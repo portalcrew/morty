@@ -47,11 +47,11 @@ Traffic passes through a trusted relay; Morty is **not end-to-end encrypted**.
 Sharing gives another device permission to view and control sessions, so protect
 sharing links and revoke access when it is no longer needed.
 
-See the [product guide](https://github.com/moxt-ai/morty/blob/main/README.md)
+See the [product guide](https://github.com/portalcrew/morty/blob/main/README.md)
 for full data handling and limitations. For installation help and ordinary bugs,
-use [support](https://github.com/moxt-ai/morty/blob/main/SUPPORT.md). Report
+use [support](https://github.com/portalcrew/morty/blob/main/SUPPORT.md). Report
 security vulnerabilities privately through the
-[Security tab](https://github.com/moxt-ai/morty/security) of the repository; never
+[Security tab](https://github.com/portalcrew/morty/security) of the repository; never
 put credentials or pairing links in a public issue.
 
 ## License
