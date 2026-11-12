@@ -20,7 +20,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/moxt-ai/morty.git",
+        "url": "git+https://github.com/portalcrew/morty.git",
         "directory": "packages/cli"
     },
     "scripts": {
@@ -65,7 +65,7 @@
     "author": "The Morty Authors",
     "license": "Apache-2.0",
     "bugs": {
-        "url": "https://github.com/moxt-ai/morty/issues"
+        "url": "https://github.com/portalcrew/morty/issues"
     },
     "homepage": "https://morty.build",
     "private": false
