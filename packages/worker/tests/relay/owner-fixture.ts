@@ -7,6 +7,7 @@ import { IdentityStorage } from "../../src/computer-relay/components/management/
 import { SessionAccessSigner } from "../../src/computer-relay/components/runtime/entity/session-access-credential.ts";
 import { SessionAccessService } from "../../src/computer-relay/components/runtime/service/session-access-service.ts";
 import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-object-database.ts";
+import { computerObjectName } from "../../src/contracts/computer-id.ts";
 import worker from "../../src/worker/application.ts";
 import { computerAccess } from "./registered-computer.ts";
 
@@ -26,22 +27,25 @@ async function ownerHolder(computerId: string): Promise<SessionAccessHolder> {
     if (token === undefined) {
         throw new Error("Expected a publicly created owner");
     }
-    return runInDurableObject(env.COMPUTER_RELAY.getByName(computerId), async (_instance, state) => {
-        const credential = await new IdentityStorage(
-            new DurableObjectDatabase(state.storage),
-            computerId,
-        ).findCredential(token, Date.now(), AbortSignal.timeout(10_000));
-        if (credential === null) {
-            throw new Error("Expected active owner access");
-        }
-        return { kind: "credential", credentialId: credential.credentialId };
-    });
+    return runInDurableObject(
+        env.COMPUTER_RELAY.getByName(computerObjectName(computerId)),
+        async (_instance, state) => {
+            const credential = await new IdentityStorage(
+                new DurableObjectDatabase(state.storage),
+                computerId,
+            ).findCredential(token, Date.now(), AbortSignal.timeout(10_000));
+            if (credential === null) {
+                throw new Error("Expected active owner access");
+            }
+            return { kind: "credential", credentialId: credential.credentialId };
+        },
+    );
 }
 
 /** Session protocol scenarios start with an authorized computer and an issued Session credential. */
 export async function issueSession(computerId: string, target: NativeSessionTarget) {
     const holder = await ownerHolder(computerId);
-    return runInDurableObject(env.COMPUTER_RELAY.getByName(computerId), async (_instance, state) =>
+    return runInDurableObject(env.COMPUTER_RELAY.getByName(computerObjectName(computerId)), async (_instance, state) =>
         new SessionAccessService(
             computerAccess(computerId, state.storage).access,
             new SessionAccessSigner(env.MORTY_SESSION_SIGNING_SECRET),

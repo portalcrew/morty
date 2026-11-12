@@ -13,7 +13,7 @@ import {
     computerRevocation,
     daemonCredential,
     retiredDaemonCredential,
-} from "../../../schema/pairing-do/index.ts";
+} from "../../../schema/computer-relay-do/index.ts";
 import { activeGeneration, currentGeneration } from "./computer-generation.ts";
 
 const registrationFields = {

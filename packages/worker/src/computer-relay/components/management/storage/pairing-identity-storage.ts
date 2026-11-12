@@ -4,7 +4,7 @@ import type { ComputerIdentityCredential } from "../../../../contracts/relay/pai
 import type { PairingScopeRow } from "../../../../contracts/relay/pairing-records.ts";
 import { relayDrizzle } from "../../../../infra/drizzle-database.ts";
 import type { DurableObjectDatabase } from "../../../infra/durable-object-database.ts";
-import { computerPairing, daemonCredential } from "../../../schema/pairing-do/index.ts";
+import { computerPairing, daemonCredential } from "../../../schema/computer-relay-do/index.ts";
 import { activeGeneration } from "./computer-generation.ts";
 
 /** The Computers in this storage whose credential matches. */

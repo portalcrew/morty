@@ -1,6 +1,6 @@
 import { type AnyColumn, and, eq, inArray, max, notInArray } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/sqlite-core";
-import { computerPairing, computerRegistration, computerRevocation } from "../../../schema/pairing-do/index.ts";
+import { computerPairing, computerRegistration, computerRevocation } from "../../../schema/computer-relay-do/index.ts";
 
 const query = new QueryBuilder();
 

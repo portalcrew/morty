@@ -1,1 +1,0 @@
-ALTER TABLE `chat_managed_session` ADD `archived_at` integer;

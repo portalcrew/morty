@@ -4,6 +4,7 @@ import { createResponseLossProxy } from "@morty-build/relay-test-support/respons
 import * as v from "valibot";
 import { expect } from "vitest";
 import { createSessionExecutionProxy } from "../../../../tests/support/session-execution-proxy.ts";
+import { computerObjectName } from "../../src/contracts/computer-id.ts";
 import worker from "../../src/worker/application.ts";
 
 /** A fresh client-held key naming one anonymous user creation. */
@@ -128,7 +129,7 @@ async function startIdentityFixture(
         return {
             reload: reconfigure,
             revokeComputer: async (computerId: string) => {
-                const object = computerObjects.get(computerObjects.idFromName(computerId));
+                const object = computerObjects.get(computerObjects.idFromName(computerObjectName(computerId)));
                 const response = await object.fetch("https://computer.internal/revoked-computer", {
                     method: "POST",
                     body: computerId,

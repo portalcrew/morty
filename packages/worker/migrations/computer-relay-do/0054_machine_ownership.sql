@@ -1,1 +1,0 @@
-DROP TABLE `platform_project_mapping`;

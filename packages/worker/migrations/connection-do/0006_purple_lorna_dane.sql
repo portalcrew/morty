@@ -1,1 +1,0 @@
-ALTER TABLE `native_session_forks` ADD `attempt_json` text;

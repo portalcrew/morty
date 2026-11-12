@@ -1,1 +1,0 @@
-ALTER TABLE `managed_bot` DROP COLUMN `agent_ref`;

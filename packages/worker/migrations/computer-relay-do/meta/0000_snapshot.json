@@ -1,122 +1,128 @@
 {
     "version": "6",
     "dialect": "sqlite",
-    "id": "fd093ec3-31d6-4e20-887c-c378701a3ea8",
-    "prevId": "0d3b8b74-77fc-4e48-bd4d-ae006c368e37",
+    "id": "02a05ba8-1241-421c-974b-59c255c9697b",
+    "prevId": "00000000-0000-0000-0000-000000000000",
     "tables": {
-        "audit_events": {
-            "name": "audit_events",
+        "browser_credential": {
+            "name": "browser_credential",
             "columns": {
-                "category": {
-                    "name": "category",
+                "id": {
+                    "name": "id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "token_hash": {
+                    "name": "token_hash",
                     "type": "text",
                     "primaryKey": false,
                     "notNull": true,
                     "autoincrement": false
                 },
-                "audit_id": {
-                    "name": "audit_id",
+                "device_id": {
+                    "name": "device_id",
                     "type": "text",
                     "primaryKey": false,
                     "notNull": true,
                     "autoincrement": false
                 },
-                "computer_id": {
-                    "name": "computer_id",
+                "transfer_id": {
+                    "name": "transfer_id",
                     "type": "text",
                     "primaryKey": false,
                     "notNull": true,
                     "autoincrement": false
                 },
-                "actor_kind": {
-                    "name": "actor_kind",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "actor_id": {
-                    "name": "actor_id",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "action": {
-                    "name": "action",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "details_json": {
-                    "name": "details_json",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "recorded_at": {
-                    "name": "recorded_at",
+                "replaced_at": {
+                    "name": "replaced_at",
                     "type": "integer",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "actor_ref": {
-                    "name": "actor_ref",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": false,
-                    "autoincrement": false
-                },
-                "service_id": {
-                    "name": "service_id",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": false,
-                    "autoincrement": false
-                },
-                "subject_id": {
-                    "name": "subject_id",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": false,
-                    "autoincrement": false
-                },
-                "outcome": {
-                    "name": "outcome",
-                    "type": "text",
                     "primaryKey": false,
                     "notNull": false,
                     "autoincrement": false
                 }
             },
             "indexes": {
-                "audit_events_category_time": {
-                    "name": "audit_events_category_time",
-                    "columns": ["category", "recorded_at", "audit_id"],
+                "browser_credential_token_hash_unique": {
+                    "name": "browser_credential_token_hash_unique",
+                    "columns": ["token_hash"],
+                    "isUnique": true
+                },
+                "browser_credential_device_idx": {
+                    "name": "browser_credential_device_idx",
+                    "columns": ["device_id"],
+                    "isUnique": false
+                },
+                "browser_credential_transfer_idx": {
+                    "name": "browser_credential_transfer_idx",
+                    "columns": ["transfer_id"],
                     "isUnique": false
                 }
             },
             "foreignKeys": {},
-            "compositePrimaryKeys": {
-                "audit_events_category_audit_id_pk": {
-                    "columns": ["category", "audit_id"],
-                    "name": "audit_events_category_audit_id_pk"
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "browser_device": {
+            "name": "browser_device",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "joined_at": {
+                    "name": "joined_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "label": {
+                    "name": "label",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "joined_city": {
+                    "name": "joined_city",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "joined_country": {
+                    "name": "joined_country",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "joined_through_transfer_id": {
+                    "name": "joined_through_transfer_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "ended_at": {
+                    "name": "ended_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
                 }
             },
+            "indexes": {},
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
             "uniqueConstraints": {},
-            "checkConstraints": {
-                "audit_event_category": {
-                    "name": "audit_event_category",
-                    "value": "\"audit_events\".\"category\" in ('authentication','pairing','computer_management')"
-                },
-                "audit_event_computer_management": {
-                    "name": "audit_event_computer_management",
-                    "value": "\"audit_events\".\"category\" != 'computer_management' or (\"audit_events\".\"actor_ref\" is not null and \"audit_events\".\"subject_id\" is not null and \"audit_events\".\"outcome\" is not null)"
-                }
-            }
+            "checkConstraints": {}
         },
         "computer_connection": {
             "name": "computer_connection",
@@ -207,13 +213,6 @@
                     "primaryKey": false,
                     "notNull": true,
                     "autoincrement": false
-                },
-                "created_by_owner_credential_id": {
-                    "name": "created_by_owner_credential_id",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false
                 }
             },
             "indexes": {
@@ -240,13 +239,6 @@
                     "name": "generation",
                     "type": "integer",
                     "primaryKey": true,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "claimed_at": {
-                    "name": "claimed_at",
-                    "type": "integer",
-                    "primaryKey": false,
                     "notNull": true,
                     "autoincrement": false
                 },
@@ -369,13 +361,109 @@
             "uniqueConstraints": {},
             "checkConstraints": {}
         },
-        "session_access_revocations": {
-            "name": "session_access_revocations",
+        "identity_transfer": {
+            "name": "identity_transfer",
             "columns": {
-                "computer_id": {
-                    "name": "computer_id",
+                "id": {
+                    "name": "id",
                     "type": "text",
                     "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "code_hash": {
+                    "name": "code_hash",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "request_hash": {
+                    "name": "request_hash",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "expires_at": {
+                    "name": "expires_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "access_expires_at": {
+                    "name": "access_expires_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "created_at": {
+                    "name": "created_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "created_by_credential_id": {
+                    "name": "created_by_credential_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "replaces_transfer_id": {
+                    "name": "replaces_transfer_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "cancelled_at": {
+                    "name": "cancelled_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {
+                "identity_transfer_code_hash_unique": {
+                    "name": "identity_transfer_code_hash_unique",
+                    "columns": ["code_hash"],
+                    "isUnique": true
+                },
+                "identity_transfer_replaces_transfer_id_unique": {
+                    "name": "identity_transfer_replaces_transfer_id_unique",
+                    "columns": ["replaces_transfer_id"],
+                    "isUnique": true
+                },
+                "identity_transfer_expiry_idx": {
+                    "name": "identity_transfer_expiry_idx",
+                    "columns": ["expires_at"],
+                    "isUnique": false
+                }
+            },
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "owner_credential": {
+            "name": "owner_credential",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "token_hash": {
+                    "name": "token_hash",
+                    "type": "text",
+                    "primaryKey": false,
                     "notNull": true,
                     "autoincrement": false
                 },
@@ -383,32 +471,28 @@
                     "name": "revoked_at",
                     "type": "integer",
                     "primaryKey": false,
-                    "notNull": true,
+                    "notNull": false,
                     "autoincrement": false
                 }
             },
-            "indexes": {},
+            "indexes": {
+                "owner_credential_token_hash_unique": {
+                    "name": "owner_credential_token_hash_unique",
+                    "columns": ["token_hash"],
+                    "isUnique": true
+                }
+            },
             "foreignKeys": {},
             "compositePrimaryKeys": {},
             "uniqueConstraints": {},
-            "checkConstraints": {
-                "session_access_revocations_revoked_at_check": {
-                    "name": "session_access_revocations_revoked_at_check",
-                    "value": "typeof(\"session_access_revocations\".\"revoked_at\") = 'integer' and \"session_access_revocations\".\"revoked_at\" >= 0"
-                }
-            }
+            "checkConstraints": {}
         }
     },
     "views": {},
     "enums": {},
     "_meta": {
         "schemas": {},
-        "tables": {
-            "\"runtime_connection\"": "\"computer_connection\"",
-            "\"runtime_pairings\"": "\"computer_pairings\"",
-            "\"runtime_registrations\"": "\"computer_registrations\"",
-            "\"runtime_revocations\"": "\"computer_revocations\""
-        },
+        "tables": {},
         "columns": {}
     },
     "internal": {

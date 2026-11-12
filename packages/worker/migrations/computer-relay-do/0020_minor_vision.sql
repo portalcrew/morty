@@ -1,2 +1,0 @@
-ALTER TABLE `chat_managed_session` ADD `directory_id` text DEFAULT 'default' NOT NULL;--> statement-breakpoint
-ALTER TABLE `chat_managed_session` ADD `additional_directory_ids_json` text DEFAULT '[]' NOT NULL;

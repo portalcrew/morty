@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { Hono } from "hono";
 import { ComputerRelay as RelayComputerRelay } from "../../../worker/src/computer-relay/computer-relay.ts";
+import { computerObjectName } from "../../../worker/src/contracts/computer-id.ts";
 import type { ConfiguredRelayBindings } from "../../../worker/src/contracts/relay-bindings.ts";
 import { errorMiddleware, rethrowHonoError } from "../../../worker/src/middleware/error-middleware.ts";
 import relay from "../../src/worker-entry.ts";
@@ -87,7 +88,9 @@ const application = new Hono<{ Bindings: TestBindings }>()
         throw failure(context.req.param("kind"));
     })
     .all("/computers/:computerId/*", (context) =>
-        context.env.COMPUTER_RELAY.getByName(context.req.param("computerId")).fetch(context.req.raw),
+        context.env.COMPUTER_RELAY.getByName(computerObjectName(context.req.param("computerId"))).fetch(
+            context.req.raw,
+        ),
     );
 
 export default {

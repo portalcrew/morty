@@ -1,6 +1,6 @@
 import * as v from "valibot";
 import { type CloudBindings, durableObjectNamespaceBindingSchema } from "../../contracts/cloud-bindings.ts";
-import { decodeComputerPlacement } from "../../contracts/computer-id.ts";
+import { computerObjectName, decodeComputerPlacement } from "../../contracts/computer-id.ts";
 import { ComputerManagementError } from "../../contracts/computer-management.ts";
 import { logger } from "../../infra/logger.ts";
 
@@ -62,5 +62,7 @@ export function computerObject(bindings: CloudBindings, computerId: string) {
         throw new ComputerManagementError("INVALID_ACCOUNT_ID", "The Computer ID is invalid.", 400);
     }
     const namespace = parsed.output;
-    return namespace.get(namespace.idFromName(computerId), { locationHint: placement.locationHint });
+    return namespace.get(namespace.idFromName(computerObjectName(computerId)), {
+        locationHint: placement.locationHint,
+    });
 }

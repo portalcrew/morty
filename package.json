@@ -28,7 +28,6 @@
         "typecheck:tooling": "tsc --project tsconfig.tooling.json",
         "db:generate:cli-acp-session-store": "drizzle-kit generate --config drizzle/drizzle.cli-acp-session-store.config.ts && pnpm db:codegen",
         "db:generate:cli-session-event-cache": "pnpm --filter @morty-build/cli exec drizzle-kit generate --config ../../drizzle/drizzle.cli-session-event-cache.config.ts && pnpm db:codegen",
-        "db:generate:pairing-do": "drizzle-kit generate --config drizzle/drizzle.pairing-do.config.ts && pnpm db:codegen",
         "db:generate:computer-relay-do": "drizzle-kit generate --config drizzle/drizzle.computer-relay-do.config.ts && pnpm db:codegen",
         "db:codegen": "node scripts/generate-sql-modules.ts",
         "build:cli": "pnpm --filter @morty-build/cli build",

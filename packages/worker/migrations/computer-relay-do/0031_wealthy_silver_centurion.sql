@@ -1,1 +1,0 @@
-DROP TABLE `clerk_user_binding`;
