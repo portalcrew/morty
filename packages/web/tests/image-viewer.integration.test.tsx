@@ -145,7 +145,9 @@ for (const [prompt, label] of [
         await app.user.click(disclosure);
         const trigger = await app.waitForView(() => getByRole(document.body, "button", { name: "View image: Image" }));
         await app.user.click(trigger);
-        expect(getByRole(document.body, "dialog", { name: "Image viewer" }).textContent).toContain("1 of 1");
+        expect(
+            getByRole(getByRole(document.body, "dialog", { name: "Image viewer" }), "img", { name: "Image" }),
+        ).toBeDefined();
     });
 }
 
