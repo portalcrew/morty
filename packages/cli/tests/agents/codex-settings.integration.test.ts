@@ -98,19 +98,19 @@ test("Given Codex publishes complete model settings and defaults to Full access,
             }
             expect(discovered.requestId).toBe(requestId);
             expect((await launchCount(launches)) - launchesBeforeSettings).toBe(1);
-            const model = discovered.settings.find((setting) => setting.id === "model")?.values[0]?.value;
-            const effort = discovered.settings
-                .find((setting) => setting.id === "reasoning_effort")
-                ?.values.find((option) => option.value === "high")?.value;
+            const selectValues = (id: string) => {
+                const setting = discovered.settings.find((candidate) => candidate.id === id);
+                return setting?.type === "select" ? setting.values : [];
+            };
+            const model = selectValues("model")[0]?.value;
+            const effort = selectValues("reasoning_effort").find((option) => option.value === "high")?.value;
             if (model === undefined || effort === undefined) {
                 throw new Error("Codex did not advertise model/effort settings");
             }
             expect(discovered.settings.find((setting) => setting.id === "fast-mode")).toMatchObject({
                 type: "boolean",
             });
-            expect(discovered.settings.find((setting) => setting.id === "collaboration_mode")?.values).toContainEqual(
-                expect.objectContaining({ value: "plan" }),
-            );
+            expect(selectValues("collaboration_mode")).toContainEqual(expect.objectContaining({ value: "plan" }));
             expect(discovered.settings.find((setting) => setting.id === "mode")).toMatchObject({
                 defaultValue: "agent-full-access",
             });

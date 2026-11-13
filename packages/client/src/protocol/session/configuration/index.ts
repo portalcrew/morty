@@ -7,18 +7,25 @@ import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
 export const SESSION_CONFIGURE_KIND = "session.configure";
 export const SESSION_CONFIG_UPDATED_KIND = "session.config.updated";
 
-const sessionConfigOptionSchema = z
-    .object({
-        booleanValue: z.boolean(),
-        category: z.string().max(128),
-        currentValue: z.string().max(500),
-        description: SHORT_TEXT,
-        id: z.string().min(1).max(128),
-        name: z.string().min(1).max(255),
-        type: z.enum(["boolean", "select"]),
-        values: z.array(configValueSchema).max(500).readonly(),
-    })
-    .readonly();
+const sessionConfigOptionFields = {
+    category: z.string().max(128),
+    description: SHORT_TEXT,
+    id: z.string().min(1).max(128),
+    name: z.string().min(1).max(255),
+};
+
+/** A setting the Agent offers and what it holds now: a select holds one of its values, a boolean holds a flag. */
+const sessionConfigOptionSchema = z.discriminatedUnion("type", [
+    z
+        .object({
+            ...sessionConfigOptionFields,
+            currentValue: z.string().max(500),
+            type: z.literal("select"),
+            values: z.array(configValueSchema).max(500).readonly(),
+        })
+        .readonly(),
+    z.object({ ...sessionConfigOptionFields, booleanValue: z.boolean(), type: z.literal("boolean") }).readonly(),
+]);
 
 export type SessionConfigOption = z.infer<typeof sessionConfigOptionSchema>;
 

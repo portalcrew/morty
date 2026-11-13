@@ -3,6 +3,7 @@ import { MortyClient, type WsTransport } from "@morty-build/client";
 import { sameNativeSession } from "@morty-build/client/native-session";
 import type { NativeSessionRequest } from "@morty-build/client/protocol";
 import {
+    type AgentSetting,
     decodeAgentSettingsDiscoveredEvent,
     decodeComputerDiagnosticsResult,
     decodeNativeSessionEvents,
@@ -23,7 +24,7 @@ import type { ApiRequest } from "../api/calls/call.ts";
 import { chatCalls } from "../api/calls/chat.ts";
 import { managementCalls } from "../api/calls/management.ts";
 import { recordBrowserDiagnostic } from "../diagnostics/browser-diagnostics.ts";
-import { type AgentModelCatalog, modelSelections } from "../diagnostics/model-catalog.ts";
+import type { AgentModelCatalog } from "../diagnostics/model-catalog.ts";
 import { CloudApiError, ManagementApi } from "../management/management-api.ts";
 
 const identifier = v.custom<Identifier>(isIdentifier);
@@ -150,6 +151,24 @@ const localSessionSchema = v.object({
     result: v.unknown(),
     entry: localSessionEntrySchema,
 });
+
+/** The draft's option for an Agent's setting: a boolean holds its default flag, a select its default value when offered. */
+function optionFromSetting(setting: AgentSetting): SessionConfigOption {
+    const { category, description, id, name } = setting;
+    if (setting.type === "boolean") {
+        return { booleanValue: setting.booleanValue, category, description, id, name, type: "boolean" };
+    }
+    const offered = setting.values.some((value) => value.value === setting.defaultValue);
+    return {
+        category,
+        currentValue: offered ? setting.defaultValue : (setting.values[0]?.value ?? ""),
+        description,
+        id,
+        name,
+        type: "select",
+        values: setting.values,
+    };
+}
 
 function continuedSession(value: unknown) {
     const stored = v.parse(localSessionSchema, value);
@@ -355,17 +374,13 @@ export class BotChatApi {
                 observedAt: new Date().toISOString(),
                 revision: discovered.settingsRevision,
                 requestId: discovered.requestId,
-                models: modelSelections(
-                    discovered.settings.map((setting) => ({ ...setting, currentValue: setting.defaultValue })),
+                models: discovered.settings.flatMap((setting) =>
+                    setting.category === "model" && setting.type === "select"
+                        ? [{ selected: setting.defaultValue, values: setting.values.map((value) => value.value) }]
+                        : [],
                 ),
             },
-            options: discovered.settings.map(({ defaultValue, ...setting }) => ({
-                ...setting,
-                currentValue:
-                    setting.type === "select" && !setting.values.some((value) => value.value === defaultValue)
-                        ? (setting.values[0]?.value ?? "")
-                        : defaultValue,
-            })),
+            options: discovered.settings.map(optionFromSetting),
         };
         return settings;
     };

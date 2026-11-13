@@ -1,6 +1,5 @@
-import type { SessionConfigOption } from "@morty-build/client/protocol";
+import type { SessionConfigOption, SessionConfigurationSelection } from "@morty-build/client/protocol";
 import {
-    type AgentSettingPreference,
     centralLocalStorage,
     lastAgentSettingsEntry,
     MAX_AGENT_SETTING_PREFERENCES,
@@ -19,13 +18,13 @@ export function restoreLastAgentSettings(
     const restoredIds = new Set<string>();
     const restored = options.map((option) => {
         const preference = preferences.find((candidate) => candidate.configId === option.id);
-        if (option.type === "boolean" && preference?.kind === "boolean") {
+        if (option.type === "boolean" && preference?.type === "boolean") {
             restoredIds.add(option.id);
-            return { ...option, booleanValue: preference.value };
+            return { ...option, booleanValue: preference.booleanValue };
         }
         if (
             option.type === "select" &&
-            preference?.kind === "select" &&
+            preference?.type === "select" &&
             option.values.some((value) => value.value === preference.value)
         ) {
             restoredIds.add(option.id);
@@ -37,7 +36,11 @@ export function restoreLastAgentSettings(
 }
 
 /** Remembers one setting the user chose, keeping their other choices for this Agent. */
-export function rememberAgentSettingChoice(computerId: string, harness: string, choice: AgentSettingPreference): void {
+export function rememberAgentSettingChoice(
+    computerId: string,
+    harness: string,
+    choice: SessionConfigurationSelection,
+): void {
     const entry = lastAgentSettingsEntry(computerId, harness);
     const others = (centralLocalStorage.read(entry) ?? []).filter(
         (preference) => preference.configId !== choice.configId,

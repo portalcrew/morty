@@ -311,7 +311,10 @@ export class PiAdapter implements Adapter {
             const configOptions = normalizeSessionConfiguration(applied);
             if (
                 !configOptions.some(
-                    (option) => option.id === selection.configId && option.currentValue === selection.value,
+                    (option) =>
+                        option.id === selection.configId &&
+                        option.type === "select" &&
+                        option.currentValue === selection.value,
                 )
             ) {
                 throw new AcpExecutionError(

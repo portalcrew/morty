@@ -141,13 +141,7 @@ export function createSessionSettingsStore(options: {
                         AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
                     );
                     signal.throwIfAborted();
-                    rememberAgentSettingChoice(
-                        options.computerId,
-                        options.sessionTarget.harness,
-                        selection.type === "boolean"
-                            ? { configId: selection.configId, kind: "boolean", value: selection.booleanValue }
-                            : { configId: selection.configId, kind: "select", value: selection.value },
-                    );
+                    rememberAgentSettingChoice(options.computerId, options.sessionTarget.harness, selection);
                     refresh(signal);
                     set({ change: { kind: "idle" } });
                 } catch (cause) {

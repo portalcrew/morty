@@ -21,9 +21,14 @@ function validateSessionConfigurationSelection(
     if (option.type !== selection.type) {
         throw invalidSessionConfiguration(`The Agent setting ${selection.configId} changed type`);
     }
-    if (selection.type === "select" && !option.values.some((value) => value.value === selection.value)) {
+    if (option.type === "select" && selection.type === "select" && !offers(option, selection.value)) {
         throw invalidSessionConfiguration(`The Agent setting ${selection.configId} has an unavailable value`);
     }
+}
+
+/** Whether the select setting offers `value`. */
+function offers(option: Extract<SessionConfigOption, { readonly type: "select" }>, value: string): boolean {
+    return option.values.some((entry) => entry.value === value);
 }
 
 function sessionConfigurationSelectionIsAvailable(
@@ -33,14 +38,15 @@ function sessionConfigurationSelectionIsAvailable(
     if (option.type !== selection.type) {
         return false;
     }
-    return selection.type === "boolean" || option.values.some((value) => value.value === selection.value);
+    return option.type === "boolean" || (selection.type === "select" && offers(option, selection.value));
 }
 
 function sessionConfigurationMatches(option: SessionConfigOption, selection: SessionConfigurationSelection): boolean {
     validateSessionConfigurationSelection(option, selection);
-    return selection.type === "boolean"
-        ? option.booleanValue === selection.booleanValue
-        : option.currentValue === selection.value;
+    if (option.type === "boolean") {
+        return selection.type === "boolean" && option.booleanValue === selection.booleanValue;
+    }
+    return selection.type === "select" && option.currentValue === selection.value;
 }
 
 /**
@@ -96,7 +102,7 @@ function unavailableReason(
     if (option.type !== selection.type) {
         return "setting_schema_mismatch";
     }
-    if (selection.type === "select" && !option.values.some((value) => value.value === selection.value)) {
+    if (option.type === "select" && selection.type === "select" && !offers(option, selection.value)) {
         return "value_unavailable";
     }
     return null;

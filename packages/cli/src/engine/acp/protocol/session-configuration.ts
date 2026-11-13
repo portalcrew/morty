@@ -94,12 +94,10 @@ function normalizeConfigOptions(value: unknown, modes: unknown): readonly Sessio
                 normalized.push({
                     booleanValue: readBoolean(option["currentValue"]),
                     category,
-                    currentValue: "",
                     description: truncate(readString(option["description"]), 500),
                     id,
                     name,
                     type: "boolean",
-                    values: [],
                 });
                 continue;
             }
@@ -110,7 +108,6 @@ function normalizeConfigOptions(value: unknown, modes: unknown): readonly Sessio
                 // empty, which is how an Agent reports the provider default.
                 if (values.some((entry) => entry.value === currentValue)) {
                     normalized.push({
-                        booleanValue: false,
                         category,
                         currentValue,
                         description: truncate(readString(option["description"]), 500),
@@ -153,7 +150,6 @@ function normalizeConfigOptions(value: unknown, modes: unknown): readonly Sessio
             !duplicatesThinkingOption(normalized, currentValue, values)
         ) {
             normalized.unshift({
-                booleanValue: false,
                 category: "mode",
                 currentValue,
                 description: "Agent session mode",
