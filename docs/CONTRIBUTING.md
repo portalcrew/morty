@@ -26,8 +26,8 @@ the particular breaking change. Follow the engineering rules and
 [CODE_REVIEW.md](CODE_REVIEW.md). For a changed external contract, include the
 affected peers, both mixed-version verification results, and rollout/recovery
 consequences in the PR; cite the explicit instruction for any intentional break.
-An explicitly authorized Morty contract change does not authorize changes to
-Moxt or deletion of Agent-owned data.
+An explicitly authorized Morty contract change does not authorize deletion of
+Agent-owned data.
 
 - Write issue titles and descriptions in English.
 - Write pull request titles and descriptions in English.
@@ -64,14 +64,12 @@ pnpm local-dev status --state-dir <stateDir>
 pnpm local-dev remove --state-dir <stateDir>
 ```
 
-No production Cloudflare credentials, paid model account, or access to the original
-Mobius repository is needed to build the workspace or start the local web stack.
+No production Cloudflare credentials or paid model account is needed to build the
+workspace or start the local web stack.
 Continuing a real Agent conversation requires that Agent to be installed and
 configured. See [the local-stack guide](../.agents/skills/chat-local-full-dev/SKILL.md)
 for connecting it to the isolated stack. Runtime, protocol, client, and server
-sources belong to the same Morty workspace. Normal Morty builds must not require
-the original Mobius distribution; use an isolated released copy only when
-verifying coexistence with Moxt.
+sources belong to the same Morty workspace.
 Runtime configuration is described in [deployment](deployment.md).
 
 Before proposing a change, run `pnpm lint`, `pnpm typecheck`, and the relevant

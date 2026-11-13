@@ -4,32 +4,32 @@ import {
     MORTY_API_PREFIX,
     SESSION_CLOSED_ERROR_CODE,
 } from "@morty-build/client/protocol";
+import {
+    CANCEL_KIND,
+    ERROR_KIND,
+    EVENT_SUBSCRIBE_KIND,
+    EVENT_UNSUBSCRIBE_KIND,
+    FORBIDDEN_HEADERS,
+    FRAME_IDENTIFIER_PATTERN,
+    MAX_BODY_BYTES,
+    MAX_HEADER_NAME_LENGTH,
+    MAX_HEADER_VALUE_LENGTH,
+    MAX_HEADERS,
+    REQUEST_KIND,
+    REQUEST_METHODS,
+    RESPONSE_KIND,
+} from "../../../../contracts/agent-api/transport-frames.ts";
 import { type HttpError, toHttpError } from "../../../../contracts/http-error.ts";
+import type { WebSocketHttpDispatch } from "../../../../contracts/websocket-http-dispatch.ts";
 import { diagnosticText, serializeDiagnosticError } from "../../../../infra/log-diagnostics.ts";
 import { logger } from "../../../../infra/logger.ts";
 
-const REQUEST_KIND = "http.request";
-const RESPONSE_KIND = "http.response";
-const ERROR_KIND = "http.error";
-const EVENT_SUBSCRIBE_KIND = "session.events.subscribe";
-const EVENT_UNSUBSCRIBE_KIND = "session.events.unsubscribe";
-const MAX_BODY_BYTES = 12_582_912;
 const MAX_PENDING_BINARY_BYTES = MAX_BODY_BYTES;
 const MAX_PENDING_BINARY_REQUESTS = 16;
 const BINARY_REQUEST_TIMEOUT_MILLISECONDS = 30_000;
 const IDLE_TIMEOUT_MILLISECONDS = 60_000;
 const MAX_SUBSCRIPTION_DIAGNOSTICS = 8;
-const FORBIDDEN_HEADERS = new Set([
-    "connection",
-    "content-length",
-    "forwarded",
-    "host",
-    "origin",
-    "upgrade",
-    "x-morty-computer-id",
-]);
 
-type DispatchRequest = (request: Request) => Promise<Response>;
 type SubscriptionEnd =
     | { readonly kind: "error"; readonly error: unknown }
     | { readonly kind: "close"; readonly code: number; readonly reason: string; readonly wasClean: boolean };
@@ -83,8 +83,8 @@ function transportError(code: WebSocketTransportErrorCode): WebSocketTransportEr
     return new WebSocketTransportError(code);
 }
 
-/** Shared by browser connections owned by one Computer, not by unrelated Computers. */
-export class WebSocketUploadBudget {
+/** Bounds buffering on this connection while the application admits each upload. */
+class ConnectionUploadBudget {
     #bytes = 0;
     #requests = 0;
 
@@ -114,39 +114,39 @@ class PendingBinaryUpload {
 
     readonly byteLength: number;
     readonly message: Readonly<Record<string, unknown>>;
-    readonly #connectionBudget: WebSocketUploadBudget;
-    readonly #computerBudget: WebSocketUploadBudget;
+    readonly #connectionBudget: ConnectionUploadBudget;
     readonly #onFailure: (cause: unknown) => Promise<void>;
 
     constructor(
         byteLength: number,
         message: Readonly<Record<string, unknown>>,
-        connectionBudget: WebSocketUploadBudget,
-        computerBudget: WebSocketUploadBudget,
+        connectionBudget: ConnectionUploadBudget,
         onFailure: (cause: unknown) => Promise<void>,
     ) {
         connectionBudget.reserve(byteLength);
         this.byteLength = byteLength;
         this.message = message;
         this.#connectionBudget = connectionBudget;
-        this.#computerBudget = computerBudget;
         this.#onFailure = onFailure;
         this.#timeout = setTimeout(() => {
             void this.fail(transportError("request_timeout"));
         }, BINARY_REQUEST_TIMEOUT_MILLISECONDS);
     }
 
-    readonly authorize = async (request: Request, authorize: DispatchRequest | undefined): Promise<void> => {
+    readonly authorize = async (request: Request, dispatch: WebSocketHttpDispatch): Promise<void> => {
         try {
-            const response = await authorize?.(new Request(request, { signal: this.#controller.signal }));
+            const response = await dispatch({
+                kind: "upload-admission",
+                request: new Request(request, { signal: this.#controller.signal }),
+                byteLength: this.byteLength,
+            });
             if (this.#controller.signal.aborted) {
                 return;
             }
-            if (response !== undefined && !response.ok) {
+            if (!response.ok) {
                 await this.fail(response);
                 return;
             }
-            this.#computerBudget.reserve(this.byteLength);
             this.#state = "authorized";
             this.#ready.resolve(true);
         } catch (cause) {
@@ -160,9 +160,6 @@ class PendingBinaryUpload {
         if (this.#state === "closed") {
             return;
         }
-        if (this.#state === "authorized") {
-            this.#computerBudget.release(this.byteLength);
-        }
         this.#state = "closed";
         clearTimeout(this.#timeout);
         this.#connectionBudget.release(this.byteLength);
@@ -173,6 +170,67 @@ class PendingBinaryUpload {
     private readonly fail = async (cause: unknown): Promise<void> => {
         this.close();
         await this.#onFailure(cause);
+    };
+}
+
+class PendingRequest {
+    #state:
+        | { readonly kind: "uncancellable" }
+        | {
+              readonly kind: "cancellable";
+              readonly controller: AbortController;
+              readonly timeout: ReturnType<typeof setTimeout>;
+          } = { kind: "uncancellable" };
+    readonly #requestId: string;
+    readonly #connectionSignal: AbortSignal;
+    readonly #requests: Map<string, AbortController>;
+
+    constructor(requestId: string, connectionSignal: AbortSignal, requests: Map<string, AbortController>) {
+        this.#requestId = requestId;
+        this.#connectionSignal = connectionSignal;
+        this.#requests = requests;
+    }
+
+    readonly enableCancellation = (): AbortSignal => {
+        if (this.#state.kind === "uncancellable") {
+            if (this.#requests.has(this.#requestId)) {
+                throw transportError("invalid_message");
+            }
+            if (this.#requests.size >= 64) {
+                throw transportError("request_capacity_exceeded");
+            }
+            const controller = new AbortController();
+            this.#state = {
+                kind: "cancellable",
+                controller,
+                timeout: setTimeout(() => controller.abort(transportError("request_timeout")), 120_000),
+            };
+            this.#requests.set(this.#requestId, controller);
+        }
+        return AbortSignal.any([this.#connectionSignal, this.#state.controller.signal]);
+    };
+
+    readonly throwIfAborted = (): void => {
+        if (this.#state.kind === "cancellable") {
+            this.#state.controller.signal.throwIfAborted();
+        }
+    };
+
+    readonly cancelled = (): boolean =>
+        this.#state.kind === "cancellable" &&
+        this.#state.controller.signal.aborted &&
+        !(this.#state.controller.signal.reason instanceof WebSocketTransportError);
+
+    readonly failure = (cause: unknown): unknown =>
+        this.#state.kind === "cancellable" && this.#state.controller.signal.aborted
+            ? this.#state.controller.signal.reason
+            : cause;
+
+    readonly release = (): void => {
+        if (this.#state.kind === "cancellable") {
+            clearTimeout(this.#state.timeout);
+            this.#requests.delete(this.#requestId);
+        }
     };
 }
 
@@ -200,7 +258,7 @@ function requestBody(value: Readonly<Record<string, unknown>>): string {
 }
 
 function headers(value: unknown): Headers {
-    if (!Array.isArray(value) || value.length > 128) {
+    if (!Array.isArray(value) || value.length > MAX_HEADERS) {
         throw transportError("invalid_headers");
     }
     const decoded = new Headers();
@@ -210,8 +268,8 @@ function headers(value: unknown): Headers {
             entry.length !== 2 ||
             typeof entry[0] !== "string" ||
             typeof entry[1] !== "string" ||
-            entry[0].length > 256 ||
-            entry[1].length > 16_384
+            entry[0].length > MAX_HEADER_NAME_LENGTH ||
+            entry[1].length > MAX_HEADER_VALUE_LENGTH
         ) {
             throw transportError("invalid_headers");
         }
@@ -234,7 +292,7 @@ function requestIdFromMessage(value: Readonly<Record<string, unknown>>): string 
         throw transportError("invalid_message");
     }
     const requestId = string(value, "requestId", 128);
-    if (!/^[a-zA-Z0-9-]{1,128}$/u.test(requestId)) {
+    if (!FRAME_IDENTIFIER_PATTERN.test(requestId)) {
         throw transportError("invalid_message");
     }
     return requestId;
@@ -257,7 +315,7 @@ function requestFromMessage(
         throw transportError("invalid_target");
     }
     const method = string(value, "method", 16);
-    if (!["DELETE", "GET", "PATCH", "POST", "PUT"].includes(method)) {
+    if (!REQUEST_METHODS.some((allowed) => allowed === method)) {
         throw transportError("invalid_method");
     }
     const body = binaryBody ?? requestBody(value);
@@ -288,17 +346,9 @@ function responseHeaders(response: Response): readonly (readonly [string, string
 export function acceptWebSocketHttpTransport({
     request,
     dispatch,
-    uploads = new WebSocketUploadBudget(),
-    authorizeUpload,
-    validateTarget: acceptsTarget = () => true,
-    cancellable = () => false,
 }: {
     readonly request: Request;
-    readonly dispatch: DispatchRequest;
-    readonly uploads?: WebSocketUploadBudget;
-    readonly authorizeUpload?: DispatchRequest;
-    readonly validateTarget?: (request: Request) => boolean;
-    readonly cancellable?: (request: Request) => boolean;
+    readonly dispatch: WebSocketHttpDispatch;
 }): Response {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
         return Response.json(
@@ -306,11 +356,6 @@ export function acceptWebSocketHttpTransport({
             { status: 426 },
         );
     }
-    const validateTarget = (operation: Request): void => {
-        if (!acceptsTarget(operation)) {
-            throw transportError("invalid_target");
-        }
-    };
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
@@ -320,9 +365,7 @@ export function acceptWebSocketHttpTransport({
         | { readonly kind: "pending"; readonly controller: AbortController }
         | { readonly kind: "open"; readonly socket: WebSocket }
     >();
-    // Buffer in-flight chunks within this connection while admission is authorized.
-    // Only verified uploads may consume the Computer-wide budget.
-    const connectionUploads = new WebSocketUploadBudget();
+    const connectionUploads = new ConnectionUploadBudget();
     const binaryRequests = new Map<string, PendingBinaryUpload>();
     const requests = new Map<string, AbortController>();
     const browserOrigin = request.headers.get("origin");
@@ -386,11 +429,7 @@ export function acceptWebSocketHttpTransport({
         touch();
         void (async () => {
             let requestId = "unknown";
-            let operation: {
-                readonly controller: AbortController;
-                readonly timeout: ReturnType<typeof setTimeout>;
-                readonly requestId: string;
-            } | null = null;
+            let operation: PendingRequest | null = null;
             try {
                 let decoded: unknown;
                 let binaryBody: Uint8Array | undefined;
@@ -443,7 +482,7 @@ export function acceptWebSocketHttpTransport({
                     server.send('{"kind":"pong"}');
                     return;
                 }
-                if (kind === "http.cancel") {
+                if (kind === CANCEL_KIND) {
                     const cancelledId = string(message, "requestId", 128);
                     requests.get(cancelledId)?.abort(new DOMException("Request cancelled", "AbortError"));
                     releaseBinaryRequest(cancelledId);
@@ -466,7 +505,7 @@ export function acceptWebSocketHttpTransport({
                 }
                 if (kind === EVENT_SUBSCRIBE_KIND) {
                     const subscriptionId = string(message, "subscriptionId", 128);
-                    if (!/^[a-zA-Z0-9-]{1,128}$/u.test(subscriptionId) || subscriptions.has(subscriptionId)) {
+                    if (!FRAME_IDENTIFIER_PATTERN.test(subscriptionId) || subscriptions.has(subscriptionId)) {
                         throw transportError("invalid_message");
                     }
                     requestId = subscriptionId;
@@ -485,11 +524,21 @@ export function acceptWebSocketHttpTransport({
                         browserOrigin,
                         subscriptionController.signal,
                     );
-                    validateTarget(converted.request);
                     subscriptions.set(subscriptionId, { controller: subscriptionController, kind: "pending" });
                     const subscriptionHeaders = new Headers(converted.request.headers);
                     subscriptionHeaders.set("Upgrade", "websocket");
-                    const response = await dispatch(new Request(converted.request, { headers: subscriptionHeaders }));
+                    const response = await dispatch({
+                        kind: "request",
+                        request: new Request(converted.request, { headers: subscriptionHeaders }),
+                        enableCancellation: () => subscriptionController.signal,
+                    }).catch((cause: unknown) => {
+                        const pending = subscriptions.get(subscriptionId);
+                        if (pending?.kind === "pending" && pending.controller === subscriptionController) {
+                            subscriptions.delete(subscriptionId);
+                        }
+                        subscriptionController.abort(cause);
+                        throw cause;
+                    });
                     const subscription = response.webSocket;
                     if (subscription === null) {
                         subscriptions.delete(subscriptionId);
@@ -639,7 +688,6 @@ export function acceptWebSocketHttpTransport({
                         controller.signal,
                         new Uint8Array(0),
                     );
-                    validateTarget(declaration.request);
                     if (declaration.request.method === "GET") {
                         throw transportError("invalid_message");
                     }
@@ -647,7 +695,6 @@ export function acceptWebSocketHttpTransport({
                         bodyByteLength,
                         message,
                         connectionUploads,
-                        uploads,
                         async (cause) => {
                             if (binaryRequests.get(requestId) !== upload) {
                                 return;
@@ -681,7 +728,7 @@ export function acceptWebSocketHttpTransport({
                         },
                     );
                     binaryRequests.set(requestId, upload);
-                    void upload.authorize(declaration.request, authorizeUpload);
+                    void upload.authorize(declaration.request, dispatch);
                     return;
                 }
                 requestId = requestIdFromMessage(message);
@@ -694,30 +741,13 @@ export function acceptWebSocketHttpTransport({
                     binaryBody,
                 );
                 requestId = converted.requestId;
-                validateTarget(converted.request);
-                if (cancellable(converted.request)) {
-                    if (requests.has(requestId)) {
-                        throw transportError("invalid_message");
-                    }
-                    if (requests.size >= 64) {
-                        throw transportError("request_capacity_exceeded");
-                    }
-                    const requestController = new AbortController();
-                    operation = {
-                        controller: requestController,
-                        requestId,
-                        timeout: setTimeout(() => requestController.abort(transportError("request_timeout")), 120_000),
-                    };
-                    requests.set(requestId, requestController);
-                }
-                const dispatched =
-                    operation === null
-                        ? converted.request
-                        : new Request(converted.request, {
-                              signal: AbortSignal.any([controller.signal, operation.controller.signal]),
-                          });
-                const response = await dispatch(dispatched);
-                operation?.controller.signal.throwIfAborted();
+                operation = new PendingRequest(requestId, controller.signal, requests);
+                const response = await dispatch({
+                    kind: "request",
+                    request: converted.request,
+                    enableCancellation: operation.enableCancellation,
+                });
+                operation.throwIfAborted();
                 const mediaType = response.headers.get("content-type") ?? "";
                 if (mediaType.startsWith("text/event-stream")) {
                     throw transportError("streaming_response_unsupported");
@@ -737,18 +767,11 @@ export function acceptWebSocketHttpTransport({
                 );
                 touch();
             } catch (cause) {
-                if (
-                    controller.signal.aborted ||
-                    server.readyState !== WebSocket.OPEN ||
-                    (operation?.controller.signal.aborted &&
-                        !(operation.controller.signal.reason instanceof WebSocketTransportError))
-                ) {
+                if (controller.signal.aborted || server.readyState !== WebSocket.OPEN || operation?.cancelled()) {
                     return;
                 }
                 logger.error({ err: cause, requestId }, "Morty WebSocket transport request failed");
-                const httpError = toHttpError(
-                    operation?.controller.signal.aborted ? operation.controller.signal.reason : cause,
-                );
+                const httpError = toHttpError(operation === null ? cause : operation.failure(cause));
                 server.send(
                     JSON.stringify({
                         code: httpError.body.error.code,
@@ -759,10 +782,7 @@ export function acceptWebSocketHttpTransport({
                     }),
                 );
             } finally {
-                if (operation !== null) {
-                    clearTimeout(operation.timeout);
-                    requests.delete(operation.requestId);
-                }
+                operation?.release();
             }
         })();
     };

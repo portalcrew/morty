@@ -1,21 +1,14 @@
-import { computerRequestTarget, MortyValidationError, WsTransport } from "@morty-build/client";
+import { MortyValidationError, WsTransport } from "@morty-build/client";
 import { isIdentifier } from "@morty-build/client/protocol";
 import { recordBrowserDiagnostic } from "../diagnostics/browser-diagnostics.ts";
 import { systemClock } from "../time/clock.ts";
 import type { ApiResponseSnapshot } from "./api-transport.ts";
+import type { ApiCall } from "./calls/call.ts";
 
 export class ApiConnectionError extends Error {}
 export function isApiConnectionError(error: unknown): error is ApiConnectionError {
     return error instanceof ApiConnectionError;
 }
-function isWatchable(method: string, pathname: string): boolean {
-    return (
-        (method === "POST" && pathname.endsWith("/workspace")) ||
-        (method === "GET" && pathname.endsWith("/management/computer/pairing-state")) ||
-        (method === "GET" && pathname.endsWith("/identity/devices"))
-    );
-}
-
 export class WorkerApiTransport {
     readonly #computers = new Map<string, WsTransport>();
     readonly #origin: string;
@@ -43,24 +36,48 @@ export class WorkerApiTransport {
         }
         return transport;
     };
-    readonly #request = async (request: Request): Promise<Response> => {
-        const target = computerRequestTarget(request);
-        return target === null ? await fetch(request) : await this.computerTransport(target.computerId).fetch(request);
+    readonly #request = async (request: ApiCall): Promise<Response> => {
+        const endpoint = request.endpoint;
+        switch (endpoint.target.kind) {
+            case "worker":
+                return await fetch(endpoint.url, {
+                    method: endpoint.method,
+                    headers: request.headers,
+                    body: request.body ?? null,
+                    redirect: request.redirect ?? "follow",
+                    signal: request.signal,
+                });
+            case "computer":
+                return await this.computerTransport(endpoint.target.computerId).fetch({
+                    endpoint: {
+                        computerId: endpoint.target.computerId,
+                        method: endpoint.method,
+                        path: `${endpoint.url.pathname}${endpoint.url.search}`,
+                        transport: endpoint.transport,
+                        timeoutMilliseconds: endpoint.timeoutMilliseconds,
+                    },
+                    origin: new URL(this.#origin),
+                    headers: request.headers,
+                    body: request.body ?? null,
+                    signal: request.signal,
+                });
+        }
     };
-    readonly #key = (request: Request) => JSON.stringify([request.url, request.headers.get("authorization")]);
-    readonly fetch = async (request: Request): Promise<Response> => {
+    readonly #key = (request: ApiCall) =>
+        JSON.stringify([request.endpoint.url.href, request.headers["authorization"] ?? null]);
+    readonly fetch = async (request: ApiCall): Promise<Response> => {
         const requestId = crypto.randomUUID();
         const started = performance.now();
-        const operation = new URL(request.url).pathname.split("/").slice(-1)[0] ?? "request";
+        const operation = request.endpoint.operation;
         try {
-            if (new URL(request.url).origin !== this.#origin) {
+            if (request.endpoint.url.origin !== this.#origin) {
                 throw new Error("Unexpected Morty API origin.");
             }
             const signal = AbortSignal.any([request.signal, this.#lifetime.signal]);
             signal.throwIfAborted();
-            const raw = await this.#request(new Request(request, { signal }));
+            const raw = await this.#request({ ...request, signal });
             const response = new Response(raw.body, raw);
-            if (isWatchable(request.method, new URL(request.url).pathname)) {
+            if (request.endpoint.watch === "snapshot") {
                 this.#baselines.set(this.#key(request), `${response.status}\0${await response.clone().text()}`);
             }
             response.headers.set("x-morty-request-id", requestId);
@@ -91,7 +108,7 @@ export class WorkerApiTransport {
     };
     readonly measureMortyLatency = async (parent: AbortSignal) => {
         const start = performance.now();
-        const response = await fetch(new URL("/morty/api/health", this.#origin), {
+        const response = await fetch(new URL("/morty/api/v1/health", this.#origin), {
             cache: "no-store",
             signal: AbortSignal.any([parent, this.#lifetime.signal, AbortSignal.timeout(10000)]),
         });
@@ -100,9 +117,9 @@ export class WorkerApiTransport {
         }
         return Math.round(performance.now() - start);
     };
-    readonly waitForChange = async (request: Request, ready?: (snapshot: ApiResponseSnapshot) => void) => {
-        const url = new URL(request.url);
-        if (url.origin !== this.#origin || !isWatchable(request.method, url.pathname)) {
+    readonly waitForChange = async (request: ApiCall, ready?: (snapshot: ApiResponseSnapshot) => void) => {
+        const url = request.endpoint.url;
+        if (url.origin !== this.#origin || request.endpoint.watch !== "snapshot") {
             throw new Error("Invalid Morty watch request.");
         }
         const signal = AbortSignal.any([request.signal, this.#lifetime.signal]);
@@ -111,13 +128,11 @@ export class WorkerApiTransport {
             signal.throwIfAborted();
             let response: Response;
             try {
-                response = await this.#request(
-                    new Request(request.url, {
-                        method: request.method,
-                        headers: request.headers,
-                        signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]),
-                    }),
-                );
+                response = await this.#request({
+                    endpoint: request.endpoint,
+                    headers: request.headers,
+                    signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]),
+                });
             } catch (cause) {
                 signal.throwIfAborted();
                 if (ready !== undefined) {

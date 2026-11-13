@@ -8,12 +8,12 @@ test("Given a computer owner, When the owner opens management, Then they can pai
     const fixture = await createIdentityFixture();
     try {
         const identity = await fixture.createAnonymousUser();
-        const managementUrl = `${APP_ORIGIN}/morty/api/computers/${identity.computerId}/management`;
+        const managementUrl = `${APP_ORIGIN}/morty/api/v1/computers/${identity.computerId}`;
         const headers = { authorization: `Bearer ${identity.token}` };
 
         const environment = fixture.environment();
 
-        const computer = await worker.fetch(new Request(`${managementUrl}/computer`, { headers }), environment);
+        const computer = await worker.fetch(new Request(managementUrl, { headers }), environment);
         expect(computer.status).toBe(200);
         expect(await computer.json()).toMatchObject({ computer: { computerId: identity.computerId } });
         const pairing = await worker.fetch(
@@ -37,16 +37,13 @@ test("Given an existing Computer, When Morty moves to another origin, Then the u
     const fixture = await createIdentityFixture();
     try {
         const identity = await fixture.createAnonymousUser();
-        const managementUrl = `${APP_ORIGIN}/morty/api/computers/${identity.computerId}/management`;
+        const managementUrl = `${APP_ORIGIN}/morty/api/v1/computers/${identity.computerId}`;
         const headers = { authorization: `Bearer ${identity.token}` };
-        const originalComputer = await worker.fetch(
-            new Request(`${managementUrl}/computer`, { headers }),
-            fixture.environment(),
-        );
+        const originalComputer = await worker.fetch(new Request(managementUrl, { headers }), fixture.environment());
         expect(originalComputer.status).toBe(200);
         const computer = await originalComputer.json();
         const originalBot = await worker.fetch(
-            new Request(`${managementUrl}/computer/pairing-state`, { headers }),
+            new Request(`${managementUrl}/pairing-state`, { headers }),
             fixture.environment(),
         );
         expect(originalBot.status).toBe(200);
@@ -61,15 +58,12 @@ test("Given an existing Computer, When Morty moves to another origin, Then the u
             expect(session.status).toBe(200);
             expect(await session.json()).toMatchObject({ computerId: identity.computerId });
             const currentBot = await worker.fetch(
-                new Request(`${managementUrl}/computer/pairing-state`, { headers }),
+                new Request(`${managementUrl}/pairing-state`, { headers }),
                 environment,
             );
             expect(currentBot.status).toBe(200);
             expect(await currentBot.json()).toEqual(bot);
-            const currentComputer = await worker.fetch(
-                new Request(`${managementUrl}/computer`, { headers }),
-                environment,
-            );
+            const currentComputer = await worker.fetch(new Request(managementUrl, { headers }), environment);
             expect(currentComputer.status).toBe(200);
             expect(await currentComputer.json()).toEqual(computer);
 
@@ -85,7 +79,7 @@ test("Given an existing Computer, When Morty moves to another origin, Then the u
             expect(await pairing.json()).toMatchObject({ computerId: identity.computerId, relayUrl: relocated.origin });
 
             const replaced = await worker.fetch(
-                new Request(`${managementUrl}/computer/replacement`, {
+                new Request(`${managementUrl}/replacement`, {
                     method: "POST",
                     headers,
                 }),

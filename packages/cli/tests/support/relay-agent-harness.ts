@@ -74,7 +74,7 @@ export async function createFakeAgentHarnessRuntime(options: {
             computerPairingSchema,
             await (
                 await options.server.request(
-                    new Request(`${options.origin}/morty/api/computers/${options.computerId}/management/pairing`, {
+                    new Request(`${options.origin}/morty/api/v1/computers/${options.computerId}/pairing`, {
                         body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
                         headers: {
                             authorization: `Bearer ${options.credential}`,
@@ -90,7 +90,7 @@ export async function createFakeAgentHarnessRuntime(options: {
             v.object({ computerCredential: v.string() }),
             await (
                 await options.server.request(
-                    new Request(`${options.origin}/morty/api/v1/pairings/${pairing.computerId}/redeem`, {
+                    new Request(`${options.origin}/morty/api/v1/computers/${pairing.computerId}/pairing/redeem`, {
                         body: JSON.stringify({
                             agents: fakeAgentHarnessCatalog(harnesses),
                             computerName: "Controlled Agent harness",
@@ -156,7 +156,7 @@ export async function createFakeAgentHarnessRuntime(options: {
         const selected = harnesses[0];
         if (selected !== undefined) {
             const setup = await options.server.request(
-                new Request(`${options.origin}/morty/api/chat/computers/${pairing.computerId}/setup`, {
+                new Request(`${options.origin}/morty/api/v1/computers/${pairing.computerId}/setup`, {
                     method: "POST",
                     signal,
                     headers: { authorization: `Bearer ${options.credential}`, "content-type": "application/json" },

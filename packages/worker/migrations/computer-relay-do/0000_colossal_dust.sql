@@ -20,16 +20,14 @@ CREATE TABLE `browser_device` (
 );
 --> statement-breakpoint
 CREATE TABLE `computer_connection` (
-	`computer_id` text PRIMARY KEY NOT NULL,
+	`connection_epoch` integer PRIMARY KEY NOT NULL,
 	`generation` integer NOT NULL,
-	`connection_epoch` integer NOT NULL,
 	`connected_at` integer NOT NULL,
 	`disconnected_at` integer
 );
 --> statement-breakpoint
 CREATE TABLE `computer_pairings` (
 	`generation` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`computer_id` text NOT NULL,
 	`pairing_code_hash` text NOT NULL,
 	`poll_token_hash` text NOT NULL,
 	`expires_at` integer NOT NULL,

@@ -3,7 +3,9 @@ import { createMiddleware } from "hono/factory";
 import { accessHolder, type LocalOperation } from "../../../../contracts/authentication/credential.ts";
 import type { Session } from "../../../../contracts/authentication/session.ts";
 import { ManagementError } from "../../../../contracts/management-error.ts";
+import { readBearerToken } from "../../../../http/request-headers.ts";
 import type { ManagementHttpEnvironment } from "./management-http-environment.ts";
+import { applicationForRequest, type ManagementRouteContext } from "./route-context.ts";
 
 type SessionEnvironment = ManagementHttpEnvironment & {
     Variables: {
@@ -13,36 +15,39 @@ type SessionEnvironment = ManagementHttpEnvironment & {
     };
 };
 
-export const authenticatedSession = createMiddleware<SessionEnvironment>(async (context, next) => {
-    const result = await context.var.application.services.authentication.session(
-        context.get("bearerToken"),
-        context.req.raw.signal,
-    );
-    switch (result.kind) {
-        case "authenticated":
-            context.set("session", result.session);
-            context.set("accessExpiresAt", result.accessExpiresAt);
-            context.set("accessHolder", result.holder);
-            await next();
-            return;
-        case "unauthenticated":
-        case "revoked":
-            throw credentialRejected(result.kind);
-    }
-});
+export const authenticatedSession = (ctx: ManagementRouteContext) =>
+    createMiddleware<SessionEnvironment>(async (context, next) => {
+        const application = await applicationForRequest(ctx, context);
+        const result = await application.services.authentication.session(
+            readBearerToken(context.req.raw),
+            context.req.raw.signal,
+        );
+        switch (result.kind) {
+            case "authenticated":
+                context.set("session", result.session);
+                context.set("accessExpiresAt", result.accessExpiresAt);
+                context.set("accessHolder", result.holder);
+                await next();
+                return;
+            case "unauthenticated":
+            case "revoked":
+                throw credentialRejected(result.kind);
+        }
+    });
 
 /** Admits only the computer's local credential, for an operation no shared access may perform. */
-export const localSession = (operation: LocalOperation) =>
+export const localSession = (ctx: ManagementRouteContext, operation: LocalOperation) =>
     createMiddleware<SessionEnvironment>(async (context, next) => {
-        const result = await context.var.application.services.authentication.authorize(
-            context.get("bearerToken"),
+        const application = await applicationForRequest(ctx, context);
+        const result = await application.services.authentication.authorize(
+            readBearerToken(context.req.raw),
             operation,
             context.req.raw.signal,
         );
         switch (result.kind) {
             case "authorized":
                 context.set("session", {
-                    computerId: context.var.application.identity.computerId,
+                    computerId: application.identity.computerId,
                 });
                 context.set("accessExpiresAt", null);
                 context.set("accessHolder", accessHolder(result.credential));

@@ -147,7 +147,3 @@ Morty owns its browser, cloud services, and local Runtime in this repository.
 ## License
 
 [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
-
-"Morty" and "Moxt", and the Morty and Moxt logos, are trademarks of Moxt. The
-Apache 2.0 license grants you rights to the code, not to the names or marks — a
-fork is welcome, but please give it a name of its own.

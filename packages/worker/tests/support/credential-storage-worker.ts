@@ -13,8 +13,8 @@ export default {
 export class ComputerRelay extends ProductionComputerRelay {
     override async fetch(request: Request): Promise<Response> {
         if (request.url === "https://computer.internal/revoked-computer" && request.method === "POST") {
-            const computerId = await request.text();
-            await new ComputerRelayStore(computerId, new DurableObjectDatabase(this.ctx.storage)).revokeComputer(
+            await request.body?.cancel();
+            await new ComputerRelayStore(new DurableObjectDatabase(this.ctx.storage)).revokeComputer(
                 Date.now(),
                 request.signal,
             );

@@ -60,7 +60,7 @@ export const computerBackend = (computerId: string) => {
             throw new Error("Expected a publicly created owner");
         }
         const response = await ownerRequest(
-            new Request(`${ownerOrigin}/morty/api/chat/computers/${computerId}/${path}`, {
+            new Request(`${ownerOrigin}/morty/api/v1/computers/${computerId}/${path}`, {
                 method: "POST",
                 headers: { authorization: `Bearer ${token}` },
                 signal,
@@ -108,7 +108,7 @@ export async function pairComputer(computerId: string) {
         throw new Error("Expected a publicly created owner");
     }
     const reservation = await ownerRequest(
-        new Request(`${ownerOrigin}/morty/api/computers/${computerId}/management/pairing`, {
+        new Request(`${ownerOrigin}/morty/api/v1/computers/${computerId}/pairing`, {
             method: "POST",
             headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
             body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
@@ -119,7 +119,7 @@ export async function pairComputer(computerId: string) {
     }
     const { pairingCode } = v.parse(v.object({ pairingCode: v.string() }), await reservation.json());
     const redemption = await ownerRequest(
-        new Request(`${ownerOrigin}/morty/api/v1/pairings/${computerId}/redeem`, {
+        new Request(`${ownerOrigin}/morty/api/v1/computers/${computerId}/pairing/redeem`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({

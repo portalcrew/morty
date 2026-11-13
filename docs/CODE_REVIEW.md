@@ -16,7 +16,7 @@ complete diff and identify the exact reviewed head.
 ## Required compatibility review
 
 Check every change to an externally consumed operation, HTTP/WebSocket message,
-SDK contract, serialized record, or persisted data format. Follow changes through
+client contract, serialized record, or persisted data format. Follow changes through
 the sender, transport/adapter, receiver, and observable result; checking types or
 one side of the boundary is insufficient.
 

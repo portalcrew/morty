@@ -213,7 +213,7 @@ jobs:
         with:
           name: morty-release
           path: .release
-      - name: Install and verify the exact archive beside released Moxt
+      - name: Install and verify the exact archive
         run: node scripts/test-installed-release.mjs
 
   acceptance:

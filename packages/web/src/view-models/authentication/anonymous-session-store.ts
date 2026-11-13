@@ -1,4 +1,5 @@
 import { createStore } from "zustand/vanilla";
+import type { ApiTransport } from "../../services/api/api-transport.ts";
 import {
     type AnonymousIdentity,
     AnonymousIdentityApi,
@@ -69,7 +70,7 @@ export interface AnonymousSessionStore {
 export type AnnounceIdentity = (session: ActiveAnonymousSession | null) => void;
 
 export const createAnonymousSessionStore = (
-    fetchRequest: (request: Request) => Promise<Response>,
+    fetchRequest: ApiTransport["fetch"],
     origin: string,
     onIdentityChanged: AnnounceIdentity,
     clock: Clock = systemClock,

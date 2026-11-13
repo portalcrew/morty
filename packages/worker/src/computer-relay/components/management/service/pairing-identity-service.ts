@@ -59,14 +59,11 @@ export class ComputerIdentityService {
                 default:
                     return rotation satisfies never;
             }
-            const computerId = validateIdentifier(rotation.computer.computer_id, "computer_id");
+            const computerId = this.#computerId;
             const active = await this.#accounts.isActive(computerId, signal);
             signal.throwIfAborted();
             if (!active) {
                 throw new PairingDirectoryError("unauthorized", "A valid Computer credential is required");
-            }
-            if (computerId !== this.#computerId) {
-                throw new PairingDirectoryError("directory_unavailable", "Computer storage is unavailable");
             }
             return {
                 kind: rotation.kind,
@@ -89,17 +86,19 @@ export class ComputerIdentityService {
     readonly #readIdentity = async (credential: ComputerIdentityCredential, signal: AbortSignal) => {
         signal.throwIfAborted();
         try {
-            const rows = await this.#store.findCredential(credential, signal);
+            // A daemon credential names its Computer; it must be this one.
+            if (
+                credential.kind === "daemon" &&
+                validateIdentifier(credential.computerId, "computer_id") !== this.#computerId
+            ) {
+                throw unmatchedCredential(credential);
+            }
+            const held = await this.#store.holdsCredential(credential, signal);
             signal.throwIfAborted();
-            const row = rows[0];
-            if (rows.length !== 1 || row === undefined) {
+            if (!held) {
                 throw unmatchedCredential(credential);
             }
-            const computerId = validateIdentifier(row.computer_id, "computer_id");
-            if (computerId !== this.#computerId) {
-                throw unmatchedCredential(credential);
-            }
-            return { computerId };
+            return { computerId: this.#computerId };
         } catch (cause) {
             signal.throwIfAborted();
             if (cause instanceof PairingDirectoryError) {

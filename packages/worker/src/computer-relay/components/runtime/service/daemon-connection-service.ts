@@ -27,21 +27,17 @@ export class DaemonConnectionService {
      */
     readonly standing = (identity: ComputerConnectionIdentity): "current" | "replaced" | "ended" => {
         const latest = this.#storage.latest();
-        if (
-            latest?.kind !== "connected" ||
-            latest.computerId !== identity.computerId ||
-            latest.connectionEpoch !== identity.connectionEpoch
-        ) {
+        if (latest?.kind !== "connected" || latest.connectionEpoch !== identity.connectionEpoch) {
             return "replaced";
         }
         return this.#storage.read() === null ? "ended" : "current";
     };
 
     readonly connected = (identity: ComputerConnectionIdentity, generation: number, now: number): void => {
-        this.#storage.connect(identity, generation, now);
+        this.#storage.connect(identity.connectionEpoch, generation, now);
     };
 
-    readonly disconnected = (identity: ComputerConnectionIdentity, now: number): void => {
-        this.#storage.disconnect(identity, now);
+    readonly disconnected = (connectionEpoch: number, now: number): void => {
+        this.#storage.disconnect(connectionEpoch, now);
     };
 }

@@ -38,9 +38,9 @@ may require a separate catch-up step.
 
 Morty includes the local Runtime, relay, and browser experience. Available operations
 depend on the Agent and configuration; unavailable capabilities or history must be
-clear to the user. Morty and Moxt may discover the same installed Agent, but must not
-write to the same Agent conversation concurrently. Stop or release the current
-writer before continuing it elsewhere.
+clear to the user. Another application may use the same installed Agent; Morty must
+not write to an Agent conversation another writer is using. Stop or release the
+current writer before continuing it elsewhere.
 
 ## Data ownership and recovery
 

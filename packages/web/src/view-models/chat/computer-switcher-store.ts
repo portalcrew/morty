@@ -1,4 +1,5 @@
 import { createStore } from "zustand/vanilla";
+import type { ApiTransport } from "../../services/api/api-transport.ts";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import { type AnonymousIdentity, AnonymousIdentityApi } from "../../services/identity/anonymous-identity-api.ts";
 import type { IdentityScope } from "../../services/identity/identity-scope-url.ts";
@@ -55,7 +56,7 @@ export type ComputerSwitcherModel = ReturnType<typeof createComputerSwitcher>;
 export function createComputerSwitcher(options: {
     readonly active: IdentityScope;
     readonly origin: string;
-    readonly fetchRequest: (request: Request) => Promise<Response>;
+    readonly fetchRequest: ApiTransport["fetch"];
     readonly requests: (identity: AnonymousIdentity) => BotChatApi;
 }) {
     const api = new AnonymousIdentityApi(options);

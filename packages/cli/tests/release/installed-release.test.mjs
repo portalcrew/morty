@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { access, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -31,31 +31,24 @@ if (!entry) {
 }
 const releaseVersion = JSON.parse(await readFile(join(dirname(entry), "../package.json"), "utf8")).version;
 
-test("Given an existing Mobius state root, Morty help identifies its own product without changing that root", async () => {
-    const existing = await mkdtemp(join(tmpdir(), "moxt-coexistence-"));
+test("Given a packed Morty release, its help identifies the morty command", async () => {
     const morty = await mkdtemp(join(tmpdir(), "morty-release-"));
     try {
-        await writeFile(join(existing, "owned-by-moxt"), "preserve this installation\n");
         const result = await execute(process.execPath, [entry, "--help"], {
-            env: { ...process.env, MORTY_STATE_DIRECTORY: morty, MOBIUS_STATE_DIRECTORY: existing },
+            env: { ...process.env, MORTY_STATE_DIRECTORY: morty },
             timeout: 20_000,
         });
         assert.match(result.stdout, /^Usage: morty\b/m);
-        assert.doesNotMatch(result.stdout, /\bmobius\b/i);
-        assert.deepEqual(await readdir(existing), ["owned-by-moxt"]);
     } finally {
         await rm(morty, { recursive: true, force: true });
-        await rm(existing, { recursive: true, force: true });
     }
 });
 
-test("Given a packed Morty release, starting and restarting its daemon preserve adjacent Moxt data", async () => {
-    const existing = await mkdtemp(join(tmpdir(), "moxt-lifecycle-"));
+test("Given a packed Morty release, its daemon starts once under concurrent starts, rejects unauthorized control, restarts and stops", async () => {
     const morty = await mkdtemp(join(tmpdir(), "morty-lifecycle-"));
-    const env = { ...process.env, MORTY_STATE_DIRECTORY: morty, MOBIUS_STATE_DIRECTORY: existing };
+    const env = { ...process.env, MORTY_STATE_DIRECTORY: morty };
     const run = (...args) => execute(process.execPath, [entry, ...args], { env, timeout: 180_000 });
     try {
-        await writeFile(join(existing, "owned-by-moxt"), "preserve this installation\n");
         await Promise.all([run("start"), run("start"), run("start")]);
         assert.ok((await run("status")).stdout.includes(`Daemon: ${releaseVersion}\n`));
         const installation = join(morty, "computer");
@@ -88,10 +81,8 @@ test("Given a packed Morty release, starting and restarting its daemon preserve 
         await writeFile(join(morty, "user-data"), "keep this file");
         await assert.rejects(access(join(morty, "executables")), { code: "ENOENT" });
         await access(join(morty, "user-data"));
-        assert.deepEqual(await readdir(existing), ["owned-by-moxt"]);
     } finally {
         await run("stop").catch(() => undefined);
         await rm(morty, { recursive: true, force: true });
-        await rm(existing, { recursive: true, force: true });
     }
 });

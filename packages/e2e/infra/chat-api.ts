@@ -35,8 +35,8 @@ export async function jsonRequest(origin: string, path: string, { body, computer
         headers["authorization"] = `Bearer ${token}`;
     }
     const scopedPath =
-        computer !== undefined && path.startsWith("/morty/api/") && !path.startsWith("/morty/api/chat/computers/")
-            ? path.replace("/morty/api/", `/morty/api/computers/${encodeURIComponent(computer)}/`)
+        computer !== undefined && path.startsWith("/morty/api/v1/") && !path.startsWith("/morty/api/v1/computers/")
+            ? path.replace("/morty/api/v1/", `/morty/api/v1/computers/${encodeURIComponent(computer)}/`)
             : path;
     const response = await fetch(new URL(scopedPath, origin), {
         method: body === undefined ? "GET" : "POST",
@@ -79,13 +79,13 @@ export class ChatApi {
     }
 
     async createPairing() {
-        return await this.#request("/morty/api/management/pairing", {
+        return await this.#request("/morty/api/v1/pairing", {
             body: { idempotencyKey: crypto.randomUUID() },
         });
     }
 
     async readPairedAgent(harness: string) {
-        const paired = await this.#request(`/morty/api/management/pairing`);
+        const paired = await this.#request(`/morty/api/v1/pairing`);
         if (
             paired["status"] !== "paired" ||
             !Array.isArray(paired["agents"]) ||
@@ -97,7 +97,7 @@ export class ChatApi {
 
     async bindAgent(harness: string) {
         const identity = this.#requireIdentity();
-        await this.#request(`/morty/api/chat/computers/${encodeURIComponent(identity.computerId)}/setup`, {
+        await this.#request(`/morty/api/v1/computers/${encodeURIComponent(identity.computerId)}/setup`, {
             body: { harness },
         });
     }
@@ -105,7 +105,7 @@ export class ChatApi {
     async readBinding(harness: string) {
         const identity = this.#requireIdentity();
         const configuration = await this.#request(
-            `/morty/api/chat/computers/${encodeURIComponent(identity.computerId)}/workspace`,
+            `/morty/api/v1/computers/${encodeURIComponent(identity.computerId)}/workspace`,
             { body: {} },
         );
         const computer = object(configuration["computer"], "computer");

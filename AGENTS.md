@@ -12,7 +12,7 @@ These rules apply to the entire repository. You must read [CONTRIBUTING.md](./do
 
 ## Repository setup
 
-- Use the pinned Node and pnpm versions and install the locked workspace dependencies before building or testing. Morty owns its Runtime and cloud sources in one workspace; normal development must not require the original Mobius repository or package.
+- Use the pinned Node and pnpm versions and install the locked workspace dependencies before building or testing. Morty owns its Runtime and cloud sources in one workspace.
 
 ## Trust Boundary
 
@@ -33,11 +33,8 @@ Device access, recovery, pairing and service authorization remain enforced at
 their owning boundaries. Removing an authentication surface never authorizes
 anonymous access to privileged operations.
 
-Morty and Moxt have independent package publication, installation, state,
-credentials, process control and update lifecycles. Verify non-interference with
-a real released Moxt/Mobius installation. Production uses Morty-owned resources
-and credentials. Local development must work without production secrets or remote
-test environments and must never inherit Moxt state or fall back to Moxt services.
+Production uses Morty-owned resources and credentials. Local development must
+work without production secrets or remote test environments.
 
 Preserve production business records, Agent-owned history and the immutable
 migration history of every database the product still binds. Delete tables,
@@ -62,7 +59,7 @@ Make illegal states unrepresentable.
 
 ## Compatibility is mandatory by default
 
-Morty Web, SDK clients, deployed services, local Morty Runtimes, and stored data
+Morty Web, the client package, deployed services, local Morty Runtimes, and stored data
 upgrade independently. Preserve existing external contracts and behavior in both
 directions: new clients with old servers/Runtimes, and old clients with new
 servers/Runtimes. A successful all-new deployment does not establish compatibility.

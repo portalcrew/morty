@@ -285,7 +285,7 @@ export async function createControlledAgentRuntime(options: {
         computerPairingSchema,
         await (
             await options.server.request(
-                new Request(`${options.origin}/morty/api/computers/${options.computerId}/management/pairing`, {
+                new Request(`${options.origin}/morty/api/v1/computers/${options.computerId}/pairing`, {
                     body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
                     headers: {
                         authorization: `Bearer ${options.credential}`,
@@ -302,7 +302,7 @@ export async function createControlledAgentRuntime(options: {
         computerClaimSchema,
         await (
             await options.server.request(
-                new Request(`${options.origin}/morty/api/v1/pairings/${pairing.computerId}/redeem`, {
+                new Request(`${options.origin}/morty/api/v1/computers/${pairing.computerId}/pairing/redeem`, {
                     body: JSON.stringify({
                         agents: harness.catalog,
                         computerName: "Controlled Agent Runtime",

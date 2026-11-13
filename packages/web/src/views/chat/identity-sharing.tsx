@@ -12,7 +12,11 @@ import {
     type IdentityTransfer,
 } from "../../services/identity/anonymous-identity-api.ts";
 import { formatMoment } from "../../view-models/chat/access-presentation.ts";
-import type { IdentitySharingStore } from "../../view-models/chat/identity-sharing-store.ts";
+import {
+    agentHandoffInstructions,
+    type IdentitySharingStore,
+    type SharingRecipient,
+} from "../../view-models/chat/identity-sharing-store.ts";
 import { useExternalStore } from "../../view-models/external-store.ts";
 
 const durationLabels: Readonly<Record<DeviceAccessDuration, string>> = {
@@ -22,6 +26,10 @@ const durationLabels: Readonly<Record<DeviceAccessDuration, string>> = {
     "30d": "30 days",
 };
 const durationOptions = deviceAccessDurations.map((value) => ({ value, label: durationLabels[value] }));
+const recipientOptions: readonly { readonly value: SharingRecipient; readonly label: string }[] = [
+    { value: "person", label: "A person" },
+    { value: "agent", label: "An AI agent" },
+];
 
 const shareMethodSubheadingClassName = "text-12 font-medium leading-4 text-morty-text-3";
 const identitySharingSkeletonBarClassName = "rounded-full bg-morty-fill-opacity-3 motion-reduce:animate-none";
@@ -143,14 +151,53 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
             {loading ? (
                 <IdentitySharingTimingCopySkeleton />
             ) : (
-                <p className="text-xs leading-5 text-morty-text-3">
-                    Works for one device until {formatMoment(props.transfer.expiresAt)}. That device keeps access until{" "}
-                    {formatMoment(props.transfer.accessExpiresAt)}.
-                    {props.transfer.accessLimitedBySharer &&
-                        " This browser's own access ends then, so the device cannot keep it longer."}
-                    {props.replacedEarlier && " The previous link no longer works."}
-                </p>
+                <IdentitySharingTiming replacedEarlier={props.replacedEarlier} transfer={props.transfer} />
             )}
+        </div>
+    );
+}
+
+function IdentitySharingTiming({
+    transfer,
+    replacedEarlier,
+}: {
+    readonly transfer: IdentityTransfer;
+    readonly replacedEarlier: boolean;
+}) {
+    return (
+        <p className="text-xs leading-5 text-morty-text-3">
+            Works for one device until {formatMoment(transfer.expiresAt)}. That device keeps access until{" "}
+            {formatMoment(transfer.accessExpiresAt)}.
+            {transfer.accessLimitedBySharer &&
+                " This browser's own access ends then, so the device cannot keep it longer."}
+            {replacedEarlier && " The previous link no longer works."}
+        </p>
+    );
+}
+
+function AgentHandoffSection({
+    transfer,
+    replacedEarlier,
+}: {
+    readonly transfer: IdentityTransfer;
+    readonly replacedEarlier: boolean;
+}) {
+    return (
+        <div className="space-y-4" data-testid={dataTestId.agentHandoff}>
+            <div className="space-y-2.5">
+                <h3 className={dialogSectionTitleClassName}>Instructions for the agent</h3>
+                <p className="text-xs leading-5 text-morty-text-3">
+                    Paste this into the AI agent&apos;s chat. The agent reads the published API description and connects
+                    through the link; it does not need a browser.
+                </p>
+                <CopyLinkButton
+                    copyLabel="Copy instructions"
+                    subject="instructions"
+                    url={agentHandoffInstructions(transfer)}
+                    urlClassName="whitespace-pre-wrap break-normal"
+                />
+            </div>
+            <IdentitySharingTiming replacedEarlier={replacedEarlier} transfer={transfer} />
         </div>
     );
 }
@@ -159,6 +206,8 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
 export function IdentitySharing({ store }: { readonly store: StoreApi<IdentitySharingStore> }) {
     const state = useExternalStore(store, (state) => state.state);
     const choose = useExternalStore(store, (state) => state.choose);
+    const recipient = useExternalStore(store, (state) => state.recipient);
+    const chooseRecipient = useExternalStore(store, (state) => state.chooseRecipient);
     // The Worker states the duration a link grants; until the first link exists there is nothing to show.
     const duration =
         state.kind === "ready" ? state.transfer.accessDuration : state.kind === "initial" ? null : state.duration;
@@ -169,6 +218,21 @@ export function IdentitySharing({ store }: { readonly store: StoreApi<IdentitySh
             <MortyAlert tone="warning">
                 Anyone who opens this link can view and control every session on this computer.
             </MortyAlert>
+            <div className="grid gap-2">
+                <p className={dialogSectionTitleClassName}>Share with</p>
+                <Select
+                    label="Share with"
+                    onValueChange={(value) => {
+                        const chosen = recipientOptions.find((option) => option.value === value);
+                        if (chosen !== undefined) {
+                            chooseRecipient(chosen.value);
+                        }
+                    }}
+                    options={recipientOptions}
+                    value={recipient}
+                    viewportClassName="pt-2.5"
+                />
+            </div>
             {showDeviceAccess && (
                 <div className="grid gap-2">
                     <p className={dialogSectionTitleClassName}>Device access</p>
@@ -204,6 +268,8 @@ export function IdentitySharing({ store }: { readonly store: StoreApi<IdentitySh
             )}
             {loading ? (
                 <IdentitySharingTransferSection loading />
+            ) : state.kind === "ready" && recipient === "agent" ? (
+                <AgentHandoffSection replacedEarlier={state.replacedEarlier} transfer={state.transfer} />
             ) : state.kind === "ready" ? (
                 <IdentitySharingTransferSection
                     image={state.image}

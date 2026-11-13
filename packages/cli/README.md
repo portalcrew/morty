@@ -57,5 +57,4 @@ put credentials or pairing links in a public issue.
 ## License
 
 Apache-2.0; see `LICENSE` and `NOTICE` in this package. Bundled third-party
-components retain their own terms in `THIRD-PARTY-NOTICES.txt`. The Morty and Moxt
-names and logos are trademarks; the code license does not grant trademark rights.
+components retain their own terms in `THIRD-PARTY-NOTICES.txt`.

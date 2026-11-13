@@ -1,6 +1,6 @@
 import { CONTENT_CHUNK_MAX_BYTES, encodeContentChunkFrame, MORTY_API_PREFIX } from "@morty-build/client/protocol";
+import type { MortyTransportCall } from "../calls/call.ts";
 import { MortyApiError, MortyConnectionError, MortyProtocolError, MortyValidationError } from "../errors.ts";
-import { computerRequestTarget } from "./computer-request-target.ts";
 
 const CONNECTION_TIMEOUT_MILLISECONDS = 15_000;
 const HEARTBEAT_INTERVAL_MILLISECONDS = 20_000;
@@ -163,40 +163,44 @@ export class WsTransport {
         this.#connector = options.connector ?? new RelayMortyWebSocketConnector();
     }
 
-    readonly fetch = async (request: Request): Promise<Response> => {
+    readonly #cancelRequest = (socket: WebSocket, requestId: string): void => {
+        if (socket.readyState !== WebSocket.OPEN) {
+            return;
+        }
+        try {
+            socket.send(JSON.stringify({ kind: "http.cancel", requestId }));
+        } catch {
+            // Cancellation is already final locally; never replay the operation.
+        }
+    };
+
+    readonly fetch = async (request: MortyTransportCall): Promise<Response> => {
         request.signal.throwIfAborted();
         if (this.#state.kind === "closed") {
             throw new MortyConnectionError("The Morty WebSocket transport is closed");
         }
-        const requestUrl = new URL(request.url);
-        const computerPrefix = `${MORTY_API_PREFIX}/v1/computers/`;
-        const fileDownload =
-            request.method === "GET" &&
-            requestUrl.pathname.startsWith(computerPrefix) &&
-            /^[^/]+\/harnesses\/[^/]+\/sessions\/[^/]+\/files\/content$/u.test(
-                requestUrl.pathname.slice(computerPrefix.length),
-            );
-        const target = computerRequestTarget(request);
-        if (fileDownload || target === null) {
-            return await globalThis.fetch(request);
+        const requestUrl = new URL(request.endpoint.path, request.origin);
+        const transport = request.endpoint.transport;
+        if (transport.kind === "http") {
+            return await globalThis.fetch(requestUrl, {
+                method: request.endpoint.method,
+                headers: request.headers,
+                body: request.body instanceof Uint8Array ? request.body.slice().buffer : request.body,
+                signal: request.signal,
+            });
         }
         const socket = await this.#socket(request);
         request.signal.throwIfAborted();
         const requestId = crypto.randomUUID();
-        const binaryRequest = request.headers.has("x-morty-byte-length");
-        const binaryBody = binaryRequest ? new Uint8Array(await request.arrayBuffer()) : null;
-        const body = binaryRequest ? "" : await request.text();
+        const binaryBody = request.body instanceof Uint8Array ? request.body : null;
+        const body = typeof request.body === "string" ? request.body : "";
         request.signal.throwIfAborted();
         const response = new Promise<Response>((resolve, reject) => {
             const abort = (): void => {
                 this.#pending.delete(requestId);
                 reject(request.signal.reason);
-                if (target.kind === "computer-api" && socket.readyState === WebSocket.OPEN) {
-                    try {
-                        socket.send(JSON.stringify({ kind: "http.cancel", requestId }));
-                    } catch {
-                        // Cancellation is already final locally; never replay the operation.
-                    }
+                if (transport.cancellation === "remote") {
+                    this.#cancelRequest(socket, requestId);
                 }
             };
             request.signal.addEventListener("abort", abort, { once: true });
@@ -215,9 +219,9 @@ export class WsTransport {
             socket.send(
                 JSON.stringify({
                     body,
-                    headers: Array.from(request.headers.entries()),
+                    headers: Object.entries(request.headers),
                     kind: WS_REQUEST_KIND,
-                    method: request.method,
+                    method: request.endpoint.method,
                     path: `${requestUrl.pathname}${requestUrl.search}`,
                     requestId,
                     ...(binaryBody === null ? {} : { bodyByteLength: binaryBody.byteLength }),
@@ -243,9 +247,11 @@ export class WsTransport {
         return await response;
     };
 
-    readonly openSessionLiveEvents = async (request: Request): Promise<ReadableStream<MortyTransportSessionEvent>> => {
+    readonly openSessionLiveEvents = async (
+        request: MortyTransportCall,
+    ): Promise<ReadableStream<MortyTransportSessionEvent>> => {
         request.signal.throwIfAborted();
-        const requestUrl = new URL(request.url);
+        const requestUrl = new URL(request.endpoint.path, request.origin);
         const socket = await this.#socket(request);
         request.signal.throwIfAborted();
         const id = crypto.randomUUID();
@@ -268,7 +274,7 @@ export class WsTransport {
         try {
             socket.send(
                 JSON.stringify({
-                    headers: Array.from(request.headers.entries()),
+                    headers: Object.entries(request.headers),
                     kind: EVENT_SUBSCRIBE_KIND,
                     path: `${requestUrl.pathname}${requestUrl.search}`,
                     subscriptionId: id,
@@ -295,12 +301,11 @@ export class WsTransport {
         this.#failSubscriptions(new MortyConnectionError("The live Session event transport closed"));
     };
 
-    readonly #socket = async (request: Request): Promise<WebSocket> => {
-        const target = computerRequestTarget(request);
-        if (target === null) {
-            throw new MortyValidationError("A WebSocket subscription requires a Computer target");
-        }
-        const endpoint = new URL(`${MORTY_API_PREFIX}/v1/computers/${target.computerId}/transport`, request.url);
+    readonly #socket = async (request: MortyTransportCall): Promise<WebSocket> => {
+        const endpoint = new URL(
+            `${MORTY_API_PREFIX}/v1/computers/${encodeURIComponent(request.endpoint.computerId)}/transport`,
+            request.origin,
+        );
         endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
         if (this.#endpoint !== null && this.#endpoint !== endpoint.href) {
             throw new MortyValidationError("A WebSocket transport cannot connect to multiple computers");

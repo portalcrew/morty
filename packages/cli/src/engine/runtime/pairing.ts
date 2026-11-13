@@ -161,7 +161,10 @@ async function claimPairing(
         harness: agent.harness,
         label: agent.label,
     }));
-    const endpoint = mortyApiUrl(options.relayOrigin, `/v1/pairings/${encodeURIComponent(options.computerId)}/redeem`);
+    const endpoint = mortyApiUrl(
+        options.relayOrigin,
+        `/v1/computers/${encodeURIComponent(options.computerId)}/pairing/redeem`,
+    );
     let response: Response;
     try {
         response = await fetch(endpoint, {

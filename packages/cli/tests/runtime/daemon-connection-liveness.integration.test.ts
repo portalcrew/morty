@@ -252,7 +252,10 @@ describe("daemon relay connection liveness", () => {
         const defaultWorkspace = join(stateDirectory, "workspace");
         await mkdir(defaultWorkspace);
         const relay = createServer((request, response) => {
-            if (request.method === "PUT" && request.url === `${MORTY_API_PREFIX}/channels/heartbeat-channel/catalog`) {
+            if (
+                request.method === "PUT" &&
+                request.url === `${MORTY_API_PREFIX}/v1/computers/heartbeat-channel/catalog`
+            ) {
                 request.resume();
                 response.writeHead(204);
                 response.end();
@@ -400,7 +403,7 @@ describe("daemon relay connection liveness", () => {
         const relay = createServer((request, response) => {
             if (
                 request.method === "PUT" &&
-                request.url === `${MORTY_API_PREFIX}/channels/computer-revoked-channel/catalog`
+                request.url === `${MORTY_API_PREFIX}/v1/computers/computer-revoked-channel/catalog`
             ) {
                 request.resume();
                 response.writeHead(204);
@@ -538,7 +541,10 @@ describe("daemon relay connection liveness", () => {
             observeCatalogFailure = resolve;
         });
         const relay = createServer((request, response) => {
-            if (request.method === "PUT" && request.url === `${MORTY_API_PREFIX}/channels/liveness-channel/catalog`) {
+            if (
+                request.method === "PUT" &&
+                request.url === `${MORTY_API_PREFIX}/v1/computers/liveness-channel/catalog`
+            ) {
                 catalogRequestCount += 1;
                 request.resume();
                 response.writeHead(catalogRequestCount === 1 ? 503 : 204);
@@ -704,7 +710,7 @@ describe("daemon relay connection liveness", () => {
         const relay = createServer((request, response) => {
             if (
                 request.method === "PUT" &&
-                request.url === `${MORTY_API_PREFIX}/channels/unsupported-channel/catalog`
+                request.url === `${MORTY_API_PREFIX}/v1/computers/unsupported-channel/catalog`
             ) {
                 request.resume();
                 response.writeHead(204);
@@ -877,7 +883,7 @@ describe("daemon relay connection liveness", () => {
             const url = new URL(request.url ?? "/", "http://127.0.0.1");
             if (
                 request.method === "PUT" &&
-                url.pathname === `${MORTY_API_PREFIX}/channels/reconciliation-channel/catalog`
+                url.pathname === `${MORTY_API_PREFIX}/v1/computers/reconciliation-channel/catalog`
             ) {
                 request.resume();
                 response.writeHead(204);

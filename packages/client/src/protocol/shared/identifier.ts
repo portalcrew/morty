@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const IDENTIFIER_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
+export const IDENTIFIER_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
 
 export const identifierStringSchema = z.string().min(1).max(128).regex(IDENTIFIER_PATTERN);
 export const identifierSchema = identifierStringSchema.brand<"Identifier">();

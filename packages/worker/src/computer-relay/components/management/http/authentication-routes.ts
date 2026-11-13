@@ -1,6 +1,8 @@
-import { Hono, type MiddlewareHandler } from "hono";
+import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import * as v from "valibot";
+import { transferRedemptionInput } from "../../../../contracts/agent-api/identity-requests.ts";
+import { documented, identityResponse } from "../../../../contracts/agent-api/responses.ts";
 import {
     computerToken,
     credentialRevocationPaths,
@@ -14,10 +16,11 @@ import { bodyParser } from "../../../../http/body-parser.ts";
 import { computerFromTransfer } from "../../../../http/computer-target.ts";
 import { json } from "../../../../http/json.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
+import { readBearerToken } from "../../../../http/request-headers.ts";
 import { requestTimeoutMiddleware } from "../../../../middleware/request-timeout-middleware.ts";
-import { requestHeaders } from "../../../middleware/request-headers.ts";
 import { credentialRejected } from "./authenticated-session.ts";
 import type { ManagementHttpEnvironment } from "./management-http-environment.ts";
+import { applicationForRequest, type ManagementRouteContext } from "./route-context.ts";
 
 const shareInput = v.pipe(
     v.object({
@@ -30,18 +33,6 @@ const shareInput = v.pipe(
     }),
     v.readonly(),
 );
-const transferInput = v.pipe(
-    v.object({
-        code: v.string(),
-        /** The credential this browser already holds for the link's Computer, which the new one replaces. */
-        replaces: v.optional(v.pipe(v.string(), v.maxLength(512))),
-        /** How the browser describes itself, such as "iPhone · Safari"; shown to the owner's other devices. */
-        device: v.optional(v.pipe(v.string(), v.trim(), v.regex(/^[^\p{C}]{1,80}$/u))),
-        /** A browser-held secret naming this redemption, so repeating it after a lost reply returns the same access. */
-        redemptionKey: v.optional(v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{43}$/u))),
-    }),
-    v.readonly(),
-);
 const revokeAllAccessInput = v.pipe(
     v.strictObject({
         /** The local credential that replaces the caller's; setup saved it before sending this request. */
@@ -50,16 +41,17 @@ const revokeAllAccessInput = v.pipe(
     v.readonly(),
 );
 const computerLinkInput = v.pipe(v.strictObject({ computerId: relayIdentifier }), v.readonly());
-export function createAuthenticationRoutes() {
+export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
     return new Hono<ManagementHttpEnvironment>()
         .post(
             "/identity/link",
             bodyParser<ManagementHttpEnvironment, typeof computerLinkInput>(computerLinkInput),
             async (context) => {
+                const application = await applicationForRequest(ctx, context);
                 using deadline = new RequestDeadline(context.req.raw.signal, 15_000);
-                const result = await context.var.application.services.authentication.linkComputer(
+                const result = await application.services.authentication.linkComputer(
                     context.req.valid("json").computerId,
-                    context.get("bearerToken"),
+                    readBearerToken(context.req.raw),
                     deadline.signal,
                 );
                 switch (result.kind) {
@@ -84,14 +76,15 @@ export function createAuthenticationRoutes() {
             },
         )
         .all("/session", async (context) => {
+            const application = await applicationForRequest(ctx, context);
             const request = context.req.raw;
             if (request.method !== "GET") {
                 throw new ManagementError("METHOD_NOT_ALLOWED", "Method not allowed.", 405, {
                     Allow: "GET",
                 });
             }
-            const token = context.get("bearerToken");
-            const result = await context.var.application.services.authentication.session(token, request.signal);
+            const token = readBearerToken(request);
+            const result = await application.services.authentication.session(token, request.signal);
             switch (result.kind) {
                 case "authenticated":
                     // A browser's access ends at its device's term, the latest among the links the device opened; other
@@ -117,9 +110,10 @@ export function createAuthenticationRoutes() {
             "/identity/transfers",
             bodyParser<ManagementHttpEnvironment, typeof shareInput>(shareInput),
             async (context) => {
+                const application = await applicationForRequest(ctx, context);
                 const input = context.req.valid("json");
-                const transfer = await context.var.application.services.authentication.createTransfer(
-                    context.get("bearerToken"),
+                const transfer = await application.services.authentication.createTransfer(
+                    readBearerToken(context.req.raw),
                     {
                         operationId: input.operationId,
                         duration: input.accessDuration ?? defaultDeviceAccessDuration,
@@ -132,7 +126,7 @@ export function createAuthenticationRoutes() {
                 }
                 const url = new URL(
                     "/continue",
-                    v.parse(v.pipe(v.string(), v.url()), context.var.application.config.bindings.APP_ORIGIN),
+                    v.parse(v.pipe(v.string(), v.url()), application.config.bindings.APP_ORIGIN),
                 );
                 url.hash = `code=${transfer.code}`;
                 return json(
@@ -148,8 +142,9 @@ export function createAuthenticationRoutes() {
             },
         )
         .get("/identity/devices", async (context) => {
-            const result = await context.var.application.services.authentication.linkedDevices(
-                context.get("bearerToken"),
+            const application = await applicationForRequest(ctx, context);
+            const result = await application.services.authentication.linkedDevices(
+                readBearerToken(context.req.raw),
                 context.req.raw.signal,
             );
             if (result.kind !== "listed") {
@@ -174,8 +169,9 @@ export function createAuthenticationRoutes() {
             "/identity/revoke-all-access",
             bodyParser<ManagementHttpEnvironment, typeof revokeAllAccessInput>(revokeAllAccessInput),
             async (context) => {
-                const result = await context.var.application.services.authentication.revokeAllAccess(
-                    context.get("bearerToken"),
+                const application = await applicationForRequest(ctx, context);
+                const result = await application.services.authentication.revokeAllAccess(
+                    readBearerToken(context.req.raw),
                     context.req.valid("json").successor,
                     context.req.raw.signal,
                 );
@@ -193,9 +189,10 @@ export function createAuthenticationRoutes() {
                 }
             },
         )
-        .delete("/identity/v1/other-browser-access", async (context) => {
-            const result = await context.var.application.services.authentication.endOtherBrowserAccess(
-                context.get("bearerToken"),
+        .delete("/identity/other-browser-access", async (context) => {
+            const application = await applicationForRequest(ctx, context);
+            const result = await application.services.authentication.endOtherBrowserAccess(
+                readBearerToken(context.req.raw),
                 context.req.raw.signal,
             );
             switch (result.kind) {
@@ -211,9 +208,10 @@ export function createAuthenticationRoutes() {
                     );
             }
         })
-        .delete("/identity/v1/devices/:deviceId", async (context) => {
-            const result = await context.var.application.services.authentication.endDeviceAccess(
-                context.get("bearerToken"),
+        .delete("/identity/devices/:deviceId", async (context) => {
+            const application = await applicationForRequest(ctx, context);
+            const result = await application.services.authentication.endDeviceAccess(
+                readBearerToken(context.req.raw),
                 context.req.param("deviceId"),
                 context.req.raw.signal,
             );
@@ -239,35 +237,36 @@ export function createAuthenticationRoutes() {
             }
         })
         .delete(credentialRevocationPaths.browser, async (context) => {
+            const application = await applicationForRequest(ctx, context);
             return endAccessResponse(
-                await context.var.application.services.authentication.endBrowserAccess(
-                    context.get("bearerToken"),
+                await application.services.authentication.endBrowserAccess(
+                    readBearerToken(context.req.raw),
                     context.req.raw.signal,
                 ),
             );
         })
         .delete(credentialRevocationPaths.local, async (context) => {
+            const application = await applicationForRequest(ctx, context);
             return endAccessResponse(
-                await context.var.application.services.authentication.retireLocalCredential(
-                    context.get("bearerToken"),
+                await application.services.authentication.retireLocalCredential(
+                    readBearerToken(context.req.raw),
                     context.req.raw.signal,
                 ),
             );
         });
 }
 
-export function createTransferRedemptionRoutes(initialize: MiddlewareHandler<ManagementHttpEnvironment>) {
+export function createTransferRedemptionRoutes(ctx: ManagementRouteContext) {
     return new Hono<ManagementHttpEnvironment>().post(
         "/identity/transfers/redeem",
         requestTimeoutMiddleware<ManagementHttpEnvironment>(30_000),
         computerFromTransfer,
         bodyLimit({ maxSize: 3 * 1_024 * 1_024 }),
-        initialize,
-        requestHeaders,
-        bodyParser<ManagementHttpEnvironment, typeof transferInput>(transferInput),
+        bodyParser<ManagementHttpEnvironment, typeof transferRedemptionInput>(transferRedemptionInput),
         async (context) => {
+            const application = await applicationForRequest(ctx, context);
             const input = context.req.valid("json");
-            const identity = await context.var.application.services.management.redeemTransfer(
+            const identity = await application.services.management.redeemTransfer(
                 input.code,
                 input.replaces ?? null,
                 {
@@ -284,7 +283,7 @@ export function createTransferRedemptionRoutes(initialize: MiddlewareHandler<Man
                     410,
                 );
             }
-            return json(identity);
+            return json(documented(identityResponse, identity));
         },
     );
 }

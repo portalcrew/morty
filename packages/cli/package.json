@@ -62,7 +62,7 @@
         "@types/qrcode": "catalog:"
     },
     "keywords": [],
-    "author": "Moxt",
+    "author": "The Morty Authors",
     "license": "Apache-2.0",
     "bugs": {
         "url": "https://github.com/moxt-ai/morty/issues"

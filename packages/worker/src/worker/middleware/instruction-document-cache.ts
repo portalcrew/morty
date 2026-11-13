@@ -1,12 +1,15 @@
 import type { CloudBindings } from "../../contracts/cloud-bindings.ts";
-import { instructionOrigin } from "../components/instruction-documents/service/instruction-document-service.ts";
+import {
+    instructionDocumentPaths,
+    instructionOrigin,
+} from "../components/instruction-documents/service/instruction-document-service.ts";
 
 type WorkerFetch = (request: Request, bindings: CloudBindings, context?: ExecutionContext) => Promise<Response>;
 
 export function withInstructionDocumentCache(next: WorkerFetch): WorkerFetch {
     return async (request, bindings, context) => {
         const url = new URL(request.url);
-        if (request.method !== "GET" || url.pathname !== "/setup.md") {
+        if (request.method !== "GET" || !instructionDocumentPaths.has(url.pathname)) {
             return next(request, bindings, context);
         }
         const origin = instructionOrigin(bindings.APP_ORIGIN === undefined ? url.origin : bindings.APP_ORIGIN);

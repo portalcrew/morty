@@ -1,6 +1,6 @@
 import { type Identifier, isIdentifier } from "@morty-build/client/protocol";
 import * as v from "valibot";
-import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
+import { PairingDirectoryError } from "../relay/pairing.ts";
 
 // The request bodies of the operations every Session API offers on one Session. Each API states the Session in its own
 // way and shapes its own response, but a request for the same operation means the same thing on every API. The
@@ -12,7 +12,12 @@ const identifier = v.custom<Identifier>(isIdentifier);
 const turnSubmissionEntries = {
     content: v.pipe(v.string(), v.maxLength(100_000)),
     disposition: v.optional(v.picklist(["append", "steer"]), "append"),
-    idempotencyKey: identifier,
+    idempotencyKey: v.pipe(
+        identifier,
+        v.description(
+            "Persist before sending. Resend the same key to retry the same intended turn; a new key submits another turn.",
+        ),
+    ),
     sessionConfigurations: v.optional(v.pipe(v.array(v.unknown()), v.maxLength(100)), []),
     // Only a steering submission names the Turn it joins; the Computer protocol refuses a target on an appended one.
     targetCommandId: v.optional(identifier),

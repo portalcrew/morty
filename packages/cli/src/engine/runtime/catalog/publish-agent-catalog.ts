@@ -62,7 +62,7 @@ async function rejectedCatalogError(response: FetchResponse): Promise<AgentCatal
 
 function catalogEndpoint(config: RuntimeConfig): URL {
     const endpoint = relayHttpEndpoint(config.relayUrl);
-    endpoint.pathname = `${MORTY_API_PREFIX}/channels/${encodeURIComponent(config.computerId)}/catalog`;
+    endpoint.pathname = `${MORTY_API_PREFIX}/v1/computers/${encodeURIComponent(config.computerId)}/catalog`;
     return endpoint;
 }
 

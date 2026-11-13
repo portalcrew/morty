@@ -37,11 +37,9 @@ const bound = <T>(value: T, name: string) => sql<T>`${value}`.as(name);
  * starts a new generation instead of changing an earlier one.
  */
 export class ComputerDirectoryStorage {
-    readonly #computerId: string;
     readonly #database: DurableObjectDatabase;
 
-    constructor(computerId: string, database: DurableObjectDatabase) {
-        this.#computerId = computerId;
+    constructor(database: DurableObjectDatabase) {
         this.#database = database;
     }
 
@@ -49,7 +47,6 @@ export class ComputerDirectoryStorage {
     private readonly generationQuery = (database: RelayDrizzleDatabase) =>
         database
             .select({
-                computer_id: computerPairing.computerId,
                 poll_token_hash: computerPairing.pollTokenHash,
                 expires_at: computerPairing.expiresAt,
                 revoked_at: computerRevocation.revokedAt,
@@ -61,7 +58,7 @@ export class ComputerDirectoryStorage {
 
     readonly readPairingCode = async (codeHash: string, signal: AbortSignal): Promise<PairingClaimRow | null> => {
         const rows = await this.generationQuery(relayDrizzle(this.#database, signal))
-            .where(and(eq(computerPairing.computerId, this.#computerId), eq(computerPairing.pairingCodeHash, codeHash)))
+            .where(eq(computerPairing.pairingCodeHash, codeHash))
             .limit(1);
         return rows[0] ?? null;
     };
@@ -69,7 +66,7 @@ export class ComputerDirectoryStorage {
     /** The computer's current generation; null before it was ever paired. */
     readonly readCurrentPairing = async (signal: AbortSignal): Promise<PairingClaimRow | null> => {
         const rows = await this.generationQuery(relayDrizzle(this.#database, signal))
-            .where(inArray(computerPairing.generation, currentGeneration(this.#computerId)))
+            .where(inArray(computerPairing.generation, currentGeneration()))
             .limit(1);
         return rows[0] ?? null;
     };
@@ -80,18 +77,12 @@ export class ComputerDirectoryStorage {
     ): Promise<ComputerPairingRow | null> => {
         const rows = await relayDrizzle(this.#database, signal)
             .select({
-                computer_id: computerPairing.computerId,
                 pairing_code_hash: computerPairing.pairingCodeHash,
                 poll_token_hash: computerPairing.pollTokenHash,
                 expires_at: computerPairing.expiresAt,
             })
             .from(computerPairing)
-            .where(
-                and(
-                    eq(computerPairing.computerId, this.#computerId),
-                    eq(computerPairing.creationIdempotencyKey, idempotencyKey),
-                ),
-            )
+            .where(eq(computerPairing.creationIdempotencyKey, idempotencyKey))
             .limit(1);
         return rows[0] ?? null;
     };
@@ -108,7 +99,6 @@ export class ComputerDirectoryStorage {
             .leftJoin(computerRegistration, eq(computerRegistration.generation, computerPairing.generation))
             .where(
                 and(
-                    eq(computerPairing.computerId, this.#computerId),
                     notInArray(
                         computerPairing.generation,
                         database.select({ generation: computerRevocation.generation }).from(computerRevocation),
@@ -122,7 +112,6 @@ export class ComputerDirectoryStorage {
                 .select({
                     // SQLite assigns the next generation in place of a null one.
                     generation: bound<number | null>(null, "generation"),
-                    computerId: bound(this.#computerId, "computer_id"),
                     pairingCodeHash: bound(value.codeHash, "pairing_code_hash"),
                     pollTokenHash: bound(value.pollHash, "poll_token_hash"),
                     expiresAt: bound(value.expiresAt, "expires_at"),
@@ -152,8 +141,7 @@ export class ComputerDirectoryStorage {
             .from(computerPairing)
             .where(
                 and(
-                    eq(computerPairing.computerId, this.#computerId),
-                    inArray(computerPairing.generation, currentGeneration(this.#computerId)),
+                    inArray(computerPairing.generation, currentGeneration()),
                     eq(computerPairing.pairingCodeHash, value.codeHash),
                     gt(computerPairing.expiresAt, value.now),
                     notInArray(
@@ -199,25 +187,22 @@ export class ComputerDirectoryStorage {
     /** The computer's current generation as a Computer: its registration and revocation, if they happened. */
     readonly readComputer = async (signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> => {
         const row = await this.readCurrentPairing(signal);
-        return row === null
-            ? null
-            : { computer_id: row.computer_id, revoked_at: row.revoked_at, registration: row.registration };
+        return row === null ? null : { revoked_at: row.revoked_at, registration: row.registration };
     };
 
-    readonly readDaemon = async (tokenHash: string, signal: AbortSignal) => {
+    /** Whether the token is the active generation's daemon credential. */
+    readonly isActiveDaemon = async (tokenHash: string, signal: AbortSignal): Promise<boolean> => {
         const rows = await relayDrizzle(this.#database, signal)
-            .select({ computer_id: computerPairing.computerId })
+            .select({ generation: daemonCredential.generation })
             .from(daemonCredential)
-            .innerJoin(computerPairing, eq(computerPairing.generation, daemonCredential.generation))
             .where(
                 and(
-                    eq(computerPairing.computerId, this.#computerId),
                     eq(daemonCredential.tokenHash, tokenHash),
-                    inArray(daemonCredential.generation, activeGeneration(this.#computerId)),
+                    inArray(daemonCredential.generation, activeGeneration()),
                 ),
             )
             .limit(1);
-        return rows[0] ?? null;
+        return rows.length === 1;
     };
 
     /**
@@ -232,7 +217,7 @@ export class ComputerDirectoryStorage {
         signal: AbortSignal,
     ): Promise<ComputerCredentialRotation> => {
         const database = relayDrizzle(this.#database, signal);
-        const active = activeGeneration(this.#computerId);
+        const active = activeGeneration();
         const current = and(
             eq(daemonCredential.tokenHash, presentedHash),
             inArray(daemonCredential.generation, active),
@@ -254,7 +239,6 @@ export class ComputerDirectoryStorage {
             ],
             signal,
         );
-        const computer = { computer_id: this.#computerId };
         const rows = await database
             .select({
                 successor_hash: retiredDaemonCredential.successorHash,
@@ -272,8 +256,8 @@ export class ComputerDirectoryStorage {
         const row = rows[0];
         if (row !== undefined) {
             return row.successor_hash === successorHash && row.current_hash === successorHash
-                ? { kind: "rotated", computer }
-                : { kind: "reused", computer };
+                ? { kind: "rotated" }
+                : { kind: "reused" };
         }
         // Every generation keeps its credentials, so a daemon of an ended generation learns its access ended for good,
         // also after the computer was paired again.
@@ -294,7 +278,7 @@ export class ComputerDirectoryStorage {
     /** Ends the current generation's access, once; a repeated revocation returns the first one. */
     readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> => {
         const database = relayDrizzle(this.#database, signal);
-        const current = currentGeneration(this.#computerId);
+        const current = currentGeneration();
         const revocation = database
             .insert(computerRevocation)
             .select(
@@ -311,9 +295,7 @@ export class ComputerDirectoryStorage {
 
     readonly listComputers = async (signal: AbortSignal) => {
         const row = await this.readComputer(signal);
-        return row?.registration && row.revoked_at === null
-            ? [{ computer_id: row.computer_id, ...row.registration }]
-            : [];
+        return row?.registration && row.revoked_at === null ? [row.registration] : [];
     };
 
     readonly updateAgents = async (tokenHash: string, agents: string, signal: AbortSignal) => {
@@ -331,7 +313,7 @@ export class ComputerDirectoryStorage {
                             .where(
                                 and(
                                     eq(daemonCredential.tokenHash, tokenHash),
-                                    inArray(daemonCredential.generation, activeGeneration(this.#computerId)),
+                                    inArray(daemonCredential.generation, activeGeneration()),
                                 ),
                             ),
                     ),

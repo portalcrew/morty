@@ -122,6 +122,6 @@ export function mayPerform<Operation extends CredentialOperation>(
 }
 
 export const credentialRevocationPaths = {
-    local: "/identity/v1/local-credential",
-    browser: "/identity/v1/browser-access",
+    local: "/identity/local-credential",
+    browser: "/identity/browser-access",
 } as const;

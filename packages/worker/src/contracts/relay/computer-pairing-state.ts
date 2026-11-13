@@ -13,7 +13,7 @@ export function computerRevokedAt(value: unknown): number | null {
 
 // The v1 representation is a projection of facts. Passing the clock explicitly
 // makes expiry independent of polling, maintenance writes, and component order.
-export function computerPairingStatus(row: PairingComputerRow, now: number): PairingStatus {
+export function computerPairingStatus(row: PairingComputerRow, computerId: string, now: number): PairingStatus {
     const revokedAt = computerRevokedAt(row.revoked_at);
     if (revokedAt !== null) {
         return { status: "revoked", revokedAt: new Date(revokedAt).toISOString() };
@@ -24,7 +24,7 @@ export function computerPairingStatus(row: PairingComputerRow, now: number): Pai
             agents: parseAgents(row.registration.agents_json),
             computerName: row.registration.computer_name,
             workspaceName: row.registration.workspace_name,
-            computerId: row.computer_id,
+            computerId,
         };
     }
     if (!Number.isSafeInteger(row.expires_at) || row.expires_at < 0) {

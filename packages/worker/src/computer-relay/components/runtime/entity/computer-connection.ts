@@ -4,7 +4,8 @@ export interface ComputerConnectionIdentity {
 }
 
 /** A daemon connection the Relay admitted under one pairing generation. */
-export interface ComputerConnection extends ComputerConnectionIdentity {
+export interface ComputerConnection {
+    readonly connectionEpoch: number;
     readonly generation: number;
     readonly connectedAt: number;
 }

@@ -1,5 +1,5 @@
 {
-    "$comment": "Modified and maintained by Moxt for Morty as part of the Claude ACP adapter derived from Zed Industries' claude-code-acp (Apache-2.0).",
+    "$comment": "Modified for Morty as part of the Claude ACP adapter derived from Zed Industries' claude-code-acp (Apache-2.0).",
     "compilerOptions": {
         "declaration": true,
         "declarationMap": true,

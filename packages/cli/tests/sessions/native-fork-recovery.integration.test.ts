@@ -123,7 +123,7 @@ test("Given a Fork succeeds but its response is lost, When the same operation is
     });
     await listen(proxy);
     try {
-        const url = `http://127.0.0.1:${port(proxy)}/morty/api/chat/computers/${owner.computerId}/native-session-forks/${crypto.randomUUID()}`;
+        const url = `http://127.0.0.1:${port(proxy)}/morty/api/v1/computers/${owner.computerId}/native-sessions/forks/${crypto.randomUUID()}`;
         const send = () =>
             fetch(url, {
                 method: "POST",

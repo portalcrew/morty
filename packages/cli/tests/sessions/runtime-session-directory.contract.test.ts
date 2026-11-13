@@ -24,20 +24,23 @@ for (const client of ["SDK", "HTTP"] as const) {
                     ? await runtime.createSession(request, cancellation.signal)
                     : await (async () => {
                           const response = await relay.app.request(
-                              new Request(`${relay.baseUrl}/morty/api/chat/computers/${owner.computerId}/access`, {
-                                  method: "POST",
-                                  headers: {
-                                      authorization: `Bearer ${owner.token}`,
-                                      "content-type": "application/json",
+                              new Request(
+                                  `${relay.baseUrl}/morty/api/v1/computers/${owner.computerId}/managed-sessions/open`,
+                                  {
+                                      method: "POST",
+                                      headers: {
+                                          authorization: `Bearer ${owner.token}`,
+                                          "content-type": "application/json",
+                                      },
+                                      body: JSON.stringify({
+                                          harness: request.harness,
+                                          configurations: request.configurations,
+                                          workspaceRef: request.directory,
+                                          conversationKey: request.operationId,
+                                      }),
+                                      signal: cancellation.signal,
                                   },
-                                  body: JSON.stringify({
-                                      harness: request.harness,
-                                      configurations: request.configurations,
-                                      workspaceRef: request.directory,
-                                      conversationKey: request.operationId,
-                                  }),
-                                  signal: cancellation.signal,
-                              }),
+                              ),
                           );
                           expect(response.status).toBe(200);
                           const access: unknown = await response.json();

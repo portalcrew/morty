@@ -15,7 +15,7 @@
         "binding": "ASSETS",
         "directory": "../../../dist/client",
         "not_found_handling": "none",
-        "run_worker_first": ["/morty/api/*", "/setup.md"]
+        "run_worker_first": ["/morty/api/*", "/setup.md", "/agent-api.md", "/agent-api/*"]
     },
     "durable_objects": {
         "bindings": [{ "name": "COMPUTER_RELAY", "class_name": "ComputerRelay" }]

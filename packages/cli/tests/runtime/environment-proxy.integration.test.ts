@@ -204,7 +204,7 @@ describe("daemon environment proxy", () => {
 
             expect(tunnelTargets).toContain(`127.0.0.1:${pairingPort}`);
             expect(tunnelTargets).toContain(`127.0.0.1:${relayPort}`);
-            expect(pairingPaths).toEqual([`${MORTY_API_PREFIX}/v1/pairings/proxy-computer/redeem`]);
+            expect(pairingPaths).toEqual([`${MORTY_API_PREFIX}/v1/computers/proxy-computer/pairing/redeem`]);
             await environmentProxyDispatcher.close();
         } finally {
             if (previousHttpProxy === undefined) {

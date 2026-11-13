@@ -1,42 +1,51 @@
 import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER } from "@morty-build/client/protocol";
 import { Hono } from "hono";
+import * as v from "valibot";
 import {
     validateAgents,
     validateDisplayName,
     validateIdentifier,
     validatePairingCode,
 } from "../../../../contracts/relay/pairing.ts";
-import { bearerToken } from "../../../../infra/relay-http.ts";
-import { bodyParser } from "../../../../middleware/body-parser.ts";
-import { errorMiddleware, rethrowHonoError } from "../../../../middleware/error-middleware.ts";
+import { bearerToken } from "../../../../http/bearer-token.ts";
+import { bodyParser } from "../../../../http/body-parser.ts";
+import { computerFromPath, computerFromRuntimeCredential } from "../../../../http/computer-target.ts";
+import { errorMiddleware, rethrowHonoError } from "../../../../http/error-middleware.ts";
+import { protocolBodyLimit } from "../../../../http/protocol-body-limit.ts";
 import { pairingTimeoutMiddleware } from "../../../../middleware/pairing-timeout-middleware.ts";
-import type {
-    RelayProtocolEnvironment as RelayHttpEnvironment,
-    RelayRouteMiddleware,
-} from "../../../http/environment.ts";
+import { requestTimeoutMiddleware } from "../../../../middleware/request-timeout-middleware.ts";
+import type { RelayProtocolEnvironment as RelayHttpEnvironment } from "../../../http/environment.ts";
+import type { RelayProtocolRouteContext } from "./protocol-routes.ts";
 
-export function createComputerPairingRoutes(
-    [timeout, target, initialize]: RelayRouteMiddleware,
-    [runtimeTimeout, runtimeTarget, initializeRuntime]: RelayRouteMiddleware,
-) {
+// The validators below decode each field into its domain value and report its own error code.
+const redeemRequestSchema = v.object({
+    agents: v.unknown(),
+    computerName: v.unknown(),
+    pairingCode: v.unknown(),
+    workspaceName: v.unknown(),
+});
+
+export function createComputerPairingRoutes(ctx: RelayProtocolRouteContext) {
+    const timeout = requestTimeoutMiddleware<RelayHttpEnvironment>(30_000);
     return new Hono<RelayHttpEnvironment>()
         .onError(rethrowHonoError)
         .use("*", errorMiddleware)
         .post(
-            "/pairings/:computerId/redeem",
+            "/computers/:computerId/pairing/redeem",
             timeout,
-            target,
-            initialize,
+            computerFromPath,
             pairingTimeoutMiddleware("Computer pairing redemption timed out"),
-            bodyParser<RelayHttpEnvironment>(["agents", "computerName", "pairingCode", "workspaceName"]),
+            protocolBodyLimit,
+            bodyParser<RelayHttpEnvironment, typeof redeemRequestSchema>(redeemRequestSchema),
             async (context) => {
                 const body = context.req.valid("json");
-                const agents = validateAgents(body["agents"]);
-                const redeemed = await context.var.relay.services.computerPairings.redeemComputerPairing(
+                const agents = validateAgents(body.agents);
+                const services = ctx.services.forComputer(context.var.computerId).services;
+                const redeemed = await services.computerPairings.redeemComputerPairing(
                     validateIdentifier(context.req.param("computerId"), "computer_id"),
-                    validatePairingCode(body["pairingCode"]),
-                    validateDisplayName(body["computerName"], "computer_name"),
-                    validateDisplayName(body["workspaceName"], "workspace_name"),
+                    validatePairingCode(body.pairingCode),
+                    validateDisplayName(body.computerName, "computer_name"),
+                    validateDisplayName(body.workspaceName, "workspace_name"),
                     agents,
                     context.var.signal,
                 );
@@ -46,9 +55,10 @@ export function createComputerPairingRoutes(
                 });
             },
         )
-        .get("/computers/connect", runtimeTimeout, runtimeTarget, initializeRuntime, async (context) => {
+        .get("/computers/connect", timeout, computerFromRuntimeCredential, async (context) => {
             const request = context.req.raw;
-            const connection = await context.var.relay.services.computerConnections.connectComputer(
+            const services = ctx.services.forComputer(context.var.computerId).services;
+            const connection = await services.computerConnections.connectComputer(
                 bearerToken(request),
                 request.headers.get(COMPUTER_SUCCESSOR_CREDENTIAL_HEADER) ?? "",
                 request.signal,
@@ -58,10 +68,7 @@ export function createComputerPairingRoutes(
                     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
                         return new Response("WebSocket upgrade required", { status: 426 });
                     }
-                    const admitted = await context.var.relay.services.runtime.acceptDaemon(
-                        connection.access.computerId,
-                        request.signal,
-                    );
+                    const admitted = await services.runtime.acceptDaemon(connection.access.computerId, request.signal);
                     return admitted.kind === "accepted"
                         ? admitted.response
                         : Response.json(

@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { expect, it, onTestFinished, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { z } from "zod";
-import { WsTransport } from "../src/index.ts";
+import { type MortyEndpointCall, type MortyTransportCall, WsTransport } from "../src/index.ts";
 
 const operation = z.object({
     kind: z.literal("http.request"),
@@ -26,7 +26,7 @@ async function computerPeer() {
     const pending = Promise.withResolvers<void>();
     const cancelled = Promise.withResolvers<void>();
     const server = createServer((request, response) => {
-        if (request.url === "/morty/api/chat/computers/computer-1/setup" && request.method === "POST") {
+        if (request.url === "/morty/api/v1/computers/computer-1/setup" && request.method === "POST") {
             response.writeHead(202);
             response.end();
             return;
@@ -42,7 +42,7 @@ async function computerPeer() {
             response.end("Downloaded over HTTP");
             return;
         }
-        if (request.url === "/morty/api/identity/transfers/redeem" && request.method === "POST") {
+        if (request.url === "/morty/api/v1/identity/transfers/redeem" && request.method === "POST") {
             response.writeHead(200, { "content-type": "application/json" });
             response.end(JSON.stringify({ computerId: "computer-1", computerToken: "owner" }));
             return;
@@ -72,13 +72,13 @@ async function computerPeer() {
                 if (headers.get("authorization") !== "Bearer owner" || access === "revoked") {
                     status = 401;
                     body = { error: { code: "UNAUTHENTICATED", message: "Sign in to continue." } };
-                } else if (message.path === "/morty/api/chat/computers/computer-1/agent-settings") {
+                } else if (message.path === "/morty/api/v1/computers/computer-1/agent-settings") {
                     waiting.add(message.requestId);
                     pending.resolve();
                     return;
                 } else if (
                     message.method === "DELETE" &&
-                    message.path === "/morty/api/computers/computer-1/identity/v1/browser-access"
+                    message.path === "/morty/api/v1/computers/computer-1/identity/browser-access"
                 ) {
                     access = "revoked";
                     status = 204;
@@ -114,12 +114,26 @@ async function computerPeer() {
         origin,
         pending: pending.promise,
         cancelled: cancelled.promise,
-        request: (path: string, init: RequestInit = {}) =>
-            new Request(`${origin}/morty/api${path}`, {
-                ...init,
-                headers: { authorization: "Bearer owner" },
-                signal: init.signal ?? AbortSignal.timeout(10_000),
-            }),
+        request: (
+            path: string,
+            init: {
+                readonly method?: MortyEndpointCall["method"];
+                readonly signal?: AbortSignal;
+                readonly transport?: "http" | "websocket";
+            } = {},
+        ): MortyTransportCall => ({
+            endpoint: {
+                computerId: "computer-1",
+                method: init.method ?? "GET",
+                path: `/morty/api${path}`,
+                transport: init.transport === "http" ? { kind: "http" } : { kind: "websocket", cancellation: "remote" },
+                timeoutMilliseconds: 10_000,
+            },
+            origin: new URL(origin),
+            headers: { authorization: "Bearer owner" },
+            body: null,
+            signal: init.signal ?? AbortSignal.timeout(10_000),
+        }),
     };
 }
 
@@ -131,23 +145,29 @@ it("Given a Computer credential, When a client reads access and ends browser acc
     const peer = await computerPeer();
     const transport = new WsTransport();
     onTestFinished(transport.close);
-    const session = await transport.fetch(peer.request("/computers/computer-1/session"));
+    const session = await transport.fetch(peer.request("/v1/computers/computer-1/session"));
     expect(session.status).toBe(200);
     expect(await session.json()).toEqual({ computerId: "computer-1", authentication: { kind: "anonymous" } });
     const ended = await transport.fetch(
-        peer.request("/computers/computer-1/identity/v1/browser-access", { method: "DELETE" }),
+        peer.request("/v1/computers/computer-1/identity/browser-access", { method: "DELETE" }),
     );
     expect(ended.status).toBe(204);
     expect(await ended.text()).toBe("");
-    const rejected = await transport.fetch(peer.request("/computers/computer-1/session"));
+    const rejected = await transport.fetch(peer.request("/v1/computers/computer-1/session"));
     expect(rejected.status).toBe(401);
     expect(await rejected.json()).toMatchObject({ error: { code: "UNAUTHENTICATED" } });
-    const bootstrap = await transport.fetch(peer.request("/identity/transfers/redeem", { method: "POST" }));
+    const bootstrap = await transport.fetch(
+        peer.request("/v1/identity/transfers/redeem", { method: "POST", transport: "http" }),
+    );
     expect(await bootstrap.json()).toEqual({ computerId: "computer-1", computerToken: "owner" });
-    const setup = await transport.fetch(peer.request("/chat/computers/computer-1/setup", { method: "POST" }));
+    const setup = await transport.fetch(
+        peer.request("/v1/computers/computer-1/setup", { method: "POST", transport: "http" }),
+    );
     expect(setup.status).toBe(202);
     const download = await transport.fetch(
-        peer.request("/v1/computers/computer-1/harnesses/codex/sessions/session-1/files/content"),
+        peer.request("/v1/computers/computer-1/harnesses/codex/sessions/session-1/files/content", {
+            transport: "http",
+        }),
     );
     expect(download.headers.get("content-disposition")).toBe("attachment; filename=notes.txt");
     expect(await download.text()).toBe("Downloaded over HTTP");
@@ -163,7 +183,7 @@ it("Given an in-flight Computer API request, When its caller cancels, Then the p
     onTestFinished(transport.close);
     const controller = new AbortController();
     const result = transport.fetch(
-        peer.request("/chat/computers/computer-1/agent-settings", { method: "POST", signal: controller.signal }),
+        peer.request("/v1/computers/computer-1/agent-settings", { method: "POST", signal: controller.signal }),
     );
     const reason = new DOMException("Leaving discovery", "AbortError");
     const rejected = expect(result).rejects.toBe(reason);
@@ -171,5 +191,5 @@ it("Given an in-flight Computer API request, When its caller cancels, Then the p
     controller.abort(reason);
     await rejected;
     await peer.cancelled;
-    expect((await transport.fetch(peer.request("/computers/computer-1/session"))).status).toBe(200);
+    expect((await transport.fetch(peer.request("/v1/computers/computer-1/session"))).status).toBe(200);
 });

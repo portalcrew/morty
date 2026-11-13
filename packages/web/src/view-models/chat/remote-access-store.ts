@@ -1,4 +1,5 @@
 import { createStore } from "zustand/vanilla";
+import type { ApiTransport } from "../../services/api/api-transport.ts";
 import { AnonymousIdentityApi, IdentityApiError } from "../../services/identity/anonymous-identity-api.ts";
 import { readIdentityScope } from "../../services/identity/identity-scope-url.ts";
 import {
@@ -29,7 +30,7 @@ interface RemoteAccessOperations {
 }
 
 export function createRemoteAccessOperations(options: {
-    readonly fetchRequest: (request: Request) => Promise<Response>;
+    readonly fetchRequest: ApiTransport["fetch"];
     readonly origin: string;
     readonly identity: {
         readonly computerId: string;

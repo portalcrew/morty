@@ -170,41 +170,43 @@ const resultEnvelope = {
     ...envelope,
     kind: z.literal(NATIVE_SESSION_RESULT_KIND),
 };
+/** What reading a Session's execution answers: its running turn, queue, and last turn. */
+export const activeTurnResultSchema = z
+    .object({
+        ...resultEnvelope,
+        action: z.literal("active-turn"),
+        target: nativeSessionTargetSchema,
+        queued: z
+            .array(
+                z
+                    .object({
+                        commandId: identifier,
+                        prompt: z.string().max(100_000),
+                        attachments: z.array(promptAttachmentSchema).max(16).readonly(),
+                    })
+                    .readonly(),
+            )
+            .readonly(),
+        turn: activeTurnSnapshotSchema.nullable(),
+        // The whole execution read covers this prefix of the Session event log.
+        executionPosition: z
+            .object({
+                sessionGenerationId: identifier,
+                throughPosition: z.string().regex(/^(0|[1-9][0-9]*)$/),
+            })
+            .readonly(),
+        // Null when this Computer has no retained Session for the requested identity.
+        interactionState: sessionInteractionSnapshotSchema.nullable(),
+        // Present only when the request named a command.
+        command: commandDeliverySchema.optional(),
+        // Absent while the last started command is running or none has started.
+        lastTurn: lastTurnOutcomeSchema.optional(),
+        // The Computer withdraws a queued command only before it starts.
+        queuedCancellation: z.literal("before-start"),
+    })
+    .readonly();
 const nativeSessionResultSchema = z.discriminatedUnion("action", [
-    z
-        .object({
-            ...resultEnvelope,
-            action: z.literal("active-turn"),
-            target: nativeSessionTargetSchema,
-            queued: z
-                .array(
-                    z
-                        .object({
-                            commandId: identifier,
-                            prompt: z.string().max(100_000),
-                            attachments: z.array(promptAttachmentSchema).max(16).readonly(),
-                        })
-                        .readonly(),
-                )
-                .readonly(),
-            turn: activeTurnSnapshotSchema.nullable(),
-            // The whole execution read covers this prefix of the Session event log.
-            executionPosition: z
-                .object({
-                    sessionGenerationId: identifier,
-                    throughPosition: z.string().regex(/^(0|[1-9][0-9]*)$/),
-                })
-                .readonly(),
-            // Null when this Computer has no retained Session for the requested identity.
-            interactionState: sessionInteractionSnapshotSchema.nullable(),
-            // Present only when the request named a command.
-            command: commandDeliverySchema.optional(),
-            // Absent while the last started command is running or none has started.
-            lastTurn: lastTurnOutcomeSchema.optional(),
-            // The Computer withdraws a queued command only before it starts.
-            queuedCancellation: z.literal("before-start"),
-        })
-        .readonly(),
+    activeTurnResultSchema,
     z
         .object({
             ...resultEnvelope,

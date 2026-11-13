@@ -45,7 +45,7 @@ async function pairedComputer(name: string) {
     const headers = new Headers({ authorization: `Bearer ${owner.token}`, "content-type": "application/json" });
     const pairing = await responseJson(
         await ownerRequest(
-            new Request(`${relayOrigin}${MORTY_API_PREFIX}/computers/${owner.computerId}/management/pairing`, {
+            new Request(`${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${owner.computerId}/pairing`, {
                 body: JSON.stringify({ idempotencyKey: name }),
                 headers,
                 method: "POST",
@@ -55,16 +55,19 @@ async function pairedComputer(name: string) {
     );
     const claimed = await responseJson(
         await worker.fetch(
-            new Request(`${relayOrigin}${MORTY_API_PREFIX}/v1/pairings/${text(pairing, "computerId")}/redeem`, {
-                body: JSON.stringify({
-                    agents: [],
-                    computerName: "Owner laptop",
-                    pairingCode: text(pairing, "pairingCode"),
-                    workspaceName: "workspace",
-                }),
-                headers: { "content-type": "application/json" },
-                method: "POST",
-            }),
+            new Request(
+                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${text(pairing, "computerId")}/pairing/redeem`,
+                {
+                    body: JSON.stringify({
+                        agents: [],
+                        computerName: "Owner laptop",
+                        pairingCode: text(pairing, "pairingCode"),
+                        workspaceName: "workspace",
+                    }),
+                    headers: { "content-type": "application/json" },
+                    method: "POST",
+                },
+            ),
             environment,
         ),
         200,

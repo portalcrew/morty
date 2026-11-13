@@ -102,7 +102,11 @@ export class PairingDirectoryService {
                 "This pairing cannot be reused; reinstall Morty and create a new pairing",
             );
         }
-        return new CreatedComputerPairing(new Date(row.expires_at).toISOString(), secrets.pairingCode, row.computer_id);
+        return new CreatedComputerPairing(
+            new Date(row.expires_at).toISOString(),
+            secrets.pairingCode,
+            owner.computerId,
+        );
     };
 
     /** Replays retain the original identity, secrets and deadline; retries keep the same key after an ambiguous failure. */
@@ -162,7 +166,7 @@ export class PairingDirectoryService {
         if (row === null) {
             throw new PairingDirectoryError("pairing_not_found", "The Computer pairing request was not found");
         }
-        return computerPairingStatus(row, Date.now());
+        return computerPairingStatus(row, owner.computerId, Date.now());
     };
 
     private readonly redeemPairing = async (
@@ -177,11 +181,12 @@ export class PairingDirectoryService {
         const codeHash = await hashPairingCredential(normalizePairingCode(pairingCode));
         const storage = await this.identityStorage({ kind: "pairing-code", codeHash }, signal);
         const pairing = await storage.readPairingCode(codeHash, signal);
-        if (pairing === null || pairing.computer_id !== expectedComputerId) {
+        const computerId = this.#cx.computerId;
+        if (pairing === null || computerId !== expectedComputerId) {
             throw new PairingDirectoryError("invalid_pairing_code", "The pairing code is invalid or expired");
         }
-        await this.#cx.services.computerAccounts.authorizeComputer(pairing.computer_id, signal);
-        const daemonToken = await deriveComputerDaemonToken(pairingCode, pairing.computer_id, pairing.poll_token_hash);
+        await this.#cx.services.computerAccounts.authorizeComputer(computerId, signal);
+        const daemonToken = await deriveComputerDaemonToken(pairingCode, computerId, pairing.poll_token_hash);
         const claimed = await storage.claimPairing(
             {
                 codeHash,
@@ -196,7 +201,7 @@ export class PairingDirectoryService {
         if (!claimed) {
             throw new PairingDirectoryError("invalid_pairing_code", "The pairing code is invalid or expired");
         }
-        return { computerId: pairing.computer_id, daemonToken };
+        return { computerId, daemonToken };
     };
 
     readonly redeemComputerPairing = async (
@@ -229,7 +234,7 @@ export class PairingDirectoryService {
                     parseAgents(row.agents_json),
                     row.computer_name,
                     row.workspace_name,
-                    row.computer_id,
+                    access.computerId,
                 ),
         );
     };

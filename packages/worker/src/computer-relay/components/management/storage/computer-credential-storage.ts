@@ -4,16 +4,14 @@ import { activeGeneration } from "./computer-generation.ts";
 
 /** Which pairing generation of the computer is active in its own storage. */
 export class ComputerCredentialStorage {
-    readonly #computerId: string;
     readonly #database: DurableObjectDatabase;
 
-    constructor(computerId: string, database: DurableObjectDatabase) {
-        this.#computerId = computerId;
+    constructor(database: DurableObjectDatabase) {
         this.#database = database;
     }
 
     readonly readActiveGeneration = async (signal: AbortSignal): Promise<number | null> => {
-        const active = activeGeneration(this.#computerId).as("active_generation");
+        const active = activeGeneration().as("active_generation");
         const rows = await relayDrizzle(this.#database, signal)
             .select({ generation: active.generation })
             .from(active)

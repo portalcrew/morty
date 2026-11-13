@@ -27,10 +27,7 @@ export class PairingService {
     readonly listComputers = async (computerId: string, signal: AbortSignal) => {
         const channels = await this.#pairings.listComputers(computerId, signal);
         return await Promise.all(
-            channels.map(
-                async (channel) =>
-                    new ComputerSummary(channel, await this.#runtime.readStatus(channel.computerId, signal)),
-            ),
+            channels.map(async (channel) => new ComputerSummary(channel, await this.#runtime.readStatus(signal))),
         );
     };
 
@@ -44,7 +41,7 @@ export class PairingService {
             }
             throw new PairingDirectoryError("computer_access_denied", "This credential cannot access this Computer");
         }
-        return new ComputerSummary(channel, await this.#runtime.readStatus(channel.computerId, signal));
+        return new ComputerSummary(channel, await this.#runtime.readStatus(signal));
     };
 
     readonly readComputerPairing = (computerId: string, signal: AbortSignal) =>

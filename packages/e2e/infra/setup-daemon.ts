@@ -61,15 +61,19 @@ export class ControlledSetupRuntime implements SetupRuntime {
 
     readonly pair: SetupRuntime["pair"] = async (_directory, pairing, signal) => {
         const daemon = createMortyFakeDaemon(this.#options);
-        const claim = await jsonRequest(pairing.relayOrigin, `/morty/api/v1/pairings/${pairing.computerId}/redeem`, {
-            body: {
-                agents: daemon.catalog,
-                computerName: this.#computerName,
-                pairingCode: pairing.pairingCode,
-                workspaceName: "Test project",
+        const claim = await jsonRequest(
+            pairing.relayOrigin,
+            `/morty/api/v1/computers/${pairing.computerId}/pairing/redeem`,
+            {
+                body: {
+                    agents: daemon.catalog,
+                    computerName: this.#computerName,
+                    pairingCode: pairing.pairingCode,
+                    workspaceName: "Test project",
+                },
+                signal,
             },
-            signal,
-        });
+        );
         const connection: Connection = {
             computer_id: text(claim["computerId"], "Channel ID"),
             pairingGeneration: crypto.randomUUID(),

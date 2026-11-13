@@ -90,7 +90,7 @@ const test = base.extend<{ readonly network: Network }>({
                                 frame?.["kind"] === "http.request" &&
                                 frame["method"] === "GET" &&
                                 typeof frame["path"] === "string" &&
-                                frame["path"].includes("/events-v2?");
+                                frame["path"].includes("/events?");
                             if (history && typeof frame?.["requestId"] === "string") {
                                 requestIds.add(frame["requestId"]);
                             }

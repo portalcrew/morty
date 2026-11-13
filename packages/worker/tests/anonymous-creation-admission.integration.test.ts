@@ -21,7 +21,7 @@ afterAll(async () => {
 });
 
 function creation(headers: Readonly<Record<string, string>> = {}): Request {
-    return new Request(`${APP_ORIGIN}/morty/api/computers`, {
+    return new Request(`${APP_ORIGIN}/morty/api/v1/computers`, {
         method: "POST",
         headers: { "content-type": "application/json", ...headers },
         body: JSON.stringify({ creationKey: anonymousCreationKey() }),
@@ -73,7 +73,7 @@ test("Given an invalid user credential, When a visitor tries to pair a Computer,
     const identity = await fixture.createAnonymousUser();
     const token = `${identity.token.slice(0, -1)}${identity.token.endsWith("A") ? "B" : "A"}`;
     const response = await worker.fetch(
-        new Request(`${APP_ORIGIN}/morty/api/computers/${identity.computerId}/management/pairing`, {
+        new Request(`${APP_ORIGIN}/morty/api/v1/computers/${identity.computerId}/pairing`, {
             method: "POST",
             headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
             body: JSON.stringify({ idempotencyKey: "security-error-sanitization" }),

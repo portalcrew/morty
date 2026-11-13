@@ -29,6 +29,7 @@ catalog:
   "@types/react": 19.3.0
   "@types/react-dom": 19.3.0
   "@vitejs/plugin-react": ^6.2.1
+  "@valibot/to-json-schema": 1.8.0
   clsx: ^2.1.1
   dependency-cruiser: 18.7.2
   drizzle-kit: 0.31.8

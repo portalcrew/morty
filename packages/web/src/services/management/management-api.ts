@@ -1,5 +1,8 @@
 import { decodeIdentifier, type Identifier, isIdentifier } from "@morty-build/client/protocol";
 import * as v from "valibot";
+import type { ApiTransport } from "../api/api-transport.ts";
+import type { ApiRequest } from "../api/calls/call.ts";
+import { managementCalls } from "../api/calls/management.ts";
 
 const identifier = v.custom<Identifier>(isIdentifier);
 const computerSchema = v.pipe(v.object({ computerId: identifier }), v.readonly());
@@ -12,18 +15,9 @@ const pairingStateSchema = v.object({ computerPairing: v.picklist(["unpaired", "
  */
 export type ComputerPairing = v.InferOutput<typeof pairingStateSchema>["computerPairing"];
 
-/** The Computer resource, read by setup and the page and polled by the browser for pairing changes. */
-export function computerPairingUrl(origin: string, computerId: string): URL {
-    return managementUrl(origin, decodeIdentifier(computerId), "/computer/pairing-state");
-}
-
-function managementUrl(origin: string, computerId: Identifier, path: string): URL {
-    return new URL(`/morty/api/computers/${encodeURIComponent(computerId)}/management${path}`, origin);
-}
-
 export interface ManagementApiOptions {
     readonly computerId: string;
-    readonly fetchRequest: (request: Request) => Promise<Response>;
+    readonly fetchRequest: ApiTransport["fetch"];
     readonly getToken: (signal: AbortSignal) => Promise<string | null>;
     readonly origin: string;
     /** Told when the Worker refuses the access as unauthenticated; whoever owns that access decides what it means. */
@@ -31,7 +25,7 @@ export interface ManagementApiOptions {
 }
 
 export class ManagementApi {
-    readonly #fetchRequest: (request: Request) => Promise<Response>;
+    readonly #fetchRequest: ApiTransport["fetch"];
     readonly #getToken: (signal: AbortSignal) => Promise<string | null>;
     readonly #origin: string;
     readonly #computerId: Identifier;
@@ -45,23 +39,34 @@ export class ManagementApi {
     }
 
     readonly readComputer = async (signal: AbortSignal): Promise<ManagedComputer | null> =>
-        v.parse(v.object({ computer: v.nullable(computerSchema) }), await this.#request("/computer", signal)).computer;
+        v.parse(
+            v.object({ computer: v.nullable(computerSchema) }),
+            await this.#request(
+                managementCalls.readComputer({ origin: this.#origin, computerId: this.#computerId }),
+                signal,
+            ),
+        ).computer;
 
     readonly readComputerPairing = async (signal: AbortSignal): Promise<ComputerPairing> =>
-        v.parse(pairingStateSchema, await this.#request("/computer/pairing-state", signal)).computerPairing;
+        v.parse(
+            pairingStateSchema,
+            await this.#request(
+                managementCalls.readComputerPairing({ origin: this.#origin, computerId: this.#computerId }),
+                signal,
+            ),
+        ).computerPairing;
 
-    readonly #request = async (path: string, requestSignal: AbortSignal): Promise<unknown> => {
-        const signal = AbortSignal.any([requestSignal, AbortSignal.timeout(15_000)]);
+    readonly #request = async (request: ApiRequest, requestSignal: AbortSignal): Promise<unknown> => {
+        const signal = AbortSignal.any([requestSignal, AbortSignal.timeout(request.endpoint.timeoutMilliseconds)]);
         const token = await this.#getToken(signal);
         if (token === null) {
             throw new CloudApiError("UNAUTHENTICATED", "Your session is unavailable.");
         }
-        const response = await this.#fetchRequest(
-            new Request(managementUrl(this.#origin, this.#computerId, path), {
-                signal,
-                headers: { authorization: `Bearer ${token}` },
-            }),
-        );
+        const response = await this.#fetchRequest({
+            ...request,
+            signal,
+            headers: { authorization: `Bearer ${token}` },
+        });
         const value: unknown = response.status === 204 ? null : await response.json();
         signal.throwIfAborted();
         if (response.status === 401) {

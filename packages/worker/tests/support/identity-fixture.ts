@@ -17,9 +17,12 @@ export const AUTH_TIME = new Date("2026-09-07T00:00:00.000Z");
 export const APP_ORIGIN = "http://localhost:5173";
 
 export function accountRequest(token?: string, computerId?: string): Request {
-    return new Request(`${APP_ORIGIN}/morty/api${computerId === undefined ? "" : `/computers/${computerId}`}/session`, {
-        headers: token === undefined ? {} : { Authorization: `Bearer ${token}` },
-    });
+    return new Request(
+        `${APP_ORIGIN}/morty/api${computerId === undefined ? "" : `/v1/computers/${computerId}`}/session`,
+        {
+            headers: token === undefined ? {} : { Authorization: `Bearer ${token}` },
+        },
+    );
 }
 
 type IdentityFixtureOptions = {
@@ -112,7 +115,7 @@ async function startIdentityFixture(
         };
         const createAnonymousUser = async () => {
             const response = await worker.fetch(
-                new Request(`${APP_ORIGIN}/morty/api/computers`, {
+                new Request(`${APP_ORIGIN}/morty/api/v1/computers`, {
                     method: "POST",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({ creationKey: anonymousCreationKey() }),

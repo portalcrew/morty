@@ -11,7 +11,7 @@ import type { RelayBindings } from "../../src/contracts/relay-bindings.ts";
 /** The computer's store and access as its ComputerRelay composes them over the object's storage. */
 export function computerAccess(computerId: string, storage: DurableObjectStorage) {
     const database = new DurableObjectDatabase(storage);
-    const store = new ComputerRelayStore(computerId, database);
+    const store = new ComputerRelayStore(database);
     return {
         store,
         access: new ComputerAccessService(

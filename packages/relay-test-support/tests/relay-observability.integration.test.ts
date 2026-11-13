@@ -106,7 +106,7 @@ async function api(
 
 async function provisionComputer() {
     const owner = await api(
-        "/computers",
+        "/v1/computers",
         {
             method: "POST",
             body: JSON.stringify({
@@ -121,7 +121,7 @@ async function provisionComputer() {
 async function pairComputer() {
     const { computerId, appCredential } = await provisionComputer();
     const pairing = await api(
-        `/computers/${computerId}/management/pairing`,
+        `/v1/computers/${computerId}/pairing`,
         {
             method: "POST",
             headers: { authorization: `Bearer ${appCredential}` },
@@ -130,7 +130,7 @@ async function pairComputer() {
         201,
     );
     const claimed = await api(
-        `/v1/pairings/${text(pairing, "computerId")}/redeem`,
+        `/v1/computers/${text(pairing, "computerId")}/pairing/redeem`,
         {
             method: "POST",
             body: JSON.stringify({
@@ -269,8 +269,8 @@ it("identifies the failing Computer Durable Object through the public pairing an
 
 it.each([
     { method: "GET", path: "/v1/computers/prj_ap_01_abcdefghijklmnopqrstuvwx/transport" },
-    { method: "POST", path: "/v1/pairings/prj_ap_01_abcdefghijklmnopqrstuvwx/redeem" },
-    { method: "PUT", path: "/channels/prj_ap_01_abcdefghijklmnopqrstuvwx/catalog" },
+    { method: "POST", path: "/v1/computers/prj_ap_01_abcdefghijklmnopqrstuvwx/pairing/redeem" },
+    { method: "PUT", path: "/v1/computers/prj_ap_01_abcdefghijklmnopqrstuvwx/catalog" },
 ])(
     "Given an overloaded computer, When $method $path enters the production Worker, Then the relay error contract is preserved",
     async ({ method, path }) => {
@@ -286,7 +286,7 @@ it("identifies a Computer Relay overload through the public HTTP API", async () 
     const start = logs.length;
     const computerId = "prj_ap_01_abcdefghijklmnopqrstuvwx";
     await api(
-        `/computers/${computerId}/management/computer`,
+        `/v1/computers/${computerId}`,
         { headers: { "x-test-routing-failure": "1", "cf-ray": "computer-routing-failure-ray" } },
         503,
     );

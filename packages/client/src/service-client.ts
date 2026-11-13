@@ -11,7 +11,6 @@ import {
     type ExternalAudioContentBlock,
     type ExternalImageContentBlock,
     type ExternalResourceContentBlock,
-    isIdentifier,
     MORTY_API_PREFIX,
     type NativeSessionResult,
     type NativeSessionTarget,
@@ -22,6 +21,8 @@ import {
     SessionPromptDisposition,
     type Turn,
 } from "@morty-build/client/protocol";
+import type { MortyEndpointCall } from "./calls/call.ts";
+import { sessionEndpoints } from "./calls/session.ts";
 import {
     MortyApiError,
     MortyCancellationError,
@@ -32,7 +33,6 @@ import {
     MortyValidationError,
 } from "./errors.ts";
 import { sameNativeSession } from "./native-session.ts";
-import { nativeSessionTargetSchema } from "./protocol/session/shared/native-session-target.ts";
 import type {
     MortyInteractionResponseRequest,
     MortyPageRequest,
@@ -40,9 +40,6 @@ import type {
     SubmitMortyTurnRequest,
 } from "./resources.ts";
 import type { MortyTransportSessionEvent, WsTransport } from "./transport/ws-transport.ts";
-
-const DEFAULT_OPERATION_TIMEOUT_MILLISECONDS = 20_000;
-const STREAM_CONNECTION_TIMEOUT_MILLISECONDS = 15_000;
 
 function sanitizedConnectionCauseMessage(value: string): string {
     return Array.from(value, (character) => {
@@ -193,32 +190,6 @@ function decodeTurnCancellation(value: unknown, turnId: string): MortyTurnCancel
     return { turnId, stopReason: Reflect.get(value, "stopReason") };
 }
 
-function computerPath(computerId: string, resourcePath: string): string {
-    if (!isIdentifier(computerId)) {
-        throw new MortyValidationError("The Morty Computer identifier is invalid");
-    }
-    return `v1/computers/${encodeURIComponent(computerId)}/${resourcePath}`;
-}
-
-function nativeSessionRoute(target: NativeSessionTarget): string {
-    const parsed = nativeSessionTargetSchema.safeParse(target);
-    if (!parsed.success) {
-        throw new MortyValidationError("The harness and native Session identity are invalid", { cause: parsed.error });
-    }
-    return `harnesses/${encodeURIComponent(parsed.data.harness)}/sessions/${encodeURIComponent(parsed.data.sessionId)}`;
-}
-
-function sessionPath(computerId: string, target: NativeSessionTarget, resourcePath: string): string {
-    if (!nativeSessionTargetSchema.safeParse(target).success) {
-        throw new MortyValidationError("The Morty Session identifier is invalid");
-    }
-    return computerPath(computerId, `${nativeSessionRoute(target)}/${resourcePath}`);
-}
-
-function requestUrl(endpoint: URL, path: string): URL {
-    return new URL(path, endpoint);
-}
-
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -328,7 +299,7 @@ class LiveEventConnection {
 export class MortyRequestExecutor {
     readonly #credentialProvider: MortyCredentialProvider;
     readonly #endpoint: URL;
-    readonly #operationTimeoutMilliseconds: number;
+    readonly #operationTimeoutMilliseconds: number | undefined;
     readonly #observeResponse: ((metadata: MortyResponseMetadata) => void) | undefined;
     readonly #transport: WsTransport;
     readonly #lifetime = new AbortController();
@@ -337,20 +308,20 @@ export class MortyRequestExecutor {
         this.#transport = transport;
         this.#credentialProvider = options.credentialProvider;
         this.#endpoint = normalizeEndpoint(options.endpoint);
-        this.#operationTimeoutMilliseconds = validatePositiveInteger(
-            options.operationTimeoutMilliseconds ?? DEFAULT_OPERATION_TIMEOUT_MILLISECONDS,
-            "operation timeout",
-        );
+        this.#operationTimeoutMilliseconds =
+            options.operationTimeoutMilliseconds === undefined
+                ? undefined
+                : validatePositiveInteger(options.operationTimeoutMilliseconds, "operation timeout");
         this.#observeResponse = options.observeResponse;
     }
 
     readonly close = (): void => this.#lifetime.abort(new MortyConnectionError("The Morty client is closed"));
 
-    readonly get = async (path: string, signal: AbortSignal): Promise<unknown> =>
-        await this.request(path, "GET", "", false, signal);
+    readonly get = async (endpoint: MortyEndpointCall, signal: AbortSignal): Promise<unknown> =>
+        await this.request(endpoint, "", false, signal);
 
     readonly getFile = async (
-        path: string,
+        endpoint: MortyEndpointCall,
         maximumBytes: number,
         signal: AbortSignal,
     ): Promise<{
@@ -361,16 +332,17 @@ export class MortyRequestExecutor {
     }> => {
         const deadline = new RequestDeadline(
             AbortSignal.any([signal, this.#lifetime.signal]),
-            this.#operationTimeoutMilliseconds,
+            this.#operationTimeoutMilliseconds ?? endpoint.timeoutMilliseconds,
         );
         try {
             const credential = validateCredential(await this.#credentialProvider.credential(deadline.signal));
-            const response = await this.#transport.fetch(
-                new Request(requestUrl(this.#endpoint, path), {
-                    headers: this.authenticationHeaders(credential, "application/octet-stream"),
-                    signal: deadline.signal,
-                }),
-            );
+            const response = await this.#transport.fetch({
+                endpoint,
+                origin: this.#endpoint,
+                body: null,
+                headers: this.authenticationHeaders(credential, "application/octet-stream"),
+                signal: deadline.signal,
+            });
             this.#observeResponse?.({
                 serverTiming: response.headers.get("server-timing"),
                 status: response.status,
@@ -416,48 +388,48 @@ export class MortyRequestExecutor {
         }
     };
 
-    readonly post = async (path: string, body: unknown, signal: AbortSignal): Promise<unknown> => {
+    readonly post = async (endpoint: MortyEndpointCall, body: unknown, signal: AbortSignal): Promise<unknown> => {
         const encoded = JSON.stringify(body);
         if (typeof encoded !== "string") {
             throw new MortyValidationError("The Morty request body is invalid");
         }
-        return await this.request(path, "POST", encoded, true, signal);
+        return await this.request(endpoint, encoded, true, signal);
     };
 
-    readonly put = async (path: string, body: unknown, signal: AbortSignal): Promise<unknown> => {
+    readonly put = async (endpoint: MortyEndpointCall, body: unknown, signal: AbortSignal): Promise<unknown> => {
         const encoded = JSON.stringify(body);
         if (typeof encoded !== "string") {
             throw new MortyValidationError("The Morty request body is invalid");
         }
-        return await this.request(path, "PUT", encoded, true, signal);
+        return await this.request(endpoint, encoded, true, signal);
     };
 
     readonly putContent = async (
-        path: string,
+        endpoint: MortyEndpointCall,
         bytes: Uint8Array,
         metadata: { readonly contentKind: "image" | "resource"; readonly mediaType: string; readonly name: string },
         signal: AbortSignal,
     ): Promise<unknown> => {
         const deadline = new RequestDeadline(
             AbortSignal.any([signal, this.#lifetime.signal]),
-            this.#operationTimeoutMilliseconds,
+            this.#operationTimeoutMilliseconds ?? endpoint.timeoutMilliseconds,
         );
         try {
             const credential = validateCredential(await this.#credentialProvider.credential(deadline.signal));
-            const headers = this.authenticationHeaders(credential, "application/json");
-            headers.set("content-type", metadata.mediaType);
-            headers.set("x-morty-byte-length", bytes.byteLength.toString());
-            headers.set("x-morty-content-kind", metadata.contentKind);
-            headers.set("x-morty-file-name", encodeURIComponent(metadata.name));
-            const body = bytes.slice().buffer;
-            const response = await this.#transport.fetch(
-                new Request(requestUrl(this.#endpoint, path), {
-                    body,
-                    headers,
-                    method: "PUT",
-                    signal: deadline.signal,
-                }),
-            );
+            const headers = {
+                ...this.authenticationHeaders(credential, "application/json"),
+                "content-type": metadata.mediaType,
+                "x-morty-byte-length": bytes.byteLength.toString(),
+                "x-morty-content-kind": metadata.contentKind,
+                "x-morty-file-name": encodeURIComponent(metadata.name),
+            };
+            const response = await this.#transport.fetch({
+                endpoint,
+                origin: this.#endpoint,
+                body: bytes.slice(),
+                headers,
+                signal: deadline.signal,
+            });
             this.#observeResponse?.({
                 serverTiming: response.headers.get("server-timing"),
                 status: response.status,
@@ -476,7 +448,10 @@ export class MortyRequestExecutor {
         }
     };
 
-    readonly openLiveEventStream = async (path: string, signal: AbortSignal): Promise<LiveEventConnection> => {
+    readonly openLiveEventStream = async (
+        endpoint: MortyEndpointCall,
+        signal: AbortSignal,
+    ): Promise<LiveEventConnection> => {
         signal = AbortSignal.any([signal, this.#lifetime.signal]);
         signal.throwIfAborted();
         const controller = new AbortController();
@@ -484,7 +459,7 @@ export class MortyRequestExecutor {
         signal.addEventListener("abort", abort, { once: true });
         const timeoutId = globalThis.setTimeout(
             () => controller.abort(new Error("The live Session event connection timed out")),
-            STREAM_CONNECTION_TIMEOUT_MILLISECONDS,
+            endpoint.timeoutMilliseconds,
         );
         const release = (): void => {
             globalThis.clearTimeout(timeoutId);
@@ -492,12 +467,13 @@ export class MortyRequestExecutor {
         };
         try {
             const credential = validateCredential(await this.#credentialProvider.credential(controller.signal));
-            const events = await this.#transport.openSessionLiveEvents(
-                new Request(requestUrl(this.#endpoint, path), {
-                    headers: this.authenticationHeaders(credential, "application/json"),
-                    signal: controller.signal,
-                }),
-            );
+            const events = await this.#transport.openSessionLiveEvents({
+                endpoint,
+                origin: this.#endpoint,
+                body: null,
+                headers: this.authenticationHeaders(credential, "application/json"),
+                signal: controller.signal,
+            });
             globalThis.clearTimeout(timeoutId);
             return new LiveEventConnection(events, controller, release);
         } catch (cause) {
@@ -513,30 +489,28 @@ export class MortyRequestExecutor {
     };
 
     private readonly request = async (
-        path: string,
-        method: string,
+        endpoint: MortyEndpointCall,
         body: string,
         hasBody: boolean,
         signal: AbortSignal,
     ): Promise<unknown> => {
         const deadline = new RequestDeadline(
             AbortSignal.any([signal, this.#lifetime.signal]),
-            this.#operationTimeoutMilliseconds,
+            this.#operationTimeoutMilliseconds ?? endpoint.timeoutMilliseconds,
         );
         try {
             const credential = validateCredential(await this.#credentialProvider.credential(deadline.signal));
-            const headers = this.authenticationHeaders(credential, "application/json");
-            if (hasBody) {
-                headers.set("content-type", "application/json");
-            }
-            const response = await this.#transport.fetch(
-                new Request(requestUrl(this.#endpoint, path), {
-                    body: hasBody ? body : null,
-                    headers,
-                    method,
-                    signal: deadline.signal,
-                }),
-            );
+            const headers = {
+                ...this.authenticationHeaders(credential, "application/json"),
+                ...(hasBody ? { "content-type": "application/json" } : {}),
+            };
+            const response = await this.#transport.fetch({
+                endpoint,
+                origin: this.#endpoint,
+                body: hasBody ? body : null,
+                headers,
+                signal: deadline.signal,
+            });
             this.#observeResponse?.({
                 serverTiming: response.headers.get("server-timing"),
                 status: response.status,
@@ -555,9 +529,10 @@ export class MortyRequestExecutor {
         }
     };
 
-    private readonly authenticationHeaders = (credential: string, accept: string): Headers => {
-        return new Headers({ accept, authorization: `Bearer ${credential}` });
-    };
+    private readonly authenticationHeaders = (
+        credential: string,
+        accept: string,
+    ): Readonly<Record<string, string>> => ({ accept, authorization: `Bearer ${credential}` });
 }
 
 async function readExactResponseBytes(
@@ -624,19 +599,32 @@ export class MortySessionResources {
     ) =>
         decodeSessionConfigUpdatedEvent(
             JSON.stringify(
-                await this.#executor.post(sessionPath(this.#computerId, target, "configuration"), request, signal),
+                await this.#executor.post(
+                    sessionEndpoints.updateConfiguration({ computerId: this.#computerId, target }),
+                    request,
+                    signal,
+                ),
             ),
         );
 
     readonly readConfiguration = async (target: NativeSessionTarget, signal: AbortSignal) =>
         decodeSessionConfigReadResult(
-            JSON.stringify(await this.#executor.get(sessionPath(this.#computerId, target, "configuration"), signal)),
+            JSON.stringify(
+                await this.#executor.get(
+                    sessionEndpoints.readConfiguration({ computerId: this.#computerId, target }),
+                    signal,
+                ),
+            ),
         );
 
     readonly rename = async (target: NativeSessionTarget, title: string, signal: AbortSignal) =>
         decodeSessionRenamedEvent(
             JSON.stringify(
-                await this.#executor.post(sessionPath(this.#computerId, target, "rename"), { title }, signal),
+                await this.#executor.post(
+                    sessionEndpoints.rename({ computerId: this.#computerId, target }),
+                    { title },
+                    signal,
+                ),
             ),
         );
 
@@ -658,10 +646,14 @@ export class MortySessionResources {
         if (input.bytes.byteLength < 1 || input.bytes.byteLength > CONTENT_WRITE_MAX_BYTES) {
             throw new MortyValidationError("The content size is invalid");
         }
-        const query = new URLSearchParams({ uri: input.uri });
         return decodePromptAttachment(
             await this.#executor.putContent(
-                `${sessionPath(this.#computerId, sessionTarget, `content/${input.contentKey}`)}?${query.toString()}`,
+                sessionEndpoints.uploadContent({
+                    computerId: this.#computerId,
+                    target: sessionTarget,
+                    key: input.contentKey,
+                    uri: input.uri,
+                }),
                 input.bytes,
                 { contentKind: input.kind, mediaType: input.mediaType, name: input.name },
                 signal,
@@ -686,9 +678,8 @@ export class MortySessionResources {
         if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1 || maximumBytes > 128 * 1024 * 1024) {
             throw new MortyValidationError("The file size limit is invalid");
         }
-        const query = new URLSearchParams({ maxBytes: maximumBytes.toString(), path });
         return await this.#executor.getFile(
-            `${sessionPath(this.#computerId, sessionTarget, "files/content")}?${query.toString()}`,
+            sessionEndpoints.readFile({ computerId: this.#computerId, target: sessionTarget, path, maximumBytes }),
             maximumBytes,
             signal,
         );
@@ -709,15 +700,17 @@ export class MortySessionResources {
             "turn" | "queued" | "command" | "lastTurn" | "queuedCancellation" | "interactionState" | "executionPosition"
         >
     > => {
-        const path = requestUrl(
-            new URL("https://morty.invalid/"),
-            sessionPath(this.#computerId, sessionTarget, "active-turn"),
-        );
-        if (commandId !== undefined) {
-            path.searchParams.set("commandId", commandId);
-        }
         const result = decodeNativeSessionResult(
-            JSON.stringify(await this.#executor.get(`${path.pathname.slice(1)}${path.search}`, signal)),
+            JSON.stringify(
+                await this.#executor.get(
+                    sessionEndpoints.readExecution({
+                        computerId: this.#computerId,
+                        target: sessionTarget,
+                        ...(commandId === undefined ? {} : { commandId }),
+                    }),
+                    signal,
+                ),
+            ),
         );
         if (result.action !== "active-turn" || !sameNativeSession(result.target, sessionTarget)) {
             throw new MortyProtocolError("The service returned an invalid active Turn");
@@ -749,7 +742,11 @@ export class MortyTurnResources {
         signal: AbortSignal,
     ): Promise<Turn> => {
         const turn = decodeTurn(
-            await this.#executor.post(sessionPath(this.#computerId, sessionTarget, "turns"), request, signal),
+            await this.#executor.post(
+                sessionEndpoints.submitTurn({ computerId: this.#computerId, target: sessionTarget }),
+                request,
+                signal,
+            ),
         );
         if (turn === null) {
             throw new MortyProtocolError("The service returned an invalid Turn");
@@ -764,7 +761,7 @@ export class MortyTurnResources {
     ): Promise<MortyTurnCancellation> =>
         decodeTurnCancellation(
             await this.#executor.post(
-                sessionPath(this.#computerId, sessionTarget, `turns/${encodeURIComponent(turnId)}/cancel`),
+                sessionEndpoints.cancelTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
                 {},
                 signal,
             ),
@@ -778,7 +775,7 @@ export class MortyTurnResources {
         signal: AbortSignal,
     ): Promise<void> => {
         const result = await this.#executor.post(
-            sessionPath(this.#computerId, sessionTarget, `turns/${encodeURIComponent(turnId)}/cancel-before-start`),
+            sessionEndpoints.cancelQueuedTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
             {},
             signal,
         );
@@ -793,7 +790,7 @@ export class MortyTurnResources {
         signal: AbortSignal,
     ): Promise<{ readonly turnId: string }> => {
         const result = await this.#executor.put(
-            sessionPath(this.#computerId, sessionTarget, `turns/${encodeURIComponent(turnId)}/disposition`),
+            sessionEndpoints.steerTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
             { disposition: SessionPromptDisposition.Steer },
             signal,
         );
@@ -822,7 +819,7 @@ export class MortyInteractionResources {
         signal: AbortSignal,
     ): Promise<void> => {
         const result = await this.#executor.post(
-            sessionPath(this.#computerId, sessionTarget, `interactions/${encodeURIComponent(interactionId)}/responses`),
+            sessionEndpoints.respond({ computerId: this.#computerId, target: sessionTarget, interactionId }),
             request,
             signal,
         );
@@ -848,20 +845,20 @@ export class MortyLiveEventSubscription {
     readonly #controller = new AbortController();
     readonly #executor: MortyRequestExecutor;
     readonly #observer: MortySessionEventObserver;
-    readonly #path: string;
+    readonly #endpoint: MortyEndpointCall;
     #closed = false;
     readonly connected: Promise<void>;
     readonly completed: Promise<void>;
 
     constructor(
         executor: MortyRequestExecutor,
-        path: string,
+        endpoint: MortyEndpointCall,
         observer: MortySessionEventObserver,
         signal: AbortSignal,
     ) {
         this.#executor = executor;
         this.#observer = observer;
-        this.#path = path;
+        this.#endpoint = endpoint;
         const abort = (): void => this.#controller.abort(signal.reason);
         if (signal.aborted) {
             abort();
@@ -890,7 +887,7 @@ export class MortyLiveEventSubscription {
         let connected = false;
         let connection: LiveEventConnection | null = null;
         try {
-            connection = await this.#executor.openLiveEventStream(this.#path, this.#controller.signal);
+            connection = await this.#executor.openLiveEventStream(this.#endpoint, this.#controller.signal);
             await this.#observer.reconcile();
             connected = true;
             resolveConnected();
@@ -974,7 +971,7 @@ export class MortyEventResources {
     ): Promise<MortyLiveEventSubscription> => {
         const subscription = new MortyLiveEventSubscription(
             this.#executor,
-            sessionPath(this.#computerId, sessionTarget, "events-v2"),
+            sessionEndpoints.liveEvents({ computerId: this.#computerId, target: sessionTarget }),
             observer,
             signal,
         );
@@ -989,16 +986,16 @@ export class MortyEventResources {
         page: MortyPageRequest,
         signal: AbortSignal,
     ): Promise<SessionEventLogPage> => {
-        const path = requestUrl(
-            new URL("https://morty.invalid/"),
-            sessionPath(this.#computerId, sessionTarget, "events-v2"),
-        );
-        path.searchParams.set("limit", page.limit.toString());
-        if (page.cursor.length > 0) {
-            path.searchParams.set("cursor", page.cursor);
-        }
         return decodeKnownSessionEventLogPage(
-            await this.#executor.get(`${path.pathname.slice(1)}${path.search}`, signal),
+            await this.#executor.get(
+                sessionEndpoints.listEvents({
+                    computerId: this.#computerId,
+                    target: sessionTarget,
+                    limit: page.limit,
+                    cursor: page.cursor,
+                }),
+                signal,
+            ),
         );
     };
 

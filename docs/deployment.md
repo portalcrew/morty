@@ -14,7 +14,6 @@ The only hosted application environment is production in the Morty Cloudflare
 account. Development, integration and performance checks use isolated local or
 CI services; there is no permanent staging or benchmark deployment. Local
 services must not use production credentials or silently fall back to production.
-Moxt resources, credentials, local state and release channels remain independent.
 
 ## Cloud deployment
 
@@ -48,7 +47,7 @@ deployed API supports it. R2 uploads currently use the Cloudflare REST API; its
 account-level storage permission must stay in the Morty-only account. Bucket-scoped
 object credentials require a separately verified S3 upload path.
 
-Ordinary deployment does not need D1, DNS, zone administration, member management
+Ordinary deployment does not need DNS, zone administration, member management
 or API-token provisioning permissions.
 
 Deployment and restore verify account ownership, active status and a valid future
@@ -143,7 +142,7 @@ recovery share a production lock.
 ## CLI publication
 
 Build and pack once, then test that same archive across supported systems and
-Node versions, including coexistence with a real released Moxt installation.
+Node versions.
 Record its source revision and integrity. Do not publish a public prerelease to
 bypass the acceptance gates.
 
@@ -181,5 +180,5 @@ Activate matching cloud and CLI artifacts, then verify fresh installation, pairi
 conversation, attachments and reconnect. Preserve accepted release archives and
 retained data for recovery. Never replay old writers against new schemas.
 Recovery restores an accepted matching cloud/CLI
-release and uses fresh pairing when installation generations differ. Moxt services
-and Agent-owned data remain independent.
+release and uses fresh pairing when installation generations differ. Agent-owned
+data remains independent.

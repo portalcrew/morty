@@ -14,12 +14,12 @@ beforeAll(async () => {
 beforeEach(() => vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T00:00:00Z") }));
 afterEach(() => vi.useRealTimers());
 
-test("Given a Computer credential, When a peer manages identity and pairing over WebSocket, Then it sees the same authorized results while existing HTTP clients remain supported", async () => {
+test("Given canonical Computer paths, When an owner manages identity and pairing over HTTP and WebSocket, Then both transports enforce the same access and operation identity", async () => {
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });
     const signal = AbortSignal.timeout(45_000);
     const created = await bindings.request(
-        new Request(`${bindings.origin}/morty/api/computers`, {
+        new Request(`${bindings.origin}/morty/api/v1/computers`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
@@ -31,7 +31,7 @@ test("Given a Computer credential, When a peer manages identity and pairing over
     expect(created.status).toBe(201);
     const owner = v.parse(v.object({ computerId: v.string(), computerToken: v.string() }), await created.json());
     const request = (path: string, body?: object) =>
-        new Request(`${bindings.origin}/morty/api/computers/${owner.computerId}${path}`, {
+        new Request(`${bindings.origin}/morty/api/v1/computers/${owner.computerId}${path}`, {
             method: body === undefined ? "GET" : "POST",
             headers: { authorization: `Bearer ${owner.computerToken}`, "content-type": "application/json" },
             ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -39,17 +39,19 @@ test("Given a Computer credential, When a peer manages identity and pairing over
         });
     const http = await bindings.request(request("/session"));
     expect(http.status).toBe(200);
+    expect(http.headers.get("Morty-Credential-Revocation")).toBe("/identity/local-credential");
     const transport = await connectComputerApiWebSocket(bindings.origin, owner.computerId, signal);
     try {
+        const computer = await transport.fetch(request(""));
+        expect(computer.status).toBe(200);
+        expect(await computer.json()).toEqual({ computer: { computerId: owner.computerId } });
         const session = await transport.fetch(request("/session"));
         expect(session.status).toBe(200);
         expect(await session.json()).toEqual(await http.json());
         const link = await bindings.request(request("/identity/link", { computerId: owner.computerId }));
         expect(link.status).toBe(200);
         expect(await link.json()).toEqual({ computerId: owner.computerId });
-        const pairing = await bindings.request(
-            request("/management/pairing", { idempotencyKey: "websocket-management" }),
-        );
+        const pairing = await bindings.request(request("/pairing", { idempotencyKey: "websocket-management" }));
         expect(pairing.status).toBe(201);
         expect(await pairing.json()).toMatchObject({ pairingCode: expect.any(String) });
         const devices = await transport.fetch(request("/identity/devices"));
@@ -70,29 +72,32 @@ test("Given a Computer credential, When a peer manages identity and pairing over
         expect(unauthenticated.status).toBe(401);
         expect(await unauthenticated.json()).toMatchObject({ error: { code: "UNAUTHENTICATED" } });
         const wrongComputer = await transport.fetch(
-            new Request(`${bindings.origin}/morty/api/computers/prj_ap_01_abcdefghijklmnopqrstuvwx/session`, {
+            new Request(`${bindings.origin}/morty/api/v1/computers/prj_ap_01_abcdefghijklmnopqrstuvwx/session`, {
                 signal,
             }),
         );
         expect(wrongComputer.status).toBe(400);
         expect(await wrongComputer.json()).toMatchObject({ error: { code: "invalid_target" } });
         const setup = await transport.fetch(
-            new Request(`${bindings.origin}/morty/api/chat/computers/${owner.computerId}/setup`, {
+            new Request(`${bindings.origin}/morty/api/v1/computers/${owner.computerId}/setup`, {
                 method: "POST",
                 signal,
             }),
         );
         expect(setup.status).toBe(400);
         expect(await setup.json()).toMatchObject({ error: { code: "invalid_target" } });
+        for (const path of ["/catalog", "/pairing/redeem"]) {
+            const runtimeOnly = await transport.fetch(request(path, {}));
+            expect(runtimeOnly.status).toBe(400);
+            expect(await runtimeOnly.json()).toMatchObject({ error: { code: "invalid_target" } });
+        }
         const oversized = { ...sharing, replaces: "x".repeat(3 * 1_024 * 1_024) };
         const oversizedHttp = await bindings.request(request("/identity/transfers", oversized));
         const oversizedWebSocket = await transport.fetch(request("/identity/transfers", oversized));
         expect(oversizedHttp.ok).toBe(false);
         expect(oversizedWebSocket.status).toBe(oversizedHttp.status);
         expect(await oversizedWebSocket.json()).toEqual(await oversizedHttp.json());
-        const retired = await transport.fetch(
-            new Request(request("/identity/v1/local-credential"), { method: "DELETE" }),
-        );
+        const retired = await transport.fetch(new Request(request("/identity/local-credential"), { method: "DELETE" }));
         expect(retired.status).toBe(204);
         expect(await retired.text()).toBe("");
         expect((await transport.fetch(request("/session"))).status).toBe(401);
@@ -118,7 +123,7 @@ test.each(["http", "websocket"] as const)(
                 ...(body === undefined ? {} : { body: JSON.stringify(body) }),
             });
         const created = await bindings.request(
-            operation("/computers", undefined, {
+            operation("/v1/computers", undefined, {
                 creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
             }),
         );
@@ -140,11 +145,13 @@ test.each(["http", "websocket"] as const)(
             const input = operation(path, token, body);
             return websocket !== null &&
                 !path.endsWith("/setup") &&
-                (path.startsWith("/computers/") || path.startsWith("/chat/computers/"))
+                path.startsWith("/v1/computers/") &&
+                !path.includes("/harnesses/") &&
+                !path.endsWith("/pairing/redeem")
                 ? websocket.fetch(input)
                 : bindings.request(input);
         };
-        const paired = await request(`/computers/${owner.computerId}/management/pairing`, owner.token, {
+        const paired = await request(`/v1/computers/${owner.computerId}/pairing`, owner.token, {
             idempotencyKey: "single-worker",
         });
         expect(paired.status).toBe(201);
@@ -157,7 +164,7 @@ test.each(["http", "websocket"] as const)(
             files: new Map([["/workspace/entrypoint.txt", { content: "HTTP download", mediaType: "text/plain" }]]),
         };
         const harness = createMortyFakeDaemon(behavior);
-        const redeemed = await request(`/v1/pairings/${owner.computerId}/redeem`, undefined, {
+        const redeemed = await request(`/v1/computers/${owner.computerId}/pairing/redeem`, undefined, {
             pairingCode: pairing.pairingCode,
             computerName: "Single Worker",
             workspaceName: "Controlled workspace",
@@ -174,7 +181,7 @@ test.each(["http", "websocket"] as const)(
                 credentials: memoryComputerCredentials(claim.computerCredential),
             },
         });
-        const chat = `/chat/computers/${owner.computerId}`;
+        const chat = `/v1/computers/${owner.computerId}`;
         const setup = await request(`${chat}/setup`, owner.token, { harness: "codex" });
         expect(setup.status, await setup.clone().text()).toBe(202);
         const workspace = await request(`${chat}/workspace`, owner.token, {});
@@ -191,10 +198,10 @@ test.each(["http", "websocket"] as const)(
         expect(await computers.json()).toEqual({
             computers: [expect.objectContaining({ computerId: owner.computerId, online: true })],
         });
-        const computer = await request(`/computers/${owner.computerId}/management/computer/pairing-state`, owner.token);
+        const computer = await request(`/v1/computers/${owner.computerId}/pairing-state`, owner.token);
         expect(computer.status).toBe(200);
         expect(await computer.json()).toEqual({ computerPairing: "paired" });
-        const opened = await request(`${chat}/access`, owner.token, {
+        const opened = await request(`${chat}/managed-sessions/open`, owner.token, {
             harness: "codex",
             conversationKey: "single-worker-session",
             workspaceRef: ".",
@@ -260,7 +267,7 @@ test.each(["http", "websocket"] as const)(
             expect(file.status).toBe(200);
             expect(file.headers.has("server-timing")).toBe(false);
             expect(await file.text()).toBe("HTTP download");
-            for (const operation of ["configuration", "active-turn", "events-v2"]) {
+            for (const operation of ["configuration", "active-turn", "events"]) {
                 const response = await request(`${session}/${operation}`, access.credential);
                 expect(response.status, operation).toBe(404);
                 expect(await response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });

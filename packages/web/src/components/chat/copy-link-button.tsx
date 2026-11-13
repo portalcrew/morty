@@ -8,10 +8,15 @@ export function CopyLinkButton({
     className,
     url,
     urlClassName,
+    copyLabel = "Copy link",
+    subject = "link",
 }: {
     readonly className?: string;
     readonly url: string;
     readonly urlClassName?: string;
+    readonly copyLabel?: string;
+    /** What the copied text is, as the manual-copy fallback names it. */
+    readonly subject?: string;
 }) {
     const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");
     return (
@@ -42,11 +47,11 @@ export function CopyLinkButton({
                 ) : (
                     <Copy aria-hidden="true" className="size-4" />
                 )}
-                <span>{copy === "copied" ? "Copied" : "Copy link"}</span>
+                <span>{copy === "copied" ? "Copied" : copyLabel}</span>
             </Button>
             {copy === "failed" && (
                 <p className="text-xs text-muted-foreground" role="alert">
-                    Could not copy the link. Copy it manually from above.
+                    Could not copy the {subject}. Copy it manually from above.
                 </p>
             )}
         </div>

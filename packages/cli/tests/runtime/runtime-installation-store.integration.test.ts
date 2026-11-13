@@ -83,28 +83,28 @@ describe("Computer installation storage", () => {
         const signal = new AbortController().signal;
         const computerId = "shared:channel";
         try {
-            const morty = await RuntimeInstallationStore.open(join(stateRoot, "morty-data"), signal);
-            const moxt = await RuntimeInstallationStore.open(join(stateRoot, "moxt-data"), signal);
-            await morty.saveConnection(
+            const first = await RuntimeInstallationStore.open(join(stateRoot, "first-data"), signal);
+            const second = await RuntimeInstallationStore.open(join(stateRoot, "second-data"), signal);
+            await first.saveConnection(
                 {
                     computerId,
-                    defaultWorkspace: "/workspace/morty",
+                    defaultWorkspace: "/workspace/first",
                     relayOrigin: new URL("https://relay.example.com/"),
                     computerCredential: "a".repeat(43),
                 },
                 signal,
             );
-            const moxtConnection = await moxt.saveConnection(
+            const secondConnection = await second.saveConnection(
                 {
                     computerId,
-                    defaultWorkspace: "/workspace/moxt",
+                    defaultWorkspace: "/workspace/second",
                     relayOrigin: new URL("https://relay.example.com/"),
                     computerCredential: "b".repeat(43),
                 },
                 signal,
             );
 
-            const resumed = await moxt.readConnection(moxtConnection.pairingGeneration, signal);
+            const resumed = await second.readConnection(secondConnection.pairingGeneration, signal);
 
             expect(resumed.computerId).toBe(computerId);
             expect(resumed).toBeInstanceOf(SavedComputerConnection);
@@ -112,13 +112,13 @@ describe("Computer installation storage", () => {
                 throw new Error("Expected a verified Computer connection");
             }
             expect(resumed.computerId).toBe(computerId);
-            await expect(moxt.currentConnection(signal)).resolves.toEqual(resumed);
-            expect(morty.pairingPath).not.toContain("moxt-data");
-            expect(moxt.pairingPath).toContain("moxt-data");
-            expect(morty.pairingPath).not.toContain(computerId);
-            expect(moxt.pairingPath).not.toContain(computerId);
+            await expect(second.currentConnection(signal)).resolves.toEqual(resumed);
+            expect(first.pairingPath).not.toContain("second-data");
+            expect(second.pairingPath).toContain("second-data");
+            expect(first.pairingPath).not.toContain(computerId);
+            expect(second.pairingPath).not.toContain(computerId);
 
-            await expect(morty.readConnection(moxtConnection.pairingGeneration, signal)).rejects.toMatchObject({
+            await expect(first.readConnection(secondConnection.pairingGeneration, signal)).rejects.toMatchObject({
                 code: "connection_not_found",
             } satisfies Pick<RuntimeInstallationStoreError, "code">);
         } finally {

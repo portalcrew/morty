@@ -20,7 +20,7 @@ import { createControlledRuntimeConfig as createRuntimeConfig } from "../../supp
 
 // External Agent failure modes: cancellation before its initialization promise is
 // observed, cancellation while initialization is pending, and ordinary startup failure.
-// A process-level fatal handler reproduces the integrated Moxt host's exit policy.
+// A process-level fatal handler exits the host on an unhandled rejection.
 process.on("unhandledRejection", (error: unknown) => {
     process.stderr.write(`unhandled_rejection: ${String(error)}\n`);
     process.exit(91);

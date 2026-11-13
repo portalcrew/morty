@@ -12,9 +12,6 @@ import { ManagementService } from "../components/management/service/management-s
 import type { IdentityStorage } from "../components/management/storage/identity-storage.ts";
 import { accountProvisioner } from "../gateway/computer-relay.ts";
 
-// One logger, whose error serializer keeps credentials and request input out of the logs.
-export { logger };
-
 export interface ApplicationContext {
     readonly config: { readonly bindings: CloudBindings };
     readonly identity: ComputerIdentity;

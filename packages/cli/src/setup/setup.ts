@@ -868,7 +868,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
     }
 
     async function send(base: string, path: string, headers: Readonly<Record<string, string>>, body?: unknown) {
-        const response = await fetch(new URL(`/morty/api${path}`, base), {
+        const response = await fetch(new URL(`/morty/api/v1${path}`, base), {
             method: body === undefined ? "GET" : "POST",
             headers: { "content-type": "application/json", ...headers },
             redirect: "error",
@@ -885,10 +885,10 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
     /** Sends a request as the saved identity, to its Computer unless the route names one. */
     async function request(context: Context, route: string, body?: unknown) {
         const headers: Record<string, string> = { authorization: `Bearer ${context.identity.computerToken}` };
-        if (route === "/management/computer/replacement") {
+        if (route === "/replacement") {
             headers["x-morty-setup-run-id"] = runId;
         }
-        const path = route.startsWith("/chat/computers/") ? route : `/computers/${context.identity.computerId}${route}`;
+        const path = route.startsWith("/computers/") ? route : `/computers/${context.identity.computerId}${route}`;
         return await send(context.base, path, headers, body);
     }
 
@@ -912,7 +912,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         }
         const previous = replacement.previous;
         const response = await fetch(
-            new URL(`/morty/api/computers/${previous.computerId}/identity/v1/local-credential`, context.base),
+            new URL(`/morty/api/v1/computers/${previous.computerId}/identity/local-credential`, context.base),
             {
                 method: "DELETE",
                 headers: { authorization: `Bearer ${previous.token}` },
@@ -1083,7 +1083,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
             fail("IDENTITY_CONFLICT");
         }
         // The Worker reads the Computer's pairing from the Relay, the same one every browser handoff opens.
-        const computerPairing = text((await request(context, "/management/computer/pairing-state"))["computerPairing"]);
+        const computerPairing = text((await request(context, "/pairing-state"))["computerPairing"]);
         if (computerPairing !== "unpaired" && computerPairing !== "paired" && computerPairing !== "revoked") {
             fail("INVALID_RESPONSE");
         }
@@ -1094,7 +1094,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         context: Context,
         requestKey: string,
     ): Promise<{ readonly computer: ComputerSelection; readonly expiresAt: number }> {
-        const pairing = await request(context, "/management/pairing", { idempotencyKey: requestKey });
+        const pairing = await request(context, "/pairing", { idempotencyKey: requestKey });
         const selection: ComputerSelection = {
             kind: "pairing",
             pairingCode: text(pairing["pairingCode"], /^[A-Za-z0-9-]+$/u),
@@ -1118,7 +1118,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         const prepared = await commit(context, withReplacementRequested(context.identity));
         replacementAccess = { kind: "unknown", previousComputerId };
         progress("replacement", "Replacing the saved connection with approval. Earlier shared access will be revoked.");
-        const replacement = await request(prepared, "/management/computer/replacement", {});
+        const replacement = await request(prepared, "/replacement", {});
         const computerId = identifier(replacement["computerId"]);
         replacementAccess = { kind: "revoked", previousComputerId, computerId };
         // Report the access change immediately, even if saving or connecting the successor fails next.
@@ -1310,7 +1310,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         context: Context,
         computer: ComputerSelection,
     ): Promise<readonly string[] | null> {
-        const botPath = `/chat/computers/${context.identity.computerId}`;
+        const botPath = `/computers/${context.identity.computerId}`;
         // A paired Computer is read through management; one still waiting for its pairing is among the setup candidates.
         const alreadyPaired = computer.kind === "existing" && computer.paired;
         const state = await request(context, `${botPath}/${alreadyPaired ? "workspace" : "setup/computers"}`, {});
@@ -1372,7 +1372,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         if (computer.kind === "pairing") {
             while (true) {
                 signal.throwIfAborted();
-                const status = await request(context, `/management/pairing`);
+                const status = await request(context, `/pairing`);
                 if (status["status"] !== "pending" && status["status"] !== "paired") {
                     fail("COMPUTER_PAIRING_UNAVAILABLE");
                 }
@@ -1430,7 +1430,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
     async function bindAgent(context: Context, harness: string) {
         progress("binding", `Connecting the Computer to ${harness} in the default working directory.`);
         try {
-            await request(context, `/chat/computers/${context.identity.computerId}/setup`, { harness });
+            await request(context, `/computers/${context.identity.computerId}/setup`, { harness });
         } catch (cause) {
             // Cancellation and the setup budget keep their own codes.
             if (signal.aborted || !(cause instanceof Error)) {
@@ -1457,11 +1457,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         let attempts = 0;
         while (true) {
             signal.throwIfAborted();
-            const configuration = await request(
-                context,
-                `/chat/computers/${context.identity.computerId}/workspace`,
-                {},
-            );
+            const configuration = await request(context, `/computers/${context.identity.computerId}/workspace`, {});
             if (hasOnlineComputerAgent(object(configuration["computer"]), computer.computerId, harness)) {
                 return;
             }

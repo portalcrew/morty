@@ -8,7 +8,7 @@ it("Given two computer owners, When one uses the other's computer management bou
     const other = await createOwner();
     const read = (computerId: string, token: string) =>
         ownerRequest(
-            new Request(`${ownerOrigin}/morty/api/computers/${computerId}/management/computer`, {
+            new Request(`${ownerOrigin}/morty/api/v1/computers/${computerId}`, {
                 headers: { authorization: `Bearer ${token}` },
             }),
         );

@@ -94,7 +94,7 @@ test("Given a browser opened the saved Computer's link, When the user approves r
     expect(connected.identity.computerId).not.toBe(original.identity.computerId);
     expect(connected.configuration["replacement"]).toEqual({ kind: "unchanged" });
     const session = await page.request.get(
-        `${runtime.origin}/morty/api/computers/${original.identity.computerId}/session`,
+        `${runtime.origin}/morty/api/v1/computers/${original.identity.computerId}/session`,
         { headers: { authorization: `Bearer ${String(previousToken)}` } },
     );
     expect(session.status()).toBe(401);

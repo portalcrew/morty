@@ -34,7 +34,7 @@ class IdentitySharingUnavailable extends Error {
 }
 
 export function createIdentityAccess(options: {
-    readonly fetchRequest: (request: Request) => Promise<Response>;
+    readonly fetchRequest: ApiTransport["fetch"];
     readonly waitForChange: ApiTransport["waitForChange"];
     readonly origin: string;
     readonly identity: { readonly computerId: string; readonly getToken: (signal: AbortSignal) => Promise<string> };

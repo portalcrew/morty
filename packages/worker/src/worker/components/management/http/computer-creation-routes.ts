@@ -7,7 +7,6 @@ import { anonymousCreationKey } from "../../../../contracts/computer-bootstrap.t
 import { computerLocationHint } from "../../../../contracts/computer-location.ts";
 import { readJsonBody } from "../../../../http/body-parser.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
-import { accountProvisioner } from "../../../gateway/account-provisioning.ts";
 import { admitAnonymousCreation } from "../../../gateway/anonymous-creation-admission.ts";
 import { computerObject } from "../../../gateway/computer-object-routing.ts";
 
@@ -15,17 +14,12 @@ const inputSchema = v.strictObject({
     creationKey: anonymousCreationKey,
 });
 
-export const computerCreationRoutes = new Hono<{
-    readonly Bindings: CloudBindings;
-    readonly Variables: { readonly provisionAccount: AccountProvisioner };
-}>().post(
-    "/computers",
-    bodyLimit({ maxSize: 3 * 1_024 * 1_024 }),
-    async (context, next) => {
-        context.set("provisionAccount", accountProvisioner(context.env));
-        await next();
-    },
-    async (context) => {
+export function createComputerCreationRoutes(ctx: {
+    readonly services: { readonly accounts: (bindings: CloudBindings) => AccountProvisioner };
+}) {
+    return new Hono<{
+        readonly Bindings: CloudBindings;
+    }>().post("/computers", bodyLimit({ maxSize: 3 * 1_024 * 1_024 }), async (context) => {
         const request = context.req.raw;
         using deadline = new RequestDeadline(request.signal, 45_000);
         const signal = deadline.signal;
@@ -33,7 +27,7 @@ export const computerCreationRoutes = new Hono<{
         signal.throwIfAborted();
         await admitAnonymousCreation(request, context.env);
         signal.throwIfAborted();
-        const computer = await context.var.provisionAccount(
+        const computer = await ctx.services.accounts(context.env)(
             crypto.randomUUID(),
             computerLocationHint(request) ?? "apac",
             signal,
@@ -51,5 +45,5 @@ export const computerCreationRoutes = new Hono<{
         );
         signal.throwIfAborted();
         return response;
-    },
-);
+    });
+}

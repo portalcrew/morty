@@ -68,7 +68,7 @@ const sessionConfigureCommandSchema = z
 
 export type SessionConfigureCommand = z.infer<typeof sessionConfigureCommandSchema>;
 
-const sessionConfigUpdatedEventSchema = z
+export const sessionConfigUpdatedEventSchema = z
     .object({
         configOptions: sessionConfigOptionsSchema,
         // An opaque Computer generation token.
@@ -106,7 +106,7 @@ const sessionConfigReadCommandSchema = z
 
 export type SessionConfigReadCommand = z.infer<typeof sessionConfigReadCommandSchema>;
 
-const sessionConfigReadResultSchema = z
+export const sessionConfigReadResultSchema = z
     .object({
         configOptions: sessionConfigOptionsSchema,
         // An opaque Computer generation token.

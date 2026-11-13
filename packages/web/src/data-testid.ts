@@ -41,6 +41,7 @@ export const dataTestId = Object.freeze({
     newConversation: "chat-new-conversation",
     shareIdentity: "chat-share-identity",
     identitySharing: "chat-identity-sharing",
+    agentHandoff: "chat-agent-handoff",
     userMenu: "chat-user-menu",
     endRemoteAccess: "chat-end-remote-access",
     endRemoteAccessDialog: "chat-end-remote-access-dialog",

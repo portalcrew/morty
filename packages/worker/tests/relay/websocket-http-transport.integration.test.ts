@@ -1,16 +1,18 @@
 import { SELF } from "cloudflare:test";
-import { encodeContentChunkFrame } from "@morty-build/client/protocol";
+import { CONTENT_CHUNK_MAX_BYTES, encodeContentChunkFrame } from "@morty-build/client/protocol";
 import { expect, it, vi } from "vitest";
-import {
-    acceptWebSocketHttpTransport,
-    WebSocketUploadBudget,
-} from "../../src/computer-relay/components/runtime/http/websocket-http-transport.ts";
+import { acceptWebSocketHttpTransport } from "../../src/computer-relay/components/runtime/http/websocket-http-transport.ts";
 import { SessionRuntimeError } from "../../src/contracts/relay/session.ts";
+import type { WebSocketHttpOperation } from "../../src/contracts/websocket-http-dispatch.ts";
+import { createOwner, issueSession, ownerOrigin, ownerRequest, pairComputer } from "./owner-fixture.ts";
 
 class FailingDaemonBoundary {
     requests = 0;
 
-    readonly fetch = (_request: Request): Promise<Response> => {
+    readonly fetch = (operation: WebSocketHttpOperation): Promise<Response> => {
+        if (operation.kind === "upload-admission") {
+            return Promise.resolve(new Response(null, { status: 204 }));
+        }
         this.requests += 1;
         return Promise.reject(
             new SessionRuntimeError("agent_execution_failed", "The local Agent exited before completing the request"),
@@ -68,6 +70,47 @@ it("Given a browser connection, When it requests a retired private Computer API,
     }
 });
 
+it.each([
+    { operation: "unknown-command", kind: "http.response", status: 404, code: "not_found" },
+    { operation: "access-credentials", kind: "http.error", status: 400, code: "invalid_target" },
+    { operation: "access-credentials/unknown-command", kind: "http.error", status: 400, code: "invalid_target" },
+])(
+    "Given a browser connection, When it requests Session operation $operation, Then the owning route preserves its existing $status rejection",
+    async ({ operation, kind, status, code }) => {
+        const computerId = "prj_ap_01_000000000000000000000001";
+        const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
+            headers: { Upgrade: "websocket" },
+        });
+        const socket = response.webSocket;
+        if (socket === null) {
+            throw new Error("Expected the public WebSocket transport");
+        }
+        socket.accept();
+        try {
+            const answer = nextMessage(socket);
+            socket.send(
+                JSON.stringify({
+                    kind: "http.request",
+                    requestId: "unsupported-session-operation",
+                    method: "GET",
+                    path: `/morty/api/v1/computers/${computerId}/harnesses/codex/sessions/example/${operation}`,
+                    headers: [["authorization", "Bearer untrusted-credential"]],
+                    body: "",
+                }),
+            );
+            const frame = JSON.parse(await answer);
+            expect(frame).toMatchObject({ kind, status, requestId: "unsupported-session-operation" });
+            if (kind === "http.response") {
+                expect(JSON.parse(frame.body)).toMatchObject({ error: { code } });
+            } else {
+                expect(frame).toMatchObject({ code });
+            }
+        } finally {
+            socket.close();
+        }
+    },
+);
+
 it("Given a browser connection, When it heartbeats through the public Relay transport, Then the Computer acknowledges it and an unauthenticated Session request is rejected", async () => {
     const response = await SELF.fetch(
         "https://relay.test/morty/api/v1/computers/prj_ap_01_000000000000000000000001/transport",
@@ -107,102 +150,145 @@ it("Given a browser connection, When it heartbeats through the public Relay tran
     }
 });
 
-it("Given a Computer-bound browser, When it addresses another computer, Then the request is rejected without closing the browser connection", async () => {
-    const response = await SELF.fetch(
-        "https://relay.test/morty/api/v1/computers/prj_ap_01_000000000000000000000001/transport",
-        {
-            headers: { Upgrade: "websocket" },
-        },
-    );
-    expect(response.status).toBe(101);
-    const socket = response.webSocket;
-    if (socket === null) {
-        throw new Error("Expected the public WebSocket transport");
-    }
-    socket.accept();
-    try {
-        const result = nextMessage(socket);
-        socket.send(
-            JSON.stringify({
-                kind: "http.request",
-                requestId: "request-identity",
-                method: "GET",
-                path: "/morty/api/v1/computers/prj_ap_01_000000000000000000000002/harnesses/codex/sessions/example/active-turn",
-                headers: [],
-                body: "",
-            }),
+it.each([
+    {
+        path: "/morty/api/v1/computers/prj_ap_01_000000000000000000000002/harnesses/codex/sessions/example/active-turn",
+        binary: false,
+    },
+    { path: "/morty/api/computers/prj_ap_01_000000000000000000000002/session", binary: false },
+    { path: "/morty/api/v1/computers/prj_ap_01_000000000000000000000002/agent-settings", binary: false },
+    {
+        path: `/morty/api/v1/computers/prj_ap_01_000000000000000000000002/harnesses/codex/sessions/example/content/${"a".repeat(64)}`,
+        binary: true,
+    },
+])(
+    "Given a Computer-bound browser, When it addresses another computer at $path (binary: $binary), Then the request is rejected without closing the browser connection",
+    async ({ path, binary }) => {
+        const response = await SELF.fetch(
+            "https://relay.test/morty/api/v1/computers/prj_ap_01_000000000000000000000001/transport",
+            {
+                headers: { Upgrade: "websocket" },
+            },
         );
-        expect(JSON.parse(await result)).toMatchObject({
-            kind: "http.error",
-            code: "invalid_target",
-            requestId: "request-identity",
-            status: 400,
-        });
-        const heartbeat = nextMessage(socket);
-        socket.send('{"kind":"ping"}');
-        expect(await heartbeat).toBe('{"kind":"pong"}');
-    } finally {
-        socket.close();
-    }
-});
+        expect(response.status).toBe(101);
+        const socket = response.webSocket;
+        if (socket === null) {
+            throw new Error("Expected the public WebSocket transport");
+        }
+        socket.accept();
+        try {
+            const result = nextMessage(socket);
+            socket.send(
+                JSON.stringify({
+                    kind: "http.request",
+                    requestId: "request-identity",
+                    method: binary ? "PUT" : "GET",
+                    path,
+                    headers: [["authorization", "Bearer untrusted-credential"]],
+                    body: "",
+                    ...(binary ? { bodyByteLength: 1 } : {}),
+                }),
+            );
+            expect(JSON.parse(await result)).toMatchObject({
+                kind: "http.error",
+                code: "invalid_target",
+                requestId: "request-identity",
+                status: 400,
+            });
+            const heartbeat = nextMessage(socket);
+            socket.send('{"kind":"ping"}');
+            expect(await heartbeat).toBe('{"kind":"pong"}');
+        } finally {
+            socket.close();
+        }
+    },
+);
 
 it("Given two browser connections to one Computer, When their pending uploads exceed its shared budget, Then the second upload is refused and capacity is released after a failed transfer", async () => {
-    const uploads = new WebSocketUploadBudget();
-    const daemon = new TextDaemonBoundary("uploaded");
-    const connect = () =>
-        acceptWebSocketHttpTransport({
-            request: new Request("https://relay.test/morty/api/v1/transport", {
-                headers: { Upgrade: "websocket" },
-            }),
-            dispatch: daemon.fetch,
-            uploads,
-            validateTarget: () => true,
-        }).webSocket;
-    const first = connect();
-    const second = connect();
-    if (first === null || second === null) {
-        throw new Error("Expected browser transports");
-    }
-    first.accept();
-    second.accept();
-    const declaration = (requestId: string) =>
-        JSON.stringify({
-            kind: "http.request",
-            requestId,
-            method: "POST",
-            path: "/morty/api/v1/computers/upload-computer/daemon/content",
-            headers: [],
-            body: "",
-            bodyByteLength: 8 * 1024 * 1024,
-        });
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2030-01-01T00:00:00Z") });
+    const sockets: WebSocket[] = [];
     try {
+        const { computerId } = await createOwner();
+        await pairComputer(computerId);
+        const target = { harness: "codex", sessionId: "upload-session" };
+        const { credential } = await issueSession(computerId, target);
+        for (let index = 0; index < 2; index += 1) {
+            const response = await ownerRequest(
+                new Request(`${ownerOrigin}/morty/api/v1/computers/${computerId}/transport`, {
+                    headers: { Upgrade: "websocket" },
+                }),
+            );
+            const socket = response.webSocket;
+            if (socket === null) {
+                throw new Error("Expected browser transports");
+            }
+            socket.accept();
+            sockets.push(socket);
+        }
+        const first = sockets[0];
+        const second = sockets[1];
+        if (first === undefined || second === undefined) {
+            throw new Error("Expected two browser transports");
+        }
+        const byteLength = 8 * 1024 * 1024;
+        const declaration = (requestId: string) =>
+            JSON.stringify({
+                kind: "http.request",
+                requestId,
+                method: "PUT",
+                path: `/morty/api/v1/computers/${computerId}/harnesses/codex/sessions/upload-session/content/${"a".repeat(64)}?uri=file:///upload.bin`,
+                headers: [
+                    ["authorization", `Bearer ${credential}`],
+                    ["content-type", "application/octet-stream"],
+                    ["x-morty-byte-length", String(byteLength)],
+                    ["x-morty-content-kind", "resource"],
+                    ["x-morty-file-name", "upload.bin"],
+                ],
+                body: "",
+                bodyByteLength: byteLength,
+            });
+        // Admission is asynchronous. Observe which upload is refused rather than using a ping as an admission barrier.
+        const refused = Promise.race([
+            nextMessage(first).then((message) => ({ message, refused: first, admitted: second, admittedId: "second" })),
+            nextMessage(second).then((message) => ({ message, refused: second, admitted: first, admittedId: "first" })),
+        ]);
         first.send(declaration("first"));
-        const admitted = nextMessage(first);
-        first.send('{"kind":"ping"}');
-        expect(await admitted).toBe('{"kind":"pong"}');
-        const refused = nextMessage(second);
         second.send(declaration("second"));
-        expect(JSON.parse(await refused)).toMatchObject({
+        const result = await refused;
+        expect(JSON.parse(result.message)).toMatchObject({
             kind: "http.error",
             code: "request_capacity_exceeded",
-            requestId: "second",
         });
-        const failed = nextMessage(first);
-        first.send(
-            encodeContentChunkFrame({ requestId: "first", sequence: 1, bytes: new Uint8Array([1]) }).slice().buffer,
+        const failed = nextMessage(result.admitted);
+        result.admitted.send(
+            encodeContentChunkFrame({ requestId: result.admittedId, sequence: 1, bytes: new Uint8Array([1]) }).slice()
+                .buffer,
         );
         expect(JSON.parse(await failed)).toMatchObject({
             kind: "http.error",
             code: "invalid_message",
-            requestId: "first",
+            requestId: result.admittedId,
         });
-        second.send(declaration("retry"));
-        const retried = nextMessage(second);
-        second.send('{"kind":"ping"}');
-        expect(await retried).toBe('{"kind":"pong"}');
+        const retried = nextMessage(result.refused);
+        result.refused.send(declaration("retry"));
+        for (let offset = 0, sequence = 0; offset < byteLength; offset += CONTENT_CHUNK_MAX_BYTES, sequence += 1) {
+            result.refused.send(
+                encodeContentChunkFrame({
+                    requestId: "retry",
+                    sequence,
+                    bytes: new Uint8Array(Math.min(CONTENT_CHUNK_MAX_BYTES, byteLength - offset)),
+                }).slice().buffer,
+            );
+        }
+        // Reaching execution's unavailable Computer check proves admission and assembly succeeded after release.
+        const response = JSON.parse(await retried);
+        expect(response).toMatchObject({ kind: "http.response", requestId: "retry", status: 403 });
+        expect(JSON.parse(response.body)).toMatchObject({ error: { code: "computer_access_denied" } });
     } finally {
-        first.close();
-        second.close();
+        for (const socket of sockets) {
+            socket.close();
+        }
+        vi.useRealTimers();
     }
 });
 
@@ -229,16 +315,17 @@ it.each([
         }
         socket.accept();
         try {
-            const rejected = nextMessage(socket);
-            socket.send(
-                JSON.stringify({
-                    kind: "session.events.subscribe",
-                    subscriptionId: "unauthorized-subscription",
-                    path: "/morty/api/v1/computers/prj_wn_01_ABCDEFGHIJKLMNOPQRSTUVWX/harnesses/claude/sessions/session-unauthorized/events-v2",
-                    headers: authorization === null ? [] : [["authorization", authorization]],
-                }),
-            );
-            expect(JSON.parse(await rejected)).toMatchObject({ code, status });
+            const subscription = JSON.stringify({
+                kind: "session.events.subscribe",
+                subscriptionId: "unauthorized-subscription",
+                path: "/morty/api/v1/computers/prj_wn_01_ABCDEFGHIJKLMNOPQRSTUVWX/harnesses/claude/sessions/session-unauthorized/events",
+                headers: authorization === null ? [] : [["authorization", authorization]],
+            });
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+                const rejected = nextMessage(socket);
+                socket.send(subscription);
+                expect(JSON.parse(await rejected)).toMatchObject({ code, status });
+            }
         } finally {
             socket.close(1000, "Test complete");
         }
@@ -249,8 +336,8 @@ class SubscriptionDaemonBoundary {
     requestSignal: AbortSignal | null = null;
     downstream: WebSocket | null = null;
 
-    readonly fetch = (request: Request): Promise<Response> => {
-        this.requestSignal = request.signal;
+    readonly fetch = (operation: WebSocketHttpOperation): Promise<Response> => {
+        this.requestSignal = operation.request.signal;
         const pair = new WebSocketPair();
         this.downstream = pair[1];
         pair[1].accept();
@@ -261,7 +348,7 @@ class SubscriptionDaemonBoundary {
 class MultipleSubscriptionDaemonBoundary {
     readonly downstreams: WebSocket[] = [];
 
-    readonly fetch = (_request: Request): Promise<Response> => {
+    readonly fetch = (_operation: WebSocketHttpOperation): Promise<Response> => {
         const pair = new WebSocketPair();
         pair[1].accept();
         this.downstreams.push(pair[1]);
@@ -291,7 +378,7 @@ it("Given two quiet subscriptions, When multiple heartbeat intervals pass, Then 
                 JSON.stringify({
                     kind: "session.events.subscribe",
                     subscriptionId,
-                    path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events-v2",
+                    path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
                     headers: [],
                 }),
             );
@@ -325,8 +412,8 @@ class PendingDaemonBoundary {
     readonly response = Promise.withResolvers<Response>();
     readonly requested = Promise.withResolvers<AbortSignal>();
 
-    readonly fetch = (request: Request): Promise<Response> => {
-        this.requested.resolve(request.signal);
+    readonly fetch = (operation: WebSocketHttpOperation): Promise<Response> => {
+        this.requested.resolve(operation.request.signal);
         return this.response.promise;
     };
 }
@@ -339,8 +426,11 @@ class TextDaemonBoundary {
         this.responseBody = responseBody;
     }
 
-    readonly fetch = async (request: Request): Promise<Response> => {
-        this.requestBody = await request.text();
+    readonly fetch = async (operation: WebSocketHttpOperation): Promise<Response> => {
+        if (operation.kind === "upload-admission") {
+            return new Response(null, { status: 204 });
+        }
+        this.requestBody = await operation.request.text();
         return new Response(this.responseBody, { headers: { "content-type": "application/json" } });
     };
 }
@@ -647,7 +737,7 @@ it("Given an established event subscription, When the browser transport closes, 
         JSON.stringify({
             headers: [],
             kind: "session.events.subscribe",
-            path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events-v2",
+            path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
             subscriptionId: "subscription-1",
         }),
     );
@@ -689,7 +779,7 @@ it("Given two live subscriptions, When each receives event batches, Then deliver
             JSON.stringify({
                 headers: [],
                 kind: "session.events.subscribe",
-                path: `/morty/api/v1/computers/computer/harnesses/claude/sessions/${subscriptionId}/events-v2`,
+                path: `/morty/api/v1/computers/computer/harnesses/claude/sessions/${subscriptionId}/events`,
                 subscriptionId,
             }),
         );
@@ -752,7 +842,7 @@ it("Given an established event subscription is quiet, When the transport idle de
             JSON.stringify({
                 headers: [],
                 kind: "session.events.subscribe",
-                path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events-v2",
+                path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
                 subscriptionId: "subscription-1",
             }),
         );

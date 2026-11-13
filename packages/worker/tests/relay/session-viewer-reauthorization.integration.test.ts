@@ -126,7 +126,7 @@ async function openSessionView(_slug: string) {
         JSON.stringify({
             kind: "session.events.subscribe",
             subscriptionId: "viewer-reauthorization",
-            path: `${MORTY_API_PREFIX}/v1/computers/${computerId}/harnesses/claude/sessions/${sessionId}/events-v2`,
+            path: `${MORTY_API_PREFIX}/v1/computers/${computerId}/harnesses/claude/sessions/${sessionId}/events`,
             headers: [["authorization", `Bearer ${sessionCredential}`]],
         }),
     );
@@ -154,7 +154,7 @@ it("Given a live Session view, When the owner revokes browser access, Then the l
     });
 
     const revoked = await ownerRequest(
-        new Request(`${origin}/computers/${computerId}/identity/revoke-all-access`, {
+        new Request(`${origin}/v1/computers/${computerId}/identity/revoke-all-access`, {
             method: "POST",
             headers: { authorization: `Bearer ${owner.token}`, "content-type": "application/json" },
             body: JSON.stringify({ successor: `morty_computer_v1_${"B".repeat(43)}` }),

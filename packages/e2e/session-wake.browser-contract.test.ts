@@ -44,7 +44,7 @@ test("Given a conversation recovering after suspension, when its history read ti
                 frame.method === "GET" &&
                 "path" in frame &&
                 typeof frame.path === "string" &&
-                new URL(frame.path, "https://relay.test").pathname.endsWith("/events-v2")
+                new URL(frame.path, "https://relay.test").pathname.endsWith("/events")
             ) {
                 holdHistory = false;
                 historyHeld.resolve(() => server.send(message));

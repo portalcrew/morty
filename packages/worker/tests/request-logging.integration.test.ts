@@ -54,14 +54,14 @@ afterAll(async () => runtime.dispose());
 
 test("Given a request whose credential field is malformed, When the Worker logs the rejected request, Then the log names the field but never its value", async () => {
     const canary = "CREDENTIAL-CANARY-not-a-valid-creation-key";
-    const response = await runtime.dispatchFetch("https://chat.test/morty/api/computers", {
+    const response = await runtime.dispatchFetch("https://chat.test/morty/api/v1/computers", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ creationKey: canary }),
     });
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: { code: "INVALID_REQUEST", message: "The request is invalid." } });
-    await logged("Application request failed");
+    await logged("Morty request failed");
     expect(output).toContain("creationKey");
     expect(output).not.toContain(canary);
 });

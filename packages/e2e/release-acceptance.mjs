@@ -216,7 +216,7 @@ try {
         // Revoking all access replaces the local credential; the replacement is then retired too.
         const successor = `morty_computer_v1_${randomBytes(32).toString("base64url")}`;
         const call = (path, method, token, body) =>
-            fetch(new URL(`/morty/api/computers/${encodeURIComponent(identity.computer_id)}${path}`, origin), {
+            fetch(new URL(`/morty/api/v1/computers/${encodeURIComponent(identity.computer_id)}${path}`, origin), {
                 method,
                 headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
                 ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -227,7 +227,7 @@ try {
         const sharesRevoked =
             shares.status === 401 || (shares.status === 200 && sharedResult?.status === "access_revoked");
         const remaining = shares.status === 200 ? successor : identity.computer_token;
-        const local = sharesRevoked ? await call("/identity/v1/local-credential", "DELETE", remaining) : null;
+        const local = sharesRevoked ? await call("/identity/local-credential", "DELETE", remaining) : null;
         const rejected = local
             ? [await call("/session", "GET", identity.computer_token), await call("/session", "GET", successor)]
             : null;

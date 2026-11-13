@@ -1,30 +1,27 @@
-import { MORTY_API_PREFIX } from "@morty-build/client/protocol";
+import type { NativeSessionTarget } from "@morty-build/client/protocol";
 import { toHttpError } from "../../../../contracts/http-error.ts";
-import { validateIdentifier } from "../../../../contracts/relay/pairing.ts";
 import type { SessionAccessService } from "../service/session-access-service.ts";
 
-/** Shared by transport admission and execution; never executes a content write. */
-export async function authorizeSessionContentUpload(request: Request, sessions: SessionAccessService) {
-    const path = new URL(request.url).pathname;
-    const prefix = `${MORTY_API_PREFIX}/v1/computers/`;
-    const parts = path.startsWith(prefix) ? path.slice(prefix.length).split("/") : [];
-    const [computerId, harnessResource, harness, resource, sessionId, operation, contentKey] = parts;
-    if (
-        request.method !== "PUT" ||
-        parts.length !== 7 ||
-        harnessResource !== "harnesses" ||
-        harness === undefined ||
-        resource !== "sessions" ||
-        operation !== "content" ||
-        computerId === undefined ||
-        sessionId === undefined ||
-        contentKey === undefined ||
-        !/^[a-f0-9]{64}$/u.test(contentKey)
-    ) {
-        return Response.json(
-            { error: { code: "invalid_target", message: "A Session content upload is required" } },
-            { status: 400 },
-        );
+export type SessionContentUploadTarget = {
+    readonly computerId: string;
+    readonly target: NativeSessionTarget;
+    readonly contentKey: string;
+};
+
+export const sessionContentUploadRequired = (): Response =>
+    Response.json(
+        { error: { code: "invalid_target", message: "A Session content upload is required" } },
+        { status: 400 },
+    );
+
+/** Shared by transport admission and execution; the owning router resolves the target. */
+export async function authorizeSessionContentUpload(
+    request: Request,
+    sessions: SessionAccessService,
+    { computerId, target, contentKey }: SessionContentUploadTarget,
+) {
+    if (!/^[a-f0-9]{64}$/u.test(contentKey)) {
+        return sessionContentUploadRequired();
     }
     const credential = (request.headers.get("authorization") ?? "").match(/^Bearer ([^\s]+)$/u)?.[1];
     if (credential === undefined) {
@@ -34,14 +31,10 @@ export async function authorizeSessionContentUpload(request: Request, sessions: 
         );
     }
     try {
-        const target = {
-            harness: validateIdentifier(decodeURIComponent(harness), "harness"),
-            sessionId: validateIdentifier(decodeURIComponent(sessionId), "session_id"),
-        };
         const access = await sessions.authorizeSession(
             {
                 kind: "session",
-                computerId: validateIdentifier(computerId, "computer_id"),
+                computerId,
                 target,
             },
             credential,

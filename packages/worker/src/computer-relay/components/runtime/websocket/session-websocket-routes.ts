@@ -7,13 +7,9 @@ import {
     type NativeSessionTarget,
     type TurnState,
 } from "@morty-build/client/protocol";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import * as v from "valibot";
-import { toHttpError } from "../../../../contracts/http-error.ts";
-import { PairingDirectoryError, validateIdentifier } from "../../../../contracts/relay/pairing.ts";
-import { RequestDeadline } from "../../../../http/request-deadline.ts";
-import { authorizeSessionContentUpload } from "../http/session-content-upload.ts";
 import {
     decodeSessionRequest,
     interactionResponseRequest,
@@ -21,18 +17,33 @@ import {
     sessionRenameRequest,
     turnSteerRequest,
     turnSubmissionRequest,
-} from "../http/session-requests.ts";
+} from "../../../../contracts/agent-api/session-requests.ts";
+import { toHttpError } from "../../../../contracts/http-error.ts";
+import { PairingDirectoryError, validateIdentifier } from "../../../../contracts/relay/pairing.ts";
+import { WebSocketDispatchError, type WebSocketHttpOperation } from "../../../../contracts/websocket-http-dispatch.ts";
+import { RequestDeadline } from "../../../../http/request-deadline.ts";
+import {
+    authorizeSessionContentUpload,
+    type SessionContentUploadTarget,
+    sessionContentUploadRequired,
+} from "../http/session-content-upload.ts";
 import type { LocalSessionOperations } from "../service/local-session-operations.ts";
 import type { SessionAccessService } from "../service/session-access-service.ts";
 import type { TurnAdmission } from "../service/session-control.ts";
 import { SessionControl } from "../service/session-control.ts";
 
-type BrowserSessionEnvironment = {
+export type SessionWebSocketServices = {
+    readonly sessions: SessionAccessService;
+    readonly operations: LocalSessionOperations;
+};
+
+type SessionWebSocketEnvironment = {
+    readonly Bindings: { readonly operation: WebSocketHttpOperation };
     readonly Variables: {
-        readonly access: Awaited<ReturnType<SessionAccessService["authenticate"]>>;
-        readonly control: SessionControl;
-        readonly target: NativeSessionTarget;
         readonly computerId: string;
+        readonly credential: string;
+        readonly access: Awaited<ReturnType<SessionAccessService["authenticate"]>>;
+        readonly target: NativeSessionTarget;
     };
 };
 
@@ -44,55 +55,79 @@ const notFound = (): Response =>
         { status: 404 },
     );
 
-/** Session routes are mounted only in the browser WebSocket dispatcher, never in the public HTTP router. */
-export function createBrowserWebSocketRoutes(ctx: {
-    readonly computerId: string;
-    readonly services: {
-        readonly sessions: SessionAccessService;
-        readonly operations: LocalSessionOperations;
-    };
+/** Session commands belong only to the WebSocket application's route tree. */
+export function createSessionWebSocketRoutes(ctx: {
+    readonly ownsComputer: (computerId: string) => boolean;
+    readonly services: { readonly forComputer: (computerId: string) => SessionWebSocketServices };
 }) {
-    const authenticate = createMiddleware<BrowserSessionEnvironment>(async (context, next) => {
+    const authorizeTarget = createMiddleware<SessionWebSocketEnvironment>(async (context, next) => {
+        const computerId = context.req.param("computerId");
+        if (computerId === undefined || !ctx.ownsComputer(computerId)) {
+            throw new WebSocketDispatchError();
+        }
+        // Preserve the established admission error for a missing or malformed bearer header.
+        const credential = (context.req.header("authorization") ?? "").match(/^Bearer ([^\s]+)$/u)?.[1];
+        if (credential === undefined) {
+            throw new WebSocketDispatchError();
+        }
+        context.set("credential", credential);
+        context.set("computerId", validateIdentifier(computerId, "computer_id"));
+        context.set("target", {
+            harness: validateIdentifier(context.req.param("harness") ?? "", "harness"),
+            sessionId: validateIdentifier(context.req.param("sessionId") ?? "", "session_id"),
+        });
+        await next();
+        return;
+    });
+    const admitContentUpload = createMiddleware<SessionWebSocketEnvironment>(async (context, next) => {
+        if (context.env.operation.kind === "upload-admission") {
+            const services = ctx.services.forComputer(context.var.computerId);
+            const authorized = await authorizeSessionContentUpload(context.req.raw, services.sessions, {
+                computerId: context.var.computerId,
+                target: context.var.target,
+                contentKey: context.req.param("contentKey") ?? "",
+            });
+            return authorized instanceof Response ? authorized : new Response(null, { status: 204 });
+        }
+        await next();
+        return;
+    });
+    const authenticate = createMiddleware<SessionWebSocketEnvironment>(async (context, next) => {
+        if (context.env.operation.kind === "upload-admission") {
+            return sessionContentUploadRequired();
+        }
         using deadline = new RequestDeadline(context.req.raw.signal, 30_000);
         context.req.raw = new Request(context.req.raw, { signal: deadline.signal });
         const request = context.req.raw;
-        const computerId = validateIdentifier(context.req.param("computerId") ?? "", "computer_id");
-        if (computerId !== ctx.computerId) {
-            return Response.json({ error: { code: "runtime_access_denied" } }, { status: 403 });
-        }
-        const target = {
-            harness: validateIdentifier(context.req.param("harness") ?? "", "harness"),
-            sessionId: validateIdentifier(context.req.param("sessionId") ?? "", "session_id"),
-        };
-        const credential = (request.headers.get("authorization") ?? "").match(/^Bearer ([^\s]+)$/u)?.[1];
-        if (credential === undefined) {
-            return Response.json(
-                { error: { code: "session_access_required", message: "A Session credential is required" } },
-                { status: 401 },
-            );
-        }
-        const access = await ctx.services.sessions.authenticate(
+        const computerId = context.var.computerId;
+        const target = context.var.target;
+        const services = ctx.services.forComputer(computerId);
+        const credential = context.var.credential;
+        const access = await services.sessions.authenticate(
             { kind: "session", computerId, target },
             credential,
             request.signal,
         );
-        context.set("computerId", computerId);
-        context.set("target", target);
         context.set("access", access);
-        context.set(
-            "control",
-            new SessionControl(async (command) => {
-                await access.authorize(request.signal);
-                return ctx.services.operations.requestControl(computerId, command, request.signal);
-            }, target),
-        );
         await next();
         return;
     });
+    const controlForRequest = (context: Context<SessionWebSocketEnvironment>): SessionControl => {
+        const { computerId, target, access } = context.var;
+        const { operations } = ctx.services.forComputer(computerId);
+        const signal = context.req.raw.signal;
+        return new SessionControl(async (command) => {
+            await access.authorize(signal);
+            return operations.requestControl(computerId, command, signal);
+        }, target);
+    };
     const sessionPath = `${MORTY_API_PREFIX}/v1/computers/:computerId/harnesses/:harness/sessions/:sessionId`;
-    return new Hono<BrowserSessionEnvironment>()
+    return new Hono<SessionWebSocketEnvironment>()
         .onError((cause, context) => {
             context.req.raw.signal.throwIfAborted();
+            if (cause instanceof WebSocketDispatchError) {
+                throw cause;
+            }
             const error = toHttpError(cause);
             return Response.json(error.body, {
                 status: error.status,
@@ -100,16 +135,24 @@ export function createBrowserWebSocketRoutes(ctx: {
             });
         })
         .notFound(notFound)
-        .put(`${sessionPath}/content/:contentKey`, authenticate, (context) =>
-            uploadContent(context.req.raw, ctx.services),
+        .all(`${sessionPath}/access-credentials/*`, () => {
+            throw new WebSocketDispatchError();
+        })
+        .use(`${sessionPath}/*`, authorizeTarget)
+        .put(`${sessionPath}/content/:contentKey`, admitContentUpload, authenticate, (context) =>
+            uploadContent(context.req.raw, ctx.services.forComputer(context.var.computerId), {
+                computerId: context.var.computerId,
+                target: context.var.target,
+                contentKey: context.req.param("contentKey"),
+            }),
         )
         .get(`${sessionPath}/configuration`, authenticate, async (context) =>
-            json(await context.var.control.readConfiguration()),
+            json(await controlForRequest(context).readConfiguration()),
         )
         .get(`${sessionPath}/active-turn`, authenticate, async (context) => {
             const commandId = context.req.query("commandId");
             return json(
-                await context.var.control.activeTurn(
+                await controlForRequest(context).activeTurn(
                     commandId === undefined ? undefined : decodeSessionRequest(identifier, commandId),
                 ),
             );
@@ -117,7 +160,7 @@ export function createBrowserWebSocketRoutes(ctx: {
         .post(`${sessionPath}/turns`, authenticate, async (context) => {
             const input: unknown = await context.req.json();
             const body = decodeSessionRequest(turnSubmissionRequest, input);
-            const accepted = await context.var.control.submitTurn({ ...body, commandId: body.idempotencyKey });
+            const accepted = await controlForRequest(context).submitTurn({ ...body, commandId: body.idempotencyKey });
             const acceptedAt = new Date().toISOString();
             return json({
                 acceptedAt,
@@ -132,39 +175,46 @@ export function createBrowserWebSocketRoutes(ctx: {
             const turnId = decodeSessionRequest(identifier, context.req.param("turnId"));
             const input: unknown = await context.req.json();
             decodeSessionRequest(turnSteerRequest, input);
-            await context.var.control.steerTurn(turnId);
+            await controlForRequest(context).steerTurn(turnId);
             return json({ turnId });
         })
         .post(`${sessionPath}/turns/:turnId/cancel-before-start`, authenticate, async (context) => {
             const turnId = decodeSessionRequest(identifier, context.req.param("turnId"));
-            await context.var.control.withdrawTurn(turnId);
+            await controlForRequest(context).withdrawTurn(turnId);
             return json({ turnId });
         })
         .post(`${sessionPath}/turns/:turnId/cancel`, authenticate, async (context) => {
             const turnId = decodeSessionRequest(identifier, context.req.param("turnId"));
-            const { stopReason } = await context.var.control.cancelTurn(turnId);
+            const { stopReason } = await controlForRequest(context).cancelTurn(turnId);
             return json({ turnId, stopReason });
         })
         .post(`${sessionPath}/configuration`, authenticate, async (context) => {
             const input: unknown = await context.req.json();
-            return json(await context.var.control.configure(decodeSessionRequest(sessionConfigurationRequest, input)));
+            return json(
+                await controlForRequest(context).configure(decodeSessionRequest(sessionConfigurationRequest, input)),
+            );
         })
         .post(`${sessionPath}/rename`, authenticate, async (context) => {
             const input: unknown = await context.req.json();
-            return json(await context.var.control.rename(decodeSessionRequest(sessionRenameRequest, input).title));
+            return json(
+                await controlForRequest(context).rename(decodeSessionRequest(sessionRenameRequest, input).title),
+            );
         })
         .post(`${sessionPath}/interactions/:interactionId/responses`, authenticate, async (context) => {
             const interactionId = decodeSessionRequest(identifier, context.req.param("interactionId"));
             const input: unknown = await context.req.json();
-            await context.var.control.respond(interactionId, decodeSessionRequest(interactionResponseRequest, input));
+            await controlForRequest(context).respond(
+                interactionId,
+                decodeSessionRequest(interactionResponseRequest, input),
+            );
             return json({ accepted: true });
         })
-        .get(`${sessionPath}/events-v2`, authenticate, async (context) => {
+        .get(`${sessionPath}/events`, authenticate, async (context) => {
             const request = context.req.raw;
             const access = context.var.access;
             await access.authorize(request.signal);
             if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
-                return ctx.services.operations.openPublicSessionEvents(
+                return ctx.services.forComputer(context.var.computerId).operations.openPublicSessionEvents(
                     context.var.computerId,
                     context.var.target,
                     {
@@ -176,7 +226,7 @@ export function createBrowserWebSocketRoutes(ctx: {
                 );
             }
             return json(
-                await context.var.control.liveEvents({
+                await controlForRequest(context).liveEvents({
                     cursor: decodeSessionRequest(
                         v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
                         context.req.query("cursor") ?? null,
@@ -187,7 +237,10 @@ export function createBrowserWebSocketRoutes(ctx: {
                     ),
                 }),
             );
-        });
+        })
+        .all(`${sessionPath}/*`, (context) =>
+            context.env.operation.kind === "upload-admission" ? sessionContentUploadRequired() : notFound(),
+        );
 }
 
 function submittedTurnState(state: TurnAdmission["state"], answeredAt: string): TurnState {
@@ -210,8 +263,9 @@ async function uploadContent(
         readonly sessions: SessionAccessService;
         readonly operations: LocalSessionOperations;
     },
+    location: SessionContentUploadTarget,
 ): Promise<Response> {
-    const authorized = await authorizeSessionContentUpload(request, dependencies.sessions);
+    const authorized = await authorizeSessionContentUpload(request, dependencies.sessions, location);
     if (authorized instanceof Response) {
         return authorized;
     }

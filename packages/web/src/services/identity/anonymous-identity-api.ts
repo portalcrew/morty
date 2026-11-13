@@ -1,5 +1,7 @@
 import * as v from "valibot";
 import type { ApiTransport } from "../api/api-transport.ts";
+import type { ApiRequest } from "../api/calls/call.ts";
+import { identityCalls } from "../api/calls/identity.ts";
 import { browserAccessEntry } from "../local-storage/central-local-storage.ts";
 import { CloudApiError, ManagementApi } from "../management/management-api.ts";
 import { centralSessionStorage, transferRedemptionEntry } from "../session-storage/central-session-storage.ts";
@@ -77,7 +79,7 @@ export type LinkedDevice = v.InferOutput<typeof linkedDeviceSchema>;
 const linkedDevicesSchema = v.object({ devices: v.array(linkedDeviceSchema) });
 const deviceAccessEndedSchema = v.object({ status: v.literal("device_access_ended") });
 const otherBrowserAccessEndedSchema = v.object({ status: v.literal("other_browser_access_ended") });
-const credentialRevocationPathSchema = v.picklist(["/identity/v1/local-credential", "/identity/v1/browser-access"]);
+const credentialRevocationPathSchema = v.picklist(["/identity/local-credential", "/identity/browser-access"]);
 export type AnonymousIdentity = v.InferOutput<typeof identitySchema>;
 export type IdentityTransfer = v.InferOutput<typeof transferSchema>;
 /** What a new link grants, and the unopened link from this page it replaces. */
@@ -103,8 +105,12 @@ export type LostAccess = { readonly kind: "revoked" } | { readonly kind: "gone" 
 const ACCESS_REVOKED = "ACCESS_REVOKED";
 
 interface Options {
-    readonly fetchRequest: (request: Request) => Promise<Response>;
+    readonly fetchRequest: ApiTransport["fetch"];
     readonly origin: string;
+}
+
+interface IdentityRequest {
+    readonly headers: Readonly<Record<string, string>>;
 }
 
 /**
@@ -125,7 +131,7 @@ function transferRedemptionKey(code: string): string {
 }
 
 export class AnonymousIdentityApi {
-    readonly #fetchRequest: (request: Request) => Promise<Response>;
+    readonly #fetchRequest: ApiTransport["fetch"];
     readonly #origin: string;
 
     constructor(options: Options) {
@@ -214,18 +220,18 @@ export class AnonymousIdentityApi {
         v.parse(
             transferSchema,
             await this.#request(
-                "/identity/transfers",
+                identityCalls.createTransfer({
+                    origin: this.#origin,
+                    computerId: this.#computerId(),
+                    operationId: terms.operationId,
+                    accessDuration: terms.accessDuration,
+                    replaces: terms.replaces,
+                }),
                 {
-                    method: "POST",
                     headers: {
                         authorization: `Bearer ${v.parse(tokenSchema, token)}`,
                         "content-type": "application/json",
                     },
-                    body: JSON.stringify({
-                        operationId: terms.operationId,
-                        ...(terms.accessDuration === null ? {} : { accessDuration: terms.accessDuration }),
-                        ...(terms.replaces === null ? {} : { replaces: terms.replaces }),
-                    }),
                 },
                 signal,
             ),
@@ -249,16 +255,16 @@ export class AnonymousIdentityApi {
         const identity = v.parse(
             identitySchema,
             await this.#request(
-                "/identity/transfers/redeem",
+                identityCalls.redeemTransfer({
+                    origin: this.#origin,
+                    computerId: null,
+                    code,
+                    replaces,
+                    device: describeBrowser(navigator.userAgent),
+                    redemptionKey,
+                }),
                 {
-                    method: "POST",
                     headers: { "content-type": "application/json" },
-                    body: JSON.stringify({
-                        code,
-                        ...(replaces === null ? {} : { replaces }),
-                        device: describeBrowser(navigator.userAgent),
-                        redemptionKey,
-                    }),
                 },
                 signal,
             ),
@@ -274,21 +280,19 @@ export class AnonymousIdentityApi {
         waitForChange: ApiTransport["waitForChange"],
         signal: AbortSignal,
     ): Promise<void> =>
-        await waitForChange(
-            new Request(this.#url("/identity/devices"), {
-                method: "GET",
-                headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` },
-                signal,
-            }),
-        );
+        await waitForChange({
+            ...identityCalls.linkedDevices({ origin: this.#origin, computerId: this.#computerId() }),
+            headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` },
+            signal,
+        });
 
     /** When this access ends: the browser's device term, the latest among the links it opened; null without one. */
     readonly accessExpiresAt = async (token: string, signal: AbortSignal): Promise<string | null> =>
         v.parse(
             accessTermSchema,
             await this.#request(
-                "/session",
-                { method: "GET", headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` } },
+                identityCalls.session({ origin: this.#origin, computerId: this.#computerId() }),
+                { headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` } },
                 signal,
             ),
         ).accessExpiresAt;
@@ -298,8 +302,8 @@ export class AnonymousIdentityApi {
         v.parse(
             linkedDevicesSchema,
             await this.#request(
-                "/identity/devices",
-                { method: "GET", headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` } },
+                identityCalls.linkedDevices({ origin: this.#origin, computerId: this.#computerId() }),
+                { headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` } },
                 signal,
             ),
         ).devices;
@@ -312,8 +316,8 @@ export class AnonymousIdentityApi {
         v.parse(
             otherBrowserAccessEndedSchema,
             await this.#request(
-                "/identity/v1/other-browser-access",
-                { method: "DELETE", headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` } },
+                identityCalls.endOtherBrowserAccess({ origin: this.#origin, computerId: this.#computerId() }),
+                { headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` } },
                 signal,
             ),
         );
@@ -324,8 +328,8 @@ export class AnonymousIdentityApi {
         v.parse(
             deviceAccessEndedSchema,
             await this.#request(
-                `/identity/v1/devices/${encodeURIComponent(deviceId)}`,
-                { method: "DELETE", headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` } },
+                identityCalls.endDeviceAccess({ origin: this.#origin, computerId: this.#computerId(), deviceId }),
+                { headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` } },
                 signal,
             ),
         );
@@ -337,11 +341,19 @@ export class AnonymousIdentityApi {
         access: StoredAccessWriter,
     ): Promise<void> => {
         const headers = { authorization: `Bearer ${v.parse(tokenSchema, token)}` };
-        const session = await this.#response("/session", { method: "GET", headers }, signal);
+        const session = await this.#response(
+            identityCalls.session({ origin: this.#origin, computerId: this.#computerId() }),
+            { headers },
+            signal,
+        );
         await session.body?.cancel();
         // The Worker names the deletion that ends this credential's kind.
         const path = v.parse(credentialRevocationPathSchema, session.headers.get("Morty-Credential-Revocation"));
-        await this.#request(path, { method: "DELETE", headers }, signal);
+        const request =
+            path === "/identity/local-credential"
+                ? identityCalls.endLocalCredential({ origin: this.#origin, computerId: this.#computerId() })
+                : identityCalls.endBrowserAccess({ origin: this.#origin, computerId: this.#computerId() });
+        await this.#request(request, { headers }, signal);
         const scope = readIdentityScope();
         if (scope !== null) {
             access.forget(scope);
@@ -363,9 +375,8 @@ export class AnonymousIdentityApi {
             return v.parse(
                 anonymousSessionSchema,
                 await this.#request(
-                    `/computers/${encodeURIComponent(identity.computerId)}/session`,
+                    identityCalls.session({ origin: this.#origin, computerId: identity.computerId }),
                     {
-                        method: "GET",
                         headers: {
                             authorization: `Bearer ${identity.computerToken}`,
                         },
@@ -385,26 +396,36 @@ export class AnonymousIdentityApi {
         }
     };
 
-    readonly #request = async (path: string, init: RequestInit, requestSignal: AbortSignal): Promise<unknown> => {
-        const response = await this.#response(path, init, requestSignal);
+    readonly #request = async (
+        request: ApiRequest,
+        init: IdentityRequest,
+        requestSignal: AbortSignal,
+    ): Promise<unknown> => {
+        const response = await this.#response(request, init, requestSignal);
         const value: unknown = response.status === 204 ? null : await response.json();
         requestSignal.throwIfAborted();
         return value;
     };
 
-    readonly #url = (path: string): URL => {
+    readonly #computerId = (): string => {
         const scope = readIdentityScope();
-        const scopedPath =
-            scope !== null && !path.startsWith("/computers/") && path !== "/identity/transfers/redeem"
-                ? `/computers/${encodeURIComponent(scope.computerId)}${path}`
-                : path;
-        return new URL(`/morty/api${scopedPath}`, this.#origin);
+        if (scope === null) {
+            throw new IdentityApiError("COMPUTER_REQUIRED", "Choose a Computer to continue.", 400);
+        }
+        return scope.computerId;
     };
 
-    readonly #response = async (path: string, init: RequestInit, requestSignal: AbortSignal): Promise<Response> => {
-        const signal = AbortSignal.any([requestSignal, AbortSignal.timeout(30_000)]);
-        const headers = new Headers(init.headers);
-        const response = await this.#fetchRequest(new Request(this.#url(path), { ...init, headers, signal }));
+    readonly #response = async (
+        request: ApiRequest,
+        init: IdentityRequest,
+        requestSignal: AbortSignal,
+    ): Promise<Response> => {
+        const signal = AbortSignal.any([requestSignal, AbortSignal.timeout(request.endpoint.timeoutMilliseconds)]);
+        const response = await this.#fetchRequest({
+            ...request,
+            headers: init.headers,
+            signal,
+        });
         signal.throwIfAborted();
         if (!response.ok) {
             const value: unknown = await response.json();

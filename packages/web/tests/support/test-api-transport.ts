@@ -18,6 +18,7 @@ export class TestApiTransport {
     readonly fetch: WorkerApiTransport["fetch"] = (request) => this.#current.fetch(request);
     readonly measureMortyLatency: WorkerApiTransport["measureMortyLatency"] = (signal) =>
         this.#current.measureMortyLatency(signal);
+    readonly request = async (request: Request): Promise<Response> => await fetch(request);
     readonly waitForChange: WorkerApiTransport["waitForChange"] = (request, ready) =>
         this.#current.waitForChange(request, ready);
 }

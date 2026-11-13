@@ -14,7 +14,7 @@ export function isHttpError(error: unknown): error is HttpError {
     return error instanceof Error && "toHttpJson" in error && typeof error.toHttpJson === "function";
 }
 
-/** Protocol endpoints retain their lowercase fallback; application endpoints use their own error policy. */
+/** A typed error's response, or a sanitized internal error for anything else. */
 export function toHttpError(error: unknown): HttpErrorJson {
     return isHttpError(error)
         ? error.toHttpJson()

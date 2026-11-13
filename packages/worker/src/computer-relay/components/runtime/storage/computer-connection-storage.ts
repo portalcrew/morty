@@ -3,14 +3,9 @@ import { DatabaseError } from "../../../../infra/sql-database.ts";
 import type { DurableObjectDatabase } from "../../../infra/durable-object-database.ts";
 import { computerConnection } from "../../../schema/computer-relay-do/index.ts";
 import { activeGeneration } from "../../management/storage/computer-generation.ts";
-import type {
-    ComputerConnection,
-    ComputerConnectionIdentity,
-    LatestComputerConnection,
-} from "../entity/computer-connection.ts";
+import type { ComputerConnection, LatestComputerConnection } from "../entity/computer-connection.ts";
 
 const connectionFields = {
-    computerId: computerConnection.computerId,
     connectionEpoch: computerConnection.connectionEpoch,
     generation: computerConnection.generation,
     connectedAt: computerConnection.connectedAt,
@@ -31,7 +26,7 @@ export class ComputerConnectionStorage {
             .where(
                 and(
                     isNull(computerConnection.disconnectedAt),
-                    inArray(computerConnection.generation, activeGeneration(computerConnection.computerId)),
+                    inArray(computerConnection.generation, activeGeneration()),
                 ),
             )
             .limit(1)
@@ -53,34 +48,26 @@ export class ComputerConnectionStorage {
     };
 
     /** Makes `identity` the computer's latest connection, replacing the one before it. */
-    readonly connect = (identity: ComputerConnectionIdentity, generation: number, now: number): void => {
-        const connection = {
-            ...identity,
-            generation,
-            connectedAt: now,
-            disconnectedAt: null,
-        };
-        const result = this.#database.orm
-            .insert(computerConnection)
-            .values(connection)
-            .onConflictDoUpdate({ target: computerConnection.computerId, set: connection })
-            .returning({ computerId: computerConnection.computerId })
-            .get();
+    readonly connect = (connectionEpoch: number, generation: number, now: number): void => {
+        const result = this.#database.orm.transaction((transaction) => {
+            transaction.delete(computerConnection).run();
+            return transaction
+                .insert(computerConnection)
+                .values({ connectionEpoch, generation, connectedAt: now, disconnectedAt: null })
+                .returning({ connectionEpoch: computerConnection.connectionEpoch })
+                .get();
+        });
         if (!result) {
             throw new DatabaseError("database_unavailable", "The computer connection could not be recorded");
         }
     };
 
-    readonly disconnect = (identity: ComputerConnectionIdentity, now: number): void => {
+    readonly disconnect = (connectionEpoch: number, now: number): void => {
         this.#database.orm
             .update(computerConnection)
             .set({ disconnectedAt: now })
             .where(
-                and(
-                    eq(computerConnection.computerId, identity.computerId),
-                    eq(computerConnection.connectionEpoch, identity.connectionEpoch),
-                    isNull(computerConnection.disconnectedAt),
-                ),
+                and(eq(computerConnection.connectionEpoch, connectionEpoch), isNull(computerConnection.disconnectedAt)),
             )
             .run();
     };

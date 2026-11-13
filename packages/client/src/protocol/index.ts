@@ -390,33 +390,28 @@ export {
     WORKSPACE_ENTRIES_KIND,
     WORKSPACE_LIST_KIND,
 } from "./session/workspace/index.ts";
-
+export { sessionResultJsonSchemas } from "./session-api-json-schema.ts";
 export {
     isDirectoryPath,
     MAX_WORKSPACE_PATH_LENGTH,
 } from "./shared/directory.ts";
-
 export type { Identifier } from "./shared/identifier.ts";
-
 export {
     decodeIdentifier,
+    IDENTIFIER_PATTERN,
     isIdentifier,
 } from "./shared/identifier.ts";
-
 export {
     decodeMessageKind,
     ProtocolMessageError,
 } from "./shared/message-codec.ts";
-
 export { isBoundedJson } from "./shared/tool-input.ts";
-
 export type {
     DaemonToRelayMessage,
     DaemonToServiceMessage,
     ServiceToDaemonMessage,
     ServiceToDaemonRequest,
 } from "./transport/daemon-transport.ts";
-
 export {
     decodeDaemonToRelayMessage,
     decodeDaemonToServiceMessage,

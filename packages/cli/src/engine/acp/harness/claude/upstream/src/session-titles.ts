@@ -1,4 +1,4 @@
-// Modified and maintained by Moxt for Morty.
+// Modified for Morty.
 // Part of the Claude ACP adapter derived from Zed Industries' claude-code-acp (Apache-2.0).
 
 /**

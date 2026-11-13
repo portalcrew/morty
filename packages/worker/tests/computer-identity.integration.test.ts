@@ -16,7 +16,7 @@ afterAll(async () => {
 test("Given a new Computer, When setup creates and shares its access, Then each response contains only its Computer ID and Computer token and cannot open another Computer", async () => {
     const create = async (creationKey: string) => {
         const response = await worker.fetch(
-            new Request(`${APP_ORIGIN}/morty/api/computers`, {
+            new Request(`${APP_ORIGIN}/morty/api/v1/computers`, {
                 method: "POST",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({ creationKey }),
@@ -32,7 +32,7 @@ test("Given a new Computer, When setup creates and shares its access, Then each 
     const second = await create(anonymousCreationKey());
     const session = (computerId: string) =>
         worker.fetch(
-            new Request(`${APP_ORIGIN}/morty/api/computers/${computerId}/session`, {
+            new Request(`${APP_ORIGIN}/morty/api/v1/computers/${computerId}/session`, {
                 headers: { authorization: `Bearer ${first.computerToken}` },
             }),
             fixture.environment(),
@@ -43,7 +43,7 @@ test("Given a new Computer, When setup creates and shares its access, Then each 
     expect((await session(second.computerId)).status).toBe(401);
 
     const shared = await worker.fetch(
-        new Request(`${APP_ORIGIN}/morty/api/computers/${first.computerId}/identity/transfers`, {
+        new Request(`${APP_ORIGIN}/morty/api/v1/computers/${first.computerId}/identity/transfers`, {
             method: "POST",
             headers: { authorization: `Bearer ${first.computerToken}`, "content-type": "application/json" },
             body: JSON.stringify({ operationId: crypto.randomUUID() }),
@@ -54,7 +54,7 @@ test("Given a new Computer, When setup creates and shares its access, Then each 
     const link = v.parse(v.object({ url: v.string() }), await shared.json()).url;
     const code = new URLSearchParams(new URL(link).hash.slice(1)).get("code");
     const redeemed = await worker.fetch(
-        new Request(`${APP_ORIGIN}/morty/api/identity/transfers/redeem`, {
+        new Request(`${APP_ORIGIN}/morty/api/v1/identity/transfers/redeem`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ code }),
@@ -73,7 +73,7 @@ test("Given a new Computer, When setup creates and shares its access, Then each 
         [second.computerId, 401],
     ] as const) {
         const response = await worker.fetch(
-            new Request(`${APP_ORIGIN}/morty/api/computers/${computerId}/session`, {
+            new Request(`${APP_ORIGIN}/morty/api/v1/computers/${computerId}/session`, {
                 headers: { authorization: `Bearer ${browser.computerToken}` },
             }),
             fixture.environment(),

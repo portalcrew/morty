@@ -6,7 +6,6 @@ import type {
     ComputerPairingRow,
     PairingClaimRow,
     PairingComputerRow,
-    PairingScopeRow,
 } from "../../../../contracts/relay/pairing-records.ts";
 import type { DurableObjectDatabase } from "../../../infra/durable-object-database.ts";
 import { ComputerCredentialStorage } from "./computer-credential-storage.ts";
@@ -46,10 +45,10 @@ export class ComputerRelayStore {
     readonly #computers: ComputerDirectoryStorage;
     readonly #credentials: ComputerCredentialStorage;
 
-    constructor(computerId: string, database: DurableObjectDatabase) {
+    constructor(database: DurableObjectDatabase) {
         this.#database = database;
-        this.#computers = new ComputerDirectoryStorage(computerId, database);
-        this.#credentials = new ComputerCredentialStorage(computerId, database);
+        this.#computers = new ComputerDirectoryStorage(database);
+        this.#credentials = new ComputerCredentialStorage(database);
     }
 
     readonly updateAgentCatalog = async (tokenHash: string, agents: string, signal: AbortSignal): Promise<boolean> =>
@@ -100,7 +99,7 @@ export class ComputerRelayStore {
         return (
             pairing !== null &&
             pairing.expires_at > value.now &&
-            (await this.#computers.readDaemon(value.daemonHash, signal)) !== null
+            (await this.#computers.isActiveDaemon(value.daemonHash, signal))
         );
     };
 
@@ -111,11 +110,9 @@ export class ComputerRelayStore {
     readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> =>
         await this.#computers.revokeComputer(now, signal);
 
-    /** The computer scopes whose stored credential matches; the caller decides what a match authorizes. */
-    readonly findCredential = async (
-        credential: ComputerIdentityCredential,
-        signal: AbortSignal,
-    ): Promise<readonly PairingScopeRow[]> => await credentialMatches(this.#database, credential, signal);
+    /** Whether the computer holds the credential; the caller decides what a match authorizes. */
+    readonly holdsCredential = async (credential: ComputerIdentityCredential, signal: AbortSignal): Promise<boolean> =>
+        await credentialMatches(this.#database, credential, signal);
 
     readonly rotateComputerCredential = async (
         presentedHash: string,

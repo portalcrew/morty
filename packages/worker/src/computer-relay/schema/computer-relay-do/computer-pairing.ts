@@ -6,7 +6,6 @@ import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
  */
 export const computerPairing = sqliteTable("computer_pairings", {
     generation: integer("generation").primaryKey({ autoIncrement: true }),
-    computerId: text("computer_id").notNull(),
     pairingCodeHash: text("pairing_code_hash").notNull().unique(),
     pollTokenHash: text("poll_token_hash").notNull(),
     expiresAt: integer("expires_at").notNull(),

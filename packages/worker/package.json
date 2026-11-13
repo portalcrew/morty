@@ -23,6 +23,7 @@
     },
     "dependencies": {
         "@morty-build/client": "workspace:*",
+        "@valibot/to-json-schema": "catalog:",
         "drizzle-orm": "catalog:",
         "hono": "catalog:",
         "pino": "catalog:",

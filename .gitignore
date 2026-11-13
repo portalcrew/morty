@@ -9,6 +9,7 @@ dist/
 .dev.vars.*
 worker-configuration.d.ts
 test-results/
+coverage/
 e2e-diagnostics/
 coverage/
 __screenshots__/

@@ -104,6 +104,52 @@ test("Given Morty access from a finished setup, When the user reopens Morty in a
     expect(window.sessionStorage.getItem("morty.anonymous-credential.v2")).toBeNull();
 });
 
+test("Given a stored identity, When the user shares access with an AI agent, Then copyable instructions name the agent API document and a link the agent can redeem as documented", {
+    timeout: 30_000,
+}, async () => {
+    const app = await createTestApp({ connectAgent: true, page: { kind: "bootstrap", identity: true } });
+    await app.user.click(await app.queryElementByTestId(dataTestId.shareIdentity));
+    const dialog = getByRole(document.body, "dialog", { name: "Continue on another device" });
+    await app.waitForView(() => getByRole(dialog, "button", { name: "Copy link" }));
+    await app.user.click(getByRole(dialog, "combobox", { name: "Share with" }));
+    await app.user.click(getByRole(document.body, "option", { name: "An AI agent" }));
+
+    const handoff = await app.queryElementByTestId(dataTestId.agentHandoff);
+    expect(queryByRole(dialog, "img", { name: "Continue on another device QR code" })).toBeNull();
+    expect(handoff.textContent).toContain("Works for one device until");
+    await app.user.click(getByRole(handoff, "button", { name: "Copy instructions" }));
+    const instructions = await navigator.clipboard.readText();
+    expect(instructions).toContain(`${app.origin}/agent-api.md`);
+    const link = instructions.split("\n").find((line) => line.startsWith(`${app.origin}/continue`));
+    if (link === undefined) {
+        throw new Error("The agent instructions must contain the continue link.");
+    }
+
+    const guide = await app.transport.request(new Request(new URL("/agent-api.md", app.origin)));
+    expect(guide.status).toBe(200);
+    expect(await guide.text()).toContain(`${app.origin}/agent-api/openapi.json`);
+    const redeemed = await app.transport.request(
+        new Request(new URL("/morty/api/v1/identity/transfers/redeem", app.origin), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                code: new URLSearchParams(new URL(link).hash.slice(1)).get("code"),
+                redemptionKey: "A".repeat(43),
+                device: "Test agent",
+            }),
+            signal: AbortSignal.timeout(15_000),
+        }),
+    );
+    expect(redeemed.status).toBe(200);
+    expect(await redeemed.json()).toEqual({ computerToken: expect.any(String), computerId: expect.any(String) });
+
+    // Switching back shows the same link to a person; choosing a recipient never issues another link.
+    await app.user.click(getByRole(dialog, "combobox", { name: "Share with" }));
+    await app.user.click(getByRole(document.body, "option", { name: "A person" }));
+    await app.user.click(await app.waitForView(() => getByRole(dialog, "button", { name: "Copy link" })));
+    expect(await navigator.clipboard.readText()).toBe(link);
+});
+
 test("Given shared Morty access, When the user continues on another device, Then the visible entry opens sharing with its scope and expiry before the link", {
     timeout: 30_000,
 }, async () => {
@@ -419,8 +465,8 @@ test("Given an end confirmation for access revoked elsewhere, When the API rejec
         return button;
     });
     const signal = new AbortController().signal;
-    const revoked = await app.transport.fetch(
-        new Request(`${app.origin}/morty/api/computers/${app.identity.computerId}/identity/v1/local-credential`, {
+    const revoked = await app.transport.request(
+        new Request(`${app.origin}/morty/api/v1/computers/${app.identity.computerId}/identity/local-credential`, {
             method: "DELETE",
             headers: { authorization: `Bearer ${await app.identity.getToken(signal)}` },
             signal,
@@ -607,15 +653,15 @@ test("Given other browsers joined this computer, When the user disconnects one f
     await joined.waitForView(() => expect(new URL(window.location.href).searchParams.get("identity")).not.toBeNull());
     const app = await joined.reload();
     const session = (token: string) =>
-        app.transport.fetch(
-            new Request(`${app.origin}/morty/api/computers/${app.identity.computerId}/session`, {
+        app.transport.request(
+            new Request(`${app.origin}/morty/api/v1/computers/${app.identity.computerId}/session`, {
                 headers: { authorization: `Bearer ${token}` },
             }),
         );
     const join = async (device: string) => {
         const code = new URL(await app.createTransferUrl()).hash.slice("#code=".length);
-        const redeemed = await app.transport.fetch(
-            new Request(`${app.origin}/morty/api/identity/transfers/redeem`, {
+        const redeemed = await app.transport.request(
+            new Request(`${app.origin}/morty/api/v1/identity/transfers/redeem`, {
                 method: "POST",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({ code, device }),
@@ -673,8 +719,8 @@ test("Given a browser that acknowledged a new device, When another device joins 
     await joined.waitForView(() => expect(new URL(window.location.href).searchParams.get("identity")).not.toBeNull());
     const join = async (page: typeof joined, device: string) => {
         const code = new URL(await page.createTransferUrl()).hash.slice("#code=".length);
-        const redeemed = await page.transport.fetch(
-            new Request(`${page.origin}/morty/api/identity/transfers/redeem`, {
+        const redeemed = await page.transport.request(
+            new Request(`${page.origin}/morty/api/v1/identity/transfers/redeem`, {
                 method: "POST",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({ code, device }),
@@ -707,8 +753,8 @@ test("Given a new device and this browser's access in the sidebar, When the user
     const joined = await createTestApp({ connectAgent: true, page: { kind: "share" } });
     await joined.waitForView(() => expect(new URL(window.location.href).searchParams.get("identity")).not.toBeNull());
     const code = new URL(await joined.createTransferUrl()).hash.slice("#code=".length);
-    const redeemed = await joined.transport.fetch(
-        new Request(`${joined.origin}/morty/api/identity/transfers/redeem`, {
+    const redeemed = await joined.transport.request(
+        new Request(`${joined.origin}/morty/api/v1/identity/transfers/redeem`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ code, device: "iPhone · Safari" }),
@@ -758,8 +804,8 @@ test("Given this browser already dismissed its access notice, When a new device 
 
     centralLocalStorage.write(linkedDevicesSeenEntry(joined.identity.computerId), new Date(0).toISOString());
     const code = new URL(await app.createTransferUrl()).hash.slice("#code=".length);
-    const redeemed = await app.transport.fetch(
-        new Request(`${app.origin}/morty/api/identity/transfers/redeem`, {
+    const redeemed = await app.transport.request(
+        new Request(`${app.origin}/morty/api/v1/identity/transfers/redeem`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ code, device: "iPhone · Safari" }),

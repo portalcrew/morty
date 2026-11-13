@@ -130,6 +130,3 @@ Morty 的浏览器、云端服务和本地 Runtime 源码统一由本仓库维�
 ## 许可
 
 [Apache License 2.0](LICENSE)，另见 [NOTICE](NOTICE)。
-
-"Morty"、"Moxt" 及其标识是 Moxt 的商标。Apache 2.0 授予你的是代码的权利，
-不包括名称和标识——欢迎 fork，但请给它取一个自己的名字。

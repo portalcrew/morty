@@ -963,7 +963,7 @@ export function ConversationSidebar({
                                             <Dialog
                                                 size="medium"
                                                 title="Continue on another device"
-                                                description="Scan the code or open the link on the device you want to use."
+                                                description="Share this computer with a person on another device, or with an AI agent."
                                                 onClose={dialogs.getState().closeSharing}
                                             >
                                                 <IdentitySharing store={sharingStore} />

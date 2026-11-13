@@ -113,11 +113,11 @@ export class ComputerService {
         this.#cx = cx;
     }
 
-    readonly readStatus = async (computerId: string, signal: AbortSignal): Promise<ComputerStatus> => {
+    readonly readStatus = async (signal: AbortSignal): Promise<ComputerStatus> => {
         signal.throwIfAborted();
         await this.expireSilentDaemons();
         signal.throwIfAborted();
-        return new ComputerStatus(this.isOnline(computerId));
+        return new ComputerStatus(this.isOnline());
     };
 
     readonly acceptDaemon = (computerId: string, signal: AbortSignal) =>
@@ -252,9 +252,9 @@ export class ComputerService {
             return;
         }
         const latest = this.#cx.services.connections.latest();
-        const connected = latest?.kind === "connected" && latest.computerId === computerId;
+        const connected = latest?.kind === "connected";
         if (connected) {
-            this.#cx.services.connections.disconnected(latest, Date.now());
+            this.#cx.services.connections.disconnected(latest.connectionEpoch, Date.now());
         }
         for (const accepting of this.#accepting) {
             if (accepting.computerId === computerId) {
@@ -301,9 +301,9 @@ export class ComputerService {
         await this.detachDaemons(this.closeSilentDaemons());
     };
 
-    readonly isOnline = (computerId: string): boolean => {
+    readonly isOnline = (): boolean => {
         const current = this.#cx.services.connections.current();
-        return current !== null && current.computerId === computerId && this.#cx.gateways.peers.daemons().length > 0;
+        return current !== null && this.#cx.gateways.peers.daemons().length > 0;
     };
 
     readonly attachDaemon = async (computerId: string, replaced: boolean, signal: AbortSignal): Promise<void> => {
@@ -514,7 +514,7 @@ export class ComputerService {
         if (!latest()) {
             return;
         }
-        this.#cx.services.connections.disconnected(identity, Date.now());
+        this.#cx.services.connections.disconnected(identity.connectionEpoch, Date.now());
         await this.relay(identity.computerId).detachDaemon(socket, signal);
     };
 

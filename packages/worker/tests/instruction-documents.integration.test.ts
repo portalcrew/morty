@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
+import * as v from "valibot";
 import { expect, test } from "vitest";
 import worker from "../src/worker/application.ts";
 
@@ -139,4 +140,112 @@ test("Given the setup document, When an agent follows it, Then it neither passes
     expect(command).toContain("--harness <own-harness-id>");
     expect(command).not.toContain("--session-id");
     expect(document.replaceAll("\n", " ")).not.toMatch(/ask the user for (it|the session)/u);
+});
+
+test("Given an AI agent receives a continue link, When it fetches the agent guide and API schemas, Then each names the serving origin and the documented API", async () => {
+    const bindings = { APP_ORIGIN: "https://chat.example" };
+    const guide = await worker.fetch(new Request("https://preview.example/agent-api.md?token=ticket"), bindings);
+    expect(guide.status).toBe(200);
+    expect(guide.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
+    const text = await guide.text();
+    expect(text).toMatch(/^# Morty agent API\n/);
+    expect(text).toContain("Morty origin: https://chat.example");
+    expect(text).toContain("https://chat.example/agent-api/openapi.json");
+    expect(text).toContain("https://chat.example/agent-api/asyncapi.json");
+    expect(text).toContain("/morty/api/v1/identity/transfers/redeem");
+    expect(text).not.toMatch(/\{\{.*\}\}|preview\.example|token=ticket/);
+
+    const openApiResponse = await worker.fetch(new Request("https://preview.example/agent-api/openapi.json"), bindings);
+    expect(openApiResponse.status).toBe(200);
+    expect(openApiResponse.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    const openApi = v.parse(
+        v.object({
+            openapi: v.literal("3.1.0"),
+            servers: v.tuple([v.object({ url: v.literal("https://chat.example") })]),
+            paths: v.record(v.string(), v.record(v.string(), v.object({ operationId: v.string() }))),
+        }),
+        await openApiResponse.json(),
+    );
+    const operations = Object.values(openApi.paths).flatMap((methods) =>
+        Object.values(methods).map((operation) => operation.operationId),
+    );
+    expect(operations).toEqual(
+        expect.arrayContaining(["redeemTransfer", "openSession", "readActiveTurn", "submitTurn", "listSessionEvents"]),
+    );
+    expect(JSON.stringify(openApi)).not.toContain("preview.example");
+
+    const asyncApiResponse = await worker.fetch(
+        new Request("https://preview.example/agent-api/asyncapi.json"),
+        bindings,
+    );
+    expect(asyncApiResponse.status).toBe(200);
+    const asyncApi = v.parse(
+        v.object({
+            asyncapi: v.literal("3.0.0"),
+            servers: v.object({ morty: v.object({ host: v.literal("chat.example"), protocol: v.literal("wss") }) }),
+            channels: v.object({
+                transport: v.object({ messages: v.record(v.string(), v.object({ name: v.string() })) }),
+            }),
+        }),
+        await asyncApiResponse.json(),
+    );
+    expect(Object.values(asyncApi.channels.transport.messages).map((message) => message.name)).toEqual(
+        expect.arrayContaining(["http.request", "http.response", "http.error", "session.events.subscribe"]),
+    );
+});
+
+test("Given agent documents at the edge, When agents fetch them with different query strings, Then the CDN shares one rendered copy per origin", async () => {
+    const runtime = createRuntime({ appOrigin: "https://chat.example" });
+    try {
+        for (const path of ["/agent-api.md", "/agent-api/openapi.json", "/agent-api/asyncapi.json"]) {
+            const first = await runtime.dispatchFetch(`https://preview.example${path}?token=first`);
+            expect(first.status).toBe(200);
+            expect(first.headers.get("X-Instruction-Cache")).toBe("MISS");
+            const body = await first.text();
+            const second = await runtime.dispatchFetch(`https://preview.example${path}?token=second`);
+            expect(second.headers.get("X-Instruction-Cache")).toBe("HIT");
+            expect(await second.text()).toBe(body);
+        }
+    } finally {
+        await runtime.dispose();
+    }
+});
+
+test("Given the generated agent API descriptions, When an agent follows every schema reference, Then each resolves inside its document", async () => {
+    for (const path of ["/agent-api/openapi.json", "/agent-api/asyncapi.json"]) {
+        const response = await worker.fetch(new Request(`https://preview.example${path}`), {
+            APP_ORIGIN: "https://chat.example",
+        });
+        const document: unknown = await response.json();
+        const references: string[] = [];
+        const collect = (value: unknown): void => {
+            if (Array.isArray(value)) {
+                value.forEach(collect);
+            } else if (typeof value === "object" && value !== null) {
+                for (const [key, entry] of Object.entries(value)) {
+                    if (key === "$ref" && typeof entry === "string") {
+                        references.push(entry);
+                    } else {
+                        collect(entry);
+                    }
+                }
+            }
+        };
+        collect(document);
+        expect(references.length, path).toBeGreaterThan(0);
+        for (const reference of references) {
+            expect(reference, path).toMatch(/^#\//u);
+            const target = reference
+                .slice(2)
+                .split("/")
+                .reduce<unknown>(
+                    (node, segment) =>
+                        typeof node === "object" && node !== null
+                            ? Object.entries(node).find(([key]) => key === segment.replaceAll("~1", "/"))?.[1]
+                            : undefined,
+                    document,
+                );
+            expect(target, `${path} ${reference}`).toBeDefined();
+        }
+    }
 });

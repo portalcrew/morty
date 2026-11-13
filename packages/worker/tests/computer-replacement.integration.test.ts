@@ -31,7 +31,7 @@ test("Given a saved Computer, When it is replaced, Then setup receives a fresh C
     const original = await fixture.createAnonymousUser();
     const replace = async () =>
         await worker.fetch(
-            new Request(`${APP_ORIGIN}/morty/api/computers/${original.computerId}/management/computer/replacement`, {
+            new Request(`${APP_ORIGIN}/morty/api/v1/computers/${original.computerId}/replacement`, {
                 method: "POST",
                 headers: { authorization: `Bearer ${original.token}` },
             }),
@@ -51,7 +51,7 @@ test("Given a saved Computer, When it is replaced, Then setup receives a fresh C
     expect(retry.token).toBe(replacement.token);
 
     const sessionResponse = await worker.fetch(
-        new Request(`${APP_ORIGIN}/morty/api/computers/${replacement.computerId}/session`, {
+        new Request(`${APP_ORIGIN}/morty/api/v1/computers/${replacement.computerId}/session`, {
             headers: { authorization: `Bearer ${replacement.token}` },
         }),
         environment,
@@ -59,7 +59,7 @@ test("Given a saved Computer, When it is replaced, Then setup receives a fresh C
     expect(sessionResponse.status).toBe(200);
 
     const previousCredential = await worker.fetch(
-        new Request(`${APP_ORIGIN}/morty/api/computers/${replacement.computerId}/session`, {
+        new Request(`${APP_ORIGIN}/morty/api/v1/computers/${replacement.computerId}/session`, {
             headers: { authorization: `Bearer ${original.token}` },
         }),
         environment,
@@ -67,7 +67,7 @@ test("Given a saved Computer, When it is replaced, Then setup receives a fresh C
     expect(previousCredential.status).toBe(401);
 
     const computerResponse = await worker.fetch(
-        new Request(`${APP_ORIGIN}/morty/api/computers/${replacement.computerId}/management/computer/pairing-state`, {
+        new Request(`${APP_ORIGIN}/morty/api/v1/computers/${replacement.computerId}/pairing-state`, {
             headers: { authorization: `Bearer ${replacement.token}` },
         }),
         environment,
@@ -80,7 +80,7 @@ test("Given a revoked successor local credential, When the previous Computer ret
     const original = await fixture.createAnonymousUser();
     const replace = () =>
         worker.fetch(
-            computerRequest(original.computerId, "/management/computer/replacement", original.token, "POST"),
+            computerRequest(original.computerId, "/replacement", original.token, "POST"),
             fixture.environment(),
         );
     const response = await replace();
@@ -89,7 +89,7 @@ test("Given a revoked successor local credential, When the previous Computer ret
     expect(
         (
             await worker.fetch(
-                computerRequest(replacement.computerId, "/identity/v1/local-credential", replacement.token, "DELETE"),
+                computerRequest(replacement.computerId, "/identity/local-credential", replacement.token, "DELETE"),
                 fixture.environment(),
             )
         ).status,
@@ -108,7 +108,7 @@ test("Given a revoked successor local credential, When the previous Computer ret
 });
 
 function computerRequest(computerId: string, path: string, token: string, method = "GET", body?: object): Request {
-    return new Request(`${APP_ORIGIN}/morty/api/computers/${computerId}${path}`, {
+    return new Request(`${APP_ORIGIN}/morty/api/v1/computers/${computerId}${path}`, {
         method,
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -119,7 +119,7 @@ test("Given a completed replacement, When the saved Computer retries after a Wor
     const original = await fixture.createAnonymousUser();
     const replace = () =>
         worker.fetch(
-            computerRequest(original.computerId, "/management/computer/replacement", original.token, "POST"),
+            computerRequest(original.computerId, "/replacement", original.token, "POST"),
             fixture.environment(),
         );
     const response = await replace();
@@ -140,7 +140,7 @@ test("Given a completed replacement, When the saved Computer retries after a Wor
     expect(
         (
             await worker.fetch(
-                computerRequest(completed.computerId, "/management/computer/pairing-state", completed.token),
+                computerRequest(completed.computerId, "/pairing-state", completed.token),
                 fixture.environment(),
             )
         ).status,
@@ -158,7 +158,7 @@ async function share(computerId: string, token: string): Promise<string> {
 
 async function redeem(code: string): Promise<Response> {
     return await worker.fetch(
-        new Request(`${APP_ORIGIN}/morty/api/identity/transfers/redeem`, {
+        new Request(`${APP_ORIGIN}/morty/api/v1/identity/transfers/redeem`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ code }),
@@ -176,7 +176,7 @@ test("Given access shared from a saved Computer, When it is replaced, Then nothi
 
     const replace = async () =>
         await worker.fetch(
-            computerRequest(original.computerId, "/management/computer/replacement", original.token, "POST"),
+            computerRequest(original.computerId, "/replacement", original.token, "POST"),
             fixture.environment(),
         );
     const response = await replace();
@@ -199,7 +199,7 @@ test("Given a browser that opened a shared link, When it asks to replace the Com
     const browser = v.parse(v.object({ computerToken: v.string() }), await redeemed.json()).computerToken;
 
     const response = await worker.fetch(
-        computerRequest(original.computerId, "/management/computer/replacement", browser, "POST"),
+        computerRequest(original.computerId, "/replacement", browser, "POST"),
         fixture.environment(),
     );
 
@@ -213,7 +213,7 @@ test("Given a browser that opened a shared link, When it asks to replace the Com
 test("Given an unauthenticated request, When a Computer replacement is requested, Then it is rejected", async () => {
     const identity = await fixture.createAnonymousUser();
     const response = await worker.fetch(
-        new Request(`${APP_ORIGIN}/morty/api/computers/${identity.computerId}/management/computer/replacement`, {
+        new Request(`${APP_ORIGIN}/morty/api/v1/computers/${identity.computerId}/replacement`, {
             method: "POST",
         }),
         fixture.environment(),

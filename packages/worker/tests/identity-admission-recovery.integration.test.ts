@@ -88,7 +88,7 @@ test("Given setup and a lost creation response without a known computer, When se
                 ...(body.length === 0 ? {} : { body }),
                 signal: AbortSignal.timeout(30_000),
             });
-            const creation = new URL(request.url).pathname === "/morty/api/computers";
+            const creation = new URL(request.url).pathname === "/morty/api/v1/computers";
             if (creation) {
                 creationKeys.push(
                     v.parse(v.object({ creationKey: v.string() }), JSON.parse(body.toString())).creationKey,
@@ -228,7 +228,7 @@ test("Given setup and a lost creation response without a known computer, When se
             computer_id: identity.computerId,
         });
         expect(new Set(creationKeys)).toEqual(new Set([pending["creation_key"]]));
-        const session = await fetch(`${origin}/morty/api/computers/${identity.computerId}/session`, {
+        const session = await fetch(`${origin}/morty/api/v1/computers/${identity.computerId}/session`, {
             headers: { authorization: `Bearer ${identity.computerToken}` },
         });
         expect(session.status).toBe(200);

@@ -30,7 +30,7 @@ export async function createChatWorkerEnvironment(
         await cloud.changeAppOrigin(origin);
     }
     const createApplication = async () => {
-        const identityResponse = await cloud.dispatchFetch(`${origin}/morty/api/computers`, {
+        const identityResponse = await cloud.dispatchFetch(`${origin}/morty/api/v1/computers`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
@@ -62,7 +62,7 @@ export async function createChatWorkerEnvironment(
         transport.open();
         const connect = async (agents: readonly ControlledAgent[], sessionIds?: ReadonlySet<string>) => {
             const runtime = await cloud.connectAgent(identity.computerId, identity.token, agents, sessionIds);
-            const setup = await request(`chat/computers/${identity.computerId}/setup`, {
+            const setup = await request(`v1/computers/${identity.computerId}/setup`, {
                 harness: agents[0]?.harness ?? "codex",
             });
             if (setup.status !== 202) {
@@ -74,7 +74,7 @@ export async function createChatWorkerEnvironment(
                 signal: AbortSignal,
             ) => {
                 const response = await cloud.dispatchFetch(
-                    `${cloud.directOrigin}/morty/api/chat/computers/${runtime.computerId}/session-access`,
+                    `${cloud.directOrigin}/morty/api/v1/computers/${runtime.computerId}/native-sessions/access`,
                     {
                         method: "POST",
                         signal,
@@ -109,7 +109,7 @@ export async function createChatWorkerEnvironment(
                 continueReply: runtime.continueReply,
                 /** Archives a Session the way another browser window of this Computer would. */
                 archiveSession: async (sessionId: string): Promise<void> => {
-                    const response = await request(`chat/computers/${identity.computerId}/managed-session/archive`, {
+                    const response = await request(`v1/computers/${identity.computerId}/managed-sessions/archive`, {
                         harness: agents[0]?.harness ?? "codex",
                         sessionId,
                     });
@@ -208,7 +208,7 @@ export async function createChatWorkerEnvironment(
                 return { failure: runtime.failure, computerId: runtime.computerId };
             },
             createTransferUrl: async () => {
-                const response = await request(`computers/${identity.computerId}/identity/transfers`, {
+                const response = await request(`v1/computers/${identity.computerId}/identity/transfers`, {
                     operationId: crypto.randomUUID(),
                 });
                 if (response.status !== 201) {

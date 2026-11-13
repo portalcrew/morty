@@ -1,12 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
 import { COMPUTER_HEARTBEAT_ACK_MESSAGE, COMPUTER_HEARTBEAT_MESSAGE } from "@morty-build/client/protocol";
-import { Hono, type MiddlewareHandler } from "hono";
+import { Hono } from "hono";
 import { computerObjectName, decodeComputerPlacement } from "../contracts/computer-id.ts";
 import { ComputerManagementError } from "../contracts/computer-management.ts";
-import { relayAuthenticationFromEnvironment } from "../contracts/relay-authentication-environment.ts";
 import type { ConfiguredRelayBindings } from "../contracts/relay-bindings.ts";
+import { errorHandler } from "../http/error-middleware.ts";
 import { logger } from "../infra/logger.ts";
-import { relayErrorHandler } from "../middleware/error-middleware.ts";
 import { ComputerBackendService } from "./components/computer/service/computer-backend-service.ts";
 import { ComputerAccessService } from "./components/management/service/computer-access-service.ts";
 import { ComputerRelayStore } from "./components/management/storage/computer-relay-store.ts";
@@ -14,8 +13,11 @@ import { DurableComputerAccount } from "./components/management/storage/durable-
 import { IdentityStorage } from "./components/management/storage/identity-storage.ts";
 import { DaemonWebSocketRoutes } from "./components/runtime/daemon-websocket-routes.ts";
 import { SessionAccessSigner } from "./components/runtime/entity/session-access-credential.ts";
-import { WebSocketUploadBudget } from "./components/runtime/http/websocket-http-transport.ts";
 import { createLocalSessionOperations } from "./components/runtime/service/local-session-operations.ts";
+import {
+    createComputerHttpApplication,
+    createComputerWebSocketApplication,
+} from "./composition/computer-application.ts";
 import type { ComputerRouteContext } from "./composition/computer-route-context.ts";
 import { ComputerServices } from "./composition/computer-services.ts";
 import { createRelayDurableObjectContext } from "./composition/relay-durable-object-context.ts";
@@ -46,53 +48,37 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         this.#account,
     );
 
-    readonly #uploads = new WebSocketUploadBudget();
     readonly #http = this.#createHttpRoutes();
 
     #createHttpRoutes() {
-        const computer = this;
+        const storeFor = (computerId: string) => {
+            const store = this.#computerStore(computerId);
+            if (store === null) {
+                throw new ComputerManagementError("computer_id_mismatch", "The computer is unavailable", 421);
+            }
+            return store;
+        };
         const ctx: ComputerRouteContext = {
             bindings: this.env,
+            ownsComputer: (computerId) => this.#owns(computerId),
             services: {
                 browser: this.#browserServices,
-                get runtime() {
-                    return computer.#connectionsForComputer.context.services.runtime;
-                },
+                relay: (computerId) => this.#services(computerId, storeFor(computerId)).relay,
+                accounts: this.#account,
+                sessions: (computerId) => ({
+                    sessions: this.#services(computerId, storeFor(computerId)).access.sessionAccess,
+                    operations: createLocalSessionOperations(this.#connectionsForComputer.context, computerId),
+                }),
             },
-            resources: { uploads: this.#uploads },
             utilities: {
                 connectionOpened: () => this.#scheduleConnectionChecks(),
             },
         };
-        const initialize: MiddlewareHandler<ComputerHttpEnvironment> = async (context, next) => {
-            const computerId = context.var.computerId;
-            const store = this.#computerStore(computerId);
-            if (store === null) {
-                throw new ComputerManagementError("computer_id_mismatch", "The computer is unavailable", 421);
-            }
-            const { access, relay } = this.#services(computerId, store);
-            context.set("allowedOrigins", relayAuthenticationFromEnvironment(context.env).allowedOrigins);
-            context.set("sessionAccess", access.sessionAccess);
-            context.set("relay", relay);
-            context.set(
-                "sessionOperations",
-                createLocalSessionOperations(this.#connectionsForComputer.context, computerId),
-            );
-            await next();
-            return;
-        };
-        const initializeInternal: MiddlewareHandler<ComputerHttpEnvironment> = async (context, next) => {
-            const computerId = context.var.computerId;
-            const store = this.#computerStore(computerId);
-            if (store === null) {
-                throw new ComputerManagementError("computer_id_mismatch", "The computer is unavailable", 421);
-            }
-            context.set("computerAccount", this.#account);
-            await next();
-        };
+        const httpApplication = createComputerHttpApplication(ctx);
+        const websocketApplication = createComputerWebSocketApplication(ctx);
         return new Hono<ComputerHttpEnvironment>()
-            .onError(relayErrorHandler)
-            .route("/", createComputerHttpRoutes(ctx, initialize, initializeInternal))
+            .onError(errorHandler)
+            .route("/", createComputerHttpRoutes(ctx, httpApplication, websocketApplication))
             .notFound(() =>
                 Response.json(
                     { error: { code: "not_found", message: "The requested Morty resource does not exist" } },
@@ -150,7 +136,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
             return null;
         }
         if (this.#store === null) {
-            this.#store = new ComputerRelayStore(computerId, this.#computerDatabase);
+            this.#store = new ComputerRelayStore(this.#computerDatabase);
         }
         return this.#store;
     }

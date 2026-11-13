@@ -1,18 +1,5 @@
 Morty
-Copyright 2026 Moxt
-
-This product includes software developed at Moxt (https://moxt.ai).
-
---------------------------------------------------------------------------------
-
-Morty runtime and service source provenance
-Imported from the Mobius source snapshot fe26494ae0a44697b453a0866de7e1f74b42d12a.
-The imported components are maintained directly in this Morty workspace.
-
-Mobius
-Copyright 2026 Moxt
-
-This product includes software developed at Moxt (https://moxt.ai).
+Copyright 2026 The Morty Authors
 
 --------------------------------------------------------------------------------
 
@@ -20,7 +7,7 @@ This product bundles the following third-party components.
 
 Claude ACP adapter
   packages/cli/src/engine/acp/harness/claude/upstream
-  Derived from claude-code-acp; modified and maintained by Moxt for Morty.
+  Derived from claude-code-acp; modified for Morty.
   Copyright 2025 Zed Industries, Inc. and contributors
   Licensed under the Apache License, Version 2.0.
   License text: packages/cli/src/engine/acp/harness/claude/LICENSE
@@ -29,7 +16,7 @@ Pi ACP adapter
   packages/cli/src/engine/acp/harness/pi/upstream
   Derived from pi-acp v0.0.34 (https://github.com/svkozak/pi-acp),
   commit b0581c9c1d675e634234674484247008b03d69b4.
-  Modified and maintained by Moxt for Morty.
+  Modified for Morty.
   Copyright (c) 2025 Sergii Kozak
   Licensed under the MIT License.
   License text: packages/cli/src/engine/acp/harness/pi/LICENSE

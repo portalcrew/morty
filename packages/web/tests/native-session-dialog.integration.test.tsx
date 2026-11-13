@@ -272,7 +272,7 @@ test("Given an old native preview response, When the selected Agent changes, The
     if (app.executionNetwork === null) {
         throw new Error("Expected controllable real transport");
     }
-    const held = app.executionNetwork.holdNextResponse("/native-session/previous-agent-session");
+    const held = app.executionNetwork.holdNextResponse("/native-sessions/previous-agent-session");
     await app.user.click(getByRole(document.body, "button", { name: "Open Session" }));
     const release = await held;
     onTestFinished(release);

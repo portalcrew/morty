@@ -150,7 +150,7 @@ test.each(["fresh", "unknown", "revoked"] as const)(
                               await (
                                   await worker.fetch(
                                       new Request(
-                                          `${fixture.origin}/morty/api/computers/${previous.computerId}/management/computer/replacement`,
+                                          `${fixture.origin}/morty/api/v1/computers/${previous.computerId}/replacement`,
                                           { method: "POST", headers: { authorization: `Bearer ${previous.token}` } },
                                       ),
                                       fixture.environment(fixture.origin),
@@ -190,7 +190,6 @@ test.each(["fresh", "unknown", "revoked"] as const)(
                 {
                     env: {
                         ...process.env,
-                        MOBIUS_STATE_DIRECTORY: join(directory, "inherited-installation-data"),
                         MORTY_STATE_DIRECTORY: state,
                     },
                     stdio: ["ignore", "pipe", "pipe"],
@@ -270,7 +269,6 @@ process.exitCode = await runSetup(process.argv.slice(2), {
             env: {
                 ...process.env,
                 MORTY_STATE_DIRECTORY: state,
-                MOBIUS_STATE_DIRECTORY: join(directory, "morty-state"),
             },
             stdio: ["ignore", "pipe", "pipe"],
             windowsHide: true,
@@ -395,7 +393,6 @@ test.runIf(process.platform !== "win32")(
                 env: {
                     ...environment,
                     HOME: directory,
-                    MOBIUS_STATE_DIRECTORY: join(directory, "morty-state"),
                 },
                 stdio: ["ignore", "pipe", "pipe"],
                 signal: AbortSignal.timeout(SETUP_PROCESS_TIMEOUT_MS),
@@ -712,7 +709,7 @@ test("Given a shared Computer whose local pairing was removed, When setup has no
         const url = v.parse(v.string(), first.events.at(-1)?.["url"]);
         const redeem = async () =>
             await paths.dispatch(
-                new Request(`${paths.origin}/morty/api/identity/transfers/redeem`, {
+                new Request(`${paths.origin}/morty/api/v1/identity/transfers/redeem`, {
                     method: "POST",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({ code: new URLSearchParams(new URL(url).hash.slice(1)).get("code") }),
@@ -723,7 +720,7 @@ test("Given a shared Computer whose local pairing was removed, When setup has no
         expect(redeemed.status).toBe(200);
         const browser = v.parse(v.object({ computerToken: v.string() }), await redeemed.json());
         const session = async () =>
-            await fetch(`${paths.origin}/morty/api/computers/${config.computer_id}/session`, {
+            await fetch(`${paths.origin}/morty/api/v1/computers/${config.computer_id}/session`, {
                 headers: { authorization: `Bearer ${browser.computerToken}` },
                 signal: AbortSignal.timeout(10000),
             });
@@ -750,7 +747,7 @@ test("Given a shared Computer whose local pairing was removed, When setup has no
             expect.objectContaining({ status: "replacement_access_revoked", previousComputerId: config.computer_id }),
         );
         expect(approved.events.at(-1)).toMatchObject({ status: "ready", computer: "replaced" });
-        const retired = await fetch(`${paths.origin}/morty/api/computers/${config.computer_id}/session`, {
+        const retired = await fetch(`${paths.origin}/morty/api/v1/computers/${config.computer_id}/session`, {
             headers: { authorization: `Bearer ${config.computer_token}` },
             signal: AbortSignal.timeout(10000),
         });
@@ -916,7 +913,7 @@ test("Given two shared links and redeemed access, When the local owner revokes a
         const configuration = savedSetupState(fixture.origin, owner);
         await writeFile(join(configurationDirectory, "config.json"), configuration, { mode: 0o600 });
         const request = (computerId: string, path: string, token: string, method = "GET", body?: object) =>
-            fetch(`${fixture.origin}/morty/api/computers/${computerId}${path}`, {
+            fetch(`${fixture.origin}/morty/api/v1/computers/${computerId}${path}`, {
                 method,
                 headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
                 ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -931,7 +928,7 @@ test("Given two shared links and redeemed access, When the local owner revokes a
         };
         const redeem = (url: string) =>
             worker.fetch(
-                new Request(`${fixture.origin}/morty/api/identity/transfers/redeem`, {
+                new Request(`${fixture.origin}/morty/api/v1/identity/transfers/redeem`, {
                     method: "POST",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({ code: new URL(url).hash.slice("#code=".length) }),
@@ -949,7 +946,7 @@ test("Given two shared links and redeemed access, When the local owner revokes a
         const remote = v.parse(v.string(), tokens[0]);
         for (const token of [remote]) {
             const refused = await fetch(
-                `${fixture.origin}/morty/api/computers/${owner.computerId}/identity/revoke-all-access`,
+                `${fixture.origin}/morty/api/v1/computers/${owner.computerId}/identity/revoke-all-access`,
                 {
                     method: "POST",
                     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -1029,13 +1026,13 @@ test("Given setup replaced the Computer but stopped before ending the previous i
     try {
         const previous = await fixture.createAnonymousUser();
         const request = (computerId: string, path: string, token: string, method = "GET", body?: object) =>
-            fetch(`${fixture.origin}/morty/api/computers/${computerId}${path}`, {
+            fetch(`${fixture.origin}/morty/api/v1/computers/${computerId}${path}`, {
                 method,
                 headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
                 ...(body === undefined ? {} : { body: JSON.stringify(body) }),
                 signal,
             });
-        const replaced = await request(previous.computerId, "/management/computer/replacement", previous.token, "POST");
+        const replaced = await request(previous.computerId, "/replacement", previous.token, "POST");
         expect(replaced.status).toBe(201);
         const current = v.parse(
             v.pipe(
@@ -1108,12 +1105,12 @@ test("Given the reply to revoking all access was lost after the Worker replaced 
         saved.identity.credential_rotation = { successor_token: successor };
         await writeFile(join(configurationDirectory, "config.json"), JSON.stringify(saved), { mode: 0o600 });
         const session = (token: string) =>
-            fetch(`${fixture.origin}/morty/api/computers/${owner.computerId}/session`, {
+            fetch(`${fixture.origin}/morty/api/v1/computers/${owner.computerId}/session`, {
                 headers: { authorization: `Bearer ${token}` },
                 signal,
             });
         const lost = await fetch(
-            `${fixture.origin}/morty/api/computers/${owner.computerId}/identity/revoke-all-access`,
+            `${fixture.origin}/morty/api/v1/computers/${owner.computerId}/identity/revoke-all-access`,
             {
                 method: "POST",
                 headers: { authorization: `Bearer ${owner.token}`, "content-type": "application/json" },

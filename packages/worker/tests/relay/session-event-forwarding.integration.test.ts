@@ -85,7 +85,7 @@ async function connectedComputer() {
                 JSON.stringify({
                     kind: "session.events.subscribe",
                     subscriptionId: "events",
-                    path: `/morty/api/v1/computers/${computerId}/harnesses/${target.harness}/sessions/${target.sessionId}/events-v2`,
+                    path: `/morty/api/v1/computers/${computerId}/harnesses/${target.harness}/sessions/${target.sessionId}/events`,
                     headers: [["authorization", `Bearer ${credential}`]],
                 }),
             );

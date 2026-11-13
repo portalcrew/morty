@@ -3,10 +3,19 @@ export interface ComputerAccess {
     readonly computerId: string;
 }
 
-export class ComputerAuthenticationError extends Error implements HttpError {
-    readonly code: string;
+export type ComputerAuthenticationErrorCode =
+    | "computer_access_denied"
+    | "credential_expired"
+    | "credential_invalid"
+    | "credential_revoked"
+    | "invalid_request"
+    | "relay_configuration_invalid"
+    | "session_permission_denied";
 
-    constructor(code: string, message: string, options: ErrorOptions = {}) {
+export class ComputerAuthenticationError extends Error implements HttpError {
+    readonly code: ComputerAuthenticationErrorCode;
+
+    constructor(code: ComputerAuthenticationErrorCode, message: string, options: ErrorOptions = {}) {
         super(message, options);
         this.code = code;
         this.name = "ComputerAuthenticationError";
@@ -18,8 +27,10 @@ export class ComputerAuthenticationError extends Error implements HttpError {
     });
 }
 
-function computerAuthenticationErrorStatus(code: string): number {
+function computerAuthenticationErrorStatus(code: ComputerAuthenticationErrorCode): number {
     switch (code) {
+        case "invalid_request":
+            return 400;
         case "credential_expired":
         case "credential_revoked":
         case "credential_invalid":
@@ -27,7 +38,9 @@ function computerAuthenticationErrorStatus(code: string): number {
         case "computer_access_denied":
         case "session_permission_denied":
             return 403;
-        default:
+        case "relay_configuration_invalid":
             return 503;
+        default:
+            return code satisfies never;
     }
 }

@@ -29,7 +29,7 @@ export type LocalSessionOperations = Readonly<ReturnType<typeof createLocalSessi
 export function createLocalSessionOperations(cx: RuntimeContext, computerId: string) {
     const checkTarget = (requestedComputer: string) => {
         const latest = cx.services.connections.latest();
-        if (requestedComputer !== computerId || latest?.computerId !== computerId) {
+        if (requestedComputer !== computerId || latest === null) {
             throw new PairingDirectoryError("computer_access_denied", "The selected Computer is unavailable");
         }
         const daemon = cx.gateways.peers.sockets().find(({ identity }) => identity.role === "daemon");
@@ -119,7 +119,7 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
             signal.throwIfAborted();
             await cx.services.runtime.expireSilentDaemons();
             checkTarget(requestedComputerId);
-            if (!cx.services.runtime.isOnline(computerId)) {
+            if (!cx.services.runtime.isOnline()) {
                 throw new PairingDirectoryError("computer_offline", "The Computer is offline");
             }
             return cx.gateways.peers.accept({

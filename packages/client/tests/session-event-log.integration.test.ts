@@ -117,7 +117,7 @@ describe("Session Event Log V2 SDK", () => {
         expect(received).toEqual([
             {
                 method: "GET",
-                path: "/morty/api/v1/computers/computer-1/harnesses/claude/sessions/source-session/events-v2?limit=500",
+                path: "/morty/api/v1/computers/computer-1/harnesses/claude/sessions/source-session/events?limit=500",
             },
         ]);
     });
