@@ -32,7 +32,7 @@ test("Given large valid history events, When the client reads all pages, Then ev
     expect(created.status).toBe(201);
     const owner = v.parse(v.object({ computerId: v.string(), computerToken: v.string() }), await created.json());
     const texts = Array.from(
-        { length: 8 },
+        { length: 10 },
         (_, index) =>
             `large-event-${index}:${index === 0 ? `${'\\"é'.repeat(30_000)}${"x".repeat(810_000)}` : "x".repeat(900_000)}`,
     );
@@ -133,7 +133,7 @@ test("Given large valid history events, When the client reads all pages, Then ev
                     );
                 expect(historyFrames.length).toBeGreaterThan(1);
                 for (const frame of historyFrames) {
-                    expect(Buffer.byteLength(frame.data)).toBeLessThanOrEqual(8 * 1024 * 1024);
+                    expect(Buffer.byteLength(frame.data)).toBeLessThanOrEqual(12 * 1024 * 1024);
                 }
                 await client.sessions.readConfiguration(target, signal);
             } finally {

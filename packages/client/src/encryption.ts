@@ -1,9 +1,9 @@
 import { base64urlnopad } from "@scure/base";
 import { MortyError } from "./errors.ts";
+import { ENCRYPTED_MESSAGE_MAX_PLAINTEXT_BYTES as MAX_PLAINTEXT_BYTES } from "./protocol/shared/encrypted-message-limits.ts";
 
 const encoder = new TextEncoder();
 const P256_PUBLIC_KEY_BYTES = 65;
-const MAX_PLAINTEXT_BYTES = 8 * 1024 * 1024;
 const MAX_PAYLOAD_PACKET_BYTES = 1 + 8 + 12 + MAX_PLAINTEXT_BYTES + 16;
 const MAX_ASSOCIATED_DATA_BYTES = 32 * 1024;
 

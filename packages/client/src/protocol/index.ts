@@ -484,6 +484,10 @@ export {
     isDirectoryPath,
     MAX_WORKSPACE_PATH_LENGTH,
 } from "./shared/directory.ts";
+export {
+    ENCRYPTED_MESSAGE_MAX_PLAINTEXT_BYTES,
+    ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
+} from "./shared/encrypted-message-limits.ts";
 export type { Identifier } from "./shared/identifier.ts";
 export {
     decodeIdentifier,

@@ -1,10 +1,8 @@
 import { z } from "zod";
+import { ENCRYPTED_MESSAGE_MAX_WIRE_BYTES } from "./encrypted-message-limits.ts";
 import { decodeIdentifier, type Identifier } from "./identifier.ts";
 
-export const encryptedFieldSchema = z
-    .string()
-    .min(1)
-    .max(12 * 1024 * 1024);
+export const encryptedFieldSchema = z.string().min(1).max(ENCRYPTED_MESSAGE_MAX_WIRE_BYTES);
 
 export class ProtocolMessageError extends Error {
     readonly code = "invalid_protocol_message";

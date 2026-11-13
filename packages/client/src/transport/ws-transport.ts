@@ -1,5 +1,6 @@
 import {
     CONTENT_CHUNK_MAX_BYTES,
+    ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     encodeContentChunkFrame,
     isIdentifier,
     MORTY_API_PREFIX,
@@ -791,8 +792,12 @@ export class WsTransport {
         if (kind !== "session.events.event") {
             throw new MortyProtocolError("The live Session event subscription returned an unsupported message");
         }
+        const data = wsString(message, "data", ENCRYPTED_MESSAGE_MAX_WIRE_BYTES);
+        if (new TextEncoder().encode(data).byteLength > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES) {
+            throw new MortyProtocolError("The live Session event exceeds the encrypted frame limit");
+        }
         const delivery: MortyTransportSessionEvent = {
-            data: wsString(message, "data", 8 * 1024 * 1024),
+            data,
             eventId: wsString(message, "eventId", 512),
             seqId: wsPositiveInteger(message, "seqId"),
         };

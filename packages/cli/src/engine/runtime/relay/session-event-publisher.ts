@@ -1,6 +1,8 @@
 import type { PayloadEncryptionConnection } from "@morty-build/client";
 import { NativeSessionMap } from "@morty-build/client/native-session";
 import {
+    ENCRYPTED_MESSAGE_MAX_PLAINTEXT_BYTES,
+    ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     isPromptTerminal,
     type NativeSessionTarget,
     SESSION_EVENT_BATCH_MAX_SIZE,
@@ -17,7 +19,6 @@ import type { ScheduledTask, Timer } from "../../util/timer.ts";
 const MAX_BUFFERED_BYTES = 32 * 1024 * 1024;
 const MAX_PENDING_BYTES = 32 * 1024 * 1024;
 const MAX_EVENT_BATCH_BYTES = 1024 * 1024;
-const MAX_FRAME_BYTES = 8 * 1024 * 1024;
 // Browser-compatible WebSocket clients may initiate only 1000 or application close codes.
 const LOCAL_BACKPRESSURE_CLOSE_CODE = 4009;
 export const SESSION_EVENT_BATCH_WINDOW_MILLISECONDS = 100;
@@ -134,6 +135,13 @@ export class RuntimeSessionEventPublisher implements SessionEventSink {
                 if (!connection.isSubscribed(event.target)) {
                     return;
                 }
+                if (Buffer.byteLength(encoded, "utf8") > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES) {
+                    console.warn("Session close notice exceeds the Relay frame limit", {
+                        code: "live_notice_too_large",
+                        target: event.target,
+                    });
+                    return;
+                }
                 if (socket.bufferedAmount + Buffer.byteLength(encoded, "utf8") > MAX_BUFFERED_BYTES) {
                     socket.close(LOCAL_BACKPRESSURE_CLOSE_CODE, "Live event transport overloaded");
                     return;
@@ -161,7 +169,16 @@ export class RuntimeSessionEventPublisher implements SessionEventSink {
         const envelopeBytes = Buffer.byteLength(
             JSON.stringify({ events: [], kind: SESSION_EVENT_KIND, target: event.target }),
         );
-        if (bytes + envelopeBytes > MAX_FRAME_BYTES) {
+        const privateBytes = bytes + Buffer.byteLength('{"events":[]}');
+        const routingBytes = Buffer.byteLength(
+            JSON.stringify({ kind: SESSION_EVENT_KIND, target: event.target, encrypted: "" }),
+        );
+        // AES-GCM adds a 21-byte header and 16-byte tag; the packet is base64url encoded.
+        const maximumWireBytes = routingBytes + Math.ceil(((privateBytes + 37) * 4) / 3);
+        if (
+            privateBytes > ENCRYPTED_MESSAGE_MAX_PLAINTEXT_BYTES ||
+            maximumWireBytes > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES
+        ) {
             console.warn("Live Session event exceeds the Relay frame limit", {
                 code: "live_event_too_large",
                 target: event.target,
@@ -323,6 +340,16 @@ export class RuntimeSessionEventPublisher implements SessionEventSink {
                     }
                     if (socket.readyState !== WebSocket.OPEN) {
                         break;
+                    }
+                    if (Buffer.byteLength(encoded, "utf8") > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES) {
+                        console.warn("Live Session output exceeds the Relay frame limit", {
+                            code: "live_event_too_large",
+                            target: batch.target,
+                        });
+                        this.#pending.splice(this.#pending.indexOf(batch), 1);
+                        this.#pendingBytes -= batch.bytes;
+                        this.#sendingBatch = null;
+                        continue;
                     }
                     if (socket.bufferedAmount + Buffer.byteLength(encoded, "utf8") > MAX_BUFFERED_BYTES) {
                         socket.close(LOCAL_BACKPRESSURE_CLOSE_CODE, "Live event transport overloaded");

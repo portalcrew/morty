@@ -2,6 +2,8 @@ import { sameNativeSession } from "@morty-build/client/native-session";
 import {
     type decodeSessionHistoryPageLoad,
     type decodeSessionPreviewHistoryPageLoad,
+    ENCRYPTED_MESSAGE_MAX_PLAINTEXT_BYTES,
+    ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     type NativeSessionEvents,
     type NativeSessionTarget,
     type QueuedPromptRequestEventLog,
@@ -32,8 +34,11 @@ interface OrderedHistoryEvent {
     readonly event: SessionEvent;
 }
 
-const HISTORY_FRAME_LIMIT = 8 * 1024 * 1024;
 const HISTORY_ROUTING_RESERVE = 4096;
+const fitsHistoryFrame = (privateBytes: number): boolean =>
+    privateBytes + HISTORY_ROUTING_RESERVE <= ENCRYPTED_MESSAGE_MAX_PLAINTEXT_BYTES &&
+    Math.ceil(((privateBytes + HISTORY_ROUTING_RESERVE + 37) * 4) / 3) + HISTORY_ROUTING_RESERVE <=
+        ENCRYPTED_MESSAGE_MAX_WIRE_BYTES;
 
 async function loadHistoryPage(
     target: NativeSessionTarget,
@@ -99,7 +104,7 @@ async function loadHistoryPage(
         queuedPromptRequests,
     };
     let privateBytes = Buffer.byteLength(JSON.stringify({ events: empty }));
-    if (Math.ceil(((privateBytes + 37) * 4) / 3) + HISTORY_ROUTING_RESERVE > HISTORY_FRAME_LIMIT) {
+    if (!fitsHistoryFrame(privateBytes)) {
         throw new SessionError(
             "session_history_unavailable",
             "The Session history metadata exceeds the supported response size",
@@ -112,7 +117,7 @@ async function loadHistoryPage(
             break;
         }
         const bytes = Buffer.byteLength(JSON.stringify(candidate.event)) + (first === candidates.length ? 0 : 1);
-        if (Math.ceil(((privateBytes + bytes + 37) * 4) / 3) + HISTORY_ROUTING_RESERVE > HISTORY_FRAME_LIMIT) {
+        if (!fitsHistoryFrame(privateBytes + bytes)) {
             break;
         }
         privateBytes += bytes;
@@ -185,7 +190,7 @@ async function executeSessionHistoryPageLoad(
             payloadEncryption,
             signal,
         );
-        if (Buffer.byteLength(encoded) > HISTORY_FRAME_LIMIT) {
+        if (Buffer.byteLength(encoded) > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES) {
             throw new SessionError(
                 "session_history_unavailable",
                 "The Session history response exceeds the supported size",
@@ -246,7 +251,7 @@ async function executeSessionPreviewHistoryPageLoad(
             payloadEncryption,
             signal,
         );
-        if (Buffer.byteLength(encoded) > HISTORY_FRAME_LIMIT) {
+        if (Buffer.byteLength(encoded) > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES) {
             throw new SessionError(
                 "session_history_unavailable",
                 "The Session history response exceeds the supported size",

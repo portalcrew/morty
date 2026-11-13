@@ -6,6 +6,7 @@ import {
     contentChunkCodec,
     type DaemonToRelayMessage,
     decodeClientToRelayMessage,
+    ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     encodeComputerStatusEvent,
     encodeSessionEventsUnsubscribe,
     encodeWorkerFileCredit,
@@ -435,7 +436,11 @@ export class ComputerRelayActor {
         message: unknown,
         signal: AbortSignal,
     ): Promise<void> => {
-        if (typeof message !== "string" || message.length > 8 * 1024 * 1024) {
+        if (
+            typeof message !== "string" ||
+            message.length > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES ||
+            new TextEncoder().encode(message).byteLength > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES
+        ) {
             socket.close(1003, "Bounded text message required");
             return;
         }

@@ -5,6 +5,7 @@ import {
     type ComputerLivenessReadyEvent,
     type DaemonToRelayMessage,
     decodeDaemonToRelayMessage,
+    ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     encodeComputerLivenessReadyEvent,
     encodeComputerStatusEvent,
     type NativeSessionTarget,
@@ -469,7 +470,10 @@ export class ComputerService {
             }
             return;
         }
-        if (message.length > 8 * 1024 * 1024) {
+        if (
+            message.length > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES ||
+            new TextEncoder().encode(message).byteLength > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES
+        ) {
             socket.close(1003, "Bounded text message required");
             return;
         }
