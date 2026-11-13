@@ -138,8 +138,10 @@ export class AgentSession {
     #nativeHistoryBaseline: NativeHistoryBaseline = { kind: "unavailable" };
     #nativeHistoryWrites = 0;
     #sessionLoad: SessionLoadState = { kind: "not-requested" };
-    #sessionTitle: string | null = null;
-    #sessionUpdatedAt = "";
+    /** The Session's title; empty until the Agent reports one or the first prompt names it. */
+    #sessionTitle = "";
+    /** The modification time the Agent reported; null until it reports one. */
+    #sessionUpdatedAt: string | null = null;
 
     private constructor(
         agent: AcpAgentDefinition,
@@ -382,9 +384,9 @@ export class AgentSession {
                 this.target,
                 this.#cwd,
                 this.#prompted(),
-                this.#sessionTitle ?? "",
+                this.#sessionTitle,
                 // Agent metadata owns modification time; local activity is only a fallback until it reports one.
-                this.#sessionUpdatedAt || updatedAt,
+                this.#sessionUpdatedAt ?? updatedAt,
                 this.#sessionConfigurations.stored(),
             ),
         );
@@ -419,7 +421,7 @@ export class AgentSession {
             ],
             payload: { sessionUpdate: "session_info_update", title: normalized, updatedAt },
         });
-        return { title: this.#sessionTitle ?? normalized, updatedAt };
+        return { title: this.#sessionTitle.length > 0 ? this.#sessionTitle : normalized, updatedAt };
     };
 
     readonly #captureSelectedConfigurationValues = (): void => {
@@ -804,7 +806,7 @@ export class AgentSession {
         validatePromptContent(options, this.#capabilities);
         // Recording prompt.started below is the command's start; a cancellation that arrived first withdraws it.
         options.signal.throwIfAborted();
-        if (this.#sessionTitle === null || this.#sessionTitle.length === 0) {
+        if (this.#sessionTitle.length === 0) {
             this.#sessionTitle = conversationTitleFromText(options.prompt);
         }
         this.#identity = { ...this.#bound(), prompted: true };
@@ -1093,11 +1095,12 @@ export class AgentSession {
                             this.#sessionTitle = change.value;
                             break;
                         case "updated-at":
-                            this.#sessionUpdatedAt = change.value;
+                            // An empty time is the Agent clearing it.
+                            this.#sessionUpdatedAt = change.value.length > 0 ? change.value : null;
                             break;
                     }
                 }
-                const updatedAt = this.#sessionUpdatedAt || new Date().toISOString();
+                const updatedAt = this.#sessionUpdatedAt ?? new Date().toISOString();
                 if (this.#identity.kind === "bound") {
                     this.writeStoredSession(updatedAt);
                 }
