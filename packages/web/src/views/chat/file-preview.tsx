@@ -1,11 +1,14 @@
 import { FileText, LoaderCircle, Maximize2, Minimize2, RotateCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AgentMarkdown, MAX_MARKDOWN_CHARACTERS } from "../../components/agents/agent-markdown.tsx";
+import type { SessionResourceReader } from "../../components/agents/resource-reader.ts";
 import { HighlightedCode, languageForPath } from "../../components/chat/highlighted-code.tsx";
 import { HtmlPreview } from "../../components/chat/html-preview.tsx";
 import { ImageCanvas } from "../../components/images/image-canvas.tsx";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import type { FilePreviewLayout, FilePreviewState } from "../../view-models/chat/file-preview-store.ts";
+import { createSessionResourceStore } from "../../view-models/chat/session-resource-store.ts";
 import { describePageFailure } from "../../view-models/format-error.ts";
 
 function CodeLineNumbers({ code }: { readonly code: string }) {
@@ -49,9 +52,13 @@ function PreviewSource({ name, text }: { readonly name: string; readonly text: s
 function PreviewContent({
     state,
     onHtmlAttach,
+    onMarkdownLink,
+    readMarkdownImage,
 }: {
     readonly state: FilePreviewState;
     readonly onHtmlAttach: (frame: HTMLIFrameElement) => () => void;
+    readonly onMarkdownLink: (path: string) => void;
+    readonly readMarkdownImage: SessionResourceReader;
 }) {
     switch (state.kind) {
         case "closed":
@@ -75,6 +82,28 @@ function PreviewContent({
         }
         case "text":
             return <PreviewSource name={state.name} text={state.text} />;
+        case "markdown":
+            return state.view.kind === "source" ? (
+                <PreviewSource name={state.name} text={state.text} />
+            ) : (
+                <ScrollArea
+                    aria-label="Markdown preview"
+                    role="region"
+                    className="h-full min-h-0 w-full"
+                    viewportClassName="h-full p-5 sm:p-8"
+                    tabIndex={0}
+                >
+                    <AgentMarkdown
+                        key={state.path}
+                        className="mx-auto max-w-3xl [&>:first-child]:mt-0"
+                        createResourceStore={createSessionResourceStore}
+                        markdown={state.text}
+                        openLocalFile={onMarkdownLink}
+                        readImage={readMarkdownImage}
+                        streaming={false}
+                    />
+                </ScrollArea>
+            );
         case "image":
             return (
                 <ImageCanvas
@@ -106,7 +135,9 @@ function PreviewContent({
 export function FilePreview({
     onClose,
     onReload,
-    onHtmlView,
+    onView,
+    onMarkdownLink,
+    readMarkdownImage,
     onHtmlAttach,
     onPanelAttach,
     onToggleExpanded,
@@ -115,7 +146,9 @@ export function FilePreview({
 }: {
     readonly onClose: () => void;
     readonly onReload: () => void;
-    readonly onHtmlView: (view: "preview" | "source") => void;
+    readonly onView: (view: "preview" | "source") => void;
+    readonly onMarkdownLink: (path: string) => void;
+    readonly readMarkdownImage: SessionResourceReader;
     readonly onHtmlAttach: (frame: HTMLIFrameElement) => () => void;
     readonly layout: FilePreviewLayout;
     readonly onPanelAttach: (panel: HTMLDialogElement) => () => void;
@@ -179,11 +212,12 @@ export function FilePreview({
                 </button>
             </header>
             <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-                {state.kind === "html" ? (
+                {state.kind === "html" ||
+                (state.kind === "markdown" && state.text.length <= MAX_MARKDOWN_CHARACTERS) ? (
                     <button
                         aria-label={state.view.kind === "preview" ? "View source" : "Show preview"}
                         className="rounded-md px-3 py-2 text-sm hover:bg-muted keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/70"
-                        onClick={() => onHtmlView(state.view.kind === "preview" ? "source" : "preview")}
+                        onClick={() => onView(state.view.kind === "preview" ? "source" : "preview")}
                         type="button"
                     >
                         {state.view.kind === "preview" ? "View source" : "Show preview"}
@@ -199,9 +233,19 @@ export function FilePreview({
                     <RotateCw aria-hidden="true" className="size-4" /> Reload
                 </button>
             </div>
-            {state.kind === "text" || state.kind === "html" || state.kind === "image" ? (
+            {state.kind === "markdown" && state.text.length > MAX_MARKDOWN_CHARACTERS ? (
+                <p className="shrink-0 border-b border-border px-4 py-3 text-sm" role="status">
+                    This Markdown file is too large to render. Showing source.
+                </p>
+            ) : null}
+            {state.kind === "text" || state.kind === "html" || state.kind === "markdown" || state.kind === "image" ? (
                 <div className="flex min-h-0 flex-1 items-stretch justify-stretch overflow-hidden bg-white">
-                    <PreviewContent onHtmlAttach={onHtmlAttach} state={state} />
+                    <PreviewContent
+                        onHtmlAttach={onHtmlAttach}
+                        onMarkdownLink={onMarkdownLink}
+                        readMarkdownImage={readMarkdownImage}
+                        state={state}
+                    />
                 </div>
             ) : (
                 <ScrollArea
@@ -210,7 +254,12 @@ export function FilePreview({
                     viewportClassName="h-full p-5"
                 >
                     <div className="flex min-h-full items-center justify-center">
-                        <PreviewContent onHtmlAttach={onHtmlAttach} state={state} />
+                        <PreviewContent
+                            onHtmlAttach={onHtmlAttach}
+                            onMarkdownLink={onMarkdownLink}
+                            readMarkdownImage={readMarkdownImage}
+                            state={state}
+                        />
                     </div>
                 </ScrollArea>
             )}

@@ -1,6 +1,8 @@
 import { MortyError } from "@morty-build/client";
 import { createStore } from "zustand/vanilla";
+import { MAX_MARKDOWN_CHARACTERS } from "../../components/agents/agent-markdown.tsx";
 import { isDisplayableImageType } from "../../components/agents/displayable-image-type.ts";
+import type { SessionResourceReader } from "../../components/agents/resource-reader.ts";
 import {
     attachFilePreviewPanel,
     createFilePreviewImage,
@@ -63,6 +65,13 @@ export type FilePreviewState =
     | { readonly kind: "loading"; readonly path: string }
     | { readonly kind: "text"; readonly name: string; readonly path: string; readonly text: string }
     | {
+          readonly kind: "markdown";
+          readonly name: string;
+          readonly path: string;
+          readonly text: string;
+          readonly view: { readonly kind: "preview" } | { readonly kind: "source" };
+      }
+    | {
           readonly kind: "html";
           readonly name: string;
           readonly path: string;
@@ -101,7 +110,9 @@ interface FilePreviewStore {
     readonly close: () => void;
     readonly open: (path: string, signal: AbortSignal) => Promise<void>;
     readonly reload: (signal: AbortSignal) => Promise<void>;
-    readonly showHtml: (view: "preview" | "source") => void;
+    readonly showView: (view: "preview" | "source") => void;
+    readonly openMarkdownLink: (path: string, signal: AbortSignal) => Promise<void>;
+    readonly readMarkdownImage: SessionResourceReader;
     readonly reportHtmlFailure: (id: string, code: HtmlPreviewFailure) => void;
     readonly toggleExpanded: () => void;
     readonly onPanelAttach: (panel: HTMLDialogElement) => () => void;
@@ -140,6 +151,35 @@ function isTextFile(file: LocalFileResult): boolean {
 
 function isHtmlFile(file: LocalFileResult): boolean {
     return /^text\/html(?:;|$)/iu.test(file.mediaType) || /\.html?$/iu.test(file.name);
+}
+
+function isMarkdownFile(file: LocalFileResult): boolean {
+    return /^text\/(?:markdown|x-markdown)(?:;|$)/iu.test(file.mediaType) || /\.(?:md|markdown)$/iu.test(file.name);
+}
+
+// File links and images are relative to the document, not the Agent's working directory.
+// Normalize dot segments because the Runtime rejects non-canonical absolute paths;
+// the Runtime still resolves and authorizes the resulting path at its own boundary.
+function markdownTargetPath(documentPath: string, target: string): string {
+    if (/^(?:[\\/]|[A-Za-z]:[\\/])/u.test(target)) {
+        return target;
+    }
+    const path = documentPath.replaceAll("\\", "/");
+    const joined = path.slice(0, path.lastIndexOf("/") + 1) + target.replaceAll("\\", "/");
+    const root = joined.match(/^(?:\/+|[A-Za-z]:\/)/u)?.[0] ?? "";
+    const segments: string[] = [];
+    for (const segment of joined.slice(root.length).split("/")) {
+        if (segment === "" || segment === ".") {
+            continue;
+        }
+        if (segment === ".." && segments.length > 0 && segments.at(-1) !== "..") {
+            segments.pop();
+        } else if (segment !== ".." || root === "") {
+            segments.push(segment);
+        }
+    }
+    const resolved = root + segments.join("/");
+    return documentPath.includes("\\") ? resolved.replaceAll("/", "\\") : resolved;
 }
 
 const HTML_FAILURE_MESSAGES: Readonly<Record<HtmlPreviewFailure, string>> = {
@@ -256,8 +296,28 @@ export function createBrowserFilePreviewStore(read: (path: string, signal: Abort
                 await open(state.path, signal);
             }
         },
-        showHtml: (view) => {
+        openMarkdownLink: async (path, signal) => {
+            const { state, open } = get();
+            if (state.kind === "markdown") {
+                await open(markdownTargetPath(state.path, path), signal);
+            }
+        },
+        readMarkdownImage: async (path, signal) => {
+            signal.throwIfAborted();
             const { state } = get();
+            if (state.kind !== "markdown") {
+                throw new DOMException("The Markdown preview is closed.", "AbortError");
+            }
+            return await read(markdownTargetPath(state.path, path), signal);
+        },
+        showView: (view) => {
+            const { state } = get();
+            if (state.kind === "markdown") {
+                if (view === "source" || state.text.length <= MAX_MARKDOWN_CHARACTERS) {
+                    set({ state: { ...state, view: { kind: view } } });
+                }
+                return;
+            }
             if (state.kind !== "html" || state.view.kind === view) {
                 return;
             }
@@ -320,6 +380,19 @@ export function createBrowserFilePreviewStore(read: (path: string, signal: Abort
                             blob: image.blob,
                             name: file.name,
                             path,
+                        },
+                    });
+                    return;
+                }
+                if (isMarkdownFile(file)) {
+                    const text = decoder.decode(file.bytes);
+                    set({
+                        state: {
+                            kind: "markdown",
+                            name: file.name,
+                            path,
+                            text,
+                            view: { kind: text.length > MAX_MARKDOWN_CHARACTERS ? "source" : "preview" },
                         },
                     });
                     return;
