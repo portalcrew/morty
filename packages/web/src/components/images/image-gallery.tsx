@@ -137,6 +137,16 @@ export function PreviewImage(
     );
 }
 
+export function UserImagePlaceholder() {
+    return (
+        <span
+            aria-label="Loading image"
+            className="block size-[120px] max-w-full shrink-0 rounded-[12px] bg-morty-fill-opacity-2"
+            role="status"
+        />
+    );
+}
+
 function ImageTrigger({
     gallery,
     blob,
@@ -144,6 +154,7 @@ function ImageTrigger({
     src,
     className,
     insetStroke = false,
+    onLoad,
     ...props
 }: ComponentProps<"img"> & {
     readonly blob?: Blob | undefined;
@@ -151,6 +162,8 @@ function ImageTrigger({
     readonly insetStroke?: boolean;
 }) {
     const name = alt?.trim() || "Image";
+    const [loadedSource, setLoadedSource] = useState<string | null>(null);
+    const loading = insetStroke && typeof src === "string" && loadedSource !== src;
     const register = useCallback(
         (node: HTMLButtonElement | null) => {
             return node === null || typeof src !== "string" ? undefined : gallery.register(node, { src, name, blob });
@@ -163,6 +176,7 @@ function ImageTrigger({
             className={cn(
                 "relative inline-flex max-w-full cursor-zoom-in items-center justify-center rounded-lg align-middle outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring",
                 insetStroke && "rounded-[12px]",
+                loading && "bg-morty-fill-opacity-2",
             )}
             onClick={(event) => {
                 event.preventDefault();
@@ -176,13 +190,17 @@ function ImageTrigger({
                 {...props}
                 alt={alt ?? ""}
                 className={cn("max-h-[480px] max-w-full object-contain", className)}
+                onLoad={(event) => {
+                    setLoadedSource(src ?? null);
+                    onLoad?.(event);
+                }}
                 src={src}
             />
             {insetStroke && (
                 <span
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-0 rounded-[inherit]"
-                    style={{ boxShadow: "inset 0 0 0 0.5px color-mix(in srgb, var(--foreground) 50%, transparent)" }}
+                    style={{ boxShadow: "inset 0 0 0 0.5px color-mix(in srgb, var(--foreground) 8%, transparent)" }}
                 />
             )}
         </button>
@@ -197,17 +215,23 @@ function isViewerEntry(id: string): boolean {
 function ImageViewer({ gallery, onClose }: { readonly gallery: OpenGallery; readonly onClose: () => void }) {
     const [index, setIndex] = useState(gallery.index);
     const dismiss = useRef(onClose);
+    const attached = useRef<HTMLDialogElement | null>(null);
+    const entryId = useRef<string | null>(null);
     const onAttach = useCallback(
         (dialog: HTMLDialogElement | null) => {
             if (dialog === null) {
                 return;
             }
-            const id = crypto.randomUUID();
-            const state: unknown = window.history.state;
-            window.history.pushState(
-                { ...(typeof state === "object" && state !== null ? state : {}), mortyImageViewer: id },
-                "",
-            );
+            attached.current = dialog;
+            const id = entryId.current ?? crypto.randomUUID();
+            if (entryId.current === null) {
+                entryId.current = id;
+                const state: unknown = window.history.state;
+                window.history.pushState(
+                    { ...(typeof state === "object" && state !== null ? state : {}), mortyImageViewer: id },
+                    "",
+                );
+            }
             let leaving = false;
             const close = () => {
                 if (leaving) {
@@ -228,15 +252,24 @@ function ImageViewer({ gallery, onClose }: { readonly gallery: OpenGallery; read
                 }
             };
             window.addEventListener("popstate", onPop);
-            dialog.showModal();
+            if (!dialog.open) {
+                dialog.showModal();
+            }
             dialog.querySelector<HTMLButtonElement>("[data-image-close]")?.focus({ preventScroll: true });
             return () => {
                 window.removeEventListener("popstate", onPop);
-                if (!leaving && isViewerEntry(id)) {
-                    window.history.back();
-                }
-                dialog.close();
-                gallery.restoreFocus();
+                attached.current = null;
+                // StrictMode replays callback refs; defer teardown until a real detach.
+                queueMicrotask(() => {
+                    if (attached.current !== null) {
+                        return;
+                    }
+                    if (!leaving && isViewerEntry(id)) {
+                        window.history.back();
+                    }
+                    dialog.close();
+                    gallery.restoreFocus();
+                });
             };
         },
         [gallery, onClose],
@@ -248,10 +281,18 @@ function ImageViewer({ gallery, onClose }: { readonly gallery: OpenGallery; read
     return (
         <dialog
             aria-label="Image viewer"
-            className="fixed inset-0 z-50 m-0 h-dvh max-h-none w-screen max-w-none border-0 bg-surface-elevated p-0 text-foreground outline-none backdrop:bg-black/70"
+            className="fixed inset-0 z-50 m-0 h-dvh max-h-none w-screen max-w-none border-0 bg-transparent p-0 text-foreground outline-none backdrop:bg-black/70"
             onCancel={(event) => {
                 event.preventDefault();
                 dismiss.current();
+            }}
+            onClick={(event) => {
+                if (
+                    event.target === event.currentTarget ||
+                    (event.target instanceof HTMLElement && event.target.dataset["imageOverlay"] === "")
+                ) {
+                    dismiss.current();
+                }
             }}
             onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -269,49 +310,48 @@ function ImageViewer({ gallery, onClose }: { readonly gallery: OpenGallery; read
             }}
             ref={onAttach}
         >
-            <div className="flex h-full flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-                <header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-3">
-                    <span className="min-w-0 flex-1 truncate text-sm" title={image.name}>
-                        {image.name}
-                    </span>
-                    <span aria-live="polite" className="shrink-0 text-xs tabular-nums">
-                        {index + 1} of {gallery.images.length}
-                    </span>
-                    {gallery.images.length > 1 && (
-                        <>
-                            <button
-                                aria-label="Previous image"
-                                className={imageControlClass}
-                                aria-disabled={index === 0}
-                                onClick={() => setIndex(Math.max(0, index - 1))}
-                                type="button"
-                            >
-                                <ChevronLeft aria-hidden="true" className="size-5" />
-                            </button>
-                            <button
-                                aria-label="Next image"
-                                className={imageControlClass}
-                                aria-disabled={index === gallery.images.length - 1}
-                                onClick={() => setIndex(Math.min(gallery.images.length - 1, index + 1))}
-                                type="button"
-                            >
-                                <ChevronRight aria-hidden="true" className="size-5" />
-                            </button>
-                        </>
-                    )}
-                    <button
-                        aria-label="Close image viewer"
-                        className={imageControlClass}
-                        data-image-close=""
-                        onClick={() => dismiss.current()}
-                        type="button"
-                    >
-                        <X aria-hidden="true" className="size-5" />
-                    </button>
-                </header>
+            <div className="relative flex h-full flex-col" data-image-overlay="">
+                {gallery.images.length > 1 && (
+                    <div className="absolute left-4 top-[max(16px,env(safe-area-inset-top))] z-10 flex items-center gap-1 rounded-full border border-white/80 bg-card/95 px-1 py-1 shadow-lg sm:left-8">
+                        <button
+                            aria-label="Previous image"
+                            className={imageControlClass}
+                            aria-disabled={index === 0}
+                            onClick={() => setIndex(Math.max(0, index - 1))}
+                            type="button"
+                        >
+                            <ChevronLeft aria-hidden="true" className="size-5" />
+                        </button>
+                        <span
+                            aria-live="polite"
+                            className="min-w-12 text-center text-xs tabular-nums text-copy-secondary"
+                        >
+                            {index + 1} of {gallery.images.length}
+                        </span>
+                        <button
+                            aria-label="Next image"
+                            className={imageControlClass}
+                            aria-disabled={index === gallery.images.length - 1}
+                            onClick={() => setIndex(Math.min(gallery.images.length - 1, index + 1))}
+                            type="button"
+                        >
+                            <ChevronRight aria-hidden="true" className="size-5" />
+                        </button>
+                    </div>
+                )}
+                <button
+                    aria-label="Close image viewer"
+                    className="absolute right-4 top-[max(16px,env(safe-area-inset-top))] z-10 flex size-11 items-center justify-center rounded-full border border-white/80 bg-card/95 text-copy-secondary shadow-lg transition-colors hover:bg-card hover:text-foreground keyboard-focus:focus-visible:outline-2 keyboard-focus:focus-visible:outline-ring sm:right-8"
+                    data-image-close=""
+                    onClick={() => dismiss.current()}
+                    type="button"
+                >
+                    <X aria-hidden="true" className="size-5" />
+                </button>
                 <ImageCanvas
                     image={image}
                     key={index}
+                    mode="overlay"
                     onBackdrop={() => dismiss.current()}
                     onStep={(direction) =>
                         setIndex((current) => Math.max(0, Math.min(gallery.images.length - 1, current + direction)))

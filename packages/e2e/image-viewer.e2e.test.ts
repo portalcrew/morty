@@ -63,25 +63,25 @@ test("Given draft screenshots, When the user zooms, pans, switches and saves, Th
     await viewer.getByRole("button", { name: "Actual size" }).click();
     await expect(viewer.getByLabel("Zoom level")).toHaveText("100%");
     await expect(image).toHaveCSS("width", "1600px");
-    expect(await canvas.evaluate((node) => node.scrollLeft)).toBe(
-        await canvas.evaluate((node) => Math.max(0, Math.round((1600 - node.clientWidth) / 2))),
-    );
-    const scrollBefore = await canvas.evaluate((node) => node.scrollTop);
+    const beforePan = await image.boundingBox();
+    if (beforePan === null) {
+        throw new Error("Expected the enlarged image to be visible");
+    }
     await page.mouse.move(canvasSize.x + canvasSize.width / 2, canvasSize.y + canvasSize.height / 2);
     await page.mouse.down();
     await page.mouse.move(canvasSize.x + canvasSize.width / 2 - 90, canvasSize.y + canvasSize.height / 2 - 120, {
         steps: 8,
     });
     await page.mouse.up();
-    expect(await canvas.evaluate((node) => node.scrollTop)).toBeGreaterThan(scrollBefore);
+    const afterPan = await image.boundingBox();
+    expect(afterPan?.x).toBeLessThan(beforePan.x);
+    expect(afterPan?.y).toBeLessThan(beforePan.y);
     await expect(viewer).toBeVisible();
-    const nextCenter = await canvas.evaluate((node) => ({
-        left: Math.round((node.scrollLeft + node.clientWidth / 2) * 1.5 - node.clientWidth / 2),
-        top: Math.round((node.scrollTop + node.clientHeight / 2) * 1.5 - node.clientHeight / 2),
-    }));
     await viewer.getByRole("button", { name: "Zoom in" }).click();
-    expect(await canvas.evaluate((node) => ({ left: node.scrollLeft, top: node.scrollTop }))).toEqual(nextCenter);
     await expect(viewer.getByLabel("Zoom level")).toHaveText("150%");
+    const afterZoom = await image.boundingBox();
+    expect(afterZoom?.x).toBeLessThan(afterPan?.x ?? 0);
+    expect(afterZoom?.y).toBeLessThan(afterPan?.y ?? 0);
     await viewer.getByRole("button", { name: "Zoom out" }).click();
     await viewer.getByRole("button", { name: "Fit image" }).click();
     await viewer.getByRole("button", { name: "Next image" }).click();

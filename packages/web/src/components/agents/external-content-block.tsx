@@ -2,7 +2,7 @@ import { externalContentPath, type MortyExternalContentBlock } from "@morty-buil
 import { type ReactNode, useMemo } from "react";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
-import { PreviewImage } from "../images/image-gallery.tsx";
+import { PreviewImage, UserImagePlaceholder } from "../images/image-gallery.tsx";
 import { ScrollArea } from "../ui/scroll-area.tsx";
 import { textLinkClassName } from "../ui/text-link.ts";
 import type { MarkdownImageReader } from "./agent-markdown.tsx";
@@ -35,7 +35,11 @@ export function LinkedResourceBlock({
         <SessionResource createStore={createResourceStore} inline request={request} read={readContent}>
             {(state) => {
                 if (state.kind === "loading") {
-                    return <p className="text-sm text-muted-foreground">Loading content…</p>;
+                    return speaker === "user" && mediaType === "image/svg+xml" ? (
+                        <UserImagePlaceholder />
+                    ) : (
+                        <p className="text-sm text-muted-foreground">Loading content…</p>
+                    );
                 }
                 if (state.kind !== "media") {
                     return <p className="text-sm text-muted-foreground">Content could not be loaded: {name}</p>;
@@ -114,7 +118,13 @@ function renderContent(
     speaker: "assistant" | "user",
 ): ReactNode {
     if (state.kind === "loading") {
-        return <p className="text-sm text-muted-foreground">Loading content…</p>;
+        return speaker === "user" &&
+            (content.type === "external_image" ||
+                (content.type === "external_resource" && content.mimeType === "image/svg+xml")) ? (
+            <UserImagePlaceholder />
+        ) : (
+            <p className="text-sm text-muted-foreground">Loading content…</p>
+        );
     }
     if (state.kind === "failed") {
         return <p className="text-sm text-muted-foreground">Content could not be loaded.</p>;

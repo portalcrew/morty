@@ -74,23 +74,21 @@ function NativeSessionDirectoryListSkeleton() {
 
 function NativeSessionAgentTabsSkeleton() {
     return (
-        <div
-            aria-hidden="true"
-            className={cn(
-                sessionAgentTabsListClassName,
-                "animate-pulse motion-reduce:animate-none sm:ml-0.5 sm:mr-2.5",
-            )}
-        >
-            {/* The first tab is selected, so it takes the remaining width instead of an icon-only slot. */}
-            <div className={cn(sessionAgentTabSelectedLayoutClassName, "gap-1.5 border border-transparent bg-card")}>
-                <div className="size-4 shrink-0 rounded-sm bg-morty-fill-opacity-3 max-sm:size-5" />
-                <div className="h-3 min-w-0 flex-1 rounded-full bg-morty-fill-opacity-3" />
-            </div>
-            <div className={sessionAgentTabInactiveLayoutClassName}>
-                <div className="size-4 rounded-sm bg-morty-fill-opacity-3 max-sm:size-5" />
-            </div>
-            <div className={sessionAgentTabInactiveLayoutClassName}>
-                <div className="size-4 rounded-sm bg-morty-fill-opacity-3 max-sm:size-5" />
+        <div aria-hidden="true" className="sm:ml-0.5 sm:mr-2.5">
+            <div className={cn(sessionAgentTabsListClassName, "animate-pulse motion-reduce:animate-none")}>
+                {/* The first tab is selected, so it takes the remaining width instead of an icon-only slot. */}
+                <div
+                    className={cn(sessionAgentTabSelectedLayoutClassName, "gap-1.5 border border-transparent bg-card")}
+                >
+                    <div className="size-4 shrink-0 rounded-sm bg-morty-fill-opacity-3 max-sm:size-5" />
+                    <div className="h-3 min-w-0 flex-1 rounded-full bg-morty-fill-opacity-3" />
+                </div>
+                <div className={sessionAgentTabInactiveLayoutClassName}>
+                    <div className="size-4 rounded-sm bg-morty-fill-opacity-3 max-sm:size-5" />
+                </div>
+                <div className={sessionAgentTabInactiveLayoutClassName}>
+                    <div className="size-4 rounded-sm bg-morty-fill-opacity-3 max-sm:size-5" />
+                </div>
             </div>
         </div>
     );

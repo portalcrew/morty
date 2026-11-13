@@ -5,7 +5,7 @@ import { UserMessageShell } from "../../components/chat/user-message-shell.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import { AgentMarkdown } from "../agents/agent-markdown.tsx";
 import { createFileSource } from "../images/file-source.ts";
-import { ImageGallery, PreviewImage } from "../images/image-gallery.tsx";
+import { ImageGallery, PreviewImage, UserImagePlaceholder } from "../images/image-gallery.tsx";
 import type { ComposerAttachment } from "./composer-attachment.ts";
 
 interface UserPromptMessageProps {
@@ -23,7 +23,9 @@ function PromptImage({ attachment }: { readonly attachment: ComposerAttachment }
         setSource(file.source);
         return file.release;
     }, [attachment]);
-    return source.length === 0 ? null : (
+    return source.length === 0 ? (
+        <UserImagePlaceholder />
+    ) : (
         <PreviewImage
             alt={attachment.name}
             className="size-[120px] max-w-full shrink-0 rounded-[12px] object-cover"
