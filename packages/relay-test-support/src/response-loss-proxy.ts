@@ -55,9 +55,11 @@ export async function createResponseLossProxy(upstream: string) {
             outgoing.destroy();
             return;
         }
+        const requested = new URL(incoming.url ?? "/", upstream);
         const forwarded = request(
-            new URL(incoming.url ?? "/", upstream),
+            new URL(upstream),
             {
+                path: requested.pathname + requested.search,
                 method: incoming.method,
                 headers: { ...incoming.headers, host: new URL(upstream).host },
             },
@@ -130,7 +132,10 @@ export async function createResponseLossProxy(upstream: string) {
             browserSockets.add(client);
             turnArrivals.emit("browser-connections", browserSockets.size);
         }
-        const target = new URL(incoming.url ?? "/", upstream);
+        const requested = new URL(incoming.url ?? "/", upstream);
+        const target = new URL(upstream);
+        target.pathname = requested.pathname;
+        target.search = requested.search;
         target.protocol = "ws:";
         const remote = new WebSocket(target, {
             ...(incoming.headers.origin === undefined ? {} : { origin: incoming.headers.origin }),

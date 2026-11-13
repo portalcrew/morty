@@ -11,9 +11,11 @@ import { type RawData, WebSocket, WebSocketServer } from "ws";
 /** Drops a real Computer transport at the Fork boundary; never fabricates a reply. */
 export async function createForkLossProxy(upstream: string, loss: "request" | "result") {
     const server = createServer((incoming, outgoing) => {
+        const requested = new URL(incoming.url ?? "/", upstream);
         const forwarded = httpRequest(
-            new URL(incoming.url ?? "/", upstream),
+            new URL(upstream),
             {
+                path: requested.pathname + requested.search,
                 method: incoming.method,
                 headers: { ...incoming.headers, host: new URL(upstream).host },
             },
@@ -30,7 +32,10 @@ export async function createForkLossProxy(upstream: string, loss: "request" | "r
     let armed = true;
     const sockets = new WebSocketServer({ server });
     sockets.on("connection", (daemon, request) => {
-        const url = new URL(request.url ?? "/", upstream);
+        const requested = new URL(request.url ?? "/", upstream);
+        const url = new URL(upstream);
+        url.pathname = requested.pathname;
+        url.search = requested.search;
         url.protocol = "ws:";
         const relay = new WebSocket(url, {
             headers: Object.fromEntries(

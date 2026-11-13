@@ -28,9 +28,11 @@ export async function createSessionExecutionProxy(upstream: string) {
     }[] = [];
     const server = createServer((incoming, outgoing) => {
         const heldResponse = takeResponseHold(new URL(incoming.url ?? "/", upstream).pathname);
+        const requested = new URL(incoming.url ?? "/", upstream);
         const forwarded = request(
-            new URL(incoming.url ?? "/", upstream),
+            new URL(upstream),
             {
+                path: requested.pathname + requested.search,
                 method: incoming.method,
                 headers: { ...incoming.headers, host: new URL(upstream).host },
             },
@@ -60,7 +62,10 @@ export async function createSessionExecutionProxy(upstream: string) {
         connections.handleUpgrade(incoming, socket, head, (client) => connections.emit("connection", client, incoming));
     });
     connections.on("connection", (client: WebSocket, incoming: IncomingMessage) => {
-        const target = new URL(incoming.url ?? "/", upstream);
+        const requested = new URL(incoming.url ?? "/", upstream);
+        const target = new URL(upstream);
+        target.pathname = requested.pathname;
+        target.search = requested.search;
         target.protocol = "ws:";
         const remote = new WebSocket(target, {
             ...(incoming.headers.origin === undefined ? {} : { origin: incoming.headers.origin }),

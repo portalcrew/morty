@@ -78,12 +78,18 @@ describe("daemon environment proxy", () => {
 
         const proxyServer = createServer((request, response) => {
             const destination = new URL(request.url ?? "/", "http://127.0.0.1");
+            const target = new URL(`http://127.0.0.1:${port(pairingServer)}`);
+            if (destination.origin !== target.origin) {
+                response.writeHead(403).end();
+                return;
+            }
             tunnelTargets.push(destination.host);
             const headers = { ...request.headers };
             delete headers["proxy-authorization"];
             const upstream = httpRequest(
-                destination,
+                target,
                 {
+                    path: destination.pathname + destination.search,
                     method: request.method,
                     headers,
                     signal: AbortSignal.timeout(2_000),
@@ -103,10 +109,15 @@ describe("daemon environment proxy", () => {
                 downstream.destroy();
                 return;
             }
-            const destination = new URL(`http://${encodedTarget}`);
-            const destinationPort = Number(destination.port);
+            const destinationPort = [port(pairingServer), port(relayServer)].find(
+                (candidate) => encodedTarget === `127.0.0.1:${candidate}`,
+            );
+            if (destinationPort === undefined) {
+                downstream.destroy();
+                return;
+            }
             tunnelTargets.push(encodedTarget);
-            const upstream = connect(destinationPort, destination.hostname, () => {
+            const upstream = connect(destinationPort, "127.0.0.1", () => {
                 downstream.write("HTTP/1.1 200 Connection Established\r\n\r\n");
                 if (head.byteLength > 0) {
                     upstream.write(head);
@@ -118,8 +129,12 @@ describe("daemon environment proxy", () => {
         });
         proxyServer.on("upgrade", (request, downstream, head) => {
             const destination = new URL(request.url ?? "/", "http://127.0.0.1");
+            if (destination.origin !== `http://127.0.0.1:${port(relayServer)}`) {
+                downstream.destroy();
+                return;
+            }
             tunnelTargets.push(destination.host);
-            const upstream = connect(Number(destination.port), destination.hostname, () => {
+            const upstream = connect(port(relayServer), "127.0.0.1", () => {
                 const headers = Object.entries(request.headers)
                     .filter(([name]) => name !== "proxy-authorization")
                     .map(([name, value]) => `${name}: ${value}`)
