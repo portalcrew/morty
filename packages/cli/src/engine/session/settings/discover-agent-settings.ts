@@ -9,6 +9,7 @@ import {
     type AgentSettingsDiscoverCommand,
     type AgentSettingsDiscoveredEvent,
     type SessionConfigOption,
+    type SessionConfigValue,
 } from "@morty-build/client/protocol";
 import { AcpConfigurationValueUnavailableError, AcpExecutionError } from "../../acp/acp-error.ts";
 import type { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
@@ -93,7 +94,7 @@ export async function discoverAgentSettings(
                 new AcpConfigurationValueUnavailableError(
                     baseModel?.id ?? "model",
                     command.model,
-                    baseModel?.values.map((value) => value.value) ?? [],
+                    baseModel?.type === "select" ? baseModel.values.map((value) => value.value) : [],
                 ),
             );
         } else {
@@ -156,16 +157,10 @@ export async function discoverAgentSettings(
 }
 
 function settingFromOption(option: SessionConfigOption): AgentSetting {
-    return {
-        booleanValue: option.booleanValue,
-        category: option.category,
-        defaultValue: option.type === "boolean" ? "" : option.currentValue,
-        description: option.description,
-        id: option.id,
-        name: option.name,
-        type: option.type,
-        values: option.values,
-    };
+    const { category, description, id, name } = option;
+    return option.type === "boolean"
+        ? { booleanValue: option.booleanValue, category, description, id, name, type: "boolean" }
+        : { category, defaultValue: option.currentValue, description, id, name, type: "select", values: option.values };
 }
 
 function settingsFromSnapshot(configOptions: readonly SessionConfigOption[]): readonly AgentSetting[] {
@@ -267,7 +262,7 @@ async function discoverModelEffort(
                 signal,
             })
         ).configOptions;
-    const valuesByModel: Record<string, readonly SessionConfigOption["values"][number][]> = {};
+    const valuesByModel: Record<string, readonly SessionConfigValue[]> = {};
     if (resolution === "complete") {
         const effort = effortOption(initialOptions);
         if (effort === undefined || effort.type !== "select" || effort.values.length < 2) {

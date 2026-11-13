@@ -452,9 +452,11 @@ export class AgentSession {
                 const current = this.#configOptions.find((option) => option.id === selection.configId);
                 if (
                     current?.type !== selection.type ||
-                    (selection.type === "select"
+                    (current.type === "select" && selection.type === "select"
                         ? current.currentValue !== selection.value
-                        : current.booleanValue !== selection.booleanValue)
+                        : current.type === "boolean" &&
+                          selection.type === "boolean" &&
+                          current.booleanValue !== selection.booleanValue)
                 ) {
                     throw new AcpExecutionError(
                         "The Agent could not preserve the source Session mode for this Fork",

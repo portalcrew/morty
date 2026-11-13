@@ -9,18 +9,25 @@ export const AGENT_SETTINGS_DISCOVER_KIND = "agent.settings.discover";
 export const AGENT_SETTINGS_DISCOVERED_KIND = "agent.settings.discovered";
 export const AGENT_SETTINGS_DISCOVERY_FAILED_KIND = "agent.settings.discovery.failed";
 
-const agentSettingSchema = z
-    .object({
-        booleanValue: z.boolean(),
-        category: z.string().max(128),
-        defaultValue: z.string().max(500),
-        description: SHORT_TEXT,
-        id: z.string().min(1).max(128),
-        name: z.string().min(1).max(255),
-        type: z.enum(["boolean", "select"]),
-        values: z.array(configValueSchema).max(500).readonly(),
-    })
-    .readonly();
+const agentSettingFields = {
+    category: z.string().max(128),
+    description: SHORT_TEXT,
+    id: z.string().min(1).max(128),
+    name: z.string().min(1).max(255),
+};
+
+/** A setting the Agent offers and its default: a select defaults to one of its values, a boolean to a flag. */
+const agentSettingSchema = z.discriminatedUnion("type", [
+    z
+        .object({
+            ...agentSettingFields,
+            defaultValue: z.string().max(500),
+            type: z.literal("select"),
+            values: z.array(configValueSchema).max(500).readonly(),
+        })
+        .readonly(),
+    z.object({ ...agentSettingFields, booleanValue: z.boolean(), type: z.literal("boolean") }).readonly(),
+]);
 
 export type AgentSetting = z.infer<typeof agentSettingSchema>;
 

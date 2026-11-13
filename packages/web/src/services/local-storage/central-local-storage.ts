@@ -97,32 +97,26 @@ const settingIdentifierSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(1
 // Chosen agent settings per Bot and agent
 // ---------------------------------------------------------------------------
 
-const agentSettingPreferenceSchema = v.pipe(
-    v.variant("kind", [
-        v.object({
-            configId: settingIdentifierSchema,
-            kind: v.literal("boolean"),
-            value: v.boolean(),
-        }),
-        v.object({
-            configId: settingIdentifierSchema,
-            kind: v.literal("select"),
-            value: v.pipe(v.string(), v.maxLength(500)),
-        }),
-    ]),
-    v.readonly(),
-);
-export type AgentSettingPreference = v.InferOutput<typeof agentSettingPreferenceSchema>;
+/** A choice the user made for one setting, in the shape the protocol states one. */
+const agentSettingPreferenceSchema = v.variant("type", [
+    v.object({ booleanValue: v.boolean(), configId: settingIdentifierSchema, type: v.literal("boolean") }),
+    v.object({
+        configId: settingIdentifierSchema,
+        type: v.literal("select"),
+        value: v.pipe(v.string(), v.maxLength(500)),
+    }),
+]);
 
 export const MAX_AGENT_SETTING_PREFERENCES = 100;
 
 /**
  * The settings the user chose for an Agent, one per setting. Version 1 stored every setting a Session ran with,
- * chosen or not; those entries cannot tell a choice from a default, so they are no longer read.
+ * chosen or not; those entries cannot tell a choice from a default, so they are no longer read. Version 2 stated a
+ * choice as a kind and a value; it is no longer read either.
  */
 export const lastAgentSettingsEntry = (computerId: string, harness: string) =>
     jsonLocalStorageEntry({
-        key: scopedKey("morty:last-agent-settings:v2:", computerId, harness),
+        key: scopedKey("morty:last-agent-settings:v3:", computerId, harness),
         schema: v.pipe(
             v.array(agentSettingPreferenceSchema),
             v.maxLength(MAX_AGENT_SETTING_PREFERENCES),

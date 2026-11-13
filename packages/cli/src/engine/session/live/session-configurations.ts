@@ -45,13 +45,15 @@ export async function replaySessionConfigurations(
         if (current === undefined) {
             continue;
         }
-        if (selection.type === "boolean") {
+        if (current.type === "boolean" && selection.type === "boolean") {
             if (current.booleanValue !== selection.booleanValue) {
                 await apply(selection, signal);
             }
             continue;
         }
         if (
+            current.type === "select" &&
+            selection.type === "select" &&
             current.currentValue !== selection.value &&
             current.values.some((value) => value.value === selection.value)
         ) {

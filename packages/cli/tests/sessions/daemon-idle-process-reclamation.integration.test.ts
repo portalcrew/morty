@@ -262,7 +262,10 @@ test("Given a client read a conversation's settings before its idle process exit
         const read = decodeSessionConfigReadResult(await nextResponse(peer, "session.config.read.result"));
         expect(read.requestId).toBe(readId);
         const model = read.configOptions.find((option) => option.id === "model");
-        const other = model?.values.find((value) => value.value !== model.currentValue)?.value;
+        const other =
+            model?.type === "select"
+                ? model.values.find((value) => value.value !== model.currentValue)?.value
+                : undefined;
         if (other === undefined) {
             throw new Error("The controlled Agent must offer a second model");
         }
@@ -287,7 +290,9 @@ test("Given a client read a conversation's settings before its idle process exit
             if (updated.requestId !== configureId) {
                 continue;
             }
-            expect(updated.configOptions.find((option) => option.id === "model")?.currentValue).toBe(other);
+            expect(updated.configOptions.find((option) => option.id === "model")).toMatchObject({
+                currentValue: other,
+            });
             expect(updated.configurationRevision).not.toBe(read.configurationRevision);
             break;
         }

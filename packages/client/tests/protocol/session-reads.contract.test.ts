@@ -24,7 +24,6 @@ describe("Session config read contracts", () => {
         const result = {
             configOptions: [
                 {
-                    booleanValue: false,
                     category: "model",
                     currentValue: "test-large",
                     description: "Model",

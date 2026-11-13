@@ -16,12 +16,11 @@ export interface ModelSelection {
 }
 
 export function modelSelections(options: readonly SessionConfigOption[]): readonly ModelSelection[] {
-    return options
-        .filter((option) => option.category === "model" && option.type === "select")
-        .map((option) => ({
-            selected: option.currentValue,
-            values: option.values.map((value) => value.value),
-        }));
+    return options.flatMap((option) =>
+        option.category === "model" && option.type === "select"
+            ? [{ selected: option.currentValue, values: option.values.map((value) => value.value) }]
+            : [],
+    );
 }
 
 // Only reviewed public identifiers leave the browser verbatim. Custom provider/deployment names

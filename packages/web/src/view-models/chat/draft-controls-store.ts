@@ -723,13 +723,15 @@ export const createDraftControlsStore = (
                     ...settings,
                     changedOptionIds: new Set([...settings.changedOptionIds, configId]),
                     options: settings.options.map((option) =>
-                        option.id === configId ? { ...option, currentValue: value } : option,
+                        option.id === configId && option.type === "select"
+                            ? { ...option, currentValue: value }
+                            : option,
                     ),
                 };
                 if (settings.options.some((option) => option.id === configId && option.type === "select")) {
                     rememberAgentSettingChoice(computerId, settings.selectedAgent.harness, {
                         configId,
-                        kind: "select",
+                        type: "select",
                         value,
                     });
                 }
@@ -752,9 +754,9 @@ export const createDraftControlsStore = (
                 const toggled = ready.options.find((option) => option.id === configId);
                 if (toggled?.type === "boolean") {
                     rememberAgentSettingChoice(computerId, settings.selectedAgent.harness, {
+                        booleanValue: toggled.booleanValue,
                         configId,
-                        kind: "boolean",
-                        value: toggled.booleanValue,
+                        type: "boolean",
                     });
                 }
                 set({ settings: ready });

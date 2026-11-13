@@ -314,7 +314,7 @@ describe("daemon session configuration boundary", () => {
                 valuesByModel: { "test-small": expect.any(Array) },
             });
             const model = discovered.settings.find((setting) => setting.id === "model");
-            expect(model?.values.map((value) => value.value)).toEqual(["test-small"]);
+            expect(model).toMatchObject({ type: "select", values: [expect.objectContaining({ value: "test-small" })] });
         } finally {
             cancellation.abort();
             for (const socket of relaySockets) {
