@@ -634,6 +634,9 @@ function MortySessionPaneBody({
     const reloadLocalFile = () => {
         void pane.filePreview.getState().reload(pane.operationsSignal());
     };
+    const openMarkdownLink = (path: string) => {
+        void pane.filePreview.getState().openMarkdownLink(path, pane.operationsSignal());
+    };
 
     const workingDirectoryLabel = executionContext.directory ?? executionContext.directoryPlaceholder;
     const titleBarProps = {
@@ -1175,7 +1178,9 @@ function MortySessionPaneBody({
                         onPanelAttach={preview.onPanelAttach}
                         onToggleExpanded={preview.toggleExpanded}
                         onHtmlAttach={preview.onHtmlAttach}
-                        onHtmlView={preview.showHtml}
+                        onView={preview.showView}
+                        onMarkdownLink={openMarkdownLink}
+                        readMarkdownImage={preview.readMarkdownImage}
                         onReload={reloadLocalFile}
                         state={preview.state}
                     />
