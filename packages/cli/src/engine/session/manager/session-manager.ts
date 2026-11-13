@@ -37,6 +37,7 @@ const SESSION_CLOSE_TIMEOUT_MILLISECONDS = 30_000;
 import {
     type AgentSettingsInspectionOptions,
     AgentSettingsSnapshot,
+    type CreatedSession,
     type ElicitationResponseOptions,
     NullSessionObserver,
     type PermissionResponseOptions,
@@ -167,6 +168,7 @@ export class SessionManager {
                 this.#executionProcesses.get(target)?.hasBackgroundActivity() === true ||
                 this.#executions.isBusy(target) ||
                 this.#executionProcesses.isBusy(target) ||
+                this.#lifecycles.isCreating(target) ||
                 this.#lifecycles.managesNativeSession(target),
             retire: (runtime) => this.#retireSessionProcess(target, runtime, () => runtime.close()),
             retireIdle: (runtime) => this.#stopSessionProcess(target, runtime),
@@ -383,45 +385,79 @@ export class SessionManager {
     ): Promise<PreparedSession> => await this.#prepareSession(options, { kind: "interactive-only" }, metrics);
 
     /**
-     * Creates a Session with the initial settings `configure` applies, and answers with the configured snapshot. A
-     * Session this call created that cannot take its settings is discarded, so a refused creation leaves nothing
-     * behind. A Session that already existed, such as one whose creation answer was lost, is configured again and kept.
-     * Concurrent creates are busy until initialization and cleanup finish; none may acknowledge a Session another
-     * creation can still discard.
+     * Creates a Session with the settings `configure` applies, and answers with its configured snapshot. The Runtime
+     * holds the Session only once those settings are applied: a creation that fails or is cancelled midway releases
+     * its process and leaves no record, so no Session exists that was never configured as asked.
      */
     readonly createSession = async (
-        options: SessionPrepareOptions,
-        configure: (prepared: PreparedSession, signal: AbortSignal) => Promise<void>,
-        metrics: OperationMetrics = unmeasuredOperationMetrics,
-    ): Promise<PreparedSession> =>
+        options: SessionCreationOptions,
+        configure: (created: CreatedSession, signal: AbortSignal) => Promise<void>,
+    ): Promise<CreatedSession> =>
         this.#operations.run(options, async (options) => {
+            const runtime = await this.#processes.startUnretained(
+                options.signal,
+                async () =>
+                    await AgentSession.create(
+                        options,
+                        this.#observer,
+                        this.#executionRecord,
+                        this.#store,
+                        unmeasuredOperationMetrics,
+                    ),
+            );
+            const target = await this.#retainCreated(runtime);
             const creation = Promise.withResolvers<void>();
-            const created = await this.#admit(options.target, { kind: "create" }, options.signal, () => {
-                const unknown = !this.#isKnownSession(options.target);
-                this.#lifecycles.beginCreation(options.target, creation.promise);
-                return unknown;
-            });
+            this.#lifecycles.beginCreation(target, creation.promise);
             try {
-                await configure(await this.prepareSession(options, metrics), options.signal);
-                return await this.prepareSession(options, metrics);
+                await configure({ target, prepared: runtime.prepared() }, options.signal);
+                options.signal.throwIfAborted();
+                runtime.hold();
+                return { target, prepared: runtime.prepared() };
             } catch (error) {
-                if (created) {
-                    await this.#discardCreatedSession(options.target);
-                }
+                await this.#discardCreatedSession(target, runtime);
                 throw error;
             } finally {
-                this.#lifecycles.endCreation(options.target, creation.promise);
+                this.#lifecycles.endCreation(target, creation.promise);
                 creation.resolve();
             }
         });
 
-    async #discardCreatedSession(target: NativeSessionTarget): Promise<void> {
-        const runtime = this.#executionProcesses.get(target);
+    /** A Session created with the Agent's own settings. */
+    readonly createNativeSession = async (options: SessionCreationOptions): Promise<NativeSessionTarget> =>
+        (await this.createSession(options, async () => undefined)).target;
+
+    /** Keeps the process of a Session the harness just opened, unless the harness named a Session already known. */
+    async #retainCreated(runtime: AgentSession): Promise<NativeSessionTarget> {
+        let retained = false;
         try {
-            if (runtime !== undefined) {
-                await this.#retireSessionProcess(target, runtime, async () => await runtime.close());
+            const target = runtime.target;
+            if (
+                !isIdentifier(target.sessionId) ||
+                this.#executionProcesses.get(target) !== undefined ||
+                this.#isHeld(target)
+            ) {
+                throw new AcpExecutionError(
+                    "The Agent returned an invalid new Session ID",
+                    {},
+                    "invalid_native_session_response",
+                );
             }
+            this.#executionProcesses.retain(target, runtime);
+            this.#processes.retain(runtime, this.#retention(target));
+            retained = true;
+            return target;
         } finally {
+            if (!retained) {
+                await this.#processes.retire(runtime, () => runtime.closeProcess());
+            }
+        }
+    }
+
+    async #discardCreatedSession(target: NativeSessionTarget, runtime: AgentSession): Promise<void> {
+        try {
+            await this.#retireSessionProcess(target, runtime, async () => await runtime.close());
+        } finally {
+            // The events a creation recorded leave with it.
             this.#store.remove(target);
         }
     }
@@ -872,40 +908,6 @@ export class SessionManager {
         const { sessionGenerationId, throughPosition } = this.#store.events.livePosition(session.target);
         return { sessionGenerationId, throughPosition, interactions: [] };
     };
-
-    readonly createNativeSession = async (options: SessionCreationOptions): Promise<NativeSessionTarget> =>
-        this.#operations.run(options, async (options) => {
-            const runtime = await this.#processes.startUnretained(
-                options.signal,
-                async () =>
-                    await AgentSession.create(
-                        options,
-                        this.#observer,
-                        this.#executionRecord,
-                        this.#store,
-                        unmeasuredOperationMetrics,
-                    ),
-            );
-            let retained = false;
-            try {
-                const target = runtime.target;
-                if (!isIdentifier(target.sessionId) || this.#executionProcesses.get(target) !== undefined) {
-                    throw new AcpExecutionError(
-                        "The Agent returned an invalid new Session ID",
-                        {},
-                        "invalid_native_session_response",
-                    );
-                }
-                this.#executionProcesses.retain(target, runtime);
-                this.#processes.retain(runtime, this.#retention(target));
-                retained = true;
-                return target;
-            } finally {
-                if (!retained) {
-                    await this.#processes.retire(runtime, () => runtime.closeProcess());
-                }
-            }
-        });
 
     readonly ensureSession = async (options: SessionPrepareOptions): Promise<AgentSession> =>
         this.#operations.run(options, async (options) => {

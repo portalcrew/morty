@@ -28,8 +28,6 @@ export type ImmediateSessionOperation =
 export type WaitingSessionOperation =
     /** Prepares the Session's Agent: a held Session no native operation manages. */
     | { readonly kind: "prepare" }
-    /** Creates the Session with its initial settings, one creation at a time. */
-    | { readonly kind: "create" }
     /** Archives the Session. */
     | { readonly kind: "end" }
     /** Imports the native session, which holds it again even when it was archived. */
@@ -98,14 +96,6 @@ function admitAfterTransitions(
                 return notFound();
             }
             return nativeOperation ? managed() : admitted;
-        case "create":
-            if (lifecycle?.kind === "creating") {
-                return refused("The Session is still being created; retry after it finishes", "session_busy");
-            }
-            if (lifecycle?.kind === "closing") {
-                return { kind: "wait", settled: lifecycle.settled };
-            }
-            return admitted;
         case "end":
             return lifecycle?.kind === "creating" || lifecycle?.kind === "closing"
                 ? { kind: "wait", settled: lifecycle.settled }
@@ -144,6 +134,9 @@ export class SessionLifecycles {
 
     /** Whether an import, fork, or history read is managing the native session, so no prompt may write it. */
     readonly managesNativeSession = (target: NativeSessionTarget): boolean => this.#nativeOperations.has(target);
+
+    /** Whether the Session's creation is still applying its settings. */
+    readonly isCreating = (target: NativeSessionTarget): boolean => this.#lifecycles.get(target)?.kind === "creating";
 
     /** A creation of an open Session begins. */
     readonly beginCreation = (target: NativeSessionTarget, settled: Promise<void>): void => {

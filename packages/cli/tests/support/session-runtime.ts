@@ -60,6 +60,11 @@ export class SessionRuntimeFixture {
     readonly createNativeSession = (options: Omit<SessionCreationOptions, "adapter">) =>
         this.sessions.createNativeSession({ ...options, adapter: this.adapters.resolve(options.agent) });
 
+    readonly createConfiguredSession = (
+        options: Omit<SessionCreationOptions, "adapter">,
+        configure: Parameters<SessionManager["createSession"]>[1],
+    ) => this.sessions.createSession({ ...options, adapter: this.adapters.resolve(options.agent) }, configure);
+
     readonly createSession = async (
         options: Omit<SessionCreationOptions, "adapter">,
     ): Promise<TestSessionPrepareOptions> => ({

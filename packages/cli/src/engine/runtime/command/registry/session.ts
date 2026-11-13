@@ -1,7 +1,6 @@
 import type {
     NativeSessionTarget,
     SessionConfigReadCommand,
-    SessionConfigurationSelection,
     SessionConfigureCommand,
     SessionCreateCommand,
     SessionPrepareCommand,
@@ -45,8 +44,6 @@ import { reportOperationFailure, send } from "../transport.ts";
 /** What a preparation of a Session asks for, apart from the Session itself. */
 interface SessionPreparationRequest {
     readonly requestId: string;
-    /** The complete settings a Session being created starts with. */
-    readonly configurations?: readonly SessionConfigurationSelection[] | undefined;
 }
 
 /** Resolves the Session this Computer holds for `target`, measured as part of the preparation. */
@@ -63,6 +60,30 @@ const resolveMeasuredHeldSession = async (
         async () => await resolveHeldSession(sessions, resolveAgent, directories, target, signal),
     );
 
+/** What a client is told of a Session whose Agent is prepared. */
+function readyEvent(
+    command: SessionPreparationRequest,
+    target: NativeSessionTarget,
+    prepared: PreparedSession,
+    location: { readonly directory: string; readonly directoryLabel: string },
+): SessionReadyEvent {
+    return {
+        harness: target.harness,
+        agentName: prepared.agentName,
+        agentVersion: prepared.agentVersion,
+        capabilities: prepared.capabilities,
+        commands: prepared.commands,
+        configOptions: prepared.configOptions,
+        configurationRevision: prepared.configurationRevision,
+        directory: location.directory,
+        directoryLabel: location.directoryLabel,
+        kind: "session.ready",
+        requestId: command.requestId,
+        restored: prepared.restored,
+        target,
+    };
+}
+
 async function prepareSession(
     command: SessionPreparationRequest,
     session: HeldSession,
@@ -72,54 +93,11 @@ async function prepareSession(
 ): Promise<SessionReadyEvent> {
     return await metrics.measure("prepare-total", async () => {
         const preparation = session.options;
-        const { target } = preparation;
-        const prepare = async (): Promise<PreparedSession> => {
-            if (recovery.kind === "history-required") {
-                return await sessions.restoreSession(preparation, metrics);
-            }
-            const configurations = command.configurations;
-            if (configurations === undefined) {
-                return await sessions.prepareSession(preparation, metrics);
-            }
-            // A Session being created starts with exactly the settings it states, by the rule a Turn's settings use.
-            return await sessions.createSession(
-                preparation,
-                async (created, creationSignal) =>
-                    await metrics.measure(
-                        "configuration",
-                        async () =>
-                            await applyCompleteSessionConfiguration(
-                                sessions,
-                                created.configOptions,
-                                configurations,
-                                "refuse",
-                                preparation.agent,
-                                preparation.adapter,
-                                preparation.cwd,
-                                command.requestId,
-                                target,
-                                creationSignal,
-                            ),
-                    ),
-                metrics,
-            );
-        };
-        const prepared = await prepare();
-        return {
-            harness: target.harness,
-            agentName: prepared.agentName,
-            agentVersion: prepared.agentVersion,
-            capabilities: prepared.capabilities,
-            commands: prepared.commands,
-            configOptions: prepared.configOptions,
-            configurationRevision: prepared.configurationRevision,
-            directory: session.directory,
-            directoryLabel: session.directoryLabel,
-            kind: "session.ready",
-            requestId: command.requestId,
-            restored: prepared.restored,
-            target,
-        };
+        const prepared =
+            recovery.kind === "history-required"
+                ? await sessions.restoreSession(preparation, metrics)
+                : await sessions.prepareSession(preparation, metrics);
+        return readyEvent(command, preparation.target, prepared, session);
     });
 }
 
@@ -381,36 +359,33 @@ async function executeSessionCreate(context: CommandContext, command: SessionCre
             const resolved = await resolveSessionDirectory(context.directories, command.directory, signal);
             const agent = await context.resolveAgent(command.harness, signal);
             return await context.sessionCreations.run(command.operationId, input, signal, async () => {
-                const target = await context.sessions.createNativeSession({
-                    ...agent,
-                    cwd: resolved.cwd,
-                    signal,
+                const metrics = new AccumulatingOperationMetrics();
+                // A Session being created starts with exactly the settings it states, by the rule a Turn's settings use.
+                const created = await context.sessions.createSession(
+                    { ...agent, cwd: resolved.cwd, signal },
+                    async ({ target, prepared }, creationSignal) =>
+                        await metrics.measure(
+                            "configuration",
+                            async () =>
+                                await applyCompleteSessionConfiguration(
+                                    context.sessions,
+                                    prepared.configOptions,
+                                    command.configurations,
+                                    "refuse",
+                                    agent.agent,
+                                    agent.adapter,
+                                    resolved.cwd,
+                                    command.requestId,
+                                    target,
+                                    creationSignal,
+                                ),
+                        ),
+                );
+                // A created Session reports the directory its creation named.
+                return readyEvent(command, created.target, created.prepared, {
+                    directory: command.directory,
+                    directoryLabel: resolved.directoryLabel,
                 });
-                try {
-                    const metrics = new AccumulatingOperationMetrics();
-                    const created = await resolveMeasuredHeldSession(
-                        target,
-                        context.resolveAgent,
-                        context.directories,
-                        context.sessions,
-                        metrics,
-                        signal,
-                    );
-                    // A created Session reports the directory its creation named.
-                    return await prepareSession(
-                        command,
-                        { ...created, directory: command.directory },
-                        { kind: "interactive-only" },
-                        context.sessions,
-                        metrics,
-                    );
-                } catch (cause) {
-                    if (!signal.aborted) {
-                        // A refused creation leaves no Session behind in the Sessions this Computer holds.
-                        await context.sessions.archiveSession(target, signal);
-                    }
-                    throw cause;
-                }
             });
         };
         const ready = await (context.sessionCreations.recover(command.operationId, input, signal) ?? create());
