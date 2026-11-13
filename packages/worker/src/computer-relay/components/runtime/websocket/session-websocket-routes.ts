@@ -2,9 +2,12 @@ import {
     CONTENT_WRITE_MAX_BYTES,
     decodeContentWriteCommand,
     type Identifier,
+    type InteractionAccepted,
     isIdentifier,
     MORTY_API_PREFIX,
     type NativeSessionTarget,
+    type TurnCancellation,
+    type TurnReference,
     type TurnState,
 } from "@morty-build/client/protocol";
 import { type Context, Hono } from "hono";
@@ -176,17 +179,17 @@ export function createSessionWebSocketRoutes(ctx: {
             const input: unknown = await context.req.json();
             decodeSessionRequest(turnSteerRequest, input);
             await controlForRequest(context).steerTurn(turnId);
-            return json({ turnId });
+            return json({ turnId } satisfies TurnReference);
         })
         .post(`${sessionPath}/turns/:turnId/cancel-before-start`, authenticate, async (context) => {
             const turnId = decodeSessionRequest(identifier, context.req.param("turnId"));
             await controlForRequest(context).withdrawTurn(turnId);
-            return json({ turnId });
+            return json({ turnId } satisfies TurnReference);
         })
         .post(`${sessionPath}/turns/:turnId/cancel`, authenticate, async (context) => {
             const turnId = decodeSessionRequest(identifier, context.req.param("turnId"));
             const { stopReason } = await controlForRequest(context).cancelTurn(turnId);
-            return json({ turnId, stopReason });
+            return json({ stopReason, turnId } satisfies TurnCancellation);
         })
         .post(`${sessionPath}/configuration`, authenticate, async (context) => {
             const input: unknown = await context.req.json();
@@ -207,7 +210,7 @@ export function createSessionWebSocketRoutes(ctx: {
                 interactionId,
                 decodeSessionRequest(interactionResponseRequest, input),
             );
-            return json({ accepted: true });
+            return json({ accepted: true } satisfies InteractionAccepted);
         })
         .get(`${sessionPath}/events`, authenticate, async (context) => {
             const request = context.req.raw;

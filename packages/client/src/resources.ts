@@ -2,6 +2,7 @@ import type {
     PromptAttachment,
     SessionConfigurationSelection,
     SessionPromptDisposition,
+    TurnCancellation,
 } from "@morty-build/client/protocol";
 
 import { MortyValidationError } from "./errors.ts";
@@ -26,10 +27,7 @@ export type SubmitMortyTurnRequest = SubmitMortyTurnContent &
     );
 
 /** How a cancelled Turn ended: `cancelled`, or the Agent's stop reason when the Turn finished first. */
-export interface MortyTurnCancellation {
-    readonly turnId: string;
-    readonly stopReason: string;
-}
+export type MortyTurnCancellation = TurnCancellation;
 
 export type MortyInteractionResponseRequest =
     | {

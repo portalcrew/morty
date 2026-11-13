@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { identifierStringSchema as IDENTIFIER } from "../../shared/identifier.ts";
-import { decodeZodMessage as decode, encodeZodMessage as encode } from "../../shared/message-codec.ts";
+import { decodeZodMessage as decode, decodeZodValue, encodeZodMessage as encode } from "../../shared/message-codec.ts";
 import { boundedJsonSchema, toolCallLocationSchema } from "../../shared/tool-input.ts";
 import { SHORT_TEXT } from "../shared/index.ts";
 import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
@@ -178,3 +178,11 @@ export const decodeSessionInteractionAnsweredEvent = (encoded: string): SessionI
     decode(encoded, sessionInteractionAnsweredEventSchema);
 export const encodeSessionInteractionAnsweredEvent = (message: SessionInteractionAnsweredEvent): string =>
     encode(message, sessionInteractionAnsweredEventSchema);
+
+/** What the Relay answers when it took an answer to one of the Agent's requests. */
+const interactionAcceptedSchema = z.object({ accepted: z.literal(true) }).readonly();
+
+export type InteractionAccepted = z.infer<typeof interactionAcceptedSchema>;
+
+export const decodeInteractionAccepted = (value: unknown): InteractionAccepted =>
+    decodeZodValue(value, interactionAcceptedSchema);
