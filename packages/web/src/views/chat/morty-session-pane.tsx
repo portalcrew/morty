@@ -1,10 +1,10 @@
-import type { AgentQuestion, SessionConfigOption } from "@morty-build/client/protocol";
+import type { SessionConfigOption } from "@morty-build/client/protocol";
 import { Check, CircleAlert, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useStore } from "zustand";
 import { dataTestId } from "@/data-testid";
 import { AgentQuestions } from "../../components/chat/agent-questions.tsx";
-import { AgentThinking, type AgentThinkingEntry } from "../../components/chat/agent-thinking.tsx";
+import { AgentThinking } from "../../components/chat/agent-thinking.tsx";
 import { AuthenticationNotice } from "../../components/chat/authentication-notice.tsx";
 import { AutoFocusInput } from "../../components/chat/auto-focus-input.tsx";
 import { BotChatComposer } from "../../components/chat/bot-chat-composer.tsx";
@@ -38,7 +38,7 @@ import {
 import { SessionLoadFailure } from "../../components/chat/session-load-failure.tsx";
 import { SessionWelcomeInChat } from "../../components/chat/session-welcome.tsx";
 import { isFileEditToolCall } from "../../components/chat/tools/tool-renderer-registry.tsx";
-import { TurnWorkDisclosure, type TurnWorkSummary } from "../../components/chat/turn-work-disclosure.tsx";
+import { TurnWorkDisclosure } from "../../components/chat/turn-work-disclosure.tsx";
 import { UserPromptMessage } from "../../components/chat/user-prompt-message.tsx";
 import { OwnerQueueNotice, WorkingIndicator } from "../../components/chat/working-indicator.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
@@ -47,11 +47,7 @@ import { DesktopChatLayout } from "../../components/utils/desktop-chat-layout.ts
 import { FollowLatestScrollArea } from "../../components/utils/follow-latest-scroll-area.tsx";
 import { ScrollEdgeFade } from "../../components/utils/scroll-edge-fade.tsx";
 import { cn } from "../../lib/utils.ts";
-import {
-    type AgentQuestionChoices,
-    agentQuestionAnswer,
-    openAgentQuestions,
-} from "../../view-models/chat/agent-question-answer.ts";
+import { type AgentQuestionChoices, agentQuestionAnswer } from "../../view-models/chat/agent-question-answer.ts";
 import { agentReplyCopyText, agentReplyMessageGroups } from "../../view-models/chat/agent-reply-copy.ts";
 import { authenticationGuidance } from "../../view-models/chat/authentication-guidance.ts";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
@@ -66,301 +62,23 @@ import {
     sessionTitleEdit,
     type TitleEdit,
 } from "../../view-models/chat/session-pane-store.ts";
-import {
-    type SessionMessage,
-    sessionExecutionStates,
-    sessionTextValue,
-} from "../../view-models/chat/session-presentation.ts";
+import { sessionExecutionStates } from "../../view-models/chat/session-presentation.ts";
 import { sessionProjectionTimeline } from "../../view-models/chat/session-projection.ts";
+import {
+    agentReplySections,
+    hasRunningProcessWork,
+    isGeneratingProcessRenderItem,
+    type SessionRenderItem,
+    sessionRenderGroups,
+    sessionRenderItemId,
+    sessionRenderItems,
+} from "../../view-models/chat/session-render-items.ts";
 import { createSessionResourceStore } from "../../view-models/chat/session-resource-store.ts";
 import { sessionTitle } from "../../view-models/chat/session-titles-store.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
 import { ChatMessageQueue } from "./chat-message-queue.tsx";
 import { FilePreview } from "./file-preview.tsx";
 import { MortyAssistantText, MortySessionMessage } from "./morty-session-message.tsx";
-
-type SessionRenderItem =
-    | {
-          readonly kind: "assistant-text";
-          readonly id: string;
-          readonly messageId: string | null;
-          readonly text: string;
-          readonly questions: readonly AgentQuestion[];
-          /** No user message followed the questions yet. */
-          readonly answerable: boolean;
-      }
-    | {
-          readonly kind: "event";
-          readonly message: SessionMessage;
-      }
-    | {
-          readonly entries: readonly AgentThinkingEntry[];
-          readonly id: string;
-          readonly kind: "thinking";
-      };
-
-function assistantText(message: SessionMessage): {
-    readonly messageId: string | null;
-    readonly questions: readonly AgentQuestion[];
-    readonly text: string;
-} | null {
-    if (
-        message.role === "assistant" &&
-        message.presentation.kind === "message" &&
-        message.presentation.content.type === "text"
-    ) {
-        return {
-            messageId: message.presentation.messageId,
-            questions: message.presentation.questions,
-            text: sessionTextValue(message.presentation.content.text),
-        };
-    }
-    return null;
-}
-
-function thinkingEntry(message: SessionMessage): AgentThinkingEntry | null {
-    if (message.role !== "assistant") {
-        return null;
-    }
-    if (message.presentation.kind === "tool") {
-        return message.presentation.entry;
-    }
-    if (message.presentation.kind === "thought" && message.presentation.content.type === "text") {
-        return {
-            id: message.firstEvent.eventId,
-            kind: "reasoning",
-            messageId: message.presentation.messageId,
-            text: sessionTextValue(message.presentation.content.text),
-            truncated: message.presentation.content.text.truncated,
-        };
-    }
-    return null;
-}
-
-function sessionRenderItems(messages: readonly SessionMessage[]): readonly SessionRenderItem[] {
-    type RenderItemBuilder =
-        | {
-              kind: "assistant-text";
-              id: string;
-              messageId: string | null;
-              questions: readonly AgentQuestion[];
-              text: string[];
-          }
-        | { readonly kind: "event"; readonly message: SessionMessage }
-        | { entries: AgentThinkingEntry[]; readonly id: string; readonly kind: "thinking" };
-    const items: RenderItemBuilder[] = [];
-    for (const message of messages) {
-        const text = assistantText(message);
-        const thinking = thinkingEntry(message);
-        const previous = items.at(-1);
-        if (text !== null && previous?.kind === "assistant-text" && previous.messageId === text.messageId) {
-            previous.text.push(text.text);
-            if (previous.questions.length === 0) {
-                previous.questions = text.questions;
-            }
-        } else if (text !== null) {
-            items.push({
-                kind: "assistant-text",
-                id: message.firstEvent.eventId,
-                messageId: text.messageId,
-                questions: text.questions,
-                text: [text.text],
-            });
-        } else if (thinking !== null && previous?.kind === "thinking") {
-            previous.entries.push(thinking);
-        } else if (thinking !== null) {
-            items.push({ entries: [thinking], id: message.firstEvent.eventId, kind: "thinking" });
-        } else {
-            items.push({ kind: "event", message });
-        }
-    }
-    const open = openAgentQuestions(messages);
-    return items.map(
-        (item): SessionRenderItem =>
-            item.kind === "assistant-text"
-                ? {
-                      ...item,
-                      answerable: item.messageId !== null && open.has(item.messageId),
-                      text: item.text.join(""),
-                  }
-                : item,
-    );
-}
-
-type SessionRenderGroup =
-    | {
-          readonly id: string;
-          readonly items: readonly SessionRenderItem[];
-          readonly kind: "agent-reply";
-      }
-    | {
-          readonly id: string;
-          readonly item: SessionRenderItem;
-          readonly kind: "user";
-      };
-
-function sessionRenderItemId(item: SessionRenderItem): string {
-    return item.kind === "event" ? item.message.firstEvent.eventId : item.id;
-}
-
-function isUserSessionRenderItem(item: SessionRenderItem): boolean {
-    return item.kind === "event" && item.message.role === "user";
-}
-
-function sessionRenderGroups(items: readonly SessionRenderItem[]): readonly SessionRenderGroup[] {
-    const groups: SessionRenderGroup[] = [];
-    let replyItems: SessionRenderItem[] = [];
-
-    const flushReplyGroup = (): void => {
-        if (replyItems.length === 0) {
-            return;
-        }
-        const firstReplyItem = replyItems.at(0);
-        if (firstReplyItem === undefined) {
-            return;
-        }
-        groups.push({ id: sessionRenderItemId(firstReplyItem), items: replyItems, kind: "agent-reply" });
-        replyItems = [];
-    };
-
-    for (const item of items) {
-        if (isUserSessionRenderItem(item)) {
-            flushReplyGroup();
-            groups.push({ id: sessionRenderItemId(item), item, kind: "user" });
-        } else {
-            replyItems.push(item);
-        }
-    }
-    flushReplyGroup();
-    return groups;
-}
-
-type ReplyContentSection =
-    | {
-          readonly id: string;
-          readonly items: readonly SessionRenderItem[];
-          readonly kind: "visible";
-      }
-    | {
-          readonly id: string;
-          readonly items: readonly SessionRenderItem[];
-          readonly kind: "process";
-          readonly summary: TurnWorkSummary;
-      };
-
-function isProcessRenderItem(item: SessionRenderItem): boolean {
-    // Compaction already has its own summary disclosure. Keep its marker visible
-    // at the native event position rather than burying it in a process group.
-    return item.kind === "thinking";
-}
-
-function isGeneratingProcessRenderItem(item: SessionRenderItem): boolean {
-    if (item.kind === "thinking") {
-        const current = item.entries.at(-1);
-        return (
-            current?.kind === "reasoning" ||
-            current?.state.kind === "running" ||
-            (current?.state.kind === "background" && current.state.status === "running")
-        );
-    }
-    return (
-        item.kind === "event" &&
-        item.message.role === "assistant" &&
-        item.message.presentation.kind === "compaction" &&
-        item.message.presentation.status === "in_progress"
-    );
-}
-
-/**
- * Whether a reply still has process work in flight. A generation the Agent drives natively reports no Morty turn,
- * so its reply settles only when every tool it started has an outcome; settled imports interrupt unresolved tools
- * when the Session opens, so this stays false for finished history.
- */
-function hasRunningProcessWork(items: readonly SessionRenderItem[]): boolean {
-    return items.some((item) => {
-        if (item.kind === "thinking") {
-            return item.entries.some(
-                (entry) =>
-                    entry.kind === "tool" &&
-                    (entry.state.kind === "running" ||
-                        (entry.state.kind === "background" && entry.state.status === "running")),
-            );
-        }
-        return (
-            item.kind === "event" &&
-            item.message.role === "assistant" &&
-            item.message.presentation.kind === "compaction" &&
-            item.message.presentation.status === "in_progress"
-        );
-    });
-}
-
-function processSummary(items: readonly SessionRenderItem[]): TurnWorkSummary {
-    const entries = items.flatMap((item) => (item.kind === "thinking" ? item.entries : []));
-    const tools = entries.filter((entry) => entry.kind === "tool");
-    return {
-        failed: tools.filter(
-            (entry) =>
-                entry.state.kind === "failed" || (entry.state.kind === "background" && entry.state.status === "failed"),
-        ).length,
-        backgroundRunning: tools.filter((tool) => tool.state.kind === "background" && tool.state.status === "running")
-            .length,
-        backgroundUnknown: tools.filter((tool) => tool.state.kind === "background" && tool.state.status === "unknown")
-            .length,
-        fileEdits: tools.filter(isFileEditToolCall).length,
-        interrupted: tools.filter(
-            (entry) =>
-                entry.state.kind === "interrupted" ||
-                (entry.state.kind === "background" && entry.state.status === "stopped"),
-        ).length,
-        steps: Math.max(tools.length, items.length),
-    };
-}
-
-/**
- * Groups adjacent weakened process rows until visible answer text starts the
- * next section. A process section remains disclosed during generation and
- * after completion so the answer leads; its summary carries the live shimmer
- * while the owning execution is still running.
- */
-function agentReplySections(items: readonly SessionRenderItem[]): readonly ReplyContentSection[] {
-    const sections: ReplyContentSection[] = [];
-    let index = 0;
-    while (index < items.length) {
-        const item = items[index];
-        if (item === undefined) {
-            break;
-        }
-        if (isProcessRenderItem(item)) {
-            const start = index;
-            while (true) {
-                const candidate = items[index];
-                if (candidate === undefined || !isProcessRenderItem(candidate)) {
-                    break;
-                }
-                index += 1;
-            }
-            const processItems = items.slice(start, index);
-            const summary = processSummary(processItems);
-            sections.push({
-                id: `process:${sessionRenderItemId(processItems[0] ?? item)}`,
-                items: processItems,
-                kind: "process",
-                summary,
-            });
-            continue;
-        }
-        const start = index;
-        index += 1;
-        const visibleItems = items.slice(start, index);
-        sections.push({
-            id: `visible:${sessionRenderItemId(visibleItems[0] ?? item)}`,
-            items: visibleItems,
-            kind: "visible",
-        });
-    }
-    return sections;
-}
 
 /**
  * Vertical spacing class per reply display item: answer text carries no block
@@ -1086,7 +804,7 @@ function MortySessionPaneBody({
                                                 );
                                             };
                                             const execution = executionStateByItemId.get(group.id) ?? { kind: "open" };
-                                            const sections = agentReplySections(group.items);
+                                            const sections = agentReplySections(group.items, isFileEditToolCall);
                                             // A generation the Agent drives natively reports no Morty turn; its running
                                             // tools are the only live signal that it is still working.
                                             const replyGenerating = replyActive || hasRunningProcessWork(group.items);
