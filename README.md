@@ -1,10 +1,3 @@
----
-metadata:
-  change-policy: >-
-    Submit changes in a separate documentation-only pull request for review and
-    approval. The recommended reviewer is taowen-paraflow.
----
-
 <div align="center">
 
 # Morty
