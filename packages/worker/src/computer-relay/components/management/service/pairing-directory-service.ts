@@ -59,9 +59,10 @@ export class PairingDirectoryService {
         token: string,
         successor: string,
         signal: AbortSignal,
-    ): Promise<
-        { readonly kind: "rotated" | "reused"; readonly access: VerifiedComputerAccess } | { readonly kind: "revoked" }
-    > => {
+    ): Promise<{
+        readonly kind: "rotated" | "reused" | "revoked";
+        readonly access: VerifiedComputerAccess;
+    }> => {
         signal.throwIfAborted();
         const current = validateToken(token);
         if (!isComputerCredentialSuccessor(current, successor)) {
@@ -72,6 +73,9 @@ export class PairingDirectoryService {
             await hashPairingCredential(successor),
             signal,
         );
+        if (rotation.kind === "revoked") {
+            return { kind: "revoked", access: { computerId: this.#cx.computerId } };
+        }
         if (rotation.kind !== "reused") {
             return rotation;
         }
