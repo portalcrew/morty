@@ -8,7 +8,7 @@ import {
     sessionEventsSubscribeCommandCodec,
 } from "@morty-build/client/protocol";
 import { expect, it, vi } from "vitest";
-import { acceptWebSocketHttpTransport } from "../../src/computer-relay/components/runtime/http/websocket-http-transport.ts";
+import { acceptWebSocketHttpTransport } from "../../src/computer-relay/components/runtime/service/websocket-http-transport.ts";
 import { SessionRuntimeError } from "../../src/contracts/relay/session.ts";
 import type { WebSocketHttpOperation } from "../../src/contracts/websocket-http-dispatch.ts";
 import { createOwner, issueSession, ownerOrigin, ownerRequest, pairComputer } from "./owner-fixture.ts";
@@ -99,13 +99,9 @@ it("Given a browser connection, When it requests a retired private Computer API,
     }
 });
 
-it.each([
-    { operation: "unknown-command", kind: "http.response", status: 404, code: "not_found" },
-    { operation: "access-credentials", kind: "http.error", status: 400, code: "invalid_target" },
-    { operation: "access-credentials/unknown-command", kind: "http.error", status: 400, code: "invalid_target" },
-])(
-    "Given a browser connection, When it requests Session operation $operation, Then the owning route preserves its existing $status rejection",
-    async ({ operation, kind, status, code }) => {
+it.each(["unknown-command", "access-credentials", "access-credentials/unknown-command"])(
+    "Given a browser connection, When it requests unsupported Session operation %s, Then it receives the normal 404 response",
+    async (operation) => {
         const computerId = "prj_ap_01_000000000000000000000001";
         const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
             headers: { Upgrade: "websocket" },
@@ -128,12 +124,12 @@ it.each([
                 }),
             );
             const frame = JSON.parse(await answer);
-            expect(frame).toMatchObject({ kind, status, requestId: "unsupported-session-operation" });
-            if (kind === "http.response") {
-                expect(JSON.parse(frame.body)).toMatchObject({ error: { code } });
-            } else {
-                expect(frame).toMatchObject({ code });
-            }
+            expect(frame).toMatchObject({
+                kind: "http.response",
+                status: 404,
+                requestId: "unsupported-session-operation",
+            });
+            expect(JSON.parse(frame.body)).toMatchObject({ error: { code: "not_found" } });
         } finally {
             socket.close();
         }

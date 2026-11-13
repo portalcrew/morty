@@ -1,35 +1,28 @@
 import { DurableObject } from "cloudflare:workers";
 import { COMPUTER_HEARTBEAT_ACK_MESSAGE, COMPUTER_HEARTBEAT_MESSAGE } from "@morty-build/client/protocol";
-import { Hono } from "hono";
 import { computerObjectName, decodeComputerPlacement } from "../contracts/computer-id.ts";
 import { ComputerManagementError } from "../contracts/computer-management.ts";
 import type { ConfiguredRelayBindings } from "../contracts/relay-bindings.ts";
-import { errorHandler } from "../http/error-middleware.ts";
 import { logger } from "../infra/logger.ts";
 import { ComputerBackendService } from "./components/computer/service/computer-backend-service.ts";
 import { ComputerAccessService } from "./components/management/service/computer-access-service.ts";
 import { ComputerRelayStore } from "./components/management/storage/computer-relay-store.ts";
 import { DurableComputerAccount } from "./components/management/storage/durable-computer-account.ts";
 import { IdentityStorage } from "./components/management/storage/identity-storage.ts";
-import { DaemonWebSocketRoutes } from "./components/runtime/daemon-websocket-routes.ts";
 import { SessionAccessSigner } from "./components/runtime/entity/session-access-credential.ts";
+import { DaemonWebSocketService } from "./components/runtime/service/daemon-websocket-service.ts";
 import { createLocalSessionOperations } from "./components/runtime/service/local-session-operations.ts";
-import {
-    createComputerHttpApplication,
-    createComputerWebSocketApplication,
-} from "./composition/computer-application.ts";
 import type { ComputerRouteContext } from "./composition/computer-route-context.ts";
 import { ComputerServices } from "./composition/computer-services.ts";
 import { createRelayDurableObjectContext } from "./composition/relay-durable-object-context.ts";
 import { createComputerRelayServices } from "./composition/relay-services.ts";
-import type { ComputerRouteHttpEnvironment } from "./http/environment.ts";
-import { createComputerHttpRoutes } from "./http/routes.ts";
 import { DurableObjectDatabase } from "./infra/durable-object-database.ts";
+import { createComputerHttpApplication } from "./route/http/application.ts";
+import { createComputerWebSocketApplication } from "./route/ws/application.ts";
 
 const REAUTHORIZATION_INTERVAL_MILLISECONDS = 60_000;
 
 type Store = ComputerRelayStore;
-type ComputerHttpEnvironment = ComputerRouteHttpEnvironment;
 
 /**
  * Owns one computer's storage. Requests routed to the computer run here against that storage, and every other
@@ -74,22 +67,13 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
                 connectionOpened: () => this.#scheduleConnectionChecks(),
             },
         };
-        const httpApplication = createComputerHttpApplication(ctx);
         const websocketApplication = createComputerWebSocketApplication(ctx);
-        return new Hono<ComputerHttpEnvironment>()
-            .onError(errorHandler)
-            .route("/", createComputerHttpRoutes(ctx, httpApplication, websocketApplication))
-            .notFound(() =>
-                Response.json(
-                    { error: { code: "not_found", message: "The requested Morty resource does not exist" } },
-                    { status: 404 },
-                ),
-            );
+        return createComputerHttpApplication(ctx, websocketApplication);
     }
     #connections:
         | {
               readonly context: ReturnType<typeof createRelayDurableObjectContext>;
-              readonly daemonWebSocket: DaemonWebSocketRoutes;
+              readonly daemonWebSocket: DaemonWebSocketService;
           }
         | undefined;
 
@@ -107,7 +91,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         });
         return {
             context,
-            daemonWebSocket: new DaemonWebSocketRoutes(
+            daemonWebSocket: new DaemonWebSocketService(
                 context,
                 logger.child({
                     durableObjectClass: "ComputerRelay",

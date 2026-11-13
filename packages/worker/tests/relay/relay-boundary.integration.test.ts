@@ -60,8 +60,8 @@ import {
 } from "@morty-build/client/protocol";
 import { afterAll, afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";
-import { DaemonWebSocketRoutes } from "../../src/computer-relay/components/runtime/daemon-websocket-routes.ts";
 import { createRuntimeContext } from "../../src/computer-relay/components/runtime/runtime-context.ts";
+import { DaemonWebSocketService } from "../../src/computer-relay/components/runtime/service/daemon-websocket-service.ts";
 import { createRelayDurableObjectContext } from "../../src/computer-relay/composition/relay-durable-object-context.ts";
 import { ComputerRelay as RelayComputerRelay } from "../../src/computer-relay/computer-relay.ts";
 import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-object-database.ts";
@@ -1231,7 +1231,7 @@ it.each(["text", "binary"])(
                     const database = new DurableObjectDatabase(state.storage);
                     const { access } = computerAccess(runtime.computerId, state.storage);
                     const context = createRelayDurableObjectContext(state, { database, access: () => access });
-                    const relay = new DaemonWebSocketRoutes(
+                    const relay = new DaemonWebSocketService(
                         createRuntimeContext({
                             doDatabase: database,
                             services: context.services,

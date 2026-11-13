@@ -29,9 +29,9 @@ import {
     authenticatedSession as createAuthenticatedSession,
     credentialRejected,
     localSession,
-} from "../../management/http/authenticated-session.ts";
-import type { ManagementHttpEnvironment } from "../../management/http/management-http-environment.ts";
-import { applicationForRequest, type ManagementRouteContext } from "../../management/http/route-context.ts";
+} from "../../management/route/authenticated-session.ts";
+import type { ManagementHttpEnvironment } from "../../management/route/management-http-environment.ts";
+import { applicationForRequest, type ManagementRouteContext } from "../../management/route/route-context.ts";
 import { type ChatScope, MINIMUM_SESSION_CREDENTIAL_SECONDS } from "../service/chat-service.ts";
 
 type AuthorizedChatEnvironment = ManagementHttpEnvironment & {
@@ -315,22 +315,26 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
                     ),
                 );
             },
-        )
-        .post(
-            "/setup",
-            localSession(ctx, "verifyAgent"),
-            authorizedChat(),
-            bodyParser<AuthorizedChatEnvironment, typeof setupInput>(setupInput),
-            async (context) => {
-                const application = await applicationForRequest(ctx, context);
-                const result = await application.services.chat.verifyAgent(
-                    context.get("chatScope"),
-                    context.req.valid("json"),
-                );
-                return new Response(result, {
-                    status: 202,
-                    headers: { "cache-control": "no-store", "content-type": "application/json" },
-                });
-            },
         );
+}
+
+/** Local CLI setup is composed only into the HTTP application. */
+export function createAgentSetupRoutes(ctx: ManagementRouteContext) {
+    return new Hono<AuthorizedChatEnvironment>().post(
+        "/setup",
+        localSession(ctx, "verifyAgent"),
+        createAuthorizedChat(ctx, 45000),
+        bodyParser<AuthorizedChatEnvironment, typeof setupInput>(setupInput),
+        async (context) => {
+            const application = await applicationForRequest(ctx, context);
+            const result = await application.services.chat.verifyAgent(
+                context.get("chatScope"),
+                context.req.valid("json"),
+            );
+            return new Response(result, {
+                status: 202,
+                headers: { "cache-control": "no-store", "content-type": "application/json" },
+            });
+        },
+    );
 }

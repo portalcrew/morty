@@ -1,5 +1,5 @@
 import type { ConfiguredRelayBindings } from "../../contracts/relay-bindings.ts";
-import type { SessionWebSocketServices } from "../components/runtime/websocket/session-websocket-routes.ts";
+import type { SessionWebSocketServices } from "../components/runtime/route/ws/session-websocket-routes.ts";
 import type { ComputerServices } from "./computer-services.ts";
 import type { RelayContext } from "./relay-services.ts";
 

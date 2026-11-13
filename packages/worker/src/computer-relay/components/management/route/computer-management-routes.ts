@@ -3,12 +3,11 @@ import { bodyLimit } from "hono/body-limit";
 import * as v from "valibot";
 import { relayIdentifier } from "../../../../contracts/computer-management.ts";
 import { ManagementError } from "../../../../contracts/management-error.ts";
-import { relayBindings } from "../../../../contracts/relay-bindings.ts";
 import { bodyParser } from "../../../../http/body-parser.ts";
 import { json } from "../../../../http/json.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import { readBearerToken } from "../../../../http/request-headers.ts";
-import { ComputerRelayGateway } from "../../../gateway/computer-relay.ts";
+import { replaceComputer } from "../service/computer-replacement-service.ts";
 import { authenticatedSession as createAuthenticatedSession, localSession } from "./authenticated-session.ts";
 import type { ManagementHttpEnvironment } from "./management-http-environment.ts";
 import { applicationForRequest, type ManagementRouteContext } from "./route-context.ts";
@@ -47,7 +46,7 @@ export function createComputerManagementRoutes(ctx: ManagementRouteContext) {
             const application = await applicationForRequest(ctx, context);
             using deadline = new RequestDeadline(context.req.raw.signal, 45000);
             const signal = deadline.signal;
-            const { authentication, management } = application.services;
+            const { authentication } = application.services;
             const local = await authentication.authorize(readBearerToken(context.req.raw), "replaceComputer", signal);
             switch (local.kind) {
                 case "unauthenticated":
@@ -64,66 +63,7 @@ export function createComputerManagementRoutes(ctx: ManagementRouteContext) {
             }
             // This optional correlation ID is untrusted diagnostics, never authorization.
             const setupRunId = v.safeParse(v.pipe(v.string(), v.uuid()), context.req.header("x-morty-setup-run-id"));
-            const audit = {
-                event: "computer_replacement",
-                previousComputerId: application.identity.computerId,
-                setupRunId: setupRunId.success ? setupRunId.output : null,
-            };
-            application.logger.info({ ...audit, stage: "requested" }, "Computer replacement requested");
-            try {
-                const successor = await management.replaceComputer(application.identity.computerId, signal);
-                // Repeating the same saved local identity reuses its successor credential, even if bootstrap
-                // committed only part of its data. An explicitly revoked successor credential is never reissued.
-                const response = await new ComputerRelayGateway(
-                    relayBindings(application.config.bindings),
-                    successor.computerId,
-                ).bootstrap(
-                    new Request("https://computer.internal/__computer/bootstrap", {
-                        body: JSON.stringify({
-                            computer: successor,
-                            origin: {
-                                kind: "replacement",
-                                previousComputerId: audit.previousComputerId,
-                                token: local.token,
-                            },
-                        }),
-                        headers: { "content-type": "application/json" },
-                        method: "POST",
-                        signal,
-                    }),
-                );
-                signal.throwIfAborted();
-                if (!response.ok) {
-                    application.logger.warn(
-                        {
-                            ...audit,
-                            computerId: successor.computerId,
-                            stage: "bootstrap_failed",
-                            status: response.status,
-                        },
-                        "Computer replacement did not reach access revocation",
-                    );
-                    return response;
-                }
-                // Keep the local identity until setup has saved the successor, so a lost reply can be retried.
-                const revoked = await authentication.revokeOtherAccess(local.token, signal);
-                if (revoked.kind !== "revoked") {
-                    throw new ManagementError("UNAUTHENTICATED", "Local identity is no longer available.", 401);
-                }
-                application.logger.info(
-                    { ...audit, computerId: successor.computerId, stage: "access_revoked" },
-                    "Earlier shared access revoked by Computer replacement",
-                );
-                return response;
-            } catch (cause) {
-                // Do not log request bodies, credentials, or arbitrary remote error messages. A failed response
-                // cannot prove whether a request already changed access, so leave the outcome unconfirmed.
-                application.logger.warn(
-                    { ...audit, stage: "outcome_unconfirmed" },
-                    "Computer replacement did not return a confirmed result",
-                );
-                throw cause;
-            }
+            return replaceComputer(application, local.token, setupRunId.success ? setupRunId.output : null, signal);
         })
         .post(
             "/pairing",

@@ -1,5 +1,5 @@
-import type { ConfiguredRelayBindings } from "../../contracts/relay-bindings.ts";
-import type { ComputerTargetEnvironment } from "../../http/computer-target.ts";
+import type { ConfiguredRelayBindings } from "../../../contracts/relay-bindings.ts";
+import type { ComputerTargetEnvironment } from "../../../http/computer-target.ts";
 
 export type RelayProtocolEnvironment = ComputerRouteHttpEnvironment;
 

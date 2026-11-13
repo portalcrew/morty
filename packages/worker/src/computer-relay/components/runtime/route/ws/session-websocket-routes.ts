@@ -1,5 +1,5 @@
 import { sameNativeSession } from "@morty-build/client/native-session";
-import { MORTY_API_PREFIX, type NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionTarget } from "@morty-build/client/protocol";
 import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import * as v from "valibot";
@@ -16,19 +16,22 @@ import {
     promptInput,
     renameInput,
     withdrawInput,
-} from "../../../../contracts/agent-api/session-requests.ts";
-import { toHttpError } from "../../../../contracts/http-error.ts";
-import { PairingDirectoryError, validateIdentifier } from "../../../../contracts/relay/pairing.ts";
-import { WebSocketDispatchError, type WebSocketHttpOperation } from "../../../../contracts/websocket-http-dispatch.ts";
-import { bodyParser, readJsonTextBody } from "../../../../http/body-parser.ts";
-import { RequestDeadline } from "../../../../http/request-deadline.ts";
+} from "../../../../../contracts/agent-api/session-requests.ts";
+import { toHttpError } from "../../../../../contracts/http-error.ts";
+import { PairingDirectoryError, validateIdentifier } from "../../../../../contracts/relay/pairing.ts";
+import {
+    WebSocketDispatchError,
+    type WebSocketHttpOperation,
+} from "../../../../../contracts/websocket-http-dispatch.ts";
+import { bodyParser, readJsonTextBody } from "../../../../../http/body-parser.ts";
+import { RequestDeadline } from "../../../../../http/request-deadline.ts";
+import type { LocalSessionOperations } from "../../service/local-session-operations.ts";
+import type { SessionAccessService } from "../../service/session-access-service.ts";
 import {
     authorizeSessionContentUpload,
-    type SessionContentUploadTarget,
     sessionContentUploadRequired,
-} from "../http/session-content-upload.ts";
-import type { LocalSessionOperations } from "../service/local-session-operations.ts";
-import type { SessionAccessService } from "../service/session-access-service.ts";
+    uploadSessionContent,
+} from "../../service/session-content-upload.ts";
 
 export type SessionWebSocketServices = {
     readonly sessions: SessionAccessService;
@@ -142,7 +145,7 @@ export function createSessionWebSocketRoutes(ctx: {
                 .operations.requestClientControl(context.var.computerId, command, signal),
         );
     };
-    const sessionPath = `${MORTY_API_PREFIX}/v1/computers/:computerId/harnesses/:harness/sessions/:sessionId`;
+    const sessionPath = "/:harness/sessions/:sessionId";
     return new Hono<SessionWebSocketEnvironment>()
         .onError((cause, context) => {
             context.req.raw.signal.throwIfAborted();
@@ -160,12 +163,9 @@ export function createSessionWebSocketRoutes(ctx: {
             });
         })
         .notFound(notFound)
-        .all(`${sessionPath}/access-credentials/*`, () => {
-            throw new WebSocketDispatchError();
-        })
         .use(`${sessionPath}/*`, authorizeTarget)
         .put(`${sessionPath}/content/:contentKey`, admitContentUpload, authenticateUpload, (context) =>
-            uploadContent(context.req.raw, ctx.services.forComputer(context.var.computerId), {
+            uploadSessionContent(context.req.raw, ctx.services.forComputer(context.var.computerId), {
                 computerId: context.var.computerId,
                 target: context.var.target,
                 contentKey: context.req.param("contentKey"),
@@ -333,31 +333,4 @@ export function createSessionWebSocketRoutes(ctx: {
         .all(`${sessionPath}/*`, (context) =>
             context.env.operation.kind === "upload-admission" ? sessionContentUploadRequired() : notFound(),
         );
-}
-
-async function uploadContent(
-    request: Request,
-    dependencies: {
-        readonly sessions: SessionAccessService;
-        readonly operations: LocalSessionOperations;
-    },
-    location: SessionContentUploadTarget,
-): Promise<Response> {
-    const authorized = await authorizeSessionContentUpload(request, dependencies.sessions, location);
-    if (authorized instanceof Response) {
-        return authorized;
-    }
-    const { access, target } = authorized;
-    if (request.body === null) {
-        throw new PairingDirectoryError("invalid_request", "The content body is required");
-    }
-    const available = await dependencies.operations.writeSessionContent(
-        access.computerId,
-        target,
-        request.body,
-        request.signal,
-    );
-    return new Response(available, {
-        headers: { "cache-control": "no-store", "content-type": "application/json" },
-    });
 }
