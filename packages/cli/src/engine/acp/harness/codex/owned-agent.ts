@@ -172,6 +172,8 @@ interface ActiveTurn {
     readonly content: readonly ContentBlock[];
     readonly completion: PromiseWithResolvers<PromptResponse>;
     readonly turn: { id: string };
+    /** The app-server reported a compaction under this turn, so whatever settled it emitted its terminal update. */
+    compactionReported: boolean;
     input: { readonly kind: "awaiting" } | { readonly kind: "identified"; readonly messageId: string };
 }
 
@@ -234,7 +236,6 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
     // Set when the turn machinery (turn/completed or cancel) settled this turn's
     // compaction, so the compact error path does not report a second terminal
     // update for the same failure.
-    #turnSettledCompaction = false;
 
     constructor(context: OwnedAgentContext) {
         this.#context = context;
@@ -332,6 +333,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
             steeringContent: new Map(),
             clientId: randomUUID(),
             input: { kind: "awaiting" },
+            compactionReported: false,
             turn: { id: "" },
         };
         this.#turn = turn;
@@ -360,7 +362,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
             // (the start RPC itself failed; no item streamed, nothing emitted) gets
             // a fresh-id failed update here.
             const open = this.#settleCompaction("failed", cause instanceof Error ? cause.message : String(cause));
-            if (open === null && !this.#turnSettledCompaction) {
+            if (open === null && !turn.compactionReported) {
                 const compactionId = randomUUID();
                 await this.#enqueue(async () => {
                     await this.#context.emit({
@@ -371,7 +373,6 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
                     });
                 });
             }
-            this.#turnSettledCompaction = false;
             throw cause;
         } finally {
             signal.removeEventListener("abort", aborted);
@@ -594,6 +595,9 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
             // so failure, interruption, or endpoint loss can settle it.
             if (method === "item/started") {
                 this.#openCompaction = { compactionId: item.id };
+                if (this.#turn !== null) {
+                    this.#turn.compactionReported = true;
+                }
             }
             if (method === "item/completed") {
                 // The item's own terminal update is the settlement; #finishCompaction
@@ -825,6 +829,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
             steeringContent: new Map(),
             clientId: randomUUID(),
             input: { kind: "awaiting" },
+            compactionReported: false,
             turn: { id: "" },
         };
         this.#agentMessages.clear();
@@ -942,7 +947,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         }
         // The interrupted turn's terminal notification may never arrive; its open
         // compaction must not outlive it.
-        this.#turnSettledCompaction = this.#settleCompaction("cancelled") !== null;
+        this.#settleCompaction("cancelled");
         turn.completion.resolve({ stopReason: "cancelled" });
     };
 
@@ -965,15 +970,14 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
             // The app-server reports a failed turn's compaction as never-completed:
             // settle the open compaction under the same failure before the turn
             // rejects, so the client is not left with a compaction stuck in_progress.
-            this.#turnSettledCompaction =
-                this.#settleCompaction("failed", turn.error?.message ?? "The Codex turn failed") !== null;
+            this.#settleCompaction("failed", turn.error?.message ?? "The Codex turn failed");
             active.completion.reject(
                 new AcpExecutionError(turn.error?.message ?? "The Codex turn failed", {}, "codex_turn_failed"),
             );
             return;
         }
         if (turn.status === "interrupted") {
-            this.#turnSettledCompaction = this.#settleCompaction("cancelled") !== null;
+            this.#settleCompaction("cancelled");
             active.completion.resolve({ stopReason: "cancelled" });
             return;
         }
