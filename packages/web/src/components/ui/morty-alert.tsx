@@ -6,7 +6,7 @@ const alertChrome = "flex gap-2 rounded-md border-[0.5px] px-4 py-3 [overflow-wr
 
 /** Pale amber surface shared by warning alerts. */
 const warningAlertSurfaceClassName =
-    "border-[oklch(0.62_0.14_75/0.28)] bg-[oklch(0.98_0.03_85/0.6)] text-[oklch(0.52_0.13_70)] backdrop-blur-[80px]";
+    "border-[oklch(0.62_0.14_75/0.12)] bg-[oklch(0.98_0.03_85/0.6)] text-[oklch(0.52_0.13_70)] backdrop-blur-[80px]";
 
 /** Info alert ink: brand primary. */
 const infoAlertInkClassName = "text-primary";

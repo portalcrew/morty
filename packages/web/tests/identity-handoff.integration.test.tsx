@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getByRole, queryByRole } from "@testing-library/dom";
+import { getByRole, getByTestId, queryByRole } from "@testing-library/dom";
+import { act } from "@testing-library/react";
 import * as v from "valibot";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
@@ -107,14 +108,18 @@ test("Given Morty access from a finished setup, When the user reopens Morty in a
 test("Given a stored identity, When the user shares access with an AI agent, Then copyable instructions name the agent API document and a link the agent can redeem as documented", {
     timeout: 30_000,
 }, async () => {
-    const app = await createTestApp({ connectAgent: true, page: { kind: "bootstrap", identity: true } });
+    const clock = new TestClock("2026-11-13T08:00:00Z");
+    const app = await createTestApp({ clock, connectAgent: true, page: { kind: "bootstrap", identity: true } });
     await app.user.click(await app.queryElementByTestId(dataTestId.shareIdentity));
     const dialog = getByRole(document.body, "dialog", { name: "Continue on another device" });
     await app.waitForView(() => getByRole(dialog, "button", { name: "Copy link" }));
     await app.user.click(getByRole(dialog, "combobox", { name: "Share with" }));
     await app.user.click(getByRole(document.body, "option", { name: "An AI agent" }));
+    expect(getByRole(dialog, "status").textContent).toContain("Preparing agent instructions");
+    expect(queryByRole(dialog, "button", { name: "Copy instructions" })).toBeNull();
+    await act(async () => clock.advanceBy(250));
 
-    const handoff = await app.queryElementByTestId(dataTestId.agentHandoff);
+    const handoff = getByTestId(dialog, dataTestId.agentHandoff);
     expect(queryByRole(dialog, "img", { name: "Continue on another device QR code" })).toBeNull();
     expect(handoff.textContent).toContain("Works for one device until");
     await app.user.click(getByRole(handoff, "button", { name: "Copy instructions" }));
@@ -146,7 +151,9 @@ test("Given a stored identity, When the user shares access with an AI agent, The
     // Switching back shows the same link to a person; choosing a recipient never issues another link.
     await app.user.click(getByRole(dialog, "combobox", { name: "Share with" }));
     await app.user.click(getByRole(document.body, "option", { name: "A person" }));
-    await app.user.click(await app.waitForView(() => getByRole(dialog, "button", { name: "Copy link" })));
+    expect(getByRole(dialog, "status").textContent).toContain("Preparing sharing details");
+    await act(async () => clock.advanceBy(250));
+    await app.user.click(getByRole(dialog, "button", { name: "Copy link" }));
     expect(await navigator.clipboard.readText()).toBe(link);
 });
 

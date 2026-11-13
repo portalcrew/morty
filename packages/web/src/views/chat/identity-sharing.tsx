@@ -34,17 +34,18 @@ const recipientOptions: readonly { readonly value: SharingRecipient; readonly la
 const shareMethodSubheadingClassName = "text-12 font-medium leading-4 text-morty-text-3";
 const identitySharingSkeletonBarClassName = "rounded-full bg-morty-fill-opacity-3 motion-reduce:animate-none";
 const identitySharingSkeletonPulseClassName = "animate-pulse motion-reduce:animate-none";
-const identitySharingSkeletonFieldShellClassName = "rounded-lg border-[0.5px] border-black/10 bg-white";
+const identitySharingSkeletonFieldShellClassName = "rounded-lg border-[0.5px] border-black/5 bg-white";
+const identitySharingSkeletonSelectClassName = "rounded-lg border border-border bg-background";
 /** Matches a typical wrapped continue URL beside the QR code. */
-const identitySharingUrlBoxMinHeightClassName = "min-h-[4.5rem]";
+const identitySharingUrlBoxClassName = "min-h-[4.5rem]";
 
 function IdentitySharingDeviceAccessSkeleton() {
     return (
         <div
             aria-hidden="true"
             className={cn(
-                "flex h-9 w-full items-center px-2.5",
-                identitySharingSkeletonFieldShellClassName,
+                "flex h-9 w-full items-center px-3",
+                identitySharingSkeletonSelectClassName,
                 identitySharingSkeletonPulseClassName,
             )}
         >
@@ -57,8 +58,9 @@ function IdentitySharingTimingCopySkeleton() {
     return (
         <div aria-hidden="true" className={cn("space-y-2", identitySharingSkeletonPulseClassName)}>
             <div className={cn("h-3.5 w-full", identitySharingSkeletonBarClassName)} />
-            <div className={cn("h-3.5 w-[94%]", identitySharingSkeletonBarClassName)} />
-            <div className={cn("h-3.5 w-[70%]", identitySharingSkeletonBarClassName)} />
+            <div className={cn("h-3.5 w-[68%]", identitySharingSkeletonBarClassName)} />
+            <div className={cn("h-3.5 w-full sm:hidden", identitySharingSkeletonBarClassName)} />
+            <div className={cn("h-3.5 w-[58%] sm:hidden", identitySharingSkeletonBarClassName)} />
         </div>
     );
 }
@@ -66,7 +68,8 @@ function IdentitySharingTimingCopySkeleton() {
 const shareMethodGridClassName = "grid grid-cols-[auto_auto_minmax(0,1fr)] items-start gap-x-6 gap-y-2.5";
 const shareMethodOrDividerClassName =
     "col-start-2 row-start-2 flex min-h-0 shrink-0 flex-col items-center self-stretch";
-const shareMethodQrShellClassName = "col-start-1 row-start-2 shrink-0 rounded-lg bg-white p-3";
+const shareMethodQrShellClassName =
+    "col-start-1 row-start-2 shrink-0 rounded-lg border-[0.5px] border-black/5 bg-white p-3";
 
 type IdentitySharingTransferSectionProps =
     | { readonly loading: true }
@@ -84,7 +87,7 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
             className="space-y-4"
             {...(loading ? { role: "status" as const } : { "data-testid": dataTestId.identitySharing })}
         >
-            {loading ? <span className="sr-only">Creating secure QR code…</span> : null}
+            {loading ? <span className="sr-only">Preparing sharing details…</span> : null}
             <div className="space-y-2.5">
                 <h3 className={dialogSectionTitleClassName}>Sharing method</h3>
                 <div className={shareMethodGridClassName}>
@@ -124,26 +127,21 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
                                 className={cn(
                                     "flex flex-col justify-center gap-2 px-4 py-3",
                                     identitySharingSkeletonFieldShellClassName,
-                                    identitySharingUrlBoxMinHeightClassName,
+                                    identitySharingUrlBoxClassName,
                                 )}
                             >
                                 <div className={cn("h-3.5 w-full", identitySharingSkeletonBarClassName)} />
                                 <div className={cn("h-3.5 w-11/12", identitySharingSkeletonBarClassName)} />
+                                <div className={cn("h-3.5 w-[70%]", identitySharingSkeletonBarClassName)} />
                             </div>
-                            <div
-                                className={cn(
-                                    "flex h-9 w-full items-center justify-center",
-                                    identitySharingSkeletonFieldShellClassName,
-                                )}
-                            >
-                                <div className={cn("h-3.5 w-[5.25rem]", identitySharingSkeletonBarClassName)} />
-                            </div>
+                            <div className="h-9 w-28 rounded-lg bg-morty-fill-opacity-3" />
                         </div>
                     ) : (
                         <CopyLinkButton
                             className="col-start-3 row-start-2 min-w-0"
+                            prominent
                             url={props.transfer.url}
-                            urlClassName={identitySharingUrlBoxMinHeightClassName}
+                            urlClassName={identitySharingUrlBoxClassName}
                         />
                     )}
                 </div>
@@ -175,6 +173,17 @@ function IdentitySharingTiming({
     );
 }
 
+function AgentHandoffHeading() {
+    return (
+        <div className="space-y-0.5">
+            <h3 className={dialogSectionTitleClassName}>Instructions for the agent</h3>
+            <p className="text-xs leading-5 text-morty-text-3">
+                Paste these instructions into your AI agent&apos;s chat to connect it to this computer.
+            </p>
+        </div>
+    );
+}
+
 function AgentHandoffSection({
     transfer,
     replacedEarlier,
@@ -185,13 +194,10 @@ function AgentHandoffSection({
     return (
         <div className="space-y-4" data-testid={dataTestId.agentHandoff}>
             <div className="space-y-2.5">
-                <h3 className={dialogSectionTitleClassName}>Instructions for the agent</h3>
-                <p className="text-xs leading-5 text-morty-text-3">
-                    Paste this into the AI agent&apos;s chat. The agent reads the published API description and connects
-                    through the link; it does not need a browser.
-                </p>
+                <AgentHandoffHeading />
                 <CopyLinkButton
                     copyLabel="Copy instructions"
+                    prominent
                     subject="instructions"
                     url={agentHandoffInstructions(transfer)}
                     urlClassName="whitespace-pre-wrap break-normal"
@@ -202,12 +208,44 @@ function AgentHandoffSection({
     );
 }
 
+function AgentHandoffSkeleton() {
+    return (
+        <div className="space-y-4" role="status">
+            <span className="sr-only">Preparing agent instructions…</span>
+            <div className="space-y-2.5">
+                <AgentHandoffHeading />
+                <div
+                    aria-hidden="true"
+                    className={cn(
+                        "min-h-40 space-y-2 px-4 py-3",
+                        identitySharingSkeletonFieldShellClassName,
+                        identitySharingSkeletonPulseClassName,
+                    )}
+                >
+                    <div className={cn("h-3.5 w-[85%]", identitySharingSkeletonBarClassName)} />
+                    <div className={cn("h-3.5 w-full", identitySharingSkeletonBarClassName)} />
+                    <div className={cn("h-3.5 w-[92%]", identitySharingSkeletonBarClassName)} />
+                    <div className={cn("h-3.5 w-[76%]", identitySharingSkeletonBarClassName)} />
+                    <div className={cn("h-3.5 w-full", identitySharingSkeletonBarClassName)} />
+                    <div className={cn("h-3.5 w-[58%]", identitySharingSkeletonBarClassName)} />
+                </div>
+                <div
+                    aria-hidden="true"
+                    className={cn("h-9 w-40 rounded-lg bg-morty-fill-opacity-3", identitySharingSkeletonPulseClassName)}
+                />
+            </div>
+            <IdentitySharingTimingCopySkeleton />
+        </div>
+    );
+}
+
 /** Renders the sharing dialog's transfer, whose store is created when the dialog opens. */
 export function IdentitySharing({ store }: { readonly store: StoreApi<IdentitySharingStore> }) {
     const state = useExternalStore(store, (state) => state.state);
     const choose = useExternalStore(store, (state) => state.choose);
     const recipient = useExternalStore(store, (state) => state.recipient);
     const chooseRecipient = useExternalStore(store, (state) => state.chooseRecipient);
+    const recipientTransitioning = useExternalStore(store, (state) => state.recipientTransitioning);
     // The Worker states the duration a link grants; until the first link exists there is nothing to show.
     const duration =
         state.kind === "ready" ? state.transfer.accessDuration : state.kind === "initial" ? null : state.duration;
@@ -266,8 +304,12 @@ export function IdentitySharing({ store }: { readonly store: StoreApi<IdentitySh
                     The previous link or your access is no longer available. Close this dialog and share again.
                 </p>
             )}
-            {loading ? (
-                <IdentitySharingTransferSection loading />
+            {loading || (state.kind === "ready" && recipientTransitioning) ? (
+                recipient === "agent" ? (
+                    <AgentHandoffSkeleton />
+                ) : (
+                    <IdentitySharingTransferSection loading />
+                )
             ) : state.kind === "ready" && recipient === "agent" ? (
                 <AgentHandoffSection replacedEarlier={state.replacedEarlier} transfer={state.transfer} />
             ) : state.kind === "ready" ? (
