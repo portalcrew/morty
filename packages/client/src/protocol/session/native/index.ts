@@ -170,41 +170,55 @@ const resultEnvelope = {
     ...envelope,
     kind: z.literal(NATIVE_SESSION_RESULT_KIND),
 };
-/** What reading a Session's execution answers: its running turn, queue, and last turn. */
-export const activeTurnResultSchema = z
-    .object({
-        ...resultEnvelope,
-        action: z.literal("active-turn"),
-        target: nativeSessionTargetSchema,
-        queued: z
-            .array(
-                z
-                    .object({
-                        commandId: identifier,
-                        prompt: z.string().max(100_000),
-                        attachments: z.array(promptAttachmentSchema).max(16).readonly(),
-                    })
-                    .readonly(),
-            )
-            .readonly(),
-        turn: activeTurnSnapshotSchema.nullable(),
-        // The whole execution read covers this prefix of the Session event log.
-        executionPosition: z
-            .object({
-                sessionGenerationId: identifier,
-                throughPosition: z.string().regex(/^(0|[1-9][0-9]*)$/),
-            })
-            .readonly(),
-        // Null when this Computer has no retained Session for the requested identity.
-        interactionState: sessionInteractionSnapshotSchema.nullable(),
-        // Present only when the request named a command.
-        command: commandDeliverySchema.optional(),
-        // Absent while the last started command is running or none has started.
-        lastTurn: lastTurnOutcomeSchema.optional(),
-    })
+const executionReadFields = {
+    ...resultEnvelope,
+    action: z.literal("active-turn"),
+    target: nativeSessionTargetSchema,
+    queued: z
+        .array(
+            z
+                .object({
+                    commandId: identifier,
+                    prompt: z.string().max(100_000),
+                    attachments: z.array(promptAttachmentSchema).max(16).readonly(),
+                })
+                .readonly(),
+        )
+        .readonly(),
+    // The whole execution read covers this prefix of the Session event log.
+    executionPosition: z
+        .object({
+            sessionGenerationId: identifier,
+            throughPosition: z.string().regex(/^(0|[1-9][0-9]*)$/),
+        })
+        .readonly(),
+    // Null when this Computer has no retained Session for the requested identity.
+    interactionState: sessionInteractionSnapshotSchema.nullable(),
+    // Present only when the request named a command.
+    command: commandDeliverySchema.optional(),
+};
+/**
+ * What reading a Session's execution answers: a running turn, or none and how the last started command ended. How a
+ * command ended is told only while none runs, and not at all before one has started.
+ */
+const runningTurnResultSchema = z
+    .object({ ...executionReadFields, lastTurn: z.never().optional(), turn: activeTurnSnapshotSchema })
     .readonly();
-const nativeSessionResultSchema = z.discriminatedUnion("action", [
-    activeTurnResultSchema,
+const idleTurnResultSchema = z
+    .object({ ...executionReadFields, lastTurn: lastTurnOutcomeSchema.optional(), turn: z.null() })
+    .readonly();
+export const activeTurnResultSchema = z.union([runningTurnResultSchema, idleTurnResultSchema]);
+/** A Session's execution as one read answers it, without the addressing every native result carries. */
+export type SessionExecution =
+    z.infer<typeof activeTurnResultSchema> extends infer Read
+        ? Read extends unknown
+            ? Omit<Read, "action" | "kind" | "requestId" | "target">
+            : never
+        : never;
+// A union of its own variants, not discriminated by `action`: the two reads of an execution share theirs.
+const nativeSessionResultSchema = z.union([
+    runningTurnResultSchema,
+    idleTurnResultSchema,
     z
         .object({
             ...resultEnvelope,

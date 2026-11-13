@@ -15,11 +15,11 @@ import {
     type ExternalImageContentBlock,
     type ExternalResourceContentBlock,
     MORTY_API_PREFIX,
-    type NativeSessionResult,
     type NativeSessionTarget,
     type PromptAttachment,
     type SessionConfigurationSelection,
     type SessionEventLogPage,
+    type SessionExecution,
     type SessionLiveEventBatch,
     SessionPromptDisposition,
     type Turn,
@@ -685,12 +685,7 @@ export class MortySessionResources {
         sessionTarget: NativeSessionTarget,
         signal: AbortSignal,
         commandId?: string,
-    ): Promise<
-        Pick<
-            Extract<NativeSessionResult, { readonly action: "active-turn" }>,
-            "turn" | "queued" | "command" | "lastTurn" | "interactionState" | "executionPosition"
-        >
-    > => {
+    ): Promise<SessionExecution> => {
         const result = decodeNativeSessionResult(
             JSON.stringify(
                 await this.#executor.get(
@@ -706,14 +701,8 @@ export class MortySessionResources {
         if (result.action !== "active-turn" || !sameNativeSession(result.target, sessionTarget)) {
             throw new MortyProtocolError("The service returned an invalid active Turn");
         }
-        return {
-            turn: result.turn,
-            queued: result.queued,
-            ...(result.command === undefined ? {} : { command: result.command }),
-            ...(result.lastTurn === undefined ? {} : { lastTurn: result.lastTurn }),
-            interactionState: result.interactionState,
-            executionPosition: result.executionPosition,
-        };
+        const { action: _action, kind: _kind, requestId: _requestId, target: _target, ...execution } = result;
+        return execution;
     };
 }
 

@@ -57,6 +57,21 @@ describe("Session execution read contracts", () => {
         turn: null,
     } as const;
 
+    it("Given an execution that reports a running turn and a last turn, When it crosses the launch protocol boundary, Then it is rejected, since a last turn is told only while none runs", () => {
+        const turn = {
+            commandId: "command-1",
+            epoch: "epoch-1",
+            interaction: null,
+            sequence: 1,
+            startedAt: "2026-11-13T00:00:00.000Z",
+            state: "running",
+        };
+        const lastTurn = { commandId: "command-0", state: "completed", stopReason: "end_turn" };
+        expect(decodeNativeSessionResult(JSON.stringify({ ...execution, turn }))).toMatchObject({ turn });
+        expect(() => decodeNativeSessionResult(JSON.stringify({ ...execution, turn, lastTurn }))).toThrow();
+        expect(decodeNativeSessionResult(JSON.stringify({ ...execution, lastTurn }))).toMatchObject({ lastTurn });
+    });
+
     it("Given an execution with an unknown command delivery state, When it crosses the launch protocol boundary, Then the malformed snapshot is rejected", () => {
         expect(() =>
             decodeNativeSessionResult(
