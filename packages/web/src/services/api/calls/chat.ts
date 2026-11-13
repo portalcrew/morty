@@ -334,6 +334,6 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: { kind: "session.prepare", requestId: crypto.randomUUID(), target, sessionState: "provisioned" },
+            body: { kind: "session.prepare", requestId: crypto.randomUUID(), target },
         }),
 });
