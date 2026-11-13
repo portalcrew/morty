@@ -38,8 +38,10 @@ export class ComputerAccessService {
         return computerId;
     };
 
-    readonly isActive = async (computerId: string, signal: AbortSignal): Promise<boolean> =>
-        await this.#account.isActive(this.#own(computerId), signal);
+    readonly isActive = async (computerId: string, signal: AbortSignal): Promise<boolean> => {
+        this.#own(computerId);
+        return await this.#account.isActive(signal);
+    };
 
     /** The pairing generation whose daemon may act for the computer now; null while none may. */
     readonly activeGeneration = async (computerId: string, signal: AbortSignal): Promise<number | null> => {
@@ -102,6 +104,5 @@ export class ComputerAccessService {
 
     /** Whether `holder`'s access to the computer holds now; a Session credential is honored only while it does. */
     readonly #holdsAccess = async (holder: SessionAccessHolder, signal: AbortSignal): Promise<boolean> =>
-        (await this.#account.isActive(this.#computerId, signal)) &&
-        (await this.#identities.holdsAccess(holder, Date.now(), signal));
+        (await this.#account.isActive(signal)) && (await this.#identities.holdsAccess(holder, Date.now(), signal));
 }

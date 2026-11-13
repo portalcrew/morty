@@ -42,7 +42,7 @@ export function createComputerHttpRoutes(
             authorizeTarget,
             async (context) => {
                 const computerId = context.var.computerId;
-                await ctx.services.accounts.create(computerId, context.req.raw.signal);
+                await ctx.services.accounts.create(context.req.raw.signal);
                 return context.json({ computerId });
             },
         )

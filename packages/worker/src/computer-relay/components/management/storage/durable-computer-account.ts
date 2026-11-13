@@ -1,11 +1,11 @@
-import * as v from "valibot";
 import { waitForAccount } from "./account-operation.ts";
 
 const ACCOUNT_KEY = "computer-account";
-/** A computer's account: which computer it is. */
-const accountSchema = v.object({ computer_id: v.string() });
 
-/** A computer's own account record. No global directory or secondary ownership copy. */
+/**
+ * Whether this object holds a computer's account. Which computer it is belongs to the object's name, which
+ * `ComputerRelay` checks against every request, so the account records only that one was created.
+ */
 export class DurableComputerAccount {
     readonly #storage: DurableObjectStorage;
 
@@ -13,15 +13,11 @@ export class DurableComputerAccount {
         this.#storage = storage;
     }
 
-    /** Whether this object holds the account of `computerId`. */
-    readonly isActive = async (computerId: string, signal: AbortSignal): Promise<boolean> =>
-        await waitForAccount(async () => {
-            const stored: unknown = await this.#storage.get(ACCOUNT_KEY);
-            return stored !== undefined && v.parse(accountSchema, stored).computer_id === computerId;
-        }, signal);
+    readonly isActive = async (signal: AbortSignal): Promise<boolean> =>
+        await waitForAccount(async () => (await this.#storage.get(ACCOUNT_KEY)) !== undefined, signal);
 
-    /** Creates the account of `computerId`, or keeps the one an earlier request created. */
-    readonly create = async (computerId: string, signal: AbortSignal): Promise<void> => {
+    /** Creates the account, or keeps the one an earlier request created. */
+    readonly create = async (signal: AbortSignal): Promise<void> => {
         await waitForAccount(
             () =>
                 this.#storage.transaction(async (storage) => {
@@ -29,7 +25,7 @@ export class DurableComputerAccount {
                         return;
                     }
                     signal.throwIfAborted();
-                    await storage.put(ACCOUNT_KEY, { computer_id: computerId });
+                    await storage.put(ACCOUNT_KEY, true);
                 }),
             signal,
         );
