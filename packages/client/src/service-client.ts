@@ -15,7 +15,7 @@ import {
     type NativeSessionResult,
     type NativeSessionTarget,
     type PromptAttachment,
-    type SessionConfigureCommand,
+    type SessionConfigurationSelection,
     type SessionEventLogPage,
     type SessionLiveEventBatch,
     SessionPromptDisposition,
@@ -71,10 +71,9 @@ export interface MortyCredentialProvider {
 }
 
 /** A Session setting change. */
-export type UpdateMortySessionConfigurationRequest = Pick<
-    SessionConfigureCommand,
-    "booleanValue" | "configId" | "expectedConfigurationRevision" | "value" | "valueType"
->;
+export type UpdateMortySessionConfigurationRequest = SessionConfigurationSelection & {
+    readonly expectedConfigurationRevision: string;
+};
 
 export interface ForkMortyNativeSessionRequest {
     readonly harness: string;

@@ -2021,7 +2021,7 @@ describe.sequential("Relay Turn submission", () => {
                         new Request(
                             `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${computerId}/harnesses/codex/sessions/${sessionId}/configuration`,
                             {
-                                body: JSON.stringify({ configId: "model", valueType: "select", value: "gpt" }),
+                                body: JSON.stringify({ configId: "model", type: "select", value: "gpt" }),
                                 headers: credentialHeaders(text(sessionAccess, "credential")),
                                 method: "POST",
                             },

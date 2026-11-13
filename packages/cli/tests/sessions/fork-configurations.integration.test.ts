@@ -75,14 +75,12 @@ test.each(["", "--fork-mode-unavailable", "--fork-omits-mode", "--fork-omits-mod
                         }
                     };
                     if (fault === "--model-dependent-mode") {
-                        await configureSource([
-                            { configId: "model", valueType: "select", value: "test-large", booleanValue: false },
-                        ]);
+                        await configureSource([{ configId: "model", type: "select", value: "test-large" }]);
                     }
                     await configureSource([
-                        { configId: "mode", valueType: "select", value: "plan", booleanValue: false },
-                        { configId: "model", valueType: "select", value: "test-large", booleanValue: false },
-                        { configId: "fast_mode", valueType: "boolean", value: "", booleanValue: true },
+                        { configId: "mode", type: "select", value: "plan" },
+                        { configId: "model", type: "select", value: "test-large" },
+                        { configId: "fast_mode", type: "boolean", booleanValue: true },
                     ]);
                     const listId = crypto.randomUUID();
                     peer.send(

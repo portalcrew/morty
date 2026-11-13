@@ -20,6 +20,7 @@ import {
     type NativeSessionRequest,
     type NativeSessionTarget,
     type SessionAccessHolder,
+    type SessionConfigurationSelection,
     type SessionReadyEvent,
 } from "@morty-build/client/protocol";
 import * as v from "valibot";
@@ -41,12 +42,7 @@ export type NewChatSessionInput = {
     readonly harness: string;
     readonly workspaceRef: string;
     readonly operationId: string;
-    readonly configurations: readonly {
-        readonly booleanValue: boolean;
-        readonly configId: string;
-        readonly value: string;
-        readonly valueType: "select" | "boolean";
-    }[];
+    readonly configurations: readonly SessionConfigurationSelection[];
 };
 
 /** Application use cases call the services in their own ComputerRelay, not an HTTP client or another Worker. */

@@ -134,14 +134,13 @@ async function configure(
     const requestId = crypto.randomUUID();
     peer.send(
         encodeSessionConfigureCommand({
-            booleanValue: false,
             configId,
             expectedConfigurationRevision: revision,
             kind: "session.configure",
             requestId,
             target: sessionTarget,
             value,
-            valueType: "select",
+            type: "select",
         }),
     );
     for (;;) {

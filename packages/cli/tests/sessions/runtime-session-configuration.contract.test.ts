@@ -20,11 +20,10 @@ it("Given two clients holding one configuration revision, When they edit concurr
         );
         expect(ready.configurationRevision).toEqual(expect.any(String));
         const edit = {
-            booleanValue: false,
             configId: "model",
             expectedConfigurationRevision: ready.configurationRevision,
             value: "test-large",
-            valueType: "select" as const,
+            type: "select" as const,
         };
         const results = await Promise.allSettled([
             (await runtime.sessionClient(ready.target, cancellation.signal)).sessions.updateConfiguration(

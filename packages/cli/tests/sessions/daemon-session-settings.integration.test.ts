@@ -865,11 +865,11 @@ describe("daemon session configuration boundary", () => {
                 kind: "session.prompt",
                 prompt: "wait for steering",
                 sessionConfigurations: [
-                    { booleanValue: false, configId: "removed_access_mode", value: "read-only", valueType: "select" },
-                    { booleanValue: false, configId: "model", value: "test-small", valueType: "select" },
-                    { booleanValue: false, configId: "reasoning_effort", value: "high", valueType: "select" },
-                    { booleanValue: true, configId: "fast_mode", value: "", valueType: "boolean" },
-                    { booleanValue: false, configId: "mode", value: "code", valueType: "select" },
+                    { configId: "removed_access_mode", value: "read-only", type: "select" },
+                    { configId: "model", value: "test-small", type: "select" },
+                    { configId: "reasoning_effort", value: "high", type: "select" },
+                    { booleanValue: true, configId: "fast_mode", type: "boolean" },
+                    { configId: "mode", value: "code", type: "select" },
                 ],
                 target: sessionTarget,
             };
@@ -989,8 +989,8 @@ describe("daemon session configuration boundary", () => {
                 kind: "session.prompt",
                 prompt: "wait for steering",
                 sessionConfigurations: [
-                    { booleanValue: false, configId: "model", value: "test-small", valueType: "select" },
-                    { booleanValue: false, configId: "reasoning_effort", value: "high", valueType: "select" },
+                    { configId: "model", value: "test-small", type: "select" },
+                    { configId: "reasoning_effort", value: "high", type: "select" },
                 ],
                 target: sessionTarget,
             };
@@ -1005,8 +1005,8 @@ describe("daemon session configuration boundary", () => {
                 disposition: SessionPromptDisposition.Steer,
                 prompt: "focus on the requested fix",
                 sessionConfigurations: [
-                    { booleanValue: false, configId: "model", value: "test-small", valueType: "select" },
-                    { booleanValue: false, configId: "reasoning_effort", value: "medium", valueType: "select" },
+                    { configId: "model", value: "test-small", type: "select" },
+                    { configId: "reasoning_effort", value: "medium", type: "select" },
                 ],
                 targetCommandId: runningCommandId,
             };

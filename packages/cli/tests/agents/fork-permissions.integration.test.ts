@@ -79,9 +79,7 @@ test.each(["codex", "claude"] as const)(
                             prompt: text,
                             ...(selectMode
                                 ? {
-                                      sessionConfigurations: [
-                                          { configId: "mode", valueType: "select", value: mode, booleanValue: false },
-                                      ],
+                                      sessionConfigurations: [{ configId: "mode", type: "select", value: mode }],
                                   }
                                 : {}),
                         }),

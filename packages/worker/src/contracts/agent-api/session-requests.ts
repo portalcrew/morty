@@ -29,13 +29,20 @@ export const turnSubmissionRequest = v.strictObject({ ...turnSubmissionEntries, 
 
 export const turnSteerRequest = v.strictObject({ disposition: v.literal("steer") });
 
-export const sessionConfigurationRequest = v.strictObject({
-    booleanValue: v.boolean(),
-    configId: identifier,
-    expectedConfigurationRevision: identifier,
-    value: v.pipe(v.string(), v.maxLength(500)),
-    valueType: v.picklist(["select", "boolean"]),
-});
+export const sessionConfigurationRequest = v.variant("type", [
+    v.strictObject({
+        configId: identifier,
+        expectedConfigurationRevision: identifier,
+        type: v.literal("select"),
+        value: v.pipe(v.string(), v.maxLength(500)),
+    }),
+    v.strictObject({
+        booleanValue: v.boolean(),
+        configId: identifier,
+        expectedConfigurationRevision: identifier,
+        type: v.literal("boolean"),
+    }),
+]);
 
 export const sessionRenameRequest = v.strictObject({
     title: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(500)),

@@ -92,6 +92,7 @@ export {
     SESSION_CONFIG_READ_KIND,
     SESSION_CONFIG_READ_RESULT_KIND,
     SESSION_CONFIGURE_KIND,
+    sessionConfigurationSelection,
 } from "./session/configuration/index.ts";
 
 export type {

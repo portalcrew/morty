@@ -8,6 +8,7 @@ import type {
     SessionCloseNoticeEvent,
     SessionCommand,
     SessionConfigOption,
+    SessionConfigurationSelection,
     SessionElicitationResolvedEvent,
     SessionLiveEvent,
     SessionPermissionResolvedEvent,
@@ -46,18 +47,13 @@ export interface AgentSettingsInspectionOptions {
 }
 
 /** A setting the Runtime applies on its own authority: a launch, stored or prompt-requested selection. */
-export interface SessionConfigurationChange extends SessionPrepareOptions {
-    readonly booleanValue: boolean;
-    readonly configId: string;
-    readonly requestId: string;
-    readonly value: string;
-    readonly valueType: SessionConfigOption["type"];
-}
+export type SessionConfigurationChange = SessionPrepareOptions &
+    SessionConfigurationSelection & { readonly requestId: string };
 
 /** A client's edit, which applies only while the configuration still has the revision it was chosen from. */
-export interface SessionConfigureOptions extends SessionConfigurationChange {
+export type SessionConfigureOptions = SessionConfigurationChange & {
     readonly expectedConfigurationRevision: string;
-}
+};
 
 interface PromptContentOptions {
     readonly images: readonly PromptImageInput[];

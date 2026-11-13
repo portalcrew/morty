@@ -7,12 +7,15 @@ import { relayIdentifier } from "../computer-management.ts";
 
 /** An absolute directory on the Computer. */
 export const nativeDirectory = v.custom<string>(isDirectoryPath);
-const sessionConfiguration = v.strictObject({
-    booleanValue: v.boolean(),
-    configId: relayIdentifier,
-    value: v.pipe(v.string(), v.maxLength(500)),
-    valueType: v.picklist(["select", "boolean"]),
-});
+/** One setting's chosen value: a select takes a value, a boolean takes a flag, and each carries only its own. */
+const sessionConfiguration = v.variant("type", [
+    v.strictObject({
+        configId: relayIdentifier,
+        type: v.literal("select"),
+        value: v.pipe(v.string(), v.maxLength(500)),
+    }),
+    v.strictObject({ booleanValue: v.boolean(), configId: relayIdentifier, type: v.literal("boolean") }),
+]);
 const sessionConfigurations = v.pipe(
     v.array(sessionConfiguration),
     v.maxLength(100),

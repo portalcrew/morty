@@ -1621,14 +1621,13 @@ agent.once("exit", (code) => process.exit(code ?? 84));
         await expect(
             manager.applySessionConfiguration({
                 agent,
-                booleanValue: false,
                 configId: "model",
                 cwd: process.cwd(),
                 requestId: "configure-exited-session",
                 target,
                 signal,
                 value: "test-large",
-                valueType: "select",
+                type: "select",
             }),
         ).rejects.toThrow();
 

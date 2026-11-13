@@ -4,6 +4,7 @@ import type {
     PromptUsage,
     SessionCapabilities,
     SessionConfigOption,
+    SessionConfigurationSelection,
     SessionEvent,
 } from "@morty-build/client/protocol";
 import type { AgentProcessPool } from "../../session/process/agent-process-pool.ts";
@@ -12,7 +13,6 @@ import type { AcpAgentDefinition } from "../agent/agent-definition.ts";
 import type { PromptContent } from "../client/prompt-content.ts";
 import type { AcpContentExternalizer, ExternalizeSessionUpdate } from "../content/content-externalizer.ts";
 import type { NativeSessionInfo, NativeSessionPage } from "../protocol/native-session.ts";
-import type { SessionConfigurationSelection } from "../protocol/session-configuration.ts";
 
 /** One page of a saved native session's events. */
 export interface SessionEventPage {

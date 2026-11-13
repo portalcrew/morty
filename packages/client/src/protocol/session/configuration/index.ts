@@ -24,14 +24,11 @@ export type SessionConfigOption = z.infer<typeof sessionConfigOptionSchema>;
 
 export const sessionConfigOptionsSchema = z.array(sessionConfigOptionSchema).max(100).readonly();
 
-const sessionConfigurationSelectionSchema = z
-    .object({
-        booleanValue: z.boolean(),
-        configId: IDENTIFIER,
-        value: z.string().max(500),
-        valueType: z.enum(["boolean", "select"]),
-    })
-    .readonly();
+/** One setting's chosen value: a select takes a value, a boolean takes a flag, and each carries only its own. */
+const sessionConfigurationSelectionSchema = z.discriminatedUnion("type", [
+    z.object({ configId: IDENTIFIER, type: z.literal("select"), value: z.string().max(500) }).readonly(),
+    z.object({ booleanValue: z.boolean(), configId: IDENTIFIER, type: z.literal("boolean") }).readonly(),
+]);
 
 export type SessionConfigurationSelection = z.infer<typeof sessionConfigurationSelectionSchema>;
 
@@ -53,18 +50,18 @@ export const sessionConfigurationSelectionsSchema = z
     })
     .readonly();
 
-const sessionConfigureCommandSchema = z
-    .object({
-        booleanValue: z.boolean(),
-        configId: z.string().min(1).max(128),
-        expectedConfigurationRevision: IDENTIFIER,
-        kind: z.literal(SESSION_CONFIGURE_KIND),
-        requestId: IDENTIFIER,
-        target: nativeSessionTargetSchema,
-        value: z.string().max(500),
-        valueType: z.enum(["boolean", "select"]),
-    })
-    .readonly();
+const sessionConfigureCommandFields = {
+    configId: z.string().min(1).max(128),
+    expectedConfigurationRevision: IDENTIFIER,
+    kind: z.literal(SESSION_CONFIGURE_KIND),
+    requestId: IDENTIFIER,
+    target: nativeSessionTargetSchema,
+};
+
+const sessionConfigureCommandSchema = z.discriminatedUnion("type", [
+    z.object({ ...sessionConfigureCommandFields, type: z.literal("select"), value: z.string().max(500) }).readonly(),
+    z.object({ ...sessionConfigureCommandFields, booleanValue: z.boolean(), type: z.literal("boolean") }).readonly(),
+]);
 
 export type SessionConfigureCommand = z.infer<typeof sessionConfigureCommandSchema>;
 
@@ -83,6 +80,12 @@ export type SessionConfigUpdatedEvent = z.infer<typeof sessionConfigUpdatedEvent
 
 export const decodeSessionConfigurationSelections = (value: unknown): readonly SessionConfigurationSelection[] =>
     decodeZodValue(value, sessionConfigurationSelectionsSchema);
+
+/** The setting change a configure command asks for, without the command's addressing. */
+export const sessionConfigurationSelection = (command: SessionConfigureCommand): SessionConfigurationSelection =>
+    command.type === "boolean"
+        ? { booleanValue: command.booleanValue, configId: command.configId, type: "boolean" }
+        : { configId: command.configId, type: "select", value: command.value };
 
 export const decodeSessionConfigureCommand = (encoded: string): SessionConfigureCommand =>
     decodeZodMessage(encoded, sessionConfigureCommandSchema);

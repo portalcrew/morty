@@ -127,11 +127,10 @@ export async function createChatWorkerEnvironment(
                         await client.sessions.updateConfiguration(
                             target,
                             {
-                                booleanValue: false,
                                 configId: "model",
                                 expectedConfigurationRevision: snapshot.configurationRevision,
                                 value,
-                                valueType: "select",
+                                type: "select",
                             },
                             signal,
                         );
