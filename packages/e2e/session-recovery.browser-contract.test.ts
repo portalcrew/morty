@@ -16,7 +16,7 @@ type Network = {
 };
 
 const test = base.extend<{ readonly network: Network }>({
-    network: async ({ browserName }, use) => {
+    network: async ({ browserName, stack }, use) => {
         if (browserName !== "webkit") {
             throw new Error("These recovery contracts target mobile WebKit");
         }
@@ -28,15 +28,24 @@ const test = base.extend<{ readonly network: Network }>({
             readonly upstream: Socket;
         }>();
         const sockets = new Set<Socket>();
+        const target = new URL(stack.chatOrigin);
         const server = createServer((incoming, outgoing) => {
             if (offline) {
                 return;
             }
-            const endpoint = new URL(incoming.url ?? "");
-            const upstream = request(endpoint, { method: incoming.method, headers: incoming.headers }, (response) => {
-                outgoing.writeHead(response.statusCode ?? 502, response.headers);
-                response.pipe(outgoing);
-            });
+            const endpoint = new URL(incoming.url ?? "/", target);
+            const upstream = request(
+                target,
+                {
+                    path: endpoint.pathname + endpoint.search,
+                    method: incoming.method,
+                    headers: { ...incoming.headers, host: target.host },
+                },
+                (response) => {
+                    outgoing.writeHead(response.statusCode ?? 502, response.headers);
+                    response.pipe(outgoing);
+                },
+            );
             upstream.on("error", () => outgoing.destroy());
             incoming.pipe(upstream);
         });
@@ -49,7 +58,10 @@ const test = base.extend<{ readonly network: Network }>({
             if (offline) {
                 return;
             }
-            const endpoint = new URL(incoming.url ?? "", `http://${incoming.headers.host}`);
+            const requested = new URL(incoming.url ?? "/", target);
+            const endpoint = new URL(target);
+            endpoint.pathname = requested.pathname;
+            endpoint.search = requested.search;
             const upstream = connect(Number(endpoint.port) || 80, endpoint.hostname, () => {
                 const headers = Object.entries(incoming.headers)
                     .filter(([, value]) => value !== undefined)

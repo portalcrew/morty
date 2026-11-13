@@ -1,5 +1,6 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { E2EHarness } from "./harness.ts";
+import { LocalStack } from "./local-stack.ts";
 import { createTestRuntime } from "./test-runtime.ts";
 
 export { expect } from "@playwright/test";
@@ -16,28 +17,20 @@ export async function conversationLoaded(page: Page): Promise<void> {
 
 function runtimeTest() {
     return base.extend<{
+        readonly stack: LocalStack;
         readonly runtime: Awaited<ReturnType<typeof createTestRuntime>>;
         readonly runtimeComputerName: string;
         readonly runtimeAgent: { readonly harness: string; readonly name: string };
     }>({
         runtimeComputerName: ["Browser test Runtime", { option: true }],
         runtimeAgent: [{ harness: "claude", name: "Claude Code" }, { option: true }],
-        runtime: async ({ browserName, contextOptions, runtimeComputerName, runtimeAgent }, use, testInfo) => {
-            const harness = await E2EHarness.create("chat-e2e");
+        stack: async ({ browserName }, use, testInfo) => {
+            const harness = await E2EHarness.create(`chat-e2e-${browserName}`);
             let failure: unknown;
             try {
-                const runtime = await createTestRuntime(
-                    harness,
-                    browserName,
-                    contextOptions,
-                    runtimeComputerName,
-                    runtimeAgent,
-                );
-                try {
-                    await Promise.race([use(runtime), runtime.failure]);
-                } finally {
-                    await runtime.close();
-                }
+                const stack = await LocalStack.create(harness);
+                await stack.start();
+                await use(stack);
             } catch (error) {
                 failure = error;
                 throw error;
@@ -47,6 +40,20 @@ function runtimeTest() {
                     await harness.diagnose(failure ?? testInfo.error);
                 }
                 await harness.close(success);
+            }
+        },
+        runtime: async ({ stack, browserName, contextOptions, runtimeComputerName, runtimeAgent }, use) => {
+            const runtime = await createTestRuntime(
+                stack,
+                browserName,
+                contextOptions,
+                runtimeComputerName,
+                runtimeAgent,
+            );
+            try {
+                await Promise.race([use(runtime), runtime.failure]);
+            } finally {
+                await runtime.close();
             }
         },
     });

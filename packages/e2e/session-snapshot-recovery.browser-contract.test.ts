@@ -31,7 +31,7 @@ function parseFrame(data: { readonly toString: () => string }): Readonly<Record<
 // unchanged, preserving order in each direction; the only fault is a gate that
 // pauses one direction. No application data or server responses are invented.
 const test = base.extend<{ readonly network: Network }>({
-    network: async ({ browserName }, use) => {
+    network: async ({ browserName, stack }, use) => {
         if (browserName !== "webkit") {
             throw new Error("These recovery contracts target mobile WebKit");
         }
@@ -46,10 +46,16 @@ const test = base.extend<{ readonly network: Network }>({
             readonly reached: () => void;
             readonly wait: Promise<void>;
         } | null = null;
+        const target = new URL(stack.chatOrigin);
         const server = createServer((incoming, outgoing) => {
+            const requested = new URL(incoming.url ?? "/", target);
             const upstream = request(
-                new URL(incoming.url ?? ""),
-                { method: incoming.method, headers: incoming.headers },
+                target,
+                {
+                    path: requested.pathname + requested.search,
+                    method: incoming.method,
+                    headers: { ...incoming.headers, host: target.host },
+                },
                 (response) => {
                     outgoing.writeHead(response.statusCode ?? 502, response.headers);
                     response.pipe(outgoing);
@@ -60,7 +66,10 @@ const test = base.extend<{ readonly network: Network }>({
         });
         const websocketServer = new WebSocketServer({ noServer: true, perMessageDeflate: false });
         server.on("upgrade", (incoming, socket, head) => {
-            const endpoint = new URL(incoming.url ?? "", `http://${incoming.headers.host}`);
+            const requested = new URL(incoming.url ?? "/", target);
+            const endpoint = new URL(target);
+            endpoint.pathname = requested.pathname;
+            endpoint.search = requested.search;
             endpoint.protocol = "ws:";
             websocketServer.handleUpgrade(incoming, socket, head, (client) => {
                 const headers = Object.fromEntries(

@@ -163,15 +163,15 @@ function relativeFilePath(href: string): string | null {
 }
 
 export function localFilePath(href: string): string | null {
-    if (!href.startsWith(LOCAL_FILE_URL_ORIGIN)) {
-        return fileSystemPath(href);
-    }
     try {
         const url = new URL(href);
-        const path = url.origin === LOCAL_FILE_URL_ORIGIN ? url.searchParams.get("path") : null;
+        if (url.origin !== LOCAL_FILE_URL_ORIGIN) {
+            return fileSystemPath(href);
+        }
+        const path = url.searchParams.get("path");
         return path === null ? null : (fileSystemPath(path) ?? relativeFilePath(path));
     } catch {
-        return null;
+        return fileSystemPath(href);
     }
 }
 

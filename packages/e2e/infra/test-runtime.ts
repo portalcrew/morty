@@ -4,23 +4,22 @@ import { mortyFiles, mortyReply } from "../../../tests/support/fake-daemon/scena
 import { ANONYMOUS_CREDENTIAL_KEY_NAME } from "../../web/src/services/identity/anonymous-identity-api.ts";
 import { encodeIdentityScope } from "../../web/src/services/identity/identity-scope-url.ts";
 import { anonymousCreationKey, ChatApi, jsonRequest, object, text } from "./chat-api.ts";
-import type { E2EHarness } from "./harness.ts";
-import { LocalStack } from "./local-stack.ts";
+import type { LocalStack } from "./local-stack.ts";
 import { ControlledSetupRuntime } from "./setup-daemon.ts";
 import { followSetupInstructions } from "./setup-instructions.ts";
 
 export async function createTestRuntime(
-    journey: E2EHarness,
+    stack: LocalStack,
     browserName: "chromium" | "firefox" | "webkit" = "chromium",
     contextOptions: BrowserContextOptions = {},
     computerName = "Browser test Runtime",
     agent: { readonly harness: string; readonly name: string } = { harness: "claude", name: "Claude Code" },
 ) {
+    const journey = stack.harness;
     const setupClockStart = Date.parse("2026-09-15T12:00:00Z");
     let setupClockTime = setupClockStart;
     const harness = agent.harness;
     const agentName = agent.name;
-    const stack = await LocalStack.create(journey);
     const runtime = new ControlledSetupRuntime(
         {
             harness,
@@ -37,7 +36,6 @@ export async function createTestRuntime(
     const additionalRuntimes: ControlledSetupRuntime[] = [];
     const additionalFailure = Promise.withResolvers<never>();
     void additionalFailure.promise.catch(() => undefined);
-    await stack.start();
     const browser = await { chromium, firefox, webkit }[browserName].launch({ headless: true });
     try {
         const context = await browser.newContext(contextOptions);

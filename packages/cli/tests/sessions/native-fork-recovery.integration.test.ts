@@ -100,9 +100,11 @@ test("Given a Fork succeeds but its response is lost, When the same operation is
     let loseNextResponse = true;
     let lostStatus: number | undefined;
     const proxy = createServer((incoming, outgoing) => {
+        const requested = new URL(incoming.url ?? "/", relay.baseUrl);
         const forwarded = request(
-            new URL(incoming.url ?? "/", relay.baseUrl),
+            new URL(relay.baseUrl),
             {
+                path: requested.pathname + requested.search,
                 method: incoming.method,
                 headers: { ...incoming.headers, host: new URL(relay.baseUrl).host },
             },
