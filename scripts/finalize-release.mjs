@@ -36,7 +36,7 @@ if (
 ) {
     throw new Error("No successful deployment evidence for this exact release");
 }
-const instructionUrl = new URL("/setup.md", cloud.target.morty_origin);
+const instructionUrl = new URL("/doc/setup.md", cloud.target.morty_origin);
 const instructionCheck = evidence.checks?.find((check) => check.url === instructionUrl.href && check.status === 200);
 const currentInstructions = await fetch(instructionUrl, {
     signal: AbortSignal.timeout(40_000),
