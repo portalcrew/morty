@@ -103,7 +103,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: [1, 2, 3, 4, 5, 6]
     runs-on: ubuntu-latest
     # Playwright's image carries the browsers and their system libraries for exactly the suite's Playwright version,
     # so browser and acceptance jobs never install them. Share the version, digest and runner user for both jobs.
@@ -123,7 +123,7 @@ jobs:
       - run: pnpm build:cli
       - name: Install the accepted real Codex boundary dependency
         run: npm install --global @openai/codex@0.166.0
-      - run: pnpm test:e2e --shard=${{ matrix.shard }}/8
+      - run: pnpm test:e2e --shard=${{ matrix.shard }}/6
         env:
           # A failed journey keeps its trace, page, screenshot and process logs here for the failure artifact. The path
           # is relative to the suite in packages/e2e: in a container job, runner paths name the host, not the container.
