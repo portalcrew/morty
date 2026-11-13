@@ -245,7 +245,6 @@ export class LocalComputerService {
                                     kind: "session.prepare",
                                     requestId: crypto.randomUUID(),
                                     target: input.target,
-                                    sessionState: "provisioned",
                                 }),
                             ),
                             signal,

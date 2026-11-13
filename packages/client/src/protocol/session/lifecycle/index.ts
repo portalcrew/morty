@@ -117,24 +117,9 @@ export type SessionArchiveCommand = z.infer<typeof sessionArchiveCommandSchema>;
 /** Opens an existing Session with the Agent and directory the Computer holds it with. */
 const sessionPrepareCommandSchema = z
     .object({
-        /**
-         * The complete settings a new Session starts with. The Computer applies them in dependency order as part of
-         * creating the Session: it answers only once every selection holds, and otherwise creates nothing.
-         */
-        configurations: sessionConfigurationSelectionsSchema.optional(),
         kind: z.literal(SESSION_PREPARE_KIND),
         requestId: IDENTIFIER,
-        sessionState: z.literal("provisioned").optional(),
         target: nativeSessionTargetSchema,
-    })
-    .superRefine((command, context) => {
-        if (command.configurations !== undefined && command.sessionState !== undefined) {
-            context.addIssue({
-                code: "custom",
-                message: "Only a Session being created states its initial settings",
-                path: ["configurations"],
-            });
-        }
     })
     .readonly();
 
