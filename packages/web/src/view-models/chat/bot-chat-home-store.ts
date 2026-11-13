@@ -13,7 +13,7 @@ import { CloudApiError, isComputerConnectionFailure } from "../../services/manag
 import {
     centralSessionStorage,
     newConversationDraftEntry,
-    newConversationUnsentMessageEntry,
+    newConversationUnsentMessagesEntry,
 } from "../../services/session-storage/central-session-storage.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import { formatError } from "../format-error.ts";
@@ -283,11 +283,22 @@ export const createBotChatHomeStore = (
             set({ selection });
             announceSelection();
         };
-        // The draft page's reload recovery of a first message ends once its Session owns it or the draft takes it back.
+        // The reload copies of first messages no Session owns yet, oldest first. A copy ends once its Session owns the
+        // message or the draft takes it back.
+        const unsentEntry = newConversationUnsentMessagesEntry(computerId);
+        const unsentFirstMessages = () => centralSessionStorage.read(unsentEntry) ?? [];
+        const keepUnsentFirstMessage = (message: { readonly commandId: string; readonly content: string }): void => {
+            centralSessionStorage.write(unsentEntry, [
+                ...unsentFirstMessages().filter((unsent) => unsent.commandId !== message.commandId),
+                message,
+            ]);
+        };
         const releaseUnsentFirstMessage = (commandId: string): void => {
-            const entry = newConversationUnsentMessageEntry(computerId);
-            if (centralSessionStorage.read(entry)?.commandId === commandId) {
-                centralSessionStorage.remove(entry);
+            const remaining = unsentFirstMessages().filter((unsent) => unsent.commandId !== commandId);
+            if (remaining.length === 0) {
+                centralSessionStorage.remove(unsentEntry);
+            } else {
+                centralSessionStorage.write(unsentEntry, remaining);
             }
         };
         // First messages no Session took while the New Session page was not showing them, oldest first. Each keeps
@@ -354,22 +365,27 @@ export const createBotChatHomeStore = (
                 }
                 if (starting.initialization.kind === "loading" && starting.selection.kind === "draft") {
                     const draft = centralSessionStorage.read(newConversationDraftEntry(computerId)) ?? "";
-                    // A first message an earlier page could not hand to a Session returns ahead of the draft.
-                    const unsent = centralSessionStorage.read(newConversationUnsentMessageEntry(computerId));
-                    if (unsent === null) {
+                    // First messages an earlier page could not hand to a Session return ahead of the draft, the oldest first.
+                    const unsent = unsentFirstMessages();
+                    if (unsent.length === 0) {
                         set({ draft });
                     } else {
-                        const restored = prependToDraft(unsent.content, draft);
+                        const restored = unsent
+                            .toReversed()
+                            .reduce((text, message) => prependToDraft(message.content, text), draft);
                         centralSessionStorage.write(newConversationDraftEntry(computerId), restored);
-                        centralSessionStorage.remove(newConversationUnsentMessageEntry(computerId));
+                        centralSessionStorage.remove(unsentEntry);
                         set({ draft: restored });
                     }
                 } else if (starting.initialization.kind === "loading") {
-                    // A page that opens on another conversation keeps an earlier page's unsent first message for the next draft.
-                    const unsent = centralSessionStorage.read(newConversationUnsentMessageEntry(computerId));
-                    if (unsent !== null && !returned.some((message) => message.commandId === unsent.commandId)) {
-                        returned = [...returned, { ...unsent, attachments: [] }];
-                    }
+                    // A page that opens on another conversation keeps an earlier page's unsent first messages for the next draft.
+                    const known = new Set(returned.map((message) => message.commandId));
+                    returned = [
+                        ...returned,
+                        ...unsentFirstMessages()
+                            .filter((message) => !known.has(message.commandId))
+                            .map((message) => ({ ...message, attachments: [] })),
+                    ];
                 }
                 // Entry failures and session failures belong to the request that failed.
                 const failLoad = (
@@ -814,10 +830,7 @@ export const createBotChatHomeStore = (
                     get().composerAttachments.getState().clear();
                     centralSessionStorage.remove(newConversationDraftEntry(computerId));
                     if (content.length > 0) {
-                        centralSessionStorage.write(newConversationUnsentMessageEntry(computerId), {
-                            commandId,
-                            content,
-                        });
+                        keepUnsentFirstMessage({ commandId, content });
                     }
                 }
                 let access: ChatAccess;

@@ -242,17 +242,24 @@ const unsentFirstMessageSchema = v.pipe(
     v.readonly(),
 );
 
-type UnsentFirstMessage = v.InferOutput<typeof unsentFirstMessageSchema>;
+const unsentFirstMessagesSchema = v.pipe(v.array(unsentFirstMessageSchema), v.maxLength(100), v.readonly());
 
-/** A first message whose Session does not exist yet; a reload returns it to the new-conversation composer. */
-export const newConversationUnsentMessageEntry = (computerId: string): SessionStorageEntry<UnsentFirstMessage> =>
+export type UnsentFirstMessage = v.InferOutput<typeof unsentFirstMessageSchema>;
+
+/**
+ * The first messages whose Sessions do not exist yet, oldest first, one per message: several creations can be in
+ * flight at once, and a reload returns every one of them to the new-conversation composer.
+ */
+export const newConversationUnsentMessagesEntry = (
+    computerId: string,
+): SessionStorageEntry<readonly UnsentFirstMessage[]> =>
     customSessionStorageEntry({
-        key: scopedKey("morty:unsent-message:new:v1:", computerId),
-        schema: unsentFirstMessageSchema,
-        encode: (value) => JSON.stringify(v.parse(unsentFirstMessageSchema, value)),
+        key: scopedKey("morty:unsent-messages:new:v2:", computerId),
+        schema: unsentFirstMessagesSchema,
+        encode: (value) => JSON.stringify(v.parse(unsentFirstMessagesSchema, value)),
         decode: (raw) => {
             try {
-                const parsed = v.safeParse(unsentFirstMessageSchema, JSON.parse(raw));
+                const parsed = v.safeParse(unsentFirstMessagesSchema, JSON.parse(raw));
                 return parsed.success ? parsed.output : null;
             } catch {
                 return null;
