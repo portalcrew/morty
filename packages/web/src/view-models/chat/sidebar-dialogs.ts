@@ -8,19 +8,31 @@ import type { OpenMortySession } from "./open-session.ts";
 
 export type SidebarDialogs = StoreApi<SidebarDialogsState>;
 
+/** The one panel the phone shows over the page: its navigation, or the recent sessions sheet. */
+type MobilePanel =
+    | { readonly kind: "closed" }
+    | { readonly kind: "nav" }
+    | {
+          readonly kind: "sessions";
+          /** Timestamp until which the sheet ignores outside-pointer dismissals. */
+          readonly dismissLockedUntil: number;
+      };
+
 interface SidebarDialogsState {
-    readonly mobileNavOpen: boolean;
-    readonly mobileSessionsOpen: boolean;
-    /** Timestamp until which the mobile sessions sheet ignores outside-pointer dismissals. */
-    readonly mobileSheetDismissLockedUntil: number;
-    readonly nativeDialog: StoreApi<NativeSessionStore> | null;
+    readonly mobilePanel: MobilePanel;
+    /** The Open Session dialog while it shows, with the phone sheet's drill-down step: the list, or one session's detail. */
+    readonly nativeDialog: {
+        readonly store: StoreApi<NativeSessionStore>;
+        readonly step: "list" | "detail";
+    } | null;
     /** A closed dialog's store, kept so reopening the sheet returns to the session the user was reading. */
     readonly retainedNativeDialog: StoreApi<NativeSessionStore> | null;
-    /** The phone sheet's drill-down step: the session list, or the previewed session's detail. */
-    readonly nativeDialogStep: "list" | "detail";
     readonly sharing: StoreApi<IdentitySharingStore> | null;
+    /** Shows the navigation, in place of any panel shown. */
     readonly openMobileNav: () => void;
     readonly closeMobileNav: () => void;
+    /** Closes whichever panel the phone shows. */
+    readonly closeMobilePanel: () => void;
     /** Opens the mobile recent-sessions sheet and locks outside-pointer dismissal briefly so the same tap that opened it cannot close it. */
     readonly openMobileRecentSessions: () => void;
     readonly closeMobileRecentSessions: () => void;
@@ -62,27 +74,34 @@ export function createSidebarDialogs(options: {
 }): SidebarDialogs {
     const { clock, requests, computer, createTransfer, onOpenSession, onOpenedSession } = options;
     return createStore<SidebarDialogsState>()((set, get) => ({
-        mobileNavOpen: false,
-        mobileSessionsOpen: false,
-        mobileSheetDismissLockedUntil: 0,
+        mobilePanel: { kind: "closed" },
         nativeDialog: null,
         retainedNativeDialog: null,
-        nativeDialogStep: "list",
         sharing: null,
-        openMobileNav: () => set({ mobileNavOpen: true }),
-        closeMobileNav: () => set({ mobileNavOpen: false }),
+        openMobileNav: () => set({ mobilePanel: { kind: "nav" } }),
+        closeMobileNav: () => {
+            if (get().mobilePanel.kind === "nav") {
+                set({ mobilePanel: { kind: "closed" } });
+            }
+        },
+        closeMobilePanel: () => set({ mobilePanel: { kind: "closed" } }),
         openMobileRecentSessions: () =>
             set({
-                mobileNavOpen: false,
-                mobileSessionsOpen: true,
-                mobileSheetDismissLockedUntil: clock.now() + MOBILE_SHEET_DISMISS_LOCK_MILLISECONDS,
+                mobilePanel: {
+                    kind: "sessions",
+                    dismissLockedUntil: clock.now() + MOBILE_SHEET_DISMISS_LOCK_MILLISECONDS,
+                },
             }),
-        closeMobileRecentSessions: () => set({ mobileSessionsOpen: false }),
-        dismissMobileRecentSessions: () => {
-            if (clock.now() < get().mobileSheetDismissLockedUntil) {
-                return;
+        closeMobileRecentSessions: () => {
+            if (get().mobilePanel.kind === "sessions") {
+                set({ mobilePanel: { kind: "closed" } });
             }
-            set({ mobileSessionsOpen: false });
+        },
+        dismissMobileRecentSessions: () => {
+            const panel = get().mobilePanel;
+            if (panel.kind === "sessions" && clock.now() >= panel.dismissLockedUntil) {
+                set({ mobilePanel: { kind: "closed" } });
+            }
         },
         openNativeDialog: () => {
             if (get().nativeDialog !== null) {
@@ -90,7 +109,7 @@ export function createSidebarDialogs(options: {
             }
             const retained = get().retainedNativeDialog;
             if (retained !== null) {
-                set({ nativeDialog: retained, retainedNativeDialog: null, nativeDialogStep: "list" });
+                set({ nativeDialog: { store: retained, step: "list" }, retainedNativeDialog: null });
                 // Refresh the listing for the Computer the page follows now; the
                 // previewed entry stays selected when the refresh still lists it.
                 retained.getState().start();
@@ -102,25 +121,35 @@ export function createSidebarDialogs(options: {
                 onOpenedSession();
             });
             store.getState().start();
-            set({ nativeDialog: store, nativeDialogStep: "list" });
+            set({ nativeDialog: { store, step: "list" } });
         },
         closeNativeDialog: () => {
             const dialog = get().nativeDialog;
             if (dialog === null) {
                 return;
             }
-            set({ nativeDialog: null, retainedNativeDialog: dialog });
+            set({ nativeDialog: null, retainedNativeDialog: dialog.store });
         },
         discardNativeDialog: () => {
             const { nativeDialog, retainedNativeDialog } = get();
-            nativeDialog?.getState().stop();
+            nativeDialog?.store.getState().stop();
             retainedNativeDialog?.getState().stop();
-            set({ nativeDialog: null, retainedNativeDialog: null, nativeDialogStep: "list" });
+            set({ nativeDialog: null, retainedNativeDialog: null });
         },
-        openNativeSessionDetail: () => set({ nativeDialogStep: "detail" }),
-        backToNativeSessionList: () => set({ nativeDialogStep: "list" }),
+        openNativeSessionDetail: () => {
+            const dialog = get().nativeDialog;
+            if (dialog !== null) {
+                set({ nativeDialog: { ...dialog, step: "detail" } });
+            }
+        },
+        backToNativeSessionList: () => {
+            const dialog = get().nativeDialog;
+            if (dialog !== null) {
+                set({ nativeDialog: { ...dialog, step: "list" } });
+            }
+        },
         computerChanged: () => {
-            get().nativeDialog?.getState().computerChanged();
+            get().nativeDialog?.store.getState().computerChanged();
         },
         openSharing: () => {
             if (get().sharing !== null) {

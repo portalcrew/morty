@@ -472,9 +472,9 @@ export function ConversationSidebar({
 
     const sessionStatuses = useStore(workspace.statuses, (state) => state.observations);
     const dialogState = useStore(dialogs);
-    const mobileNavOpen = dialogState.mobileNavOpen;
-    const mobileSessionsOpen = dialogState.mobileSessionsOpen;
-    const dialogStore = dialogState.nativeDialog;
+    const mobileNavOpen = dialogState.mobilePanel.kind === "nav";
+    const mobileSessionsOpen = dialogState.mobilePanel.kind === "sessions";
+    const nativeDialog = dialogState.nativeDialog;
     const sharingStore = dialogState.sharing;
     const openMobileRecentSessions = dialogs.getState().openMobileRecentSessions;
     const closeMobileRecentSessions = dialogs.getState().closeMobileRecentSessions;
@@ -497,8 +497,7 @@ export function ConversationSidebar({
     const refreshing = directory.kind === "refreshing";
     const openSession = (session: ManagedChatSession) => {
         onOpen(session);
-        dialogs.getState().closeMobileNav();
-        dialogs.getState().closeMobileRecentSessions();
+        dialogs.getState().closeMobilePanel();
     };
     const sessionListProps = {
         directory,
@@ -580,14 +579,13 @@ export function ConversationSidebar({
                                                     )}
                                                     onClick={() => {
                                                         if (mobileNavOpen) {
-                                                            dialogs.getState().closeMobileNav();
+                                                            dialogs.getState().closeMobilePanel();
                                                         } else {
                                                             dialogs.getState().openMobileNav();
                                                             if (workspace.computers !== null) {
                                                                 void workspace.computers.refresh();
                                                             }
                                                         }
-                                                        dialogs.getState().closeMobileRecentSessions();
                                                     }}
                                                 >
                                                     <MortyLogoMark size={24} />
@@ -947,15 +945,15 @@ export function ConversationSidebar({
                                                 </ScrollArea>
                                             </Tooltip.Provider>
                                         </div>
-                                        {dialogStore !== null && (
+                                        {nativeDialog !== null && (
                                             <NativeSessionDialog
-                                                store={dialogStore}
+                                                store={nativeDialog.store}
                                                 sessions={sessions ?? []}
                                                 agents={nativeAgents}
                                                 onClose={dialogs.getState().closeNativeDialog}
                                                 onOpenDetail={dialogs.getState().openNativeSessionDetail}
                                                 onBack={dialogs.getState().backToNativeSessionList}
-                                                step={dialogState.nativeDialogStep}
+                                                step={nativeDialog.step}
                                                 bugReportDialog={workspace.bugReportDialog}
                                                 daemonSource={sessionDiagnostics}
                                             />
