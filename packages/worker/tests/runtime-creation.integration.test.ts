@@ -57,7 +57,7 @@ test("Given a creation operation still applying initial settings, When another c
         const successful = await runtime.createSession({ ...input, configurations: [] }, signal);
         expect(successful.target.sessionId).not.toBe(operationId);
         expect(await runtime.api.managedSession(successful.target, signal)).toMatchObject({
-            result: { target: successful.target },
+            target: successful.target,
         });
     } finally {
         release.resolve();
