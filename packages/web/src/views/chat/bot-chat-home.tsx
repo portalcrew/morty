@@ -290,7 +290,7 @@ function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & 
                             <MortySessionPane workspace={workspace} />
                         </div>
                     ) : (model.selection.kind === "loading" ||
-                          (model.selection.kind === "pending" && model.initialization.kind === "loading")) &&
+                          (model.selection.kind === "pending" && computer.entry.kind === "loading")) &&
                       pendingConversation.recovery === null ? (
                         <MortySessionPaneLoading
                             footer={
@@ -346,17 +346,16 @@ function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & 
                                             </div>
                                             <Button onClick={store.getState().retry}>Reconnect</Button>
                                         </div>
-                                    ) : model.selection.kind === "loading" ||
-                                      model.initialization.kind === "loading" ? (
+                                    ) : model.selection.kind === "loading" || computer.entry.kind === "loading" ? (
                                         <SessionMessageListSkeleton />
-                                    ) : model.initialization.kind === "failed" || model.selection.kind === "failed" ? (
+                                    ) : computer.entry.kind === "failed" || model.selection.kind === "failed" ? (
                                         <PreSessionFailure
                                             action={<Button onClick={store.getState().retry}>Reconnect</Button>}
                                             message={
                                                 model.selection.kind === "failed"
                                                     ? model.selection.message
-                                                    : model.initialization.kind === "failed"
-                                                      ? model.initialization.message
+                                                    : computer.entry.kind === "failed"
+                                                      ? computer.entry.message
                                                       : "Chat is unavailable."
                                             }
                                             report={reportEntry}

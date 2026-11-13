@@ -12,6 +12,19 @@ type BotPairing =
     | { readonly kind: "unpaired" }
     | { readonly kind: "revoked" };
 
+/**
+ * Whether the page's entry request to the Computer has been answered: its pairing read, and for a paired Computer its
+ * configuration. It owns only that request, never the selected Session or the Computer's availability afterwards.
+ */
+type ComputerEntry =
+    | { readonly kind: "loading" }
+    | { readonly kind: "ready" }
+    | {
+          readonly kind: "failed";
+          readonly failure: "computer" | "agent-required" | "unavailable";
+          readonly message: string;
+      };
+
 /** How the page's follow of the Computer's configuration stands. */
 type ConfigurationWatch =
     | { readonly kind: "checking" }
@@ -37,6 +50,7 @@ export type BotConnectionStatus =
  */
 export interface ComputerStatusStore {
     readonly pairing: BotPairing;
+    readonly entry: ComputerEntry;
     readonly computerConfiguration: BotComputerConfiguration | null;
     readonly configurationWatch: ConfigurationWatch;
     readonly networkAvailable: boolean;
@@ -45,6 +59,10 @@ export interface ComputerStatusStore {
     readonly networkChanged: (available: boolean) => void;
     readonly pairingRead: (pairing: "paired" | "unpaired") => void;
     readonly pairingRevoked: () => void;
+    /** The entry request starts again, unless it already succeeded: a Computer that answered stays answered. */
+    readonly entryStarted: () => void;
+    readonly entryReady: () => void;
+    readonly entryFailed: (failure: "computer" | "agent-required" | "unavailable", message: string) => void;
     /** The Computer's configuration as the Computer last reported it, read or watched at `checkedAt`. */
     readonly configurationObserved: (configuration: BotComputerConfiguration, checkedAt: number) => void;
     /**
@@ -61,6 +79,7 @@ export interface ComputerStatusStore {
 export const createComputerStatusStore = (networkAvailable: boolean) =>
     createStore<ComputerStatusStore>()((set, get) => ({
         pairing: { kind: "checking" },
+        entry: { kind: "loading" },
         computerConfiguration: null,
         configurationWatch: { kind: "checking" },
         networkAvailable,
@@ -68,6 +87,13 @@ export const createComputerStatusStore = (networkAvailable: boolean) =>
         networkChanged: (available) => set({ networkAvailable: available }),
         pairingRead: (pairing) => set({ pairing: { kind: pairing } }),
         pairingRevoked: () => set({ pairing: { kind: "revoked" } }),
+        entryStarted: () => {
+            if (get().entry.kind !== "ready") {
+                set({ entry: { kind: "loading" } });
+            }
+        },
+        entryReady: () => set({ entry: { kind: "ready" } }),
+        entryFailed: (failure, message) => set({ entry: { kind: "failed", failure, message } }),
         configurationObserved: (configuration, checkedAt) =>
             set({
                 computerConfiguration: configuration,

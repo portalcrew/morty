@@ -10,6 +10,7 @@ import type { BugReportDialogStore } from "../bug-report-dialog-store.ts";
 import { reportApplicationError } from "../report-error.ts";
 import { type AccessExpiryStore, createAccessExpiryStore } from "./access-expiry-store.ts";
 import { type BotChatHomeStoreApi, createBotChatHomeStore, homeWaitsForComputer } from "./bot-chat-home-store.ts";
+import { createComputerFollower } from "./computer-follower.ts";
 import { createComputerRecovery } from "./computer-recovery.ts";
 import { type ComputerStatusStoreApi, createComputerStatusStore } from "./computer-status-store.ts";
 import type { ComputerSwitcherModel } from "./computer-switcher-store.ts";
@@ -160,19 +161,12 @@ export function createChatWorkspace(options: {
         options.rememberedIdentity === undefined ? null : encodeIdentityScope(options.rememberedIdentity),
     );
     const computer = createComputerStatusStore(navigator.onLine);
-    const home: BotChatHomeStoreApi = createBotChatHomeStore(requests, {
-        computerId,
+    const follower = createComputerFollower({
+        requests,
         computer,
-        titles,
-        draftConfiguration: () => draftConfiguration(draftControls.getState().settings),
-        connectionAvailable: () =>
-            connectionPresentation(computer.getState(), home.getState().selection, null).available,
         clock: options.clock,
-        onWaitingForComputer: () => computerRecovery.failed(),
-        createId: () => crypto.randomUUID(),
-        navigation: historyNavigation(recordHome),
-        entry: options.entry ?? "address",
-        onComputerConfiguration: (configuration, observation) => {
+        draftSelected: () => home.getState().selection.kind === "draft",
+        onConfiguration: (configuration, observation) => {
             sidebar.dialogs.getState().computerChanged();
             void draftControls
                 .getState()
@@ -189,13 +183,9 @@ export function createChatWorkspace(options: {
             }
             computerRecovery.observe(configuration.computer.online, observation);
         },
-        onDraftSelected: () => enterDraft(),
-        onRestart: () => {
-            startHomeLoad();
-            startDirectoryLoad();
-        },
-        onSelectionChanged: () => startHomeLoad(),
-        onComputerReplaced: () => {
+        onEntered: (outcome) => home.getState().entryAnswered(outcome),
+        onRevoked: (message) => home.getState().computerRevoked(message),
+        onReplaced: () => {
             // A Session belongs to the Computer that held it, so the page starts over on the Computer's new conversation.
             const url = new URL(window.location.href);
             url.searchParams.delete("harness");
@@ -203,6 +193,30 @@ export function createChatWorkspace(options: {
             window.history.replaceState(window.history.state, "", url);
             options.onComputerReplaced();
         },
+        retry: () => home.getState().retry(),
+        onRestart: () => startOver(),
+        onWaitingForComputer: () => computerRecovery.failed(),
+    });
+    const home: BotChatHomeStoreApi = createBotChatHomeStore(requests, {
+        computerId,
+        computer,
+        titles,
+        draftConfiguration: () => draftConfiguration(draftControls.getState().settings),
+        connectionAvailable: () =>
+            connectionPresentation(computer.getState(), home.getState().selection, null).available,
+        clock: options.clock,
+        computerEntry: follower.entry,
+        computerEntered: follower.entered,
+        onComputerInterrupted: follower.interrupted,
+        onComputerRevokedByOperation: follower.revokedByOperation,
+        onWaitingForComputer: () => computerRecovery.failed(),
+        createId: () => crypto.randomUUID(),
+        navigation: historyNavigation(recordHome),
+        entry: options.entry ?? "address",
+        onDraftSelected: () => enterDraft(),
+        onRestart: () => startOver(),
+        // A selection chosen while the Computer's entry failed starts the page over, as Reconnect would.
+        onSelectionChanged: () => (follower.entry()?.kind === "failed" ? startOver() : startHomeLoad()),
         onDirectoryRefreshed: () => startDirectoryLoad(),
         onFirstMessage: (sessionTarget, message) =>
             sessionState(sessionTarget).delivery.getState().awaitConnection(message),
@@ -301,10 +315,29 @@ export function createChatWorkspace(options: {
     };
     let chatLifetime = new AbortController();
     chatLifetime.abort(new Error("The chat workspace has not loaded yet."));
+    // The Computer's follow outlives every selection: only starting the page over restarts it.
+    let computerLifetime = new AbortController();
+    computerLifetime.abort(new Error("The chat workspace has not loaded yet."));
     let directoryLifetime = new AbortController();
     directoryLifetime.abort(new Error("The chat workspace has not loaded yet."));
     const operationsLifetime = new AbortController();
 
+    const startComputerFollow = (): void => {
+        computerLifetime.abort(new Error("Computer following restarted."));
+        computerLifetime = new AbortController();
+        const signal = computerLifetime.signal;
+        void follower.follow(signal).catch((cause: unknown) => {
+            if (!signal.aborted) {
+                reportApplicationError(cause, "computer-follow");
+            }
+        });
+    };
+    /** Starts the page over. The Computer's follow restarts first: the loads wait for the entry it answers. */
+    const startOver = (): void => {
+        startComputerFollow();
+        startHomeLoad();
+        startDirectoryLoad();
+    };
     const startHomeLoad = (): void => {
         chatLifetime.abort(new Error("Chat loading restarted."));
         chatLifetime = new AbortController();
@@ -362,12 +395,12 @@ export function createChatWorkspace(options: {
         clock: options.clock,
         lifetime: operationsLifetime.signal,
         waiting: () =>
-            homeWaitsForComputer(home.getState()) ||
+            homeWaitsForComputer(home.getState(), computer.getState()) ||
             listWaitsForComputer() ||
             draftWaitsForComputer() ||
             paneWaitingForComputer() !== null,
         retry: () => {
-            if (homeWaitsForComputer(home.getState())) {
+            if (homeWaitsForComputer(home.getState(), computer.getState())) {
                 home.getState().retry();
             } else if (listWaitsForComputer()) {
                 startDirectoryLoad();
@@ -533,8 +566,7 @@ export function createChatWorkspace(options: {
             if (home.getState().selection.kind === "draft") {
                 enterDraft();
             }
-            startHomeLoad();
-            startDirectoryLoad();
+            startOver();
         },
         requests,
         computerId,
@@ -569,6 +601,7 @@ export function createChatWorkspace(options: {
                 state.composer.getState().attachments.getState().clear();
             }
             closePane();
+            computerLifetime.abort(new Error("The chat workspace was disposed."));
             chatLifetime.abort(new Error("The chat workspace was disposed."));
             directoryLifetime.abort(new Error("The chat workspace was disposed."));
             operationsLifetime.abort(new Error("The chat workspace was disposed."));
