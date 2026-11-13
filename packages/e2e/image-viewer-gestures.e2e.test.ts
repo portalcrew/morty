@@ -52,7 +52,7 @@ test("Given a touch gallery, When the user pinches, pans and swipes at fit size,
         const afterPan = await image.boundingBox();
         expect(afterPan?.x).toBeLessThan(beforePan.x);
         await expect(viewer.getByText("1 of 2")).toBeVisible();
-        await viewer.getByRole("button", { name: "Fit image" }).tap();
+        await viewer.getByRole("button", { name: "Fit image" }).click();
         await expect(viewer.getByRole("button", { name: "Fit image" })).toHaveAttribute("aria-pressed", "true");
         await input.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 300, y: 400, id: 1 }] });
         await input.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: 80, y: 400, id: 1 }] });
