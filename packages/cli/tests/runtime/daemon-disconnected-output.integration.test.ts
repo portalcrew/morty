@@ -5,8 +5,6 @@ import { join } from "node:path";
 import { type AgentConnection, agent, methods, PROTOCOL_VERSION } from "@agentclientprotocol/sdk/unstable";
 import { sameNativeSession } from "@morty-build/client/native-session";
 import {
-    COMPUTER_HEARTBEAT_ACK_MESSAGE,
-    COMPUTER_HEARTBEAT_MESSAGE,
     decodeMessageKind,
     decodeSessionEventEnvelope,
     decodeSessionHistoryPageLoaded,
@@ -34,6 +32,7 @@ import type { ScheduledTask, Timer } from "../../src/engine/util/timer.ts";
 import { createControlledAgent } from "../support/agents/controlled-agent-definition.ts";
 import { memoryComputerCredentials } from "../support/computer-credentials.ts";
 import { createControlledRuntimeConfig as createRuntimeConfig } from "../support/controlled-runtime-config.ts";
+import { createEncryptedDaemonGateway, type EncryptedDaemonPeer } from "../support/encrypted-daemon-gateway.ts";
 
 // Failure modes exercised through the production daemon and its real WebSocket transport:
 // - a disconnect discards a batch whose delivery timer has not fired;
@@ -198,39 +197,26 @@ class RelayPeer {
     readonly events: SessionLiveEvent[] = [];
     readonly batches: Array<{ readonly bytes: number; readonly count: number }> = [];
     readonly socket: WebSocket;
-    readonly #messages: string[] = [];
-    readonly #waiters: Array<(message: string) => void> = [];
+    readonly peer: EncryptedDaemonPeer;
 
-    constructor(socket: WebSocket) {
+    constructor(socket: WebSocket, peer: EncryptedDaemonPeer) {
         this.socket = socket;
-        socket.on("message", (encoded) => {
-            const text = encoded.toString();
-            if (text === COMPUTER_HEARTBEAT_MESSAGE) {
-                socket.send(COMPUTER_HEARTBEAT_ACK_MESSAGE);
-                return;
-            }
+        this.peer = peer;
+        peer.observe((text) => {
             if (decodeMessageKind(text) === SESSION_EVENT_KIND) {
                 const envelope = decodeSessionEventEnvelope(text);
                 this.events.push(...envelope.events);
                 this.batches.push({ bytes: Buffer.byteLength(text), count: envelope.events.length });
             }
-            const waiter = this.#waiters.shift();
-            if (waiter === undefined) {
-                this.#messages.push(text);
-            } else {
-                waiter(text);
-            }
         });
-        socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
     }
 
-    readonly next = (): Promise<string> => {
-        const message = this.#messages.shift();
-        return message === undefined ? new Promise((resolve) => this.#waiters.push(resolve)) : Promise.resolve(message);
-    };
+    readonly send = (message: string): Promise<void> => this.peer.send(message);
+
+    readonly next = (): Promise<string> => this.peer.next();
 
     readonly barrier = async (): Promise<void> => {
-        this.socket.send(
+        await this.send(
             encodeWorkspaceListCommand({
                 directory: ".",
                 kind: "workspace.list",
@@ -270,10 +256,11 @@ async function startRuntime() {
         response.writeHead(request.method === "PUT" ? 204 : 404).end();
     });
     const relay = new WebSocketServer({ server: http });
+    const gateway = await createEncryptedDaemonGateway(directory, "disconnected-output", AbortSignal.timeout(120_000));
     const peers: RelayPeer[] = [];
     const waiters: Array<(peer: RelayPeer) => void> = [];
     relay.on("connection", (socket) => {
-        const peer = new RelayPeer(socket);
+        const peer = new RelayPeer(socket, gateway.connect(socket));
         const waiter = waiters.shift();
         if (waiter === undefined) {
             peers.push(peer);
@@ -327,7 +314,7 @@ async function startRuntime() {
             peer: RelayPeer,
             label: string,
         ): Promise<ControlledTurn & { readonly sessionTarget: NativeSessionTarget }> => {
-            peer.socket.send(
+            await peer.send(
                 encodeSessionCreateCommand({
                     kind: "session.create",
                     requestId: crypto.randomUUID(),
@@ -345,7 +332,7 @@ async function startRuntime() {
                 created = await peer.next();
             }
             const sessionTarget = decodeSessionReadyEvent(created).target;
-            peer.socket.send(
+            await peer.send(
                 encodeSessionPromptCommand({
                     commandId: `command-${label}`,
                     requestId: `command-${label}`,
@@ -377,6 +364,7 @@ async function startRuntime() {
             producer.finishAll();
             cancellation.abort();
             await runtime;
+            await gateway.close();
             for (const socket of relay.clients) {
                 socket.terminate();
             }
@@ -462,7 +450,7 @@ test.each([
         await turn.write("Complete answer");
         (await runtime.timer.next(100)).run();
         await runtime.initial.barrier();
-        runtime.initial.socket.send(
+        await runtime.initial.send(
             encodeSessionHistoryPageLoad({
                 kind: "session.live-history.v2.page.load",
                 target: turn.sessionTarget,
@@ -532,7 +520,7 @@ test.each([
         ) {
             throw new Error("Expected the native Session identifier from the controlled Agent");
         }
-        runtime.initial.socket.send(
+        await runtime.initial.send(
             encodeSessionPreviewHistoryPageLoad({
                 directory: ".",
                 kind: "session.preview-history.page.load",
@@ -712,6 +700,14 @@ test("Given an outage exhausts the bounded output buffer, When the Relay reconne
     retry.run();
     const resumed = await reconnect;
     await resumed.barrier();
+    // A workspace reply can interleave with asynchronous event encryption. An
+    // Agent marker on the same ordered event stream proves the retained tail drained.
+    const reconnected = "reconnected-output-boundary";
+    await turn.write(reconnected);
+    (await runtime.timer.next(100)).run();
+    while (!answer(resumed.events, turn.sessionTarget).endsWith(reconnected)) {
+        await resumed.next();
+    }
     const offlineAnswer = answer(resumed.events, turn.sessionTarget);
     expect(offlineAnswer.length).toBeGreaterThan(0);
     expect(resumed.batches.reduce((bytes, batch) => bytes + batch.bytes, 0)).toBeLessThanOrEqual(32 * 1024 * 1024);

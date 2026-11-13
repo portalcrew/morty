@@ -16,7 +16,7 @@ for (const layout of ["desktop", "mobile"] as const) {
             runtime,
         }, testInfo) => {
             const { page } = runtime;
-            await page.clock.install({ time: new Date("2026-10-26T00:00:00Z") });
+            await runtime.clock.install({ time: new Date("2026-10-26T00:00:00Z") });
             const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
             await page.goto(connected.url);
             const composer = page.getByRole("textbox", { name: "Message" });

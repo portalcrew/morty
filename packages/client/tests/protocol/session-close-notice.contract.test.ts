@@ -1,20 +1,28 @@
 import {
-    decodeDaemonToServiceMessage,
     decodeSessionCloseNoticeEvent,
-    encodeDaemonToServiceMessage,
     SESSION_CLOSE_NOTICE_KIND,
+    sessionCloseNoticeEventCodec,
 } from "@morty-build/client/protocol";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { openTestPayloadEncryption } from "../support/payload-encryption.ts";
+
+beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-12T00:00:00Z"));
+});
+afterEach(() => vi.useRealTimers());
 
 describe("Session close notice contracts", () => {
-    it("Given a Computer reports that it is archiving a Session, When the notice crosses the daemon-to-service boundary, Then receivers decode the same notice with its reason", () => {
+    it("Given a Computer reports that it is archiving a Session, When the notice crosses the encrypted boundary, Then receivers decode the same notice with its reason", async () => {
         const notice = {
             kind: SESSION_CLOSE_NOTICE_KIND,
             reason: "This Session was closed on request.",
             target: { harness: "claude", sessionId: "session-1" },
         } as const;
 
-        expect(decodeDaemonToServiceMessage(encodeDaemonToServiceMessage(notice))).toEqual(notice);
+        const { client, computer, signal } = await openTestPayloadEncryption();
+        const wire = await sessionCloseNoticeEventCodec.encode(notice, computer, signal);
+        expect(await sessionCloseNoticeEventCodec.decode(wire, client, signal)).toEqual(notice);
     });
 
     it("Given a reason worded by a newer Computer, When a receiver decodes the notice, Then any reason of up to 500 characters arrives as sent", () => {

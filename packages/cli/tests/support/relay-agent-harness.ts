@@ -5,6 +5,7 @@ import { mortyApiUrl } from "@morty-build/client/protocol";
 import * as v from "valibot";
 import { createOwnerApi } from "../../../../tests/support/owner-api.ts";
 import { RuntimeLocalContext } from "../../src/engine/runtime/config.ts";
+import { ComputerEncryptionStore } from "../../src/engine/runtime/connection/computer-encryption-store.ts";
 import { type RunRuntimeOptions, runRuntime } from "../../src/engine/runtime/run.ts";
 import {
     defaultFakeAgentHarness,
@@ -50,6 +51,7 @@ export async function createFakeAgentHarnessRuntime(options: {
     const workspace = join(directory, "workspace");
     const harnessState = join(directory, "harness");
     let runtime: Promise<void> | undefined;
+    let closeOwner = (): void => {};
     try {
         await Promise.all([mkdir(workspace), mkdir(harnessState)]);
         await Promise.all(
@@ -152,26 +154,24 @@ export async function createFakeAgentHarnessRuntime(options: {
             computerId: pairing.computerId,
             credential: options.credential,
             request: async (request) => await options.server.request(request),
+            encryptionAccess: await (await ComputerEncryptionStore.open(directory, pairing.computerId, signal)).access(
+                signal,
+            ),
         });
         const selected = harnesses[0];
+        closeOwner = owner.close;
         if (selected !== undefined) {
-            const setup = await options.server.request(
-                new Request(`${options.origin}/morty/api/v1/computers/${pairing.computerId}/setup`, {
-                    method: "POST",
-                    signal,
-                    headers: { authorization: `Bearer ${options.credential}`, "content-type": "application/json" },
-                    body: JSON.stringify({ harness: selected.harness }),
-                }),
-            );
-            if (setup.status !== 202) {
-                throw new Error(`Computer setup failed (${setup.status})`);
-            }
+            await owner.api.verifyAgent(selected.harness, signal);
         }
         let disposed = false;
         return {
             api: owner.api,
             createSession: owner.createSession,
             sessionClient: owner.sessionClient,
+            encryptionAccess: async (accessSignal: AbortSignal) =>
+                await (await ComputerEncryptionStore.open(directory, pairing.computerId, accessSignal)).access(
+                    accessSignal,
+                ),
             /** The controlled Agent's native history can be removed independently of Morty's receipts. */
             removeNativeSession: async (sessionId: string): Promise<void> => {
                 await rm(join(harnessState, `${encodeURIComponent(sessionId)}.json`));
@@ -190,6 +190,7 @@ export async function createFakeAgentHarnessRuntime(options: {
             },
         };
     } catch (cause) {
+        closeOwner();
         cancellation.abort(cause);
         await runtime?.catch(() => undefined);
         await rm(directory, { recursive: true, force: true });

@@ -9,6 +9,8 @@ import {
     COMPUTER_HEARTBEAT_ACK_MESSAGE,
     COMPUTER_HEARTBEAT_MESSAGE,
     COMPUTER_LIVENESS_READY_KIND,
+    decodeContentChunkFrame,
+    decodeFileBeginEvent,
     decodeMessageKind,
     decodeNativeSessionResult,
     decodeSessionEventEnvelope,
@@ -17,6 +19,7 @@ import {
     encodeComputerLivenessReadyEvent,
     encodeNativeSessionCommand,
     encodeSessionCreateCommand,
+    encodeWorkerFileCredit,
     isPromptTerminal,
     MORTY_API_PREFIX,
     type NativeSessionTarget,
@@ -46,6 +49,8 @@ import { AgentProcessPool } from "../../../src/engine/session/process/agent-proc
 import { systemTimer, type Timer } from "../../../src/engine/util/timer.ts";
 import { acpAdapters } from "../acp-adapters.ts";
 import { memoryComputerCredentials } from "../computer-credentials.ts";
+import { createEncryptedDaemonFrames } from "../encrypted-daemon-frames.ts";
+import { encryptedContentFrames } from "./encrypted-content-frames.ts";
 
 export interface DaemonConnectionPeer {
     /** Runs a `morty` command against this daemon's installation, as the user's terminal would. */
@@ -53,6 +58,7 @@ export interface DaemonConnectionPeer {
     readonly restart: (mode?: "crash", restoreFiles?: () => Promise<void>) => Promise<void>;
     readonly stateDirectory: string;
     readonly send: (message: string | Uint8Array) => void;
+    readonly subscribe: (target: NativeSessionTarget) => Promise<void>;
     readonly workspace: string;
 
     readonly readDiagnostics: () => Promise<string>;
@@ -193,6 +199,30 @@ async function withDaemonConnection(
         });
     };
     let socket: WebSocket | undefined;
+    const stateDirectory =
+        launch === "managed" ? (await openMortyInstallation(signal, cliEnvironment)).stateDirectory : directory;
+    const encryption = await createEncryptedDaemonFrames(stateDirectory, "real-agent", signal);
+    const contentFrames = encryptedContentFrames(encryption.encryption, signal);
+    const subscriptions = new Map<string, NativeSessionTarget>();
+    let sendTail: Promise<void> = Promise.resolve();
+    const send = (message: string | Uint8Array): void => {
+        const connection = socket;
+        if (connection === undefined) {
+            throw new Error("Daemon is not connected");
+        }
+        sendTail = sendTail.then(async () => {
+            signal.throwIfAborted();
+            connection.send(
+                typeof message === "string" ? await encryption.encode(message) : await contentFrames.encode(message),
+            );
+        });
+        void sendTail.catch((error: unknown) => waiter?.reject(error));
+    };
+    const subscribe = async (target: NativeSessionTarget): Promise<void> => {
+        subscriptions.set(JSON.stringify([target.harness, target.sessionId]), target);
+        send(JSON.stringify({ kind: "session.events.subscribe", subscriptionId: randomUUID(), target }));
+        await sendTail;
+    };
     const messages: Array<string | Buffer> = [];
     const recentFrames: string[] = [];
     let waiter: PromiseWithResolvers<string | Buffer> | undefined;
@@ -301,12 +331,30 @@ async function withDaemonConnection(
         }
         const nextFrame = async (): Promise<string | Buffer> => {
             signal.throwIfAborted();
-            const message = messages.shift();
-            if (message !== undefined) {
-                return message;
+            await sendTail;
+            let message = messages.shift();
+            if (message === undefined) {
+                waiter = Promise.withResolvers<string | Buffer>();
+                message = await waiter.promise;
             }
-            waiter = Promise.withResolvers<string | Buffer>();
-            return await waiter.promise;
+            const decoded =
+                typeof message === "string" ? await encryption.decode(message) : await contentFrames.decode(message);
+            // The real Worker grants one download chunk at a time. This fixture
+            // owns that relay-side flow control while all file bytes stay encrypted.
+            const requestId =
+                typeof decoded === "string"
+                    ? decodeMessageKind(decoded) === "file.begin"
+                        ? decodeFileBeginEvent(decoded).requestId
+                        : null
+                    : decodeContentChunkFrame(decoded).requestId;
+            if (requestId !== null) {
+                const connection = socket;
+                if (connection === undefined) {
+                    throw new Error("Daemon is not connected");
+                }
+                connection.send(encodeWorkerFileCredit({ kind: "worker.file.credit", requestId, chunks: 1 }));
+            }
+            return typeof decoded === "string" ? decoded : Buffer.from(decoded);
         };
         const nextMessage = async (): Promise<string> => {
             const message = await nextFrame();
@@ -318,6 +366,7 @@ async function withDaemonConnection(
         const pendingEvents: string[] = [];
         await scenario({
             restart: async (mode, restoreFiles) => {
+                await sendTail;
                 messages.length = 0;
                 pendingEvents.length = 0;
                 connected = Promise.withResolvers<void>();
@@ -341,18 +390,17 @@ async function withDaemonConnection(
                 await restoreFiles?.();
                 await start();
                 await connected.promise;
+                for (const target of subscriptions.values()) {
+                    await subscribe(target);
+                }
             },
             stateDirectory: directory,
             cli: async (args) => await cli(args),
             readDiagnostics: async () => await readFile(join(directory, "logs", "daemon.log"), "utf8"),
             signal,
             workspace,
-            send: (message) => {
-                if (socket === undefined) {
-                    throw new Error("Daemon is not connected");
-                }
-                socket.send(message);
-            },
+            send,
+            subscribe,
             nextMessage,
             nextFrame,
             nextEvent: async () => {
@@ -391,6 +439,7 @@ async function withDaemonConnection(
             }
         } finally {
             controller.abort();
+            encryption.close();
             signal.removeEventListener("abort", stopWaiting);
             await runtime?.catch(() => {});
             for (const connection of server.clients) {
@@ -486,6 +535,7 @@ export async function importRealSession(
     if (imported.action !== "import") {
         throw new Error("Expected a native Session import");
     }
+    await peer.subscribe(imported.target);
     return imported.target;
 }
 
@@ -512,6 +562,7 @@ export async function prepareNewRealSession(peer: DaemonConnectionPeer, harness:
         if (kind === "session.ready") {
             const ready = decodeSessionReadyEvent(message);
             if (ready.requestId === requestId) {
+                await peer.subscribe(ready.target);
                 return ready.target;
             }
         }

@@ -1,8 +1,21 @@
 import { z } from "zod";
-import { identifierStringSchema as IDENTIFIER } from "../../shared/identifier.ts";
-import { decodeZodMessage, decodeZodValue, encodeZodMessage } from "../../shared/message-codec.ts";
+import { encryptedMessageCodec } from "../../shared/encrypted-message.ts";
+import {
+    identifierStringSchema as IDENTIFIER,
+    identifierStringSchema as routingIdentifier,
+} from "../../shared/identifier.ts";
+import {
+    decodeZodMessage as decodeRoutingZodMessage,
+    decodeZodMessage,
+    decodeZodValue,
+    encodeZodMessage,
+    encryptedFieldSchema,
+} from "../../shared/message-codec.ts";
 import { configValueSchema, SHORT_TEXT } from "../shared/index.ts";
-import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
+import {
+    nativeSessionTargetSchema,
+    nativeSessionTargetSchema as routingTarget,
+} from "../shared/native-session-target.ts";
 
 export const SESSION_CONFIGURE_KIND = "session.configure";
 export const SESSION_CONFIG_UPDATED_KIND = "session.config.updated";
@@ -72,7 +85,7 @@ const sessionConfigureCommandSchema = z.discriminatedUnion("type", [
 
 export type SessionConfigureCommand = z.infer<typeof sessionConfigureCommandSchema>;
 
-export const sessionConfigUpdatedEventSchema = z
+const sessionConfigUpdatedEventSchema = z
     .object({
         configOptions: sessionConfigOptionsSchema,
         // An opaque Computer generation token.
@@ -94,14 +107,12 @@ export const sessionConfigurationSelection = (command: SessionConfigureCommand):
         ? { booleanValue: command.booleanValue, configId: command.configId, type: "boolean" }
         : { configId: command.configId, type: "select", value: command.value };
 
-export const decodeSessionConfigureCommand = (encoded: string): SessionConfigureCommand =>
+const decodeSessionConfigureCommand = (encoded: string): SessionConfigureCommand =>
     decodeZodMessage(encoded, sessionConfigureCommandSchema);
 export const encodeSessionConfigureCommand = (message: SessionConfigureCommand): string =>
     encodeZodMessage(message, sessionConfigureCommandSchema);
 export const decodeSessionConfigUpdatedEvent = (encoded: string): SessionConfigUpdatedEvent =>
     decodeZodMessage(encoded, sessionConfigUpdatedEventSchema);
-export const encodeSessionConfigUpdatedEvent = (message: SessionConfigUpdatedEvent): string =>
-    encodeZodMessage(message, sessionConfigUpdatedEventSchema);
 
 export const SESSION_CONFIG_READ_KIND = "session.config.read";
 export const SESSION_CONFIG_READ_RESULT_KIND = "session.config.read.result";
@@ -116,7 +127,7 @@ const sessionConfigReadCommandSchema = z
 
 export type SessionConfigReadCommand = z.infer<typeof sessionConfigReadCommandSchema>;
 
-export const sessionConfigReadResultSchema = z
+const sessionConfigReadResultSchema = z
     .object({
         configOptions: sessionConfigOptionsSchema,
         // An opaque Computer generation token.
@@ -129,11 +140,89 @@ export const sessionConfigReadResultSchema = z
 
 export type SessionConfigReadResult = z.infer<typeof sessionConfigReadResultSchema>;
 
-export const decodeSessionConfigReadCommand = (encoded: string): SessionConfigReadCommand =>
+const decodeSessionConfigReadCommand = (encoded: string): SessionConfigReadCommand =>
     decodeZodMessage(encoded, sessionConfigReadCommandSchema);
 export const encodeSessionConfigReadCommand = (message: SessionConfigReadCommand): string =>
     encodeZodMessage(message, sessionConfigReadCommandSchema);
 export const decodeSessionConfigReadResult = (encoded: string): SessionConfigReadResult =>
     decodeZodMessage(encoded, sessionConfigReadResultSchema);
-export const encodeSessionConfigReadResult = (message: SessionConfigReadResult): string =>
-    encodeZodMessage(message, sessionConfigReadResultSchema);
+
+const sessionConfigureCommandPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_CONFIGURE_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+});
+const sessionConfigureCommandRoutingSchema = sessionConfigureCommandPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionConfigureCommandRouting = z.infer<typeof sessionConfigureCommandRoutingSchema>;
+const decodeSessionConfigureCommandRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionConfigureCommandRoutingSchema);
+export const sessionConfigureCommandCodec = encryptedMessageCodec({
+    kind: SESSION_CONFIGURE_KIND,
+    decode: decodeSessionConfigureCommand,
+    decodeRouting: decodeSessionConfigureCommandRouting,
+    publicRoutingSchema: sessionConfigureCommandPublicRoutingSchema,
+});
+
+const sessionConfigReadCommandPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_CONFIG_READ_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+});
+const sessionConfigReadCommandRoutingSchema = sessionConfigReadCommandPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionConfigReadCommandRouting = z.infer<typeof sessionConfigReadCommandRoutingSchema>;
+const decodeSessionConfigReadCommandRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionConfigReadCommandRoutingSchema);
+export const sessionConfigReadCommandCodec = encryptedMessageCodec({
+    kind: SESSION_CONFIG_READ_KIND,
+    decode: decodeSessionConfigReadCommand,
+    decodeRouting: decodeSessionConfigReadCommandRouting,
+    publicRoutingSchema: sessionConfigReadCommandPublicRoutingSchema,
+});
+
+const sessionConfigUpdatedEventPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_CONFIG_UPDATED_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+});
+const sessionConfigUpdatedEventRoutingSchema = sessionConfigUpdatedEventPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionConfigUpdatedEventRouting = z.infer<typeof sessionConfigUpdatedEventRoutingSchema>;
+const decodeSessionConfigUpdatedEventRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionConfigUpdatedEventRoutingSchema);
+export const sessionConfigUpdatedEventCodec = encryptedMessageCodec({
+    kind: SESSION_CONFIG_UPDATED_KIND,
+    decode: decodeSessionConfigUpdatedEvent,
+    decodeRouting: decodeSessionConfigUpdatedEventRouting,
+    publicRoutingSchema: sessionConfigUpdatedEventPublicRoutingSchema,
+});
+
+const sessionConfigReadResultPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_CONFIG_READ_RESULT_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+});
+const sessionConfigReadResultRoutingSchema = sessionConfigReadResultPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export function configurationWireJsonSchemas() {
+    return {
+        configurationRequest: z.toJSONSchema(sessionConfigReadCommandRoutingSchema),
+        configureRequest: z.toJSONSchema(sessionConfigureCommandRoutingSchema),
+        configurationReply: z.toJSONSchema(sessionConfigReadResultRoutingSchema),
+        configuredReply: z.toJSONSchema(sessionConfigUpdatedEventRoutingSchema),
+    };
+}
+export type SessionConfigReadResultRouting = z.infer<typeof sessionConfigReadResultRoutingSchema>;
+const decodeSessionConfigReadResultRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionConfigReadResultRoutingSchema);
+export const sessionConfigReadResultCodec = encryptedMessageCodec({
+    kind: SESSION_CONFIG_READ_RESULT_KIND,
+    decode: decodeSessionConfigReadResult,
+    decodeRouting: decodeSessionConfigReadResultRouting,
+    publicRoutingSchema: sessionConfigReadResultPublicRoutingSchema,
+});

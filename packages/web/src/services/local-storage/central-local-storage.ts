@@ -93,6 +93,22 @@ function scopedKey(prefix: string, ...parts: readonly string[]): string {
 
 const settingIdentifierSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
 
+export const computerEncryptionEntry = (computerId: string) =>
+    jsonLocalStorageEntry({
+        key: scopedKey("morty:computer-encryption:v1:", computerId),
+        schema: v.pipe(
+            v.strictObject({
+                computerId: v.pipe(
+                    v.string(),
+                    v.check((value) => isIdentifier(value)),
+                ),
+                computerE2EPublicKey: v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{87}$/u)),
+                computerE2EAccessSecret: v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{43}$/u)),
+            }),
+            v.readonly(),
+        ),
+    });
+
 // ---------------------------------------------------------------------------
 // Chosen agent settings per Bot and agent
 // ---------------------------------------------------------------------------

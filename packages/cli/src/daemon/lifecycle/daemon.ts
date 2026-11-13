@@ -133,8 +133,10 @@ async function runDaemonRuntime(
                     const config = await prepareComputerConnection(installation, connection, combined, process.env);
                     const controller = new AbortController();
                     const processes = new AgentProcessPool();
+                    const initialized = Promise.withResolvers<void>();
                     const completion = runRuntime(config, AbortSignal.any([combined, controller.signal]), systemTimer, {
                         processes,
+                        onInitialized: initialized.resolve,
                     }).then(
                         () => {
                             if (!combined.aborted && !controller.signal.aborted) {
@@ -173,6 +175,19 @@ async function runDaemonRuntime(
                         controller,
                         completion,
                     };
+                    // Local encryption and database initialization must finish before
+                    // the control endpoint may advertise a healthy daemon. Relay
+                    // availability remains independent of local startup readiness.
+                    await Promise.race([
+                        initialized.promise,
+                        completion.then(() => {
+                            combined.throwIfAborted();
+                            throw new DaemonRuntimeError(
+                                connection.pairingGeneration,
+                                new Error("The Computer stopped before initialization"),
+                            );
+                        }),
+                    ]);
                 } catch (cause) {
                     combined.throwIfAborted();
                     fail(connection.pairingGeneration, cause);

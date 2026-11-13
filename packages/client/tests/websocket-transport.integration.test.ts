@@ -2,8 +2,10 @@
 
 import { once } from "node:events";
 import { createServer } from "node:http";
+import { base64urlnopad } from "@scure/base";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 import { WebSocketServer } from "ws";
+import { createComputerPayloadEncryption, exportE2EPublicKey, generateE2EIdentity } from "../src/encryption.ts";
 import {
     MortyClient,
     MortyConnectionError,
@@ -11,6 +13,7 @@ import {
     type MortyWebSocketConnector,
     WsTransport,
 } from "../src/index.ts";
+import { sessionEventEnvelopeCodec, sessionEventsSubscribeCommandCodec } from "../src/protocol/session/events/index.ts";
 
 // Only the Relay verifies the credential; routing uses the explicit endpoint target.
 const sessionClaims = btoa(
@@ -175,13 +178,21 @@ afterEach(() => {
 
 /** A stateful wire peer for SDK recovery; the SDK owns its real connector and transport. */
 async function liveEventPeer(liveness: "responsive" | "silent" = "responsive") {
+    const identity = await generateE2EIdentity();
+    const accessSecret = base64urlnopad.encode(new Uint8Array(32).fill(8));
+    const claims = new Set<string>();
+    const access = {
+        computerId: "computer-1",
+        computerE2EPublicKey: await exportE2EPublicKey(identity.publicKey),
+        computerE2EAccessSecret: accessSecret,
+    };
     const server = createServer();
     const webSockets = new WebSocketServer({ noServer: true });
     const activeSubscriptions = new Set<string>();
     server.on("upgrade", (request, socket, head) => {
         webSockets.handleUpgrade(request, socket, head, (connection) => {
             webSockets.emit("connection", connection, request);
-            connection.on("message", (data) => {
+            connection.on("message", async (data) => {
                 const value: unknown = JSON.parse(data.toString());
                 if (typeof value !== "object" || value === null || !("kind" in value)) {
                     throw new Error("Expected a protocol message");
@@ -193,10 +204,58 @@ async function liveEventPeer(liveness: "responsive" | "silent" = "responsive") {
                     "subscriptionId" in value &&
                     typeof value.subscriptionId === "string"
                 ) {
+                    if (!("body" in value) || typeof value.body !== "string") {
+                        throw new Error("Expected encrypted subscription");
+                    }
+                    if (!("headers" in value) || !Array.isArray(value.headers)) {
+                        throw new Error("Expected subscription headers");
+                    }
+                    expect(new Headers(value.headers).get("content-type")).toBe("application/json");
+                    const wire = value.body;
+                    const packet: unknown = JSON.parse(wire);
+                    if (
+                        typeof packet !== "object" ||
+                        packet === null ||
+                        !("encrypted" in packet) ||
+                        typeof packet.encrypted !== "string"
+                    ) {
+                        throw new Error("Expected encrypted subscription packet");
+                    }
+                    const box = await createComputerPayloadEncryption(
+                        access,
+                        async (claim) => {
+                            if (claims.has(claim.fingerprint)) {
+                                throw new Error("Replayed payload");
+                            }
+                            claims.add(claim.fingerprint);
+                        },
+                        new AbortController().signal,
+                    );
+                    let command: Awaited<ReturnType<typeof sessionEventsSubscribeCommandCodec.decode>>;
+                    try {
+                        command = await sessionEventsSubscribeCommandCodec.decode(
+                            wire,
+                            box,
+                            new AbortController().signal,
+                        );
+                    } finally {
+                        box.close();
+                    }
+                    expect(command).toEqual({
+                        kind: "session.events.subscribe",
+                        subscriptionId: value.subscriptionId,
+                        target: { harness: "claude", sessionId: "session-1" },
+                    });
                     activeSubscriptions.add(value.subscriptionId);
                     connection.send(
                         JSON.stringify({ kind: "session.events.ready", subscriptionId: value.subscriptionId }),
                     );
+                } else if (
+                    value.kind === "session.events.unsubscribe" &&
+                    "subscriptionId" in value &&
+                    typeof value.subscriptionId === "string"
+                ) {
+                    activeSubscriptions.delete(value.subscriptionId);
                 }
             });
         });
@@ -216,6 +275,40 @@ async function liveEventPeer(liveness: "responsive" | "silent" = "responsive") {
     });
     return {
         endpoint: `http://127.0.0.1:${address.port}`,
+        access,
+        publish: (wire: string) => {
+            const socket = webSockets.clients.values().next().value;
+            if (socket === undefined) {
+                throw new Error("Expected a connected SDK");
+            }
+            for (const subscriptionId of activeSubscriptions) {
+                socket.send(
+                    JSON.stringify({
+                        kind: "session.events.event",
+                        subscriptionId,
+                        seqId: 1,
+                        eventId: "event-1",
+                        data: wire,
+                    }),
+                );
+            }
+        },
+        subscriptionIds: (): readonly string[] => Array.from(activeSubscriptions),
+        publishTo: (subscriptionId: string, wire: string) => {
+            const socket = webSockets.clients.values().next().value;
+            if (socket === undefined || !activeSubscriptions.has(subscriptionId)) {
+                throw new Error("Expected an active live subscription");
+            }
+            socket.send(
+                JSON.stringify({
+                    kind: "session.events.event",
+                    subscriptionId,
+                    seqId: 1,
+                    eventId: "event-1",
+                    data: wire,
+                }),
+            );
+        },
         disconnect: async () => {
             const socket = webSockets.clients.values().next().value;
             if (socket === undefined) {
@@ -229,6 +322,217 @@ async function liveEventPeer(liveness: "responsive" | "silent" = "responsive") {
     };
 }
 
+it("Given two live subscribers to one Session, when one encrypted event arrives, then both observe it and a replay is rejected", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "clearTimeout", "setTimeout"] });
+    vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+    const peer = await liveEventPeer();
+    const transport = new WsTransport();
+    const client = new MortyClient({
+        transport,
+        encryption: { access: peer.access },
+        credentialProvider: {
+            credential: async (signal) => {
+                signal.throwIfAborted();
+                return sessionCredential;
+            },
+        },
+        endpoint: peer.endpoint,
+        computerId: "computer-1",
+    });
+    const signal = new AbortController().signal;
+    const claims = new Set<string>();
+    const computer = await createComputerPayloadEncryption(
+        peer.access,
+        async (claim) => {
+            if (claims.has(claim.fingerprint)) {
+                throw new Error("Replayed payload");
+            }
+            claims.add(claim.fingerprint);
+        },
+        signal,
+    );
+    const otherClient = new MortyClient({
+        transport,
+        encryption: { access: peer.access },
+        credentialProvider: {
+            credential: async (credentialSignal) => {
+                credentialSignal.throwIfAborted();
+                return sessionCredential;
+            },
+        },
+        endpoint: peer.endpoint,
+        computerId: "computer-1",
+    });
+    const target = { harness: "claude", sessionId: "session-1" };
+    const receivedA = Promise.withResolvers<readonly string[]>();
+    const receivedB = Promise.withResolvers<readonly string[]>();
+    const reconciled: string[] = [];
+    try {
+        const a = await client.events.subscribeLive(
+            target,
+            {
+                receive: async (events) => {
+                    receivedA.resolve(events.map((event) => event.eventId));
+                    return true;
+                },
+                reconcile: async () => {
+                    reconciled.push("a");
+                },
+            },
+            signal,
+        );
+        const b = await otherClient.events.subscribeLive(
+            target,
+            {
+                receive: async (events) => {
+                    receivedB.resolve(events.map((event) => event.eventId));
+                    return true;
+                },
+                reconcile: async () => {
+                    reconciled.push("b");
+                },
+            },
+            signal,
+        );
+        const wire = await sessionEventEnvelopeCodec.encode(
+            {
+                kind: "session.event.v2",
+                events: [
+                    {
+                        eventId: "event-1",
+                        sessionGenerationId: "generation-1",
+                        target,
+                        recordedAt: "2030-01-01T00:00:00Z",
+                        position: "1",
+                        type: "acp",
+                        payload: {
+                            sessionUpdate: "agent_message_chunk",
+                            messageId: "message-1",
+                            content: { type: "text", text: "answer" },
+                        },
+                    },
+                ],
+            },
+            computer,
+            signal,
+        );
+        peer.publish(wire);
+        expect(await Promise.race([receivedA.promise, a.completed])).toEqual(["event-1"]);
+        expect(await Promise.race([receivedB.promise, b.completed])).toEqual(["event-1"]);
+        expect(reconciled).toEqual(["a", "b"]);
+        const failure = expect(a.completed).rejects.toMatchObject({ code: "e2e_invalid_frame" });
+        const otherFailure = expect(b.completed).rejects.toMatchObject({ code: "e2e_invalid_frame" });
+        peer.publish(wire);
+        await Promise.all([failure, otherFailure]);
+    } finally {
+        computer.close();
+        client.close();
+        otherClient.close();
+        transport.close();
+    }
+});
+
+it("Given an event still awaiting another subscriber, when the first subscriber receives a replay, then only that replay fails", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "clearTimeout", "setTimeout"] });
+    vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+    const peer = await liveEventPeer();
+    const transport = new WsTransport();
+    const client = new MortyClient({
+        transport,
+        encryption: { access: peer.access },
+        credentialProvider: {
+            credential: async (signal) => {
+                signal.throwIfAborted();
+                return sessionCredential;
+            },
+        },
+        endpoint: peer.endpoint,
+        computerId: "computer-1",
+    });
+    const signal = new AbortController().signal;
+    const claims = new Set<string>();
+    const computer = await createComputerPayloadEncryption(
+        peer.access,
+        async (claim) => {
+            if (claims.has(claim.fingerprint)) {
+                throw new Error("Replayed payload");
+            }
+            claims.add(claim.fingerprint);
+        },
+        signal,
+    );
+    const target = { harness: "claude", sessionId: "session-1" };
+    const firstDelivery = Promise.withResolvers<readonly string[]>();
+    const secondDelivery = Promise.withResolvers<readonly string[]>();
+    const reconciled = new Set<string>();
+    try {
+        const first = await client.events.subscribeLive(
+            target,
+            {
+                reconcile: async () => {
+                    reconciled.add("first");
+                },
+                receive: async (events) => {
+                    firstDelivery.resolve(events.map((event) => event.eventId));
+                    return true;
+                },
+            },
+            signal,
+        );
+        const second = await client.events.subscribeLive(
+            target,
+            {
+                reconcile: async () => {
+                    reconciled.add("second");
+                },
+                receive: async (events) => {
+                    secondDelivery.resolve(events.map((event) => event.eventId));
+                    return true;
+                },
+            },
+            signal,
+        );
+        const [firstId, secondId] = peer.subscriptionIds();
+        if (firstId === undefined || secondId === undefined) {
+            throw new Error("Expected two independently authorized subscriptions");
+        }
+        const wire = await sessionEventEnvelopeCodec.encode(
+            {
+                kind: "session.event.v2",
+                events: [
+                    {
+                        eventId: "event-1",
+                        sessionGenerationId: "generation-1",
+                        target,
+                        recordedAt: "2030-01-01T00:00:00Z",
+                        position: "1",
+                        type: "acp",
+                        payload: {
+                            sessionUpdate: "agent_message_chunk",
+                            messageId: "message-1",
+                            content: { type: "text", text: "answer" },
+                        },
+                    },
+                ],
+            },
+            computer,
+            signal,
+        );
+        peer.publishTo(firstId, wire);
+        expect(await Promise.race([firstDelivery.promise, first.completed])).toEqual(["event-1"]);
+        const replay = expect(first.completed).rejects.toMatchObject({ code: "e2e_invalid_frame" });
+        peer.publishTo(firstId, wire);
+        await replay;
+        peer.publishTo(secondId, wire);
+        expect(await Promise.race([secondDelivery.promise, second.completed])).toEqual(["event-1"]);
+        expect(Array.from(reconciled)).toEqual(["first", "second"]);
+    } finally {
+        computer.close();
+        client.close();
+        transport.close();
+    }
+});
+
 it("Given a browser bound to one computer, When it opens another Session or addresses another computer, Then Sessions share the connection and the other computer is rejected", async () => {
     const connector = new BrowserWebSocketConnector();
     const transport = new WsTransport({ connector });
@@ -238,6 +542,7 @@ it("Given a browser bound to one computer, When it opens another Session or addr
             computerRequest(
                 "https://relay.example.test/morty/api/v1/computers/computer-1/harnesses/claude/sessions/session-2/events",
             ),
+            "subscription-1",
         );
         expect(connector.sockets).toHaveLength(1);
         expect(connector.sockets[0]?.url).toBe("wss://relay.example.test/morty/api/v1/computers/computer-1/transport");
@@ -262,7 +567,10 @@ it("Given a quiet subscription with connection heartbeats, When minutes pass, Th
     vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
     const connector = new BrowserWebSocketConnector("", "responsive");
     const transport = new WsTransport({ connector });
-    const stream = await transport.openSessionLiveEvents(computerRequest("https://relay.example.test/session/events"));
+    const stream = await transport.openSessionLiveEvents(
+        computerRequest("https://relay.example.test/session/events"),
+        "subscription-1",
+    );
     const reader = stream.getReader();
     try {
         await vi.advanceTimersByTimeAsync(180_000);
@@ -297,7 +605,10 @@ it("Given a transport whose peer stops answering heartbeats, When the ten-second
     vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
     const connector = new BrowserWebSocketConnector("", "silent");
     const transport = new WsTransport({ connector });
-    const stream = await transport.openSessionLiveEvents(computerRequest("https://relay.example.test/session/events"));
+    const stream = await transport.openSessionLiveEvents(
+        computerRequest("https://relay.example.test/session/events"),
+        "subscription-1",
+    );
     const reader = stream.getReader();
     try {
         await vi.advanceTimersByTimeAsync(20_000);
@@ -352,6 +663,7 @@ it("Given a replacement WebSocket carries a live subscription, When the old sock
         computerRequest(
             "https://relay.example.test/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
         ),
+        "subscription-1",
     );
     const subscriptionId = second.subscriptionIds[0];
     if (subscriptionId === undefined) {
@@ -388,6 +700,7 @@ it("Given a live Session stream, When it disconnects, Then the subscription fail
     onTestFinished(transport.close);
     const client = new MortyClient({
         transport,
+        encryption: { access: peer.access },
         credentialProvider: {
             credential: async (signal: AbortSignal) => {
                 signal.throwIfAborted();
@@ -419,6 +732,7 @@ it("Given a live Session stream, When its peer stops answering heartbeats, Then 
     onTestFinished(transport.close);
     const client = new MortyClient({
         transport,
+        encryption: { access: peer.access },
         credentialProvider: {
             credential: async (signal: AbortSignal) => {
                 signal.throwIfAborted();

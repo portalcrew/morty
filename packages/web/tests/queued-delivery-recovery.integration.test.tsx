@@ -32,7 +32,7 @@ for (const interruption of ["before-acceptance", "after-acceptance"] as const) {
         await app.waitForView(() =>
             getByRole(document.body, "button", { name: "Retry message with unknown delivery" }),
         );
-        const original = network.submissions.at(-1);
+        const original = await app.readSubmission(network.submissions.at(-1));
         const submissions = network.submissions.length;
         await app.user.click(app.elementByTestId(dataTestId.messageComposer));
         await app.user.paste("Next draft survives recovery");
@@ -55,7 +55,7 @@ for (const interruption of ["before-acceptance", "after-acceptance"] as const) {
             ]);
         });
         expect(network.submissions).toHaveLength(submissions + (interruption === "before-acceptance" ? 1 : 0));
-        expect(network.submissions.at(-1)).toBe(original);
+        expect(await app.readSubmission(network.submissions.at(-1))).toEqual(original);
         expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "Next draft survives recovery");
         await app.user.clear(app.elementByTestId(dataTestId.messageComposer));
         await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Queue drain marker");

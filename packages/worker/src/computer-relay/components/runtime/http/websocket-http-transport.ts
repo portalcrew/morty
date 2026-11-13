@@ -1,8 +1,9 @@
 import {
+    CONTENT_UPLOAD_MAX_ENCODED_BYTES,
     decodeContentChunkFrame,
-    decodeSessionCloseNoticeEvent,
+    FILE_STREAM_CONTENT_TYPE,
     MORTY_API_PREFIX,
-    SESSION_CLOSED_ERROR_CODE,
+    sessionEventsSubscribeCommandCodec,
 } from "@morty-build/client/protocol";
 import {
     CANCEL_KIND,
@@ -24,7 +25,7 @@ import type { WebSocketHttpDispatch } from "../../../../contracts/websocket-http
 import { diagnosticText, serializeDiagnosticError } from "../../../../infra/log-diagnostics.ts";
 import { logger } from "../../../../infra/logger.ts";
 
-const MAX_PENDING_BINARY_BYTES = MAX_BODY_BYTES;
+const MAX_PENDING_BINARY_BYTES = CONTENT_UPLOAD_MAX_ENCODED_BYTES;
 const MAX_PENDING_BINARY_REQUESTS = 16;
 const BINARY_REQUEST_TIMEOUT_MILLISECONDS = 30_000;
 const IDLE_TIMEOUT_MILLISECONDS = 60_000;
@@ -83,21 +84,44 @@ function transportError(code: WebSocketTransportErrorCode): WebSocketTransportEr
     return new WebSocketTransportError(code);
 }
 
+function isEncryptedContentUpload(request: Request): boolean {
+    const path = new URL(request.url).pathname;
+    return (
+        request.method === "PUT" &&
+        request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() === FILE_STREAM_CONTENT_TYPE &&
+        new RegExp(
+            `^${MORTY_API_PREFIX}/v1/computers/[^/]+/harnesses/[^/]+/sessions/[^/]+/content/[a-f0-9]{64}$`,
+            "u",
+        ).test(path)
+    );
+}
+
 /** Bounds buffering on this connection while the application admits each upload. */
 class ConnectionUploadBudget {
     #bytes = 0;
+    #ordinaryBytes = 0;
     #requests = 0;
 
-    readonly reserve = (bytes: number): void => {
-        if (this.#bytes + bytes > MAX_PENDING_BINARY_BYTES || this.#requests >= MAX_PENDING_BINARY_REQUESTS) {
+    readonly reserve = (bytes: number, encryptedUpload: boolean): void => {
+        if (
+            this.#bytes + bytes > MAX_PENDING_BINARY_BYTES ||
+            (!encryptedUpload && this.#ordinaryBytes + bytes > MAX_BODY_BYTES) ||
+            this.#requests >= MAX_PENDING_BINARY_REQUESTS
+        ) {
             throw transportError("request_capacity_exceeded");
         }
         this.#bytes += bytes;
+        if (!encryptedUpload) {
+            this.#ordinaryBytes += bytes;
+        }
         this.#requests += 1;
     };
 
-    readonly release = (bytes: number): void => {
+    readonly release = (bytes: number, encryptedUpload: boolean): void => {
         this.#bytes -= bytes;
+        if (!encryptedUpload) {
+            this.#ordinaryBytes -= bytes;
+        }
         this.#requests -= 1;
     };
 }
@@ -115,18 +139,21 @@ class PendingBinaryUpload {
     readonly byteLength: number;
     readonly message: Readonly<Record<string, unknown>>;
     readonly #connectionBudget: ConnectionUploadBudget;
+    readonly #encryptedUpload: boolean;
     readonly #onFailure: (cause: unknown) => Promise<void>;
 
     constructor(
         byteLength: number,
         message: Readonly<Record<string, unknown>>,
         connectionBudget: ConnectionUploadBudget,
+        encryptedUpload: boolean,
         onFailure: (cause: unknown) => Promise<void>,
     ) {
-        connectionBudget.reserve(byteLength);
+        connectionBudget.reserve(byteLength, encryptedUpload);
         this.byteLength = byteLength;
         this.message = message;
         this.#connectionBudget = connectionBudget;
+        this.#encryptedUpload = encryptedUpload;
         this.#onFailure = onFailure;
         this.#timeout = setTimeout(() => {
             void this.fail(transportError("request_timeout"));
@@ -162,7 +189,7 @@ class PendingBinaryUpload {
         }
         this.#state = "closed";
         clearTimeout(this.#timeout);
-        this.#connectionBudget.release(this.byteLength);
+        this.#connectionBudget.release(this.byteLength, this.#encryptedUpload);
         this.#controller.abort();
         this.#ready.resolve(false);
     };
@@ -305,7 +332,7 @@ function requestFromMessage(
     browserOrigin: string | null,
     signal: AbortSignal,
     binaryBody?: Uint8Array,
-): { readonly request: Request; readonly requestId: string } {
+): { readonly request: Request; readonly requestId: string; readonly body: string } {
     const path = string(value, "path", 8_192);
     if (!path.startsWith(`${MORTY_API_PREFIX}/`) || path.startsWith(`${MORTY_API_PREFIX}/v1/transport`)) {
         throw transportError("invalid_target");
@@ -318,10 +345,8 @@ function requestFromMessage(
     if (!REQUEST_METHODS.some((allowed) => allowed === method)) {
         throw transportError("invalid_method");
     }
-    const body = binaryBody ?? requestBody(value);
-    if (method === "GET" && body.length > 0) {
-        throw transportError("invalid_message");
-    }
+    const textBody = requestBody(value);
+    const body = binaryBody ?? textBody;
     const requestHeaders = headers(value["headers"]);
     if (browserOrigin !== null) {
         requestHeaders.set("origin", browserOrigin);
@@ -334,6 +359,7 @@ function requestFromMessage(
             signal,
         }),
         requestId,
+        body: textBody,
     };
 }
 
@@ -509,10 +535,20 @@ export function acceptWebSocketHttpTransport({
                         throw transportError("invalid_message");
                     }
                     requestId = subscriptionId;
+                    const encoded = requestBody(message);
+                    try {
+                        if (
+                            sessionEventsSubscribeCommandCodec.decodeRouting(encoded).subscriptionId !== subscriptionId
+                        ) {
+                            throw transportError("invalid_message");
+                        }
+                    } catch {
+                        throw transportError("invalid_message");
+                    }
                     const subscriptionController = new AbortController();
                     const converted = requestFromMessage(
                         {
-                            body: "",
+                            body: encoded,
                             headers: message["headers"],
                             kind: REQUEST_KIND,
                             method: "GET",
@@ -530,6 +566,7 @@ export function acceptWebSocketHttpTransport({
                     const response = await dispatch({
                         kind: "request",
                         request: new Request(converted.request, { headers: subscriptionHeaders }),
+                        body: converted.body,
                         enableCancellation: () => subscriptionController.signal,
                     }).catch((cause: unknown) => {
                         const pending = subscriptions.get(subscriptionId);
@@ -616,22 +653,6 @@ export function acceptWebSocketHttpTransport({
                             server.readyState === WebSocket.OPEN &&
                             subscriptions.get(subscriptionId)?.kind === "open"
                         ) {
-                            // Live event batches are arrays. A close notice ends only this subscription.
-                            if (subscriptionEvent.data.startsWith("{")) {
-                                const notice = decodeSessionCloseNoticeEvent(subscriptionEvent.data);
-                                subscriptions.delete(subscriptionId);
-                                server.send(
-                                    JSON.stringify({
-                                        kind: "session.events.error",
-                                        code: SESSION_CLOSED_ERROR_CODE,
-                                        status: 409,
-                                        message: notice.reason,
-                                        subscriptionId,
-                                    }),
-                                );
-                                subscription.close(1000, "Session closed");
-                                return;
-                            }
                             lastMessageAt = Date.now();
                             server.send(
                                 JSON.stringify({
@@ -674,7 +695,6 @@ export function acceptWebSocketHttpTransport({
                         !Number.isSafeInteger(bodyByteLength) ||
                         typeof bodyByteLength !== "number" ||
                         bodyByteLength < 1 ||
-                        bodyByteLength > MAX_BODY_BYTES ||
                         requestBody(message).length !== 0 ||
                         binaryRequests.has(requestId)
                     ) {
@@ -691,10 +711,15 @@ export function acceptWebSocketHttpTransport({
                     if (declaration.request.method === "GET") {
                         throw transportError("invalid_message");
                     }
+                    const encryptedUpload = isEncryptedContentUpload(declaration.request);
+                    if (bodyByteLength > (encryptedUpload ? CONTENT_UPLOAD_MAX_ENCODED_BYTES : MAX_BODY_BYTES)) {
+                        throw transportError("invalid_message");
+                    }
                     const upload = new PendingBinaryUpload(
                         bodyByteLength,
                         message,
                         connectionUploads,
+                        encryptedUpload,
                         async (cause) => {
                             if (binaryRequests.get(requestId) !== upload) {
                                 return;
@@ -745,6 +770,7 @@ export function acceptWebSocketHttpTransport({
                 const response = await dispatch({
                     kind: "request",
                     request: converted.request,
+                    body: converted.body,
                     enableCancellation: operation.enableCancellation,
                 });
                 operation.throwIfAborted();

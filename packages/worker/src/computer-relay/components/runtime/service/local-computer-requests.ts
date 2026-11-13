@@ -1,7 +1,10 @@
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionCommandRouting, NativeSessionTarget } from "@morty-build/client/protocol";
+import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
+import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import { logger } from "../../../../infra/logger.ts";
+import type { ClientControlReply } from "./computer-control-registry.ts";
 import type { ComputerReplyConnection } from "./computer-control-request.ts";
-import type { ComputerOperationSocket, HistoryRequestKind, RelayPeers } from "./computer-relay-actor.ts";
+import type { ComputerOperationSocket, HistoryRequestKind, RelayPeers, RelaySocket } from "./computer-relay-actor.ts";
 
 class LocalComputerRequest extends EventTarget implements ComputerReplyConnection {
     #state: number = WebSocket.OPEN;
@@ -14,8 +17,29 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
         this.#dispatch = dispatch;
         this.#release = release;
         let history: { readonly kind: HistoryRequestKind; readonly requestId: string } | null = null;
+        let request:
+            | { readonly kind: "not-forwarded" }
+            | {
+                  readonly kind: "forwarded";
+                  readonly daemon: RelaySocket;
+                  readonly action: NativeSessionCommandRouting["action"];
+              }
+            | {
+                  readonly kind: "file-read" | "content-write";
+                  readonly daemon: RelaySocket;
+              } = { kind: "not-forwarded" };
         const discoveries = new Map<string, string>();
         this.server = {
+            recordRequestDaemon: (daemon, action) => {
+                request = { kind: "forwarded", daemon, action };
+            },
+            recordTransferDaemon: (daemon, kind) => {
+                request = { kind, daemon };
+            },
+            requestDaemon: () => (request.kind === "not-forwarded" ? null : request.daemon),
+            requestAction: () => (request.kind === "forwarded" ? request.action : null),
+            requestTransferKind: () =>
+                request.kind === "file-read" || request.kind === "content-write" ? request.kind : null,
             close: (code, reason) => this.close(code, reason),
             send: (message) => {
                 if (this.isOpen()) {
@@ -68,11 +92,17 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
             this.close();
         });
     };
-    readonly close = (_code?: number, _reason?: string): void => {
+    readonly close = (code?: number, reason?: string): void => {
         if (!this.isOpen()) {
             return;
         }
         this.#state = WebSocket.CLOSED;
+        // An undrained fork reply cannot be allowed to match a later route with
+        // the same durable operation identity. Closing its original transport
+        // fences queued frames through the daemon message authorization boundary.
+        if (this.server.requestAction() === "fork" && (code !== 1000 || reason !== "Operation finished")) {
+            this.server.requestDaemon()?.close(1011, "Fork reply was not drained");
+        }
         this.#release();
         this.dispatchEvent(new Event("close"));
     };
@@ -80,12 +110,83 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
 
 export class LocalComputerRequests {
     readonly #routes = new Set<ReturnType<RelayPeers["operations"]>[number]>();
+    readonly #forks = new Map<string, EventTarget>();
+    #pendingForks = 0;
+    readonly #retain: (operation: Promise<void>) => void;
+
+    constructor(retain: (operation: Promise<void>) => void) {
+        this.#retain = retain;
+    }
     readonly routes = () => [...this.#routes];
+    /** Stable fork identities must not collide in the reply router. Do not join
+     * opaque requests: each fresh packet must reach the Computer, which alone
+     * can authorize it and compare its private intent with the durable receipt. */
+    readonly runRecoverableFork = async (
+        requestId: string,
+        signal: AbortSignal,
+        operation: (signal: AbortSignal) => Promise<ClientControlReply>,
+    ): Promise<ClientControlReply> => {
+        using deadline = new RequestDeadline(signal, 120_000);
+        if (this.#pendingForks >= 16) {
+            throw new SessionRuntimeError("session_busy", "Too many native fork requests are pending");
+        }
+        this.#pendingForks += 1;
+        let admission: "queued" | "draining" = "queued";
+        try {
+            let previous = this.#forks.get(requestId);
+            while (previous !== undefined) {
+                const available = Promise.withResolvers<void>();
+                const released = (): void => available.resolve();
+                previous.addEventListener("released", released, { once: true });
+                try {
+                    await deadline.wait(available.promise);
+                } finally {
+                    previous.removeEventListener("released", released);
+                }
+                previous = this.#forks.get(requestId);
+            }
+            deadline.signal.throwIfAborted();
+            const ownership = new EventTarget();
+            this.#forks.set(requestId, ownership);
+            admission = "draining";
+            const draining = (async () => {
+                // Caller cancellation stops its wait, but the issued RPC still
+                // owns this reply address until a terminal reply or transport fence.
+                using execution = new RequestDeadline(new AbortController().signal, 120_000);
+                try {
+                    return await operation(execution.signal);
+                } finally {
+                    this.#forks.delete(requestId);
+                    this.#pendingForks -= 1;
+                    ownership.dispatchEvent(new Event("released"));
+                }
+            })();
+            this.#retain(
+                draining.then(
+                    () => undefined,
+                    () => undefined,
+                ),
+            );
+            return await deadline.wait(draining);
+        } finally {
+            if (admission === "queued") {
+                this.#pendingForks -= 1;
+            }
+        }
+    };
     readonly open = (
         requestId: string,
         target: NativeSessionTarget | undefined,
         dispatch: (socket: ComputerOperationSocket, message: unknown) => Promise<void>,
     ) => {
+        for (const route of this.#routes) {
+            if (route.requestId === requestId) {
+                throw new SessionRuntimeError(
+                    "session_busy",
+                    "An operation with this request ID is already in progress",
+                );
+            }
+        }
         const connection = new LocalComputerRequest(dispatch, () => this.#routes.delete(route));
         const route = { socket: connection.server, requestId, target };
         this.#routes.add(route);

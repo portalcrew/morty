@@ -5,7 +5,6 @@ import { ComputerRelayActor } from "./service/computer-relay-actor.ts";
 import { type ComputerPeers, ComputerService } from "./service/computer-service.ts";
 import { DaemonConnectionService } from "./service/daemon-connection-service.ts";
 import { LocalComputerRequests } from "./service/local-computer-requests.ts";
-import { NativeSessionForks } from "./service/native-session-forks.ts";
 import { ComputerConnectionStorage } from "./storage/computer-connection-storage.ts";
 
 export type RuntimeContext = ReturnType<typeof createRuntimeContext>;
@@ -22,7 +21,7 @@ export function createRuntimeContext(cx: {
         readonly waitUntil: (operation: Promise<void>) => void;
     };
 }) {
-    const requests = new LocalComputerRequests();
+    const requests = new LocalComputerRequests(cx.utilities.waitUntil);
     const source = cx.gateways.peers;
     const peers: ComputerPeers = {
         accept: source.accept,
@@ -52,7 +51,6 @@ export function createRuntimeContext(cx: {
             credentials,
             connections,
             runtime,
-            nativeForks: new NativeSessionForks(cx.utilities.waitUntil),
         },
     };
 }

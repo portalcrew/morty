@@ -39,6 +39,92 @@ function noticePlacement(app: TestApp): string | null {
 
 const CLOCK_ORIGIN = "2026-10-13T08:00:00Z";
 
+test("Given native operation capacity is occupied, When I reopen a saved Session and capacity clears, Then its connection recovers automatically and I can keep chatting", {
+    timeout: dedicatedEnvironmentTimeout,
+}, async () => {
+    const release = Promise.withResolvers<void>();
+    onTestFinished(() => release.resolve());
+    let holding = false;
+    const clock = new TestClock(CLOCK_ORIGIN);
+    const app = await createTestApp({
+        connectAgent: true,
+        clock,
+        agent: {
+            harness: "settings-test",
+            label: "Settings Agent",
+            beforeSessionsListed: async (signal) => {
+                if (!holding) {
+                    return;
+                }
+                signal.throwIfAborted();
+                await new Promise<void>((resolve, reject) => {
+                    const aborted = () => {
+                        signal.removeEventListener("abort", aborted);
+                        reject(signal.reason);
+                    };
+                    signal.addEventListener("abort", aborted, { once: true });
+                    void release.promise.then(() => {
+                        signal.removeEventListener("abort", aborted);
+                        resolve();
+                    });
+                });
+            },
+        },
+    });
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Established session");
+    await app.waitForView(() => {
+        expect(app.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain("Established session");
+        expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
+    });
+    const daemon = app.daemon;
+    if (daemon === null) {
+        throw new Error("Expected the real Computer");
+    }
+    holding = true;
+    const signal = AbortSignal.timeout(30_000);
+    // The first four real operations occupy admission; only the surplus request can settle before the ACP gate opens.
+    const reads = Array.from({ length: 5 }, () =>
+        daemon.readNativeSessions(signal).then(
+            (value) => ({ kind: "listed" as const, value }),
+            (cause: unknown) => ({ kind: "failed" as const, cause }),
+        ),
+    );
+    const first = await Promise.race(reads);
+    expect(first).toMatchObject({ kind: "failed", cause: { code: "native_session_busy" } });
+    const sessionId = new URL(window.location.href).searchParams.get("sessionId");
+    if (sessionId === null) {
+        throw new Error("Expected an open Session");
+    }
+    await expect(daemon.readExecution(sessionId, signal)).rejects.toMatchObject({
+        name: "MortyOperationError",
+        code: "native_session_busy",
+        recovery: "retryable",
+    });
+    const reloaded = await app.reload();
+    await clock.waitForSleep(1000, AbortSignal.timeout(10_000));
+    await reloaded.user.click(await reloaded.queryElementByTestId(dataTestId.messageComposer));
+    await reloaded.user.paste("Continue after capacity clears");
+    expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", true);
+    release.resolve();
+    await Promise.all(reads);
+    // The first automatic retry has a five-second ceiling; advance application time past its whole countdown.
+    await act(async () => clock.advanceBy(5000));
+    await reloaded.waitForView(() => {
+        expect(reloaded.optionalElementByTestId(dataTestId.sessionLoadFailure)).toBeNull();
+        expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", false);
+    });
+    expect(reloaded.elementByTestId(dataTestId.messageComposer)).toHaveProperty(
+        "value",
+        "Continue after capacity clears",
+    );
+    await reloaded.user.click(getByRole(document.body, "button", { name: "Send message" }));
+    await reloaded.waitForView(() =>
+        expect(reloaded.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain(
+            "Continue after capacity clears",
+        ),
+    );
+});
+
 test("Given a new session with an unsent draft, When the browser resumes after repeated background bridge drops, Then it reconnects without flashing a notice or sending the draft", {
     timeout: 30_000,
 }, async () => {

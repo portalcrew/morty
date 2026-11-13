@@ -1,26 +1,32 @@
 import {
-    decodeDaemonToServiceMessage,
     decodeNativeSessionResult,
-    decodeServiceToDaemonMessage,
-    encodeDaemonToServiceMessage,
-    encodeServiceToDaemonMessage,
     SESSION_CONFIG_READ_KIND,
     SESSION_CONFIG_READ_RESULT_KIND,
+    sessionConfigReadCommandCodec,
+    sessionConfigReadResultCodec,
 } from "@morty-build/client/protocol";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { openTestPayloadEncryption } from "../support/payload-encryption.ts";
+
+beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-12T00:00:00Z"));
+});
+afterEach(() => vi.useRealTimers());
 
 describe("Session config read contracts", () => {
-    it("Given a config read command, When it crosses the daemon boundary, Then it round-trips", () => {
+    it("Given a config read command, When it crosses the daemon boundary, Then it round-trips", async () => {
         const command = {
             kind: SESSION_CONFIG_READ_KIND,
             requestId: "request-config-1",
             target: { harness: "claude", sessionId: "session-1" },
         } as const;
-        const encoded = encodeServiceToDaemonMessage(command);
-        expect(decodeServiceToDaemonMessage(encoded)).toEqual(command);
+        const { client, computer, signal } = await openTestPayloadEncryption();
+        const encoded = await sessionConfigReadCommandCodec.encode(command, client, signal);
+        expect(await sessionConfigReadCommandCodec.decode(encoded, computer, signal)).toEqual(command);
     });
 
-    it("Given a config read result, When it crosses the daemon boundary, Then it round-trips", () => {
+    it("Given a config read result, When it crosses the daemon boundary, Then it round-trips", async () => {
         const result = {
             configOptions: [
                 {
@@ -41,7 +47,9 @@ describe("Session config read contracts", () => {
             requestId: "request-config-1",
             target: { harness: "claude", sessionId: "session-1" },
         } as const;
-        expect(decodeDaemonToServiceMessage(encodeDaemonToServiceMessage(result))).toEqual(result);
+        const { client, computer, signal } = await openTestPayloadEncryption();
+        const encoded = await sessionConfigReadResultCodec.encode(result, computer, signal);
+        expect(await sessionConfigReadResultCodec.decode(encoded, client, signal)).toEqual(result);
     });
 });
 

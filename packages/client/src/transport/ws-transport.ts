@@ -1,10 +1,27 @@
-import { CONTENT_CHUNK_MAX_BYTES, encodeContentChunkFrame, MORTY_API_PREFIX } from "@morty-build/client/protocol";
+import {
+    CONTENT_CHUNK_MAX_BYTES,
+    ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
+    encodeContentChunkFrame,
+    isIdentifier,
+    MORTY_API_PREFIX,
+} from "@morty-build/client/protocol";
 import type { MortyTransportCall } from "../calls/call.ts";
+import { computerEncryptionAccessCodec } from "../calls/encryption.ts";
+import {
+    type ComputerEncryptionAccess,
+    createClientPayloadEncryption,
+    type PayloadDecryptor,
+    type PayloadEncryptionConnection,
+    type PayloadEncryptor,
+} from "../encryption.ts";
 import { MortyApiError, MortyConnectionError, MortyProtocolError, MortyValidationError } from "../errors.ts";
+import { type LiveDeliveryExecution, registerLiveDelivery } from "./live-delivery.ts";
 
 const CONNECTION_TIMEOUT_MILLISECONDS = 15_000;
 const HEARTBEAT_INTERVAL_MILLISECONDS = 20_000;
 const HEARTBEAT_TIMEOUT_MILLISECONDS = 10_000;
+const MAX_PENDING_LIVE_FANOUTS = 128;
+const MAX_PENDING_LIVE_FANOUT_BYTES = 32 * 1024 * 1024;
 
 export interface MortyTransportSessionEvent {
     readonly data: string;
@@ -20,6 +37,15 @@ export interface WsTransportOptions {
     /** Opens the WebSocket; the browser's own WebSocket unless a test supplies a stateful socket. */
     readonly connector?: MortyWebSocketConnector;
 }
+
+type PayloadConnectionState =
+    | { readonly kind: "idle" }
+    | {
+          readonly kind: "opening";
+          readonly operation: Promise<PayloadEncryptionConnection>;
+          readonly controller: AbortController;
+      }
+    | { readonly kind: "open"; readonly connection: PayloadEncryptionConnection };
 
 type WsTransportState =
     | { readonly kind: "closed" }
@@ -38,6 +64,7 @@ type LiveEventSubscription =
     | {
           readonly cleanup: () => void;
           readonly kind: "opening";
+          readonly scope: string;
           readonly reject: (cause: unknown) => void;
           readonly resolve: (events: ReadableStream<MortyTransportSessionEvent>) => void;
       }
@@ -45,7 +72,14 @@ type LiveEventSubscription =
           readonly cleanup: () => void;
           readonly controller: ReadableStreamDefaultController<MortyTransportSessionEvent>;
           readonly kind: "open";
+          readonly scope: string;
       };
+
+interface PendingLiveFanout {
+    readonly remaining: Set<string>;
+    readonly execution: LiveDeliveryExecution;
+    readonly bytes: number;
+}
 
 const WS_REQUEST_KIND = "http.request";
 const WS_RESPONSE_KIND = "http.response";
@@ -151,8 +185,14 @@ export class WsTransport {
     readonly #connector: MortyWebSocketConnector;
     readonly #pending = new Map<string, PendingWsRequest>();
     readonly #subscriptions = new Map<string, LiveEventSubscription>();
+    readonly #pendingLiveFanouts = new Map<string, Map<string, PendingLiveFanout>>();
+    #pendingLiveFanoutCount = 0;
+    #pendingLiveFanoutBytes = 0;
+    #liveDecryptionController = new AbortController();
     #endpoint: string | null = null;
     #state: WsTransportState = { kind: "disconnected" };
+    #access: ComputerEncryptionAccess | null = null;
+    #payload: PayloadConnectionState = { kind: "idle" };
     #heartbeat:
         | { readonly kind: "inactive" }
         | { readonly kind: "waiting" | "awaiting"; readonly timer: ReturnType<typeof globalThis.setTimeout> } = {
@@ -162,6 +202,121 @@ export class WsTransport {
     constructor(options: WsTransportOptions = {}) {
         this.#connector = options.connector ?? new RelayMortyWebSocketConnector();
     }
+
+    readonly payloadEncryption: PayloadEncryptor & PayloadDecryptor = {
+        encrypt: async (plaintext, associatedData, signal) => {
+            const access = this.#access;
+            if (access === null) {
+                throw new MortyValidationError("Encrypted Computer access is required");
+            }
+            const connection = await this.#payloadConnection(access.computerId, signal);
+            return await connection.encrypt(plaintext, associatedData, signal);
+        },
+        decrypt: async (ciphertext, associatedData, signal) => {
+            const access = this.#access;
+            if (access === null) {
+                throw new MortyValidationError("Encrypted Computer access is required");
+            }
+            const connection = await this.#payloadConnection(access.computerId, signal);
+            return await connection.decrypt(ciphertext, associatedData, signal);
+        },
+    };
+
+    readonly configureEncryption = (value: ComputerEncryptionAccess): void => {
+        const access = computerEncryptionAccessCodec.decode(computerEncryptionAccessCodec.encode(value));
+        if (this.#state.kind === "closed") {
+            throw new MortyConnectionError("The Morty WebSocket transport is closed");
+        }
+        if (this.#access !== null) {
+            if (
+                this.#access.computerId !== access.computerId ||
+                this.#access.computerE2EPublicKey !== access.computerE2EPublicKey ||
+                this.#access.computerE2EAccessSecret !== access.computerE2EAccessSecret
+            ) {
+                throw new MortyValidationError("A Computer connection cannot change encryption identity");
+            }
+            return;
+        }
+        this.#access = access;
+    };
+
+    readonly #payloadConnection = async (
+        computerId: string,
+        signal: AbortSignal,
+    ): Promise<PayloadEncryptionConnection> => {
+        signal.throwIfAborted();
+        const access = this.#access;
+        if (access === null || access.computerId !== computerId) {
+            throw new MortyValidationError("Encrypted access to this Computer is required");
+        }
+        if (this.#payload.kind === "open") {
+            return this.#payload.connection;
+        }
+        if (this.#payload.kind === "idle") {
+            const controller = new AbortController();
+            const operation = this.#openPayloadConnection(access, controller);
+            this.#payload = { kind: "opening", operation, controller };
+        }
+        const operation = this.#payload.operation;
+        return await new Promise<PayloadEncryptionConnection>((resolve, reject) => {
+            const abort = (): void => reject(signal.reason);
+            signal.addEventListener("abort", abort, { once: true });
+            operation.then(
+                (connection) => {
+                    signal.removeEventListener("abort", abort);
+                    if (signal.aborted) {
+                        reject(signal.reason);
+                    } else {
+                        resolve(connection);
+                    }
+                },
+                (cause: unknown) => {
+                    signal.removeEventListener("abort", abort);
+                    reject(cause);
+                },
+            );
+            if (signal.aborted) {
+                abort();
+            }
+        });
+    };
+
+    readonly #openPayloadConnection = async (
+        access: ComputerEncryptionAccess,
+        controller: AbortController,
+    ): Promise<PayloadEncryptionConnection> => {
+        const timeout = globalThis.setTimeout(
+            () => controller.abort(new MortyConnectionError("Computer encryption initialization timed out")),
+            CONNECTION_TIMEOUT_MILLISECONDS,
+        );
+        try {
+            const connection = await createClientPayloadEncryption(access, controller.signal);
+            if (controller.signal.aborted || this.#state.kind === "closed") {
+                connection.close();
+                controller.signal.throwIfAborted();
+                throw new MortyConnectionError("The Morty WebSocket transport is closed");
+            }
+            this.#payload = { kind: "open", connection };
+            return connection;
+        } catch (cause) {
+            if (this.#payload.kind === "opening" && this.#payload.controller === controller) {
+                this.#payload = { kind: "idle" };
+            }
+            throw cause;
+        } finally {
+            globalThis.clearTimeout(timeout);
+        }
+    };
+
+    readonly #closePayloadConnection = (): void => {
+        const payload = this.#payload;
+        this.#payload = { kind: "idle" };
+        if (payload.kind === "open") {
+            payload.connection.close();
+        } else if (payload.kind === "opening") {
+            payload.controller.abort(new MortyConnectionError("The Computer connection closed"));
+        }
+    };
 
     readonly #cancelRequest = (socket: WebSocket, requestId: string): void => {
         if (socket.readyState !== WebSocket.OPEN) {
@@ -249,16 +404,23 @@ export class WsTransport {
 
     readonly openSessionLiveEvents = async (
         request: MortyTransportCall,
+        subscriptionId: string,
     ): Promise<ReadableStream<MortyTransportSessionEvent>> => {
         request.signal.throwIfAborted();
         const requestUrl = new URL(request.endpoint.path, request.origin);
         const socket = await this.#socket(request);
         request.signal.throwIfAborted();
-        const id = crypto.randomUUID();
+        const id = subscriptionId;
+        if (!isIdentifier(id) || this.#subscriptions.has(id)) {
+            throw new MortyValidationError("The Session subscription identifier is invalid or already in use");
+        }
         const abort = (): void => {
             const subscription = this.#subscriptions.get(id);
             this.#subscriptions.delete(id);
             subscription?.cleanup();
+            if (subscription?.kind === "open") {
+                this.#removeLiveFanoutSubscriber(id, subscription.scope);
+            }
             if (subscription?.kind === "opening") {
                 subscription.reject(request.signal.reason);
             } else {
@@ -268,12 +430,13 @@ export class WsTransport {
         };
         const cleanup = (): void => request.signal.removeEventListener("abort", abort);
         const events = new Promise<ReadableStream<MortyTransportSessionEvent>>((resolve, reject) => {
-            this.#subscriptions.set(id, { cleanup, kind: "opening", reject, resolve });
+            this.#subscriptions.set(id, { cleanup, kind: "opening", scope: requestUrl.href, reject, resolve });
         });
         request.signal.addEventListener("abort", abort, { once: true });
         try {
             socket.send(
                 JSON.stringify({
+                    body: typeof request.body === "string" ? request.body : "",
                     headers: Object.entries(request.headers),
                     kind: EVENT_SUBSCRIBE_KIND,
                     path: `${requestUrl.pathname}${requestUrl.search}`,
@@ -289,6 +452,7 @@ export class WsTransport {
     };
 
     readonly close = (): void => {
+        this.#closePayloadConnection();
         this.#stopHeartbeat();
         const state = this.#state;
         this.#state = { kind: "closed" };
@@ -467,6 +631,11 @@ export class WsTransport {
     };
 
     readonly #failSubscriptions = (cause: unknown): void => {
+        this.#liveDecryptionController.abort(cause);
+        this.#liveDecryptionController = new AbortController();
+        this.#pendingLiveFanouts.clear();
+        this.#pendingLiveFanoutCount = 0;
+        this.#pendingLiveFanoutBytes = 0;
         const subscriptions = Array.from(this.#subscriptions.values());
         this.#subscriptions.clear();
         for (const subscription of subscriptions) {
@@ -477,6 +646,81 @@ export class WsTransport {
                 subscription.controller.error(cause);
             }
         }
+    };
+
+    readonly #removeLiveFanoutSubscriber = (id: string, scope: string): void => {
+        const pending = this.#pendingLiveFanouts.get(scope);
+        if (pending === undefined) {
+            return;
+        }
+        for (const [data, delivery] of pending) {
+            delivery.remaining.delete(id);
+            if (delivery.remaining.size === 0) {
+                pending.delete(data);
+                this.#pendingLiveFanoutCount -= 1;
+                this.#pendingLiveFanoutBytes -= delivery.bytes;
+            }
+        }
+        if (pending.size === 0) {
+            this.#pendingLiveFanouts.delete(scope);
+        }
+    };
+
+    readonly #liveDelivery = (id: string, scope: string, data: string): LiveDeliveryExecution => {
+        const pending = this.#pendingLiveFanouts.get(scope);
+        const existing = pending?.get(data);
+        if (existing?.remaining.delete(id)) {
+            if (existing.remaining.size === 0) {
+                pending?.delete(data);
+                this.#pendingLiveFanoutCount -= 1;
+                this.#pendingLiveFanoutBytes -= existing.bytes;
+                if (pending?.size === 0) {
+                    this.#pendingLiveFanouts.delete(scope);
+                }
+            }
+            return existing.execution;
+        }
+
+        const connectionSignal = this.#liveDecryptionController.signal;
+        let running: Promise<string> | null = null;
+        const execution: LiveDeliveryExecution = {
+            run: (operation) => {
+                running ??= Promise.resolve().then(() =>
+                    operation(AbortSignal.any([connectionSignal, AbortSignal.timeout(10_000)])),
+                );
+                return running;
+            },
+        };
+        // Every subscription opens independently at the Worker. Only copies expected by other already-open
+        // subscriptions for the same URL may share this one delivery's execution; nothing is reused outside
+        // that cohort. A repeat on the same subscription always reaches replay validation.
+        if (existing !== undefined) {
+            return execution;
+        }
+        const remaining = new Set<string>();
+        for (const [otherId, subscription] of this.#subscriptions) {
+            if (otherId !== id && subscription.kind === "open" && subscription.scope === scope) {
+                remaining.add(otherId);
+            }
+        }
+        if (remaining.size === 0) {
+            return execution;
+        }
+        const bytes = data.length * 2;
+        if (
+            this.#pendingLiveFanoutCount >= MAX_PENDING_LIVE_FANOUTS ||
+            this.#pendingLiveFanoutBytes + bytes > MAX_PENDING_LIVE_FANOUT_BYTES
+        ) {
+            throw new MortyProtocolError("The live Session event fanout exceeded its buffer limit");
+        }
+        const entries = pending ?? new Map<string, PendingLiveFanout>();
+        entries.set(data, { remaining, execution, bytes });
+        if (pending === undefined) {
+            this.#pendingLiveFanouts.set(scope, entries);
+        }
+        this.#pendingLiveFanoutCount += 1;
+        this.#pendingLiveFanoutBytes += bytes;
+        return execution;
     };
 
     readonly #receiveSubscription = (kind: string, message: Readonly<Record<string, unknown>>): void => {
@@ -497,13 +741,19 @@ export class WsTransport {
                 cancel: () => {
                     subscription.cleanup();
                     this.#subscriptions.delete(id);
+                    this.#removeLiveFanoutSubscriber(id, subscription.scope);
                     this.#sendUnsubscribe(id);
                 },
             });
             if (streamController === null) {
                 throw new MortyProtocolError("The live Session event subscription could not initialize");
             }
-            this.#subscriptions.set(id, { cleanup: subscription.cleanup, controller: streamController, kind: "open" });
+            this.#subscriptions.set(id, {
+                cleanup: subscription.cleanup,
+                controller: streamController,
+                kind: "open",
+                scope: subscription.scope,
+            });
             subscription.resolve(stream);
             return;
         }
@@ -519,6 +769,9 @@ export class WsTransport {
             );
             this.#subscriptions.delete(id);
             subscription.cleanup();
+            if (subscription.kind === "open") {
+                this.#removeLiveFanoutSubscriber(id, subscription.scope);
+            }
             if (subscription.kind === "opening") {
                 subscription.reject(cause);
             } else {
@@ -532,17 +785,24 @@ export class WsTransport {
         if (kind === "session.events.end") {
             this.#subscriptions.delete(id);
             subscription.cleanup();
+            this.#removeLiveFanoutSubscriber(id, subscription.scope);
             subscription.controller.close();
             return;
         }
         if (kind !== "session.events.event") {
             throw new MortyProtocolError("The live Session event subscription returned an unsupported message");
         }
-        subscription.controller.enqueue({
-            data: wsString(message, "data", 8 * 1024 * 1024),
+        const data = wsString(message, "data", ENCRYPTED_MESSAGE_MAX_WIRE_BYTES);
+        if (new TextEncoder().encode(data).byteLength > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES) {
+            throw new MortyProtocolError("The live Session event exceeds the encrypted frame limit");
+        }
+        const delivery: MortyTransportSessionEvent = {
+            data,
             eventId: wsString(message, "eventId", 512),
             seqId: wsPositiveInteger(message, "seqId"),
-        });
+        };
+        registerLiveDelivery(delivery, this.#liveDelivery(id, subscription.scope, delivery.data));
+        subscription.controller.enqueue(delivery);
     };
 
     readonly #sendUnsubscribe = (id: string): void => {

@@ -41,9 +41,7 @@ const turnIdentitySchema = z.object({
     turnId: identifierSchema,
 });
 /** The acknowledgement of a Turn submission. */
-export const turnSchema = turnIdentitySchema
-    .extend({ request: promptTurnRequestSchema, state: turnStateSchema })
-    .readonly();
+const turnSchema = turnIdentitySchema.extend({ request: promptTurnRequestSchema, state: turnStateSchema }).readonly();
 
 export type Turn = z.infer<typeof turnSchema>;
 

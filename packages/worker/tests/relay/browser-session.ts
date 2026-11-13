@@ -47,7 +47,11 @@ const reply = v.variant("kind", [
 ]);
 
 /** A protocol client, not an HTTP alternative: every operation crosses the actual browser WS boundary. */
-export async function requestBrowserOperation(fetch: Fetch, request: Request): Promise<Response> {
+export async function requestBrowserOperation(
+    fetch: Fetch,
+    request: Request,
+    transportBody?: string,
+): Promise<Response> {
     using deadline = new RequestDeadline(request.signal, 30_000);
     const target = new URL(request.url);
     const computerId = target.pathname.slice(`${MORTY_API_PREFIX}/v1/computers/`.length).split("/")[0];
@@ -94,7 +98,7 @@ export async function requestBrowserOperation(fetch: Fetch, request: Request): P
                 method: request.method,
                 path: `${target.pathname}${target.search}`,
                 headers: browserOperationHeaders(request),
-                body: bytes === null ? await request.text() : "",
+                body: bytes === null ? (transportBody ?? (await request.text())) : "",
                 ...(bytes === null ? {} : { bodyByteLength: bytes.byteLength }),
             }),
         );

@@ -1,9 +1,20 @@
 import { z } from "zod";
 import { DIRECTORY_PATH as directoryPath } from "../../shared/directory.ts";
-import { identifierStringSchema as identifier } from "../../shared/identifier.ts";
-import { ProtocolMessageError } from "../../shared/message-codec.ts";
+import { encryptedMessageCodec } from "../../shared/encrypted-message.ts";
+import {
+    identifierStringSchema as identifier,
+    identifierStringSchema as routingIdentifier,
+} from "../../shared/identifier.ts";
+import {
+    decodeZodMessage as decodeRoutingZodMessage,
+    encryptedFieldSchema,
+    ProtocolMessageError,
+} from "../../shared/message-codec.ts";
 import { decodeKnownNativeSessionEvents, nativeSessionEventsSchema } from "../events/index.ts";
-import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
+import {
+    nativeSessionTargetSchema,
+    nativeSessionTargetSchema as routingTarget,
+} from "../shared/native-session-target.ts";
 
 export const SESSION_HISTORY_PAGE_LOAD_KIND = "session.live-history.v2.page.load";
 export const SESSION_HISTORY_PAGE_LOADED_KIND = "session.live-history.v2.page.loaded";
@@ -49,45 +60,6 @@ export type SessionHistoryPageLoaded = z.infer<typeof sessionHistoryPageLoadedSc
 export type SessionPreviewHistoryPageLoad = z.infer<typeof sessionPreviewHistoryPageLoadSchema>;
 export type SessionPreviewHistoryPageLoaded = z.infer<typeof sessionPreviewHistoryPageLoadedSchema>;
 
-const wireNativeSessionEventsSchema = z
-    .object({
-        events: z
-            .object({
-                events: z.array(z.unknown()).max(10_000).readonly(),
-                nextCursor: z.string().min(1).max(512).nullable(),
-                sessionGenerationId: identifier,
-                tailCursor: z.string().max(512),
-                throughPosition: z.string().regex(/^(0|[1-9][0-9]*)$/u),
-                truncated: z.boolean(),
-                version: z.literal(2),
-            })
-            .passthrough()
-            .readonly(),
-        queuedPromptRequests: z.array(z.unknown()).max(1_000).readonly(),
-    })
-    .passthrough()
-    .readonly();
-const sessionHistoryWirePageLoadedSchema = z
-    .object({
-        events: wireNativeSessionEventsSchema,
-        kind: z.literal(SESSION_HISTORY_PAGE_LOADED_KIND),
-        requestId: identifier,
-        target: nativeSessionTargetSchema,
-    })
-    .passthrough()
-    .readonly();
-const sessionPreviewHistoryWirePageLoadedSchema = z
-    .object({
-        events: wireNativeSessionEventsSchema,
-        kind: z.literal(SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND),
-        requestId: identifier,
-        target: nativeSessionTargetSchema,
-    })
-    .passthrough()
-    .readonly();
-export type SessionHistoryWirePageLoaded = z.infer<typeof sessionHistoryWirePageLoadedSchema>;
-export type SessionPreviewHistoryWirePageLoaded = z.infer<typeof sessionPreviewHistoryWirePageLoadedSchema>;
-
 function decode<T>(schema: z.ZodType<T>, encoded: string): T {
     try {
         const value: unknown = JSON.parse(encoded);
@@ -117,15 +89,85 @@ export const decodeSessionPreviewHistoryPageLoad = (encoded: string): SessionPre
     decode(sessionPreviewHistoryPageLoadSchema, encoded);
 export const decodeSessionPreviewHistoryPageLoaded = (encoded: string): SessionPreviewHistoryPageLoaded =>
     decodeLoaded(sessionPreviewHistoryPageLoadedSchema, encoded);
-export const decodeSessionHistoryWirePageLoaded = (encoded: string): SessionHistoryWirePageLoaded =>
-    decode(sessionHistoryWirePageLoadedSchema, encoded);
-export const decodeSessionPreviewHistoryWirePageLoaded = (encoded: string): SessionPreviewHistoryWirePageLoaded =>
-    decode(sessionPreviewHistoryWirePageLoadedSchema, encoded);
 export const encodeSessionHistoryPageLoad = (value: SessionHistoryPageLoad): string =>
     JSON.stringify(sessionHistoryPageLoadSchema.parse(value));
-export const encodeSessionHistoryPageLoaded = (value: SessionHistoryPageLoaded): string =>
-    JSON.stringify(sessionHistoryPageLoadedSchema.parse(value));
 export const encodeSessionPreviewHistoryPageLoad = (value: SessionPreviewHistoryPageLoad): string =>
     JSON.stringify(sessionPreviewHistoryPageLoadSchema.parse(value));
-export const encodeSessionPreviewHistoryPageLoaded = (value: SessionPreviewHistoryPageLoaded): string =>
-    JSON.stringify(sessionPreviewHistoryPageLoadedSchema.parse(value));
+
+const sessionPreviewHistoryPageLoadPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+});
+const sessionPreviewHistoryPageLoadRoutingSchema = sessionPreviewHistoryPageLoadPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionPreviewHistoryPageLoadRouting = z.infer<typeof sessionPreviewHistoryPageLoadRoutingSchema>;
+const decodeSessionPreviewHistoryPageLoadRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionPreviewHistoryPageLoadRoutingSchema);
+export const sessionPreviewHistoryPageLoadCodec = encryptedMessageCodec({
+    kind: SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND,
+    decode: decodeSessionPreviewHistoryPageLoad,
+    decodeRouting: decodeSessionPreviewHistoryPageLoadRouting,
+    publicRoutingSchema: sessionPreviewHistoryPageLoadPublicRoutingSchema,
+});
+
+const sessionHistoryPageLoadPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_HISTORY_PAGE_LOAD_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+});
+const sessionHistoryPageLoadRoutingSchema = sessionHistoryPageLoadPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionHistoryPageLoadRouting = z.infer<typeof sessionHistoryPageLoadRoutingSchema>;
+const decodeSessionHistoryPageLoadRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionHistoryPageLoadRoutingSchema);
+export const sessionHistoryPageLoadCodec = encryptedMessageCodec({
+    kind: SESSION_HISTORY_PAGE_LOAD_KIND,
+    decode: decodeSessionHistoryPageLoad,
+    decodeRouting: decodeSessionHistoryPageLoadRouting,
+    publicRoutingSchema: sessionHistoryPageLoadPublicRoutingSchema,
+});
+
+const sessionPreviewHistoryPageLoadedPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+});
+const sessionPreviewHistoryPageLoadedRoutingSchema = sessionPreviewHistoryPageLoadedPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionPreviewHistoryPageLoadedRouting = z.infer<typeof sessionPreviewHistoryPageLoadedRoutingSchema>;
+const decodeSessionPreviewHistoryPageLoadedRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionPreviewHistoryPageLoadedRoutingSchema);
+export const sessionPreviewHistoryPageLoadedCodec = encryptedMessageCodec({
+    kind: SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND,
+    decode: decodeSessionPreviewHistoryPageLoaded,
+    decodeRouting: decodeSessionPreviewHistoryPageLoadedRouting,
+    publicRoutingSchema: sessionPreviewHistoryPageLoadedPublicRoutingSchema,
+});
+
+const sessionHistoryPageLoadedPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_HISTORY_PAGE_LOADED_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+});
+const sessionHistoryPageLoadedRoutingSchema = sessionHistoryPageLoadedPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export function historyWireJsonSchemas() {
+    return {
+        historyRequest: z.toJSONSchema(sessionHistoryPageLoadRoutingSchema),
+        historyReply: z.toJSONSchema(sessionHistoryPageLoadedRoutingSchema),
+    };
+}
+export type SessionHistoryPageLoadedRouting = z.infer<typeof sessionHistoryPageLoadedRoutingSchema>;
+const decodeSessionHistoryPageLoadedRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionHistoryPageLoadedRoutingSchema);
+export const sessionHistoryPageLoadedCodec = encryptedMessageCodec({
+    kind: SESSION_HISTORY_PAGE_LOADED_KIND,
+    decode: decodeSessionHistoryPageLoaded,
+    decodeRouting: decodeSessionHistoryPageLoadedRouting,
+    publicRoutingSchema: sessionHistoryPageLoadedPublicRoutingSchema,
+});

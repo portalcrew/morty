@@ -1,8 +1,16 @@
 import { z } from "zod";
 import { MAX_WORKSPACE_PATH_LENGTH } from "../../shared/directory.ts";
-
-import { identifierStringSchema as IDENTIFIER } from "../../shared/identifier.ts";
-import { decodeZodMessage as decode, encodeZodMessage as encode } from "../../shared/message-codec.ts";
+import { encryptedMessageCodec } from "../../shared/encrypted-message.ts";
+import {
+    identifierStringSchema as IDENTIFIER,
+    identifierStringSchema as routingIdentifier,
+} from "../../shared/identifier.ts";
+import {
+    decodeZodMessage as decode,
+    decodeZodMessage as decodeRoutingZodMessage,
+    encodeZodMessage as encode,
+    encryptedFieldSchema,
+} from "../../shared/message-codec.ts";
 import { DIRECTORY_PATH, workspaceEntrySchema } from "../shared/index.ts";
 
 export const WORKSPACE_LIST_KIND = "workspace.list";
@@ -36,7 +44,39 @@ export const decodeWorkspaceListCommand = (encoded: string): WorkspaceListComman
     decode(encoded, workspaceListCommandSchema);
 export const encodeWorkspaceListCommand = (message: WorkspaceListCommand): string =>
     encode(message, workspaceListCommandSchema);
-export const decodeWorkspaceEntriesEvent = (encoded: string): WorkspaceEntriesEvent =>
+const decodeWorkspaceEntriesEvent = (encoded: string): WorkspaceEntriesEvent =>
     decode(encoded, workspaceEntriesEventSchema);
-export const encodeWorkspaceEntriesEvent = (message: WorkspaceEntriesEvent): string =>
-    encode(message, workspaceEntriesEventSchema);
+
+const workspaceListCommandPublicRoutingSchema = z.object({
+    kind: z.literal(WORKSPACE_LIST_KIND),
+    requestId: routingIdentifier,
+});
+const workspaceListCommandRoutingSchema = workspaceListCommandPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type WorkspaceListCommandRouting = z.infer<typeof workspaceListCommandRoutingSchema>;
+const decodeWorkspaceListCommandRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, workspaceListCommandRoutingSchema);
+export const workspaceListCommandCodec = encryptedMessageCodec({
+    kind: WORKSPACE_LIST_KIND,
+    decode: decodeWorkspaceListCommand,
+    decodeRouting: decodeWorkspaceListCommandRouting,
+    publicRoutingSchema: workspaceListCommandPublicRoutingSchema,
+});
+
+const workspaceEntriesEventPublicRoutingSchema = z.object({
+    kind: z.literal(WORKSPACE_ENTRIES_KIND),
+    requestId: routingIdentifier,
+});
+const workspaceEntriesEventRoutingSchema = workspaceEntriesEventPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type WorkspaceEntriesEventRouting = z.infer<typeof workspaceEntriesEventRoutingSchema>;
+const decodeWorkspaceEntriesEventRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, workspaceEntriesEventRoutingSchema);
+export const workspaceEntriesEventCodec = encryptedMessageCodec({
+    kind: WORKSPACE_ENTRIES_KIND,
+    decode: decodeWorkspaceEntriesEvent,
+    decodeRouting: decodeWorkspaceEntriesEventRouting,
+    publicRoutingSchema: workspaceEntriesEventPublicRoutingSchema,
+});

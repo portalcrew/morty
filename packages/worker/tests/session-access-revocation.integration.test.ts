@@ -1,6 +1,7 @@
-import { MortyClient, MortyPageRequest, sessionEndpoints, WsTransport } from "@morty-build/client";
+import { MortyClient, MortyPageRequest, WsTransport } from "@morty-build/client";
 import * as v from "valibot";
 import { afterEach, beforeEach, expect, onTestFinished, test, vi } from "vitest";
+import { createOwnerApi } from "../../../tests/support/owner-api.ts";
 import worker from "../src/worker/application.ts";
 import { APP_ORIGIN, AUTH_TIME, createIdentityFixture } from "./support/identity-fixture.ts";
 
@@ -17,7 +18,7 @@ test("Given a browser opening a Session, When its device is revoked before the C
     let hold = false;
     try {
         const owner = await cloud.createAnonymousUser();
-        await using _runtime = await cloud.connectAgent(owner.computerId, owner.token, [
+        await using runtime = await cloud.connectAgent(owner.computerId, owner.token, [
             {
                 harness: "configuration-test",
                 label: "Configuration Test",
@@ -41,14 +42,7 @@ test("Given a browser opening a Session, When its device is revoked before the C
                 env,
             );
         const computerPath = `v1/computers/${owner.computerId}`;
-        const chat = `v1/computers/${owner.computerId}`;
-        expect(
-            (
-                await request(`${chat}/setup`, owner.token, {
-                    harness: "configuration-test",
-                })
-            ).status,
-        ).toBe(202);
+        await runtime.api.verifyAgent("configuration-test", AbortSignal.timeout(15_000));
         const shared = await request(`${computerPath}/identity/transfers`, owner.token, {
             operationId: crypto.randomUUID(),
         });
@@ -68,11 +62,28 @@ test("Given a browser opening a Session, When its device is revoked before the C
             throw new Error("Missing revoked browser");
         }
         hold = true;
-        const opening = request(`${chat}/managed-sessions/open`, browser, {
-            harness: "configuration-test",
-            configurations: [],
-            conversationKey: "revocation-race",
-            workspaceRef: ".",
+        const browserApi = createOwnerApi({
+            origin: cloud.origin,
+            computerId: owner.computerId,
+            credential: browser,
+            encryptionAccess: await runtime.encryptionAccess(AbortSignal.timeout(15_000)),
+            request: (value) => worker.fetch(value, env),
+        });
+        onTestFinished(browserApi.close);
+        const opening = browserApi.api.createConversation(
+            "revocation-race",
+            {
+                harness: "configuration-test",
+                configurations: [],
+                workspaceRef: ".",
+                workspaceLabel: ".",
+            },
+            AbortSignal.timeout(30_000),
+        );
+        const rejected = expect(opening).rejects.toMatchObject({
+            code: "UNAUTHENTICATED",
+            status: 401,
+            message: "Access to this computer has ended.",
         });
         await creation.promise;
         const revoked = await request(
@@ -85,11 +96,7 @@ test("Given a browser opening a Session, When its device is revoked before the C
         expect(await revoked.json()).toEqual({ status: "device_access_ended" });
         expect((await request(`${computerPath}/session`, browser)).status).toBe(401);
         continueCreation.resolve();
-        const opened = await opening;
-        expect(opened.status).toBe(401);
-        expect(await opened.json()).toEqual({
-            error: { code: "UNAUTHENTICATED", message: "Access to this computer has ended.", reason: "ACCESS_REVOKED" },
-        });
+        await rejected;
     } finally {
         continueCreation.resolve();
         await cloud.close();
@@ -111,8 +118,7 @@ test("Given a device with an open Session, When its owner disconnects it while t
                 cloud.environment(),
             );
         const computerPath = `v1/computers/${owner.computerId}`;
-        const chat = `v1/computers/${owner.computerId}`;
-        expect((await request(`${chat}/setup`, owner.token, { harness: "codex" })).status).toBe(202);
+        await runtime.api.verifyAgent("codex", AbortSignal.timeout(15_000));
         const shared = await request(`${computerPath}/identity/transfers`, owner.token, {
             operationId: crypto.randomUUID(),
         });
@@ -127,32 +133,36 @@ test("Given a device with an open Session, When its owner disconnects it while t
         if (device === undefined) {
             throw new Error("Missing joined browser");
         }
-        const opened = await request(`${chat}/managed-sessions/open`, browser, {
-            harness: "codex",
-            configurations: [],
-            conversationKey: "ended-device-window",
-            workspaceRef: ".",
+        const browserApi = createOwnerApi({
+            origin: cloud.origin,
+            computerId: owner.computerId,
+            credential: browser,
+            encryptionAccess: await runtime.encryptionAccess(AbortSignal.timeout(15_000)),
+            request: (value) => worker.fetch(value, cloud.environment()),
         });
-        expect(opened.status).toBe(200);
-        const window = v.parse(
-            v.object({
-                computerId: v.string(),
-                target: v.object({ harness: v.string(), sessionId: v.string() }),
-                credential: v.string(),
-            }),
-            await opened.json(),
+        onTestFinished(browserApi.close);
+        const window = await browserApi.api.createConversation(
+            "ended-device-window",
+            {
+                harness: "codex",
+                configurations: [],
+                workspaceRef: ".",
+                workspaceLabel: ".",
+            },
+            AbortSignal.timeout(30_000),
         );
         const transport = new WsTransport();
         onTestFinished(() => transport.close());
-        const readAccess = () =>
-            transport.fetch({
-                endpoint: sessionEndpoints.readConfiguration({ computerId: window.computerId, target: window.target }),
-                origin: new URL("/morty/api/", cloud.origin),
-                headers: { authorization: `Bearer ${window.credential}` },
-                body: null,
-                signal: AbortSignal.timeout(15_000),
-            });
-        expect((await readAccess()).status).toBe(200);
+        const client = new MortyClient({
+            transport,
+            encryption: { access: await runtime.encryptionAccess(AbortSignal.timeout(15_000)) },
+            endpoint: cloud.origin,
+            computerId: window.computerId,
+            credentialProvider: { credential: async () => window.credential },
+        });
+        onTestFinished(client.close);
+        const readAccess = () => client.sessions.readConfiguration(window.target, AbortSignal.timeout(15_000));
+        await expect(readAccess()).resolves.toBeDefined();
         await runtime.disconnect();
         const failed = await request(`${computerPath}/identity/devices/${device.id}`, owner.token, undefined, "DELETE");
 
@@ -163,9 +173,7 @@ test("Given a device with an open Session, When its owner disconnects it while t
         await runtime.reconnect();
         const remaining = await request(`${computerPath}/identity/devices`, owner.token);
         expect(await remaining.json()).toMatchObject({ devices: [] });
-        const denied = await readAccess();
-        expect(denied.status).toBe(401);
-        expect(await denied.json()).toMatchObject({ error: { code: "credential_revoked" } });
+        await expect(readAccess()).rejects.toMatchObject({ code: "credential_revoked" });
     } finally {
         await cloud.close();
     }
@@ -185,8 +193,7 @@ async function sharedComputer(cloud: Awaited<ReturnType<typeof createIdentityFix
             cloud.environment(),
         );
     const computerPath = `v1/computers/${owner.computerId}`;
-    const chat = `v1/computers/${owner.computerId}`;
-    expect((await request(`${chat}/setup`, owner.token, { harness: "codex" })).status).toBe(202);
+    await runtime.api.verifyAgent("codex", AbortSignal.timeout(15_000));
     /** A browser joins through a link the owner shares, and opens a conversation it then reads. */
     const joinBrowser = async (label: string) => {
         const shared = await request(`${computerPath}/identity/transfers`, owner.token, {
@@ -203,25 +210,29 @@ async function sharedComputer(cloud: Awaited<ReturnType<typeof createIdentityFix
         if (device === undefined) {
             throw new Error(`Missing joined browser ${label}`);
         }
-        const opened = await request(`${chat}/managed-sessions/open`, token, {
-            harness: "codex",
-            configurations: [],
-            conversationKey: `${label.toLowerCase().replaceAll(" ", "-")}-window`,
-            workspaceRef: ".",
+        const browserApi = createOwnerApi({
+            origin: cloud.origin,
+            computerId: owner.computerId,
+            credential: token,
+            encryptionAccess: await runtime.encryptionAccess(AbortSignal.timeout(15_000)),
+            request: (value) => worker.fetch(value, cloud.environment()),
         });
-        expect(opened.status).toBe(200);
-        const window = v.parse(
-            v.object({
-                computerId: v.string(),
-                target: v.object({ harness: v.string(), sessionId: v.string() }),
-                credential: v.string(),
-            }),
-            await opened.json(),
+        onTestFinished(browserApi.close);
+        const window = await browserApi.api.createConversation(
+            `${label.toLowerCase().replaceAll(" ", "-")}-window`,
+            {
+                harness: "codex",
+                configurations: [],
+                workspaceRef: ".",
+                workspaceLabel: ".",
+            },
+            AbortSignal.timeout(30_000),
         );
         const transport = new WsTransport();
         onTestFinished(transport.close);
         const client = new MortyClient({
             transport,
+            encryption: { access: await runtime.encryptionAccess(AbortSignal.timeout(15_000)) },
             endpoint: cloud.origin,
             computerId: window.computerId,
             credentialProvider: { credential: async () => window.credential },

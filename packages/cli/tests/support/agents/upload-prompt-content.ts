@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import {
     CONTENT_CHUNK_MAX_BYTES,
     decodeContentAvailableEvent,
+    decodeContentChunkAck,
     decodeContentReadyEvent,
     decodeMessageKind,
     encodeContentChunkFrame,
@@ -48,6 +49,10 @@ export async function uploadPromptContent(
                 sequence,
             }),
         );
+        const acknowledged = decodeContentChunkAck(await peer.nextMessage());
+        if (acknowledged.requestId !== requestId || acknowledged.sequence !== sequence) {
+            throw new Error("The daemon did not acknowledge the uploaded content chunk");
+        }
         sequence += 1;
     }
     peer.send(encodeContentCommitCommand({ kind: "content.commit", requestId, target: peer.target }));

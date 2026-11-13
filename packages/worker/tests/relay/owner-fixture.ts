@@ -43,13 +43,13 @@ async function ownerHolder(computerId: string): Promise<SessionAccessHolder> {
 }
 
 /** Session protocol scenarios start with an authorized computer and an issued Session credential. */
-export async function issueSession(computerId: string, target: NativeSessionTarget) {
+export async function issueSession(computerId: string, target: NativeSessionTarget, expiresInSeconds = 900) {
     const holder = await ownerHolder(computerId);
     return runInDurableObject(env.COMPUTER_RELAY.getByName(computerObjectName(computerId)), async (_instance, state) =>
         new SessionAccessService(
             computerAccess(computerId, state.storage).access,
             new SessionAccessSigner(env.MORTY_SESSION_SIGNING_SECRET),
-        ).issue({ kind: "session", computerId, target }, 900, holder, AbortSignal.timeout(10_000)),
+        ).issue({ kind: "session", computerId, target }, expiresInSeconds, holder, AbortSignal.timeout(10_000)),
     );
 }
 

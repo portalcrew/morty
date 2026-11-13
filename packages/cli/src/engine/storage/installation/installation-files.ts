@@ -22,7 +22,10 @@ export type InstallationFileRead =
     | { readonly kind: "not-a-small-file" };
 
 /** Reads a small regular file. Errors after the file is open propagate. */
-export async function readInstallationFile(path: string): Promise<InstallationFileRead> {
+export async function readInstallationFile(
+    path: string,
+    maximumBytes = MAXIMUM_FILE_BYTES,
+): Promise<InstallationFileRead> {
     let handle: FileHandle;
     try {
         handle = await open(path, "r");
@@ -31,7 +34,7 @@ export async function readInstallationFile(path: string): Promise<InstallationFi
     }
     try {
         const metadata = await handle.stat();
-        if (!metadata.isFile() || metadata.size > MAXIMUM_FILE_BYTES) {
+        if (!metadata.isFile() || metadata.size > maximumBytes) {
             return { kind: "not-a-small-file" };
         }
         return { kind: "read", text: await handle.readFile({ encoding: "utf8" }) };

@@ -4,7 +4,7 @@ test("Given the browser denies clipboard access, When I copy a response and then
     runtime,
 }, testInfo) => {
     const { page } = runtime;
-    await page.clock.install({ time: new Date("2026-10-27T12:00:00Z") });
+    await runtime.clock.install({ time: new Date("2026-10-27T12:00:00Z") });
     await runtime.openPairedChat();
     await page.getByRole("textbox", { name: "Message" }).fill("distinguish agent work");
     await page.getByRole("button", { name: "Send message" }).click();

@@ -1,28 +1,27 @@
-import type { ForkMortyNativeSessionRequest } from "@morty-build/client";
-import type {
-    AgentSettingsDiscoverCommand,
-    AgentSettingsDiscoveredEvent,
-    ContentAvailableEvent,
-    ContentWriteCommand,
-    FileReadCommand,
-    NativeSessionResult,
-    NativeSessionTarget,
-    SessionAccessGrant,
-    WorkspaceEntriesEvent,
-    WorkspaceListCommand,
-} from "@morty-build/client/protocol";
-import { decodeNativeSessionCancel, requestReplyAddress } from "@morty-build/client/protocol";
-import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
-import type { RuntimeContext } from "../runtime-context.ts";
+import type { FileReadCommand, NativeSessionTarget, SessionAccessGrant } from "@morty-build/client/protocol";
 import {
-    type ComputerControlCommand,
-    type ComputerControlResult,
+    type AgentSettingsDiscoverCommandRouting,
+    contentWriteCommandCodec,
+    decodeMessageKind,
+    decodeWorkerFileCredit,
+    decodeWorkerRequestCancel,
+    ProtocolMessageError,
+    type SessionEventsSubscribeCommandRouting,
+    WORKER_FILE_CREDIT_KIND,
+    WORKER_REQUEST_CANCEL_KIND,
+} from "@morty-build/client/protocol";
+import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
+import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
+import { RequestDeadline } from "../../../../http/request-deadline.ts";
+import type { RuntimeContext } from "../runtime-context.ts";
+import type { ClientControlCommand } from "./computer-control-registry.ts";
+import {
+    requestClientControl,
     requestComputerAgentSettings,
     requestComputerContentWrite,
-    requestComputerControl,
     requestComputerFile,
-    requestComputerWorkspace,
 } from "./computer-control-request.ts";
+import { ContentUploadReader } from "./content-upload-reader.ts";
 
 export type LocalSessionOperations = Readonly<ReturnType<typeof createLocalSessionOperations>>;
 
@@ -40,64 +39,69 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
     const connect = async (requestId: string, target: NativeSessionTarget | undefined, signal: AbortSignal) => {
         signal.throwIfAborted();
         await cx.services.runtime.expireSilentDaemons();
+        signal.throwIfAborted();
         return cx.gateways.requests.open(requestId, target, async (socket, message) => {
+            if (typeof message === "string" && decodeMessageKind(message) === WORKER_FILE_CREDIT_KIND) {
+                const credit = decodeWorkerFileCredit(message);
+                if (credit.requestId !== requestId) {
+                    throw new PairingDirectoryError("invalid_request", "The credit does not own this operation");
+                }
+                signal.throwIfAborted();
+                cx.services.runtime.grantFileCredit(computerId, socket, requestId, signal);
+                return;
+            }
+            if (typeof message === "string" && decodeMessageKind(message) === WORKER_REQUEST_CANCEL_KIND) {
+                const cancellation = decodeWorkerRequestCancel(message);
+                if (cancellation.requestId !== requestId) {
+                    throw new PairingDirectoryError("invalid_request", "The cancellation does not own this operation");
+                }
+                const cleanup = new AbortController();
+                const timer = setTimeout(
+                    () => cleanup.abort(new DOMException("Cancellation timed out", "TimeoutError")),
+                    15_000,
+                );
+                try {
+                    cx.services.runtime.cancelRequest(computerId, socket, requestId, cleanup.signal);
+                } finally {
+                    clearTimeout(timer);
+                }
+                return;
+            }
             if (!signal.aborted) {
                 await cx.services.runtime.receiveOperation(computerId, socket, message, signal);
                 return;
             }
-            // The caller has left, but native query cancellation must still reach the daemon.
-            if (typeof message !== "string") {
-                throw signal.reason;
-            }
-            const cancellation = decodeNativeSessionCancel(message);
-            if (cancellation.requestId !== requestId) {
-                throw signal.reason;
-            }
-            const cleanup = new AbortController();
-            const timer = setTimeout(
-                () => cleanup.abort(new DOMException("Cancellation timed out", "TimeoutError")),
-                15_000,
-            );
-            try {
-                await cx.services.runtime.receiveOperation(computerId, socket, message, cleanup.signal);
-            } finally {
-                clearTimeout(timer);
-            }
+            throw signal.reason;
         });
     };
-    const requestControl = async (
-        requestedComputerId: string,
-        command: ComputerControlCommand,
-        signal: AbortSignal,
-    ): Promise<ComputerControlResult> => {
-        checkTarget(requestedComputerId);
-        const target = "target" in command ? command.target : undefined;
-        const socket = await connect(requestReplyAddress(command), target, signal);
-        return await requestComputerControl(socket, command, signal);
-    };
     return {
-        forkNativeSession: async (
+        requestClientControl: async (
             requestedComputerId: string,
-            operationId: string,
-            input: ForkMortyNativeSessionRequest,
+            command: ClientControlCommand,
             signal: AbortSignal,
-        ): Promise<NativeSessionResult> => {
+        ) => {
             checkTarget(requestedComputerId);
-            return await cx.services.nativeForks.fork(requestedComputerId, operationId, input, requestControl, signal);
-        },
-        requestWorkspace: async (
-            requestedComputerId: string,
-            command: WorkspaceListCommand,
-            signal: AbortSignal,
-        ): Promise<WorkspaceEntriesEvent> => {
-            checkTarget(requestedComputerId);
-            return await requestComputerWorkspace(await connect(command.requestId, undefined, signal), command, signal);
+            const requestId = command.requestId;
+            const target = "target" in command ? command.target : undefined;
+            const execute = async (operationSignal: AbortSignal) => {
+                checkTarget(requestedComputerId);
+                return await requestClientControl(
+                    await connect(requestId, target, operationSignal),
+                    command,
+                    operationSignal,
+                    command.kind === "native.session.request" && command.action === "fork" ? signal : undefined,
+                );
+            };
+            if (command.kind === "native.session.request" && command.action === "fork") {
+                return await cx.gateways.requests.runRecoverableFork(requestId, signal, execute);
+            }
+            return await execute(signal);
         },
         requestAgentSettings: async (
             requestedComputerId: string,
-            command: AgentSettingsDiscoverCommand,
+            command: AgentSettingsDiscoverCommandRouting,
             signal: AbortSignal,
-        ): Promise<AgentSettingsDiscoveredEvent> => {
+        ): Promise<string> => {
             checkTarget(requestedComputerId);
             return await requestComputerAgentSettings(
                 await connect(command.requestId, undefined, signal),
@@ -108,6 +112,7 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
         openPublicSessionEvents: async (
             requestedComputerId: string,
             sessionTarget: NativeSessionTarget,
+            subscription: SessionEventsSubscribeCommandRouting,
             credential: {
                 readonly signingKeyId: string;
                 readonly grant: SessionAccessGrant;
@@ -122,18 +127,35 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
             if (!cx.services.runtime.isOnline()) {
                 throw new PairingDirectoryError("computer_offline", "The Computer is offline");
             }
-            return cx.gateways.peers.accept({
+            if (
+                cx.gateways.peers
+                    .sockets()
+                    .some(
+                        ({ identity }) =>
+                            identity.role === "viewer" && identity.subscriptionId === subscription.subscriptionId,
+                    )
+            ) {
+                throw new PairingDirectoryError("invalid_request", "The subscription identifier is already in use");
+            }
+            const viewer = cx.gateways.peers.accept({
                 role: "viewer",
                 computerId,
                 sessionFilter: sessionTarget,
+                subscriptionId: subscription.subscriptionId,
                 expiresAt: credential.expiresAt,
                 credential: {
                     signingKeyId: credential.signingKeyId,
                     grant: credential.grant,
                 },
-            }).response;
+            });
+            try {
+                await cx.services.runtime.registerSessionSubscription(computerId, sessionTarget, subscription, signal);
+                return viewer.response;
+            } catch (cause) {
+                viewer.socket.close(1008, "Session subscription failed");
+                throw cause;
+            }
         },
-        requestControl,
         readSessionFile: async (
             requestedComputerId: string,
             command: FileReadCommand,
@@ -152,17 +174,39 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
         },
         writeSessionContent: async (
             requestedComputerId: string,
-            command: ContentWriteCommand,
+            target: NativeSessionTarget,
             body: ReadableStream<Uint8Array>,
             signal: AbortSignal,
-        ): Promise<ContentAvailableEvent> => {
+        ): Promise<string> => {
             checkTarget(requestedComputerId);
-            const socket = await connect(command.requestId, command.target, signal);
+            using deadline = new RequestDeadline(signal, 120_000);
+            const records = new ContentUploadReader(body);
             try {
-                return await requestComputerContentWrite(socket, command, body, signal);
+                const first = await records.read(deadline.signal);
+                if (first?.kind !== "message") {
+                    throw new SessionRuntimeError("invalid_request", "The content write command is required");
+                }
+                const command = contentWriteCommandCodec.decodeRouting(first.encoded);
+                if (command.target.harness !== target.harness || command.target.sessionId !== target.sessionId) {
+                    throw new SessionRuntimeError("invalid_request", "The content upload does not match its Session");
+                }
+                const socket = await connect(command.requestId, target, deadline.signal);
+                try {
+                    return await requestComputerContentWrite(socket, first.encoded, records, deadline.signal);
+                } catch (cause) {
+                    socket.close(1000, "Content upload ended");
+                    throw cause;
+                }
             } catch (cause) {
-                socket.close(1000, "Content upload ended");
+                deadline.signal.throwIfAborted();
+                if (cause instanceof ProtocolMessageError) {
+                    throw new SessionRuntimeError("invalid_request", "The encrypted content upload is invalid", {
+                        cause,
+                    });
+                }
                 throw cause;
+            } finally {
+                await records.close();
             }
         },
     };

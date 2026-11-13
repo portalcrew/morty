@@ -1,3 +1,4 @@
+import type { PayloadEncryptionConnection } from "@morty-build/client";
 import type { WebSocket } from "undici";
 import type { ResolveAgent } from "../../session/api/session-api.ts";
 import type { ExternalContentStore } from "../../session/content/external-content-store.ts";
@@ -11,8 +12,11 @@ import type { WorkspaceDirectoryService } from "../../session/workspace/workspac
 import type { Timer } from "../../util/timer.ts";
 import type { RuntimeConfig } from "../config.ts";
 import type { RelayConnectionDiagnostics } from "../relay/diagnostics.ts";
+import type { createSessionSubscriptions } from "./registry/subscriptions.ts";
 
 export interface CommandContext {
+    readonly payloadEncryption: PayloadEncryptionConnection;
+    readonly subscriptions: ReturnType<typeof createSessionSubscriptions>;
     readonly sessionCreations: SessionCreations;
     readonly resolveAgent: ResolveAgent;
     readonly config: RuntimeConfig;

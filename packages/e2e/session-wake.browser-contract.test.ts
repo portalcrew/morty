@@ -58,12 +58,13 @@ test("Given a conversation recovering after suspension, when its history read ti
     // ten-second heartbeat deadline, each ending once the ping is answered.
     const stayConnectedFor = async (milliseconds: number) => {
         for (let elapsed = 0; elapsed < milliseconds; elapsed += 5_000) {
-            await page.clock.runFor(Math.min(5_000, milliseconds - elapsed));
+            const step = Math.min(5_000, milliseconds - elapsed);
+            await runtime.clock.runFor(step);
             await heartbeat?.promise;
         }
     };
-    await page.clock.install({ time: new Date("2026-10-28T08:00:00Z") });
-    await page.clock.pauseAt(new Date("2026-10-28T08:01:00Z"));
+    await runtime.clock.install({ time: new Date("2026-10-28T08:00:00Z") });
+    await runtime.clock.pauseAt(new Date("2026-10-28T08:01:00Z"));
     await runtime.openPairedChat();
     const composer = page.getByRole("textbox", { name: "Message" });
     await composer.fill("hold after first delta");

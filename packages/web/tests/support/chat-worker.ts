@@ -1,9 +1,21 @@
 import { resolve } from "node:path";
-import { MortyClient, WsTransport } from "@morty-build/client";
+import {
+    createClientPayloadEncryption,
+    createComputerPayloadEncryption,
+    type PayloadEncryptionConnection,
+} from "@morty-build/client";
+import {
+    decodeKnownSessionLiveEventBatch,
+    decodeMessageKind,
+    nativeSessionResultCodec,
+    sessionEventEnvelopeCodec,
+    sessionPromptCommandCodec,
+} from "@morty-build/client/protocol";
 import * as v from "valibot";
 import type { ControlledAgent } from "../../../../tests/support/fake-daemon/runtime.ts";
 import { createResponseLossProxy } from "../../../relay-test-support/src/response-loss-proxy.ts";
 import { createIdentityFixture } from "../../../worker/tests/support/identity-fixture.ts";
+import { rememberComputerEncryption } from "../../src/services/identity/remembered-computers.ts";
 import { TestApiTransport } from "./test-api-transport.ts";
 
 /**
@@ -17,6 +29,7 @@ export async function createChatWorkerEnvironment(
     delayExecutionReads = false,
     loseSharingResponses = false,
 ) {
+    const observers = new Set<PayloadEncryptionConnection>();
     const cloud = await createIdentityFixture({
         listenOnLoopback: true,
         ...(loseTurnResponses ? { loseTurnResponses: true as const } : {}),
@@ -60,62 +73,105 @@ export async function createChatWorkerEnvironment(
         const computerId = identity.computerId;
         const transport = new TestApiTransport(origin);
         transport.open();
+        let submissionObserver: PayloadEncryptionConnection | null = null;
+        const submissions = new Map<
+            string,
+            Promise<Omit<Awaited<ReturnType<typeof sessionPromptCommandCodec.decode>>, "requestId">>
+        >();
         const connect = async (agents: readonly ControlledAgent[], sessionIds?: ReadonlySet<string>) => {
             const runtime = await cloud.connectAgent(identity.computerId, identity.token, agents, sessionIds);
-            const setup = await request(`v1/computers/${identity.computerId}/setup`, {
-                harness: agents[0]?.harness ?? "codex",
-            });
-            if (setup.status !== 202) {
-                throw new Error(`Could not prepare the test Computer: ${setup.status} ${await setup.text()}`);
+            const access = await runtime.encryptionAccess(AbortSignal.timeout(30_000));
+            rememberComputerEncryption(access);
+            const claims = new Set<string>();
+            submissionObserver = await createComputerPayloadEncryption(
+                access,
+                async (claim, signal) => {
+                    signal.throwIfAborted();
+                    if (claims.has(claim.fingerprint)) {
+                        throw new Error("The recorded submission was already decoded");
+                    }
+                    claims.add(claim.fingerprint);
+                },
+                AbortSignal.timeout(30_000),
+            );
+            observers.add(submissionObserver);
+            if (cloud.executionNetwork !== null) {
+                const encryption = await createClientPayloadEncryption(access, AbortSignal.timeout(30_000));
+                observers.add(encryption);
+                const terminalEvents = new Map<string, Promise<boolean>>();
+                cloud.executionNetwork.observeComputer(identity.computerId, {
+                    execution: async (encoded, signal) => {
+                        if (decodeMessageKind(encoded) !== "native.session.result") {
+                            return null;
+                        }
+                        const snapshot = await nativeSessionResultCodec.decode(encoded, encryption, signal);
+                        if (snapshot.action !== "active-turn") {
+                            throw new Error("Expected an execution snapshot");
+                        }
+                        return {
+                            turn: snapshot.turn?.commandId ?? null,
+                            lastTurn: snapshot.lastTurn?.commandId ?? null,
+                            lastTurnState: snapshot.lastTurn?.state ?? null,
+                            interactionPosition: snapshot.interactionState?.throughPosition ?? null,
+                        };
+                    },
+                    terminal: (encoded, signal) => {
+                        if (decodeMessageKind(encoded) !== "session.event.v2") {
+                            return Promise.resolve(false);
+                        }
+                        let result = terminalEvents.get(encoded);
+                        if (result === undefined) {
+                            result = sessionEventEnvelopeCodec
+                                .decode(encoded, encryption, signal)
+                                .then((message) =>
+                                    decodeKnownSessionLiveEventBatch(message.events).some(
+                                        (event) =>
+                                            event.type === "lifecycle-metadata" &&
+                                            (event.payload.kind === "prompt.completed" ||
+                                                event.payload.kind === "prompt.failed"),
+                                    ),
+                                );
+                            if (terminalEvents.size >= 4096) {
+                                const oldest = terminalEvents.keys().next().value;
+                                if (oldest !== undefined) {
+                                    terminalEvents.delete(oldest);
+                                }
+                            }
+                            terminalEvents.set(encoded, result);
+                        }
+                        return result;
+                    },
+                });
             }
+            await runtime.api.verifyAgent(agents[0]?.harness ?? "codex", AbortSignal.timeout(120_000));
             // The second client reaches the same Worker directly; only the browser uses the failing network.
             const sessionClient = async (
                 target: { readonly harness: string; readonly sessionId: string },
                 signal: AbortSignal,
             ) => {
-                const response = await cloud.dispatchFetch(
-                    `${cloud.directOrigin}/morty/api/v1/computers/${runtime.computerId}/native-sessions/access`,
-                    {
-                        method: "POST",
-                        signal,
-                        headers: {
-                            authorization: `Bearer ${identity.token}`,
-                            "content-type": "application/json",
-                        },
-                        body: JSON.stringify(target),
-                    },
-                );
-                if (!response.ok) {
-                    throw new Error(`Could not authorize the second client: ${response.status}`);
-                }
-                const access = v.parse(v.object({ credential: v.string() }), await response.json());
-                signal.throwIfAborted();
-                const transport = new WsTransport();
-                return new MortyClient({
-                    transport,
-                    onClose: transport.close,
-                    endpoint: cloud.directOrigin,
-                    computerId: runtime.computerId,
-                    credentialProvider: {
-                        credential: async (signal: AbortSignal) => {
-                            signal.throwIfAborted();
-                            return access.credential;
-                        },
-                    },
-                });
+                return await runtime.api.connectSession(target, signal);
             };
             return {
                 failure: runtime.failure,
+                encryptionAccess: runtime.encryptionAccess,
                 continueReply: runtime.continueReply,
+                readManagedSessions: (signal: AbortSignal) => runtime.api.managedSessions(signal),
+                readNativeSessions: (signal: AbortSignal) =>
+                    runtime.api.nativeSessions(
+                        {
+                            action: "list",
+                            harness: agents[0]?.harness ?? "codex",
+                            directory: ".",
+                            cursor: null,
+                        },
+                        signal,
+                    ),
                 /** Archives a Session the way another browser window of this Computer would. */
                 archiveSession: async (sessionId: string): Promise<void> => {
-                    const response = await request(`v1/computers/${identity.computerId}/managed-sessions/archive`, {
-                        harness: agents[0]?.harness ?? "codex",
-                        sessionId,
-                    });
-                    if (response.status !== 200) {
-                        throw new Error(`Could not archive the test Session: ${response.status}`);
-                    }
+                    await runtime.api.archiveManagedSession(
+                        { harness: agents[0]?.harness ?? "codex", sessionId },
+                        AbortSignal.timeout(30_000),
+                    );
                 },
                 /** Applies another client's explicit model edit through the public Relay contract. */
                 selectModel: async (sessionId: string, value: string): Promise<void> => {
@@ -139,16 +195,36 @@ export async function createChatWorkerEnvironment(
                     }
                 },
                 /** Starts a turn through the Relay, the way another Morty client of this Computer would. */
-                submitTurn: async (sessionId: string, content: string): Promise<void> => {
+                submitTurn: async (
+                    sessionId: string,
+                    content: string,
+                    idempotencyKey: string = crypto.randomUUID(),
+                ): Promise<void> => {
                     const signal = AbortSignal.timeout(30000);
                     const target = { harness: agents[0]?.harness ?? "codex", sessionId };
                     const client = await sessionClient(target, signal);
                     try {
-                        await client.turns.submit(
-                            target,
-                            { attachments: [], content, idempotencyKey: crypto.randomUUID() },
-                            signal,
-                        );
+                        await client.turns.submit(target, { attachments: [], content, idempotencyKey }, signal);
+                    } finally {
+                        client.close();
+                    }
+                },
+                /** Requests steering through another authorized client's real Computer API. */
+                steerTurn: async (sessionId: string, turnId: string): Promise<void> => {
+                    const signal = AbortSignal.timeout(30_000);
+                    const target = { harness: agents[0]?.harness ?? "codex", sessionId };
+                    const client = await sessionClient(target, signal);
+                    try {
+                        await client.turns.steer(target, turnId, signal);
+                    } finally {
+                        client.close();
+                    }
+                },
+                readExecution: async (sessionId: string, signal: AbortSignal) => {
+                    const target = { harness: agents[0]?.harness ?? "codex", sessionId };
+                    const client = await sessionClient(target, signal);
+                    try {
+                        return await client.sessions.readSessionExecution(target, signal);
                     } finally {
                         client.close();
                     }
@@ -193,6 +269,20 @@ export async function createChatWorkerEnvironment(
         };
         return {
             computerId,
+            /** Reads recorded real traffic with this Computer's local authority; retries retain intent, not ciphertext. */
+            readSubmission: async (encoded: string | undefined, signal = AbortSignal.timeout(10_000)) => {
+                if (encoded === undefined || submissionObserver === null) {
+                    throw new Error("Expected recorded traffic and the connected Computer's encryption access");
+                }
+                let decoded = submissions.get(encoded);
+                if (decoded === undefined) {
+                    decoded = sessionPromptCommandCodec
+                        .decode(encoded, submissionObserver, signal)
+                        .then(({ requestId: _requestId, ...intent }) => intent);
+                    submissions.set(encoded, decoded);
+                }
+                return await decoded;
+            },
             network: cloud.network,
             sharingNetwork,
             executionNetwork: cloud.executionNetwork,
@@ -233,7 +323,13 @@ export async function createChatWorkerEnvironment(
             try {
                 await sharingNetwork?.close();
             } finally {
-                await cloud.close();
+                try {
+                    await cloud.close();
+                } finally {
+                    for (const observer of observers) {
+                        observer.close();
+                    }
+                }
             }
         },
     };

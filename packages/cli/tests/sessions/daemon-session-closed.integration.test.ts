@@ -7,7 +7,6 @@ import {
     decodeSessionPromptAcceptedEvent,
     decodeSessionRenamedEvent,
     decodeSessionsQueriedEvent,
-    encodeServiceToDaemonMessage,
     encodeSessionPromptCommand,
     encodeSessionQueryCommand,
     SESSION_CLOSED_ERROR_CODE,
@@ -15,6 +14,7 @@ import {
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
 import { expect, test } from "vitest";
+import { encodeSessionArchiveCommand } from "../../../client/src/protocol/session/lifecycle/index.ts";
 import type { AgentConnectionFactory } from "../support/agents/agent-connection.ts";
 import { ControlledReadinessSpecification } from "../support/agents/controlled-readiness-specification.ts";
 import { ControlledSessionAgent } from "../support/agents/controlled-session-agent.ts";
@@ -116,7 +116,7 @@ async function prompt(peer: RealDaemonPeer, sessionTarget: RealDaemonPeer["targe
 
 function sendArchive(peer: RealDaemonPeer, sessionTarget: RealDaemonPeer["target"]): string {
     const requestId = crypto.randomUUID();
-    peer.send(encodeServiceToDaemonMessage({ kind: "session.archive", requestId, target: sessionTarget }));
+    peer.send(encodeSessionArchiveCommand({ kind: "session.archive", requestId, target: sessionTarget }));
     return requestId;
 }
 

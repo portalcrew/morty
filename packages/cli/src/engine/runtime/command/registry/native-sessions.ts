@@ -3,34 +3,48 @@ import {
     SESSION_LISTED_KIND,
     SESSION_QUERIED_KIND,
     type SESSION_QUERY_KIND,
+    sessionsListedEventCodec,
+    sessionsQueriedEventCodec,
 } from "@morty-build/client/protocol";
 import type { CommandHandler } from "../definition.ts";
 import { reportOperationFailure, send } from "../transport.ts";
 
-export const handleSessionList: CommandHandler<typeof SESSION_LIST_KIND> = (
-    { nativeSessions, signal, socket },
-    message,
-): void => {
-    void nativeSessions
+export const handleSessionList: CommandHandler<typeof SESSION_LIST_KIND> = (context, message): Promise<void> => {
+    const { nativeSessions, signal, socket, payloadEncryption } = context;
+    return nativeSessions
         .listSessions(message.limit, signal)
-        .then((entries) => {
-            send(socket, { entries, kind: SESSION_LISTED_KIND, requestId: message.requestId });
+        .then(async (entries) => {
+            send(
+                socket,
+                await sessionsListedEventCodec.encode(
+                    { entries, kind: SESSION_LISTED_KIND, requestId: message.requestId },
+                    payloadEncryption,
+                    signal,
+                ),
+            );
         })
-        .catch((error: unknown) => {
-            reportOperationFailure(socket, message.requestId, undefined, error);
+        .catch(async (error: unknown) => {
+            signal.throwIfAborted();
+            await reportOperationFailure(context, message.requestId, undefined, error);
         });
 };
 
-export const handleSessionQuery: CommandHandler<typeof SESSION_QUERY_KIND> = (
-    { nativeSessions, signal, socket },
-    message,
-): void => {
-    void nativeSessions
+export const handleSessionQuery: CommandHandler<typeof SESSION_QUERY_KIND> = (context, message): Promise<void> => {
+    const { nativeSessions, signal, socket, payloadEncryption } = context;
+    return nativeSessions
         .querySessions(message.targets, signal)
-        .then((entries) => {
-            send(socket, { entries, kind: SESSION_QUERIED_KIND, requestId: message.requestId });
+        .then(async (entries) => {
+            send(
+                socket,
+                await sessionsQueriedEventCodec.encode(
+                    { entries, kind: SESSION_QUERIED_KIND, requestId: message.requestId },
+                    payloadEncryption,
+                    signal,
+                ),
+            );
         })
-        .catch((error: unknown) => {
-            reportOperationFailure(socket, message.requestId, undefined, error);
+        .catch(async (error: unknown) => {
+            signal.throwIfAborted();
+            await reportOperationFailure(context, message.requestId, undefined, error);
         });
 };

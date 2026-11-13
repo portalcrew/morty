@@ -1,29 +1,26 @@
-import {
-    CONTENT_WRITE_MAX_BYTES,
-    decodeContentWriteCommand,
-    type Identifier,
-    type InteractionAccepted,
-    isIdentifier,
-    MORTY_API_PREFIX,
-    type NativeSessionTarget,
-    type TurnCancellation,
-    type TurnReference,
-    type TurnState,
-} from "@morty-build/client/protocol";
+import { sameNativeSession } from "@morty-build/client/native-session";
+import { MORTY_API_PREFIX, type NativeSessionTarget } from "@morty-build/client/protocol";
 import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import * as v from "valibot";
 import {
+    activeTurnInput,
+    cancelInput,
+    configReadInput,
+    configureInput,
     decodeSessionRequest,
-    interactionResponseRequest,
-    sessionConfigurationRequest,
-    sessionRenameRequest,
-    turnSteerRequest,
-    turnSubmissionRequest,
+    dispositionInput,
+    encryptedInteractionResponseInput,
+    eventsInput,
+    sessionIdentifier as identifier,
+    promptInput,
+    renameInput,
+    withdrawInput,
 } from "../../../../contracts/agent-api/session-requests.ts";
 import { toHttpError } from "../../../../contracts/http-error.ts";
 import { PairingDirectoryError, validateIdentifier } from "../../../../contracts/relay/pairing.ts";
 import { WebSocketDispatchError, type WebSocketHttpOperation } from "../../../../contracts/websocket-http-dispatch.ts";
+import { bodyParser, readJsonTextBody } from "../../../../http/body-parser.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import {
     authorizeSessionContentUpload,
@@ -32,8 +29,6 @@ import {
 } from "../http/session-content-upload.ts";
 import type { LocalSessionOperations } from "../service/local-session-operations.ts";
 import type { SessionAccessService } from "../service/session-access-service.ts";
-import type { TurnAdmission } from "../service/session-control.ts";
-import { SessionControl } from "../service/session-control.ts";
 
 export type SessionWebSocketServices = {
     readonly sessions: SessionAccessService;
@@ -50,7 +45,13 @@ type SessionWebSocketEnvironment = {
     };
 };
 
-const identifier = v.custom<Identifier>(isIdentifier);
+const readTransportJson = async (context: Context<SessionWebSocketEnvironment>): Promise<unknown> => {
+    const operation = context.env.operation;
+    if (operation.kind !== "request") {
+        throw new WebSocketDispatchError();
+    }
+    return readJsonTextBody(operation.body, context.req.raw.headers, context.req.raw.signal);
+};
 const json = (value: unknown): Response => Response.json(value, { headers: { "Cache-Control": "no-store" } });
 const notFound = (): Response =>
     Response.json(
@@ -95,34 +96,51 @@ export function createSessionWebSocketRoutes(ctx: {
         await next();
         return;
     });
-    const authenticate = createMiddleware<SessionWebSocketEnvironment>(async (context, next) => {
-        if (context.env.operation.kind === "upload-admission") {
-            return sessionContentUploadRequired();
+    const authenticateWithDeadline = (timeoutMilliseconds: number) =>
+        createMiddleware<SessionWebSocketEnvironment>(async (context, next) => {
+            if (context.env.operation.kind === "upload-admission") {
+                return sessionContentUploadRequired();
+            }
+            const signal = AbortSignal.any([context.req.raw.signal, context.env.operation.enableCancellation()]);
+            using deadline = new RequestDeadline(signal, timeoutMilliseconds);
+            context.req.raw = new Request(context.req.raw, { signal: deadline.signal });
+            const request = context.req.raw;
+            const computerId = context.var.computerId;
+            const target = context.var.target;
+            const services = ctx.services.forComputer(computerId);
+            const credential = context.var.credential;
+            const access = await services.sessions.authenticate(
+                { kind: "session", computerId, target },
+                credential,
+                request.signal,
+            );
+            context.set("access", access);
+            await next();
+            return;
+        });
+    const authenticate = authenticateWithDeadline(30_000);
+    const authenticateUpload = authenticateWithDeadline(120_000);
+    const sendSessionControl = async (
+        context: Context<SessionWebSocketEnvironment>,
+        command:
+            | v.InferOutput<typeof promptInput>
+            | v.InferOutput<typeof cancelInput>
+            | v.InferOutput<typeof withdrawInput>
+            | v.InferOutput<typeof dispositionInput>
+            | v.InferOutput<typeof configureInput>
+            | v.InferOutput<typeof renameInput>
+            | v.InferOutput<typeof encryptedInteractionResponseInput>,
+    ): Promise<Response> => {
+        if (!sameNativeSession(command.target, context.var.target)) {
+            throw new PairingDirectoryError("invalid_request", "The command does not match its Session");
         }
-        using deadline = new RequestDeadline(context.req.raw.signal, 30_000);
-        context.req.raw = new Request(context.req.raw, { signal: deadline.signal });
-        const request = context.req.raw;
-        const computerId = context.var.computerId;
-        const target = context.var.target;
-        const services = ctx.services.forComputer(computerId);
-        const credential = context.var.credential;
-        const access = await services.sessions.authenticate(
-            { kind: "session", computerId, target },
-            credential,
-            request.signal,
-        );
-        context.set("access", access);
-        await next();
-        return;
-    });
-    const controlForRequest = (context: Context<SessionWebSocketEnvironment>): SessionControl => {
-        const { computerId, target, access } = context.var;
-        const { operations } = ctx.services.forComputer(computerId);
         const signal = context.req.raw.signal;
-        return new SessionControl(async (command) => {
-            await access.authorize(signal);
-            return operations.requestControl(computerId, command, signal);
-        }, target);
+        await context.var.access.authorize(signal);
+        return json(
+            await ctx.services
+                .forComputer(context.var.computerId)
+                .operations.requestClientControl(context.var.computerId, command, signal),
+        );
     };
     const sessionPath = `${MORTY_API_PREFIX}/v1/computers/:computerId/harnesses/:harness/sessions/:sessionId`;
     return new Hono<SessionWebSocketEnvironment>()
@@ -131,7 +149,11 @@ export function createSessionWebSocketRoutes(ctx: {
             if (cause instanceof WebSocketDispatchError) {
                 throw cause;
             }
-            const error = toHttpError(cause);
+            const error = toHttpError(
+                cause instanceof v.ValiError
+                    ? new PairingDirectoryError("invalid_request", "The Session request is invalid", { cause })
+                    : cause,
+            );
             return Response.json(error.body, {
                 status: error.status,
                 ...(error.headers === undefined ? {} : { headers: error.headers }),
@@ -142,122 +164,175 @@ export function createSessionWebSocketRoutes(ctx: {
             throw new WebSocketDispatchError();
         })
         .use(`${sessionPath}/*`, authorizeTarget)
-        .put(`${sessionPath}/content/:contentKey`, admitContentUpload, authenticate, (context) =>
+        .put(`${sessionPath}/content/:contentKey`, admitContentUpload, authenticateUpload, (context) =>
             uploadContent(context.req.raw, ctx.services.forComputer(context.var.computerId), {
                 computerId: context.var.computerId,
                 target: context.var.target,
                 contentKey: context.req.param("contentKey"),
             }),
         )
-        .get(`${sessionPath}/configuration`, authenticate, async (context) =>
-            json(await controlForRequest(context).readConfiguration()),
-        )
-        .get(`${sessionPath}/active-turn`, authenticate, async (context) => {
-            const commandId = context.req.query("commandId");
-            return json(
-                await controlForRequest(context).activeTurn(
-                    commandId === undefined ? undefined : decodeSessionRequest(identifier, commandId),
-                ),
-            );
-        })
-        .post(`${sessionPath}/turns`, authenticate, async (context) => {
-            const input: unknown = await context.req.json();
-            const body = decodeSessionRequest(turnSubmissionRequest, input);
-            const accepted = await controlForRequest(context).submitTurn({ ...body, commandId: body.idempotencyKey });
-            const acceptedAt = new Date().toISOString();
-            return json({
-                acceptedAt,
-                idempotencyKey: body.idempotencyKey,
-                request: { content: body.content, kind: "prompt", sessionConfigurations: body.sessionConfigurations },
-                target: context.var.target,
-                state: submittedTurnState(accepted.state, acceptedAt),
-                turnId: accepted.commandId,
-            });
-        })
-        .put(`${sessionPath}/turns/:turnId/disposition`, authenticate, async (context) => {
-            const turnId = decodeSessionRequest(identifier, context.req.param("turnId"));
-            const input: unknown = await context.req.json();
-            decodeSessionRequest(turnSteerRequest, input);
-            await controlForRequest(context).steerTurn(turnId);
-            return json({ turnId } satisfies TurnReference);
-        })
-        .post(`${sessionPath}/turns/:turnId/cancel-before-start`, authenticate, async (context) => {
-            const turnId = decodeSessionRequest(identifier, context.req.param("turnId"));
-            await controlForRequest(context).withdrawTurn(turnId);
-            return json({ turnId } satisfies TurnReference);
-        })
-        .post(`${sessionPath}/turns/:turnId/cancel`, authenticate, async (context) => {
-            const turnId = decodeSessionRequest(identifier, context.req.param("turnId"));
-            const { stopReason } = await controlForRequest(context).cancelTurn(turnId);
-            return json({ stopReason, turnId } satisfies TurnCancellation);
-        })
-        .post(`${sessionPath}/configuration`, authenticate, async (context) => {
-            const input: unknown = await context.req.json();
-            return json(
-                await controlForRequest(context).configure(decodeSessionRequest(sessionConfigurationRequest, input)),
-            );
-        })
-        .post(`${sessionPath}/rename`, authenticate, async (context) => {
-            const input: unknown = await context.req.json();
-            return json(
-                await controlForRequest(context).rename(decodeSessionRequest(sessionRenameRequest, input).title),
-            );
-        })
-        .post(`${sessionPath}/interactions/:interactionId/responses`, authenticate, async (context) => {
-            const interactionId = decodeSessionRequest(identifier, context.req.param("interactionId"));
-            const input: unknown = await context.req.json();
-            await controlForRequest(context).respond(
-                interactionId,
-                decodeSessionRequest(interactionResponseRequest, input),
-            );
-            return json({ accepted: true } satisfies InteractionAccepted);
-        })
-        .get(`${sessionPath}/events`, authenticate, async (context) => {
-            const request = context.req.raw;
-            const access = context.var.access;
-            await access.authorize(request.signal);
-            if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
-                return ctx.services.forComputer(context.var.computerId).operations.openPublicSessionEvents(
-                    context.var.computerId,
-                    context.var.target,
-                    {
-                        signingKeyId: access.signingKeyId,
-                        grant: access.grant,
-                        expiresAt: access.expiresAtEpochMilliseconds,
-                    },
-                    request.signal,
+        .get(
+            `${sessionPath}/configuration`,
+            authenticate,
+            bodyParser<SessionWebSocketEnvironment, typeof configReadInput>(configReadInput, readTransportJson),
+            async (context) => {
+                const command = context.req.valid("json");
+                if (!sameNativeSession(command.target, context.var.target)) {
+                    throw new PairingDirectoryError("invalid_request", "The command does not match its Session");
+                }
+                const signal = context.req.raw.signal;
+                await context.var.access.authorize(signal);
+                return json(
+                    await ctx.services
+                        .forComputer(context.var.computerId)
+                        .operations.requestClientControl(context.var.computerId, command, signal),
                 );
-            }
-            return json(
-                await controlForRequest(context).liveEvents({
-                    cursor: decodeSessionRequest(
-                        v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
-                        context.req.query("cursor") ?? null,
-                    ),
-                    eventLimit: decodeSessionRequest(
-                        v.pipe(v.number(), v.safeInteger(), v.minValue(1), v.maxValue(10_000)),
-                        Number(context.req.query("limit") ?? "50"),
-                    ),
-                }),
-            );
-        })
+            },
+        )
+        .get(
+            `${sessionPath}/active-turn`,
+            authenticate,
+            bodyParser<SessionWebSocketEnvironment, typeof activeTurnInput>(activeTurnInput, readTransportJson),
+            async (context) => {
+                const commandId = context.req.query("commandId");
+                if (commandId !== undefined) {
+                    decodeSessionRequest(identifier, commandId);
+                }
+                const command = context.req.valid("json");
+                if (!("target" in command) || !sameNativeSession(command.target, context.var.target)) {
+                    throw new PairingDirectoryError("invalid_request", "The command does not match its Session");
+                }
+                const signal = context.req.raw.signal;
+                await context.var.access.authorize(signal);
+                return json(
+                    await ctx.services
+                        .forComputer(context.var.computerId)
+                        .operations.requestClientControl(context.var.computerId, command, signal),
+                );
+            },
+        )
+        .post(
+            `${sessionPath}/turns`,
+            authenticate,
+            bodyParser<SessionWebSocketEnvironment, typeof promptInput>(promptInput),
+            async (context) => {
+                const command = context.req.valid("json");
+                return sendSessionControl(context, command);
+            },
+        )
+        .put(
+            `${sessionPath}/turns/:turnId/disposition`,
+            authenticate,
+            bodyParser<SessionWebSocketEnvironment, typeof dispositionInput>(dispositionInput),
+            async (context) => {
+                const command = context.req.valid("json");
+                if (command.commandId !== decodeSessionRequest(identifier, context.req.param("turnId"))) {
+                    throw new PairingDirectoryError("invalid_request", "The command does not match its Turn");
+                }
+                return sendSessionControl(context, command);
+            },
+        )
+        .post(
+            `${sessionPath}/turns/:turnId/cancel-before-start`,
+            authenticate,
+            bodyParser<SessionWebSocketEnvironment, typeof withdrawInput>(withdrawInput),
+            async (context) => {
+                const command = context.req.valid("json");
+                if (command.commandId !== decodeSessionRequest(identifier, context.req.param("turnId"))) {
+                    throw new PairingDirectoryError("invalid_request", "The command does not match its Turn");
+                }
+                return sendSessionControl(context, command);
+            },
+        )
+        .post(
+            `${sessionPath}/turns/:turnId/cancel`,
+            authenticate,
+            bodyParser<SessionWebSocketEnvironment, typeof cancelInput>(cancelInput),
+            async (context) => {
+                const command = context.req.valid("json");
+                if (command.commandId !== decodeSessionRequest(identifier, context.req.param("turnId"))) {
+                    throw new PairingDirectoryError("invalid_request", "The command does not match its Turn");
+                }
+                return sendSessionControl(context, command);
+            },
+        )
+        .post(
+            `${sessionPath}/configuration`,
+            authenticate,
+            bodyParser<SessionWebSocketEnvironment, typeof configureInput>(configureInput),
+            async (context) => {
+                return sendSessionControl(context, context.req.valid("json"));
+            },
+        )
+        .post(
+            `${sessionPath}/rename`,
+            authenticate,
+            bodyParser<SessionWebSocketEnvironment, typeof renameInput>(renameInput),
+            async (context) => {
+                return sendSessionControl(context, context.req.valid("json"));
+            },
+        )
+        .post(
+            `${sessionPath}/interactions/:interactionId/responses`,
+            authenticate,
+            bodyParser<SessionWebSocketEnvironment, typeof encryptedInteractionResponseInput>(
+                encryptedInteractionResponseInput,
+            ),
+            async (context) => {
+                const command = context.req.valid("json");
+                if (command.interactionId !== decodeSessionRequest(identifier, context.req.param("interactionId"))) {
+                    throw new PairingDirectoryError("invalid_request", "The command does not match its interaction");
+                }
+                return sendSessionControl(context, command);
+            },
+        )
+        .get(
+            `${sessionPath}/events`,
+            authenticate,
+            bodyParser<SessionWebSocketEnvironment, typeof eventsInput>(eventsInput, readTransportJson),
+            async (context) => {
+                const request = context.req.raw;
+                const access = context.var.access;
+                await access.authorize(request.signal);
+                const command = context.req.valid("json");
+                if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
+                    if (
+                        command.kind !== "session.events.subscribe" ||
+                        !sameNativeSession(command.target, context.var.target)
+                    ) {
+                        throw new PairingDirectoryError(
+                            "invalid_request",
+                            "The subscription does not match its Session",
+                        );
+                    }
+                    return ctx.services.forComputer(context.var.computerId).operations.openPublicSessionEvents(
+                        context.var.computerId,
+                        context.var.target,
+                        command,
+                        {
+                            signingKeyId: access.signingKeyId,
+                            grant: access.grant,
+                            expiresAt: access.expiresAtEpochMilliseconds,
+                        },
+                        request.signal,
+                    );
+                }
+                if (
+                    command.kind !== "session.live-history.v2.page.load" ||
+                    !sameNativeSession(command.target, context.var.target)
+                ) {
+                    throw new PairingDirectoryError("invalid_request", "The command does not match its Session");
+                }
+                return json(
+                    await ctx.services
+                        .forComputer(context.var.computerId)
+                        .operations.requestClientControl(context.var.computerId, command, request.signal),
+                );
+            },
+        )
         .all(`${sessionPath}/*`, (context) =>
             context.env.operation.kind === "upload-admission" ? sessionContentUploadRequired() : notFound(),
         );
-}
-
-function submittedTurnState(state: TurnAdmission["state"], answeredAt: string): TurnState {
-    switch (state) {
-        case "queued":
-            return { kind: "queued" };
-        case "running":
-            return { kind: "running", startedAt: answeredAt };
-        case "settled":
-            return {
-                kind: "indeterminate",
-                reconciliation: { detectedAt: answeredAt, reason: "dispatch_indeterminate" },
-            };
-    }
 }
 
 async function uploadContent(
@@ -272,53 +347,17 @@ async function uploadContent(
     if (authorized instanceof Response) {
         return authorized;
     }
-    const { access, target, contentKey } = authorized;
-    const byteLength = decodeSessionRequest(
-        v.pipe(v.number(), v.safeInteger(), v.minValue(1), v.maxValue(CONTENT_WRITE_MAX_BYTES)),
-        Number(request.headers.get("x-morty-byte-length") ?? ""),
-    );
-    const contentKind = decodeSessionRequest(
-        v.picklist(["image", "resource"]),
-        request.headers.get("x-morty-content-kind"),
-    );
-    const mediaType = decodeSessionRequest(
-        v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
-        request.headers.get("content-type"),
-    );
-    const encodedName = decodeSessionRequest(
-        v.pipe(v.string(), v.minLength(1), v.maxLength(1_500)),
-        request.headers.get("x-morty-file-name"),
-    );
-    const uri = decodeSessionRequest(
-        v.pipe(v.string(), v.minLength(1), v.maxLength(4_096)),
-        new URL(request.url).searchParams.get("uri"),
-    );
+    const { access, target } = authorized;
     if (request.body === null) {
         throw new PairingDirectoryError("invalid_request", "The content body is required");
     }
-    let name: string;
-    try {
-        name = decodeURIComponent(encodedName);
-    } catch (cause) {
-        throw new PairingDirectoryError("invalid_request", "The content name is invalid", { cause });
-    }
-    name = decodeSessionRequest(v.pipe(v.string(), v.minLength(1), v.maxLength(500)), name);
     const available = await dependencies.operations.writeSessionContent(
         access.computerId,
-        decodeContentWriteCommand(
-            JSON.stringify({
-                byteLength,
-                contentKey,
-                contentKind,
-                kind: "content.write",
-                mediaType,
-                name,
-                requestId: crypto.randomUUID(),
-                target,
-            }),
-        ),
+        target,
         request.body,
         request.signal,
     );
-    return json({ byteLength, contentKey: available.contentKey, kind: contentKind, mimeType: mediaType, name, uri });
+    return new Response(available, {
+        headers: { "cache-control": "no-store", "content-type": "application/json" },
+    });
 }

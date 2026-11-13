@@ -1,4 +1,4 @@
-import { MortyError } from "@morty-build/client";
+import { MortyError, MortyOperationError } from "@morty-build/client";
 import { SESSION_CLOSED_ERROR_CODE } from "@morty-build/client/protocol";
 import { isApiConnectionError } from "../services/api/worker-api-transport.ts";
 import { isComputerConnectionFailure } from "../services/management/management-api.ts";
@@ -85,6 +85,9 @@ export function isSessionClosedFailure(cause: unknown): cause is MortyError {
  * upgrade), so the Session keeps retrying them instead of settling as failed.
  */
 export function isRetryableComputerConnectionFailure(cause: unknown): boolean {
+    if (cause instanceof MortyOperationError) {
+        return cause.recovery === "retryable";
+    }
     if (
         isApiConnectionError(cause) ||
         isComputerConnectionFailure(cause) ||

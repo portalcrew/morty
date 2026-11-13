@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +8,13 @@ import {
     encodeSessionPromptCommand,
     type SessionLiveEvent,
 } from "@morty-build/client/protocol";
-import { expect, test } from "vitest";
+import { eq } from "drizzle-orm";
+import { expect, test, vi } from "vitest";
+import { command } from "../../src/engine/schema/acp-session-store/command.ts";
+import {
+    computerSessionDatabasePaths,
+    openAcpSessionDatabase,
+} from "../../src/engine/storage/sqlite/local-databases.ts";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
 import { type RealDaemonPeer, withControlledDaemon } from "../support/agents/real-daemon.ts";
 import { writeControlledAcpExecutable } from "../support/controlled-acp-executable.ts";
@@ -109,5 +115,95 @@ test("Given a completed prompt, When a client retries it before and after a daem
         );
     } finally {
         await rm(directory, { recursive: true, force: true });
+    }
+}, 120_000);
+
+test("Given a persisted legacy prompt receipt, When the prompt is retried with a new reply address, Then it is restated and a changed prompt conflicts", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-12T00:00:00Z") });
+    const directory = await mkdtemp(join(tmpdir(), "morty-legacy-receipt-"));
+    try {
+        const executableDirectory = await writeControlledAcpExecutable(directory);
+        await withControlledDaemon(
+            new ControlledAcpAgentSpecification(),
+            { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executableDirectory },
+            async (peer) => {
+                const commandId = randomUUID();
+                submit(peer, commandId);
+                await next(peer, [], completed(commandId));
+                // c34752d2a encoded these fields in this order and required equal IDs.
+                const legacy = JSON.stringify({
+                    commandId,
+                    requestId: commandId,
+                    attachments: [],
+                    kind: "session.prompt",
+                    prompt: "The request completes",
+                    target: peer.target,
+                    disposition: "append",
+                });
+                await peer.restart(undefined, async () => {
+                    const database = openAcpSessionDatabase(
+                        computerSessionDatabasePaths(peer.stateDirectory, "real-agent").sessions,
+                    );
+                    try {
+                        database.orm
+                            .update(command)
+                            .set({ commandHash: createHash("sha256").update(legacy).digest("hex") })
+                            .where(eq(command.commandId, commandId))
+                            .run();
+                    } finally {
+                        database.close();
+                    }
+                });
+                const requestId = randomUUID();
+                peer.send(
+                    encodeSessionPromptCommand({
+                        commandId,
+                        requestId,
+                        attachments: [],
+                        kind: "session.prompt",
+                        prompt: "The request completes",
+                        target: peer.target,
+                        disposition: "append",
+                    }),
+                );
+                const answer = await next(
+                    peer,
+                    [],
+                    (frame) => frame.kind === "message" && frame.message["requestId"] === requestId,
+                );
+                expect(answer).toMatchObject({
+                    kind: "message",
+                    message: { kind: "session.prompt.accepted", requestId, state: "settled" },
+                });
+                const conflictId = randomUUID();
+                peer.send(
+                    encodeSessionPromptCommand({
+                        commandId,
+                        requestId: conflictId,
+                        attachments: [],
+                        kind: "session.prompt",
+                        prompt: "Different intent",
+                        target: peer.target,
+                        disposition: "append",
+                    }),
+                );
+                const conflict = await next(
+                    peer,
+                    [],
+                    (frame) => frame.kind === "message" && frame.message["requestId"] === conflictId,
+                );
+                expect(conflict).toMatchObject({
+                    kind: "message",
+                    message: {
+                        kind: "session.operation.failed",
+                        requestId: conflictId,
+                        code: "command_identity_conflict",
+                    },
+                });
+            },
+        );
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+        vi.useRealTimers();
     }
 }, 120_000);

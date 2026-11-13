@@ -110,6 +110,18 @@ const cancelBeforeStart = (peer: RealDaemonPeer, commandId: string) =>
         }),
     );
 
+async function evictReceipts(peer: RealDaemonPeer): Promise<void> {
+    const pruners = Array.from({ length: 1026 }, (_, index) => `z-prune-${String(index).padStart(4, "0")}`);
+    // Exercise the full receipt-retention boundary without flooding the bounded encrypted receive queue.
+    for (let offset = 0; offset < pruners.length; offset += 64) {
+        const batch = pruners.slice(offset, offset + 64);
+        for (const id of batch) {
+            cancelBeforeStart(peer, id);
+        }
+        await observe(peer, batch);
+    }
+}
+
 test("Given an executed command and a command cancelled before start, When later commands evict both receipts without a restart, Then the cancelled command reads as cancelled rather than expired and cannot execute", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-30T08:00:00Z"));
@@ -126,11 +138,7 @@ test("Given an executed command and a command cancelled before start, When later
                 expect((await observe(peer, ["a-executed"])).started).toEqual(["a-executed"]);
                 cancelBeforeStart(peer, "a-cancelled");
                 expect((await observe(peer, ["a-cancelled"])).cancelled).toEqual(["a-cancelled"]);
-                const pruners = Array.from({ length: 1026 }, (_, index) => `z-prune-${String(index).padStart(4, "0")}`);
-                for (const id of pruners) {
-                    cancelBeforeStart(peer, id);
-                }
-                await observe(peer, pruners);
+                await evictReceipts(peer);
 
                 expect(await readDelivery(peer, "a-cancelled")).toEqual({
                     state: "completed",
@@ -238,14 +246,7 @@ for (const admission of ["before-admission", "queued"] as const) {
                         );
                         await observe(peer, ["running-hold"]);
                     }
-                    const pruners = Array.from(
-                        { length: 1026 },
-                        (_, index) => `z-prune-${String(index).padStart(4, "0")}`,
-                    );
-                    for (const id of pruners) {
-                        cancel(id);
-                    }
-                    await observe(peer, pruners);
+                    await evictReceipts(peer);
                     const checkCancelled = async () => {
                         peer.send(original);
                         expect(await observe(peer, [commandId])).toEqual({

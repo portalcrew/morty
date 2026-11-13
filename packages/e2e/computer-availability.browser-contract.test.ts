@@ -5,7 +5,7 @@ test("Given an online computer, when the browser loses and regains its network, 
     runtime,
 }) => {
     const { page } = runtime;
-    await page.clock.install({ time: new Date("2026-10-29T00:00:00Z") });
+    await runtime.clock.install({ time: new Date("2026-10-29T00:00:00Z") });
     await runtime.openPairedChat();
     const switcher = page.getByRole("button", { name: /Switch computer/ });
     await expect(switcher).toHaveAttribute("data-connection-status", "connected");
@@ -31,7 +31,7 @@ test("Given an online computer, when the browser loses and regains its network, 
     await expect(mobileChoice).not.toContainText("Online");
 
     await page.context().setOffline(false);
-    await page.clock.runFor(5000);
+    await runtime.clock.runFor(5000);
     await expect(mobileChoice).toContainText("Online");
     await mobileChoice.click();
     await page.setViewportSize({ width: 1280, height: 900 });

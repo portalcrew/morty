@@ -1,6 +1,7 @@
 import * as v from "valibot";
 import agentApiTemplate from "../../../../../../web/content/instructions/agent-api.txt?raw";
 import setupTemplate from "../../../../../../web/content/instructions/setup.txt?raw";
+import agentClient from "../generated/agent-client.ts";
 import { agentAsyncApiDocument, agentOpenApiDocument } from "./agent-api-documents.ts";
 
 const instructionOriginSchema = v.pipe(
@@ -31,7 +32,7 @@ export function instructionOrigin(value: unknown): string | null {
 
 export function renderInstructionDocument(document: InstructionDocument, origin: string): string {
     const template = templates[document];
-    return template.replaceAll("{{BASE_URL}}", origin);
+    return template.replaceAll("{{BASE_URL}}", origin).replace("{{REMOTE_AGENT_CLIENT}}", () => agentClient);
 }
 
 export function renderApiSchemaDocument(document: ApiSchemaDocument, origin: string): string {

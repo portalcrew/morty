@@ -4,6 +4,7 @@ import type { Clock } from "../../src/services/time/clock.ts";
 export class TestClock implements Clock {
     #now: number;
     readonly #timers = new Set<{ readonly at: number; readonly resolve: () => void }>();
+    readonly #scheduled = new Set<{ readonly milliseconds: number; readonly ready: () => void }>();
 
     constructor(now: string) {
         this.#now = Date.parse(now);
@@ -30,7 +31,38 @@ export class TestClock implements Clock {
             };
             this.#timers.add(timer);
             signal.addEventListener("abort", abort, { once: true });
+            for (const scheduled of this.#scheduled) {
+                if (milliseconds > 0 && milliseconds <= scheduled.milliseconds) {
+                    scheduled.ready();
+                }
+            }
         });
+    /** Coordinates a clock advance with a retry registering a sleep within that advance. */
+    readonly waitForSleep = async (milliseconds: number, signal: AbortSignal): Promise<void> => {
+        signal.throwIfAborted();
+        if ([...this.#timers].some((timer) => timer.at > this.#now && timer.at - this.#now <= milliseconds)) {
+            return;
+        }
+        await new Promise<void>((resolve, reject) => {
+            const cleanup = () => {
+                this.#scheduled.delete(scheduled);
+                signal.removeEventListener("abort", aborted);
+            };
+            const aborted = () => {
+                cleanup();
+                reject(signal.reason);
+            };
+            const scheduled = {
+                milliseconds,
+                ready: () => {
+                    cleanup();
+                    resolve();
+                },
+            };
+            this.#scheduled.add(scheduled);
+            signal.addEventListener("abort", aborted, { once: true });
+        });
+    };
     readonly advanceBy = (milliseconds: number): void => {
         if (!Number.isSafeInteger(milliseconds) || milliseconds < 0) {
             throw new Error("Expected a nonnegative clock advance");

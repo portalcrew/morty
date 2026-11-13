@@ -5,6 +5,8 @@ import { afterEach, beforeAll, beforeEach, expect, onTestFinished, test, vi } fr
 import { connectControlledAgentRuntime, createMortyFakeDaemon } from "../../../tests/support/fake-daemon/runtime.ts";
 import { mortyReply } from "../../../tests/support/fake-daemon/scenarios.ts";
 import { memoryComputerCredentials } from "../../cli/tests/support/computer-credentials.ts";
+import { WorkerApiTransport } from "../../web/src/services/api/worker-api-transport.ts";
+import { BotChatApi } from "../../web/src/services/chat/bot-chat-api.ts";
 import { connectComputerApiWebSocket } from "./support/computer-api-websocket.ts";
 
 let createBindings: Awaited<ReturnType<typeof prepareTestMortyRelayBindings>>;
@@ -182,8 +184,40 @@ test.each(["http", "websocket"] as const)(
             },
         });
         const chat = `/v1/computers/${owner.computerId}`;
-        const setup = await request(`${chat}/setup`, owner.token, { harness: "codex" });
-        expect(setup.status, await setup.clone().text()).toBe(202);
+        const encryptionAccess = await _runtime.encryptionAccess(signal);
+        const ownerTransport = new WorkerApiTransport(bindings.origin, () => encryptionAccess);
+        const observed: { readonly method: string; readonly path: string; readonly status: number }[] = [];
+        const ownerClient = new BotChatApi({
+            origin: bindings.origin,
+            computerId: owner.computerId,
+            getToken: async () => owner.token,
+            encryptionAccess: () => encryptionAccess,
+            sessionTransport: () => ownerTransport.computerTransport(owner.computerId),
+            waitForChange: ownerTransport.waitForChange,
+            fetchRequest: async (call) => {
+                const input = new Request(call.endpoint.url, {
+                    method: call.endpoint.method,
+                    headers: call.headers,
+                    body: call.body ?? null,
+                    signal: call.signal,
+                });
+                const response =
+                    apiTransport === "websocket" && !input.url.endsWith("/setup")
+                        ? await websocket?.fetch(input)
+                        : await bindings.request(input);
+                if (response === undefined) {
+                    throw new Error("Expected the Computer WebSocket transport");
+                }
+                observed.push({ method: input.method, path: new URL(input.url).pathname, status: response.status });
+                return response;
+            },
+        });
+        onTestFinished(() => {
+            ownerClient.close();
+            ownerTransport.dispose();
+        });
+        await ownerClient.verifyAgent("codex", signal);
+        expect(observed).toContainEqual({ method: "POST", path: `/morty/api${chat}/setup`, status: 202 });
         const workspace = await request(`${chat}/workspace`, owner.token, {});
         expect(workspace.status).toBe(200);
         expect(await workspace.json()).toEqual({
@@ -201,28 +235,26 @@ test.each(["http", "websocket"] as const)(
         const computer = await request(`/v1/computers/${owner.computerId}/pairing-state`, owner.token);
         expect(computer.status).toBe(200);
         expect(await computer.json()).toEqual({ computerPairing: "paired" });
-        const opened = await request(`${chat}/managed-sessions/open`, owner.token, {
-            harness: "codex",
-            conversationKey: "single-worker-session",
-            workspaceRef: ".",
-            configurations: [],
-        });
-        expect(opened.status, await opened.clone().text()).toBe(200);
-        const issued: unknown = await opened.json();
-        const access = v.parse(
-            v.object({
-                credential: v.string(),
-                target: v.object({ harness: v.string(), sessionId: v.string() }),
-            }),
-            issued,
+        const access = await ownerClient.createConversation(
+            "single-worker-session",
+            { harness: "codex", workspaceRef: ".", workspaceLabel: ".", configurations: [] },
+            signal,
         );
+        expect(observed).toContainEqual({
+            method: "POST",
+            path: `/morty/api${chat}/managed-sessions/open`,
+            status: 200,
+        });
         const session = `/v1/computers/${owner.computerId}/harnesses/${access.target.harness}/sessions/${access.target.sessionId}`;
         const transport = new WsTransport();
+        const responses: { readonly status: number; readonly serverTiming: string | null }[] = [];
         const client = new MortyClient({
             transport,
+            encryption: { access: encryptionAccess },
             endpoint: bindings.origin,
             computerId: owner.computerId,
             credentialProvider: { credential: async () => access.credential },
+            observeResponse: (response) => responses.push(response),
         });
         try {
             expect(await client.events.list(access.target, new MortyPageRequest(1, ""), signal)).toBeDefined();
@@ -263,10 +295,6 @@ test.each(["http", "websocket"] as const)(
                 signal,
             );
             live.close();
-            const file = await request(`${session}/files/content?path=entrypoint.txt`, access.credential);
-            expect(file.status).toBe(200);
-            expect(file.headers.has("server-timing")).toBe(false);
-            expect(await file.text()).toBe("HTTP download");
             for (const operation of ["configuration", "active-turn", "events"]) {
                 const response = await request(`${session}/${operation}`, access.credential);
                 expect(response.status, operation).toBe(404);
@@ -275,6 +303,7 @@ test.each(["http", "websocket"] as const)(
             const turns = await request(`${session}/turns`, access.credential, {});
             expect(turns.status).toBe(404);
             const downloaded = await client.sessions.readFile(access.target, "entrypoint.txt", signal);
+            expect(responses.at(-1)).toEqual({ status: 200, serverTiming: null });
             expect(new TextDecoder().decode(downloaded.bytes)).toBe("HTTP download");
             expect(downloaded).toMatchObject({ name: "entrypoint.txt", mediaType: "application/octet-stream" });
             const audienceEndpoint = await bindings.request(

@@ -12,7 +12,13 @@ import {
     SESSION_PROMPT_STEERED_KIND,
     SESSION_TURN_STOPPED_KIND,
     SESSION_TURN_WITHDRAWN_KIND,
+    sessionArchivedEventCodec,
+    sessionInteractionAnsweredEventCodec,
+    sessionPromptSteeredEventCodec,
+    sessionTurnStoppedEventCodec,
+    sessionTurnWithdrawnEventCodec,
 } from "@morty-build/client/protocol";
+import { WebSocket } from "undici";
 import { SessionError } from "../../../session/api/session-error.ts";
 import { settleAbandonedTurn } from "../../../session/prompt/prompt-lifecycle.ts";
 import type { CommandContext } from "../context.ts";
@@ -21,37 +27,47 @@ import { reportOperationFailure, send } from "../transport.ts";
 import { reply, replyFailure, replySettledFailure, settledCommand } from "../turn-replies.ts";
 
 /** Answers a request that waited for its Turn to end with how the Turn ended. */
-function replyStopped(
-    { operations, socket }: CommandContext,
+async function replyStopped(
+    context: CommandContext,
     {
         commandId,
         requestId,
         target,
     }: { readonly commandId: string; readonly requestId: string; readonly target: NativeSessionTarget },
-): void {
+): Promise<void> {
+    const { operations, socket, signal, payloadEncryption } = context;
     const settled = settledCommand(operations, commandId);
     if (settled.kind === "completed") {
-        reply(socket, {
-            commandId,
-            kind: SESSION_TURN_STOPPED_KIND,
-            requestId,
-            target,
-            stopReason: settled.stopReason,
-        });
+        if (socket.readyState === WebSocket.OPEN) {
+            reply(
+                socket,
+                await sessionTurnStoppedEventCodec.encode(
+                    {
+                        commandId,
+                        kind: SESSION_TURN_STOPPED_KIND,
+                        requestId,
+                        target,
+                        stopReason: settled.stopReason,
+                    },
+                    payloadEncryption,
+                    signal,
+                ),
+            );
+        }
         return;
     }
-    replySettledFailure(socket, requestId, target, settled);
+    await replySettledFailure(context, requestId, target, settled);
 }
 
-export const handleSessionCancel: CommandHandler<typeof SESSION_CANCEL_KIND> = (context, message): void => {
-    const { eventProjection, operations, sessions, sessionTurns, signal, socket } = context;
+export const handleSessionCancel: CommandHandler<typeof SESSION_CANCEL_KIND> = (context, message): Promise<void> => {
+    const { eventProjection, operations, sessions, sessionTurns, signal } = context;
     const { commandId, requestId, target } = message;
     const turn = sessionTurns.get(commandId, target);
     const stop = async (): Promise<void> => {
         if (turn === undefined) {
             await settleAbandonedTurn(eventProjection, operations, message);
             if (!operations.isTerminalExecution(commandId, target)) {
-                replyFailure(socket, requestId, target, "turn_not_active", "The turn is not running.");
+                await replyFailure(context, requestId, target, "turn_not_active", "The turn is not running.");
                 return;
             }
         } else {
@@ -61,30 +77,42 @@ export const handleSessionCancel: CommandHandler<typeof SESSION_CANCEL_KIND> = (
             }
             await operations.settlement(commandId, target, signal);
         }
-        replyStopped(context, message);
+        await replyStopped(context, message);
     };
-    void stop().catch((error: unknown) => {
+    return stop().catch(async (error: unknown) => {
         if (!signal.aborted) {
-            reportOperationFailure(socket, requestId, target, error);
+            await reportOperationFailure(context, requestId, target, error);
         }
     });
 };
 
-export const handleSessionCancelBeforeStart: CommandHandler<typeof SESSION_CANCEL_BEFORE_START_KIND> = (
-    { eventProjection, operations, sessions, sessionTurns, signal, socket },
+export const handleSessionCancelBeforeStart: CommandHandler<typeof SESSION_CANCEL_BEFORE_START_KIND> = async (
+    context,
     message,
-): void => {
+): Promise<void> => {
+    const { eventProjection, operations, sessions, sessionTurns, signal, socket, payloadEncryption } = context;
     const { commandId, requestId, target } = message;
-    const withdrawn = (): void => reply(socket, { commandId, kind: SESSION_TURN_WITHDRAWN_KIND, requestId, target });
-    const alreadyStarted = (): void =>
+    const withdrawn = async (): Promise<void> => {
+        if (socket.readyState === WebSocket.OPEN) {
+            reply(
+                socket,
+                await sessionTurnWithdrawnEventCodec.encode(
+                    { commandId, kind: SESSION_TURN_WITHDRAWN_KIND, requestId, target },
+                    payloadEncryption,
+                    signal,
+                ),
+            );
+        }
+    };
+    const alreadyStarted = (): Promise<void> =>
         reportOperationFailure(
-            socket,
+            context,
             requestId,
             target,
             new SessionError("turn_already_started", "The message already started and could not be withdrawn"),
         );
     if (operations.hasStarted(commandId, target)) {
-        alreadyStarted();
+        await alreadyStarted();
         return;
     }
     const turn = sessionTurns.get(commandId, target);
@@ -103,19 +131,19 @@ export const handleSessionCancelBeforeStart: CommandHandler<typeof SESSION_CANCE
         ) {
             if (cancelled.kind === "restated") {
                 eventProjection.restateOutcome(target, cancelled.outcome);
-                withdrawn();
+                await withdrawn();
                 return;
             }
-            void eventProjection
+            await eventProjection
                 .recordOutcome(target, outcome)
                 .then(withdrawn)
-                .catch((error: unknown) => {
-                    reportOperationFailure(socket, requestId, target, error);
+                .catch(async (error: unknown) => {
+                    await reportOperationFailure(context, requestId, target, error);
                 });
             return;
         }
-        reportOperationFailure(
-            socket,
+        await reportOperationFailure(
+            context,
             requestId,
             target,
             new SessionError("turn_not_active", "The command is not waiting to start"),
@@ -131,43 +159,50 @@ export const handleSessionCancelBeforeStart: CommandHandler<typeof SESSION_CANCE
             console.error("Morty daemon could not stop a withdrawn prompt's execution", error);
         });
     }
-    void operations
+    await operations
         .progress(commandId, target, signal)
-        .then((progress) => {
+        .then(async (progress) => {
             if (progress === "started") {
-                alreadyStarted();
+                await alreadyStarted();
                 return;
             }
             const settled = settledCommand(operations, commandId);
             if (settled.kind !== "completed") {
-                replySettledFailure(socket, requestId, target, settled);
+                await replySettledFailure(context, requestId, target, settled);
             } else if (settled.cancelledBeforeStart) {
-                withdrawn();
+                await withdrawn();
             } else {
-                alreadyStarted();
+                await alreadyStarted();
             }
         })
         .catch(() => undefined);
 };
 
-export const handleSessionArchive: CommandHandler<typeof SESSION_ARCHIVE_KIND> = (
-    { sessions, signal, socket },
-    message,
-): void => {
-    void sessions
+export const handleSessionArchive: CommandHandler<typeof SESSION_ARCHIVE_KIND> = (context, message): Promise<void> => {
+    const { sessions, signal, socket, payloadEncryption } = context;
+    return sessions
         .archiveSession(message.target, signal)
-        .then(() => {
-            send(socket, { kind: SESSION_ARCHIVED_KIND, requestId: message.requestId, target: message.target });
+        .then(async () => {
+            send(
+                socket,
+                await sessionArchivedEventCodec.encode(
+                    { kind: SESSION_ARCHIVED_KIND, requestId: message.requestId, target: message.target },
+                    payloadEncryption,
+                    signal,
+                ),
+            );
         })
-        .catch((error: unknown) => {
-            reportOperationFailure(socket, message.requestId, message.target, error);
+        .catch(async (error: unknown) => {
+            signal.throwIfAborted();
+            await reportOperationFailure(context, message.requestId, message.target, error);
         });
 };
 
-export const handlePromptDisposition: CommandHandler<typeof SESSION_PROMPT_DISPOSITION_KIND> = (
-    { diagnostics, operations, sessionTurns, signal, socket },
+export const handlePromptDisposition: CommandHandler<typeof SESSION_PROMPT_DISPOSITION_KIND> = async (
+    context,
     message,
-): void => {
+): Promise<void> => {
+    const { diagnostics, operations, sessionTurns, signal, socket, payloadEncryption } = context;
     const { commandId, requestId, target } = message;
     const turn = sessionTurns.get(commandId, target);
     // The ledger's terminal outcome distinguishes a completed steer from a message that ran on its own.
@@ -177,25 +212,49 @@ export const handlePromptDisposition: CommandHandler<typeof SESSION_PROMPT_DISPO
         outcome.payload.kind === "prompt.completed" &&
         promptCompletion(outcome.payload).kind === "steered"
     ) {
-        reply(socket, { commandId, kind: SESSION_PROMPT_STEERED_KIND, requestId, target });
+        if (socket.readyState === WebSocket.OPEN) {
+            reply(
+                socket,
+                await sessionPromptSteeredEventCodec.encode(
+                    { commandId, kind: SESSION_PROMPT_STEERED_KIND, requestId, target },
+                    payloadEncryption,
+                    signal,
+                ),
+            );
+        }
         return;
     }
     const result = turn?.promoteQueuedPrompt(message) ?? "unavailable";
     if (result === "accepted") {
         // The steered prompt is answered once it starts inside the running Turn.
-        void operations
+        await operations
             .progress(commandId, target, signal)
-            .then((progress) => {
+            .then(async (progress) => {
                 if (progress === "started") {
-                    reply(socket, { commandId, kind: SESSION_PROMPT_STEERED_KIND, requestId, target });
+                    if (socket.readyState === WebSocket.OPEN) {
+                        reply(
+                            socket,
+                            await sessionPromptSteeredEventCodec.encode(
+                                { commandId, kind: SESSION_PROMPT_STEERED_KIND, requestId, target },
+                                payloadEncryption,
+                                signal,
+                            ),
+                        );
+                    }
                     return;
                 }
                 const settled = settledCommand(operations, commandId);
                 if (settled.kind !== "completed") {
-                    replySettledFailure(socket, requestId, target, settled);
+                    await replySettledFailure(context, requestId, target, settled);
                     return;
                 }
-                replyFailure(socket, requestId, target, "turn_not_active", "The message ended before it was steered.");
+                await replyFailure(
+                    context,
+                    requestId,
+                    target,
+                    "turn_not_active",
+                    "The message ended before it was steered.",
+                );
             })
             .catch(() => undefined);
         return;
@@ -210,31 +269,57 @@ export const handlePromptDisposition: CommandHandler<typeof SESSION_PROMPT_DISPO
         harness: target.harness,
         sessionId: target.sessionId,
     });
-    reportOperationFailure(socket, requestId, target, error);
+    await reportOperationFailure(context, requestId, target, error);
 };
 
 export const handlePermissionRespond: CommandHandler<typeof SESSION_PERMISSION_RESPOND_KIND> = (
-    { sessions, socket },
+    context,
     message,
-): void => {
+): Promise<void> => {
+    const { sessions, signal, socket, payloadEncryption } = context;
     const { interactionId, requestId, target } = message;
-    void sessions
+    return sessions
         .respondPermission(message)
-        .then(() => reply(socket, { interactionId, kind: SESSION_INTERACTION_ANSWERED_KIND, requestId, target }))
-        .catch((error: unknown) => {
-            reportOperationFailure(socket, requestId, target, error);
+        .then(async () => {
+            if (socket.readyState === WebSocket.OPEN) {
+                reply(
+                    socket,
+                    await sessionInteractionAnsweredEventCodec.encode(
+                        { interactionId, kind: SESSION_INTERACTION_ANSWERED_KIND, requestId, target },
+                        payloadEncryption,
+                        signal,
+                    ),
+                );
+            }
+        })
+        .catch(async (error: unknown) => {
+            signal.throwIfAborted();
+            await reportOperationFailure(context, requestId, target, error);
         });
 };
 
 export const handleElicitationRespond: CommandHandler<typeof SESSION_ELICITATION_RESPOND_KIND> = (
-    { sessions, socket },
+    context,
     message,
-): void => {
+): Promise<void> => {
+    const { sessions, signal, socket, payloadEncryption } = context;
     const { interactionId, requestId, target } = message;
-    void sessions
+    return sessions
         .respondElicitation(message)
-        .then(() => reply(socket, { interactionId, kind: SESSION_INTERACTION_ANSWERED_KIND, requestId, target }))
-        .catch((error: unknown) => {
-            reportOperationFailure(socket, requestId, target, error);
+        .then(async () => {
+            if (socket.readyState === WebSocket.OPEN) {
+                reply(
+                    socket,
+                    await sessionInteractionAnsweredEventCodec.encode(
+                        { interactionId, kind: SESSION_INTERACTION_ANSWERED_KIND, requestId, target },
+                        payloadEncryption,
+                        signal,
+                    ),
+                );
+            }
+        })
+        .catch(async (error: unknown) => {
+            signal.throwIfAborted();
+            await reportOperationFailure(context, requestId, target, error);
         });
 };

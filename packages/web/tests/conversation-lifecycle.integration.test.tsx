@@ -312,11 +312,6 @@ test("Given conversations updated across recent dates, When the directory loads,
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
         vi.setSystemTime(new Date("2026-10-10T12:00:00+08:00"));
-        const app = await createTestApp({ connectAgent: true });
-        await app.queryElementByTestId(
-            dataTestId.botConnectionStatus,
-            (element) => element.getAttribute("data-connection-status") === "connected",
-        );
         const conversations = [
             { title: "Today conversation", updatedAt: "2026-10-10T12:00:00+08:00" },
             { title: "September conversation", updatedAt: "2026-09-02T12:00:00+08:00" },
@@ -324,8 +319,31 @@ test("Given conversations updated across recent dates, When the directory loads,
             { title: "Previous 7 days conversation", updatedAt: "2026-10-06T12:00:00+08:00" },
             { title: "Yesterday conversation", updatedAt: "2026-10-09T12:00:00+08:00" },
         ] as const;
+        const app = await createTestApp({
+            connectAgent: true,
+            agent: {
+                harness: "codex",
+                label: "Codex",
+                reply: (prompt) => {
+                    const conversation = conversations.find(({ title }) => title === prompt);
+                    if (conversation === undefined) {
+                        throw new Error("Expected a conversation with controlled activity metadata");
+                    }
+                    return {
+                        outcome: "complete",
+                        output: [
+                            { kind: "session-updated-at", updatedAt: conversation.updatedAt },
+                            { kind: "text", text: conversation.title },
+                        ],
+                    };
+                },
+            },
+        });
+        await app.queryElementByTestId(
+            dataTestId.botConnectionStatus,
+            (element) => element.getAttribute("data-connection-status") === "connected",
+        );
         for (const [index, conversation] of conversations.entries()) {
-            vi.setSystemTime(new Date(conversation.updatedAt));
             if (index > 0) {
                 await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
             }
@@ -347,7 +365,6 @@ test("Given conversations updated across recent dates, When the directory loads,
             });
         }
 
-        vi.setSystemTime(new Date("2026-10-10T12:00:00+08:00"));
         await app.user.click(getByRole(document.body, "button", { name: "Refresh sessions" }));
 
         await app.waitForView(() => {

@@ -2,6 +2,8 @@ import { sameNativeSession } from "@morty-build/client/native-session";
 import {
     type decodeSessionHistoryPageLoad,
     type decodeSessionPreviewHistoryPageLoad,
+    ENCRYPTED_MESSAGE_MAX_PLAINTEXT_BYTES,
+    ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     type NativeSessionEvents,
     type NativeSessionTarget,
     type QueuedPromptRequestEventLog,
@@ -10,8 +12,9 @@ import {
     type SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND,
     SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND,
     type SessionEvent,
+    sessionHistoryPageLoadedCodec,
+    sessionPreviewHistoryPageLoadedCodec,
 } from "@morty-build/client/protocol";
-import type { WebSocket } from "undici";
 import { operationErrorCode } from "../../../infra/operation-error.ts";
 import type { ResolveAgent } from "../../../session/api/session-api.ts";
 import { SessionError } from "../../../session/api/session-error.ts";
@@ -22,6 +25,7 @@ import type { PromptLifecycle } from "../../../session/prompt/prompt-lifecycle.t
 import { resolveSessionDirectory } from "../../../session/workspace/resolve-session-directory.ts";
 import type { WorkspaceDirectoryService } from "../../../session/workspace/workspace-directory.ts";
 import type { RelayConnectionDiagnostics } from "../../relay/diagnostics.ts";
+import type { CommandContext } from "../context.ts";
 import type { CommandHandler } from "../definition.ts";
 import { reportOperationFailure, send } from "../transport.ts";
 
@@ -29,6 +33,12 @@ interface OrderedHistoryEvent {
     readonly cursor: string | null;
     readonly event: SessionEvent;
 }
+
+const HISTORY_ROUTING_RESERVE = 4096;
+const fitsHistoryFrame = (privateBytes: number): boolean =>
+    privateBytes + HISTORY_ROUTING_RESERVE <= ENCRYPTED_MESSAGE_MAX_PLAINTEXT_BYTES &&
+    Math.ceil(((privateBytes + HISTORY_ROUTING_RESERVE + 37) * 4) / 3) + HISTORY_ROUTING_RESERVE <=
+        ENCRYPTED_MESSAGE_MAX_WIRE_BYTES;
 
 async function loadHistoryPage(
     target: NativeSessionTarget,
@@ -77,14 +87,56 @@ async function loadHistoryPage(
     if (sessionGenerationId === null || throughPosition === null) {
         throw new SessionError("session_history_unavailable", "The Session history is unavailable");
     }
-    const orderedEvents = loaded.slice(-eventLimit);
+    const candidates = loaded.slice(-eventLimit);
+    const tailCursor = candidates.at(-1)?.event.eventId ?? "";
+    // The encrypted private JSON contains the page and queue. Reserve space for the
+    // routing JSON, a 512-character cursor, the AES-GCM packet and base64 framing.
+    const empty = {
+        events: {
+            events: [],
+            nextCursor: null,
+            sessionGenerationId,
+            tailCursor,
+            throughPosition,
+            truncated: false,
+            version: 2,
+        },
+        queuedPromptRequests,
+    };
+    let privateBytes = Buffer.byteLength(JSON.stringify({ events: empty }));
+    if (!fitsHistoryFrame(privateBytes)) {
+        throw new SessionError(
+            "session_history_unavailable",
+            "The Session history metadata exceeds the supported response size",
+        );
+    }
+    let first = candidates.length;
+    while (first > 0) {
+        const candidate = candidates[first - 1];
+        if (candidate === undefined) {
+            break;
+        }
+        const bytes = Buffer.byteLength(JSON.stringify(candidate.event)) + (first === candidates.length ? 0 : 1);
+        if (!fitsHistoryFrame(privateBytes + bytes)) {
+            break;
+        }
+        privateBytes += bytes;
+        first -= 1;
+    }
+    if (first === candidates.length && candidates.length > 0) {
+        throw new SessionError(
+            "session_history_unavailable",
+            "A Session history event exceeds the supported response size",
+        );
+    }
+    const orderedEvents = candidates.slice(first);
     const nextCursor = orderedEvents[0]?.cursor ?? null;
     return {
         events: {
             events: orderedEvents.map(({ event }) => event),
             nextCursor,
             sessionGenerationId,
-            tailCursor: orderedEvents.at(-1)?.event.eventId ?? "",
+            tailCursor,
             throughPosition,
             truncated: nextCursor !== null,
             version: 2,
@@ -94,7 +146,7 @@ async function loadHistoryPage(
 }
 
 async function executeSessionHistoryPageLoad(
-    socket: WebSocket,
+    context: CommandContext,
     command: ReturnType<typeof decodeSessionHistoryPageLoad>,
     resolveAgent: ResolveAgent,
     directories: WorkspaceDirectoryService,
@@ -104,6 +156,7 @@ async function executeSessionHistoryPageLoad(
     eventProjection: PromptLifecycle,
     signal: AbortSignal,
 ): Promise<void> {
+    const { socket, payloadEncryption } = context;
     let harness: string | undefined;
     try {
         const [entry] = await nativeSessions.querySessions([command.target], signal);
@@ -127,12 +180,23 @@ async function executeSessionHistoryPageLoad(
             async (eventLimit, cursor) => await sessions.loadSessionEvents(loadOptions, eventLimit, cursor),
         );
         signal.throwIfAborted();
-        send(socket, {
-            events,
-            kind: SESSION_HISTORY_PAGE_LOADED_KIND,
-            requestId: command.requestId,
-            target: command.target,
-        });
+        const encoded = await sessionHistoryPageLoadedCodec.encode(
+            {
+                events,
+                kind: SESSION_HISTORY_PAGE_LOADED_KIND,
+                requestId: command.requestId,
+                target: command.target,
+            },
+            payloadEncryption,
+            signal,
+        );
+        if (Buffer.byteLength(encoded) > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES) {
+            throw new SessionError(
+                "session_history_unavailable",
+                "The Session history response exceeds the supported size",
+            );
+        }
+        send(socket, encoded);
     } catch (error) {
         if (!signal.aborted) {
             diagnostics.daemonDiagnostic(
@@ -145,13 +209,13 @@ async function executeSessionHistoryPageLoad(
                 },
                 error,
             );
-            reportOperationFailure(socket, command.requestId, command.target, error);
+            await reportOperationFailure(context, command.requestId, command.target, error);
         }
     }
 }
 
 async function executeSessionPreviewHistoryPageLoad(
-    socket: WebSocket,
+    context: CommandContext,
     command: ReturnType<typeof decodeSessionPreviewHistoryPageLoad>,
     resolveAgent: ResolveAgent,
     directories: WorkspaceDirectoryService,
@@ -159,6 +223,7 @@ async function executeSessionPreviewHistoryPageLoad(
     nativeSessions: NativeSessionService,
     signal: AbortSignal,
 ): Promise<void> {
+    const { socket, payloadEncryption } = context;
     try {
         const resolved = await resolveSessionDirectory(directories, command.directory, signal);
         const loadOptions = {
@@ -176,12 +241,23 @@ async function executeSessionPreviewHistoryPageLoad(
                 await nativeSessions.readSessionHistory(loadOptions, command.target.sessionId, eventLimit, cursor),
         );
         signal.throwIfAborted();
-        send(socket, {
-            events,
-            kind: SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND,
-            requestId: command.requestId,
-            target: command.target,
-        });
+        const encoded = await sessionPreviewHistoryPageLoadedCodec.encode(
+            {
+                events,
+                kind: SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND,
+                requestId: command.requestId,
+                target: command.target,
+            },
+            payloadEncryption,
+            signal,
+        );
+        if (Buffer.byteLength(encoded) > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES) {
+            throw new SessionError(
+                "session_history_unavailable",
+                "The Session history response exceeds the supported size",
+            );
+        }
+        send(socket, encoded);
     } catch (error) {
         if (!signal.aborted) {
             diagnostics.daemonDiagnostic(
@@ -194,7 +270,7 @@ async function executeSessionPreviewHistoryPageLoad(
                 },
                 error,
             );
-            reportOperationFailure(socket, command.requestId, command.target, error);
+            await reportOperationFailure(context, command.requestId, command.target, error);
         }
     }
 }
@@ -202,9 +278,9 @@ async function executeSessionPreviewHistoryPageLoad(
 export const handleSessionHistoryPageLoad: CommandHandler<typeof SESSION_HISTORY_PAGE_LOAD_KIND> = (
     context,
     message,
-): void => {
-    void executeSessionHistoryPageLoad(
-        context.socket,
+): Promise<void> => {
+    return executeSessionHistoryPageLoad(
+        context,
         message,
         context.resolveAgent,
         context.directories,
@@ -219,9 +295,9 @@ export const handleSessionHistoryPageLoad: CommandHandler<typeof SESSION_HISTORY
 export const handlePreviewHistoryPageLoad: CommandHandler<typeof SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND> = (
     context,
     message,
-): void => {
-    void executeSessionPreviewHistoryPageLoad(
-        context.socket,
+): Promise<void> => {
+    return executeSessionPreviewHistoryPageLoad(
+        context,
         message,
         context.resolveAgent,
         context.directories,

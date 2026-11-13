@@ -20,6 +20,20 @@ interface AgentDirectory {
 }
 
 export const chatCalls = Object.freeze({
+    verifyAgent: ({ origin, computerId, harness }: ComputerCallTarget & { readonly harness: string }): ApiRequest =>
+        encodeChatCall({
+            origin,
+            computerId,
+            path: "setup",
+            definition: {
+                method: "POST",
+                operation: "verify-agent",
+                transport: { kind: "http" },
+                timeoutMilliseconds: 120_000,
+                watch: "none",
+            },
+            body: { kind: "agent.settings.discover", requestId: crypto.randomUUID(), harness, directory: "." },
+        }),
     daemonDiagnostics: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
         encodeChatCall({
             origin,
@@ -32,6 +46,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
+            body: { kind: "computer.diagnostics.read", requestId: crypto.randomUUID() },
         }),
     networkDiagnostic: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
         encodeChatCall({
@@ -45,6 +60,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
+            body: { kind: "computer.ping", requestId: `ping_${crypto.randomUUID()}` },
         }),
     createConversation: ({
         origin,
@@ -54,7 +70,7 @@ export const chatCalls = Object.freeze({
         readonly input: {
             readonly harness: string;
             readonly configurations: readonly SessionConfigurationSelection[];
-            readonly conversationKey: string;
+            readonly operationId: string;
             readonly workspaceRef: string;
         };
     }): ApiRequest =>
@@ -69,7 +85,14 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: input,
+            body: {
+                kind: "session.create",
+                requestId: crypto.randomUUID(),
+                operationId: input.operationId,
+                harness: input.harness,
+                configurations: input.configurations,
+                directory: input.workspaceRef,
+            },
         }),
     managedSessions: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
         encodeChatCall({
@@ -83,7 +106,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: {},
+            body: { kind: "session.list", requestId: crypto.randomUUID(), limit: 500 },
         }),
     archiveManagedSession: ({
         origin,
@@ -101,7 +124,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: target,
+            body: { kind: "session.archive", requestId: crypto.randomUUID(), target },
         }),
     managedSession: ({
         origin,
@@ -119,14 +142,21 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: target,
+            body: { kind: "session.restore", requestId: crypto.randomUUID(), target },
         }),
     continueNativeSession: ({
         origin,
         computerId,
         harness,
         sessionId,
-    }: ComputerCallTarget & { readonly harness: string; readonly sessionId: string }): ApiRequest =>
+        action,
+        directory,
+    }: ComputerCallTarget & {
+        readonly harness: string;
+        readonly sessionId: string;
+        readonly action: "find" | "import";
+        readonly directory: string;
+    }): ApiRequest =>
         encodeChatCall({
             origin,
             computerId,
@@ -138,7 +168,14 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: { harness, sessionId },
+            body: {
+                kind: "native.session.request",
+                requestId: crypto.randomUUID(),
+                action,
+                harness,
+                sessionId,
+                directory,
+            },
         }),
     agentSettings: ({
         origin,
@@ -157,7 +194,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: { harness, workspaceRef },
+            body: { kind: "agent.settings.discover", requestId: crypto.randomUUID(), harness, directory: workspaceRef },
         }),
     computerConfiguration: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
         encodeChatCall({
@@ -184,15 +221,17 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: { directory },
+            body: { kind: "workspace.list", requestId: crypto.randomUUID(), directory },
         }),
     forkNativeSession: ({
         origin,
         computerId,
         operationId,
+        requestId,
         input,
     }: ComputerCallTarget & {
         readonly operationId: string;
+        readonly requestId: string;
         readonly input: ForkMortyNativeSessionRequest;
     }): ApiRequest =>
         encodeChatCall({
@@ -206,7 +245,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: input,
+            body: { ...input, kind: "native.session.request", action: "fork", requestId },
         }),
     nativeSessions: ({
         origin,
@@ -226,7 +265,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: input,
+            body: { ...input, kind: "native.session.request", requestId: crypto.randomUUID() },
         }),
     importNativeSession: ({
         origin,
@@ -245,7 +284,13 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: { harness: identity.harness, directory: identity.directory },
+            body: {
+                ...identity,
+                kind: "native.session.request",
+                action: "import",
+                requestId: crypto.randomUUID(),
+                sessionId,
+            },
         }),
     nativeSession: ({
         origin,
@@ -264,7 +309,14 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: identity,
+            body: {
+                kind: "session.preview-history.page.load",
+                requestId: crypto.randomUUID(),
+                target: { harness: identity.harness, sessionId },
+                directory: identity.directory,
+                cursor: null,
+                eventLimit: 200,
+            },
         }),
     sessionAccess: ({
         origin,
@@ -282,6 +334,6 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: target,
+            body: { kind: "session.prepare", requestId: crypto.randomUUID(), target },
         }),
 });

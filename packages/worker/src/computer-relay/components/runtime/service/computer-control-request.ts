@@ -1,197 +1,91 @@
 import {
-    type AgentSettingsDiscoverCommand,
-    type AgentSettingsDiscoveredEvent,
+    type AgentSettingsDiscoverCommandRouting,
+    agentSettingsDiscoveredEventCodec,
+    agentSettingsDiscoveryFailedEventCodec,
     CONTENT_AVAILABLE_KIND,
+    CONTENT_CHUNK_ACK_KIND,
     CONTENT_CHUNK_MAX_BYTES,
     CONTENT_READY_KIND,
-    type ComputerDiagnosticsRequest,
-    type ComputerDiagnosticsResult,
-    type ComputerPingCommand,
-    type ComputerPongEvent,
-    type ContentAvailableEvent,
-    type ContentWriteCommand,
-    decodeAgentSettingsDiscoveredEvent,
-    decodeAgentSettingsDiscoveryFailedEvent,
+    CONTENT_WRITE_MAX_BYTES,
+    contentAvailableEventCodec,
+    contentChunkCodec,
+    contentCommitCommandCodec,
+    contentReadyEventCodec,
+    contentWriteCommandCodec,
     decodeComputerStatusEvent,
-    decodeContentAvailableEvent,
-    decodeContentChunkFrame,
-    decodeContentReadyEvent,
-    decodeFileBeginEvent,
-    decodeFileEndEvent,
-    decodeFileFailedEvent,
+    decodeContentChunkAck,
     decodeMessageKind,
-    decodeSessionOperationFailedEvent,
-    decodeWorkspaceEntriesEvent,
-    encodeContentChunkFrame,
-    encodeNativeSessionRequest,
-    encodeServiceToDaemonMessage,
+    decodeWorkerRequestRejected,
+    encodeClientToRelayMessage,
+    encodeFileStreamRecord,
+    encodeWorkerFileCredit,
+    encodeWorkerRequestCancel,
     FILE_BEGIN_KIND,
     FILE_END_KIND,
     FILE_FAILED_KIND,
+    FILE_STREAM_CONTENT_TYPE,
+    FILE_STREAM_MAX_CHUNK_BYTES,
     type FileReadCommand,
-    type NativeSessionRequest,
-    type NativeSessionResult,
-    requestReplyAddress,
-    type SessionArchiveCommand,
-    type SessionArchivedEvent,
-    type SessionCancelBeforeStartCommand,
-    type SessionCancelCommand,
-    type SessionConfigReadCommand,
-    type SessionConfigReadResult,
-    type SessionConfigUpdatedEvent,
-    type SessionConfigureCommand,
-    type SessionCreateCommand,
-    type SessionElicitationRespondCommand,
-    type SessionHistoryPageLoad,
-    type SessionHistoryWirePageLoaded,
-    type SessionInteractionAnsweredEvent,
-    type SessionListCommand,
-    type SessionPermissionRespondCommand,
-    type SessionPrepareCommand,
-    type SessionPreviewHistoryPageLoad,
-    type SessionPreviewHistoryWirePageLoaded,
-    type SessionPromptAcceptedEvent,
-    type SessionPromptCommand,
-    type SessionPromptDispositionCommand,
-    type SessionPromptSteeredEvent,
-    type SessionQueryCommand,
-    type SessionReadyEvent,
-    type SessionRenameCommand,
-    type SessionRenamedEvent,
-    type SessionRestoreCommand,
-    type SessionRestoredEvent,
-    type SessionsListedEvent,
-    type SessionsQueriedEvent,
-    type SessionTurnStoppedEvent,
-    type SessionTurnWithdrawnEvent,
-    type WorkspaceEntriesEvent,
-    type WorkspaceListCommand,
+    fileBeginEventCodec,
+    fileEndEventCodec,
+    fileFailedEventCodec,
+    type NativeSessionTarget,
 } from "@morty-build/client/protocol";
-import { RuntimeOperationFailedError, SessionRuntimeError } from "../../../../contracts/relay/session.ts";
-import { computerControlRegistry } from "./computer-control-registry.ts";
+import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
+import { logger } from "../../../../infra/logger.ts";
+import {
+    type ClientControlCommand,
+    type ClientControlReply,
+    computerControlAddress,
+    computerControlRegistry,
+    computerControlReplyDecoders,
+    computerControlTarget,
+} from "./computer-control-registry.ts";
+import type { ComputerReplyConnection, ReplyDecision } from "./computer-reply-request.ts";
+import type { ContentUploadReader } from "./content-upload-reader.ts";
 
-export interface ComputerReplyConnection {
-    readonly readyState: number;
-    readonly accept: () => void;
-    readonly send: (message: string | ArrayBuffer | ArrayBufferView) => void;
-    readonly close: (code?: number, reason?: string) => void;
-    readonly addEventListener: EventTarget["addEventListener"];
-    readonly removeEventListener: EventTarget["removeEventListener"];
-}
-
-export type ComputerControlCommand =
-    | ComputerDiagnosticsRequest
-    | ComputerPingCommand
-    | NativeSessionRequest
-    | SessionPrepareCommand
-    | SessionCreateCommand
-    | SessionConfigureCommand
-    | SessionConfigReadCommand
-    | SessionRenameCommand
-    | SessionArchiveCommand
-    | SessionCancelBeforeStartCommand
-    | SessionCancelCommand
-    | SessionPromptDispositionCommand
-    | SessionPromptCommand
-    | SessionPreviewHistoryPageLoad
-    | SessionHistoryPageLoad
-    | SessionElicitationRespondCommand
-    | SessionPermissionRespondCommand
-    | SessionListCommand
-    | SessionQueryCommand
-    | SessionRestoreCommand;
-
-export type ComputerControlResult =
-    | ComputerDiagnosticsResult
-    | ComputerPongEvent
-    | NativeSessionResult
-    | SessionReadyEvent
-    | SessionConfigUpdatedEvent
-    | SessionConfigReadResult
-    | SessionRenamedEvent
-    | SessionArchivedEvent
-    | SessionPromptAcceptedEvent
-    | SessionPromptSteeredEvent
-    | SessionTurnStoppedEvent
-    | SessionTurnWithdrawnEvent
-    | SessionPreviewHistoryWirePageLoaded
-    | SessionHistoryWirePageLoaded
-    | SessionInteractionAnsweredEvent
-    | SessionsListedEvent
-    | SessionsQueriedEvent
-    | SessionRestoredEvent;
+export type { ComputerReplyConnection } from "./computer-reply-request.ts";
 
 export interface ComputerFileStream {
     readonly finished: Promise<void>;
     readonly response: Response;
 }
 
-/** How long the Computer has to answer one request. */
-const COMPUTER_REQUEST_TIMEOUT_MILLISECONDS = 120_000;
-
-/** The deadline of one Computer request: the caller's signal or the request timeout, whichever ends first. */
-function computerRequestDeadline(signal: AbortSignal): {
-    readonly deadline: AbortSignal;
-    readonly release: () => void;
-} {
-    const timeout = new AbortController();
-    const timer = setTimeout(
-        () => timeout.abort(new DOMException("Computer request timed out", "TimeoutError")),
-        COMPUTER_REQUEST_TIMEOUT_MILLISECONDS,
-    );
-    return { deadline: AbortSignal.any([signal, timeout.signal]), release: () => clearTimeout(timer) };
-}
-
-const computerOffline = (): SessionRuntimeError =>
-    new SessionRuntimeError("computer_offline", "The Computer connection closed");
-
-/** What one daemon message means to a request awaiting its reply. */
-type ReplyStep<Reply> =
-    | { readonly kind: "ignore" }
-    | { readonly kind: "reply"; readonly reply: Reply }
-    | { readonly kind: "failure"; readonly error: Error };
-
-const ignored = { kind: "ignore" } as const;
-
-/** What a request does with the Computer's messages; the rules every request shares live in `awaitComputerReply`. */
+/** The caller owns request semantics; this exchange owns its single reply and cleanup. */
 interface ComputerExchange<Reply> {
-    /** Sends the request, once the exchange is listening. */
     readonly send: () => void;
-    /**
-     * Decides what a text message from the Computer means to this request. A throw is an invalid reply. `fail` ends the
-     * exchange for work the request does on its own, and `deadline` ends with the exchange.
-     */
     readonly receive: (
         data: string,
         kind: string,
-        exchange: { readonly fail: (cause: unknown) => void; readonly deadline: AbortSignal },
-    ) => ReplyStep<Reply>;
-    /** Runs when the exchange ends before the Computer replied, on the open connection. */
+        fail: (cause: unknown) => void,
+        deadline: AbortSignal,
+    ) => ReplyDecision<Reply>;
     readonly abandoned?: () => void;
-    /** Resolves when work the request started on its own has ended; the connection closes after it. */
     readonly settled?: () => Promise<void>;
 }
 
-/**
- * Runs a request that ends with one reply from the Computer. Every such request shares one deadline and one meaning
- * for the Computer going offline, the connection closing and an unreadable reply; each ends with the connection
- * released, whatever the outcome.
- */
 async function awaitComputerReply<Reply>(
     socket: ComputerReplyConnection,
+    requestId: string,
     signal: AbortSignal,
     exchange: ComputerExchange<Reply>,
 ): Promise<Reply> {
-    const { deadline, release } = computerRequestDeadline(signal);
+    const timeout = new AbortController();
+    const stopped = new AbortController();
+    const timer = setTimeout(
+        () => timeout.abort(new DOMException("Computer request timed out", "TimeoutError")),
+        120_000,
+    );
+    const deadline = AbortSignal.any([signal, timeout.signal, stopped.signal]);
     let cleanup = () => {};
+    let completed = false;
     try {
-        return await new Promise<Reply>((resolve, reject) => {
-            const onClose = (): void => reject(computerOffline());
-            const onAbort = (): void => {
-                exchange.abandoned?.();
+        const result = await new Promise<Reply>((resolve, reject) => {
+            const onClose = () => reject(new SessionRuntimeError("computer_offline", "The Computer connection closed"));
+            const onAbort = () => {
                 reject(deadline.reason);
             };
-            const onMessage = (event: Event): void => {
+            const onMessage = (event: Event) => {
                 if (!(event instanceof MessageEvent) || typeof event.data !== "string") {
                     return;
                 }
@@ -203,13 +97,22 @@ async function awaitComputerReply<Reply>(
                         }
                         return;
                     }
-                    const step = exchange.receive(event.data, kind, { fail: reject, deadline });
-                    if (step.kind === "reply") {
-                        resolve(step.reply);
-                    } else if (step.kind === "failure") {
-                        reject(step.error);
+                    if (kind === "worker.request.rejected") {
+                        const rejected = decodeWorkerRequestRejected(event.data);
+                        if (rejected.requestId === requestId) {
+                            reject(new SessionRuntimeError(rejected.code, rejected.message));
+                        }
+                        return;
+                    }
+                    const result = exchange.receive(event.data, kind, reject, deadline);
+                    if (result.kind === "complete") {
+                        resolve(result.value);
                     }
                 } catch (cause) {
+                    if (deadline.aborted) {
+                        reject(deadline.reason);
+                        return;
+                    }
                     reject(
                         cause instanceof SessionRuntimeError
                             ? cause
@@ -232,95 +135,243 @@ async function awaitComputerReply<Reply>(
             try {
                 deadline.throwIfAborted();
                 socket.accept();
+                deadline.throwIfAborted();
                 exchange.send();
             } catch (cause) {
                 reject(cause);
             }
         });
+        completed = true;
+        return result;
     } finally {
-        release();
+        if (!completed) {
+            try {
+                exchange.abandoned?.();
+            } catch {
+                // The original failure remains authoritative if cleanup cannot reach the Computer.
+            }
+        }
         cleanup();
-        await exchange.settled?.().catch(() => undefined);
-        socket.close(1000, "Operation finished");
+        stopped.abort();
+        clearTimeout(timer);
+        try {
+            await exchange.settled?.().catch(() => undefined);
+        } finally {
+            socket.close(1000, "Operation finished");
+        }
+    }
+}
+
+/** Waits for an addressed reply without interpreting either endpoint's private data. */
+export async function requestClientControl(
+    socket: ComputerReplyConnection,
+    command: ClientControlCommand,
+    signal: AbortSignal,
+    callerCancellation?: AbortSignal,
+): Promise<ClientControlReply> {
+    const encoded = encodeClientToRelayMessage(command);
+    const requestId = computerControlAddress(command);
+    const target = computerControlTarget(command);
+    const successKind = computerControlRegistry[command.kind];
+    const accept = (reply: ClientControlReply): ReplyDecision<ClientControlReply> => {
+        if (reply.requestId !== requestId) {
+            return { kind: "ignore" };
+        }
+        if (
+            target !== undefined &&
+            "target" in reply &&
+            reply.target !== undefined &&
+            (reply.kind !== "native.session.result" || reply.action !== "fork") &&
+            (reply.target.harness !== target.harness || reply.target.sessionId !== target.sessionId)
+        ) {
+            throw new SessionRuntimeError("invalid_request", "The Computer returned an invalid reply target");
+        }
+        if (
+            command.kind === "native.session.request" &&
+            reply.kind === "native.session.result" &&
+            reply.action !== command.action
+        ) {
+            throw new SessionRuntimeError("invalid_request", "The Computer returned an invalid native operation");
+        }
+        if (
+            command.kind === "agent.settings.discover" &&
+            reply.kind === "agent.settings.discovered" &&
+            reply.harness !== command.harness
+        ) {
+            throw new SessionRuntimeError("invalid_request", "The Computer returned an invalid Agent settings target");
+        }
+        return { kind: "complete", value: reply };
+    };
+    const failureKind =
+        command.kind === "agent.settings.discover" ? "agent.settings.discovery.failed" : "session.operation.failed";
+    const handlers: Readonly<Record<string, ((message: string) => ReplyDecision<ClientControlReply>) | undefined>> = {
+        [successKind]: (message) => accept(computerControlReplyDecoders[successKind](message)),
+        [failureKind]: (message) => accept(computerControlReplyDecoders[failureKind](message)),
+    };
+    const cancel = (): void => {
+        if (command.kind === "native.session.request" && socket.readyState === WebSocket.OPEN) {
+            socket.send(encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId }));
+        }
+    };
+    callerCancellation?.addEventListener("abort", cancel, { once: true });
+    try {
+        return await awaitComputerReply(socket, requestId, signal, {
+            send: () => {
+                callerCancellation?.throwIfAborted();
+                socket.send(encoded);
+            },
+            receive: (message, kind) => handlers[kind]?.(message) ?? { kind: "ignore" },
+            abandoned: () => {
+                if (command.kind === "native.session.request" && command.action === "fork") {
+                    socket.close(1011, "Fork reply was not drained");
+                } else {
+                    cancel();
+                }
+            },
+        });
+    } finally {
+        callerCancellation?.removeEventListener("abort", cancel);
     }
 }
 
 export async function requestComputerContentWrite(
     socket: ComputerReplyConnection,
-    command: ContentWriteCommand,
-    body: ReadableStream<Uint8Array>,
+    encodedCommand: string,
+    records: ContentUploadReader,
     signal: AbortSignal,
-): Promise<ContentAvailableEvent> {
-    let uploadStarted = false;
+): Promise<string> {
+    const command = contentWriteCommandCodec.decodeRouting(encodedCommand);
+    type UploadState = { readonly kind: "waiting" } | { readonly kind: "uploading" } | { readonly kind: "committed" };
+    let state: UploadState = { kind: "waiting" };
     let upload: Promise<void> = Promise.resolve();
+    let acknowledgement: { readonly sequence: number; readonly resolve: () => void } | null = null;
+    const waitForAck = (sequence: number, deadline: AbortSignal): Promise<void> =>
+        new Promise((resolve, reject) => {
+            const abort = () => {
+                acknowledgement = null;
+                reject(deadline.reason);
+            };
+            acknowledgement = {
+                sequence,
+                resolve: () => {
+                    deadline.removeEventListener("abort", abort);
+                    acknowledgement = null;
+                    resolve();
+                },
+            };
+            deadline.addEventListener("abort", abort, { once: true });
+            if (deadline.aborted) {
+                abort();
+            }
+        });
     const sendBody = async (deadline: AbortSignal): Promise<void> => {
-        const reader = body.getReader();
         let sequence = 0;
         let sentBytes = 0;
-        try {
-            while (true) {
-                deadline.throwIfAborted();
-                const chunk = await reader.read();
-                if (chunk.done) {
-                    break;
-                }
-                for (let offset = 0; offset < chunk.value.byteLength; offset += CONTENT_CHUNK_MAX_BYTES) {
-                    const bytes = chunk.value.subarray(offset, offset + CONTENT_CHUNK_MAX_BYTES);
-                    sentBytes += bytes.byteLength;
-                    if (sentBytes > command.byteLength) {
-                        throw new SessionRuntimeError("invalid_request", "The content body exceeds its declared size");
-                    }
-                    socket.send(encodeContentChunkFrame({ bytes, requestId: command.requestId, sequence }));
-                    sequence += 1;
-                }
+        const maximum = Math.ceil(CONTENT_WRITE_MAX_BYTES / CONTENT_CHUNK_MAX_BYTES) * FILE_STREAM_MAX_CHUNK_BYTES;
+        while (true) {
+            const record = await records.read(deadline);
+            deadline.throwIfAborted();
+            if (record === null) {
+                throw new SessionRuntimeError("invalid_request", "The content commit is required");
             }
-            if (sentBytes !== command.byteLength) {
-                throw new SessionRuntimeError("invalid_request", "The content body has an unexpected size");
+            if (record.kind === "chunk") {
+                const chunk = contentChunkCodec.decodeRouting(record.encoded);
+                sentBytes += record.encoded.byteLength;
+                if (chunk.requestId !== command.requestId || chunk.sequence !== sequence || sentBytes > maximum) {
+                    throw new SessionRuntimeError("invalid_request", "The encrypted content chunks are invalid");
+                }
+                const accepted = waitForAck(sequence, deadline);
+                try {
+                    socket.send(record.encoded);
+                } catch (cause) {
+                    void accepted.catch(() => undefined);
+                    throw cause;
+                }
+                await accepted;
+                sequence += 1;
+                continue;
             }
-            socket.send(
-                encodeServiceToDaemonMessage({
-                    kind: "content.commit",
-                    requestId: command.requestId,
-                    target: command.target,
-                }),
-            );
-        } finally {
-            reader.releaseLock();
+            const commit = contentCommitCommandCodec.decodeRouting(record.encoded);
+            if (
+                commit.requestId !== command.requestId ||
+                commit.target.harness !== command.target.harness ||
+                commit.target.sessionId !== command.target.sessionId ||
+                sequence === 0 ||
+                (await records.read(deadline)) !== null
+            ) {
+                throw new SessionRuntimeError("invalid_request", "The content commit is invalid");
+            }
+            deadline.throwIfAborted();
+            if (state.kind !== "uploading") {
+                throw new SessionRuntimeError("invalid_request", "The content upload is no longer active");
+            }
+            state = { kind: "committed" };
+            socket.send(record.encoded);
+            return;
         }
     };
-    return await awaitComputerReply<ContentAvailableEvent>(socket, signal, {
-        send: () => socket.send(encodeServiceToDaemonMessage(command)),
-        receive: (data, kind, { fail, deadline }) => {
+    const matches = (reply: { readonly requestId: string; readonly target: NativeSessionTarget }): boolean => {
+        if (reply.requestId !== command.requestId) {
+            return false;
+        }
+        if (reply.target.harness !== command.target.harness || reply.target.sessionId !== command.target.sessionId) {
+            throw new SessionRuntimeError("invalid_request", "The Computer returned an invalid content target");
+        }
+        return true;
+    };
+    return await awaitComputerReply(socket, command.requestId, signal, {
+        send: () => socket.send(encodedCommand),
+        abandoned: () => {
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId: command.requestId }));
+            }
+        },
+        receive: (encoded, kind, fail, deadline) => {
             switch (kind) {
-                case FILE_FAILED_KIND: {
-                    const failure = decodeFileFailedEvent(data);
-                    return failure.requestId === command.requestId
-                        ? { kind: "failure", error: new SessionRuntimeError(failure.code, failure.message) }
-                        : ignored;
-                }
-                case CONTENT_READY_KIND: {
-                    const ready = decodeContentReadyEvent(data);
-                    if (ready.requestId === command.requestId && !uploadStarted) {
-                        uploadStarted = true;
-                        upload = sendBody(deadline).catch(fail);
-                    }
-                    return ignored;
-                }
-                case CONTENT_AVAILABLE_KIND: {
-                    const available = decodeContentAvailableEvent(data);
-                    if (available.requestId !== command.requestId) {
-                        return ignored;
-                    }
-                    if (available.contentKey !== command.contentKey || available.byteLength !== command.byteLength) {
+                case CONTENT_CHUNK_ACK_KIND: {
+                    const ack = decodeContentChunkAck(encoded);
+                    if (
+                        ack.requestId !== command.requestId ||
+                        acknowledgement === null ||
+                        ack.sequence !== acknowledgement.sequence
+                    ) {
                         throw new SessionRuntimeError(
                             "invalid_request",
-                            "The Computer returned invalid content metadata",
+                            "The Computer returned an invalid content acknowledgement",
                         );
                     }
-                    return { kind: "reply", reply: available };
+                    acknowledgement.resolve();
+                    return { kind: "ignore" };
                 }
+                case CONTENT_READY_KIND:
+                    if (!matches(contentReadyEventCodec.decodeRouting(encoded))) {
+                        return { kind: "ignore" };
+                    }
+                    if (state.kind !== "waiting") {
+                        throw new SessionRuntimeError("invalid_request", "The Computer repeated content admission");
+                    }
+                    state = { kind: "uploading" };
+                    upload = Promise.resolve()
+                        .then(() => sendBody(deadline))
+                        .catch(fail);
+                    return { kind: "ignore" };
+                case CONTENT_AVAILABLE_KIND:
+                    if (!matches(contentAvailableEventCodec.decodeRouting(encoded))) {
+                        return { kind: "ignore" };
+                    }
+                    if (state.kind !== "committed") {
+                        throw new SessionRuntimeError(
+                            "invalid_request",
+                            "The Computer completed an uncommitted upload",
+                        );
+                    }
+                    return { kind: "complete", value: encoded };
+                case FILE_FAILED_KIND:
+                    return matches(fileFailedEventCodec.decodeRouting(encoded))
+                        ? { kind: "complete", value: encoded }
+                        : { kind: "ignore" };
                 default:
-                    return ignored;
+                    return { kind: "ignore" };
             }
         },
         settled: () => upload,
@@ -332,120 +383,206 @@ export async function requestComputerFile(
     command: FileReadCommand,
     signal: AbortSignal,
 ): Promise<ComputerFileStream> {
-    const { deadline, release: releaseDeadline } = computerRequestDeadline(signal);
+    const timeout = new AbortController();
+    const timer = setTimeout(
+        () => timeout.abort(new DOMException("Computer request timed out", "TimeoutError")),
+        120_000,
+    );
+    const deadline = AbortSignal.any([signal, timeout.signal]);
     let settleFinished = () => {};
     const finished = new Promise<void>((resolve) => {
         settleFinished = resolve;
     });
-    let stream: ReadableStreamDefaultController<Uint8Array> | null = null;
-    let responseSettled = false;
-    let transferFinished = false;
-    let expectedBytes = 0;
-    let receivedBytes = 0;
-    let nextSequence = 0;
+    type TransferState =
+        | { readonly kind: "waiting" }
+        | {
+              readonly kind: "streaming";
+              readonly controller: ReadableStreamDefaultController<Uint8Array>;
+              readonly receivedBytes: number;
+              readonly nextSequence: number;
+              readonly credit: "available" | "outstanding";
+          }
+        | { readonly kind: "finished" };
+    let state: TransferState = { kind: "waiting" };
+    // Bound opaque ciphertext, including encryption and binary routing overhead.
+    // Only the decrypting client can enforce the exact plaintext byte length.
+    const maxCiphertextBytes = Math.ceil(command.maxBytes / CONTENT_CHUNK_MAX_BYTES) * FILE_STREAM_MAX_CHUNK_BYTES;
     let cleanup = () => {};
     const response = await new Promise<Response>((resolve, reject) => {
-        const finish = (): void => {
-            if (transferFinished) {
+        const finish = (completed: boolean): void => {
+            if (state.kind === "finished") {
                 return;
             }
-            transferFinished = true;
-            releaseDeadline();
+            state = { kind: "finished" };
+            clearTimeout(timer);
             cleanup();
-            socket.close(1000, "Operation finished");
-            settleFinished();
+            try {
+                if (!completed && socket.readyState === WebSocket.OPEN) {
+                    socket.send(
+                        encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId: command.requestId }),
+                    );
+                }
+            } catch (cause) {
+                logger.warn(
+                    { err: cause, event: "file_download_cancellation_failed" },
+                    "File download cancellation failed",
+                );
+            } finally {
+                try {
+                    socket.close(1000, "Operation finished");
+                } finally {
+                    settleFinished();
+                }
+            }
         };
         const fail = (cause: unknown): void => {
-            if (transferFinished) {
+            if (state.kind === "finished") {
                 return;
             }
-            if (responseSettled) {
-                stream?.error(cause);
+            if (state.kind === "streaming") {
+                state.controller.error(cause);
             } else {
                 reject(cause);
             }
-            finish();
+            finish(false);
+        };
+        const startResponse = (encoded: string, terminal: boolean): void => {
+            const record = encodeFileStreamRecord({ kind: "message", encoded });
+            const body = new ReadableStream<Uint8Array>({
+                start(controller) {
+                    state = { kind: "streaming", controller, receivedBytes: 0, nextSequence: 0, credit: "available" };
+                    controller.enqueue(record);
+                    if (terminal) {
+                        controller.close();
+                    }
+                },
+                pull() {
+                    if (state.kind !== "streaming" || state.credit !== "available") {
+                        return;
+                    }
+                    try {
+                        deadline.throwIfAborted();
+                        state = { ...state, credit: "outstanding" };
+                        socket.send(
+                            encodeWorkerFileCredit({
+                                kind: "worker.file.credit",
+                                requestId: command.requestId,
+                                chunks: 1,
+                            }),
+                        );
+                    } catch (cause) {
+                        fail(cause);
+                    }
+                },
+                cancel() {
+                    finish(false);
+                },
+            });
+            resolve(
+                new Response(body, {
+                    headers: {
+                        "cache-control": "no-store",
+                        "content-type": FILE_STREAM_CONTENT_TYPE,
+                    },
+                }),
+            );
         };
         const onClose = (): void => fail(new SessionRuntimeError("computer_offline", "The Computer connection closed"));
         const onAbort = (): void => fail(deadline.reason);
+        const matches = (reply: { readonly requestId: string; readonly target: NativeSessionTarget }): boolean => {
+            if (reply.requestId !== command.requestId) {
+                return false;
+            }
+            if (
+                reply.target.harness !== command.target.harness ||
+                reply.target.sessionId !== command.target.sessionId
+            ) {
+                throw new SessionRuntimeError("invalid_request", "The Computer returned an invalid file target");
+            }
+            return true;
+        };
+        const endStream = (encoded: string): void => {
+            if (state.kind !== "streaming") {
+                throw new SessionRuntimeError("invalid_request", "The Computer ended an unknown file stream");
+            }
+            state.controller.enqueue(encodeFileStreamRecord({ kind: "message", encoded }));
+            state.controller.close();
+            finish(true);
+        };
+        const handlers: Readonly<Record<string, ((encoded: string) => void) | undefined>> = {
+            [FILE_BEGIN_KIND]: (encoded) => {
+                if (!matches(fileBeginEventCodec.decodeRouting(encoded))) {
+                    return;
+                }
+                if (state.kind !== "waiting") {
+                    throw new SessionRuntimeError("invalid_request", "The Computer returned invalid file metadata");
+                }
+                startResponse(encoded, false);
+            },
+            [FILE_END_KIND]: (encoded) => {
+                if (matches(fileEndEventCodec.decodeRouting(encoded))) {
+                    endStream(encoded);
+                }
+            },
+            [FILE_FAILED_KIND]: (encoded) => {
+                if (!matches(fileFailedEventCodec.decodeRouting(encoded))) {
+                    return;
+                }
+                if (state.kind === "waiting") {
+                    startResponse(encoded, true);
+                    finish(true);
+                    return;
+                }
+                endStream(encoded);
+            },
+            "worker.request.rejected": (encoded) => {
+                const rejection = decodeWorkerRequestRejected(encoded);
+                if (rejection.requestId === command.requestId) {
+                    fail(new SessionRuntimeError(rejection.code, rejection.message));
+                }
+            },
+            "computer.status": (encoded) => {
+                if (!decodeComputerStatusEvent(encoded).online) {
+                    onClose();
+                }
+            },
+        };
         const onMessage = (event: Event): void => {
-            if (!(event instanceof MessageEvent)) {
+            if (!(event instanceof MessageEvent) || state.kind === "finished") {
                 return;
             }
             try {
                 if (typeof event.data !== "string") {
-                    const chunk = decodeContentChunkFrame(event.data);
+                    const chunk = contentChunkCodec.decodeRouting(event.data);
                     if (chunk.requestId !== command.requestId) {
                         return;
                     }
-                    if (!responseSettled || chunk.sequence !== nextSequence) {
+                    if (
+                        state.kind !== "streaming" ||
+                        state.credit !== "outstanding" ||
+                        chunk.sequence !== state.nextSequence
+                    ) {
                         throw new SessionRuntimeError("invalid_request", "The Computer returned invalid file chunks");
                     }
-                    receivedBytes += chunk.bytes.byteLength;
-                    if (receivedBytes > command.maxBytes) {
+                    const data: unknown = event.data;
+                    let encoded: Uint8Array;
+                    if (data instanceof ArrayBuffer) {
+                        encoded = new Uint8Array(data);
+                    } else if (ArrayBuffer.isView(data)) {
+                        encoded = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+                    } else {
+                        throw new SessionRuntimeError("invalid_request", "The Computer returned invalid file chunks");
+                    }
+                    const receivedBytes = state.receivedBytes + encoded.byteLength;
+                    if (receivedBytes > maxCiphertextBytes) {
                         throw new SessionRuntimeError("invalid_request", "The Computer exceeded the file size limit");
                     }
-                    nextSequence += 1;
-                    stream?.enqueue(chunk.bytes);
+                    const controller = state.controller;
+                    state = { ...state, receivedBytes, nextSequence: state.nextSequence + 1, credit: "available" };
+                    controller.enqueue(encodeFileStreamRecord({ kind: "chunk", encoded }));
                     return;
                 }
-                const kind = decodeMessageKind(event.data);
-                if (kind === "computer.status") {
-                    if (!decodeComputerStatusEvent(event.data).online) {
-                        onClose();
-                    }
-                    return;
-                }
-                if (kind === FILE_FAILED_KIND) {
-                    const failure = decodeFileFailedEvent(event.data);
-                    if (failure.requestId === command.requestId) {
-                        fail(new SessionRuntimeError(failure.code, failure.message));
-                    }
-                    return;
-                }
-                if (kind === FILE_BEGIN_KIND) {
-                    const begin = decodeFileBeginEvent(event.data);
-                    if (begin.requestId !== command.requestId) {
-                        return;
-                    }
-                    if (responseSettled || begin.byteLength > command.maxBytes) {
-                        throw new SessionRuntimeError("invalid_request", "The Computer returned invalid file metadata");
-                    }
-                    const body = new ReadableStream<Uint8Array>({
-                        start(controller) {
-                            stream = controller;
-                        },
-                        cancel() {
-                            finish();
-                        },
-                    });
-                    responseSettled = true;
-                    expectedBytes = begin.byteLength;
-                    resolve(
-                        new Response(body, {
-                            headers: {
-                                "cache-control": "no-store",
-                                "content-length": begin.byteLength.toString(),
-                                "content-type": begin.mediaType,
-                                "last-modified": new Date(begin.modifiedAt).toUTCString(),
-                                "x-morty-byte-length": begin.byteLength.toString(),
-                                "x-morty-file-name": encodeURIComponent(begin.name),
-                            },
-                        }),
-                    );
-                    return;
-                }
-                if (kind === FILE_END_KIND) {
-                    const end = decodeFileEndEvent(event.data);
-                    if (end.requestId !== command.requestId) {
-                        return;
-                    }
-                    if (!responseSettled || receivedBytes !== expectedBytes) {
-                        throw new SessionRuntimeError("invalid_request", "The Computer ended an unknown file stream");
-                    }
-                    stream?.close();
-                    finish();
-                }
+                handlers[decodeMessageKind(event.data)]?.(event.data);
             } catch (cause) {
                 fail(
                     cause instanceof SessionRuntimeError
@@ -469,7 +606,7 @@ export async function requestComputerFile(
         try {
             deadline.throwIfAborted();
             socket.accept();
-            socket.send(encodeServiceToDaemonMessage(command));
+            socket.send(encodeClientToRelayMessage(command));
         } catch (cause) {
             fail(cause);
         }
@@ -479,90 +616,24 @@ export async function requestComputerFile(
 
 export async function requestComputerAgentSettings(
     socket: ComputerReplyConnection,
-    command: AgentSettingsDiscoverCommand,
+    command: AgentSettingsDiscoverCommandRouting,
     signal: AbortSignal,
-): Promise<AgentSettingsDiscoveredEvent> {
-    return await awaitComputerReply<AgentSettingsDiscoveredEvent>(socket, signal, {
-        send: () => socket.send(encodeServiceToDaemonMessage(command)),
-        receive: (data, kind) => {
-            if (kind === "agent.settings.discovery.failed") {
-                const failed = decodeAgentSettingsDiscoveryFailedEvent(data);
-                return failed.requestId === command.requestId
-                    ? { kind: "failure", error: new SessionRuntimeError(failed.code, failed.message) }
-                    : ignored;
-            }
-            if (kind !== "agent.settings.discovered") {
-                return ignored;
-            }
-            const result = decodeAgentSettingsDiscoveredEvent(data);
-            return result.requestId === command.requestId ? { kind: "reply", reply: result } : ignored;
+): Promise<string> {
+    const encoded = encodeClientToRelayMessage(command);
+    const handlers: Readonly<Record<string, ((message: string) => ReplyDecision<string>) | undefined>> = {
+        "agent.settings.discovered": (message) => {
+            const reply = agentSettingsDiscoveredEventCodec.decodeRouting(message);
+            return reply.requestId === command.requestId && reply.harness === command.harness
+                ? { kind: "complete", value: message }
+                : { kind: "ignore" };
         },
-    });
-}
-
-/** The Computer's own refusal of the request `requestId`: it finished handling it without a result. */
-function operationFailure(data: string, requestId: string): ReplyStep<never> {
-    const failed = decodeSessionOperationFailedEvent(data);
-    return failed.requestId === requestId
-        ? {
-              kind: "failure",
-              error: new RuntimeOperationFailedError(failed.code, failed.message, {
-                  runtimeTimings: failed.runtimeTimings,
-              }),
-          }
-        : ignored;
-}
-
-export async function requestComputerControl(
-    socket: ComputerReplyConnection,
-    command: ComputerControlCommand,
-    signal: AbortSignal,
-): Promise<ComputerControlResult> {
-    const reply = computerControlRegistry[command.kind];
-    const requestId = requestReplyAddress(command);
-    return await awaitComputerReply<ComputerControlResult>(socket, signal, {
-        send: () =>
-            socket.send(
-                command.kind === "native.session.request"
-                    ? encodeNativeSessionRequest(command)
-                    : encodeServiceToDaemonMessage(command),
-            ),
-        receive: (data, kind) => {
-            if (kind === "session.operation.failed") {
-                return operationFailure(data, requestId);
-            }
-            if (kind !== reply.eventKind) {
-                return ignored;
-            }
-            const resolved = reply.decode(data);
-            return resolved.requestId === requestId ? { kind: "reply", reply: resolved } : ignored;
+        "agent.settings.discovery.failed": (message) => {
+            const reply = agentSettingsDiscoveryFailedEventCodec.decodeRouting(message);
+            return reply.requestId === command.requestId ? { kind: "complete", value: message } : { kind: "ignore" };
         },
-        abandoned: () => {
-            if (command.kind === "native.session.request" && socket.readyState === WebSocket.OPEN) {
-                socket.send(
-                    encodeServiceToDaemonMessage({ kind: "native.session.cancel", requestId: command.requestId }),
-                );
-            }
-        },
-    });
-}
-
-export async function requestComputerWorkspace(
-    socket: ComputerReplyConnection,
-    command: WorkspaceListCommand,
-    signal: AbortSignal,
-): Promise<WorkspaceEntriesEvent> {
-    return await awaitComputerReply<WorkspaceEntriesEvent>(socket, signal, {
-        send: () => socket.send(encodeServiceToDaemonMessage(command)),
-        receive: (data, kind) => {
-            if (kind === "session.operation.failed") {
-                return operationFailure(data, command.requestId);
-            }
-            if (kind !== "workspace.entries") {
-                return ignored;
-            }
-            const result = decodeWorkspaceEntriesEvent(data);
-            return result.requestId === command.requestId ? { kind: "reply", reply: result } : ignored;
-        },
+    };
+    return await awaitComputerReply(socket, command.requestId, signal, {
+        send: () => socket.send(encoded),
+        receive: (message, kind) => handlers[kind]?.(message) ?? { kind: "ignore" },
     });
 }

@@ -489,7 +489,7 @@ test("Given saved access for the same computer, When an old native handoff link 
 }, async () => {
     const app = await createTestApp({ agent: { harness: "pi", label: "Pi" }, connectAgent: true });
     await startConversation(app, "Keep the issued grant");
-    window.location.href = `${app.origin}/continue?harness=pi&sessionId=missing-session&workspace=${encodeURIComponent(tmpdir())}#code=morty_transfer_v1.${app.identity.computerId}.${"a".repeat(43)}`;
+    window.location.href = `${app.origin}/continue?harness=pi&sessionId=missing-session#code=morty_transfer_v1.${app.identity.computerId}.${"a".repeat(43)}&workspace=${encodeURIComponent(tmpdir())}`;
     const continued = await app.reload();
     await continued.waitForView(() =>
         expect(getByRole(document.body, "alert").textContent).toContain("The native session was not found"),
@@ -529,22 +529,10 @@ test("Given the remembered conversation was closed elsewhere, When I return, The
     const app = await createTestApp({ connectAgent: true });
     const sessionId = await startConversation(app, "Conversation closed on another device");
     const explicit = window.location.href;
-    const signal = AbortSignal.timeout(10_000);
-    const archived = await app.transport.request(
-        new Request(`${app.origin}/morty/api/v1/computers/${app.identity.computerId}/managed-sessions/archive`, {
-            method: "POST",
-            headers: {
-                authorization: `Bearer ${await app.identity.getToken(signal)}`,
-                "content-type": "application/json",
-            },
-            body: JSON.stringify({
-                harness: new URL(explicit).searchParams.get("harness"),
-                sessionId: sessionId,
-            }),
-            signal,
-        }),
-    );
-    expect(archived.status).toBe(200);
+    if (app.daemon === null) {
+        throw new Error("Expected the connected Computer");
+    }
+    await app.daemon.archiveSession(sessionId);
     window.location.href = `${app.origin}/`;
     const restored = await app.reload();
     await restored.waitForView(() => getByRole(document.body, "textbox", { name: "Message" }));
@@ -623,19 +611,10 @@ test("Given a computer whose remembered conversation was closed elsewhere, When 
     const firstScope = encodeIdentityScope({
         computerId: first.identity.computerId,
     });
-    const signal = AbortSignal.timeout(10_000);
-    const archived = await first.transport.request(
-        new Request(`${first.origin}/morty/api/v1/computers/${first.identity.computerId}/managed-sessions/archive`, {
-            method: "POST",
-            headers: {
-                authorization: `Bearer ${await first.identity.getToken(signal)}`,
-                "content-type": "application/json",
-            },
-            body: JSON.stringify({ harness: "claude", sessionId: closedSession }),
-            signal,
-        }),
-    );
-    expect(archived.status).toBe(200);
+    if (first.daemon === null) {
+        throw new Error("Expected the connected Computer");
+    }
+    await first.daemon.archiveSession(closedSession);
     await first.close();
     const second = await createTestApp({ connectAgent: true });
     await startConversation(second, "Work on the other computer");
@@ -666,19 +645,10 @@ test("Given a switch to a computer whose remembered conversation is gone, When o
 }, async () => {
     const first = await createTestApp({ connectAgent: true });
     const closedSession = await startConversation(first, "Closed before a failed switch");
-    const signal = AbortSignal.timeout(10_000);
-    const archived = await first.transport.request(
-        new Request(`${first.origin}/morty/api/v1/computers/${first.identity.computerId}/managed-sessions/archive`, {
-            method: "POST",
-            headers: {
-                authorization: `Bearer ${await first.identity.getToken(signal)}`,
-                "content-type": "application/json",
-            },
-            body: JSON.stringify({ harness: "claude", sessionId: closedSession }),
-            signal,
-        }),
-    );
-    expect(archived.status).toBe(200);
+    if (first.daemon === null) {
+        throw new Error("Expected the connected Computer");
+    }
+    await first.daemon.archiveSession(closedSession);
     await first.close();
     const second = await createTestApp({ connectAgent: true });
     await startConversation(second, "Work before the failed switch");

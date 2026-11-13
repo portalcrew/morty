@@ -1,6 +1,47 @@
-import { isIdentifier, type NativeSessionTarget } from "@morty-build/client/protocol";
+import { decodeNativeSessionTarget, isIdentifier, type NativeSessionTarget } from "@morty-build/client/protocol";
 import { MortyValidationError } from "../errors.ts";
-import { nativeSessionTargetSchema } from "../protocol/session/shared/native-session-target.ts";
+import {
+    sessionConfigReadCommandCodec,
+    sessionConfigReadResultCodec,
+    sessionConfigUpdatedEventCodec,
+    sessionConfigureCommandCodec,
+} from "../protocol/session/configuration/index.ts";
+import { sessionRenameCommandCodec, sessionRenamedEventCodec } from "../protocol/session/configuration/title.ts";
+import { sessionEventEnvelopeCodec, sessionEventsSubscribeCommandCodec } from "../protocol/session/events/index.ts";
+import {
+    contentAvailableEventCodec,
+    contentCommitCommandCodec,
+    contentReadyEventCodec,
+    contentWriteCommandCodec,
+    fileBeginEventCodec,
+    fileEndEventCodec,
+    fileFailedEventCodec,
+    fileReadCommandCodec,
+} from "../protocol/session/files/index.ts";
+import {
+    sessionElicitationRespondCommandCodec,
+    sessionInteractionAnsweredEventCodec,
+    sessionPermissionRespondCommandCodec,
+} from "../protocol/session/interactions/index.ts";
+import {
+    sessionCloseNoticeEventCodec,
+    sessionOperationFailedEventCodec,
+    sessionPromptAcceptedEventCodec,
+} from "../protocol/session/lifecycle/index.ts";
+import { nativeSessionCommandCodec, nativeSessionResultCodec } from "../protocol/session/native/index.ts";
+import {
+    sessionHistoryPageLoadCodec,
+    sessionHistoryPageLoadedCodec,
+} from "../protocol/session/observability/history.ts";
+import {
+    sessionCancelBeforeStartCommandCodec,
+    sessionCancelCommandCodec,
+    sessionPromptCommandCodec,
+    sessionPromptDispositionCommandCodec,
+    sessionPromptSteeredEventCodec,
+    sessionTurnStoppedEventCodec,
+    sessionTurnWithdrawnEventCodec,
+} from "../protocol/session/prompt/commands.ts";
 import type { MortyEndpointCall, MortyTransportPolicy } from "./call.ts";
 
 export interface SessionCallTarget {
@@ -16,27 +57,32 @@ function endpoint({
     transport,
     timeoutMilliseconds,
     query,
+    encrypted,
 }: SessionCallTarget & {
     readonly method: MortyEndpointCall["method"];
     readonly resource: string;
     readonly transport: MortyTransportPolicy;
     readonly timeoutMilliseconds: number;
     readonly query?: URLSearchParams;
+    readonly encrypted: MortyEndpointCall["encrypted"];
 }): MortyEndpointCall {
     if (!isIdentifier(computerId)) {
         throw new MortyValidationError("The Morty Computer identifier is invalid");
     }
-    const parsed = nativeSessionTargetSchema.safeParse(target);
-    if (!parsed.success) {
-        throw new MortyValidationError("The harness and native Session identity are invalid", { cause: parsed.error });
+    let parsed: NativeSessionTarget;
+    try {
+        parsed = decodeNativeSessionTarget(target);
+    } catch (cause) {
+        throw new MortyValidationError("The harness and native Session identity are invalid", { cause });
     }
     const suffix = query === undefined || query.size === 0 ? "" : `?${query.toString()}`;
     return {
         computerId,
         method,
-        path: `v1/computers/${encodeURIComponent(computerId)}/harnesses/${encodeURIComponent(parsed.data.harness)}/sessions/${encodeURIComponent(parsed.data.sessionId)}/${resource}${suffix}`,
+        path: `v1/computers/${encodeURIComponent(computerId)}/harnesses/${encodeURIComponent(parsed.harness)}/sessions/${encodeURIComponent(parsed.sessionId)}/${resource}${suffix}`,
         transport,
         timeoutMilliseconds,
+        encrypted,
     };
 }
 
@@ -47,6 +93,10 @@ export const sessionEndpoints = Object.freeze({
             target,
             method: "GET",
             resource: "configuration",
+            encrypted: {
+                request: [sessionConfigReadCommandCodec],
+                response: [sessionConfigReadResultCodec, sessionOperationFailedEventCodec],
+            },
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
@@ -56,6 +106,10 @@ export const sessionEndpoints = Object.freeze({
             target,
             method: "POST",
             resource: "configuration",
+            encrypted: {
+                request: [sessionConfigureCommandCodec],
+                response: [sessionConfigUpdatedEventCodec, sessionOperationFailedEventCodec],
+            },
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
@@ -65,6 +119,10 @@ export const sessionEndpoints = Object.freeze({
             target,
             method: "POST",
             resource: "rename",
+            encrypted: {
+                request: [sessionRenameCommandCodec],
+                response: [sessionRenamedEventCodec, sessionOperationFailedEventCodec],
+            },
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
@@ -79,6 +137,15 @@ export const sessionEndpoints = Object.freeze({
             target,
             method: "GET",
             resource: "files/content",
+            encrypted: {
+                request: [fileReadCommandCodec],
+                response: [
+                    fileBeginEventCodec,
+                    fileEndEventCodec,
+                    fileFailedEventCodec,
+                    sessionOperationFailedEventCodec,
+                ],
+            },
             transport: { kind: "http" },
             timeoutMilliseconds: 20_000,
             query: new URLSearchParams({ maxBytes: maximumBytes.toString(), path }),
@@ -93,6 +160,10 @@ export const sessionEndpoints = Object.freeze({
             target,
             method: "GET",
             resource: "active-turn",
+            encrypted: {
+                request: [nativeSessionCommandCodec],
+                response: [nativeSessionResultCodec, sessionOperationFailedEventCodec],
+            },
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
             query: new URLSearchParams(commandId === undefined ? {} : { commandId }),
@@ -103,6 +174,10 @@ export const sessionEndpoints = Object.freeze({
             target,
             method: "POST",
             resource: "turns",
+            encrypted: {
+                request: [sessionPromptCommandCodec],
+                response: [sessionPromptAcceptedEventCodec, sessionOperationFailedEventCodec],
+            },
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
@@ -112,38 +187,50 @@ export const sessionEndpoints = Object.freeze({
             target,
             method: "GET",
             resource: "events",
+            encrypted: {
+                request: [sessionEventsSubscribeCommandCodec],
+                response: [sessionCloseNoticeEventCodec, sessionEventEnvelopeCodec, sessionOperationFailedEventCodec],
+            },
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 15_000,
         }),
     listEvents: ({
         computerId,
         target,
-        limit,
-        cursor,
     }: SessionCallTarget & { readonly limit: number; readonly cursor: string }): MortyEndpointCall =>
         endpoint({
             computerId,
             target,
             method: "GET",
             resource: "events",
+            encrypted: {
+                request: [sessionHistoryPageLoadCodec],
+                response: [sessionHistoryPageLoadedCodec, sessionOperationFailedEventCodec],
+            },
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
-            query: new URLSearchParams({ limit: limit.toString(), ...(cursor.length === 0 ? {} : { cursor }) }),
         }),
     uploadContent: ({
         computerId,
         target,
         key,
-        uri,
     }: SessionCallTarget & { readonly key: string; readonly uri: string }): MortyEndpointCall =>
         endpoint({
             computerId,
             target,
             method: "PUT",
             resource: `content/${encodeURIComponent(key)}`,
+            encrypted: {
+                request: [contentCommitCommandCodec, contentWriteCommandCodec],
+                response: [
+                    contentReadyEventCodec,
+                    contentAvailableEventCodec,
+                    fileFailedEventCodec,
+                    sessionOperationFailedEventCodec,
+                ],
+            },
             transport: { kind: "websocket", cancellation: "local" },
-            timeoutMilliseconds: 20_000,
-            query: new URLSearchParams({ uri }),
+            timeoutMilliseconds: 120_000,
         }),
     cancelTurn: ({ computerId, target, turnId }: SessionCallTarget & { readonly turnId: string }): MortyEndpointCall =>
         endpoint({
@@ -151,6 +238,10 @@ export const sessionEndpoints = Object.freeze({
             target,
             method: "POST",
             resource: `turns/${encodeURIComponent(turnId)}/cancel`,
+            encrypted: {
+                request: [sessionCancelCommandCodec],
+                response: [sessionTurnStoppedEventCodec, sessionOperationFailedEventCodec],
+            },
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
@@ -164,6 +255,10 @@ export const sessionEndpoints = Object.freeze({
             target,
             method: "POST",
             resource: `turns/${encodeURIComponent(turnId)}/cancel-before-start`,
+            encrypted: {
+                request: [sessionCancelBeforeStartCommandCodec],
+                response: [sessionTurnWithdrawnEventCodec, sessionOperationFailedEventCodec],
+            },
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
@@ -173,6 +268,10 @@ export const sessionEndpoints = Object.freeze({
             target,
             method: "PUT",
             resource: `turns/${encodeURIComponent(turnId)}/disposition`,
+            encrypted: {
+                request: [sessionPromptDispositionCommandCodec],
+                response: [sessionPromptSteeredEventCodec, sessionOperationFailedEventCodec],
+            },
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
@@ -186,6 +285,10 @@ export const sessionEndpoints = Object.freeze({
             target,
             method: "POST",
             resource: `interactions/${encodeURIComponent(interactionId)}/responses`,
+            encrypted: {
+                request: [sessionPermissionRespondCommandCodec, sessionElicitationRespondCommandCodec],
+                response: [sessionInteractionAnsweredEventCodec, sessionOperationFailedEventCodec],
+            },
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),

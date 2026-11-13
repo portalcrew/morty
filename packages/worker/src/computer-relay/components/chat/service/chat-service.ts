@@ -1,8 +1,18 @@
 import { nativeSessionKey, sameNativeSession } from "@morty-build/client/native-session";
 import type {
+    AgentSettingsDiscoverCommandRouting,
+    ComputerDiagnosticsRequestRouting,
+    ComputerPingCommandRouting,
+    NativeSessionCommandRouting,
     NativeSessionTarget,
     SessionAccessHolder,
-    SessionConfigurationSelection,
+    SessionArchiveCommandRouting,
+    SessionCreateCommandRouting,
+    SessionListCommandRouting,
+    SessionPrepareCommandRouting,
+    SessionPreviewHistoryPageLoadRouting,
+    SessionRestoreCommandRouting,
+    WorkspaceListCommandRouting,
 } from "@morty-build/client/protocol";
 import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
 import { computerRevoked } from "../../../../contracts/computer-pairing.ts";
@@ -11,9 +21,8 @@ import type { ComputerIdentity } from "../../management/entity/computer-identity
 import type { LocalComputerService } from "../../management/service/local-computer-service.ts";
 
 const OPENED_SESSION_CREDENTIAL_SECONDS = 900;
-/** The most Sessions one Session list read returns: the Computer's own bound. */
-const LISTED_SESSION_LIMIT = 500;
 const RENEWED_SESSION_CREDENTIAL_SECONDS = 600;
+
 /** The Relay issues no Session credential that lasts less than this. */
 export const MINIMUM_SESSION_CREDENTIAL_SECONDS = 60;
 
@@ -38,47 +47,9 @@ export type ChatScope = {
     readonly signal: AbortSignal;
 };
 
-type NativeListInput = {
-    readonly action: "list";
-    readonly harness: string;
-    readonly directory: string;
-    readonly cursor: string | null;
-};
-type NativeEntryInput = {
-    readonly harness: string;
-    readonly directory: string;
-};
-type NativePreviewInput = Omit<NativeEntryInput, never> & { readonly sessionId: string };
-type NewChatInput = {
-    readonly harness: string;
-    readonly conversationKey: string;
-    readonly configurations: readonly SessionConfigurationSelection[];
-    readonly workspaceRef: string;
-};
-type OpenChatInput = NativeSessionTarget | NewChatInput;
-type AgentSetupInput = {
-    readonly harness: string;
-};
-
-async function chatOperationId(scope: ChatScope, key: string): Promise<string> {
-    const digest = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(JSON.stringify([scope.computerId, "create", key])),
-    );
-    return `create_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-}
-
 async function scopedNativeForkOperationId(computerId: string, key: string): Promise<string> {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${computerId}\u0000${key}`));
     return `chat_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-}
-
-function notInRecentSessions(): never {
-    throw new ComputerManagementError(
-        "NOT_FOUND",
-        'This session is not in Morty Recent sessions. If you closed it in Morty, use "Open Session" to import or fork it again.',
-        404,
-    );
 }
 
 /**
@@ -125,23 +96,30 @@ export class ChatService {
         };
     };
 
-    readonly daemonDiagnostics = async (scope: ChatScope) => {
+    readonly daemonDiagnostics = async (scope: ChatScope, command: ComputerDiagnosticsRequestRouting) => {
         await this.#requirePairedComputer(scope);
-        return await this.#relay.readComputerDiagnostics(scope.computerId, scope.signal);
+        const result = await this.#relay.readComputerDiagnostics(scope.computerId, command, scope.signal);
+        if (result.kind !== "computer.diagnostics.result") {
+            throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned invalid diagnostics.", 502);
+        }
+        return result;
     };
 
-    readonly networkDiagnostic = async (scope: ChatScope) => {
+    readonly networkDiagnostic = async (scope: ChatScope, command: ComputerPingCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        return { computerLatencyMs: await this.#relay.measureComputerLatency(scope.computerId, scope.signal) };
+        return await this.#relay.measureComputerLatency(scope.computerId, command, scope.signal);
     };
 
     readonly setupComputers = async (scope: ChatScope) => ({
         computers: await this.#relay.chatComputers(scope.computerId, scope.signal),
     });
 
-    readonly listDirectory = async (scope: ChatScope, directory: string) => {
+    readonly listDirectory = async (scope: ChatScope, command: WorkspaceListCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        const listing = await this.#relay.listChatDirectory(scope.computerId, directory, scope.signal);
+        const listing = await this.#relay.listChatDirectory(scope.computerId, command, scope.signal);
+        if (listing.kind !== "workspace.entries" && listing.kind !== "session.operation.failed") {
+            throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned an invalid directory.", 502);
+        }
         return listing;
     };
 
@@ -173,12 +151,6 @@ export class ChatService {
         operation: () => Promise<Result>,
     ): Promise<Result> => this.#runSessionOperation(nativeSessionKey(target), scope.signal, operation);
 
-    /** The Computer's description of a Session it holds; a Session it does not hold is not in Recent sessions. */
-    readonly #heldSession = async (scope: ChatScope, target: NativeSessionTarget) =>
-        (await this.#relay.queryChatSessions(scope.computerId, [target], scope.signal)).find((session) =>
-            sameNativeSession(session.target, target),
-        ) ?? notInRecentSessions();
-
     /** Runs an operation on a Session after every earlier one on that Session has finished. */
     readonly #runSessionOperation = <Result>(
         sessionKey: string,
@@ -200,82 +172,28 @@ export class ChatService {
     };
 
     /** The Sessions the Computer holds, most recently updated first. */
-    readonly managedSessions = async (scope: ChatScope) => {
+    readonly managedSessions = async (scope: ChatScope, command: SessionListCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        const sessions = await this.#relay.listChatSessions(scope.computerId, LISTED_SESSION_LIMIT, scope.signal);
-        return {
-            sessions: sessions.map((session) => ({
-                directory: session.directory,
-                directoryLabel: session.directoryLabel,
-                prompted: session.prompted,
-                target: session.target,
-                status: session.status,
-                title: session.title,
-                updatedAt: session.updatedAt,
-            })),
-        };
+        const result = await this.#relay.listEncryptedChatSessions(scope.computerId, command, scope.signal);
+        if (result.kind !== "session.listed" && result.kind !== "session.operation.failed") {
+            throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned an invalid Session list.", 502);
+        }
+        return result;
     };
 
     /** The settings a new Session of this Agent starts with in the draft's directory. */
-    readonly agentSettings = async (
-        scope: ChatScope,
-        draft: { readonly harness: string; readonly workspaceRef: string },
-    ) => {
+    readonly agentSettings = async (scope: ChatScope, command: AgentSettingsDiscoverCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        await this.#requireComputerAgent(scope, draft.harness);
-        const discovered = await this.#relay.discoverChatAgentSettings(scope.computerId, draft, scope.signal);
-        return { settings: discovered };
+        await this.#requireComputerAgent(scope, command.harness);
+        return await this.#relay.discoverChatAgentSettings(scope.computerId, command, scope.signal);
     };
 
-    readonly openChat = async (scope: ChatScope, input: OpenChatInput) => {
+    readonly openChat = async (scope: ChatScope, command: SessionCreateCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        const access =
-            "conversationKey" in input
-                ? await this.#openNewChat(scope, input)
-                : await this.#withSession(scope, input, () => this.#reopenManagedSession(scope, input));
-        return access;
-    };
-
-    /**
-     * First send creates a harness Session under an operation identity derived from the draft. The Computer keeps the
-     * creation's receipt under it, so a retry after a lost answer opens the Session the first attempt created instead
-     * of creating another.
-     */
-    readonly #openNewChat = async (scope: ChatScope, input: NewChatInput) => {
-        await this.#requireComputerAgent(scope, input.harness);
-        const session = {
-            operationId: await chatOperationId(scope, input.conversationKey),
-
-            computerId: scope.computerId,
-            harness: input.harness,
-            workspaceRef: input.workspaceRef,
-        };
-        const ready = await this.#relay.createChatSession(
+        await this.#requireComputerAgent(scope, command.harness);
+        return await this.#relay.createChatSession(
             scope.computerId,
-            { ...session, configurations: input.configurations },
-            scope.signal,
-        );
-        return await this.#relay.createdChatSessionAccess(
-            scope.computerId,
-            { ...session, target: ready.target },
-            ready,
-            sessionCredentialLifetime(OPENED_SESSION_CREDENTIAL_SECONDS, scope.accessExpiresAt),
-            scope.holder,
-            scope.signal,
-        );
-    };
-
-    readonly #reopenManagedSession = async (scope: ChatScope, target: NativeSessionTarget) => {
-        const metadata = await this.#heldSession(scope, target);
-        return await this.#relay.openChatSession(
-            scope.computerId,
-            {
-                target,
-
-                computerId: scope.computerId,
-                harness: metadata.harness,
-                workspaceRef: metadata.directory,
-            },
+            command,
             sessionCredentialLifetime(OPENED_SESSION_CREDENTIAL_SECONDS, scope.accessExpiresAt),
             scope.holder,
             scope.signal,
@@ -283,24 +201,38 @@ export class ChatService {
     };
 
     /** Issues a credential for a Session the Computer holds. */
-    readonly nativeSessionAccess = async (scope: ChatScope, target: NativeSessionTarget) => {
+    readonly nativeSessionAccess = async (scope: ChatScope, command: SessionPrepareCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        const session = await this.#heldSession(scope, target);
-        return await this.#relay.nativeSessionAccess(
-            scope.computerId,
-            session.target,
-            sessionCredentialLifetime(RENEWED_SESSION_CREDENTIAL_SECONDS, scope.accessExpiresAt),
-            scope.holder,
-            scope.signal,
-        );
+        return await this.#withSession(scope, command.target, async () => {
+            const ready = await this.#relay.prepareEncryptedChatSession(scope.computerId, command, scope.signal);
+            if (ready.kind === "session.operation.failed") {
+                return ready;
+            }
+            if (ready.kind !== "session.ready" || !sameNativeSession(ready.target, command.target)) {
+                throw new ComputerManagementError(
+                    "RELAY_INVALID_RESPONSE",
+                    "Morty returned an invalid Session route.",
+                    502,
+                );
+            }
+            return await this.#relay.nativeSessionAccess(
+                scope.computerId,
+                command.target,
+                sessionCredentialLifetime(RENEWED_SESSION_CREDENTIAL_SECONDS, scope.accessExpiresAt),
+                scope.holder,
+                scope.signal,
+            );
+        });
     };
 
-    readonly managedSession = async (scope: ChatScope, target: NativeSessionTarget) => {
-        return await this.#withSession(scope, target, async () => {
+    readonly managedSession = async (scope: ChatScope, command: SessionRestoreCommandRouting) => {
+        return await this.#withSession(scope, command.target, async () => {
             await this.#requirePairedComputer(scope);
-            const session = await this.#heldSession(scope, target);
-            const restored = await this.#relay.readChatSession(scope.computerId, target, scope.signal);
-            if (!sameNativeSession(restored.ready.target, session.target)) {
+            const restored = await this.#relay.readEncryptedChatSession(scope.computerId, command, scope.signal);
+            if (restored.kind === "session.operation.failed") {
+                return restored;
+            }
+            if (restored.kind !== "session.restored" || !sameNativeSession(restored.target, command.target)) {
                 throw new ComputerManagementError(
                     "RELAY_INVALID_RESPONSE",
                     "Morty restored a different managed Session.",
@@ -316,17 +248,30 @@ export class ChatService {
      * the Computer no longer holds the Session, and fails as the Computer does otherwise, so a Session the Computer still
      * holds stays listed. Archiving a Session the Computer does not hold succeeds.
      */
-    readonly archiveManagedSession = async (scope: ChatScope, target: NativeSessionTarget) => {
+    readonly archiveManagedSession = async (scope: ChatScope, command: SessionArchiveCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        return await this.#withSession(scope, target, async () => ({
-            target: await this.#relay.archiveChatSession(scope.computerId, target, scope.signal),
-        }));
+        return await this.#withSession(scope, command.target, async () => {
+            const archived = await this.#relay.archiveEncryptedChatSession(scope.computerId, command, scope.signal);
+            if (archived.kind === "session.operation.failed") {
+                return archived;
+            }
+            if (archived.kind !== "session.archived" || !sameNativeSession(archived.target, command.target)) {
+                throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty archived a different Session.", 502);
+            }
+            return archived;
+        });
     };
 
-    readonly nativeSessions = async (scope: ChatScope, input: NativeListInput) => {
+    readonly nativeSessions = async (
+        scope: ChatScope,
+        input: Extract<NativeSessionCommandRouting, { readonly action: "list" }>,
+    ) => {
         await this.#requirePairedComputer(scope);
-        const result = await this.#relay.nativeSessions(scope.computerId, input, scope.signal);
-        if (result.action !== "list") {
+        const result = await this.#relay.encryptedNativeSessions(scope.computerId, input, scope.signal);
+        if (
+            result.kind !== "session.operation.failed" &&
+            (result.kind !== "native.session.result" || result.action !== "list")
+        ) {
             throw new ComputerManagementError(
                 "RELAY_INVALID_RESPONSE",
                 "The agent returned an invalid session directory.",
@@ -337,61 +282,77 @@ export class ChatService {
     };
 
     /** Imports the native session a setup handoff names, found by its native identifier in the default workspace. */
-    readonly continueNativeSession = async (scope: ChatScope, harness: string, sessionId: string) => {
+    readonly continueNativeSession = async (
+        scope: ChatScope,
+        input: Extract<NativeSessionCommandRouting, { readonly action: "find" | "import" }>,
+    ) => {
         const computer =
             (await this.#relay.readComputerPairing(scope.computerId, scope.signal)) === "paired"
                 ? await this.#relay.getChatComputerAgents(scope.computerId, scope.signal)
                 : undefined;
-        const agent = computer?.agents.find((item) => item.harness === harness);
+        const agent = computer?.agents.find((item) => item.harness === input.target.harness);
         if (computer === undefined || agent === undefined) {
             throw new ComputerManagementError("HARNESS_UNAVAILABLE", "The handoff harness is unavailable.", 409);
         }
-        const found = await this.#relay.findNativeSessionBySessionId(
-            scope.computerId,
-            {
-                harness: agent.harness,
-                directory: ".",
-                sessionId: sessionId,
-            },
-            scope.signal,
-        );
-        const entry = found.entry;
-        const result = await this.#relay.nativeSessions(
-            scope.computerId,
-            {
-                action: "import",
-                harness: agent.harness,
-                directory: entry.directory,
-                sessionId: entry.sessionId,
-            },
-            scope.signal,
-        );
-        if (result.action !== "import") {
+        const result = await this.#relay.encryptedNativeSessions(scope.computerId, input, scope.signal);
+        if (
+            result.kind !== "session.operation.failed" &&
+            (result.kind !== "native.session.result" ||
+                result.action !== input.action ||
+                (result.action === "import" && !sameNativeSession(result.target, input.target)))
+        ) {
             throw new ComputerManagementError("IMPORT_UNAVAILABLE", "The original session could not be opened.", 409);
         }
-        return { harness: agent.harness, result, entry };
+        return result;
     };
 
-    readonly previewNativeSession = async (scope: ChatScope, input: NativePreviewInput) => {
+    readonly previewNativeSession = async (
+        scope: ChatScope,
+        sessionId: string,
+        input: SessionPreviewHistoryPageLoadRouting,
+    ) => {
         await this.#requirePairedComputer(scope);
-        const events = await this.#relay.previewComputerNativeEvents(
-            scope.computerId,
-            { harness: input.harness, sessionId: input.sessionId },
-            input.directory,
-            { cursor: null, eventLimit: 200 },
-            scope.signal,
-        );
+        if (input.target.sessionId !== sessionId) {
+            throw new ComputerManagementError(
+                "INVALID_REQUEST",
+                "The requested Session does not match the route.",
+                400,
+            );
+        }
+        const events = await this.#relay.encryptedPreviewSession(scope.computerId, input, scope.signal);
+        if (
+            events.kind !== "session.operation.failed" &&
+            (events.kind !== "session.preview-history.page.loaded" || !sameNativeSession(events.target, input.target))
+        ) {
+            throw new ComputerManagementError(
+                "RELAY_INVALID_RESPONSE",
+                "Morty returned an invalid Session preview.",
+                502,
+            );
+        }
         return events;
     };
 
-    readonly importNativeSession = async (scope: ChatScope, sessionId: string, input: NativeEntryInput) => {
+    readonly importNativeSession = async (
+        scope: ChatScope,
+        sessionId: string,
+        input: Extract<NativeSessionCommandRouting, { readonly action: "import" }>,
+    ) => {
         await this.#requirePairedComputer(scope);
-        const result = await this.#relay.nativeSessions(
-            scope.computerId,
-            { ...input, sessionId, action: "import" },
-            scope.signal,
-        );
-        if (result.action !== "import") {
+        if (input.target.sessionId !== sessionId) {
+            throw new ComputerManagementError(
+                "INVALID_REQUEST",
+                "The requested Session does not match the route.",
+                400,
+            );
+        }
+        const result = await this.#relay.encryptedNativeSessions(scope.computerId, input, scope.signal);
+        if (
+            result.kind !== "session.operation.failed" &&
+            (result.kind !== "native.session.result" ||
+                result.action !== "import" ||
+                !sameNativeSession(result.target, input.target))
+        ) {
             throw new ComputerManagementError(
                 "IMPORT_UNAVAILABLE",
                 "This agent cannot import the selected local session.",
@@ -401,20 +362,36 @@ export class ChatService {
         return result;
     };
 
-    readonly recoverableNativeFork = async (scope: ChatScope, operationId: string, input: NativePreviewInput) => {
+    readonly recoverableNativeFork = async (
+        scope: ChatScope,
+        operationId: string,
+        input: Extract<NativeSessionCommandRouting, { readonly action: "fork" }>,
+    ) => {
         await this.#requirePairedComputer(scope);
         // Operation identity belongs to this Computer, regardless of which browser requests it.
         const scopedOperationId = await scopedNativeForkOperationId(scope.computerId, `fork\u0000${operationId}`);
-        return await this.#relay.forkNativeSession(scope.computerId, scopedOperationId, input, scope.signal);
+        if (input.requestId !== scopedOperationId) {
+            throw new ComputerManagementError("INVALID_REQUEST", "The fork operation does not match the route.", 400);
+        }
+        const result = await this.#relay.encryptedNativeSessions(scope.computerId, input, scope.signal);
+        if (
+            result.kind !== "session.operation.failed" &&
+            (result.kind !== "native.session.result" ||
+                result.action !== "fork" ||
+                result.target.harness !== input.target.harness ||
+                result.target.sessionId === input.target.sessionId)
+        ) {
+            throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned an invalid fork.", 502);
+        }
+        return result;
     };
 
     /**
      * Setup's check that the computer's paired Computer offers `harness` and can open its settings in the default
      * working directory. It records nothing: whether the Computer has a Runtime is the Relay's pairing.
      */
-    readonly verifyAgent = async (scope: ChatScope, input: AgentSetupInput) => {
-        await this.#requireComputerAgent(scope, input.harness);
-        await this.#relay.discoverChatAgentSettings(scope.computerId, { ...input, workspaceRef: "." }, scope.signal);
-        return { status: "active" };
+    readonly verifyAgent = async (scope: ChatScope, command: AgentSettingsDiscoverCommandRouting) => {
+        await this.#requireComputerAgent(scope, command.harness);
+        return await this.#relay.discoverChatAgentSettings(scope.computerId, command, scope.signal);
     };
 }

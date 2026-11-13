@@ -6,6 +6,59 @@ import { createTestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./support/chat-worker.ts";
 
+test("Given another client changes settings before my delayed edit arrives, When the Computer refuses my stale revision, Then the current model refreshes and my next edit succeeds", {
+    timeout: dedicatedEnvironmentTimeout,
+}, async () => {
+    const environment = await createChatWorkerEnvironment(false, true);
+    onTestFinished(() => environment.close());
+    const app = await createTestApp({
+        environment,
+        connectAgent: true,
+        agent: { harness: "settings-test", label: "Settings Agent" },
+    });
+    const { daemon, executionNetwork } = app;
+    if (daemon === null || executionNetwork === null) {
+        throw new Error("Expected the real Computer and ordering proxy");
+    }
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Start shared session");
+    await app.waitForView(() => {
+        expect(app.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain("Start shared session");
+        expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
+    });
+    const sessionId = new URL(window.location.href).searchParams.get("sessionId");
+    if (sessionId === null) {
+        throw new Error("Expected an open Session");
+    }
+    await app.user.click(await app.queryElementByTestId(dataTestId.agentConfiguration));
+    await openAgentModelPicker(app);
+    const held = executionNetwork.holdNextConfigurationChange();
+    await app.user.click(await app.queryElementByTestId(dataTestId.sessionConfigValue("test-large")));
+    const release = await held;
+    const releaseEvents = executionNetwork.holdSessionEvents();
+    try {
+        await daemon.selectModel(sessionId, "test-large");
+        await release();
+        await app.waitForView(() => {
+            expect(getByRole(document.body, "alert").textContent).toBeTruthy();
+            expect(app.elementByTestId(dataTestId.agentConfiguration).textContent).toContain("Test Large");
+        });
+        await openAgentModelPicker(app);
+        await app.user.click(await app.queryElementByTestId(dataTestId.sessionConfigValue("test-small")));
+        await app.waitForView(() =>
+            expect(app.elementByTestId(dataTestId.agentConfiguration).textContent).toContain("Test Small"),
+        );
+    } finally {
+        releaseEvents();
+    }
+    await app.user.keyboard("{Escape}");
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Report current model");
+    await app.waitForView(() =>
+        expect(app.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain(
+            "Current model: test-small",
+        ),
+    );
+});
+
 test("Given two clients of the current Computer, When one changes the model and the other sends, Then the Session keeps the explicit choice", {
     timeout: 60_000,
 }, async () => {
@@ -96,9 +149,11 @@ for (const delivery of ["before-acceptance", "after-acceptance"] as const) {
         );
         expect(network.submissions).toHaveLength(delivery === "before-acceptance" ? 3 : 2);
         if (delivery === "before-acceptance") {
-            expect(network.submissions[2]).toBe(network.submissions[1]);
+            expect(await first.readSubmission(network.submissions[2])).toEqual(
+                await first.readSubmission(network.submissions[1]),
+            );
         }
-        expect(JSON.parse(network.submissions[1] ?? "{}")).not.toHaveProperty("sessionConfigurations");
+        expect((await first.readSubmission(network.submissions[1])).sessionConfigurations).toEqual([]);
         expect(
             first
                 .elementsByTestId(dataTestId.agentResponse)

@@ -8,7 +8,7 @@ for (const touch of [false, true]) {
             runtime,
         }, testInfo) => {
             const { page } = runtime;
-            await page.clock.install({ time: new Date("2026-10-27T12:00:00Z") });
+            await runtime.clock.install({ time: new Date("2026-10-27T12:00:00Z") });
             await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
             await runtime.openPairedChat();
             await page.getByRole("textbox", { name: "Message" }).fill("hold with rich content");
@@ -56,7 +56,7 @@ for (const touch of [false, true]) {
             await expect(response.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
             expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`Partial rich reply${markdown}`);
             await page.screenshot({ path: testInfo.outputPath("response-copied.png"), fullPage: true });
-            await page.clock.fastForward(2100);
+            await runtime.clock.fastForward(2100);
             await expect(copy).toBeVisible();
             await page.reload();
             await expect(copy).toBeVisible();

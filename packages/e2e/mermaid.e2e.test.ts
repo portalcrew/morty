@@ -4,7 +4,6 @@ test("Given a paired Bot, When a Mermaid reply finishes, Then I see a Morty-them
     runtime,
 }, testInfo) => {
     const { page } = runtime;
-    await page.clock.install({ time: new Date("2026-10-10T12:00:00Z") });
     await runtime.openPairedChat();
     await page.getByRole("textbox", { name: "Message" }).fill("draw a deployment diagram");
     await page.getByRole("button", { name: "Send message" }).click();
@@ -50,7 +49,6 @@ test("Given a finished Mermaid diagram in a long reply, When I scroll the conver
     runtime,
 }) => {
     const { page } = runtime;
-    await page.clock.install({ time: new Date("2026-10-10T12:00:00Z") });
     await page.setViewportSize({ width: 1280, height: 720 });
     await runtime.openPairedChat();
     await page.getByRole("textbox", { name: "Message" }).fill("draw a sequence diagram");
@@ -90,7 +88,6 @@ test("Given a wide Mermaid diagram on a phone viewport, When I open it fullscree
     runtime,
 }, testInfo) => {
     const { page } = runtime;
-    await page.clock.install({ time: new Date("2026-10-10T12:00:00Z") });
     await runtime.openPairedChat();
     await page.getByRole("textbox", { name: "Message" }).fill("draw a wide deployment diagram");
     await page.getByRole("button", { name: "Send message" }).click();
@@ -133,7 +130,6 @@ test("Given a live reply with a closed Mermaid fence, When I read the response, 
     runtime,
 }, testInfo) => {
     const { page } = runtime;
-    await page.clock.install({ time: new Date("2026-10-10T12:00:00Z") });
     await runtime.openPairedChat();
     await page.getByRole("textbox", { name: "Message" }).fill("draw a sequence diagram");
     await page.getByRole("button", { name: "Send message" }).click();

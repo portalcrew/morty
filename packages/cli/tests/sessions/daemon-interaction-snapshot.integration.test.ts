@@ -40,33 +40,25 @@ import {
 } from "@morty-build/client/protocol";
 import { listen, port } from "@morty-build/relay-test-support/websocket";
 import { expect, test } from "vitest";
-import { type WebSocket, WebSocketServer } from "ws";
+import { WebSocketServer } from "ws";
 import { RuntimeLocalContext } from "../../src/engine/runtime/config.ts";
 import { runRuntime } from "../../src/engine/runtime/run.ts";
 import { ControlledAcpConnection } from "../support/agents/controlled-acp-connection.ts";
 import { createControlledAgent } from "../support/agents/controlled-agent-definition.ts";
 import { memoryComputerCredentials } from "../support/computer-credentials.ts";
 import { createControlledRuntimeConfig as createRuntimeConfig } from "../support/controlled-runtime-config.ts";
+import { createEncryptedDaemonGateway, type EncryptedDaemonPeer } from "../support/encrypted-daemon-gateway.ts";
 
 class Messages {
-    readonly #buffered: string[] = [];
-    readonly #waiting: Array<(message: string) => void> = [];
+    readonly socket: EncryptedDaemonPeer;
 
-    constructor(socket: WebSocket) {
-        socket.on("message", (value) => {
-            const message = value.toString();
-            const resolve = this.#waiting.shift();
-            if (resolve === undefined) {
-                this.#buffered.push(message);
-            } else {
-                resolve(message);
-            }
-        });
+    constructor(socket: EncryptedDaemonPeer) {
+        this.socket = socket;
     }
 
     readonly nextKind = async (kind: string): Promise<string> => {
         for (;;) {
-            const raw = this.#buffered.shift() ?? (await new Promise<string>((resolve) => this.#waiting.push(resolve)));
+            const raw = await this.socket.next();
             const message = raw;
             if (decodeMessageKind(raw) === SESSION_EVENT_KIND) {
                 const events = decodeSessionEventEnvelope(raw).events.filter(
@@ -97,8 +89,9 @@ test("Given a newly created native Session, When its first Turn resolves interac
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const connected = Promise.withResolvers<WebSocket>();
-    websocketServer.on("connection", (socket) => connected.resolve(socket));
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "interaction", AbortSignal.timeout(30_000));
+    const connected = Promise.withResolvers<EncryptedDaemonPeer>();
+    websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
     const relayUrl = new URL(`ws://127.0.0.1:${port(relay).toString()}${MORTY_API_PREFIX}/channels/interaction/daemon`);
     const fakeAgentPath = fileURLToPath(new URL("./fixtures/acp-peer.ts", import.meta.url));
@@ -138,8 +131,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
     try {
         const socket = await connected.promise;
         const messages = new Messages(socket);
-        socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
-        socket.send(
+        await socket.send(
             encodeSessionCreateCommand({
                 harness: "claude",
                 directory: ".",
@@ -151,7 +143,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         );
         const sessionTarget = decodeSessionReadyEvent(await messages.nextKind(SESSION_READY_KIND)).target;
         const submittedAt = Date.now();
-        socket.send(
+        await socket.send(
             encodeSessionPromptCommand({
                 commandId: "interaction_turn",
                 requestId: "interaction_turn",
@@ -165,7 +157,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         // The prompt is answered once the Session is executing it.
         await messages.nextKind("session.prompt.accepted");
         const snapshot = async (requestId: string) => {
-            socket.send(
+            await socket.send(
                 encodeNativeSessionRequest({
                     action: "active-turn",
                     kind: "native.session.request",
@@ -194,7 +186,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         const startedAt = running.action === "active-turn" ? Date.parse(running.turn?.startedAt ?? "") : Number.NaN;
         expect(startedAt).toBeGreaterThanOrEqual(submittedAt);
         expect(startedAt).toBeLessThanOrEqual(Date.now());
-        socket.send(
+        await socket.send(
             encodeSessionPermissionRespondCommand({
                 interactionId: permission.interactionId,
                 kind: "session.permission.respond",
@@ -218,14 +210,14 @@ test("Given a newly created native Session, When its first Turn resolves interac
             outcome: "selected" as const,
             target: sessionTarget,
         };
-        socket.send(encodeSessionPermissionRespondCommand(repeatedAnswer));
+        await socket.send(encodeSessionPermissionRespondCommand(repeatedAnswer));
         expect(
             decodeSessionInteractionAnsweredEvent(await messages.nextKind("session.interaction.answered")),
         ).toMatchObject({
             requestId: "repeat-permission",
             interactionId: permission.interactionId,
         });
-        socket.send(
+        await socket.send(
             encodeSessionPermissionRespondCommand({
                 ...repeatedAnswer,
                 requestId: "conflicting-permission",
@@ -236,7 +228,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
             requestId: "conflicting-permission",
             code: "permission_response_conflict",
         });
-        socket.send(
+        await socket.send(
             encodeSessionQueryCommand({ kind: "session.query", requestId: "metadata-time", targets: [sessionTarget] }),
         );
         expect(decodeSessionsQueriedEvent(await messages.nextKind(SESSION_QUERIED_KIND))).toMatchObject({
@@ -250,7 +242,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
             action: "active-turn",
             turn: { interaction: elicitation },
         });
-        socket.send(
+        await socket.send(
             encodeSessionElicitationRespondCommand({
                 action: "accept",
                 content: JSON.stringify({ branch: "main" }),
@@ -270,6 +262,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
     } finally {
         cancellation.abort();
         await runtime;
+        await gateway.close();
         for (const socket of websocketServer.clients) {
             socket.terminate();
         }
@@ -285,8 +278,13 @@ test("Given an Agent announced a tool call with its input, When it requests perm
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const connected = Promise.withResolvers<WebSocket>();
-    websocketServer.on("connection", (socket) => connected.resolve(socket));
+    const gateway = await createEncryptedDaemonGateway(
+        stateDirectory,
+        "announced-permission",
+        AbortSignal.timeout(30_000),
+    );
+    const connected = Promise.withResolvers<EncryptedDaemonPeer>();
+    websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
     const relayUrl = new URL(
         `ws://127.0.0.1:${port(relay).toString()}${MORTY_API_PREFIX}/channels/announced-permission/daemon`,
@@ -323,8 +321,7 @@ test("Given an Agent announced a tool call with its input, When it requests perm
     try {
         const socket = await connected.promise;
         const messages = new Messages(socket);
-        socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
-        socket.send(
+        await socket.send(
             encodeSessionCreateCommand({
                 harness: "claude",
                 directory: ".",
@@ -335,7 +332,7 @@ test("Given an Agent announced a tool call with its input, When it requests perm
             }),
         );
         const sessionTarget = decodeSessionReadyEvent(await messages.nextKind(SESSION_READY_KIND)).target;
-        socket.send(
+        await socket.send(
             encodeSessionPromptCommand({
                 commandId: "announced_turn",
                 requestId: "announced_turn",
@@ -374,6 +371,7 @@ test("Given an Agent announced a tool call with its input, When it requests perm
     } finally {
         cancellation.abort();
         await runtime;
+        await gateway.close();
         for (const socket of websocketServer.clients) {
             socket.terminate();
         }
@@ -389,8 +387,13 @@ test("Given an Agent announced a tool call and then sent a rawInput null update,
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const connected = Promise.withResolvers<WebSocket>();
-    websocketServer.on("connection", (socket) => connected.resolve(socket));
+    const gateway = await createEncryptedDaemonGateway(
+        stateDirectory,
+        "null-input-permission",
+        AbortSignal.timeout(30_000),
+    );
+    const connected = Promise.withResolvers<EncryptedDaemonPeer>();
+    websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
     const relayUrl = new URL(
         `ws://127.0.0.1:${port(relay).toString()}${MORTY_API_PREFIX}/channels/null-input-permission/daemon`,
@@ -427,8 +430,7 @@ test("Given an Agent announced a tool call and then sent a rawInput null update,
     try {
         const socket = await connected.promise;
         const messages = new Messages(socket);
-        socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
-        socket.send(
+        await socket.send(
             encodeSessionCreateCommand({
                 harness: "claude",
                 directory: ".",
@@ -439,7 +441,7 @@ test("Given an Agent announced a tool call and then sent a rawInput null update,
             }),
         );
         const sessionTarget = decodeSessionReadyEvent(await messages.nextKind(SESSION_READY_KIND)).target;
-        socket.send(
+        await socket.send(
             encodeSessionPromptCommand({
                 commandId: "null_input_turn",
                 requestId: "null_input_turn",
@@ -478,6 +480,7 @@ test("Given an Agent announced a tool call and then sent a rawInput null update,
     } finally {
         cancellation.abort();
         await runtime;
+        await gateway.close();
         for (const socket of websocketServer.clients) {
             socket.terminate();
         }
@@ -493,8 +496,13 @@ test("Given an Agent's first recorded form of a tool call is an update, When it 
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const connected = Promise.withResolvers<WebSocket>();
-    websocketServer.on("connection", (socket) => connected.resolve(socket));
+    const gateway = await createEncryptedDaemonGateway(
+        stateDirectory,
+        "orphan-update-permission",
+        AbortSignal.timeout(30_000),
+    );
+    const connected = Promise.withResolvers<EncryptedDaemonPeer>();
+    websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
     const relayUrl = new URL(
         `ws://127.0.0.1:${port(relay).toString()}${MORTY_API_PREFIX}/channels/orphan-update-permission/daemon`,
@@ -531,8 +539,7 @@ test("Given an Agent's first recorded form of a tool call is an update, When it 
     try {
         const socket = await connected.promise;
         const messages = new Messages(socket);
-        socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
-        socket.send(
+        await socket.send(
             encodeSessionCreateCommand({
                 harness: "claude",
                 directory: ".",
@@ -543,7 +550,7 @@ test("Given an Agent's first recorded form of a tool call is an update, When it 
             }),
         );
         const sessionTarget = decodeSessionReadyEvent(await messages.nextKind(SESSION_READY_KIND)).target;
-        socket.send(
+        await socket.send(
             encodeSessionPromptCommand({
                 commandId: "orphan_update_turn",
                 requestId: "orphan_update_turn",
@@ -582,6 +589,7 @@ test("Given an Agent's first recorded form of a tool call is an update, When it 
     } finally {
         cancellation.abort();
         await runtime;
+        await gateway.close();
         for (const socket of websocketServer.clients) {
             socket.terminate();
         }
@@ -597,8 +605,9 @@ test("Given a real daemon prepared a Session, When Relay queries its metadata, T
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const connected = Promise.withResolvers<WebSocket>();
-    websocketServer.on("connection", (socket) => connected.resolve(socket));
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "session-query", AbortSignal.timeout(30_000));
+    const connected = Promise.withResolvers<EncryptedDaemonPeer>();
+    websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
     const relayUrl = new URL(
         `ws://127.0.0.1:${port(relay).toString()}${MORTY_API_PREFIX}/channels/session-query/daemon`,
@@ -635,8 +644,7 @@ test("Given a real daemon prepared a Session, When Relay queries its metadata, T
     try {
         const socket = await connected.promise;
         const messages = new Messages(socket);
-        socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
-        socket.send(
+        await socket.send(
             encodeSessionCreateCommand({
                 harness: "codex",
                 directory: ".",
@@ -671,6 +679,7 @@ test("Given a real daemon prepared a Session, When Relay queries its metadata, T
     } finally {
         cancellation.abort();
         await runtime;
+        await gateway.close();
         for (const socket of websocketServer.clients) {
             socket.terminate();
         }
@@ -718,9 +727,10 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
         new RuntimeLocalContext(stateDirectory, process.env),
         async (agent) => agent,
     );
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "session-restore", AbortSignal.timeout(30_000));
     const startDaemon = async () => {
-        const connected = Promise.withResolvers<WebSocket>();
-        websocketServer.once("connection", (socket) => connected.resolve(socket));
+        const connected = Promise.withResolvers<EncryptedDaemonPeer>();
+        websocketServer.once("connection", (socket) => connected.resolve(gateway.connect(socket)));
         const cancellation = new AbortController();
         const completion = runRuntime(config, cancellation.signal);
         return { cancellation, completion, socket: await connected.promise };
@@ -730,8 +740,7 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
         const initial = await startDaemon();
         try {
             const messages = new Messages(initial.socket);
-            initial.socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
-            initial.socket.send(
+            await initial.socket.send(
                 encodeSessionCreateCommand({
                     harness: "codex",
                     directory: ".",
@@ -742,7 +751,7 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
                 }),
             );
             sessionTarget = decodeSessionReadyEvent(await messages.nextKind(SESSION_READY_KIND)).target;
-            initial.socket.send(
+            await initial.socket.send(
                 encodeSessionPromptCommand({
                     commandId: "initial_turn",
                     requestId: "initial_turn",
@@ -762,8 +771,7 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
         const restored = await startDaemon();
         try {
             const messages = new Messages(restored.socket);
-            restored.socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
-            restored.socket.send(
+            await restored.socket.send(
                 encodeSessionQueryCommand({
                     kind: "session.query",
                     requestId: "identify_restore",
@@ -774,7 +782,7 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
             if (entry === undefined) {
                 throw new Error("Missing persisted native identity");
             }
-            restored.socket.send(
+            await restored.socket.send(
                 encodeSessionRestoreCommand({
                     kind: "session.restore",
                     requestId: "restore_request",
@@ -804,7 +812,7 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
             expect(restoredEvent.ready.runtimeTimings?.map((timing) => timing.name)).toContain("session-load");
             expect(restoredEvent.ready.runtimeTimings?.map((timing) => timing.name)).not.toContain("session-resume");
 
-            restored.socket.send(
+            await restored.socket.send(
                 encodeSessionHistoryPageLoad({
                     cursor: null,
                     eventLimit: 200,
@@ -822,6 +830,7 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
             await restored.completion;
         }
     } finally {
+        await gateway.close();
         for (const socket of websocketServer.clients) {
             socket.terminate();
         }
@@ -837,8 +846,9 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const connected = Promise.withResolvers<WebSocket>();
-    websocketServer.on("connection", (socket) => connected.resolve(socket));
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "queued-identity", AbortSignal.timeout(30_000));
+    const connected = Promise.withResolvers<EncryptedDaemonPeer>();
+    websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
     const relayUrl = new URL(
         `ws://127.0.0.1:${port(relay).toString()}${MORTY_API_PREFIX}/channels/queued-identity/daemon`,
@@ -879,8 +889,7 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
     try {
         const socket = await connected.promise;
         const messages = new Messages(socket);
-        socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
-        socket.send(
+        await socket.send(
             encodeSessionCreateCommand({
                 kind: "session.create",
                 requestId: crypto.randomUUID(),
@@ -955,6 +964,7 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
     } finally {
         cancellation.abort();
         await runtime;
+        await gateway.close();
         for (const socket of websocketServer.clients) {
             socket.terminate();
         }

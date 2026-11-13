@@ -3,7 +3,6 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { sameNativeSession } from "@morty-build/client/native-session";
 import {
@@ -33,8 +32,9 @@ import {
     type SessionPromptCommand,
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
-import { listen, port, sendBinary, sendText } from "@morty-build/relay-test-support/websocket";
+import { listen, port } from "@morty-build/relay-test-support/websocket";
 import { describe, expect, it } from "vitest";
+import { WebSocketServer } from "ws";
 import { z } from "zod";
 import type { AcpAgentDefinition } from "../../src/engine/acp/agent/agent-definition.ts";
 import { RuntimeLocalContext } from "../../src/engine/runtime/config.ts";
@@ -45,8 +45,10 @@ import { ControlledAcpConnection } from "../support/agents/controlled-acp-connec
 import { createControlledAgent } from "../support/agents/controlled-agent-definition.ts";
 import { memoryComputerCredentials } from "../support/computer-credentials.ts";
 import { createControlledRuntimeConfig as createRuntimeConfig } from "../support/controlled-runtime-config.ts";
+import { createEncryptedDaemonGateway, type EncryptedDaemonPeer } from "../support/encrypted-daemon-gateway.ts";
 
-const websocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const sendText = (peer: EncryptedDaemonPeer, message: string) => peer.send(message);
+const sendBinary = (peer: EncryptedDaemonPeer, message: Uint8Array) => peer.send(message);
 const fakeAgentPath = fileURLToPath(new URL("./fixtures/acp-peer.ts", import.meta.url));
 
 class ControllableDaemonTask implements ScheduledTask {
@@ -120,74 +122,11 @@ class ControllableTimer implements Timer {
 }
 
 class ClientFrames {
-    #buffered = Buffer.alloc(0);
     readonly #messages: string[] = [];
-    readonly #resolvers: Array<(message: string) => void> = [];
+    readonly #peer: EncryptedDaemonPeer;
 
-    constructor(socket: Duplex) {
-        socket.on("data", (chunk: Buffer) => {
-            this.#buffered = Buffer.concat([this.#buffered, chunk]);
-            this.#drain();
-        });
-    }
-
-    #drain(): void {
-        for (;;) {
-            const message = this.#readFrame();
-            if (message === null) {
-                return;
-            }
-            const resolve = this.#resolvers.shift();
-            if (resolve !== undefined) {
-                resolve(message);
-            } else {
-                this.#messages.push(message);
-            }
-        }
-    }
-
-    #readFrame(): string | null {
-        if (this.#buffered.byteLength < 2) {
-            return null;
-        }
-        const first = this.#buffered[0] ?? 0;
-        const second = this.#buffered[1] ?? 0;
-        const masked = (second & 0x80) !== 0;
-        let length = second & 0x7f;
-        let offset = 2;
-        if (length === 126) {
-            if (this.#buffered.byteLength < 4) {
-                return null;
-            }
-            length = this.#buffered.readUInt16BE(2);
-            offset = 4;
-        } else if (length === 127) {
-            if (this.#buffered.byteLength < 10) {
-                return null;
-            }
-            length = Number(this.#buffered.readBigUInt64BE(2));
-            if (!Number.isSafeInteger(length)) {
-                throw new Error("WebSocket frame is too large");
-            }
-            offset = 10;
-        }
-        const maskLength = masked ? 4 : 0;
-        if (this.#buffered.byteLength < offset + maskLength + length) {
-            return null;
-        }
-        const mask = masked ? this.#buffered.subarray(offset, offset + 4) : null;
-        offset += maskLength;
-        const payload = Buffer.from(this.#buffered.subarray(offset, offset + length));
-        if (mask !== null) {
-            for (let index = 0; index < payload.byteLength; index += 1) {
-                payload[index] = (payload[index] ?? 0) ^ (mask[index % 4] ?? 0);
-            }
-        }
-        this.#buffered = this.#buffered.subarray(offset + length);
-        if ((first & 0x0f) === 0x8) {
-            return null;
-        }
-        return payload.toString("utf8");
+    constructor(peer: EncryptedDaemonPeer) {
+        this.#peer = peer;
     }
 
     readonly next = (signal?: AbortSignal): Promise<string> => {
@@ -196,21 +135,7 @@ class ClientFrames {
         if (buffered !== undefined) {
             return Promise.resolve(buffered);
         }
-        return new Promise<string>((resolve, reject) => {
-            const ready = (message: string): void => {
-                signal?.removeEventListener("abort", abort);
-                resolve(message);
-            };
-            const abort = (): void => {
-                const index = this.#resolvers.indexOf(ready);
-                if (index !== -1) {
-                    this.#resolvers.splice(index, 1);
-                }
-                reject(signal?.reason);
-            };
-            signal?.addEventListener("abort", abort, { once: true });
-            this.#resolvers.push(ready);
-        });
+        return this.#peer.next(signal);
     };
     readonly prepend = (frames: readonly string[]): void => {
         this.#messages.unshift(...frames);
@@ -223,7 +148,7 @@ async function startControlledDaemon(options: { readonly stateDirectory?: string
     readonly config: ReturnType<typeof createRuntimeConfig>;
     readonly frames: ClientFrames;
     readonly liveBatchSizes: number[];
-    readonly socket: Duplex;
+    readonly socket: EncryptedDaemonPeer;
     readonly timer: ControllableTimer;
     readonly sessionTarget: NativeSessionTarget;
 }> {
@@ -232,33 +157,14 @@ async function startControlledDaemon(options: { readonly stateDirectory?: string
     const workspace = join(stateDirectory, "workspace");
     const nativeStateDirectory = join(stateDirectory, "native");
     await Promise.all([mkdir(workspace, { recursive: true }), mkdir(nativeStateDirectory, { recursive: true })]);
-    const socketReady = Promise.withResolvers<Duplex>();
-    const relaySockets = new Set<Duplex>();
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_alpha", AbortSignal.timeout(120_000));
+    const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
     const relay = createServer((_request, response) => {
         response.writeHead(404);
         response.end();
     });
-    relay.on("connection", (socket) => {
-        relaySockets.add(socket);
-        socket.once("close", () => relaySockets.delete(socket));
-        socket.on("error", () => undefined);
-    });
-    relay.on("upgrade", (request, socket) => {
-        const key = request.headers["sec-websocket-key"];
-        if (typeof key !== "string") {
-            socket.destroy();
-            return;
-        }
-        const accept = createHash("sha1").update(`${key}${websocketGuid}`).digest("base64");
-        socket.write(
-            "HTTP/1.1 101 Switching Protocols\r\n" +
-                "Connection: Upgrade\r\n" +
-                "Upgrade: websocket\r\n" +
-                `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-        );
-        sendText(socket, JSON.stringify({ kind: "computer.liveness.ready" }));
-        socketReady.resolve(socket);
-    });
+    const relaySockets = new WebSocketServer({ server: relay });
+    relaySockets.on("connection", (socket) => socketReady.resolve(gateway.connect(socket)));
     await listen(relay);
     const relayUrl = new URL(`ws://127.0.0.1:${port(relay)}${MORTY_API_PREFIX}/channels/channel_alpha/daemon`);
     const agent = createControlledAgent(
@@ -293,7 +199,7 @@ async function startControlledDaemon(options: { readonly stateDirectory?: string
     const runtime = runRuntime(config, cancellation.signal, timer);
     const socket = await socketReady.promise;
     const frames = new ClientFrames(socket);
-    sendText(
+    await sendText(
         socket,
         encodeSessionCreateCommand({
             kind: "session.create",
@@ -326,9 +232,8 @@ async function startControlledDaemon(options: { readonly stateDirectory?: string
         close: async () => {
             cancellation.abort();
             await runtime;
-            for (const relaySocket of relaySockets) {
-                relaySocket.destroy();
-            }
+            await gateway.close();
+            await new Promise<void>((resolve) => relaySockets.close(() => resolve()));
             await new Promise<void>((resolve) => relay.close(() => resolve()));
             if (ownsStateDirectory) {
                 await rm(stateDirectory, { force: true, recursive: true });
@@ -344,7 +249,7 @@ async function uploadTextAttachment(fixture: Fixture, text: string): Promise<Pro
     const bytes = new TextEncoder().encode(text);
     const contentKey = createHash("sha256").update(bytes).digest("hex");
     const requestId = randomUUID();
-    sendText(
+    await sendText(
         fixture.socket,
         encodeContentWriteCommand({
             byteLength: bytes.byteLength,
@@ -362,8 +267,8 @@ async function uploadTextAttachment(fixture: Fixture, text: string): Promise<Pro
         ready = await fixture.frames.next();
     }
     expect(decodeContentReadyEvent(ready).requestId).toBe(requestId);
-    sendBinary(fixture.socket, encodeContentChunkFrame({ bytes, requestId, sequence: 0 }));
-    sendText(
+    await sendBinary(fixture.socket, encodeContentChunkFrame({ bytes, requestId, sequence: 0 }));
+    await sendText(
         fixture.socket,
         encodeContentCommitCommand({ kind: "content.commit", requestId, target: fixture.sessionTarget }),
     );
@@ -442,7 +347,7 @@ async function nextLive(fixture: Fixture, allowPromptFailure = false): Promise<S
     }
 }
 async function cancel(fixture: Fixture, command: SessionPromptCommand): Promise<void> {
-    sendText(
+    await sendText(
         fixture.socket,
         encodeSessionCancelCommand({
             kind: "session.cancel",
@@ -475,7 +380,7 @@ async function history(
         readonly eventLimit?: number;
     } = {},
 ) {
-    sendText(
+    await sendText(
         fixture.socket,
         encodeSessionHistoryPageLoad({
             kind: "session.live-history.v2.page.load",
@@ -496,7 +401,7 @@ async function history(
     }
 }
 async function activeTurn(fixture: Fixture, command: SessionPromptCommand) {
-    sendText(
+    await sendText(
         fixture.socket,
         encodeNativeSessionRequest({
             action: "active-turn",
@@ -524,7 +429,7 @@ describe("daemon V2 live delivery", () => {
             const fixture = await startControlledDaemon();
             try {
                 const command = prompt(fixture, `stream merged text ${sessionUpdate}`);
-                sendText(fixture.socket, encodeSessionPromptCommand(command));
+                await sendText(fixture.socket, encodeSessionPromptCommand(command));
                 for (;;) {
                     const event = await nextLive(fixture);
                     if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
@@ -558,7 +463,7 @@ describe("daemon V2 live delivery", () => {
         try {
             const first = await startControlledDaemon({ stateDirectory });
             try {
-                sendText(first.socket, encodeSessionPromptCommand(prompt(first, "Seed saved conversation")));
+                await sendText(first.socket, encodeSessionPromptCommand(prompt(first, "Seed saved conversation")));
                 for (;;) {
                     const event = await nextLive(first);
                     if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
@@ -627,7 +532,7 @@ describe("daemon V2 live delivery", () => {
                 );
                 expect((await history(restarted, command)).events).toEqual(events);
                 expect(await readFile(nativePath, "utf8")).toBe(saved);
-                sendText(restarted.socket, encodeSessionPromptCommand(command));
+                await sendText(restarted.socket, encodeSessionPromptCommand(command));
                 for (;;) {
                     const event = await nextLive(restarted);
                     if (
@@ -664,7 +569,7 @@ describe("daemon V2 live delivery", () => {
             const fixture = await startControlledDaemon();
             try {
                 const command = prompt(fixture, `stream bounded text ${sessionUpdate}`);
-                sendText(fixture.socket, encodeSessionPromptCommand(command));
+                await sendText(fixture.socket, encodeSessionPromptCommand(command));
                 const chunks: SessionLiveEvent[] = [];
                 for (;;) {
                     const event = await nextLive(fixture);
@@ -736,7 +641,7 @@ describe("daemon V2 live delivery", () => {
     it("Given a harness identifies a user message and fails its prompt, When the daemon publishes the failure, Then the failure names the user message it recorded", async () => {
         const fixture = await startControlledDaemon();
         try {
-            sendText(fixture.socket, encodeSessionPromptCommand(prompt(fixture, "fail with model unavailable")));
+            await sendText(fixture.socket, encodeSessionPromptCommand(prompt(fixture, "fail with model unavailable")));
             const events: SessionLiveEvent[] = [];
             for (;;) {
                 const event = await nextLive(fixture, true);
@@ -762,7 +667,7 @@ describe("daemon V2 live delivery", () => {
         try {
             const running = prompt(fixture, "wait for steering");
             const userMessageIds: string[] = [];
-            sendText(fixture.socket, encodeSessionPromptCommand(running));
+            await sendText(fixture.socket, encodeSessionPromptCommand(running));
             for (;;) {
                 const event = await nextLive(fixture);
                 if (event.type === "acp" && event.payload.sessionUpdate === "user_message_chunk") {
@@ -779,7 +684,7 @@ describe("daemon V2 live delivery", () => {
                 disposition: SessionPromptDisposition.Append,
                 prompt: "Execute the queued follow-up",
             };
-            sendText(fixture.socket, encodeSessionPromptCommand(queued));
+            await sendText(fixture.socket, encodeSessionPromptCommand(queued));
             for (;;) {
                 const event = await nextLive(fixture);
                 if (event.type === "lifecycle-metadata" && event.payload.kind === "session.queue.changed") {
@@ -807,7 +712,7 @@ describe("daemon V2 live delivery", () => {
                 prompt: "Finish using the steering instruction",
                 targetCommandId: running.commandId,
             };
-            sendText(fixture.socket, encodeSessionPromptCommand(steering));
+            await sendText(fixture.socket, encodeSessionPromptCommand(steering));
             const completed = new Set<string>();
             while (completed.size < 3) {
                 const event = await nextLive(fixture);
@@ -854,7 +759,7 @@ describe("daemon V2 live delivery", () => {
                     attachments:
                         scenario === "text-only" ? [] : [await uploadTextAttachment(fixture, "attached context")],
                 };
-                sendText(fixture.socket, encodeSessionPromptCommand(command));
+                await sendText(fixture.socket, encodeSessionPromptCommand(command));
                 const live: SessionLiveEvent[] = [];
                 for (;;) {
                     const event = await nextLive(fixture);
@@ -938,8 +843,8 @@ describe("daemon V2 live delivery", () => {
         try {
             let previousPosition = 0;
             for (const commandId of ["first-unbuffered-answer", "second-unbuffered-answer"]) {
-                const command = { ...prompt(fixture, commandId), commandId, requestId: commandId };
-                sendText(fixture.socket, encodeSessionPromptCommand(command));
+                const command = { ...prompt(fixture, commandId), commandId };
+                await sendText(fixture.socket, encodeSessionPromptCommand(command));
                 let firstAnswer: SessionLiveEvent | undefined;
                 for (;;) {
                     const frame = await fixture.frames.next(AbortSignal.timeout(5_000));
@@ -982,12 +887,8 @@ describe("daemon V2 live delivery", () => {
         let lastPosition = 0;
         const first = await startControlledDaemon({ stateDirectory });
         try {
-            const command = {
-                ...prompt(first, "first allocation"),
-                commandId: "first-allocation",
-                requestId: "first-allocation",
-            };
-            sendText(first.socket, encodeSessionPromptCommand(command));
+            const command = { ...prompt(first, "first allocation"), commandId: "first-allocation" };
+            await sendText(first.socket, encodeSessionPromptCommand(command));
             let firstEvent = true;
             for (;;) {
                 const event = await nextLive(first);
@@ -1009,12 +910,8 @@ describe("daemon V2 live delivery", () => {
 
         const restarted = await startControlledDaemon({ stateDirectory });
         try {
-            const command = {
-                ...prompt(restarted, "second allocation"),
-                commandId: "second-allocation",
-                requestId: "second-allocation",
-            };
-            sendText(restarted.socket, encodeSessionPromptCommand(command));
+            const command = { ...prompt(restarted, "second allocation"), commandId: "second-allocation" };
+            await sendText(restarted.socket, encodeSessionPromptCommand(command));
             const retainedOutcome = await nextLive(restarted);
             expect(
                 retainedOutcome.type === "lifecycle-metadata" && retainedOutcome.payload.kind === "prompt.completed",
@@ -1029,7 +926,7 @@ describe("daemon V2 live delivery", () => {
                 expect(Number(event.position)).toBeGreaterThan(previousPosition);
             }
 
-            sendText(
+            await sendText(
                 restarted.socket,
                 encodeSessionCreateCommand({
                     kind: "session.create",
@@ -1053,7 +950,7 @@ describe("daemon V2 live delivery", () => {
                 requestId: "separate-session-allocation",
                 target: decodeSessionReadyEvent(created).target,
             };
-            sendText(restarted.socket, encodeSessionPromptCommand(otherSessionCommand));
+            await sendText(restarted.socket, encodeSessionPromptCommand(otherSessionCommand));
             const otherSessionEvent = await nextLive(restarted);
             expect(otherSessionEvent.eventId.endsWith("-0000000000000001")).toBe(true);
             expect(otherSessionEvent.position).toBe(firstPosition);
@@ -1067,7 +964,7 @@ describe("daemon V2 live delivery", () => {
         const fixture = await startControlledDaemon();
         try {
             const command = prompt(fixture, "stream paged reasoning");
-            sendText(fixture.socket, encodeSessionPromptCommand(command));
+            await sendText(fixture.socket, encodeSessionPromptCommand(command));
             for (;;) {
                 const event = await nextLive(fixture);
                 if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
@@ -1097,7 +994,7 @@ describe("daemon V2 live delivery", () => {
         const fixture = await startControlledDaemon();
         try {
             const command = prompt(fixture, "interleave progress and hold");
-            sendText(fixture.socket, encodeSessionPromptCommand(command));
+            await sendText(fixture.socket, encodeSessionPromptCommand(command));
             const live: SessionLiveEvent[] = [];
             const order: string[] = [];
             let accumulated = "";
@@ -1148,7 +1045,7 @@ describe("daemon V2 live delivery", () => {
         const fixture = await startControlledDaemon();
         try {
             const command = prompt(fixture, "stream cumulative tool output");
-            sendText(fixture.socket, encodeSessionPromptCommand(command));
+            await sendText(fixture.socket, encodeSessionPromptCommand(command));
             for (;;) {
                 const event = await nextLive(fixture);
                 if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
@@ -1180,7 +1077,7 @@ describe("daemon V2 live delivery", () => {
         const fixture = await startControlledDaemon();
         try {
             const command = prompt(fixture, "stream token burst");
-            sendText(fixture.socket, encodeSessionPromptCommand(command));
+            await sendText(fixture.socket, encodeSessionPromptCommand(command));
             const live: SessionLiveEvent[] = [];
             let text = "";
             for (;;) {
@@ -1229,7 +1126,7 @@ describe("daemon V2 live delivery", () => {
         const fixture = await startControlledDaemon();
         try {
             const command = prompt(fixture, "hold after large output");
-            sendText(fixture.socket, encodeSessionPromptCommand(command));
+            await sendText(fixture.socket, encodeSessionPromptCommand(command));
             let text = "";
             let lastPosition = "0";
             while (text.length < 300_000) {

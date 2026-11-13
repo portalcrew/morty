@@ -2,18 +2,22 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { chromium, firefox, webkit } from "playwright-core";
 import { CodexAppServerClient } from "../../packages/cli/src/engine/acp/harness/codex/app-server-client.ts";
+import { ComputerEncryptionStore } from "../../packages/cli/src/engine/runtime/connection/computer-encryption-store.ts";
 import { stopProcessTree } from "../../packages/cli/src/engine/util/process/executable.ts";
 import { CodexFixture } from "../../packages/cli/tests/support/agents/codex.ts";
 import { FakeOpenAiProvider } from "../../packages/cli/tests/support/llm/openai.ts";
 import { TestComputerHost } from "../cli/tests/support/computer-host.ts";
 import { dataTestId } from "../web/src/data-testid.ts";
-import { ANONYMOUS_CREDENTIAL_KEY_NAME } from "../web/src/services/identity/anonymous-identity-api.ts";
-import { encodeIdentityScope } from "../web/src/services/identity/identity-scope-url.ts";
 import { anonymousCreationKey, ChatApi, jsonRequest, object, text } from "./infra/chat-api.ts";
 import { E2EHarness } from "./infra/harness.ts";
 import { LocalStack } from "./infra/local-stack.ts";
 
-test.use({ browserName: "webkit", contextOptions: { isMobile: true, hasTouch: true } });
+// Keep CI's WebKit coverage; allow local verification where the OS's frozen WebKit is unsupported.
+const selectedBrowser = process.env["MORTY_E2E_BORROWED_BROWSER"] ?? "webkit";
+if (selectedBrowser !== "webkit" && selectedBrowser !== "chromium") {
+    throw new Error("MORTY_E2E_BORROWED_BROWSER must be webkit or chromium");
+}
+test.use({ browserName: selectedBrowser, contextOptions: { isMobile: true, hasTouch: true } });
 
 // Both Codex processes and the daemon are real. Only model responses are controlled.
 test("Given desktop Codex owns a conversation, When I open it in Morty and queue follow-ups, Then steering is unavailable and the queued replies complete", async ({
@@ -110,32 +114,30 @@ test("Given desktop Codex owns a conversation, When I open it in Morty and queue
         void running.catch(ready.reject);
         await Promise.race([ready.promise, running]);
         await chat.readPairedAgent("codex");
-        await chat.bindAgent("codex");
+        const encryption = await ComputerEncryptionStore.open(
+            join(harness.workDirectory, "computer"),
+            computerId,
+            signal,
+        );
+        const access = await encryption.access(signal);
+        await harness.stage("verify-codex", () => chat.bindAgent("codex", access));
         // The harness owns the browser so a failure keeps its trace, page and browser events.
-        const browser = await { chromium, firefox, webkit }[browserName].launch({ headless: true });
+        const browser = await harness.stage(`launch-${browserName}`, () =>
+            ({ chromium, firefox, webkit })[browserName].launch({ headless: true }),
+        );
         const page = await (async () => {
             try {
-                const context = await browser.newContext(contextOptions);
-                const opened = await context.newPage();
-                await harness.attachBrowser(browser, context, opened);
+                const context = await harness.stage("create-browser-context", () => browser.newContext(contextOptions));
+                const opened = await harness.stage("open-browser-page", () => context.newPage());
+                await harness.stage("trace-browser", () => harness.attachBrowser(browser, context, opened));
                 return opened;
             } catch (error) {
                 await browser.close();
                 throw error;
             }
         })();
-        await page.addInitScript(
-            ({ key, scope, token }) => {
-                localStorage.setItem(
-                    key,
-                    JSON.stringify({ credentials: { [scope.computerId]: token }, computers: [{ scope }] }),
-                );
-            },
-            { key: ANONYMOUS_CREDENTIAL_KEY_NAME, scope: { computerId }, token },
-        );
-        const url = new URL(stack.chatOrigin);
-        url.searchParams.set("identity", encodeIdentityScope({ computerId }));
-        await page.goto(url.href);
+        const handoff = await harness.stage("issue-browser-handoff", () => chat.browserHandoff(access));
+        await page.goto(handoff);
         await page.getByRole("button", { name: "Open Session", exact: true }).click();
         const dialog = page.getByRole("dialog", { name: "Open Session" });
         await dialog.getByTestId(dataTestId.localSessionEntry).first().click();

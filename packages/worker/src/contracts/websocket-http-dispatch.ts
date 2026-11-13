@@ -4,6 +4,7 @@ export type WebSocketHttpOperation =
     | {
           readonly kind: "request";
           readonly request: Request;
+          readonly body: string;
           readonly enableCancellation: () => AbortSignal;
       }
     | {

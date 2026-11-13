@@ -1,3 +1,4 @@
+import { FILE_STREAM_CONTENT_TYPE } from "@morty-build/client/protocol";
 import { Hono, type MiddlewareHandler } from "hono";
 import type { ConfiguredRelayBindings } from "../../contracts/relay-bindings.ts";
 import {
@@ -93,7 +94,15 @@ export function createComputerWebSocketApplication(ctx: ComputerRouteContext): W
     return async (operation) => {
         const response = await websocket.fetch(operation.request, { ...ctx.bindings, operation });
         if (operation.kind === "upload-admission" && response.ok) {
-            uploads.reserve(operation.byteLength, operation.request.signal);
+            uploads.reserve({
+                byteLength: operation.byteLength,
+                format:
+                    operation.request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ===
+                    FILE_STREAM_CONTENT_TYPE
+                        ? "encrypted-content"
+                        : "ordinary",
+                signal: operation.request.signal,
+            });
         }
         if (response.status === 101) {
             await ctx.utilities.connectionOpened();

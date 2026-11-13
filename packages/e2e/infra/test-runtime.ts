@@ -5,6 +5,7 @@ import { ANONYMOUS_CREDENTIAL_KEY_NAME } from "../../web/src/services/identity/a
 import { encodeIdentityScope } from "../../web/src/services/identity/identity-scope-url.ts";
 import { anonymousCreationKey, ChatApi, jsonRequest, object, text } from "./chat-api.ts";
 import type { LocalStack } from "./local-stack.ts";
+import { RuntimeClock } from "./runtime-clock.ts";
 import { ControlledSetupRuntime } from "./setup-daemon.ts";
 import { followSetupInstructions } from "./setup-instructions.ts";
 
@@ -40,6 +41,7 @@ export async function createTestRuntime(
     try {
         const context = await browser.newContext(contextOptions);
         const page = await context.newPage();
+        const clock = new RuntimeClock(page);
         await journey.attachBrowser(browser, context, page);
         const chat = new ChatApi(stack.chatOrigin, journey.signal);
 
@@ -64,7 +66,10 @@ export async function createTestRuntime(
                         window.localStorage.setItem(
                             key,
                             JSON.stringify({
-                                credentials: { ...stored.credentials, [scope.computerId]: token },
+                                credentials: {
+                                    ...stored.credentials,
+                                    [scope.computerId]: stored.credentials[scope.computerId] ?? token,
+                                },
                                 computers: [
                                     ...stored.computers.filter(
                                         (computer: { scope: { computerId: string } }) =>
@@ -85,12 +90,17 @@ export async function createTestRuntime(
 
         return {
             close: async () => {
-                await Promise.all([runtime, ...additionalRuntimes].map((computer) => computer.disconnect()));
+                try {
+                    await Promise.all([runtime, ...additionalRuntimes].map((computer) => computer.disconnect()));
+                } finally {
+                    clock.close();
+                }
             },
             failure: Promise.race([runtime.failure, additionalFailure.promise]),
             continueReply: runtime.continueReply,
             writeFiles: runtime.writeFiles,
             page,
+            clock,
             origin: stack.chatOrigin,
             openChat,
             openPairedChat: async (computerName?: string) => {
@@ -111,7 +121,7 @@ export async function createTestRuntime(
                     additionalRuntimes.push(computer);
                     void computer.failure.catch(additionalFailure.reject);
                 }
-                await openChat();
+                const { computerId } = await openChat();
                 const pairing = await chat.createPairing();
                 await computer.pair(
                     journey.workDirectory,
@@ -124,9 +134,10 @@ export async function createTestRuntime(
                     journey.signal,
                 );
                 await chat.readPairedAgent(harness);
-                await chat.bindAgent(harness);
+                const access = await computer.encryptionAccess(journey.workDirectory, computerId, journey.signal);
+                await chat.bindAgent(harness, access);
                 await chat.readBinding(harness);
-                await page.reload();
+                await page.goto(await chat.browserHandoff(access));
             },
             disconnectRuntime: async () => await runtime.disconnect(),
             restartRuntime: async () => await runtime.restart(),

@@ -1,64 +1,105 @@
 import {
-    decodeComputerDiagnosticsResult,
-    decodeComputerPongEvent,
-    decodeNativeSessionResult,
-    decodeSessionArchivedEvent,
-    decodeSessionConfigReadResult,
-    decodeSessionConfigUpdatedEvent,
-    decodeSessionHistoryWirePageLoaded,
-    decodeSessionInteractionAnsweredEvent,
-    decodeSessionPreviewHistoryWirePageLoaded,
-    decodeSessionPromptAcceptedEvent,
-    decodeSessionPromptSteeredEvent,
-    decodeSessionReadyEvent,
-    decodeSessionRenamedEvent,
-    decodeSessionRestoredEvent,
-    decodeSessionsListedEvent,
-    decodeSessionsQueriedEvent,
-    decodeSessionTurnStoppedEvent,
-    decodeSessionTurnWithdrawnEvent,
+    type ClientToRelayMessage,
+    daemonToRelayDecoders,
+    type NativeSessionTarget,
 } from "@morty-build/client/protocol";
-import type { ComputerControlCommand, ComputerControlResult } from "./computer-control-request.ts";
 
-/** The Computer's reply to one control command, which names the command's own request identifier. */
-interface ComputerControlReply {
-    readonly eventKind: ComputerControlResult["kind"];
-    readonly decode: (data: string) => ComputerControlResult;
-}
+export const computerControlReplyDecoders = {
+    "computer.diagnostics.result": daemonToRelayDecoders["computer.diagnostics.result"],
+    "computer.pong": daemonToRelayDecoders["computer.pong"],
+    "native.session.result": daemonToRelayDecoders["native.session.result"],
+    "session.ready": daemonToRelayDecoders["session.ready"],
+    "session.config.updated": daemonToRelayDecoders["session.config.updated"],
+    "session.config.read.result": daemonToRelayDecoders["session.config.read.result"],
+    "session.renamed": daemonToRelayDecoders["session.renamed"],
+    "session.archived": daemonToRelayDecoders["session.archived"],
+    "session.turn.withdrawn": daemonToRelayDecoders["session.turn.withdrawn"],
+    "session.turn.stopped": daemonToRelayDecoders["session.turn.stopped"],
+    "session.prompt.steered": daemonToRelayDecoders["session.prompt.steered"],
+    "session.prompt.accepted": daemonToRelayDecoders["session.prompt.accepted"],
+    "session.preview-history.page.loaded": daemonToRelayDecoders["session.preview-history.page.loaded"],
+    "session.live-history.v2.page.loaded": daemonToRelayDecoders["session.live-history.v2.page.loaded"],
+    "session.interaction.answered": daemonToRelayDecoders["session.interaction.answered"],
+    "session.listed": daemonToRelayDecoders["session.listed"],
+    "session.queried": daemonToRelayDecoders["session.queried"],
+    "session.restored": daemonToRelayDecoders["session.restored"],
+    "session.operation.failed": daemonToRelayDecoders["session.operation.failed"],
+    "workspace.entries": daemonToRelayDecoders["workspace.entries"],
+    "agent.settings.discovered": daemonToRelayDecoders["agent.settings.discovered"],
+    "agent.settings.discovery.failed": daemonToRelayDecoders["agent.settings.discovery.failed"],
+};
 
-function directReply<K extends ComputerControlResult["kind"]>(
-    eventKind: K,
-    decode: (data: string) => Extract<ComputerControlResult, { readonly kind: NoInfer<K> }>,
-) {
-    return { eventKind, decode } satisfies ComputerControlReply;
-}
+export type ClientControlReply = ReturnType<
+    (typeof computerControlReplyDecoders)[keyof typeof computerControlReplyDecoders]
+>;
+export type ClientControlCommand = Exclude<
+    ClientToRelayMessage,
+    {
+        readonly kind:
+            | "file.read"
+            | "content.write"
+            | "content.commit"
+            | "native.session.cancel"
+            | "session.events.subscribe";
+    }
+>;
 
-/** The reply that answers each control command. */
+/** Only these native success kinds answer the corresponding commands. */
 export const computerControlRegistry = {
-    "computer.diagnostics.read": directReply("computer.diagnostics.result", decodeComputerDiagnosticsResult),
-    "computer.ping": directReply("computer.pong", decodeComputerPongEvent),
-    "native.session.request": directReply("native.session.result", decodeNativeSessionResult),
-    "session.prepare": directReply("session.ready", decodeSessionReadyEvent),
-    "session.create": directReply("session.ready", decodeSessionReadyEvent),
-    "session.configure": directReply("session.config.updated", decodeSessionConfigUpdatedEvent),
-    "session.config.read": directReply("session.config.read.result", decodeSessionConfigReadResult),
-    "session.rename": directReply("session.renamed", decodeSessionRenamedEvent),
-    "session.archive": directReply("session.archived", decodeSessionArchivedEvent),
-    "session.cancel-before-start": directReply("session.turn.withdrawn", decodeSessionTurnWithdrawnEvent),
-    "session.cancel": directReply("session.turn.stopped", decodeSessionTurnStoppedEvent),
-    "session.prompt.disposition": directReply("session.prompt.steered", decodeSessionPromptSteeredEvent),
-    "session.prompt": directReply("session.prompt.accepted", decodeSessionPromptAcceptedEvent),
-    "session.preview-history.page.load": directReply(
-        "session.preview-history.page.loaded",
-        decodeSessionPreviewHistoryWirePageLoaded,
-    ),
-    "session.live-history.v2.page.load": directReply(
-        "session.live-history.v2.page.loaded",
-        decodeSessionHistoryWirePageLoaded,
-    ),
-    "session.elicitation.respond": directReply("session.interaction.answered", decodeSessionInteractionAnsweredEvent),
-    "session.permission.respond": directReply("session.interaction.answered", decodeSessionInteractionAnsweredEvent),
-    "session.list": directReply("session.listed", decodeSessionsListedEvent),
-    "session.query": directReply("session.queried", decodeSessionsQueriedEvent),
-    "session.restore": directReply("session.restored", decodeSessionRestoredEvent),
-} satisfies { readonly [K in ComputerControlCommand["kind"]]: ComputerControlReply };
+    "computer.diagnostics.read": "computer.diagnostics.result",
+    "computer.ping": "computer.pong",
+    "native.session.request": "native.session.result",
+    "session.prepare": "session.ready",
+    "session.create": "session.ready",
+    "session.configure": "session.config.updated",
+    "session.config.read": "session.config.read.result",
+    "session.rename": "session.renamed",
+    "session.archive": "session.archived",
+    "session.cancel-before-start": "session.turn.withdrawn",
+    "session.cancel": "session.turn.stopped",
+    "session.prompt.disposition": "session.prompt.steered",
+    "session.prompt": "session.prompt.accepted",
+    "session.preview-history.page.load": "session.preview-history.page.loaded",
+    "session.live-history.v2.page.load": "session.live-history.v2.page.loaded",
+    "session.elicitation.respond": "session.interaction.answered",
+    "session.permission.respond": "session.interaction.answered",
+    "session.list": "session.listed",
+    "session.query": "session.queried",
+    "session.restore": "session.restored",
+    "workspace.list": "workspace.entries",
+    "agent.settings.discover": "agent.settings.discovered",
+} satisfies { readonly [K in ClientControlCommand["kind"]]: keyof typeof computerControlReplyDecoders };
+
+export function computerControlAddress(command: ClientControlCommand): string {
+    return command.requestId;
+}
+
+export function computerControlTarget(command: ClientControlCommand): NativeSessionTarget | undefined {
+    switch (command.kind) {
+        case "native.session.request":
+            return command.action === "list" ? undefined : command.target;
+        case "session.prepare":
+        case "session.configure":
+        case "session.config.read":
+        case "session.rename":
+        case "session.archive":
+        case "session.cancel-before-start":
+        case "session.cancel":
+        case "session.prompt.disposition":
+        case "session.prompt":
+        case "session.preview-history.page.load":
+        case "session.live-history.v2.page.load":
+        case "session.elicitation.respond":
+        case "session.permission.respond":
+        case "session.restore":
+            return command.target;
+        case "computer.diagnostics.read":
+        case "computer.ping":
+        case "session.create":
+        case "session.list":
+        case "session.query":
+        case "workspace.list":
+        case "agent.settings.discover":
+            return undefined;
+    }
+}

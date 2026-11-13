@@ -15,12 +15,15 @@ import {
     decodeSessionCloseNoticeEvent,
     decodeSessionOperationFailedEvent,
     decodeSessionsListedEvent,
-    encodeServiceToDaemonMessage,
     encodeSessionPromptCommand,
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
 import { type ControlledAcpPeer, ControlledEndpointConnection } from "@morty-build/runtime-test-support/fake-daemon";
 import { expect, test, vi } from "vitest";
+import {
+    encodeSessionArchiveCommand,
+    encodeSessionListCommand,
+} from "../../../client/src/protocol/session/lifecycle/index.ts";
 import type { AgentTermination } from "../../src/engine/acp/agent/agent-lifecycle.ts";
 import type { AgentConnectionFactory } from "../support/agents/agent-connection.ts";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
@@ -117,12 +120,12 @@ test("Given the Agent's teardown fails, When the Session is archived, Then clien
     const agent = new FailingCloseAgentSpecification();
     await withRealDaemon(agent, { MORTY_TEST_CONTROLLED_CLOSE_PATH: process.execPath }, async (peer) => {
         const requestId = crypto.randomUUID();
-        peer.send(encodeServiceToDaemonMessage({ kind: "session.archive", requestId, target: peer.target }));
+        peer.send(encodeSessionArchiveCommand({ kind: "session.archive", requestId, target: peer.target }));
         expect(decodeSessionCloseNoticeEvent(await peer.nextMessage())).toMatchObject({ target: peer.target });
         expect(decodeSessionOperationFailedEvent(await peer.nextMessage())).toMatchObject({ requestId });
 
         const listRequestId = crypto.randomUUID();
-        peer.send(encodeServiceToDaemonMessage({ kind: "session.list", limit: 500, requestId: listRequestId }));
+        peer.send(encodeSessionListCommand({ kind: "session.list", limit: 500, requestId: listRequestId }));
         expect(decodeSessionsListedEvent(await peer.nextMessage())).toMatchObject({
             entries: [],
             requestId: listRequestId,
@@ -138,7 +141,7 @@ test("Given retained Agent teardown does not finish, When the Session archive de
         try {
             const requestId = crypto.randomUUID();
             peer.send(
-                encodeServiceToDaemonMessage({
+                encodeSessionArchiveCommand({
                     kind: "session.archive",
                     requestId,
                     target: sessionTarget,
@@ -200,7 +203,7 @@ test("Given an active Agent session holding an exclusive writer lock, When a pub
                 await nextPromptAcceptance(peer, promptCommandId);
                 const archiveRequestId = crypto.randomUUID();
                 peer.send(
-                    encodeServiceToDaemonMessage({
+                    encodeSessionArchiveCommand({
                         kind: "session.archive",
                         requestId: archiveRequestId,
                         target: sessionTarget,

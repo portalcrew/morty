@@ -1,6 +1,11 @@
-import { type DaemonToServiceMessage, type NativeSessionTarget, promptCompletion } from "@morty-build/client/protocol";
+import {
+    type NativeSessionTarget,
+    promptCompletion,
+    sessionOperationFailedEventCodec,
+} from "@morty-build/client/protocol";
 import { WebSocket } from "undici";
 import type { ExecutionReceipts } from "../../session/turn/execution-receipts.ts";
+import type { CommandContext } from "./context.ts";
 import { send } from "./transport.ts";
 
 /** How a settled command ended, as the ledger's outcome records it. */
@@ -30,45 +35,50 @@ export function settledCommand(operations: ExecutionReceipts, commandId: string)
     }
 }
 
-/**
- * Answers a request on the connection that carried it. A reply that outlives its connection has no reader: the Relay
- * failed the request when that connection closed.
- */
-export function reply(socket: WebSocket, message: DaemonToServiceMessage): void {
+/** A reply that outlives its connection has no reader. */
+export function reply(socket: WebSocket, encoded: string | Uint8Array): void {
     if (socket.readyState === WebSocket.OPEN) {
-        send(socket, message);
+        send(socket, encoded);
     }
 }
 
-export function replyFailure(
-    socket: WebSocket,
+export async function replyFailure(
+    { socket, payloadEncryption, signal }: Pick<CommandContext, "socket" | "payloadEncryption" | "signal">,
     requestId: string,
     target: NativeSessionTarget | undefined,
     code: string,
     message: string,
-): void {
-    reply(socket, {
-        code,
-        kind: "session.operation.failed",
-        message,
-        requestId,
-        ...(target === undefined ? {} : { target }),
-    });
+): Promise<void> {
+    if (socket.readyState !== WebSocket.OPEN) {
+        return;
+    }
+    const encoded = await sessionOperationFailedEventCodec.encode(
+        {
+            code,
+            kind: "session.operation.failed",
+            message,
+            requestId,
+            ...(target === undefined ? {} : { target }),
+        },
+        payloadEncryption,
+        AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+    );
+    reply(socket, encoded);
 }
 
 /** Answers a request with a settled command's failure, or with the loss of its outcome. */
-export function replySettledFailure(
-    socket: WebSocket,
+export async function replySettledFailure(
+    context: Pick<CommandContext, "socket" | "payloadEncryption" | "signal">,
     requestId: string,
     target: NativeSessionTarget,
     settled: Exclude<SettledCommand, { readonly kind: "completed" }>,
-): void {
+): Promise<void> {
     if (settled.kind === "failed") {
-        replyFailure(socket, requestId, target, settled.code, settled.message);
+        await replyFailure(context, requestId, target, settled.code, settled.message);
         return;
     }
-    replyFailure(
-        socket,
+    await replyFailure(
+        context,
         requestId,
         target,
         "command_result_expired",

@@ -14,6 +14,7 @@ import {
     RuntimeLocalContext,
 } from "../../../packages/cli/src/engine/runtime/config.ts";
 import type { ComputerCredentials } from "../../../packages/cli/src/engine/runtime/connection/computer-credentials.ts";
+import { ComputerEncryptionStore } from "../../../packages/cli/src/engine/runtime/connection/computer-encryption-store.ts";
 import { runRuntime } from "../../../packages/cli/src/engine/runtime/run.ts";
 import { acpAdapters } from "../../../packages/cli/tests/support/acp-adapters.ts";
 import { memoryComputerCredentials } from "../../../packages/cli/tests/support/computer-credentials.ts";
@@ -49,6 +50,7 @@ export interface ControlledAgent {
     readonly reply?: FakeAgentHarnessOptions["reply"];
     /** Holds or rejects the controlled Agent's next Session creation through its real ACP boundary. */
     readonly beforeSessionCreated?: (() => Promise<void>) | undefined;
+    readonly beforeSessionsListed?: ((signal: AbortSignal) => Promise<void>) | undefined;
     /** Test control that holds a selected Agent configuration request before it is applied. */
     readonly beforeConfigurationApplied?: ((configId: string, value: string | boolean) => Promise<void>) | undefined;
     /** Holds the controlled Agent's cancellation while its current reply remains active. */
@@ -58,6 +60,7 @@ export interface ControlledAgent {
 
 export interface ControlledAgentBehavior extends FakeAgentHarnessOptions {
     readonly beforeSessionCreated?: (() => Promise<void>) | undefined;
+    readonly beforeSessionsListed?: ((signal: AbortSignal) => Promise<void>) | undefined;
     readonly beforeConfigurationApplied?: ((configId: string, value: string | boolean) => Promise<void>) | undefined;
     readonly beforeCancellationApplied?: (() => Promise<void>) | undefined;
     readonly onBackgroundPermissionReady?: ((request: () => Promise<void>) => void) | undefined;
@@ -146,7 +149,12 @@ export function createMortyFakeDaemon(behavior: ControlledAgentBehavior, workspa
         return { ...harness, agents: [createSettingsAgent("dependent")] };
     }
     if (behavior.harness === "settings-test") {
-        return { ...harness, agents: [createSettingsAgent("model", undefined, behavior.beforeSessionCreated)] };
+        return {
+            ...harness,
+            agents: [
+                createSettingsAgent("model", undefined, behavior.beforeSessionCreated, behavior.beforeSessionsListed),
+            ],
+        };
     }
     if (behavior.harness === "signed-out-test") {
         return { ...harness, agents: [createUnavailableAgent("signed-out-test", "Signed-out Agent", "signed-out")] };
@@ -169,22 +177,24 @@ export async function connectControlledAgentRuntime(options: {
     await writeWorkspaceFiles(options.behavior.files, workspace, options.signal);
     const relayUrl = new URL("/morty/api/v1/computers/connect", options.connection.origin);
     relayUrl.protocol = relayUrl.protocol === "https:" ? "wss:" : "ws:";
+    let connection = options.connection;
+    let behavior = options.behavior;
     // The Agents can change across restarts, as when the user installs another Agent on the computer.
     const configure = (behavior: ControlledAgentBehavior) => {
         const harness = createMortyFakeDaemon(behavior, workspace);
         const runtime = controlledRuntime(
             harness.agents,
             {
-                computerId: options.connection.computerId,
+                computerId: connection.computerId,
                 defaultWorkspace: workspace,
                 relayUrl,
-                credentials: options.connection.credentials,
+                credentials: connection.credentials,
             },
             directory,
         );
         return { harness, runtime };
     };
-    let { harness, runtime } = configure(options.behavior);
+    let { harness, runtime } = configure(behavior);
     const unexpectedFailure = Promise.withResolvers<never>();
     void unexpectedFailure.promise.catch(() => undefined);
     const start = async () => {
@@ -239,6 +249,8 @@ export async function connectControlledAgentRuntime(options: {
     };
     return {
         continueReply: (...reply: Parameters<typeof harness.continueReply>) => harness.continueReply(...reply),
+        encryptionAccess: async (signal: AbortSignal) =>
+            await (await ComputerEncryptionStore.open(directory, options.connection.computerId, signal)).access(signal),
         writeFiles: async (files: NonNullable<ControlledAgentBehavior["files"]>): Promise<void> =>
             await writeWorkspaceFiles(files, workspace, options.signal),
         disconnect,
@@ -250,6 +262,20 @@ export async function connectControlledAgentRuntime(options: {
                 state = { kind: "running", runtime: await start() };
             }
         },
+        /** Re-pairs this same Computer without replacing its local identity or Agent-owned history. */
+        reconnectWithConnection: async (next: ControlledComputerConnection): Promise<void> => {
+            if (
+                state.kind === "disposed" ||
+                next.computerId !== connection.computerId ||
+                next.origin !== connection.origin
+            ) {
+                throw new Error("Cannot replace this controlled Computer connection");
+            }
+            await disconnect();
+            connection = next;
+            ({ harness, runtime } = configure(behavior));
+            state = { kind: "running", runtime: await start() };
+        },
         /** Restarts the Computer offering other Agents, which it publishes to the Relay when it reconnects. */
         restartWithAgents: async (
             agents: Pick<ControlledAgentBehavior, "additionalAgents" | "harness" | "agentName">,
@@ -258,7 +284,8 @@ export async function connectControlledAgentRuntime(options: {
                 throw new Error("Cannot restart a disposed controlled Computer");
             }
             await disconnect();
-            ({ harness, runtime } = configure({ ...options.behavior, ...agents }));
+            behavior = { ...behavior, ...agents };
+            ({ harness, runtime } = configure(behavior));
             state = { kind: "running", runtime: await start() };
         },
         failure: unexpectedFailure.promise,
@@ -329,6 +356,7 @@ export async function createControlledAgentRuntime(options: {
         credential: options.credential,
         origin: options.origin,
         computerId: pairing.computerId,
+        encryptionAccess: await connected.encryptionAccess(options.signal),
         request: async (request) => await options.server.request(request),
     });
     return {

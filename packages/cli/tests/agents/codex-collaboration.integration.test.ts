@@ -6,13 +6,9 @@ import { join } from "node:path";
 
 import {
     type AcpSessionUpdate,
-    COMPUTER_HEARTBEAT_ACK_MESSAGE,
-    COMPUTER_HEARTBEAT_MESSAGE,
-    COMPUTER_LIVENESS_READY_KIND,
     decodeMessageKind,
     decodeSessionEventEnvelope,
     decodeSessionReadyEvent,
-    encodeComputerLivenessReadyEvent,
     encodeSessionCreateCommand,
     encodeSessionPromptCommand,
     MORTY_API_PREFIX,
@@ -21,49 +17,14 @@ import {
 } from "@morty-build/client/protocol";
 import { listen, port } from "@morty-build/relay-test-support/websocket";
 import { expect, test } from "vitest";
-import { type WebSocket, WebSocketServer } from "ws";
+import { WebSocketServer } from "ws";
 import { createRuntimeConfig, RuntimeAgentDependencies, RuntimeLocalContext } from "../../src/engine/runtime/config.ts";
 import { runRuntime } from "../../src/engine/runtime/run.ts";
 import { testAgentDefinition } from "../support/agent-definition.ts";
 import { CodexFixture } from "../support/agents/codex.ts";
 import { memoryComputerCredentials } from "../support/computer-credentials.ts";
+import { createEncryptedDaemonGateway, type EncryptedDaemonPeer } from "../support/encrypted-daemon-gateway.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
-
-class Messages {
-    readonly #closed = Promise.withResolvers<never>();
-    readonly #buffered: string[] = [];
-    readonly #waiting: Array<(message: string) => void> = [];
-
-    constructor(socket: WebSocket) {
-        void this.#closed.promise.catch(() => {});
-        socket.once("close", () => this.#closed.reject(new Error("The daemon disconnected during the request")));
-        socket.on("message", (value) => {
-            const message = value.toString();
-            // Like the Relay's host, answer exactly the heartbeat text without the application.
-            if (message === COMPUTER_HEARTBEAT_MESSAGE) {
-                socket.send(COMPUTER_HEARTBEAT_ACK_MESSAGE);
-                return;
-            }
-            const resolve = this.#waiting.shift();
-            if (resolve === undefined) {
-                this.#buffered.push(message);
-            } else {
-                resolve(message);
-            }
-        });
-        socket.send(encodeComputerLivenessReadyEvent({ kind: COMPUTER_LIVENESS_READY_KIND }));
-    }
-
-    readonly next = (): Promise<string> => {
-        const buffered = this.#buffered.shift();
-        return Promise.race([
-            this.#closed.promise,
-            buffered === undefined
-                ? new Promise<string>((resolve) => this.#waiting.push(resolve))
-                : Promise.resolve(buffered),
-        ]);
-    };
-}
 
 test("Given real Codex dispatches and waits for a subagent, When the turn runs through the daemon, Then ACP exposes both collaboration calls", async () => {
     const prompt = "Dispatch a subagent, wait for it, then report completion.";
@@ -84,8 +45,13 @@ test("Given real Codex dispatches and waits for a subagent, When the turn runs t
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const connected = Promise.withResolvers<WebSocket>();
-    websocketServer.on("connection", (socket) => connected.resolve(socket));
+    const gateway = await createEncryptedDaemonGateway(
+        stateDirectory,
+        "real-codex-collaboration",
+        AbortSignal.timeout(120_000),
+    );
+    const connected = Promise.withResolvers<EncryptedDaemonPeer>();
+    websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
     const relayUrl = new URL(
         `ws://127.0.0.1:${port(relay).toString()}${MORTY_API_PREFIX}/channels/real-codex-collaboration/daemon`,
@@ -107,9 +73,9 @@ test("Given real Codex dispatches and waits for a subagent, When the turn runs t
 
     try {
         const socket = await connected.promise;
-        const messages = new Messages(socket);
+        const messages = socket;
         const requestId = randomUUID();
-        socket.send(
+        await socket.send(
             encodeSessionCreateCommand({
                 kind: "session.create",
                 requestId,
@@ -128,7 +94,7 @@ test("Given real Codex dispatches and waits for a subagent, When the turn runs t
         }
         const sessionTarget = decodeSessionReadyEvent(created).target;
         const commandId = randomUUID();
-        socket.send(
+        await socket.send(
             encodeSessionPromptCommand({
                 commandId,
                 requestId: commandId,
@@ -191,6 +157,7 @@ test("Given real Codex dispatches and waits for a subagent, When the turn runs t
     } finally {
         cancellation.abort();
         await runtime;
+        await gateway.close();
         for (const socket of websocketServer.clients) {
             socket.terminate();
         }

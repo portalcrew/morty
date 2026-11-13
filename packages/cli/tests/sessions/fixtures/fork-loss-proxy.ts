@@ -1,9 +1,9 @@
 import { createServer, request as httpRequest } from "node:http";
 import {
     COMPUTER_SUCCESSOR_CREDENTIAL_HEADER,
-    decodeNativeSessionRequest,
-    decodeNativeSessionResult,
     type NativeSessionTarget,
+    nativeSessionCommandCodec,
+    nativeSessionResultCodec,
 } from "@morty-build/client/protocol";
 import { listen, port } from "@morty-build/relay-test-support/websocket";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
@@ -57,7 +57,7 @@ export async function createForkLossProxy(upstream: string, loss: "request" | "r
                     "kind" in frame &&
                     frame.kind === "native.session.result"
                 ) {
-                    const result = decodeNativeSessionResult(data.toString());
+                    const result = nativeSessionResultCodec.decodeRouting(data.toString());
                     if (result.action === "fork") {
                         armed = false;
                         lost.resolve(result.target);
@@ -87,7 +87,7 @@ export async function createForkLossProxy(upstream: string, loss: "request" | "r
                     "kind" in frame &&
                     frame.kind === "native.session.request"
                 ) {
-                    const command = decodeNativeSessionRequest(data.toString());
+                    const command = nativeSessionCommandCodec.decodeRouting(data.toString());
                     if (command.action === "fork") {
                         armed = false;
                         lost.resolve(null);

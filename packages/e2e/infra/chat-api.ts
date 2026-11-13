@@ -1,3 +1,8 @@
+import { type ComputerEncryptionAccess, computerEncryptionAccessCodec } from "@morty-build/client";
+import { createOwnerApi } from "../../../tests/support/owner-api.ts";
+import { identityCalls } from "../../web/src/services/api/calls/identity.ts";
+import { WorkerApiTransport } from "../../web/src/services/api/worker-api-transport.ts";
+
 interface RequestOptions {
     readonly body?: unknown;
     readonly computer?: string;
@@ -42,7 +47,7 @@ export async function jsonRequest(origin: string, path: string, { body, computer
         method: body === undefined ? "GET" : "POST",
         headers,
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        signal,
+        signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]),
     });
     const raw = await response.text();
     let value: unknown;
@@ -95,27 +100,79 @@ export class ChatApi {
         }
     }
 
-    async bindAgent(harness: string) {
+    async bindAgent(harness: string, encryptionAccess: ComputerEncryptionAccess) {
+        const owner = this.#owner(encryptionAccess);
+        try {
+            await owner.api.verifyAgent(harness, AbortSignal.any([this.signal, AbortSignal.timeout(120_000)]));
+        } finally {
+            owner.close();
+        }
+    }
+
+    /** Redeem through the production continuation page, keeping the Computer secret in the local fragment. */
+    async browserHandoff(encryptionAccess: ComputerEncryptionAccess) {
         const identity = this.#requireIdentity();
-        await this.#request(`/morty/api/v1/computers/${encodeURIComponent(identity.computerId)}/setup`, {
-            body: { harness },
+        if (encryptionAccess.computerId !== identity.computerId) {
+            throw new Error("Encrypted access belongs to a different Computer");
+        }
+        const transport = new WorkerApiTransport(this.origin, () => null);
+        const request = identityCalls.createTransfer({
+            origin: this.origin,
+            computerId: identity.computerId,
+            operationId: crypto.randomUUID(),
+            accessDuration: null,
+            replaces: null,
         });
+        try {
+            const response = await transport.fetch({
+                ...request,
+                headers: { authorization: `Bearer ${identity.token}`, "content-type": "application/json" },
+                signal: AbortSignal.any([this.signal, AbortSignal.timeout(request.endpoint.timeoutMilliseconds)]),
+            });
+            const value: unknown = await response.json();
+            if (!response.ok) {
+                throw new Error(`Browser handoff failed (${response.status})`);
+            }
+            const url = new URL(text(object(value, "browser handoff")["url"], "handoff URL"));
+            if (url.origin !== this.origin || url.pathname !== "/continue") {
+                throw new Error("The browser handoff must target this Worker's continuation page");
+            }
+            const fragment = new URLSearchParams(url.hash.slice(1));
+            fragment.set(
+                "e2e",
+                Buffer.from(computerEncryptionAccessCodec.encode(encryptionAccess), "utf8").toString("base64url"),
+            );
+            url.hash = fragment.toString();
+            return url.href;
+        } finally {
+            transport.dispose();
+        }
     }
 
     async readBinding(harness: string) {
-        const identity = this.#requireIdentity();
-        const configuration = await this.#request(
-            `/morty/api/v1/computers/${encodeURIComponent(identity.computerId)}/workspace`,
-            { body: {} },
-        );
-        const computer = object(configuration["computer"], "computer");
-        if (
-            computer["online"] !== true ||
-            !Array.isArray(computer["agents"]) ||
-            !computer["agents"].some((agent) => object(agent, "agent")["harness"] === harness)
-        ) {
-            throw new Error(`The configured Bot does not expose ${harness}`);
+        const owner = this.#owner();
+        try {
+            const { computer } = await owner.api.computerConfiguration(this.signal);
+            if (computer.online !== true || !computer.agents.some((agent) => agent.harness === harness)) {
+                throw new Error(`The configured Bot does not expose ${harness}`);
+            }
+        } finally {
+            owner.close();
         }
+    }
+
+    #owner(encryptionAccess?: ComputerEncryptionAccess) {
+        const identity = this.#requireIdentity();
+        if (encryptionAccess !== undefined && encryptionAccess.computerId !== identity.computerId) {
+            throw new Error("Encrypted access belongs to a different Computer");
+        }
+        return createOwnerApi({
+            origin: this.origin,
+            computerId: identity.computerId,
+            credential: identity.token,
+            request: (request) => fetch(request),
+            ...(encryptionAccess === undefined ? {} : { encryptionAccess }),
+        });
     }
 
     #requireIdentity() {

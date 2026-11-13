@@ -1,11 +1,20 @@
 import { abortAllDurableObjects, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import {
+    createClientPayloadEncryption,
+    createComputerPayloadEncryption,
+    exportE2EPublicKey,
+    generateE2EIdentity,
+} from "@morty-build/client";
+import {
     COMPUTER_HEARTBEAT_ACK_MESSAGE,
     COMPUTER_HEARTBEAT_MESSAGE,
     COMPUTER_SUCCESSOR_CREDENTIAL_HEADER,
     computerCredentialSuccessor,
+    decodeSessionEventEnvelope,
     MORTY_API_PREFIX,
+    sessionEventEnvelopeCodec,
+    sessionEventsSubscribeCommandCodec,
 } from "@morty-build/client/protocol";
 import { afterAll, afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";
@@ -62,10 +71,37 @@ class Inbox {
 }
 
 async function openSessionView(_slug: string) {
+    const signal = AbortSignal.timeout(10_000);
     const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
     const owner = await createOwner();
     const { computerId } = owner;
     const sessionId = "viewer-check-session";
+    const identity = await generateE2EIdentity();
+    const access = {
+        computerId,
+        computerE2EPublicKey: await exportE2EPublicKey(identity.publicKey),
+        computerE2EAccessSecret: btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
+            .replaceAll("+", "-")
+            .replaceAll("/", "_")
+            .replaceAll("=", ""),
+    };
+    const claimed = new Set<string>();
+    const computerEncryption = await createComputerPayloadEncryption(
+        access,
+        async (claim, claimSignal) => {
+            claimSignal.throwIfAborted();
+            if (claimed.has(claim.fingerprint)) {
+                throw new Error("Replayed encrypted command");
+            }
+            claimed.add(claim.fingerprint);
+        },
+        signal,
+    );
+    const clientEncryption = await createClientPayloadEncryption(access, signal);
+    onTestFinished(() => {
+        computerEncryption.close();
+        clientEncryption.close();
+    });
     const credential = await pairComputer(computerId);
     const daemonResponse = await ownerRequest(
         new Request(`${origin}/v1/computers/connect`, {
@@ -126,13 +162,46 @@ async function openSessionView(_slug: string) {
         JSON.stringify({
             kind: "session.events.subscribe",
             subscriptionId: "viewer-reauthorization",
+            body: await sessionEventsSubscribeCommandCodec.encode(
+                {
+                    kind: "session.events.subscribe",
+                    subscriptionId: "viewer-reauthorization",
+                    target: { harness: "claude", sessionId },
+                },
+                clientEncryption,
+                signal,
+            ),
             path: `${MORTY_API_PREFIX}/v1/computers/${computerId}/harnesses/claude/sessions/${sessionId}/events`,
-            headers: [["authorization", `Bearer ${sessionCredential}`]],
+            headers: [
+                ["authorization", `Bearer ${sessionCredential}`],
+                ["content-type", "application/json"],
+            ],
         }),
     );
     expect(await viewInbox.next()).toMatchObject({ kind: "session.events.ready" });
+    const subscribed = await sessionEventsSubscribeCommandCodec.decode(
+        JSON.stringify(await daemonInbox.next()),
+        computerEncryption,
+        signal,
+    );
+    expect(subscribed).toEqual({
+        kind: "session.events.subscribe",
+        subscriptionId: "viewer-reauthorization",
+        target: { harness: "claude", sessionId },
+    });
 
-    return { daemon, owner, computerId, sessionId, viewInbox };
+    const sendEvent = async (eventId: string) => {
+        const wire = await sessionEventEnvelopeCodec.encode(
+            decodeSessionEventEnvelope({ kind: "session.event.v2", events: [liveEvent(sessionId, eventId)] }),
+            computerEncryption,
+            signal,
+        );
+        daemon.send(wire);
+        expect(await viewInbox.next()).toMatchObject({ kind: "session.events.event", data: wire });
+        const decoded = await sessionEventEnvelopeCodec.decode(wire, clientEncryption, signal);
+        expect(decoded.events).toEqual([liveEvent(sessionId, eventId)]);
+    };
+    return { daemon, owner, computerId, viewInbox, sendEvent };
 }
 
 const liveEvent = (sessionId: string, eventId: string) => ({
@@ -142,16 +211,16 @@ const liveEvent = (sessionId: string, eventId: string) => ({
     sessionGenerationId: "generation-1",
     target: { harness: "claude", sessionId: sessionId },
     type: "acp",
-    payload: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "secret output" } },
+    payload: {
+        sessionUpdate: "agent_message_chunk",
+        messageId: eventId,
+        content: { type: "text", text: "secret output" },
+    },
 });
 
 it("Given a live Session view, When the owner revokes browser access, Then the live view closes", async () => {
-    const { daemon, owner, computerId, sessionId, viewInbox } = await openSessionView("app");
-    daemon.send(JSON.stringify({ kind: "session.event.v2", events: [liveEvent(sessionId, "before-revocation")] }));
-    expect(await viewInbox.next()).toMatchObject({
-        kind: "session.events.event",
-        data: expect.stringContaining("before-revocation"),
-    });
+    const { daemon, owner, computerId, viewInbox, sendEvent } = await openSessionView("app");
+    await sendEvent("before-revocation");
 
     const revoked = await ownerRequest(
         new Request(`${origin}/v1/computers/${computerId}/identity/revoke-all-access`, {
@@ -169,12 +238,8 @@ it("Given a live Session view, When the owner revokes browser access, Then the l
 });
 
 it("Given a live Session view the revocation push missed, When the Computer's Session access revocation is committed, Then the Relay's next connection check closes the view", async () => {
-    const { daemon, owner, computerId, sessionId, viewInbox } = await openSessionView("missed");
-    daemon.send(JSON.stringify({ kind: "session.event.v2", events: [liveEvent(sessionId, "before-revocation")] }));
-    expect(await viewInbox.next()).toMatchObject({
-        kind: "session.events.event",
-        data: expect.stringContaining("before-revocation"),
-    });
+    const { daemon, owner, computerId, viewInbox, sendEvent } = await openSessionView("missed");
+    await sendEvent("before-revocation");
 
     // The revocation commits, but its push never reaches the view (or reached it before the view opened).
     await runInDurableObject(env.COMPUTER_RELAY.getByName(computerObjectName(computerId)), async (_instance, state) => {

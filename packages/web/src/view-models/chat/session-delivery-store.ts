@@ -1,4 +1,11 @@
-import { MortyApiError, MortyCancellationError, type MortyClient, MortyError } from "@morty-build/client";
+import {
+    MortyApiError,
+    MortyCancellationError,
+    type MortyClient,
+    MortyError,
+    MortyOperationError,
+    MortyValidationError,
+} from "@morty-build/client";
 import type { PromptAttachment } from "@morty-build/client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
@@ -191,9 +198,11 @@ export function prependToDraft(content: string, draft: string): string {
     return draft.length === 0 ? content : content.length === 0 ? draft : `${content}\n\n${draft}`;
 }
 
-/** Whether the service answered with a refusal, so the request certainly took no effect. */
+/** Local validation and terminal addressed refusals settle delivery; ambiguous or retryable failures do not. */
 export function isAuthoritativeFailure(cause: unknown): boolean {
     return (
+        cause instanceof MortyValidationError ||
+        (cause instanceof MortyOperationError && cause.recovery === "terminal") ||
         (cause instanceof MortyApiError && cause.status >= 400 && cause.status < 500) ||
         (cause instanceof CloudApiError && cause.status !== null && cause.status >= 400 && cause.status < 500)
     );

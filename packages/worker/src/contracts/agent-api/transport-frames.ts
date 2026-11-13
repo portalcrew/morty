@@ -60,7 +60,7 @@ export const transportFrames = {
             body: v.pipe(
                 v.string(),
                 v.maxLength(MAX_BODY_BYTES),
-                v.description('The JSON-encoded request body; "" for GET.'),
+                v.description("The JSON-encoded encrypted protocol request, including for GET Session operations."),
             ),
         }),
     },
@@ -99,6 +99,13 @@ export const transportFrames = {
             subscriptionId: frameIdentifier,
             path: v.pipe(sessionPath, v.description("The Session's events path.")),
             headers,
+            body: v.pipe(
+                v.string(),
+                v.maxLength(MAX_BODY_BYTES),
+                v.description(
+                    "The JSON-encoded encrypted session.events.subscribe command. Its subscriptionId must match this frame's caller-owned subscriptionId.",
+                ),
+            ),
         }),
     },
     eventsUnsubscribe: {

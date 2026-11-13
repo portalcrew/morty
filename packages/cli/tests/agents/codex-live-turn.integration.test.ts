@@ -5,9 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
-    COMPUTER_HEARTBEAT_ACK_MESSAGE,
-    COMPUTER_HEARTBEAT_MESSAGE,
-    COMPUTER_LIVENESS_READY_KIND,
     decodeContentChunkFrame,
     decodeMessageKind,
     decodeNativeSessionResult,
@@ -16,7 +13,6 @@ import {
     decodeSessionOperationFailedEvent,
     decodeSessionPromptCommand,
     decodeSessionReadyEvent,
-    encodeComputerLivenessReadyEvent,
     encodeFileReadCommand,
     encodeNativeSessionCommand,
     encodeSessionCancelCommand,
@@ -35,57 +31,14 @@ import {
 } from "@morty-build/client/protocol";
 import { listen, port } from "@morty-build/relay-test-support/websocket";
 import { expect, test } from "vitest";
-import { type WebSocket, WebSocketServer } from "ws";
+import { WebSocketServer } from "ws";
 import { createRuntimeConfig, RuntimeAgentDependencies, RuntimeLocalContext } from "../../src/engine/runtime/config.ts";
 import { runRuntime } from "../../src/engine/runtime/run.ts";
 import { testAgentDefinition } from "../support/agent-definition.ts";
 import { CodexFixture } from "../support/agents/codex.ts";
 import { memoryComputerCredentials } from "../support/computer-credentials.ts";
+import { createEncryptedDaemonGateway, type EncryptedDaemonPeer } from "../support/encrypted-daemon-gateway.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
-
-class Messages {
-    readonly #closed = Promise.withResolvers<never>();
-    readonly #buffered: Array<string | Buffer> = [];
-    readonly #waiting: Array<(message: string | Buffer) => void> = [];
-
-    constructor(socket: WebSocket) {
-        void this.#closed.promise.catch(() => {});
-        socket.once("close", () => this.#closed.reject(new Error("The daemon disconnected during the request")));
-        socket.on("message", (value, isBinary) => {
-            const message = isBinary ? Buffer.from(value as Buffer) : value.toString();
-            // Like the Relay's host, answer exactly the heartbeat text without the application.
-            if (message === COMPUTER_HEARTBEAT_MESSAGE) {
-                socket.send(COMPUTER_HEARTBEAT_ACK_MESSAGE);
-                return;
-            }
-            const resolve = this.#waiting.shift();
-            if (resolve === undefined) {
-                this.#buffered.push(message);
-            } else {
-                resolve(message);
-            }
-        });
-        socket.send(encodeComputerLivenessReadyEvent({ kind: COMPUTER_LIVENESS_READY_KIND }));
-    }
-
-    readonly nextFrame = (): Promise<string | Buffer> => {
-        const buffered = this.#buffered.shift();
-        return Promise.race([
-            this.#closed.promise,
-            buffered === undefined
-                ? new Promise<string | Buffer>((resolve) => this.#waiting.push(resolve))
-                : Promise.resolve(buffered),
-        ]);
-    };
-
-    readonly next = async (): Promise<string> => {
-        const message = await this.nextFrame();
-        if (typeof message !== "string") {
-            throw new Error("Expected a text daemon message");
-        }
-        return message;
-    };
-}
 
 test("Given real Codex streams commentary after a tool, When clients watch and reopen the completed Session, Then commentary remains assistant output in chronological history", async () => {
     let providerEntered = Promise.withResolvers<void>();
@@ -103,8 +56,9 @@ test("Given real Codex streams commentary after a tool, When clients watch and r
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const connected = Promise.withResolvers<WebSocket>();
-    websocketServer.on("connection", (socket) => connected.resolve(socket));
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "real-codex", AbortSignal.timeout(120_000));
+    const connected = Promise.withResolvers<EncryptedDaemonPeer>();
+    websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
     const relayUrl = new URL(`ws://127.0.0.1:${port(relay).toString()}${MORTY_API_PREFIX}/channels/real-codex/daemon`);
     const agent = testAgentDefinition("codex", "Codex", codex.executable, codex.environment);
@@ -124,7 +78,7 @@ test("Given real Codex streams commentary after a tool, When clients watch and r
 
     try {
         const socket = await connected.promise;
-        const messages = new Messages(socket);
+        const messages = socket;
         socket.send(
             encodeSessionCreateCommand({
                 kind: "session.create",
@@ -430,6 +384,7 @@ test("Given real Codex streams commentary after a tool, When clients watch and r
         releaseProvider.resolve();
         cancellation.abort();
         await runtime;
+        await gateway.close();
         for (const socket of websocketServer.clients) {
             socket.terminate();
         }

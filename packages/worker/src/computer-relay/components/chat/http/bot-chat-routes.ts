@@ -4,18 +4,21 @@ import { createMiddleware } from "hono/factory";
 import * as v from "valibot";
 import {
     accessInput,
-    nativeContinuationInput,
-    nativeDirectory,
-    nativeSessionTargetInput,
+    archiveSessionInput,
+    diagnosticsInput,
+    directoryInput,
+    managedSessionsInput,
+    nativeContinuationCommandInput,
+    nativeForkInput,
+    nativeImportInput,
+    nativeListInput,
+    nativePreviewInput,
+    networkDiagnosticInput,
+    restoreSessionInput,
+    sessionAccessInput,
+    setupInput,
 } from "../../../../contracts/agent-api/chat-requests.ts";
-import {
-    chatAccessResponse,
-    documented,
-    managedSessionsResponse,
-    nativeContinuationResponse,
-    sessionAccessResponse,
-    workspaceResponse,
-} from "../../../../contracts/agent-api/responses.ts";
+import { chatAccessResponse, documented, workspaceResponse } from "../../../../contracts/agent-api/responses.ts";
 import type { Session } from "../../../../contracts/authentication/session.ts";
 import { relayIdentifier } from "../../../../contracts/computer-management.ts";
 import { bodyParser } from "../../../../http/body-parser.ts";
@@ -30,24 +33,6 @@ import {
 import type { ManagementHttpEnvironment } from "../../management/http/management-http-environment.ts";
 import { applicationForRequest, type ManagementRouteContext } from "../../management/http/route-context.ts";
 import { type ChatScope, MINIMUM_SESSION_CREDENTIAL_SECONDS } from "../service/chat-service.ts";
-
-const setupInput = v.strictObject({ harness: relayIdentifier });
-const nativeIdentity = {
-    harness: relayIdentifier,
-    directory: nativeDirectory,
-};
-const nativeListInput = v.strictObject({
-    ...nativeIdentity,
-    action: v.literal("list"),
-    cursor: v.nullable(relayIdentifier),
-});
-const nativeEntryInput = v.strictObject({ ...nativeIdentity });
-const nativePreviewInput = v.strictObject({ ...nativeIdentity, sessionId: relayIdentifier });
-const directoryInput = v.strictObject({ directory: nativeDirectory });
-const agentSettingsInput = v.strictObject({
-    harness: relayIdentifier,
-    workspaceRef: nativeDirectory,
-});
 
 type AuthorizedChatEnvironment = ManagementHttpEnvironment & {
     readonly Variables: ManagementHttpEnvironment["Variables"] & {
@@ -123,14 +108,36 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
                 ),
             );
         })
-        .post("/diagnostics/daemon", authenticatedSession, authorizedChat(), async (context) => {
-            const application = await applicationForRequest(ctx, context);
-            return privateJson(await application.services.chat.daemonDiagnostics(context.get("chatScope")));
-        })
-        .post("/diagnostics/network", authenticatedSession, authorizedChat(), async (context) => {
-            const application = await applicationForRequest(ctx, context);
-            return privateJson(await application.services.chat.networkDiagnostic(context.get("chatScope")));
-        })
+        .post(
+            "/diagnostics/daemon",
+            authenticatedSession,
+            authorizedChat(),
+            bodyParser<AuthorizedChatEnvironment, typeof diagnosticsInput>(diagnosticsInput),
+            async (context) => {
+                const application = await applicationForRequest(ctx, context);
+                return privateJson(
+                    await application.services.chat.daemonDiagnostics(
+                        context.get("chatScope"),
+                        context.req.valid("json"),
+                    ),
+                );
+            },
+        )
+        .post(
+            "/diagnostics/network",
+            authenticatedSession,
+            authorizedChat(),
+            bodyParser<AuthorizedChatEnvironment, typeof networkDiagnosticInput>(networkDiagnosticInput),
+            async (context) => {
+                const application = await applicationForRequest(ctx, context);
+                return privateJson(
+                    await application.services.chat.networkDiagnostic(
+                        context.get("chatScope"),
+                        context.req.valid("json"),
+                    ),
+                );
+            },
+        )
         .post("/setup/computers", authenticatedSession, authorizedChat(), async (context) => {
             const application = await applicationForRequest(ctx, context);
             return privateJson(await application.services.chat.setupComputers(context.get("chatScope")));
@@ -143,32 +150,39 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 return privateJson(
-                    await application.services.chat.listDirectory(
+                    await application.services.chat.listDirectory(context.get("chatScope"), context.req.valid("json")),
+                );
+            },
+        )
+        .post(
+            "/managed-sessions",
+            authenticatedSession,
+            authorizedChat(),
+            bodyParser<AuthorizedChatEnvironment, typeof managedSessionsInput>(managedSessionsInput),
+            async (context) => {
+                const application = await applicationForRequest(ctx, context);
+                return privateJson(
+                    await application.services.chat.managedSessions(
                         context.get("chatScope"),
-                        context.req.valid("json").directory,
+                        context.req.valid("json"),
                     ),
                 );
             },
         )
-        .post("/managed-sessions", authenticatedSession, authorizedChat(), async (context) => {
-            const application = await applicationForRequest(ctx, context);
-            return privateJson(
-                documented(
-                    managedSessionsResponse,
-                    await application.services.chat.managedSessions(context.get("chatScope")),
-                ),
-            );
-        })
         .post(
             "/agent-settings",
             authenticatedSession,
             authorizedChat(120000),
-            bodyParser<AuthorizedChatEnvironment, typeof agentSettingsInput>(agentSettingsInput),
+            bodyParser<AuthorizedChatEnvironment, typeof setupInput>(setupInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
-                return privateJson(
-                    await application.services.chat.agentSettings(context.get("chatScope"), context.req.valid("json")),
+                const result = await application.services.chat.agentSettings(
+                    context.get("chatScope"),
+                    context.req.valid("json"),
                 );
+                return new Response(result, {
+                    headers: { "cache-control": "no-store", "content-type": "application/json" },
+                });
             },
         )
         .post(
@@ -179,12 +193,11 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             bodyParser<AuthorizedChatEnvironment, typeof accessInput>(accessInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
-                return privateJson(
-                    documented(
-                        chatAccessResponse,
-                        await application.services.chat.openChat(context.get("chatScope"), context.req.valid("json")),
-                    ),
+                const result = await application.services.chat.openChat(
+                    context.get("chatScope"),
+                    context.req.valid("json"),
                 );
+                return privateJson("kind" in result ? result : documented(chatAccessResponse, result));
             },
         )
         .post(
@@ -192,15 +205,12 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             authenticatedSession,
             issuesSessionCredential,
             authorizedChat(),
-            bodyParser<AuthorizedChatEnvironment, typeof nativeSessionTargetInput>(nativeSessionTargetInput),
+            bodyParser<AuthorizedChatEnvironment, typeof sessionAccessInput>(sessionAccessInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const input = context.req.valid("json");
                 return privateJson(
-                    documented(
-                        sessionAccessResponse,
-                        await application.services.chat.nativeSessionAccess(context.get("chatScope"), input),
-                    ),
+                    await application.services.chat.nativeSessionAccess(context.get("chatScope"), input),
                 );
             },
         )
@@ -208,7 +218,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             "/managed-sessions/resolve",
             authenticatedSession,
             authorizedChat(),
-            bodyParser<AuthorizedChatEnvironment, typeof nativeSessionTargetInput>(nativeSessionTargetInput),
+            bodyParser<AuthorizedChatEnvironment, typeof restoreSessionInput>(restoreSessionInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const input = context.req.valid("json");
@@ -219,7 +229,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             "/managed-sessions/archive",
             authenticatedSession,
             authorizedChat(),
-            bodyParser<AuthorizedChatEnvironment, typeof nativeSessionTargetInput>(nativeSessionTargetInput),
+            bodyParser<AuthorizedChatEnvironment, typeof archiveSessionInput>(archiveSessionInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const input = context.req.valid("json");
@@ -244,19 +254,14 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             "/native-sessions/continue",
             authenticatedSession,
             authorizedChat(120000),
-            bodyParser<AuthorizedChatEnvironment, typeof nativeContinuationInput>(nativeContinuationInput),
+            bodyParser<AuthorizedChatEnvironment, typeof nativeContinuationCommandInput>(
+                nativeContinuationCommandInput,
+            ),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const input = context.req.valid("json");
                 return privateJson(
-                    documented(
-                        nativeContinuationResponse,
-                        await application.services.chat.continueNativeSession(
-                            context.get("chatScope"),
-                            input.harness,
-                            input.sessionId,
-                        ),
-                    ),
+                    await application.services.chat.continueNativeSession(context.get("chatScope"), input),
                 );
             },
         )
@@ -264,15 +269,16 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             "/native-sessions/:sessionId",
             authenticatedSession,
             authorizedChat(120000),
-            bodyParser<AuthorizedChatEnvironment, typeof nativeEntryInput>(nativeEntryInput),
+            bodyParser<AuthorizedChatEnvironment, typeof nativePreviewInput>(nativePreviewInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const sessionId = v.parse(relayIdentifier, context.req.param("sessionId"));
                 return privateJson(
-                    await application.services.chat.previewNativeSession(context.get("chatScope"), {
-                        ...context.req.valid("json"),
+                    await application.services.chat.previewNativeSession(
+                        context.get("chatScope"),
                         sessionId,
-                    }),
+                        context.req.valid("json"),
+                    ),
                 );
             },
         )
@@ -280,7 +286,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             "/native-sessions/:sessionId/import",
             authenticatedSession,
             authorizedChat(120000),
-            bodyParser<AuthorizedChatEnvironment, typeof nativeEntryInput>(nativeEntryInput),
+            bodyParser<AuthorizedChatEnvironment, typeof nativeImportInput>(nativeImportInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const sessionId = v.parse(relayIdentifier, context.req.param("sessionId"));
@@ -297,7 +303,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             "/native-sessions/forks/:operationId",
             authenticatedSession,
             authorizedChat(120000),
-            bodyParser<AuthorizedChatEnvironment, typeof nativePreviewInput>(nativePreviewInput),
+            bodyParser<AuthorizedChatEnvironment, typeof nativeForkInput>(nativeForkInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const operationId = v.parse(relayIdentifier, context.req.param("operationId"));
@@ -317,8 +323,14 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             bodyParser<AuthorizedChatEnvironment, typeof setupInput>(setupInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
-                const input = context.req.valid("json");
-                return json(await application.services.chat.verifyAgent(context.get("chatScope"), input), 202);
+                const result = await application.services.chat.verifyAgent(
+                    context.get("chatScope"),
+                    context.req.valid("json"),
+                );
+                return new Response(result, {
+                    status: 202,
+                    headers: { "cache-control": "no-store", "content-type": "application/json" },
+                });
             },
         );
 }

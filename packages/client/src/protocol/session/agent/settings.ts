@@ -1,8 +1,16 @@
 import { z } from "zod";
-
 import { DIRECTORY_PATH } from "../../shared/directory.ts";
-import { identifierStringSchema as IDENTIFIER } from "../../shared/identifier.ts";
-import { decodeZodMessage as decode, encodeZodMessage as encode } from "../../shared/message-codec.ts";
+import { encryptedMessageCodec } from "../../shared/encrypted-message.ts";
+import {
+    identifierStringSchema as IDENTIFIER,
+    identifierStringSchema as routingIdentifier,
+} from "../../shared/identifier.ts";
+import {
+    decodeZodMessage as decode,
+    decodeZodMessage as decodeRoutingZodMessage,
+    encodeZodMessage as encode,
+    encryptedFieldSchema,
+} from "../../shared/message-codec.ts";
 import { configValueSchema, SHORT_TEXT } from "../shared/index.ts";
 
 export const AGENT_SETTINGS_DISCOVER_KIND = "agent.settings.discover";
@@ -94,7 +102,7 @@ const agentSettingsDiscoveryFailedEventSchema = z
     })
     .readonly();
 
-export type AgentSettingsDiscoveryFailedEvent = z.infer<typeof agentSettingsDiscoveryFailedEventSchema>;
+type AgentSettingsDiscoveryFailedEvent = z.infer<typeof agentSettingsDiscoveryFailedEventSchema>;
 
 export const decodeAgentSettingsDiscoverCommand = (encoded: string): AgentSettingsDiscoverCommand =>
     decode(encoded, agentSettingsDiscoverCommandSchema);
@@ -102,9 +110,58 @@ export const encodeAgentSettingsDiscoverCommand = (message: AgentSettingsDiscove
     encode(message, agentSettingsDiscoverCommandSchema);
 export const decodeAgentSettingsDiscoveredEvent = (encoded: string): AgentSettingsDiscoveredEvent =>
     decode(encoded, agentSettingsDiscoveredEventSchema);
-export const encodeAgentSettingsDiscoveredEvent = (message: AgentSettingsDiscoveredEvent): string =>
-    encode(message, agentSettingsDiscoveredEventSchema);
-export const decodeAgentSettingsDiscoveryFailedEvent = (encoded: string): AgentSettingsDiscoveryFailedEvent =>
+const decodeAgentSettingsDiscoveryFailedEvent = (encoded: string): AgentSettingsDiscoveryFailedEvent =>
     decode(encoded, agentSettingsDiscoveryFailedEventSchema);
-export const encodeAgentSettingsDiscoveryFailedEvent = (message: AgentSettingsDiscoveryFailedEvent): string =>
-    encode(message, agentSettingsDiscoveryFailedEventSchema);
+
+const agentSettingsDiscoverCommandPublicRoutingSchema = z.object({
+    kind: z.literal(AGENT_SETTINGS_DISCOVER_KIND),
+    requestId: routingIdentifier,
+    harness: routingIdentifier,
+});
+const agentSettingsDiscoverCommandRoutingSchema = agentSettingsDiscoverCommandPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type AgentSettingsDiscoverCommandRouting = z.infer<typeof agentSettingsDiscoverCommandRoutingSchema>;
+const decodeAgentSettingsDiscoverCommandRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, agentSettingsDiscoverCommandRoutingSchema);
+export const agentSettingsDiscoverCommandCodec = encryptedMessageCodec({
+    kind: AGENT_SETTINGS_DISCOVER_KIND,
+    decode: decodeAgentSettingsDiscoverCommand,
+    decodeRouting: decodeAgentSettingsDiscoverCommandRouting,
+    publicRoutingSchema: agentSettingsDiscoverCommandPublicRoutingSchema,
+});
+
+const agentSettingsDiscoveredEventPublicRoutingSchema = z.object({
+    kind: z.literal(AGENT_SETTINGS_DISCOVERED_KIND),
+    requestId: routingIdentifier,
+    harness: routingIdentifier,
+});
+const agentSettingsDiscoveredEventRoutingSchema = agentSettingsDiscoveredEventPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type AgentSettingsDiscoveredEventRouting = z.infer<typeof agentSettingsDiscoveredEventRoutingSchema>;
+const decodeAgentSettingsDiscoveredEventRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, agentSettingsDiscoveredEventRoutingSchema);
+export const agentSettingsDiscoveredEventCodec = encryptedMessageCodec({
+    kind: AGENT_SETTINGS_DISCOVERED_KIND,
+    decode: decodeAgentSettingsDiscoveredEvent,
+    decodeRouting: decodeAgentSettingsDiscoveredEventRouting,
+    publicRoutingSchema: agentSettingsDiscoveredEventPublicRoutingSchema,
+});
+
+const agentSettingsDiscoveryFailedEventPublicRoutingSchema = z.object({
+    kind: z.literal(AGENT_SETTINGS_DISCOVERY_FAILED_KIND),
+    requestId: routingIdentifier,
+});
+const agentSettingsDiscoveryFailedEventRoutingSchema = agentSettingsDiscoveryFailedEventPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type AgentSettingsDiscoveryFailedEventRouting = z.infer<typeof agentSettingsDiscoveryFailedEventRoutingSchema>;
+const decodeAgentSettingsDiscoveryFailedEventRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, agentSettingsDiscoveryFailedEventRoutingSchema);
+export const agentSettingsDiscoveryFailedEventCodec = encryptedMessageCodec({
+    kind: AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
+    decode: decodeAgentSettingsDiscoveryFailedEvent,
+    decodeRouting: decodeAgentSettingsDiscoveryFailedEventRouting,
+    publicRoutingSchema: agentSettingsDiscoveryFailedEventPublicRoutingSchema,
+});

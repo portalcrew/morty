@@ -1,6 +1,9 @@
 import { resolveObjectURL } from "node:buffer";
+import { createClientPayloadEncryption } from "@morty-build/client";
+import { sessionOperationFailedEventCodec } from "@morty-build/client/protocol";
 import { fireEvent, getAllByText, getByLabelText, getByRole, queryAllByText, queryByRole } from "@testing-library/dom";
 import { act } from "@testing-library/react";
+import * as v from "valibot";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
 import { sendPrompt } from "./infra/application-scenario.ts";
@@ -75,8 +78,21 @@ for (const eventOrder of ["before refusal", "after refusal"] as const) {
                 await app.waitForView(() => expect(app.optionalElementByTestId(dataTestId.queuedMessage)).toBeNull());
             }
             // The Computer refuses the late steer because the message already left the queue.
-            const response = await release();
-            expect(response).toMatchObject({ kind: "http.response", status: 409 });
+            const response = v.parse(
+                v.object({ kind: v.literal("http.response"), status: v.literal(200), body: v.string() }),
+                await release(),
+            );
+            const signal = AbortSignal.timeout(10_000);
+            const encryption = await createClientPayloadEncryption(await daemon.encryptionAccess(signal), signal);
+            try {
+                expect(await sessionOperationFailedEventCodec.decode(response.body, encryption, signal)).toMatchObject({
+                    kind: "session.operation.failed",
+                    code: "turn_already_started",
+                    message: "The message already left the queue and could not be steered",
+                });
+            } finally {
+                encryption.close();
+            }
             if (eventOrder === "after refusal") {
                 await app.waitForView(() =>
                     expect(document.body.textContent).toContain(
@@ -107,6 +123,53 @@ for (const eventOrder of ["before refusal", "after refusal"] as const) {
         await app.close();
     });
 }
+
+test("Given queued work starts before its delayed withdrawal, When I edit it and the Computer refuses, Then the running instruction is not restored to my composer", {
+    timeout: dedicatedEnvironmentTimeout,
+}, async () => {
+    const environment = await createChatWorkerEnvironment(false, true);
+    onTestFinished(() => environment.close());
+    const app = await createTestApp({ environment, connectAgent: true });
+    const { daemon, executionNetwork } = app;
+    if (daemon === null || executionNetwork === null) {
+        throw new Error("Expected the real Computer and ordering proxy");
+    }
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "wait for steering");
+    await app.waitForView(() => expect(document.body.textContent).toContain("Waiting for steering"));
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "hold after first delta");
+    const queued = await app.queryElementByTestId(dataTestId.queuedMessage);
+    await app.user.click(app.elementByTestId(dataTestId.messageComposer));
+    await app.user.paste("My next draft");
+    const held = executionNetwork.holdNextQueuedCancellation();
+    await app.user.click(getByLabelText(queued, "Edit queued message: hold after first delta"));
+    const release = await held;
+    const releaseEvents = executionNetwork.holdSessionEvents();
+    try {
+        await daemon.continueReply("wait for steering", { outcome: "complete", output: [] });
+        await daemon.continueReply("hold after first delta", {
+            outcome: "hold",
+            output: [{ kind: "text", text: "The queued instruction is running" }],
+        });
+        await release();
+        await app.waitForView(() => {
+            expect(document.body.textContent).toContain("The message already started and could not be withdrawn");
+            expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "My next draft");
+        });
+        expect(document.body.textContent).not.toContain("Its text is back in the composer");
+    } finally {
+        releaseEvents();
+    }
+    await daemon.continueReply("hold after first delta", { outcome: "complete", output: [] });
+    await app.waitForView(() => {
+        expect(app.optionalElementByTestId(dataTestId.sessionStatus)).toBeNull();
+        expect(app.optionalElementByTestId(dataTestId.queuedMessage)).toBeNull();
+        expect(app.elementsByTestId(dataTestId.userMessage).map((message) => message.textContent)).toEqual([
+            "wait for steering",
+            "hold after first delta",
+        ]);
+    });
+    expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "My next draft");
+});
 
 test("Given the daemon has queued work, When the user steers it into the active turn, Then every viewer sees the steered reply", {
     timeout: 30_000,

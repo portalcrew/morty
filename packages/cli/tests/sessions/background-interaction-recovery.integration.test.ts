@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as acp from "@agentclientprotocol/sdk/unstable";
 import {
-    decodeDaemonToServiceMessage,
+    decodeMessageKind,
+    decodeNativeSessionResult,
+    decodeSessionEventEnvelope,
+    decodeSessionInteractionAnsweredEvent,
+    decodeSessionOperationFailedEvent,
+    decodeSessionPromptAcceptedEvent,
+    decodeSessionReadyEvent,
     encodeNativeSessionRequest,
     encodeSessionCreateCommand,
     encodeSessionPermissionRespondCommand,
@@ -23,6 +29,7 @@ import { runRuntime } from "../../src/engine/runtime/run.ts";
 import { createControlledAgent } from "../support/agents/controlled-agent-definition.ts";
 import { memoryComputerCredentials } from "../support/computer-credentials.ts";
 import { createControlledRuntimeConfig } from "../support/controlled-runtime-config.ts";
+import { createEncryptedDaemonFrames } from "../support/encrypted-daemon-frames.ts";
 
 test("Given a completed foreground turn, When its Agent requests background permission, Then the session snapshot recovers that request and removes it after the user responds", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
@@ -35,6 +42,7 @@ test("Given a completed foreground turn, When its Agent requests background perm
     const connected = Promise.withResolvers<WebSocket>();
     const frames: string[] = [];
     const readers: Array<(frame: string) => void> = [];
+    const encryption = await createEncryptedDaemonFrames(directory, "background", AbortSignal.timeout(60_000));
     server.on("connection", (socket) => {
         socket.on("message", (data) => {
             if (data.toString().includes('"kind":"computer.heartbeat"')) {
@@ -50,8 +58,29 @@ test("Given a completed foreground turn, When its Agent requests background perm
         });
         connected.resolve(socket);
     });
-    const next = async () =>
-        decodeDaemonToServiceMessage(frames.shift() ?? (await new Promise<string>((resolve) => readers.push(resolve))));
+    const next = async () => {
+        const frame = frames.shift() ?? (await new Promise<string>((resolve) => readers.push(resolve)));
+        const encoded = await encryption.decode(frame);
+        if (typeof encoded !== "string") {
+            throw new Error("Expected a text daemon response");
+        }
+        switch (decodeMessageKind(encoded)) {
+            case "session.ready":
+                return decodeSessionReadyEvent(encoded);
+            case "session.operation.failed":
+                return decodeSessionOperationFailedEvent(encoded);
+            case "session.event.v2":
+                return decodeSessionEventEnvelope(encoded);
+            case "native.session.result":
+                return decodeNativeSessionResult(encoded);
+            case "session.interaction.answered":
+                return decodeSessionInteractionAnsweredEvent(encoded);
+            case "session.prompt.accepted":
+                return decodeSessionPromptAcceptedEvent(encoded);
+            default:
+                throw new Error("Unexpected daemon message");
+        }
+    };
     const live = async (kind: string): Promise<SessionLiveEvent> => {
         for (;;) {
             const message = await next();
@@ -135,11 +164,14 @@ test("Given a completed foreground turn, When its Agent requests background perm
     try {
         const socket = await connected.promise;
         socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
+        const send = async (message: string): Promise<void> => {
+            socket.send(await encryption.encode(message));
+        };
         const identity = {
             harness: "claude",
             directory: ".",
         };
-        socket.send(
+        await send(
             encodeSessionCreateCommand({
                 ...identity,
                 kind: "session.create",
@@ -156,7 +188,14 @@ test("Given a completed foreground turn, When its Agent requests background perm
             created = await next();
         }
         const sessionTarget = created.target;
-        socket.send(
+        await send(
+            JSON.stringify({
+                kind: "session.events.subscribe",
+                subscriptionId: "background-subscription",
+                target: sessionTarget,
+            }),
+        );
+        await send(
             encodeSessionPromptCommand({
                 commandId: "foreground",
                 requestId: "foreground",
@@ -176,7 +215,7 @@ test("Given a completed foreground turn, When its Agent requests background perm
         }
         expect(requested.payload.event.commandId).toBe("session-control");
         const snapshot = async (requestId: string) => {
-            socket.send(
+            await send(
                 encodeNativeSessionRequest({
                     action: "active-turn",
                     kind: "native.session.request",
@@ -200,7 +239,7 @@ test("Given a completed foreground turn, When its Agent requests background perm
                 interactions: [requested.payload.event],
             },
         });
-        socket.send(
+        await send(
             encodeSessionPermissionRespondCommand({
                 target: sessionTarget,
                 interactionId: requested.payload.event.interactionId,
@@ -223,6 +262,7 @@ test("Given a completed foreground turn, When its Agent requests background perm
     } finally {
         cancellation.abort();
         await runtime;
+        encryption.close();
         for (const socket of server.clients) {
             socket.terminate();
         }

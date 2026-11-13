@@ -18,6 +18,9 @@ catalogs:
     '@playwright/test':
       specifier: 1.65.0
       version: 1.65.0
+    '@scure/base':
+      specifier: 2.4.0
+      version: 2.4.0
     '@sentry/react':
       specifier: ^11.11.0
       version: 11.11.0
@@ -219,6 +222,9 @@ importers:
       drizzle-kit:
         specifier: 'catalog:'
         version: 0.31.8(@cloudflare/workers-types@5.20261028.1)(@opentelemetry/api@1.10.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.4.1)(supports-color@10.2.2)
+      esbuild:
+        specifier: 'catalog:'
+        version: 0.28.2
       happy-dom:
         specifier: 'catalog:'
         version: 21.0.4(bufferutil@4.1.0)(utf-8-validate@6.0.6)
@@ -316,6 +322,9 @@ importers:
 
   packages/client:
     dependencies:
+      '@scure/base':
+        specifier: 'catalog:'
+        version: 2.4.0
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -393,6 +402,9 @@ importers:
       '@morty-build/client':
         specifier: workspace:*
         version: link:../client
+      '@scure/base':
+        specifier: 'catalog:'
+        version: 2.4.0
       '@sentry/react':
         specifier: 'catalog:'
         version: 11.11.0(react@19.3.1)
@@ -2451,6 +2463,9 @@ packages:
 
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
+
+  '@scure/base@2.4.0':
+    resolution: {integrity: sha512-thZ1TuJwFwBblOhgsjDKvvGirBxNp+wSvY/DR6tJBJOTDhdAAcHJ8Vbr2eFnqaxeca4+t0i9KBf+uHYGWwZORg==}
 
   '@sentry/browser-utils@11.11.0':
     resolution: {integrity: sha512-sL1BK7Z7ubIBp+cnz5VIQcVPn+t4PgWTWYaK/AWklPzeA75CJ5xeeCrx0RUvg65k0BbUcc/XvWVxg5v73RQqiQ==}
@@ -7283,6 +7298,8 @@ snapshots:
     optional: true
 
   '@rolldown/pluginutils@1.0.1': {}
+
+  '@scure/base@2.4.0': {}
 
   '@sentry/browser-utils@11.11.0':
     dependencies:

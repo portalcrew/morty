@@ -1,3 +1,4 @@
+import { base64urlnopad } from "@scure/base";
 import QRCode from "qrcode";
 import { createStore } from "zustand/vanilla";
 import {
@@ -5,7 +6,9 @@ import {
     IdentityApiError,
     type IdentityTransfer,
     type SharingTerms,
+    transferCodeComputer,
 } from "@/services/identity/anonymous-identity-api";
+import { storedComputerEncryption } from "@/services/identity/remembered-computers";
 import type { Clock } from "@/services/time/clock";
 
 type IdentitySharingState =
@@ -125,7 +128,20 @@ export const createIdentitySharingStore = (
         store.setState({ state: { kind: "loading", duration, request } });
         void (async () => {
             try {
-                const transfer = await createTransfer(request, signal);
+                const issued = await createTransfer(request, signal);
+                const computerId = transferCodeComputer(linkCode(issued));
+                const access = computerId === null ? null : storedComputerEncryption(computerId);
+                if (access === null) {
+                    throw new IdentityApiError(
+                        "INVALID_REQUEST",
+                        "Encrypted Computer access is required to share this Computer.",
+                    );
+                }
+                const url = new URL(issued.url);
+                const fragment = new URLSearchParams(url.hash.slice(1));
+                fragment.set("e2e", base64urlnopad.encode(new TextEncoder().encode(JSON.stringify(access))));
+                url.hash = fragment.toString();
+                const transfer = { ...issued, url: url.toString() };
                 signal.throwIfAborted();
                 const image = await QRCode.toDataURL(transfer.url, { margin: 1, width: 224 });
                 signal.throwIfAborted();
@@ -179,7 +195,7 @@ export function agentHandoffInstructions(transfer: IdentityTransfer): string {
     const documentUrl = new URL("/doc/agent-api.md", transfer.url).toString();
     return [
         "Use Morty to work on my computer.",
-        `Read ${documentUrl} first. It explains the protocol and links the OpenAPI and AsyncAPI schemas.`,
+        `Read ${documentUrl} first. It provides the runnable encrypted Agent workflow and links the OpenAPI and AsyncAPI contracts.`,
         "Then redeem this one-time continue link as that document describes. Keep it secret: it can view and control every session on my computer.",
         transfer.url,
     ].join("\n");

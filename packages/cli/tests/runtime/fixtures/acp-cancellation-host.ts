@@ -2,14 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { agent as acpAgent, methods, PROTOCOL_VERSION } from "@agentclientprotocol/sdk/unstable";
-import {
-    AGENT_SETTINGS_DISCOVERED_KIND,
-    COMPUTER_HEARTBEAT_ACK_MESSAGE,
-    COMPUTER_HEARTBEAT_MESSAGE,
-    COMPUTER_LIVENESS_READY_KIND,
-    encodeAgentSettingsDiscoverCommand,
-    encodeComputerLivenessReadyEvent,
-} from "@morty-build/client/protocol";
+import { AGENT_SETTINGS_DISCOVERED_KIND, encodeAgentSettingsDiscoverCommand } from "@morty-build/client/protocol";
 import { type ControlledAcpPeer, ControlledEndpointConnection } from "@morty-build/runtime-test-support/fake-daemon";
 import { WebSocketServer } from "ws";
 import { RuntimeLocalContext } from "../../../src/engine/runtime/config.ts";
@@ -17,6 +10,7 @@ import { runRuntime } from "../../../src/engine/runtime/run.ts";
 import { createControlledAgent } from "../../support/agents/controlled-agent-definition.ts";
 import { memoryComputerCredentials } from "../../support/computer-credentials.ts";
 import { createControlledRuntimeConfig as createRuntimeConfig } from "../../support/controlled-runtime-config.ts";
+import { createEncryptedDaemonGateway } from "../../support/encrypted-daemon-gateway.ts";
 
 // External Agent failure modes: cancellation before its initialization promise is
 // observed, cancellation while initialization is pending, and ordinary startup failure.
@@ -80,23 +74,24 @@ const endpoint = (): ControlledAcpPeer => {
     };
 };
 
+const gateway = await createEncryptedDaemonGateway(directory, "cancellation-test", AbortSignal.timeout(60_000));
 relay.on("connection", (socket) => {
-    socket.send(encodeComputerLivenessReadyEvent({ kind: COMPUTER_LIVENESS_READY_KIND }));
-    socket.on("message", (encoded) => {
-        const text = encoded.toString();
-        if (text === COMPUTER_HEARTBEAT_MESSAGE) {
-            socket.send(COMPUTER_HEARTBEAT_ACK_MESSAGE);
-        } else if (JSON.parse(text).kind === AGENT_SETTINGS_DISCOVERED_KIND) {
-            settings.resolve();
-        }
-    });
-    socket.send(
+    const peer = gateway.connect(socket);
+    void peer.send(
         encodeAgentSettingsDiscoverCommand({
             kind: "agent.settings.discover",
             harness: "cancellation-peer",
             requestId: cancelled ? "healthy-settings" : "cancelled-settings",
         }),
     );
+    void (async () => {
+        for (;;) {
+            if (JSON.parse(await peer.next()).kind === AGENT_SETTINGS_DISCOVERED_KIND) {
+                settings.resolve();
+                return;
+            }
+        }
+    })().catch(() => undefined);
 });
 
 await mkdir(join(directory, "workspace"), { recursive: true });
@@ -140,6 +135,7 @@ try {
         await runtime;
     }
 } finally {
+    await gateway.close();
     for (const client of relay.clients) {
         client.terminate();
     }

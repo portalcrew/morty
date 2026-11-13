@@ -1,11 +1,13 @@
-import type { NativeSessionCancel, NativeSessionCommand } from "@morty-build/client/protocol";
+import type { PayloadEncryptionConnection } from "@morty-build/client";
+import { type NativeSessionCommand, nativeSessionResultCodec } from "@morty-build/client/protocol";
 import { WebSocket } from "undici";
 import { operationErrorCode } from "../../infra/operation-error.ts";
 import { SessionError } from "../../session/api/session-error.ts";
 import type { NativeSessionService } from "../../session/native/native-session-browser.ts";
 import type { Timer } from "../../util/timer.ts";
 import type { RelayConnectionDiagnostics } from "../relay/diagnostics.ts";
-import { reportOperationFailure, send } from "./transport.ts";
+import { reportOperationFailure } from "./transport.ts";
+import { reply } from "./turn-replies.ts";
 
 type PendingRequest = Readonly<{
     harness: string;
@@ -18,6 +20,7 @@ interface NativeRequestDependencies {
     readonly nativeSessions: NativeSessionService;
     readonly signal: AbortSignal;
     readonly socket: WebSocket;
+    readonly payloadEncryption: PayloadEncryptionConnection;
     readonly timer: Timer;
 }
 
@@ -25,8 +28,8 @@ export function createNativeSessionRequestHandler(dependencies: NativeRequestDep
     const { diagnostics, nativeSessions, signal, socket, timer } = dependencies;
     const pending = new Map<string, PendingRequest>();
 
-    const cancel = (command: NativeSessionCancel): void => {
-        const request = pending.get(command.requestId);
+    const cancel = (requestId: string): void => {
+        const request = pending.get(requestId);
         if (request !== undefined) {
             request.controller.abort(
                 new SessionError("native_session_cancelled", "Native session operation cancelled"),
@@ -34,18 +37,17 @@ export function createNativeSessionRequestHandler(dependencies: NativeRequestDep
         }
     };
 
-    const handle = (command: NativeSessionCommand): void => {
+    const handle = (command: NativeSessionCommand): void | Promise<void> => {
         const harness = command.action === "active-turn" ? command.target.harness : command.harness;
         const previous = [...pending.values()].filter((request) => request.harness === harness);
         // Serialize native operations per Agent within the existing bounded, cancellable admission window.
         if (pending.has(command.requestId) || pending.size >= 4) {
-            reportOperationFailure(
-                socket,
+            return reportOperationFailure(
+                dependencies,
                 command.requestId,
                 command.action === "active-turn" ? command.target : undefined,
                 new SessionError("native_session_busy", "Another native session operation is running"),
             );
-            return;
         }
 
         const controller = new AbortController();
@@ -77,7 +79,10 @@ export function createNativeSessionRequestHandler(dependencies: NativeRequestDep
                 operationSignal.throwIfAborted();
                 const result = await nativeSessions.execute(command, operationSignal);
                 if (socket.readyState === WebSocket.OPEN) {
-                    send(socket, result);
+                    reply(
+                        socket,
+                        await nativeSessionResultCodec.encode(result, dependencies.payloadEncryption, operationSignal),
+                    );
                 }
             } catch (error) {
                 const failure: unknown = operationSignal.aborted
@@ -95,8 +100,8 @@ export function createNativeSessionRequestHandler(dependencies: NativeRequestDep
                     },
                     failure,
                 );
-                reportOperationFailure(
-                    socket,
+                await reportOperationFailure(
+                    dependencies,
                     command.requestId,
                     command.action === "active-turn" ? command.target : undefined,
                     failure,

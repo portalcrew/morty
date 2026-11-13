@@ -2,7 +2,8 @@ import { basename, extname, isAbsolute, join, normalize, resolve } from "node:pa
 import { fileURLToPath } from "node:url";
 import {
     CONTENT_CHUNK_MAX_BYTES,
-    type DaemonToServiceMessage,
+    type decodeFileBeginEvent,
+    type decodeFileEndEvent,
     FILE_BEGIN_KIND,
     FILE_END_KIND,
     type FileReadCommand,
@@ -72,14 +73,25 @@ async function resolveFile(
     return null;
 }
 
-export async function streamLocalFile(
-    command: FileReadCommand,
-    send: (message: DaemonToServiceMessage) => void,
-    sendChunk: (requestId: string, sequence: number, bytes: Uint8Array) => void,
-    signal: AbortSignal,
-    workingDirectory: string | null,
-    externalContent: ExternalContentStore,
-): Promise<void> {
+export async function streamLocalFile({
+    command,
+    sendBegin,
+    sendEnd,
+    sendChunk,
+    takeCredit,
+    signal,
+    workingDirectory,
+    externalContent,
+}: {
+    readonly command: FileReadCommand;
+    readonly sendBegin: (message: ReturnType<typeof decodeFileBeginEvent>) => Promise<void>;
+    readonly sendEnd: (message: ReturnType<typeof decodeFileEndEvent>) => Promise<void>;
+    readonly sendChunk: (requestId: string, sequence: number, bytes: Uint8Array) => Promise<void>;
+    readonly takeCredit: (signal: AbortSignal) => Promise<void>;
+    readonly signal: AbortSignal;
+    readonly workingDirectory: string | null;
+    readonly externalContent: ExternalContentStore;
+}): Promise<void> {
     const external = await externalContent.resolve(command.target, command.path, signal);
     const target = external?.path ?? (await resolveFile(command.path, workingDirectory, signal));
     if (target === null) {
@@ -91,7 +103,7 @@ export async function streamLocalFile(
         throw new Error("The local file is too large to read");
     }
     const raster = external === null ? await readLocalRaster(target, signal) : null;
-    send({
+    await sendBegin({
         byteLength: before.size,
         kind: FILE_BEGIN_KIND,
         mediaType:
@@ -104,16 +116,28 @@ export async function streamLocalFile(
         target: command.target,
     });
     let sequence = 0;
-    for await (const bytes of readFileChunks(target, CONTENT_CHUNK_MAX_BYTES, signal)) {
-        sendChunk(command.requestId, sequence, bytes);
-        sequence += 1;
+    const chunks = readFileChunks(target, CONTENT_CHUNK_MAX_BYTES, signal)[Symbol.asyncIterator]();
+    try {
+        while (true) {
+            signal.throwIfAborted();
+            await takeCredit(signal);
+            signal.throwIfAborted();
+            const next = await chunks.next();
+            if (next.done) {
+                break;
+            }
+            await sendChunk(command.requestId, sequence, next.value);
+            sequence += 1;
+        }
+    } finally {
+        await chunks.return?.();
     }
     const after = await readPathMetadata(target);
     signal.throwIfAborted();
     if (after.size !== before.size || after.modifiedMilliseconds !== before.modifiedMilliseconds) {
         throw new Error("The local file changed during transfer");
     }
-    send({
+    await sendEnd({
         kind: FILE_END_KIND,
         requestId: command.requestId,
         target: command.target,

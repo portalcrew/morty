@@ -255,7 +255,10 @@ test("Given a computer whose Runtime Morty revoked, When setup runs again, Then 
         expect(code, JSON.stringify(events)).toBe(0);
         return {
             events,
-            ready: v.parse(v.object({ status: v.literal("ready"), computerId: v.string() }), events.at(-1)),
+            ready: v.parse(
+                v.object({ status: v.literal("ready"), computerId: v.string(), url: v.string() }),
+                events.at(-1),
+            ),
         };
     };
     const savedIdentity = v.object({
@@ -296,6 +299,9 @@ test("Given a computer whose Runtime Morty revoked, When setup runs again, Then 
         expect.objectContaining({ status: "computer_revoked", computerId: before.identity.computer_id }),
     );
     expect(again.ready.computerId).toBe(first.ready.computerId);
+    const originalAccess = new URLSearchParams(new URL(first.ready.url).hash.slice(1)).get("e2e");
+    expect(originalAccess).not.toBeNull();
+    expect(new URLSearchParams(new URL(again.ready.url).hash.slice(1)).get("e2e")).toBe(originalAccess);
     expect(after.identity).toEqual(before.identity);
     expect(after.computerPairing).toBe("paired");
 });

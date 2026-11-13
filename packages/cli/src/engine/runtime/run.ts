@@ -1,4 +1,5 @@
 import { styleText } from "node:util";
+import { createComputerPayloadEncryption } from "@morty-build/client";
 import { createRuntimeAdapterRegistry } from "../acp/adapter/adapter-registry.ts";
 import { buildSessionLayer } from "../session/api/session-layer.ts";
 import { LocalExternalContentStore } from "../session/content/external-content-store.ts";
@@ -8,6 +9,7 @@ import { systemTimer, type Timer } from "../util/timer.ts";
 import { publishAgentCatalog } from "./catalog/publish-agent-catalog.ts";
 import { resolveCatalogAgent } from "./catalog/resolve-catalog-agent.ts";
 import type { RuntimeConfig } from "./config.ts";
+import { ComputerEncryptionStore } from "./connection/computer-encryption-store.ts";
 import { RuntimeDiagnosticLog } from "./observability/diagnostic-log.ts";
 import { ComputerRelayRevokedError } from "./relay/computer-revocation.ts";
 import { RelayConnectionDiagnostics } from "./relay/diagnostics.ts";
@@ -64,6 +66,7 @@ async function publishAgentCatalogUntilAvailable(
 }
 
 export interface RunRuntimeOptions {
+    readonly onInitialized?: () => void;
     /** The pool the Runtime's Agent processes run in; the daemon keeps it to release idle processes on request. */
     readonly processes?: AgentProcessPool;
     readonly onConnectionStatus?: (status: "online" | "reconnecting") => void;
@@ -83,131 +86,145 @@ export async function runRuntime(
         config.relayUrl,
         new RuntimeDiagnosticLog(stateDirectory),
     );
-    const publisher = new RuntimeSessionEventPublisher(timer);
-    // Dispose media only after session and adapter operations have drained.
-    await using externalContent = new LocalExternalContentStore(stateDirectory);
-    const processes = options.processes ?? new AgentProcessPool(undefined, timer);
-    const { adapters, externalizeSessionUpdate } = createRuntimeAdapterRegistry(
-        config.adapters,
-        processes,
-        (target, content, contentSignal) => externalContent.put({ ...content, target, signal: contentSignal }),
-        externalContent.linkedResources,
+    const encryptionSignal = AbortSignal.any([signal, AbortSignal.timeout(10_000)]);
+    const encryptionStore = await ComputerEncryptionStore.open(stateDirectory, config.computerId, encryptionSignal);
+    const access = await encryptionStore.access(encryptionSignal);
+    const payloadEncryption = await createComputerPayloadEncryption(
+        access,
+        (claim, claimSignal) => encryptionStore.authorizeAndClaim(access.computerE2EAccessSecret, claim, claimSignal),
+        encryptionSignal,
     );
-    const resolveAgent = async (harness: string, resolveSignal: AbortSignal) => {
-        const agent = await resolveCatalogAgent(config, harness, resolveSignal);
-        return {
-            agent,
-            adapter: adapters.resolve(agent),
-            externalizeSessionUpdate,
-        };
-    };
-    const layer = buildSessionLayer({
-        processes,
-        computerId: config.computerId,
-        defaultWorkspace: config.defaultWorkspace,
-        resolveAgent,
-        sink: publisher,
-        stateDirectory: config.localContext.stateDirectory,
-        timer,
-    });
-    const {
-        activeSessions,
-        directories,
-        eventProjection,
-        manager: agentRuntime,
-        nativeSessions,
-        operations,
-        sessionStore,
-        sessionCreations,
-    } = layer;
-    let connectionEpoch = 0;
-    let connectionAnnounced = false;
-    let catalogPublished = false;
-    let readinessAnnounced = false;
-    const announceReadiness = (): void => {
-        if (!connectionAnnounced || !catalogPublished) {
-            return;
-        }
-        options.onConnectionStatus?.("online");
-        if (readinessAnnounced) {
-            return;
-        }
-        readinessAnnounced = true;
-        process.stdout.write("Morty Computer is ready for Agent requests.\n");
-    };
-    const announceConnection = (): void => {
-        if (connectionAnnounced) {
-            return;
-        }
-        connectionAnnounced = true;
-        process.stdout.write("Morty Computer connected to the relay.\n\n");
-        process.stdout.write(
-            `${styleText(["bold", "yellow"], "Reconnect this local connection later:\n  morty start")}\n\n`,
-        );
-        announceReadiness();
-    };
-    const catalogPublication = publishAgentCatalogUntilAvailable(config, diagnostics, signal, timer);
-    void catalogPublication.then(() => {
-        if (signal.aborted) {
-            return;
-        }
-        catalogPublished = true;
-        announceReadiness();
-    });
-
     try {
-        while (!signal.aborted) {
-            connectionEpoch += 1;
-            try {
-                await runRelayConnection({
-                    config,
-                    resolveAgent,
-                    directories,
-                    sessions: agentRuntime,
-                    sessionCreations,
-                    nativeSessions,
-                    operations,
-                    publisher,
-                    eventProjection,
-                    externalContent,
-                    sessionTurns: activeSessions,
-                    connectionEpoch,
-                    diagnostics,
-                    onConnected: () => {
-                        if (catalogPublished) {
-                            options.onConnectionStatus?.("online");
-                        }
-                        announceConnection();
-                    },
-                    signal,
-                    timer,
-                });
-            } catch (error) {
-                if (signal.aborted) {
-                    return;
-                }
-                if (error instanceof ComputerRelayRevokedError) {
-                    throw error;
-                }
-                diagnostics.connectionFailed(connectionEpoch, error, "connection");
+        const publisher = new RuntimeSessionEventPublisher(timer, payloadEncryption);
+        // Dispose media only after session and adapter operations have drained.
+        await using externalContent = new LocalExternalContentStore(stateDirectory);
+        const processes = options.processes ?? new AgentProcessPool(undefined, timer);
+        const { adapters, externalizeSessionUpdate } = createRuntimeAdapterRegistry(
+            config.adapters,
+            processes,
+            (target, content, contentSignal) => externalContent.put({ ...content, target, signal: contentSignal }),
+            externalContent.linkedResources,
+        );
+        const resolveAgent = async (harness: string, resolveSignal: AbortSignal) => {
+            const agent = await resolveCatalogAgent(config, harness, resolveSignal);
+            return {
+                agent,
+                adapter: adapters.resolve(agent),
+                externalizeSessionUpdate,
+            };
+        };
+        const layer = buildSessionLayer({
+            processes,
+            computerId: config.computerId,
+            defaultWorkspace: config.defaultWorkspace,
+            resolveAgent,
+            sink: publisher,
+            stateDirectory: config.localContext.stateDirectory,
+            timer,
+        });
+        const {
+            activeSessions,
+            directories,
+            eventProjection,
+            manager: agentRuntime,
+            nativeSessions,
+            operations,
+            sessionStore,
+            sessionCreations,
+        } = layer;
+        options.onInitialized?.();
+        let connectionEpoch = 0;
+        let connectionAnnounced = false;
+        let catalogPublished = false;
+        let readinessAnnounced = false;
+        const announceReadiness = (): void => {
+            if (!connectionAnnounced || !catalogPublished) {
+                return;
             }
+            options.onConnectionStatus?.("online");
+            if (readinessAnnounced) {
+                return;
+            }
+            readinessAnnounced = true;
+            process.stdout.write("Morty Computer is ready for Agent requests.\n");
+        };
+        const announceConnection = (): void => {
+            if (connectionAnnounced) {
+                return;
+            }
+            connectionAnnounced = true;
+            process.stdout.write("Morty Computer connected to the relay.\n\n");
+            process.stdout.write(
+                `${styleText(["bold", "yellow"], "Reconnect this local connection later:\n  morty start")}\n\n`,
+            );
+            announceReadiness();
+        };
+        const catalogPublication = publishAgentCatalogUntilAvailable(config, diagnostics, signal, timer);
+        void catalogPublication.then(() => {
+            if (signal.aborted) {
+                return;
+            }
+            catalogPublished = true;
+            announceReadiness();
+        });
 
-            options.onConnectionStatus?.("reconnecting");
-            await waitForRelayRetry(signal, timer);
+        try {
+            while (!signal.aborted) {
+                connectionEpoch += 1;
+                try {
+                    await runRelayConnection({
+                        config,
+                        resolveAgent,
+                        directories,
+                        sessions: agentRuntime,
+                        sessionCreations,
+                        nativeSessions,
+                        operations,
+                        publisher,
+                        payloadEncryption,
+                        eventProjection,
+                        externalContent,
+                        sessionTurns: activeSessions,
+                        connectionEpoch,
+                        diagnostics,
+                        onConnected: () => {
+                            if (catalogPublished) {
+                                options.onConnectionStatus?.("online");
+                            }
+                            announceConnection();
+                        },
+                        signal,
+                        timer,
+                    });
+                } catch (error) {
+                    if (signal.aborted) {
+                        return;
+                    }
+                    if (error instanceof ComputerRelayRevokedError) {
+                        throw error;
+                    }
+                    diagnostics.connectionFailed(connectionEpoch, error, "connection");
+                }
+
+                options.onConnectionStatus?.("reconnecting");
+                await waitForRelayRetry(signal, timer);
+            }
+        } finally {
+            shutdown.abort();
+            operations.beginShutdown();
+            await activeSessions.close();
+            await runCleanup(
+                () => catalogPublication,
+                () => nativeSessions.close(),
+                () => sessionCreations.settle(),
+                () => agentRuntime.close(),
+                () => adapters.close(),
+                () => sessionStore.close(),
+                () => publisher.close(),
+                () => operations.close(),
+            );
         }
     } finally {
-        shutdown.abort();
-        operations.beginShutdown();
-        await activeSessions.close();
-        await runCleanup(
-            () => catalogPublication,
-            () => nativeSessions.close(),
-            () => sessionCreations.settle(),
-            () => agentRuntime.close(),
-            () => adapters.close(),
-            () => sessionStore.close(),
-            () => publisher.close(),
-            () => operations.close(),
-        );
+        payloadEncryption.close();
     }
 }
