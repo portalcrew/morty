@@ -49,7 +49,14 @@ function projectNewEvent(
     liveEvent: Extract<SessionLiveEvent, { readonly type: "acp" }>,
     eventId: string,
 ): AcpSessionEvent {
-    const { position: _position, eventId: _liveEventId, ...event } = liveEvent;
+    // History states the Session and generation once, on its page; the live event's own copies stay behind.
+    const {
+        position: _position,
+        eventId: _liveEventId,
+        sessionGenerationId: _generation,
+        target: _target,
+        ...event
+    } = liveEvent;
     if (event.type === "acp" && event.payload.sessionUpdate === "agent_thought_chunk") {
         return { ...event, eventId, payload: boundReasoning(event.payload) };
     }
@@ -59,7 +66,7 @@ function projectNewEvent(
 function projectLifecycleEvent(
     liveEvent: Extract<SessionLiveEvent, { readonly type: "lifecycle-metadata" }>,
 ): LifecycleSessionEvent {
-    const { position: _position, ...event } = liveEvent;
+    const { position: _position, sessionGenerationId: _generation, target: _target, ...event } = liveEvent;
     return event;
 }
 

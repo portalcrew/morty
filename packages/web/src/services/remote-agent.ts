@@ -206,10 +206,7 @@ export async function runSharedComputer(options: {
                                 throw new MortyError(event.payload.code, "Agent turn failed", { cause: event.payload });
                             }
                             if (event.payload.kind === "prompt.completed" && collecting) {
-                                if (
-                                    event.payload.stopReason === "cancelled" ||
-                                    event.payload.stopReason === "steered"
-                                ) {
+                                if (event.payload.completion.kind !== "ended") {
                                     throw new MortyError("turn_not_completed", "Agent turn did not complete normally");
                                 }
                                 return answer;

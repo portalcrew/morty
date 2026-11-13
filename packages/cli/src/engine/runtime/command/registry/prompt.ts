@@ -205,7 +205,6 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
         directories: context.directories,
         sessions: context.sessions,
         attemptId: receipt.attemptId,
-        epoch: turn.epoch,
         waitForSessionAdmission: (signal) => context.sessionTurns.admitAndWait(turn, signal),
         signal: turn.signal,
     })

@@ -167,11 +167,7 @@ test("Given real Codex streams commentary after a tool, When clients watch and r
                     expect(result).toMatchObject({ queued: [] });
                     expect(result.action).toBe("active-turn");
                     if (result.action === "active-turn") {
-                        expect(result.turn).toMatchObject({
-                            commandId,
-                            epoch: expect.any(String),
-                            state: "running",
-                        });
+                        expect(result.turn).toMatchObject({ commandId });
                     }
                     snapshotVerified = true;
                     socket.send(
@@ -203,7 +199,6 @@ test("Given real Codex streams commentary after a tool, When clients watch and r
                         expect(started).toBe(false);
                         expect(event.payload).toMatchObject({
                             commandId,
-                            epoch: expect.any(String),
                         });
                         started = true;
                         await providerEntered.promise;
@@ -236,7 +231,7 @@ test("Given real Codex streams commentary after a tool, When clients watch and r
                     } else if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
                         const completion = event.payload;
                         if (completion.commandId === queuedCommandId) {
-                            expect(completion.stopReason).toBe("cancelled");
+                            expect(completion.completion).toMatchObject({ kind: "cancelled" });
                             queuedCancelled = true;
                             socket.send(
                                 encodeNativeSessionCommand({

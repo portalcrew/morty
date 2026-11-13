@@ -85,7 +85,7 @@ test("Given real Pi receives a file attachment, When the Agent reads its local l
                 event.payload.kind === "prompt.completed" &&
                 event.payload.commandId === commandId
             ) {
-                expect(event.payload.stopReason).toBe("end_turn");
+                expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                 break;
             }
         }

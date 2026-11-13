@@ -113,7 +113,7 @@ test.each(["foreground", "background"] as const)(
                         throw new Error(JSON.stringify(event));
                     }
                     if (event.payload.kind === "prompt.completed" && event.payload.commandId === commandId) {
-                        expect(event.payload.stopReason).toBe("cancelled");
+                        expect(event.payload.completion).toMatchObject({ kind: "cancelled" });
                         break;
                     }
                 }

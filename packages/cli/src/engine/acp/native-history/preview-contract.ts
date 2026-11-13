@@ -20,7 +20,6 @@ export interface SessionEventPage {
     readonly events: readonly SessionEvent[];
     readonly nextCursor: string | null;
     readonly sessionGenerationId: string;
-    readonly truncated: boolean;
 }
 
 /** What a caller wants to preview from a saved native session. */

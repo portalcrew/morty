@@ -65,7 +65,7 @@ test("Given a reused real Pi session, When local commands reply consecutively, T
                     event.payload.kind === "prompt.completed" &&
                     event.payload.commandId === commandId
                 ) {
-                    expect(event.payload.stopReason).toBe("end_turn");
+                    expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                     break;
                 }
             }
@@ -133,7 +133,7 @@ test("Given real Pi transforms user input, When a prompt runs through the daemon
                 event.payload.kind === "prompt.completed" &&
                 event.payload.commandId === commandId
             ) {
-                expect(event.payload.stopReason).toBe("end_turn");
+                expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                 break;
             }
         }
@@ -217,7 +217,7 @@ test("Given real Pi has an active SDK turn, When the user steers it, Then Pi con
                         event.payload.kind === "prompt.completed" &&
                         event.payload.commandId === steeringCommandId
                     ) {
-                        expect(event.payload.stopReason).toBe("steered");
+                        expect(event.payload.completion).toEqual({ kind: "steered" });
                         steeringCompleted = true;
                         releaseActive.resolve();
                     }
@@ -248,7 +248,7 @@ test("Given real Pi has an active SDK turn, When the user steers it, Then Pi con
                     event.payload.kind === "prompt.completed" &&
                     event.payload.commandId === activeCommandId
                 ) {
-                    expect(event.payload.stopReason).toBe("end_turn");
+                    expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                     break;
                 }
             }
@@ -359,7 +359,7 @@ test("Given real Pi without an external ACP adapter, When Bash executes through 
                     throw new Error(JSON.stringify(event));
                 } else if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
                     expect(event.payload.commandId).toBe(commandId);
-                    expect(event.payload.stopReason).toBe("end_turn");
+                    expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                     break;
                 }
             }

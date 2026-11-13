@@ -11,6 +11,7 @@ import {
     decodeSessionTurnWithdrawnEvent,
     encodeSessionCancelCommand,
     encodeSessionPromptCommand,
+    promptStopReason,
     SESSION_EVENT_KIND,
 } from "@morty-build/client/protocol";
 import { expect, test, vi } from "vitest";
@@ -47,7 +48,7 @@ test("Given a command already completed, When a delayed queue edit cancels it be
                         event.payload.kind === "prompt.completed" &&
                         event.payload.commandId === commandId
                     ) {
-                        expect(event.payload.stopReason).toBe("end_turn");
+                        expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                         break;
                     }
                 }
@@ -166,13 +167,13 @@ test("Given running and queued work, When cancellation permits only unstarted wo
                             queuedStarted = true;
                         }
                         if (event.payload.kind === "prompt.completed") {
-                            completed.set(event.payload.commandId, event.payload.stopReason);
+                            completed.set(event.payload.commandId, promptStopReason(event.payload.completion));
                             if (event.payload.commandId === queued) {
-                                expect(event.payload).toMatchObject({ execution: "not-started" });
+                                expect(event.payload.completion).toEqual({ kind: "cancelled", started: false });
                             } else {
-                                expect(event.payload).not.toHaveProperty("execution");
+                                expect(event.payload.completion).toEqual({ kind: "cancelled", started: true });
                             }
-                            expect(event.payload.stopReason).toBe("cancelled");
+                            expect(event.payload.completion).toMatchObject({ kind: "cancelled" });
                         }
                     }
                 }
@@ -188,7 +189,7 @@ test("Given running and queued work, When cancellation permits only unstarted wo
                         event.payload.kind === "prompt.completed" &&
                         event.payload.commandId === next
                     ) {
-                        expect(event.payload.stopReason).toBe("end_turn");
+                        expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                         break;
                     }
                 }
@@ -246,7 +247,7 @@ test("Given an unacknowledged command, When Stop arrives before its prompt, Then
                             event.type === "lifecycle-metadata" &&
                             event.payload.kind === "prompt.completed" &&
                             event.payload.commandId === stopped &&
-                            event.payload.stopReason === "cancelled",
+                            promptStopReason(event.payload.completion) === "cancelled",
                     );
                 }
                 const prompt = (commandId: string) =>
@@ -277,7 +278,7 @@ test("Given an unacknowledged command, When Stop arrives before its prompt, Then
                             stoppedStarted = true;
                         }
                         if (event.payload.kind === "prompt.completed" && event.payload.commandId === next) {
-                            expect(event.payload.stopReason).toBe("end_turn");
+                            expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                             nextCompleted = true;
                         }
                     }
@@ -336,7 +337,7 @@ test("Given a prompt still loading its conversation's saved history, When the cl
                             event.payload.kind === "prompt.completed" &&
                             event.payload.commandId === commandId
                         ) {
-                            expect(event.payload.stopReason).toBe("end_turn");
+                            expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                             return;
                         }
                     }
@@ -384,7 +385,7 @@ test("Given a prompt still loading its conversation's saved history, When the cl
                             started = true;
                         }
                         if (event.payload.kind === "prompt.completed") {
-                            expect(event.payload).toMatchObject({ execution: "not-started", stopReason: "cancelled" });
+                            expect(event.payload).toMatchObject({ completion: { kind: "cancelled", started: false } });
                             settled = true;
                         }
                     }

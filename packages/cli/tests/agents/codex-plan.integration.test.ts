@@ -148,7 +148,7 @@ test.each(["owned", "borrowed"])(
                         throw new Error(JSON.stringify(event));
                     }
                     if (event.payload.kind === "prompt.completed" && event.payload.commandId === commandId) {
-                        expect(event.payload.stopReason).toBe("end_turn");
+                        expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                         break;
                     }
                 }

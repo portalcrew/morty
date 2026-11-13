@@ -1,12 +1,11 @@
 import { externalContentPath } from "@morty-build/client";
-import {
-    type AcpSessionUpdate,
-    type AgentQuestion,
-    type ContentBlock,
-    type PromptCompletion,
-    promptCompletion,
-    type SessionEvent,
-    type SessionLiveEvent,
+import type {
+    AcpSessionUpdate,
+    AgentQuestion,
+    ContentBlock,
+    PromptCompletion,
+    SessionEvent,
+    SessionLiveEvent,
 } from "@morty-build/client/protocol";
 import type { AgentDisplayContent } from "../../components/agents/display-content.ts";
 import {
@@ -519,7 +518,7 @@ function turnEnding(event: SessionPresentationEvent, lifecycle: TurnEndingPayloa
         firstEvent: event,
         presentation:
             lifecycle.kind === "prompt.completed"
-                ? { kind: "completed", completion: promptCompletion(lifecycle) }
+                ? { kind: "completed", completion: lifecycle.completion }
                 : { kind: "failure", code: lifecycle.code, message: lifecycle.message },
     };
 }
@@ -546,10 +545,8 @@ function consumeSessionEvent(
                 kind: "turn-requested",
                 commandId: lifecycle.commandId,
                 executionCommandId:
-                    lifecycle.disposition === "steer"
-                        ? (lifecycle.targetCommandId ?? lifecycle.commandId)
-                        : lifecycle.commandId,
-                execution: lifecycle.disposition === "steer" ? "steers" : "starts",
+                    lifecycle.dispatch.kind === "steer" ? lifecycle.dispatch.targetCommandId : lifecycle.commandId,
+                execution: lifecycle.dispatch.kind === "steer" ? "steers" : "starts",
             };
         }
         return { kind: "skipped" };
@@ -606,7 +603,6 @@ function consumeSessionEvent(
                 }
                 const first = entry.message.firstEvent;
                 return (
-                    first.sessionGenerationId === event.sessionGenerationId &&
                     first.type === "acp" &&
                     first.payload.sessionUpdate === "user_message_chunk" &&
                     first.payload.messageId === update.messageId
@@ -896,7 +892,7 @@ export function sessionReductionMessages(reduction: SessionMessageReduction): re
         const terminal = event.payload;
         if (
             terminal.kind !== "prompt.failed" &&
-            (terminal.kind !== "prompt.completed" || promptCompletion(terminal).kind === "steered")
+            (terminal.kind !== "prompt.completed" || terminal.completion.kind === "steered")
         ) {
             continue;
         }

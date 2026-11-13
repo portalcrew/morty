@@ -1,5 +1,8 @@
-import type { SessionElicitationRequestedEvent, SessionPermissionRequestedEvent } from "@morty-build/client/protocol";
-import { promptCompletion, type SessionLiveEvent } from "@morty-build/client/protocol";
+import type {
+    SessionElicitationRequestedEvent,
+    SessionLiveEvent,
+    SessionPermissionRequestedEvent,
+} from "@morty-build/client/protocol";
 import type { SessionInteraction } from "./session-pane-types.ts";
 
 // The Session pane reads Morty lifecycle metadata only through this module, so
@@ -66,7 +69,7 @@ export function sessionLifecycleFact(payload: LifecycleMetadata): SessionLifecyc
             return {
                 kind: "turn-completed",
                 commandId: payload.commandId,
-                steered: promptCompletion(payload).kind === "steered",
+                steered: payload.completion.kind === "steered",
             };
         case "prompt.failed":
         case "prompt.failed-before-start":

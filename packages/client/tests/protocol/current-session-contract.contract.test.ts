@@ -49,17 +49,13 @@ it("Given Agent settings without the inspected directory, When a client decodes 
 });
 
 it("Given history holding a turn's lifecycle, When a client decodes it, Then the lifecycle stays in page order", () => {
-    const fields = {
-        recordedAt: "2026-11-08T00:00:00.000Z",
-        sessionGenerationId: "generation-1",
-        target: { harness: "agent-1", sessionId: "session-1" },
-    };
+    const fields = { recordedAt: "2026-11-08T00:00:00.000Z" };
     const page = {
         events: [
             {
                 ...fields,
                 eventId: "started",
-                payload: { attemptId: "attempt-1", commandId: "command-1", epoch: "attempt-1", kind: "prompt.started" },
+                payload: { attemptId: "attempt-1", commandId: "command-1", kind: "prompt.started" },
                 type: "lifecycle-metadata",
             },
             {
@@ -75,16 +71,17 @@ it("Given history holding a turn's lifecycle, When a client decodes it, Then the
             {
                 ...fields,
                 eventId: "completed",
-                payload: { commandId: "command-1", kind: "prompt.completed", stopReason: "end_turn" },
+                payload: {
+                    commandId: "command-1",
+                    completion: { kind: "ended", stopReason: "end_turn" },
+                    kind: "prompt.completed",
+                },
                 type: "lifecycle-metadata",
             },
         ],
         nextCursor: null,
         sessionGenerationId: "generation-1",
-        tailCursor: "completed",
         throughPosition: "3",
-        truncated: false,
-        version: 2,
     };
     expect(decodeKnownSessionEventLogPage(JSON.stringify(page))).toEqual(page);
 });

@@ -1,6 +1,7 @@
 import type { SessionPromptCommand } from "@morty-build/client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import { operationErrorCode, operationErrorMessage } from "../../infra/operation-error.ts";
+import { type PromptEnd, promptEnd } from "../api/prompt-end.ts";
 import type { ReportFailure, ResolveAgent } from "../api/session-api.ts";
 import type { SessionManager } from "../manager/session-manager.ts";
 import type { StoredSession } from "../record/session-store.ts";
@@ -22,7 +23,6 @@ export interface ExecutePromptOptions {
     readonly directories: WorkspaceDirectoryService;
     readonly sessions: SessionManager;
     readonly attemptId: string;
-    readonly epoch: string;
     /** Waits for the Session to admit the prompt, and answers how it executes. */
     readonly waitForSessionAdmission: (signal: AbortSignal) => Promise<PromptDispatch>;
     /** The prompt's own signal; aborted with a withdrawal when the prompt is cancelled before its execution begins. */
@@ -44,7 +44,6 @@ export async function executePrompt({
     directories,
     sessions,
     attemptId,
-    epoch,
     waitForSessionAdmission,
     signal,
 }: ExecutePromptOptions): Promise<void> {
@@ -93,7 +92,6 @@ export async function executePrompt({
             command,
             { harness: session.harness, directory: session.cwd },
             attemptId,
-            epoch,
             dispatch,
         );
         const attachments = await resolvePromptArtifacts(readArtifact, command.attachments, signal);
@@ -108,7 +106,7 @@ export async function executePrompt({
         ) {
             throw new PromptArtifactError("prompt_attachments_unsupported", "No supported prompt content remains");
         }
-        let stopReason: string;
+        let end: PromptEnd;
         if (dispatch.kind === "steer") {
             await sessions.steerPrompt({
                 adapter,
@@ -124,7 +122,7 @@ export async function executePrompt({
                 signal,
                 targetCommandId: dispatch.targetCommandId,
             });
-            stopReason = "steered";
+            end = { kind: "steered" };
         } else {
             const result = await sessions.runPrompt({
                 adapter,
@@ -140,13 +138,13 @@ export async function executePrompt({
                 signal,
                 recovery,
             });
-            stopReason = result.stopReason;
+            end = promptEnd(result.stopReason);
         }
 
-        await eventProjection.completed(command.target, command.commandId, stopReason);
+        await eventProjection.completed(command.target, command.commandId, end);
     } catch (error) {
         if (isWithdrawn(signal)) {
-            await eventProjection.completed(command.target, command.commandId, "cancelled");
+            await eventProjection.completed(command.target, command.commandId, { kind: "cancelled" });
             return;
         }
         const code = operationErrorCode(error);

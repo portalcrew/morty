@@ -135,7 +135,7 @@ test("Given a borrowed Codex conversation with queued input, When the user stops
                     throw new Error(JSON.stringify(event));
                 }
                 if (event.payload.kind === "prompt.completed" && event.payload.commandId === commandId) {
-                    expect(event.payload.stopReason).toBe("cancelled");
+                    expect(event.payload.completion).toMatchObject({ kind: "cancelled" });
                     break;
                 }
             }

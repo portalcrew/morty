@@ -10,6 +10,7 @@ import {
     encodeSessionHistoryPageLoad,
     encodeSessionPromptCommand,
     type NativeSessionTarget,
+    promptStopReason,
     SESSION_EVENT_KIND,
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
@@ -72,7 +73,7 @@ test("Given a real claude native Session, When the active prompt is cancelled wi
                     ) {
                         expect(event.payload.commandId).toBe(commandId);
                         expect(event.target).toEqual(nativeId);
-                        expect(event.payload.stopReason).toBe(reason);
+                        expect(promptStopReason(event.payload.completion)).toBe(reason);
                         return text;
                     }
                 }
@@ -164,7 +165,7 @@ test("Given a completed real Claude Session, When it is forked, Then its history
                     event.payload.commandId === commandId
                 ) {
                     expect(event.target).toEqual(sessionTarget);
-                    expect(event.payload.stopReason).toBe("end_turn");
+                    expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                     return text;
                 }
             }

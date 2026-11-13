@@ -47,7 +47,7 @@ describe("acp interactions", () => {
                 lifecycle: {
                     attemptId: "steering-attempt",
                     content: [{ text: "wait for steering", type: "text" }],
-                    epoch: "steering-epoch",
+                    dispatch: { kind: "own" },
                 },
                 prompt: "wait for steering",
                 resources: [],
@@ -78,7 +78,7 @@ describe("acp interactions", () => {
                     lifecycle: {
                         attemptId: "steering-attempt-2",
                         content: [{ text: "focus on the requested fix", type: "text" }],
-                        epoch: "steering-epoch-2",
+                        dispatch: { kind: "steer", targetCommandId: "running-command" },
                     },
                     prompt: "focus on the requested fix",
                     resources: [],

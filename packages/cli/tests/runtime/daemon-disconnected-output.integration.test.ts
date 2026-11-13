@@ -614,7 +614,13 @@ test.each([true, false])(
         expect(
             events.filter((event) => event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed"),
         ).toMatchObject([
-            { payload: { commandId: "command-tail-session", kind: "prompt.completed", stopReason: "end_turn" } },
+            {
+                payload: {
+                    commandId: "command-tail-session",
+                    completion: { kind: "ended", stopReason: "end_turn" },
+                    kind: "prompt.completed",
+                },
+            },
         ]);
     },
 );
@@ -719,5 +725,5 @@ test("Given an outage exhausts the bounded output buffer, When the Relay reconne
         resumed.events.filter(
             (event) => event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed",
         ),
-    ).toMatchObject([{ payload: { kind: "prompt.completed", stopReason: "end_turn" } }]);
+    ).toMatchObject([{ payload: { kind: "prompt.completed", completion: { kind: "ended", stopReason: "end_turn" } } }]);
 });

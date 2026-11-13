@@ -14,6 +14,7 @@ import {
     encodeSessionHistoryPageLoad,
     encodeSessionPreviewHistoryPageLoad,
     encodeSessionPromptCommand,
+    promptStopReason,
     SESSION_EVENT_KIND,
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
@@ -90,7 +91,7 @@ test.each(["responsive", "stalled", "launcher-stalled"])(
                         ) {
                             expect(event.payload.commandId).toBe(commandId);
                             expect(event.target).toEqual(nativeId);
-                            expect(event.payload.stopReason).toBe(reason);
+                            expect(promptStopReason(event.payload.completion)).toBe(reason);
                             return text;
                         }
                     }

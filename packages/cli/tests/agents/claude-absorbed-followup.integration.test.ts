@@ -8,6 +8,7 @@ import {
     decodeSessionEventEnvelope,
     encodeNativeSessionCommand,
     encodeSessionPromptCommand,
+    promptStopReason,
 } from "@morty-build/client/protocol";
 import { expect, test } from "vitest";
 import { ClaudeCodeAgentSpecification } from "../../src/engine/agent/specification/vendors/claude-code-agent.ts";
@@ -218,7 +219,7 @@ test("Given Claude is answering a background notification, When it absorbs a new
                                 started.add(event.payload.commandId);
                             }
                             if (event.payload.kind === "prompt.completed") {
-                                completed.set(event.payload.commandId, event.payload.stopReason);
+                                completed.set(event.payload.commandId, promptStopReason(event.payload.completion));
                             }
                         } else if (event.type === "acp") {
                             if (

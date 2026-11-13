@@ -97,7 +97,7 @@ test("Given a Session whose prompt is running, When a client prompts it and read
         expect(await answer(peer, requestId)).toMatchObject({
             action: "active-turn",
             target: peer.target,
-            turn: { commandId, state: "running" },
+            turn: { commandId },
             queued: [],
         });
     });

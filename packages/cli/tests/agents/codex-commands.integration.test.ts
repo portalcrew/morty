@@ -51,7 +51,7 @@ test("Given a real Codex conversation, When the user sends slash-prefixed text o
                     text += event.payload.content.text;
                 }
                 if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
-                    expect(event.payload.stopReason).toBe("end_turn");
+                    expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                     break;
                 }
             }

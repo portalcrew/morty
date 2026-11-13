@@ -270,7 +270,7 @@ describe("native session identity", () => {
                     lifecycle: {
                         attemptId: crypto.randomUUID(),
                         content: [{ type: "text", text: "Continue this chat" }],
-                        epoch: crypto.randomUUID(),
+                        dispatch: { kind: "own" },
                     },
                     images: [],
                     resources: [],
@@ -331,7 +331,7 @@ describe("native session identity", () => {
                 lifecycle: {
                     attemptId: crypto.randomUUID(),
                     content: [{ type: "text", text: "Post-fork turn" }],
-                    epoch: crypto.randomUUID(),
+                    dispatch: { kind: "own" },
                 },
                 images: [],
                 resources: [],

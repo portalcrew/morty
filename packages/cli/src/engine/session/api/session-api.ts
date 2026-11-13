@@ -3,6 +3,7 @@ import type {
     AgentPromptResponse,
     ContentBlock,
     NativeSessionTarget,
+    PromptDispatch,
     PromptExecutionContext,
     SessionCapabilities,
     SessionCloseNoticeEvent,
@@ -67,9 +68,7 @@ interface PromptContentOptions {
         readonly context?: PromptExecutionContext;
         readonly attemptId: string;
         readonly content: readonly ContentBlock[];
-        readonly disposition?: string;
-        readonly epoch: string;
-        readonly targetCommandId?: string;
+        readonly dispatch: PromptDispatch;
     };
     readonly prompt: string;
     readonly resources: readonly PromptResourceInput[];

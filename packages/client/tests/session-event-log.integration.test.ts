@@ -24,7 +24,7 @@ import {
 
 const recordedAt = "2026-10-07T00:00:00.000Z";
 
-function event(sessionId: string, eventId: string): SessionEvent {
+function event(eventId: string): SessionEvent {
     return {
         eventId,
         payload: {
@@ -33,8 +33,6 @@ function event(sessionId: string, eventId: string): SessionEvent {
             sessionUpdate: "agent_message_chunk",
         },
         recordedAt,
-        sessionGenerationId: "session-generation-1",
-        target: { harness: "claude", sessionId: sessionId },
         type: "acp",
     };
 }
@@ -309,7 +307,8 @@ describe("Session Event Log V2 SDK", () => {
             computerE2EPublicKey: await exportE2EPublicKey(identity.publicKey),
             computerE2EAccessSecret: accessSecret,
         };
-        const sourceEvent = event("source-session", "source-event-1");
+        const sourceTarget = { harness: "claude", sessionId: "source-session" };
+        const sourceEvent = event("source-event-1");
         const received: Array<{ readonly method: string; readonly path: string }> = [];
         const claims = new Set<string>();
         const server = createServer();
@@ -361,22 +360,18 @@ describe("Session Event Log V2 SDK", () => {
                     signal,
                 );
                 const command = await sessionHistoryPageLoadCodec.decode(wire, box, signal);
-                expect(command).toMatchObject({ target: sourceEvent.target, eventLimit: 500, cursor: null });
+                expect(command).toMatchObject({ target: sourceTarget, eventLimit: 500, cursor: null });
                 const body = await sessionHistoryPageLoadedCodec.encode(
                     {
                         kind: "session.live-history.v2.page.loaded",
                         requestId: command.requestId,
                         target: command.target,
                         events: {
-                            queuedPromptRequests: [],
                             events: {
                                 sessionGenerationId: "session-generation-1",
                                 events: [sourceEvent],
                                 nextCursor: null,
-                                tailCursor: sourceEvent.eventId,
                                 throughPosition: "1",
-                                truncated: false,
-                                version: 2,
                             },
                         },
                     },
@@ -419,14 +414,11 @@ describe("Session Event Log V2 SDK", () => {
         const signal = new AbortController().signal;
 
         try {
-            expect(await client.events.list(sourceEvent.target, new MortyPageRequest(500, ""), signal)).toEqual({
+            expect(await client.events.list(sourceTarget, new MortyPageRequest(500, ""), signal)).toEqual({
                 sessionGenerationId: "session-generation-1",
                 events: [sourceEvent],
                 nextCursor: null,
-                tailCursor: sourceEvent.eventId,
                 throughPosition: "1",
-                truncated: false,
-                version: 2,
             });
         } finally {
             client.close();

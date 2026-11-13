@@ -15,11 +15,11 @@ const eventWithoutProvenance = {
         sessionUpdate: "agent_message_chunk" as const,
     },
     recordedAt: "2026-10-14T00:00:00.000Z",
-    sessionGenerationId: "generation-1",
-    target: { harness: "claude", sessionId: "session-1" },
     type: "acp" as const,
 };
 const sharedEvent = eventWithoutProvenance;
+// A history page states its Session and generation once; a live event carries them itself.
+const liveFields = { sessionGenerationId: "generation-1", target: { harness: "claude", sessionId: "session-1" } };
 
 describe("Session Event V2 contracts", () => {
     it.each(["user_message_chunk", "agent_message_chunk", "agent_thought_chunk"])(
@@ -28,16 +28,22 @@ describe("Session Event V2 contracts", () => {
             const payload = { content: sharedEvent.payload.content, sessionUpdate };
             for (const invalid of [payload, { ...payload, messageId: null }, { ...payload, messageId: "" }]) {
                 expect(() => decodeSessionEvent({ ...sharedEvent, payload: invalid })).toThrow();
-                expect(() => decodeSessionLiveEvent({ ...sharedEvent, payload: invalid, position: "1" })).toThrow();
+                expect(() =>
+                    decodeSessionLiveEvent({ ...sharedEvent, ...liveFields, payload: invalid, position: "1" }),
+                ).toThrow();
             }
             const event = { ...sharedEvent, payload: { ...payload, messageId: "message-1" } };
             expect(decodeSessionEvent(event)).toEqual(event);
-            expect(decodeSessionLiveEvent({ ...event, position: "1" })).toEqual({ ...event, position: "1" });
+            expect(decodeSessionLiveEvent({ ...event, ...liveFields, position: "1" })).toEqual({
+                ...event,
+                ...liveFields,
+                position: "1",
+            });
         },
     );
 
     it("Given the lossless relay boundary, When routing metadata or batch bounds are invalid, Then it rejects the envelope", () => {
-        const event = { ...sharedEvent, position: "1" };
+        const event = { ...sharedEvent, ...liveFields, position: "1" };
         for (const events of [
             [],
             Array.from({ length: 1001 }, () => event),
@@ -57,12 +63,20 @@ describe("Session Event V2 contracts", () => {
         const { position, ...history } = {
             ...sharedEvent,
             type: "lifecycle-metadata" as const,
-            payload: { kind: "prompt.completed" as const, commandId: "command-1", stopReason: "end_turn" },
+            payload: {
+                kind: "prompt.completed" as const,
+                commandId: "command-1",
+                completion: { kind: "ended" as const, stopReason: "end_turn" },
+            },
             position: "1",
         };
 
         expect(decodeSessionEvent(history)).toEqual(history);
-        expect(decodeSessionLiveEvent({ ...history, position })).toEqual({ ...history, position });
+        expect(decodeSessionLiveEvent({ ...history, ...liveFields, position })).toEqual({
+            ...history,
+            ...liveFields,
+            position,
+        });
     });
 
     it("Given a large Agent inline image, When its recorded event crosses the protocol boundary, Then it is accepted", () => {
@@ -221,13 +235,13 @@ describe("Session Event V2 contracts", () => {
     });
 
     it("Given a live event with a position, When it crosses the protocol boundary, Then it is accepted without a sequence", () => {
-        const event: SessionLiveEvent = { ...sharedEvent, position: "1" };
+        const event: SessionLiveEvent = { ...sharedEvent, ...liveFields, position: "1" };
 
         expect(decodeSessionLiveEvent(event)).toEqual(event);
     });
 
     it("Given a live event without a position, When it crosses the protocol boundary, Then it is rejected", () => {
-        expect(() => decodeSessionLiveEvent(sharedEvent)).toThrow();
+        expect(() => decodeSessionLiveEvent({ ...sharedEvent, ...liveFields })).toThrow();
     });
 
     describe("agent message questions", () => {
@@ -242,7 +256,11 @@ describe("Session Event V2 contracts", () => {
 
         it("Given a message that asks questions, When it crosses the recorded and live boundaries, Then the questions survive", () => {
             expect(decodeSessionEvent(JSON.parse(JSON.stringify(asking)))).toEqual(asking);
-            expect(decodeSessionLiveEvent({ ...asking, position: "1" })).toEqual({ ...asking, position: "1" });
+            expect(decodeSessionLiveEvent({ ...asking, ...liveFields, position: "1" })).toEqual({
+                ...asking,
+                ...liveFields,
+                position: "1",
+            });
         });
     });
 });

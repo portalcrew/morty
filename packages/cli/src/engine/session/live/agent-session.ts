@@ -30,6 +30,7 @@ import { unsupportedSessionCapabilities } from "../../acp/protocol/session-capab
 import type { OperationMetrics } from "../../infra/operation-metrics.ts";
 import { SerialTaskQueue } from "../../util/serial-task-queue.ts";
 import { recordsEqual, truncate } from "../../util/value-utils.ts";
+import { promptCompletion, promptEnd } from "../api/prompt-end.ts";
 import {
     type ElicitationResponseOptions,
     type PermissionResponseOptions,
@@ -833,10 +834,9 @@ export class AgentSession {
                 payload: {
                     commandId: options.commandId,
                     content: lifecycle.content,
-                    ...(lifecycle.disposition === undefined ? {} : { disposition: lifecycle.disposition }),
+                    dispatch: lifecycle.dispatch,
                     kind: "prompt.requested",
                     ...(lifecycle.context === undefined ? {} : { context: lifecycle.context }),
-                    ...(lifecycle.targetCommandId === undefined ? {} : { targetCommandId: lifecycle.targetCommandId }),
                 },
                 type: "lifecycle-metadata",
             });
@@ -844,7 +844,6 @@ export class AgentSession {
                 payload: {
                     attemptId: lifecycle.attemptId,
                     commandId: options.commandId,
-                    epoch: lifecycle.epoch,
                     kind: "prompt.started",
                 },
                 type: "lifecycle-metadata",
@@ -866,9 +865,9 @@ export class AgentSession {
                 await this.recordLifecycleEvent({
                     payload: {
                         commandId: options.commandId,
+                        completion: promptCompletion(promptEnd(result.stopReason), true),
                         kind: "prompt.completed",
                         ...(messageId === undefined ? {} : { messageId }),
-                        stopReason: result.stopReason,
                     },
                     type: "lifecycle-metadata",
                 });
@@ -885,9 +884,9 @@ export class AgentSession {
                     payload: options.cancellationRequested()
                         ? {
                               commandId: options.commandId,
+                              completion: { kind: "cancelled", started: true },
                               kind: "prompt.completed",
                               ...message,
-                              stopReason: "cancelled",
                           }
                         : {
                               attemptId: lifecycle.attemptId,
@@ -928,10 +927,9 @@ export class AgentSession {
                 payload: {
                     commandId: options.commandId,
                     content: lifecycle.content,
-                    ...(lifecycle.disposition === undefined ? {} : { disposition: lifecycle.disposition }),
+                    dispatch: lifecycle.dispatch,
                     kind: "prompt.requested",
                     ...(lifecycle.context === undefined ? {} : { context: lifecycle.context }),
-                    ...(lifecycle.targetCommandId === undefined ? {} : { targetCommandId: lifecycle.targetCommandId }),
                 },
                 type: "lifecycle-metadata",
             });
@@ -939,7 +937,6 @@ export class AgentSession {
                 payload: {
                     attemptId: lifecycle.attemptId,
                     commandId: options.commandId,
-                    epoch: lifecycle.epoch,
                     kind: "prompt.started",
                 },
                 type: "lifecycle-metadata",
@@ -951,12 +948,12 @@ export class AgentSession {
                 await this.recordLifecycleEvent({
                     payload: {
                         commandId: options.commandId,
+                        completion: { kind: "steered" },
                         kind: "prompt.completed",
                         // The steering's own user message, so a reloaded history shows it inside the turn it joined.
                         ...(outcome.outcome === "injected" && outcome.messageId !== undefined
                             ? { messageId: outcome.messageId }
                             : {}),
-                        stopReason: "steered",
                     },
                     type: "lifecycle-metadata",
                 });

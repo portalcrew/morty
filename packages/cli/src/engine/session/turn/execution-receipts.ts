@@ -8,7 +8,7 @@ import {
     type LifecycleMetadata,
     type NativeSessionTarget,
     type PromptTerminalLifecycle,
-    promptCompletion,
+    promptStopReason,
     type SessionEventPayload,
     type SessionLiveEvent,
 } from "@morty-build/client/protocol";
@@ -94,7 +94,7 @@ function settledFate(fate: UnsettledFate, terminal: PromptTerminalLifecycle, out
     if (fate.kind === "started") {
         return { kind: "settled-after-start", startedAt: fate.startedAt, outcome };
     }
-    return terminal.kind === "prompt.completed" && promptCompletion(terminal).kind === "cancelled"
+    return terminal.kind === "prompt.completed" && terminal.completion.kind === "cancelled"
         ? { kind: "cancelled", outcome }
         : { kind: "settled-before-start", outcome };
 }
@@ -143,7 +143,7 @@ function commandStanding(command: LedgerCommand | undefined, sessionTarget: Nati
 
 const cancelledBeforeStartOutcome = (commandId: string): SessionEventPayload => ({
     type: "lifecycle-metadata",
-    payload: { kind: "prompt.completed", commandId, stopReason: "cancelled", execution: "not-started" },
+    payload: { kind: "prompt.completed", commandId, completion: { kind: "cancelled", started: false } },
 });
 
 /** A stored outcome: the event as recorded, with its recording time. */
@@ -319,7 +319,7 @@ export class ExecutionReceipts {
         }
         switch (outcome.payload.kind) {
             case "prompt.completed":
-                return { state: "completed", stopReason: outcome.payload.stopReason };
+                return { state: "completed", stopReason: promptStopReason(outcome.payload.completion) };
             case "prompt.failed":
             case "prompt.failed-before-start":
                 return { code: outcome.payload.code, state: "failed" };
@@ -338,7 +338,7 @@ export class ExecutionReceipts {
             const outcome = this.outcome(command.commandId);
             const payload = outcome?.type === "lifecycle-metadata" ? outcome.payload : undefined;
             const failedBeforeStart = payload?.kind === "prompt.failed-before-start";
-            const steered = payload?.kind === "prompt.completed" && promptCompletion(payload).kind === "steered";
+            const steered = payload?.kind === "prompt.completed" && payload.completion.kind === "steered";
             const kept = command.fate.kind === "started" || outcome !== undefined;
             if (kept && (isStarted(command.fate) || failedBeforeStart) && !steered) {
                 last = { commandId: command.commandId, outcome };
@@ -350,7 +350,11 @@ export class ExecutionReceipts {
         }
         switch (outcome.payload.kind) {
             case "prompt.completed":
-                return { commandId: last.commandId, state: "completed", stopReason: outcome.payload.stopReason };
+                return {
+                    commandId: last.commandId,
+                    state: "completed",
+                    stopReason: promptStopReason(outcome.payload.completion),
+                };
             case "prompt.failed":
             case "prompt.failed-before-start":
                 return {

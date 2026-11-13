@@ -98,7 +98,7 @@ test("Given real pi exhausts its automatic model retries, When the last attempt 
                 if (terminal.kind === "prompt.failed") {
                     throw new Error(`The follow-up turn failed: ${JSON.stringify(terminal)}`);
                 }
-                expect(terminal.stopReason).toBe("end_turn");
+                expect(terminal.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                 break;
             }
         }
@@ -148,7 +148,7 @@ test("Given a pi turn's first model call fails retryably, When pi's automatic re
                     throw new Error(`The recovered turn failed: ${JSON.stringify(event.payload)}`);
                 }
                 if (event.payload.kind === "prompt.completed" && event.payload.commandId === commandId) {
-                    expect(event.payload.stopReason).toBe("end_turn");
+                    expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                     break;
                 }
             }

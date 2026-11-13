@@ -47,8 +47,8 @@ async function observe(peer: RealDaemonPeer, ids: readonly string[]) {
                 if (
                     payload.kind === "prompt.completed" &&
                     pending.has(payload.commandId) &&
-                    payload.stopReason === "cancelled" &&
-                    payload.execution === "not-started"
+                    payload.completion.kind === "cancelled" &&
+                    !payload.completion.started
                 ) {
                     cancelled.push(payload.commandId);
                 }
