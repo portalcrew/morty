@@ -34,6 +34,7 @@ import {
     MortyCancellationError,
     MortyConnectionError,
     MortyError,
+    MortyOperationError,
     MortyProtocolError,
     MortyTimeoutError,
     MortyValidationError,
@@ -249,6 +250,30 @@ function record(value: unknown): Readonly<Record<string, unknown>> {
     return value;
 }
 
+const terminalOperationFailureCodes = new Set([
+    "invalid_request",
+    "session_not_found",
+    "native_session_not_found",
+    "native_session_unsupported",
+    "native_session_cursor_expired",
+    "native_session_target_changed",
+    "unsupported_operation",
+    "session_busy",
+    SESSION_CLOSED_ERROR_CODE,
+    "idempotency_conflict",
+    "command_identity_conflict",
+    "command_result_expired",
+    "session_creation_refused",
+    "session_creation_outcome_unknown",
+    "turn_already_started",
+    "turn_not_active",
+    "permission_response_conflict",
+    "elicitation_response_conflict",
+    "session_configuration_conflict",
+    "steering_target_unavailable",
+    "steering_unsupported",
+]);
+
 function throwNativeFailure(
     failure: SessionOperationFailedEvent,
     requestId: string,
@@ -260,7 +285,18 @@ function throwNativeFailure(
     ) {
         throw new MortyProtocolError("The Computer returned a failure for another request");
     }
-    throw new MortyError(failure.code, failure.message, { cause: failure });
+    if (failure.code === "native_session_cancelled" || failure.code === "operation_cancelled") {
+        throw new MortyCancellationError({ cause: failure });
+    }
+    if (failure.code === "native_session_timeout" || failure.code === "operation_timeout") {
+        throw new MortyTimeoutError({ cause: failure });
+    }
+    throw new MortyOperationError(
+        failure.code,
+        failure.message,
+        terminalOperationFailureCodes.has(failure.code) ? "terminal" : "retryable",
+        { cause: failure },
+    );
 }
 
 async function responseValue(response: Response): Promise<unknown> {

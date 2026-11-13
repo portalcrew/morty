@@ -1,4 +1,4 @@
-import { MortyApiError } from "@morty-build/client";
+import { MortyApiError, MortyOperationError } from "@morty-build/client";
 import type {
     NativeSessionTarget,
     SessionConfigOption,
@@ -151,7 +151,10 @@ export function createSessionSettingsStore(options: {
                         set({ change: { kind: "idle" } });
                         return;
                     }
-                    if (cause instanceof MortyApiError && cause.code === "session_configuration_conflict") {
+                    if (
+                        (cause instanceof MortyApiError || cause instanceof MortyOperationError) &&
+                        cause.code === "session_configuration_conflict"
+                    ) {
                         refresh(signal);
                     }
                     set({

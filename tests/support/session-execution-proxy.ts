@@ -137,7 +137,11 @@ export async function createSessionExecutionProxy(upstream: string) {
                 }
             }
             const heldSuffix =
-                heldReply === null ? undefined : [...heldReplies.keys()].find((end) => heldReply.path.endsWith(end));
+                heldReply === null ||
+                (heldReply.path.endsWith("/configuration") &&
+                    (typeof frame !== "object" || frame === null || !("method" in frame) || frame.method !== "POST"))
+                    ? undefined
+                    : [...heldReplies.keys()].find((end) => heldReply.path.endsWith(end));
             const held = heldSuffix === undefined ? undefined : heldReplies.get(heldSuffix);
             if (heldReply !== null && heldSuffix !== undefined && held !== undefined) {
                 heldReplies.delete(heldSuffix);
@@ -365,6 +369,11 @@ export async function createSessionExecutionProxy(upstream: string) {
         holdNextQueuedCancellation: () =>
             new Promise<() => Promise<unknown>>((resolve) => {
                 heldReplies.set("/cancel-before-start", resolve);
+            }),
+        /** Delays one real settings edit before the Computer receives its revision. */
+        holdNextConfigurationChange: () =>
+            new Promise<() => Promise<unknown>>((resolve) => {
+                heldReplies.set("/configuration", resolve);
             }),
         holdSessionEvents: () => {
             const pending: (() => void)[] = [];

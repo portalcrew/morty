@@ -18,6 +18,17 @@ export class MortyApiError extends MortyError {
     }
 }
 
+/** A validated Computer reply, distinct from HTTP, malformed responses, and an attempt whose outcome is unknown. */
+export class MortyOperationError extends MortyError {
+    readonly recovery: "terminal" | "retryable";
+
+    constructor(code: string, message: string, recovery: "terminal" | "retryable", options: ErrorOptions = {}) {
+        super(code, message, options);
+        this.name = "MortyOperationError";
+        this.recovery = recovery;
+    }
+}
+
 export class MortyCancellationError extends MortyError {
     constructor(options: ErrorOptions = {}) {
         super("operation_cancelled", "The Morty operation was cancelled", options);

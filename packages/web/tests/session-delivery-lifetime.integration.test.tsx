@@ -167,6 +167,62 @@ function sessionEntry(app: TestApp, title: string): HTMLElement {
     return entry;
 }
 
+test("Given another client used my pending message identity, When the Computer refuses steering and my submission, Then retry creates a new message identity instead of recovering unknown delivery", {
+    timeout: dedicatedEnvironmentTimeout,
+}, async () => {
+    const environment = await createChatWorkerEnvironment(true, true);
+    onTestFinished(() => environment.close());
+    const app = await createTestApp({ environment, connectAgent: true });
+    const { daemon, network, executionNetwork } = app;
+    if (daemon === null || network === null || executionNetwork === null) {
+        throw new Error("Expected the real Computer and controllable network");
+    }
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Established session");
+    await app.waitForView(() => {
+        expect(app.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain("Established session");
+        expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
+    });
+    const sessionId = new URL(window.location.href).searchParams.get("sessionId");
+    if (sessionId === null) {
+        throw new Error("Expected an open Session");
+    }
+    network.holdNextTurn();
+    const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "My pending instruction");
+    const original = await app.readSubmission(await arriving);
+    const releaseEvents = executionNetwork.holdSessionEvents();
+    try {
+        await daemon.submitTurn(sessionId, "wait for steering", original.commandId);
+        await expect(daemon.steerTurn(sessionId, original.commandId)).rejects.toMatchObject({
+            name: "MortyOperationError",
+            code: "turn_already_started",
+            recovery: "terminal",
+        });
+        await daemon.continueReply("wait for steering", { outcome: "complete", output: [] });
+        network.releaseHeldTurn();
+        const retry = await app.waitForView(() => getByRole(document.body, "button", { name: "Retry message" }));
+        expect(queryByRole(document.body, "button", { name: "Retry message with unknown delivery" })).toBeNull();
+        await app.user.click(app.elementByTestId(dataTestId.messageComposer));
+        await app.user.paste("My next draft");
+        await app.user.click(retry);
+    } finally {
+        releaseEvents();
+    }
+    await app.waitForView(() => {
+        expect(app.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain("My pending instruction");
+        expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
+    });
+    const retried = await app.readSubmission(network.submissions.at(-1));
+    expect(retried.commandId).not.toBe(original.commandId);
+    expect(retried.prompt).toBe(original.prompt);
+    expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "My next draft");
+    expect(app.elementsByTestId(dataTestId.userMessage).map((message) => message.textContent)).toEqual([
+        "Established session",
+        "wait for steering",
+        "My pending instruction",
+    ]);
+});
+
 test("Given completed Sessions on one Computer, When I switch between them and New Session, Then one browser connection carries Computer requests, history and new replies", {
     timeout: dedicatedEnvironmentTimeout,
 }, async () => {

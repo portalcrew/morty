@@ -156,6 +156,16 @@ export async function createChatWorkerEnvironment(
                 encryptionAccess: runtime.encryptionAccess,
                 continueReply: runtime.continueReply,
                 readManagedSessions: (signal: AbortSignal) => runtime.api.managedSessions(signal),
+                readNativeSessions: (signal: AbortSignal) =>
+                    runtime.api.nativeSessions(
+                        {
+                            action: "list",
+                            harness: agents[0]?.harness ?? "codex",
+                            directory: ".",
+                            cursor: null,
+                        },
+                        signal,
+                    ),
                 /** Archives a Session the way another browser window of this Computer would. */
                 archiveSession: async (sessionId: string): Promise<void> => {
                     await runtime.api.archiveManagedSession(
@@ -185,16 +195,36 @@ export async function createChatWorkerEnvironment(
                     }
                 },
                 /** Starts a turn through the Relay, the way another Morty client of this Computer would. */
-                submitTurn: async (sessionId: string, content: string): Promise<void> => {
+                submitTurn: async (
+                    sessionId: string,
+                    content: string,
+                    idempotencyKey: string = crypto.randomUUID(),
+                ): Promise<void> => {
                     const signal = AbortSignal.timeout(30000);
                     const target = { harness: agents[0]?.harness ?? "codex", sessionId };
                     const client = await sessionClient(target, signal);
                     try {
-                        await client.turns.submit(
-                            target,
-                            { attachments: [], content, idempotencyKey: crypto.randomUUID() },
-                            signal,
-                        );
+                        await client.turns.submit(target, { attachments: [], content, idempotencyKey }, signal);
+                    } finally {
+                        client.close();
+                    }
+                },
+                /** Requests steering through another authorized client's real Computer API. */
+                steerTurn: async (sessionId: string, turnId: string): Promise<void> => {
+                    const signal = AbortSignal.timeout(30_000);
+                    const target = { harness: agents[0]?.harness ?? "codex", sessionId };
+                    const client = await sessionClient(target, signal);
+                    try {
+                        await client.turns.steer(target, turnId, signal);
+                    } finally {
+                        client.close();
+                    }
+                },
+                readExecution: async (sessionId: string, signal: AbortSignal) => {
+                    const target = { harness: agents[0]?.harness ?? "codex", sessionId };
+                    const client = await sessionClient(target, signal);
+                    try {
+                        return await client.sessions.readSessionExecution(target, signal);
                     } finally {
                         client.close();
                     }

@@ -215,7 +215,7 @@ const runningTurnResultSchema = z
 const idleTurnResultSchema = z
     .object({ ...executionReadFields, lastTurn: lastTurnOutcomeSchema.optional(), turn: z.null() })
     .readonly();
-export const activeTurnResultSchema = z.union([runningTurnResultSchema, idleTurnResultSchema]);
+const activeTurnResultSchema = z.union([runningTurnResultSchema, idleTurnResultSchema]);
 /** A Session's execution as one read answers it, without the addressing every native result carries. */
 export type SessionExecution =
     z.infer<typeof activeTurnResultSchema> extends infer Read

@@ -54,6 +54,7 @@ export function createSettingsAgent(
     profile: "model" | "full" | "dependent" | "diagnostics" = "model",
     beforeConfigurationApplied?: (configId: string, value: string | boolean) => Promise<void>,
     beforeSessionCreated?: () => Promise<void>,
+    beforeSessionsListed?: (signal: AbortSignal) => Promise<void>,
 ) {
     const sessions = new Map<string, acp.SessionConfigOption[]>();
     const histories = new Map<string, acp.SessionUpdate[]>();
@@ -200,7 +201,10 @@ export function createSettingsAgent(
                 sessions.set(sessionId, options);
                 return { configOptions: options };
             })
-            .onRequest(acp.methods.agent.session.list, () => ({ sessions: [] }))
+            .onRequest(acp.methods.agent.session.list, async (context) => {
+                await beforeSessionsListed?.(context.signal);
+                return { sessions: [] };
+            })
             .onRequest(acp.methods.agent.session.prompt, async (context) => {
                 const sessionId = context.params.sessionId;
                 const messageId = crypto.randomUUID();

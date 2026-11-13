@@ -3,6 +3,7 @@ import {
     MortyCancellationError,
     type MortyClient,
     MortyError,
+    MortyOperationError,
     MortyValidationError,
 } from "@morty-build/client";
 import type { PromptAttachment } from "@morty-build/client/protocol";
@@ -197,10 +198,11 @@ export function prependToDraft(content: string, draft: string): string {
     return draft.length === 0 ? content : content.length === 0 ? draft : `${content}\n\n${draft}`;
 }
 
-/** A local validation failure or a service refusal proves the request took no effect. */
+/** Local validation and terminal addressed refusals settle delivery; ambiguous or retryable failures do not. */
 export function isAuthoritativeFailure(cause: unknown): boolean {
     return (
         cause instanceof MortyValidationError ||
+        (cause instanceof MortyOperationError && cause.recovery === "terminal") ||
         (cause instanceof MortyApiError && cause.status >= 400 && cause.status < 500) ||
         (cause instanceof CloudApiError && cause.status !== null && cause.status >= 400 && cause.status < 500)
     );
