@@ -454,7 +454,8 @@ export function ConversationSidebar({
     const home = useStore(workspace.home);
     const status = useStore(workspace.computer);
     const draftSettings = useStore(workspace.draftControls, (state) => state.settings);
-    const pane = workspace.sessionPane();
+    const openPane = useStore(workspace.pane);
+    const pane = openPane.kind === "open" ? openPane.model : null;
     const paneConnection = useStore(pane?.store ?? noSessionPane, (state) => state.connection);
     const paneDelivery = useStore(pane?.delivery ?? noSessionDelivery, (state) => state.state);
     const paneExecution = useStore(pane?.execution ?? noSessionExecution, (state) => state.state);

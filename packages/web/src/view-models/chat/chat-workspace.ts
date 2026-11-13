@@ -1,6 +1,6 @@
 import { NativeSessionMap, sameNativeSession } from "@morty-build/client/native-session";
 import type { NativeSessionTarget } from "@morty-build/client/protocol";
-import type { StoreApi } from "zustand/vanilla";
+import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import type { IdentityTransfer, LinkedDevice, SharingTerms } from "../../services/identity/anonymous-identity-api.ts";
 import { encodeIdentityScope, type IdentityScope } from "../../services/identity/identity-scope-url.ts";
@@ -22,7 +22,6 @@ import { createDeviceAccessStore, type DeviceAccessStore } from "./device-access
 import { createDraftControlsStore, type DraftControlsStore, draftConfiguration } from "./draft-controls-store.ts";
 import { createLinkedDevicesStore, type LinkedDevicesStore } from "./linked-devices-store.ts";
 import { createNetworkDiagnosticStore, type NetworkDiagnosticStore } from "./network-diagnostic-store.ts";
-import type { SelectedMortySession } from "./open-session.ts";
 import { createRemoteAccessStore, type RemoteAccessStore } from "./remote-access-store.ts";
 import { connectionWaitsForComputer } from "./session-connection.ts";
 import { createSessionPageState, type SessionPageState } from "./session-page-state.ts";
@@ -36,10 +35,16 @@ interface ChatWorkspaceSidebar {
     readonly networkDiagnostic: StoreApi<NetworkDiagnosticStore>;
 }
 
-interface ChatWorkspacePaneEntry {
-    readonly session: SelectedMortySession;
-    readonly model: ReturnType<typeof createSessionPaneModel>;
-}
+/**
+ * The Session pane the workspace keeps. It exists while its session record is the ready selection: another target
+ * closes it, a re-read replaces it, and the workspace tears it down.
+ */
+type WorkspacePane =
+    | { readonly kind: "none" }
+    | { readonly kind: "open"; readonly model: ReturnType<typeof createSessionPaneModel> };
+
+/** What views read of the pane: they follow it, and never start or stop it. */
+type ChatWorkspacePane = { readonly kind: "none" } | { readonly kind: "open"; readonly model: SessionPaneModel };
 
 export interface ChatWorkspace {
     readonly computers: ComputerSwitcherModel | null;
@@ -67,12 +72,11 @@ export interface ChatWorkspace {
     /** Sidebar ephemeral UI and dialog stores; lives outside React with this workspace. */
     readonly sidebar: ChatWorkspaceSidebar;
     /**
-     * The session pane model for the currently selected conversation, created
-     * and started by the workspace when the selection becomes ready for a
-     * fresh session record and stopped when it moves on. Render-time access is
-     * a pure read: `null` means the pane for the ready selection is not built
-     * (yet), which no current view renders through.
+     * The session pane of the currently selected conversation, built and started by the workspace in the transition
+     * that makes the selection ready for a fresh session record, and stopped when it moves on. Views subscribe to it.
      */
+    readonly pane: Pick<StoreApi<ChatWorkspacePane>, "getState" | "getInitialState" | "subscribe">;
+    /** The open pane's model, for callers outside React. */
     readonly sessionPane: () => SessionPaneModel | null;
     /** Restarts the draft settings load, for example from its retry control. */
     readonly retryDraftControls: () => void;
@@ -216,9 +220,9 @@ export function createChatWorkspace(options: {
             if (selection.kind !== "draft") {
                 draftControls.getState().leave();
             }
-            if (paneEntry !== null && (selection.kind !== "ready" || selection.session !== paneEntry.session)) {
-                paneEntry.model.stop();
-                paneEntry = null;
+            const open = paneStore.getState();
+            if (open.kind === "open" && (selection.kind !== "ready" || selection.session !== open.model.session)) {
+                closePane();
             }
         },
         url: window.location.href,
@@ -347,10 +351,12 @@ export function createChatWorkspace(options: {
     };
     const draftWaitsForComputer = (): boolean => draftControls.getState().settings.kind === "unreachable";
     /** The live pane, when its connection used up its automatic retries and waits for the Computer. */
-    const paneWaitingForComputer = (): ChatWorkspacePaneEntry | null =>
-        paneEntry !== null && connectionWaitsForComputer(paneEntry.model.store.getState().connection)
-            ? paneEntry
+    const paneWaitingForComputer = () => {
+        const open = paneStore.getState();
+        return open.kind === "open" && connectionWaitsForComputer(open.model.store.getState().connection)
+            ? open.model
             : null;
+    };
     /** Retry pending reads once the computer is reachable again. */
     const computerRecovery = createComputerRecovery({
         clock: options.clock,
@@ -374,13 +380,19 @@ export function createChatWorkspace(options: {
                     .retry(operationsLifetime.signal)
                     .catch(() => undefined);
             }
-            paneWaitingForComputer()?.model.reconnect();
+            paneWaitingForComputer()?.reconnect();
         },
     });
-    // The single live pane model. It lives while its session record is the
-    // ready selection: another target stops it, a re-read replaces it, and
-    // the workspace tears it down.
-    let paneEntry: ChatWorkspacePaneEntry | null = null;
+    // The single live pane. It lives while its session record is the ready selection: another target closes it, a
+    // re-read replaces it, and the workspace tears it down.
+    const paneStore = createStore<WorkspacePane>(() => ({ kind: "none" }));
+    const closePane = (): void => {
+        const open = paneStore.getState();
+        if (open.kind === "open") {
+            paneStore.setState({ kind: "none" }, true);
+            open.model.stop();
+        }
+    };
     // What the page holds for each Session, independently of pane and connection replacements.
     const sessionStates = new NativeSessionMap<SessionPageState>();
     const sessionState = (sessionTarget: NativeSessionTarget): SessionPageState => {
@@ -405,7 +417,8 @@ export function createChatWorkspace(options: {
         return state;
     };
     const replacePane = (selection: Extract<ConversationSelectionState, { readonly kind: "ready" }>): void => {
-        if (paneEntry !== null && paneEntry.session === selection.session) {
+        const open = paneStore.getState();
+        if (open.kind === "open" && open.model.session === selection.session) {
             return;
         }
         // Keyed by the session record, not its id: every ready selection
@@ -413,7 +426,7 @@ export function createChatWorkspace(options: {
         // creation result for a new one), so the pane starts from a pristine
         // projection with its older-history pagination instead of whatever
         // the previous pane accumulated.
-        paneEntry?.model.stop();
+        closePane();
         const sessionTarget = selection.session.result.ready.target;
         if (
             options.rememberedIdentity !== undefined &&
@@ -451,7 +464,7 @@ export function createChatWorkspace(options: {
             onConnected: () => computerRecovery.working(),
             onWaitingForComputer: () => computerRecovery.failed(),
         });
-        paneEntry = { model, session: selection.session };
+        paneStore.setState({ kind: "open", model }, true);
         model.start();
     };
 
@@ -533,7 +546,11 @@ export function createChatWorkspace(options: {
         statuses,
         draftControls,
         sidebar,
-        sessionPane: () => paneEntry?.model ?? null,
+        pane: paneStore,
+        sessionPane: () => {
+            const open = paneStore.getState();
+            return open.kind === "open" ? open.model : null;
+        },
         retryDraftControls: () => {
             void draftControls
                 .getState()
@@ -551,7 +568,7 @@ export function createChatWorkspace(options: {
             for (const state of sessionStates.values()) {
                 state.composer.getState().attachments.getState().clear();
             }
-            paneEntry?.model.stop();
+            closePane();
             chatLifetime.abort(new Error("The chat workspace was disposed."));
             directoryLifetime.abort(new Error("The chat workspace was disposed."));
             operationsLifetime.abort(new Error("The chat workspace was disposed."));

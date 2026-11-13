@@ -16,6 +16,8 @@ export interface SessionOperationFacts {
     readonly delivery: SessionDeliveryStore["state"]["kind"];
     /** The Agent waits for the user's answer to a permission request or question. */
     readonly waitingForInput: boolean;
+    /** The running turn belongs to the native session's owner, such as the Codex app, which only it can stop. */
+    readonly ownerRunsTurn: boolean;
 }
 
 /**
@@ -84,6 +86,20 @@ export function canChangeSettings(
         facts.delivery === "idle" &&
         !facts.stopping
     );
+}
+
+/** Stopping the running turn: the Session is reachable, and the turn is Morty's to stop rather than its owner's. */
+export function canStop(
+    facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "ownerRunsTurn">,
+): boolean {
+    return facts.connectionAvailable && facts.connection === "ready" && !facts.ownerRunsTurn;
+}
+
+/** Stopping from the settings notice, which also waits out a stop the user already asked for. */
+export function canStopFromSettings(
+    facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "ownerRunsTurn" | "stopping">,
+): boolean {
+    return canStop(facts) && !facts.stopping;
 }
 
 /** The composer holds a message to send or queue: text or files, with no file still being read. */
