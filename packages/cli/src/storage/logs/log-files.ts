@@ -79,8 +79,8 @@ export async function readOwnedLogFile(path: string, signal: AbortSignal): Promi
     try {
         // Pin the file before checking it. NONBLOCK also keeps a raced-in FIFO from hanging collection.
         handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
-        const metadata = await handle.stat();
-        const current = await lstat(path);
+        const metadata = await handle.stat({ bigint: true });
+        const current = await lstat(path, { bigint: true });
         // The path check preserves link rejection on platforms without O_NOFOLLOW.
         if (
             !metadata.isFile() ||
@@ -107,7 +107,7 @@ export async function readOwnedLogFile(path: string, signal: AbortSignal): Promi
     }
 }
 
-function ownedByCurrentUser(metadata: { readonly uid: number }): boolean {
+function ownedByCurrentUser(metadata: { readonly uid: number | bigint }): boolean {
     // Windows reports uid 0 for every file, so ownership is not a signal there.
-    return process.getuid === undefined || metadata.uid === process.getuid();
+    return process.getuid === undefined || BigInt(metadata.uid) === BigInt(process.getuid());
 }
