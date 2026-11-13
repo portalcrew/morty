@@ -112,17 +112,23 @@ describe("acp interactions", () => {
         expect(result.text).toContain("main");
         const retry = {
             action: "accept" as const,
-            content: ' { "branch" : "main" } ',
+            content: { branch: "main" },
             interactionId: result.elicitation.interactionId,
             target: session.request.target,
         };
         await expect(session.manager.respondElicitation(retry)).resolves.toBeUndefined();
         await expect(
-            session.manager.respondElicitation({ ...retry, content: '{"branch":"other"}' }),
+            session.manager.respondElicitation({ ...retry, content: { branch: "other" } }),
         ).rejects.toMatchObject({
             code: "elicitation_response_conflict",
         });
-        await expect(session.manager.respondElicitation({ ...retry, action: "decline" })).rejects.toMatchObject({
+        await expect(
+            session.manager.respondElicitation({
+                action: "decline",
+                interactionId: retry.interactionId,
+                target: retry.target,
+            }),
+        ).rejects.toMatchObject({
             code: "elicitation_response_conflict",
         });
 
@@ -144,6 +150,38 @@ describe("acp interactions", () => {
         );
     });
 
+    it("Given a form whose defaults pre-select all of its many options, When it is requested, Then every default selection reaches the user", async () => {
+        await using session = await createControlledSession();
+        const running = session.manager.runPrompt({
+            ...session.request,
+            commandId: "many-defaults-command",
+            prompt: "ask for many default choices",
+            images: [],
+            resources: [],
+        });
+        const elicitation = await Promise.race([
+            session.observer.elicitationArrived.promise,
+            running.then(() => {
+                throw new Error("The prompt completed before the elicitation");
+            }),
+        ]);
+        if (elicitation.mode !== "form") {
+            throw new Error("Expected a form elicitation");
+        }
+        const [field] = elicitation.fields;
+        if (field?.type !== "multiselect") {
+            throw new Error("Expected a multiselect field");
+        }
+        expect(field.options).toHaveLength(200);
+        expect(field.default).toEqual(field.options.map((option) => option.value));
+        await session.manager.respondElicitation({
+            action: "cancel",
+            interactionId: elicitation.interactionId,
+            target: session.request.target,
+        });
+        await running;
+    });
+
     it("Given URL elicitation, When the user consents and the agent reports completion, Then the out-of-band interaction stays correlated through completion", async () => {
         await using session = await createControlledSession();
         const running = session.manager.runPrompt({
@@ -160,13 +198,11 @@ describe("acp interactions", () => {
             }),
         ]);
         expect(elicitation).toMatchObject({
-            accepted: false,
             mode: "url",
             url: expect.stringContaining("https://example.com/connect/"),
         });
         await session.manager.respondElicitation({
-            action: "accept",
-            content: "",
+            action: "accept-url",
             interactionId: elicitation.interactionId,
             target: session.request.target,
         });
@@ -176,8 +212,7 @@ describe("acp interactions", () => {
         });
         await expect(
             session.manager.respondElicitation({
-                action: "accept",
-                content: "",
+                action: "accept-url",
                 interactionId: elicitation.interactionId,
                 target: session.request.target,
             }),

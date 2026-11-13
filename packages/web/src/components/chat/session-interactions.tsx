@@ -112,7 +112,7 @@ function SelectFieldControl({
     onChange,
 }: {
     readonly disabled: boolean;
-    readonly field: SessionElicitationField;
+    readonly field: Extract<SessionElicitationField, { readonly type: "select" }>;
     readonly selected: string;
     readonly onChange: (value: ElicitationFieldValue) => void;
 }) {
@@ -188,8 +188,7 @@ function FieldControl({
             </label>
         );
     }
-    const numeric = field.type === "integer" || field.type === "number";
-    if (field.type === "string" && field.multiline === true) {
+    if (field.type === "string" && field.multiline) {
         return (
             <label className={fieldLabelClassName}>
                 {field.title}
@@ -198,12 +197,43 @@ function FieldControl({
                     value={text}
                     onChange={(event) => onChange(event.currentTarget.value)}
                     disabled={disabled}
-                    maxLength={field.maximumLength.length > 0 ? Number(field.maximumLength) : undefined}
-                    minLength={field.minimumLength.length > 0 ? Number(field.minimumLength) : undefined}
+                    maxLength={field.maximumLength}
+                    minLength={field.minimumLength}
                     name={field.name}
                     placeholder={field.description}
-                    required={field.required && Number(field.minimumLength) > 0}
+                    required={field.required && (field.minimumLength ?? 0) > 0}
                     rows={3}
+                />
+                {field.description.length > 0 && <span className={fieldDescriptionClassName}>{field.description}</span>}
+            </label>
+        );
+    }
+    if (field.type === "string") {
+        return (
+            <label className={fieldLabelClassName}>
+                {field.title}
+                <input
+                    className={cn(nativeFieldClassName, "min-h-11 rounded-full font-normal md:min-h-9")}
+                    value={text}
+                    onChange={(event) => onChange(event.currentTarget.value)}
+                    disabled={disabled}
+                    maxLength={field.maximumLength}
+                    minLength={field.minimumLength}
+                    name={field.name}
+                    pattern={field.pattern}
+                    placeholder={field.description}
+                    required={field.required && (field.minimumLength ?? 0) > 0}
+                    type={
+                        field.format === "email"
+                            ? "email"
+                            : field.format === "uri"
+                              ? "url"
+                              : field.format === "date"
+                                ? "date"
+                                : field.format === "date-time"
+                                  ? "datetime-local"
+                                  : "text"
+                    }
                 />
                 {field.description.length > 0 && <span className={fieldDescriptionClassName}>{field.description}</span>}
             </label>
@@ -217,47 +247,17 @@ function FieldControl({
                 value={text}
                 onChange={(event) => onChange(event.currentTarget.value)}
                 disabled={disabled}
-                max={field.maximum.length > 0 ? field.maximum : undefined}
-                maxLength={!numeric && field.maximumLength.length > 0 ? Number(field.maximumLength) : undefined}
-                min={field.minimum.length > 0 ? field.minimum : undefined}
-                minLength={!numeric && field.minimumLength.length > 0 ? Number(field.minimumLength) : undefined}
+                max={field.maximum}
+                min={field.minimum}
                 name={field.name}
-                pattern={field.pattern.length > 0 ? field.pattern : undefined}
                 placeholder={field.description}
-                required={field.required && (numeric || Number(field.minimumLength) > 0)}
+                required={field.required}
                 step={field.type === "integer" ? 1 : "any"}
-                type={
-                    numeric
-                        ? "number"
-                        : field.format === "email"
-                          ? "email"
-                          : field.format === "uri"
-                            ? "url"
-                            : field.format === "date"
-                              ? "date"
-                              : field.format === "date-time"
-                                ? "datetime-local"
-                                : "text"
-                }
+                type="number"
             />
             {field.description.length > 0 && <span className={fieldDescriptionClassName}>{field.description}</span>}
         </label>
     );
-}
-
-function elicitationAnswers(elicitation: ElicitationInteraction): Readonly<Record<string, unknown>> {
-    if (elicitation.state.kind === "pending" || elicitation.state.content.length === 0) {
-        return {};
-    }
-    try {
-        const decoded: unknown = JSON.parse(elicitation.state.content);
-        if (typeof decoded !== "object" || decoded === null || Array.isArray(decoded)) {
-            return {};
-        }
-        return Object.fromEntries(Object.entries(decoded));
-    } catch {
-        return {};
-    }
 }
 
 /** Generic affirmatives/negatives carry no scope, so the label is derived from the option kind instead. */
@@ -394,9 +394,12 @@ function PermissionCard({
     const detailsContentId = useId();
     const actionRow = useRef<HTMLDivElement>(null);
     useWrappedButtonRadius(actionRow);
-    const decidedOptionId = permission.state.kind === "pending" ? undefined : permission.state.optionId;
-    if (decidedOptionId !== undefined) {
-        const chosen = permission.options.find((option) => option.optionId === decidedOptionId);
+    if (permission.state.kind === "resolved") {
+        const answer = permission.state.answer;
+        const chosen =
+            answer.outcome === "selected"
+                ? permission.options.find((option) => option.optionId === answer.optionId)
+                : undefined;
         return (
             <section className={interactionCardClassName} role="alertdialog" aria-label="Agent permission request">
                 <div className="flex items-start gap-2">
@@ -494,9 +497,8 @@ function PermissionCard({
                                 key={option.optionId}
                                 onClick={() => {
                                     respond({
+                                        answer: { outcome: "selected", optionId: option.optionId },
                                         interactionId: permission.interactionId,
-                                        optionId: option.optionId,
-                                        outcome: "selected",
                                         target: permission.target,
                                     });
                                 }}
@@ -522,40 +524,15 @@ function PermissionCard({
     );
 }
 
-function formatAnswerValue(value: unknown): string {
-    if (typeof value === "string") {
-        return value;
+/** A one-word note on how a decided information request ended. */
+function answeredNote(state: Exclude<ElicitationInteraction["state"], { readonly kind: "pending" }>): string {
+    if (state.kind === "resolved" && state.action === "decline") {
+        return "Declined";
     }
-    if (Array.isArray(value)) {
-        return value.join(", ");
+    if (state.kind === "resolved" && state.action === "cancel") {
+        return "Cancelled";
     }
-    if (typeof value === "boolean") {
-        return value ? "yes" : "no";
-    }
-    return String(value);
-}
-
-/** Outcome of a decided information request: the answered values, or a one-word note for decline/cancel. */
-type AnsweredOutcome =
-    | { readonly kind: "answers"; readonly parts: readonly { readonly title: string; readonly value: string }[] }
-    | { readonly kind: "note"; readonly text: string };
-
-function answeredOutcome(elicitation: ElicitationInteraction): AnsweredOutcome {
-    const state = elicitation.state;
-    if (state.kind === "pending") {
-        return { kind: "note", text: "Accepted" };
-    }
-    if (state.action === "decline") {
-        return { kind: "note", text: "Declined" };
-    }
-    if (state.action === "cancel") {
-        return { kind: "note", text: "Cancelled" };
-    }
-    const answers = elicitationAnswers(elicitation);
-    const parts = elicitation.fields
-        .filter((field) => Reflect.has(answers, field.name))
-        .map((field) => ({ title: field.title, value: formatAnswerValue(Reflect.get(answers, field.name)) }));
-    return parts.length > 0 ? { kind: "answers", parts } : { kind: "note", text: "Accepted" };
+    return "Accepted";
 }
 
 function ElicitationCard({
@@ -572,19 +549,18 @@ function ElicitationCard({
     readonly respond: (response: ElicitationInteractionResponse) => void;
     readonly editAnswer: (fieldName: string, value: ElicitationFieldValue) => void;
 }) {
-    const externalUrl = safeExternalUrl(elicitation.url);
+    const externalUrl = elicitation.mode === "url" ? safeExternalUrl(elicitation.url) : "";
     const answered = elicitation.state.kind !== "pending";
     const [missingRequiredTitle, setMissingRequiredTitle] = useState("");
-    const cancel = (action: ElicitationInteractionResponse["action"]): void => {
+    const refuse = (action: "cancel" | "decline"): void => {
         respond({
-            action,
-            content: "",
+            answer: { action },
             interactionId: elicitation.interactionId,
             target: elicitation.target,
         });
     };
-    if (answered && elicitation.mode === "form") {
-        const outcome = answeredOutcome(elicitation);
+    if (elicitation.state.kind !== "pending" && elicitation.mode === "form") {
+        const note = answeredNote(elicitation.state);
         return (
             <section className={interactionCardClassName} role="dialog" aria-label="Agent information request">
                 <div className="flex items-start gap-2">
@@ -592,18 +568,7 @@ function ElicitationCard({
                     <div className="min-w-0 flex-1">
                         <p className={interactionTitleClassName}>Asked</p>
                         <p className="mt-1 text-13 leading-5 text-foreground">{elicitation.message}</p>
-                        {outcome.kind === "answers" ? (
-                            <dl className="mt-2 grid gap-1 text-12 leading-5">
-                                {outcome.parts.map((part) => (
-                                    <div className="flex flex-wrap gap-x-1.5" key={part.title}>
-                                        <dt className="text-muted-foreground">{part.title}:</dt>
-                                        <dd className="font-medium text-foreground">{part.value}</dd>
-                                    </div>
-                                ))}
-                            </dl>
-                        ) : (
-                            <p className="mt-1 text-12 leading-5 text-muted-foreground">{outcome.text}</p>
-                        )}
+                        <p className="mt-1 text-12 leading-5 text-muted-foreground">{note}</p>
                     </div>
                 </div>
             </section>
@@ -628,7 +593,8 @@ function ElicitationCard({
                             <code className="block break-all rounded-md bg-muted px-3 py-2 font-mono text-12 leading-5 text-foreground">
                                 {externalUrl.length > 0 ? externalUrl : elicitation.url}
                             </code>
-                            {answered && elicitation.state.action === "accept" ? (
+                            {elicitation.state.kind === "submitted" ||
+                            (elicitation.state.kind === "resolved" && elicitation.state.action === "accept") ? (
                                 <div className="mt-2.5 flex flex-wrap items-center gap-2">
                                     <span className="text-12 text-muted-foreground">
                                         Waiting for the agent to confirm completion…
@@ -653,8 +619,7 @@ function ElicitationCard({
                                             onClick={() => {
                                                 window.open(externalUrl, "_blank", "noopener,noreferrer");
                                                 respond({
-                                                    action: "accept",
-                                                    content: "",
+                                                    answer: { action: "accept-url" },
                                                     interactionId: elicitation.interactionId,
                                                     target: elicitation.target,
                                                 });
@@ -667,7 +632,7 @@ function ElicitationCard({
                                     <Button
                                         className="min-h-11 md:min-h-9"
                                         disabled={busy || answered}
-                                        onClick={() => cancel("decline")}
+                                        onClick={() => refuse("decline")}
                                         size="sm"
                                         variant="outline"
                                     >
@@ -676,7 +641,7 @@ function ElicitationCard({
                                     <Button
                                         className="min-h-11 md:min-h-9"
                                         disabled={busy || answered}
-                                        onClick={() => cancel("cancel")}
+                                        onClick={() => refuse("cancel")}
                                         size="sm"
                                         variant="ghost"
                                     >
@@ -703,8 +668,10 @@ function ElicitationCard({
                                 }
                                 setMissingRequiredTitle("");
                                 respond({
-                                    action: "accept",
-                                    content: encodeElicitationAnswers(elicitation.fields, draft),
+                                    answer: {
+                                        action: "accept",
+                                        content: encodeElicitationAnswers(elicitation.fields, draft),
+                                    },
                                     interactionId: elicitation.interactionId,
                                     target: elicitation.target,
                                 });
@@ -734,7 +701,7 @@ function ElicitationCard({
                                 <Button
                                     className="min-h-11 md:min-h-9"
                                     disabled={busy || answered}
-                                    onClick={() => cancel("decline")}
+                                    onClick={() => refuse("decline")}
                                     size="sm"
                                     variant="outline"
                                 >
@@ -743,7 +710,7 @@ function ElicitationCard({
                                 <Button
                                     className="min-h-11 md:min-h-9"
                                     disabled={busy || answered}
-                                    onClick={() => cancel("cancel")}
+                                    onClick={() => refuse("cancel")}
                                     size="sm"
                                     variant="ghost"
                                 >

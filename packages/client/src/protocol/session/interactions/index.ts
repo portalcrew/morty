@@ -24,6 +24,7 @@ export const SESSION_PERMISSION_RESOLVED_KIND = "session.permission.resolved";
 export const SESSION_ELICITATION_REQUESTED_KIND = "session.elicitation.requested";
 export const SESSION_ELICITATION_RESPOND_KIND = "session.elicitation.respond";
 export const SESSION_ELICITATION_RESOLVED_KIND = "session.elicitation.resolved";
+export const SESSION_ELICITATION_AWAITING_COMPLETION_KIND = "session.elicitation.awaiting-completion";
 export const SESSION_INTERACTION_ANSWERED_KIND = "session.interaction.answered";
 
 const permissionOptionSchema = z
@@ -46,29 +47,85 @@ const elicitationOptionSchema = z
 
 export type SessionElicitationOption = z.infer<typeof elicitationOptionSchema>;
 
-const elicitationFieldSchema = z
-    .object({
-        defaultBooleanValue: z.boolean(),
-        defaultNumberValue: z.number().finite(),
-        defaultStringValue: z.string().max(10_000),
-        description: SHORT_TEXT,
-        format: z.string().max(64),
-        hasDefaultValue: z.boolean(),
-        maximum: z.string().max(128),
-        maximumLength: z.string().max(128),
-        minimum: z.string().max(128),
-        minimumLength: z.string().max(128),
-        multiline: z.boolean().optional(),
-        name: z.string().min(1).max(128),
-        options: z.array(elicitationOptionSchema).max(200).readonly(),
-        pattern: z.string().max(500),
-        required: z.boolean(),
-        title: z.string().min(1).max(255),
-        type: z.enum(["boolean", "integer", "multiselect", "number", "select", "string"]),
-    })
-    .readonly();
+const elicitationFieldBase = {
+    description: SHORT_TEXT,
+    name: z.string().min(1).max(128),
+    required: z.boolean(),
+    title: z.string().min(1).max(255),
+};
+const lengthBound = z.number().int().nonnegative();
+
+/** A form field holds only the default and the limits its own type takes. */
+const elicitationFieldSchema = z.discriminatedUnion("type", [
+    z.object({ ...elicitationFieldBase, default: z.boolean().optional(), type: z.literal("boolean") }).readonly(),
+    z
+        .object({
+            ...elicitationFieldBase,
+            default: z.string().max(10_000).optional(),
+            format: z.string().min(1).max(64).optional(),
+            maximumLength: lengthBound.optional(),
+            minimumLength: lengthBound.optional(),
+            multiline: z.boolean(),
+            pattern: z.string().min(1).max(500).optional(),
+            type: z.literal("string"),
+        })
+        .readonly(),
+    z
+        .object({
+            ...elicitationFieldBase,
+            default: z.number().finite().optional(),
+            maximum: z.number().finite().optional(),
+            minimum: z.number().finite().optional(),
+            type: z.literal("integer"),
+        })
+        .readonly(),
+    z
+        .object({
+            ...elicitationFieldBase,
+            default: z.number().finite().optional(),
+            maximum: z.number().finite().optional(),
+            minimum: z.number().finite().optional(),
+            type: z.literal("number"),
+        })
+        .readonly(),
+    z
+        .object({
+            ...elicitationFieldBase,
+            default: z.string().max(500).optional(),
+            options: z.array(elicitationOptionSchema).max(200).readonly(),
+            type: z.literal("select"),
+        })
+        .readonly(),
+    z
+        .object({
+            ...elicitationFieldBase,
+            default: z.array(z.string().max(500)).max(200).readonly().optional(),
+            maximumSelections: lengthBound.optional(),
+            minimumSelections: lengthBound.optional(),
+            options: z.array(elicitationOptionSchema).max(200).readonly(),
+            type: z.literal("multiselect"),
+        })
+        .readonly(),
+]);
 
 export type SessionElicitationField = z.infer<typeof elicitationFieldSchema>;
+
+/** The value a form field is answered with. */
+const elicitationAnswerValueSchema = z.union([
+    z.string().max(100_000),
+    z.number().finite(),
+    z.boolean(),
+    z.array(z.string().max(500)).max(200).readonly(),
+]);
+
+export type SessionElicitationAnswerValue = z.infer<typeof elicitationAnswerValueSchema>;
+
+const elicitationFormContentSchema = z
+    .record(z.string().min(1).max(128), elicitationAnswerValueSchema)
+    .refine((content) => Object.keys(content).length <= 100 && JSON.stringify(content).length <= 100_000)
+    .readonly();
+
+export type SessionElicitationFormContent = z.infer<typeof elicitationFormContentSchema>;
 
 export const sessionPermissionRequestedEventSchema = z
     .object({
@@ -92,16 +149,24 @@ export const sessionPermissionRequestedEventSchema = z
 
 export type SessionPermissionRequestedEvent = z.infer<typeof sessionPermissionRequestedEventSchema>;
 
-const sessionPermissionRespondCommandSchema = z
-    .object({
-        interactionId: IDENTIFIER,
-        kind: z.literal(SESSION_PERMISSION_RESPOND_KIND),
-        optionId: z.string().max(255),
-        outcome: z.enum(["cancelled", "selected"]),
-        requestId: IDENTIFIER,
-        target: nativeSessionTargetSchema,
-    })
-    .readonly();
+const sessionPermissionRespondBase = {
+    interactionId: IDENTIFIER,
+    kind: z.literal(SESSION_PERMISSION_RESPOND_KIND),
+    requestId: IDENTIFIER,
+    target: nativeSessionTargetSchema,
+};
+
+/** An answer chooses one of the offered options, or declines them all; only a choice names an option. */
+const sessionPermissionRespondCommandSchema = z.discriminatedUnion("outcome", [
+    z
+        .object({
+            ...sessionPermissionRespondBase,
+            optionId: z.string().min(1).max(255),
+            outcome: z.literal("selected"),
+        })
+        .readonly(),
+    z.object({ ...sessionPermissionRespondBase, outcome: z.literal("cancelled") }).readonly(),
+]);
 
 /**
  * Repeating the same answer succeeds within the live Session's last 256 answered permissions. A different
@@ -110,45 +175,85 @@ const sessionPermissionRespondCommandSchema = z
  */
 export type SessionPermissionRespondCommand = z.infer<typeof sessionPermissionRespondCommandSchema>;
 
-export const sessionPermissionResolvedEventSchema = z
-    .object({
-        interactionId: IDENTIFIER,
-        kind: z.literal(SESSION_PERMISSION_RESOLVED_KIND),
-        optionId: z.string().max(255),
-        outcome: z.enum(["cancelled", "selected"]),
-        target: nativeSessionTargetSchema,
-    })
-    .readonly();
+const sessionPermissionResolvedBase = {
+    interactionId: IDENTIFIER,
+    kind: z.literal(SESSION_PERMISSION_RESOLVED_KIND),
+    target: nativeSessionTargetSchema,
+};
+
+export const sessionPermissionResolvedEventSchema = z.discriminatedUnion("outcome", [
+    z
+        .object({
+            ...sessionPermissionResolvedBase,
+            optionId: z.string().min(1).max(255),
+            outcome: z.literal("selected"),
+        })
+        .readonly(),
+    z.object({ ...sessionPermissionResolvedBase, outcome: z.literal("cancelled") }).readonly(),
+]);
 
 export type SessionPermissionResolvedEvent = z.infer<typeof sessionPermissionResolvedEventSchema>;
 
-export const sessionElicitationRequestedEventSchema = z
-    .object({
-        accepted: z.boolean(),
-        commandId: IDENTIFIER,
-        elicitationId: z.string().max(255),
-        fields: z.array(elicitationFieldSchema).max(100).readonly(),
-        interactionId: IDENTIFIER,
-        kind: z.literal(SESSION_ELICITATION_REQUESTED_KIND),
-        message: z.string().min(1).max(2_000),
-        mode: z.enum(["form", "url"]),
-        target: nativeSessionTargetSchema,
-        url: z.string().max(4_096),
-    })
-    .readonly();
+const sessionElicitationRequestedBase = {
+    commandId: IDENTIFIER,
+    interactionId: IDENTIFIER,
+    kind: z.literal(SESSION_ELICITATION_REQUESTED_KIND),
+    message: z.string().min(1).max(2_000),
+    target: nativeSessionTargetSchema,
+};
+const elicitationUrlRequest = {
+    elicitationId: z.string().min(1).max(255),
+    url: z.string().min(1).max(4_096),
+};
+
+/** The Agent asks for a form to be filled, or for the user to visit a URL; each mode carries only its own data. */
+export const sessionElicitationRequestedEventSchema = z.discriminatedUnion("mode", [
+    z
+        .object({
+            ...sessionElicitationRequestedBase,
+            fields: z.array(elicitationFieldSchema).max(100).readonly(),
+            mode: z.literal("form"),
+        })
+        .readonly(),
+    z.object({ ...sessionElicitationRequestedBase, ...elicitationUrlRequest, mode: z.literal("url") }).readonly(),
+]);
 
 export type SessionElicitationRequestedEvent = z.infer<typeof sessionElicitationRequestedEventSchema>;
 
-const sessionElicitationRespondCommandSchema = z
+/** A URL request the user accepted and the Agent has not yet completed: only a snapshot describes it. */
+export const sessionElicitationAwaitingCompletionEventSchema = z
     .object({
-        action: z.enum(["accept", "cancel", "decline"]),
-        content: z.string().max(100_000),
-        interactionId: IDENTIFIER,
-        kind: z.literal(SESSION_ELICITATION_RESPOND_KIND),
-        requestId: IDENTIFIER,
-        target: nativeSessionTargetSchema,
+        ...sessionElicitationRequestedBase,
+        ...elicitationUrlRequest,
+        kind: z.literal(SESSION_ELICITATION_AWAITING_COMPLETION_KIND),
     })
     .readonly();
+
+export type SessionElicitationAwaitingCompletionEvent = z.infer<typeof sessionElicitationAwaitingCompletionEventSchema>;
+
+const sessionElicitationRespondBase = {
+    interactionId: IDENTIFIER,
+    kind: z.literal(SESSION_ELICITATION_RESPOND_KIND),
+    requestId: IDENTIFIER,
+    target: nativeSessionTargetSchema,
+};
+
+/**
+ * The user's answer. A form is accepted with its content, a URL by going to it; a request of the other mode is
+ * refused with invalid_elicitation_response.
+ */
+const sessionElicitationRespondCommandSchema = z.discriminatedUnion("action", [
+    z
+        .object({
+            ...sessionElicitationRespondBase,
+            action: z.literal("accept"),
+            content: elicitationFormContentSchema,
+        })
+        .readonly(),
+    z.object({ ...sessionElicitationRespondBase, action: z.literal("accept-url") }).readonly(),
+    z.object({ ...sessionElicitationRespondBase, action: z.literal("decline") }).readonly(),
+    z.object({ ...sessionElicitationRespondBase, action: z.literal("cancel") }).readonly(),
+]);
 
 export type SessionElicitationRespondCommand = z.infer<typeof sessionElicitationRespondCommandSchema>;
 

@@ -188,6 +188,32 @@ export async function runInteractionScenario(
             return { stopReason: "cancelled" };
         }
     }
+    if (prompt === "ask for many default choices") {
+        // The Agent pre-selects every one of its 200 options: far more than a string field's worth of characters.
+        const choices = Array.from(
+            { length: 200 },
+            (_, index) => `branch-${String(index).padStart(3, "0")}-${"x".repeat(45)}`,
+        );
+        const elicitation = await context.client.request(acp.methods.client.elicitation.create, {
+            message: "Choose the branches to verify",
+            mode: "form",
+            requestedSchema: {
+                properties: {
+                    branches: {
+                        default: choices,
+                        items: { enum: choices, type: "string" },
+                        title: "Branches",
+                        type: "array",
+                    },
+                },
+                type: "object",
+            },
+            sessionId: context.params.sessionId,
+        });
+        if (elicitation.action !== "accept") {
+            return { stopReason: "cancelled" };
+        }
+    }
     if (prompt === "exercise URL elicitation") {
         const elicitationId = `url-${turnNumber.toString()}`;
         const elicitation = await context.client.request(acp.methods.client.elicitation.create, {

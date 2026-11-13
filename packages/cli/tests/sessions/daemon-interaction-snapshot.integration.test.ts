@@ -245,7 +245,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         await socket.send(
             encodeSessionElicitationRespondCommand({
                 action: "accept",
-                content: JSON.stringify({ branch: "main" }),
+                content: { branch: "main" },
                 interactionId: elicitation.interactionId,
                 kind: "session.elicitation.respond",
                 requestId: crypto.randomUUID(),

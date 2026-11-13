@@ -1,7 +1,10 @@
+import type { MortyPermissionAnswer } from "@morty-build/client";
 import type {
+    SessionElicitationAwaitingCompletionEvent,
     SessionElicitationRequestedEvent,
     SessionLiveEvent,
     SessionPermissionRequestedEvent,
+    SessionPermissionResolvedEvent,
 } from "@morty-build/client/protocol";
 import type { SessionInteraction } from "./session-pane-types.ts";
 
@@ -22,8 +25,7 @@ export type SessionLifecycleFact =
     | {
           readonly kind: "permission-resolved";
           readonly interactionId: string;
-          readonly optionId: string;
-          readonly outcome: LifecycleEvent<"session.permission.resolved">["outcome"];
+          readonly answer: MortyPermissionAnswer;
       }
     | {
           readonly kind: "elicitation-resolved";
@@ -48,8 +50,7 @@ export function sessionLifecycleFact(payload: LifecycleMetadata): SessionLifecyc
             return {
                 kind: "permission-resolved",
                 interactionId: payload.event.interactionId,
-                optionId: payload.event.optionId,
-                outcome: payload.event.outcome,
+                answer: permissionAnswer(payload.event),
             };
         case "session.elicitation.resolved":
             return {
@@ -79,24 +80,33 @@ export function sessionLifecycleFact(payload: LifecycleMetadata): SessionLifecyc
     }
 }
 
-/** The pending interaction a live request or an active-turn snapshot describes. */
+/** The pending interaction a live request or an interaction snapshot describes. */
 export function requestedInteraction(
-    event: SessionPermissionRequestedEvent | SessionElicitationRequestedEvent,
+    event:
+        | SessionPermissionRequestedEvent
+        | SessionElicitationRequestedEvent
+        | SessionElicitationAwaitingCompletionEvent,
 ): SessionInteraction {
     switch (event.kind) {
         case "session.permission.requested":
             return { kind: "permission", permission: { ...event, state: { kind: "pending" } } };
         case "session.elicitation.requested": {
-            const { accepted, ...elicitation } = event;
+            const { commandId: _commandId, kind: _kind, ...elicitation } = event;
+            return { kind: "elicitation", elicitation: { ...elicitation, state: { kind: "pending" } } };
+        }
+        case "session.elicitation.awaiting-completion": {
+            const { commandId: _commandId, kind: _kind, ...elicitation } = event;
             return {
                 kind: "elicitation",
-                elicitation: {
-                    ...elicitation,
-                    state: accepted ? { action: "accept", content: "", kind: "submitted" } : { kind: "pending" },
-                },
+                elicitation: { ...elicitation, mode: "url", state: { kind: "submitted" } },
             };
         }
         default:
             return event satisfies never;
     }
+}
+
+/** What a permission was decided to be, whichever option was chosen. */
+function permissionAnswer(event: SessionPermissionResolvedEvent): MortyPermissionAnswer {
+    return event.outcome === "selected" ? { outcome: "selected", optionId: event.optionId } : { outcome: "cancelled" };
 }

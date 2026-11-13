@@ -234,7 +234,10 @@ export {
 } from "./session/files/index.ts";
 export type {
     InteractionAccepted,
+    SessionElicitationAnswerValue,
+    SessionElicitationAwaitingCompletionEvent,
     SessionElicitationField,
+    SessionElicitationFormContent,
     SessionElicitationOption,
     SessionElicitationRequestedEvent,
     SessionElicitationResolvedEvent,
@@ -255,6 +258,7 @@ export {
     decodeSessionPermissionRequestedEvent,
     encodeSessionElicitationRespondCommand,
     encodeSessionPermissionRespondCommand,
+    SESSION_ELICITATION_AWAITING_COMPLETION_KIND,
     SESSION_ELICITATION_REQUESTED_KIND,
     SESSION_ELICITATION_RESOLVED_KIND,
     SESSION_ELICITATION_RESPOND_KIND,

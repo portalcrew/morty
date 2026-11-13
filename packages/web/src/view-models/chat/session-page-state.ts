@@ -113,22 +113,9 @@ export function createSessionPageState(options: {
     const answerDraftsEntry = elicitationAnswerDraftsEntry(computerId, sessionTarget);
     const interactions = createSessionInteractionStore({
         permission: (response, signal) =>
-            respond(
-                response.interactionId,
-                {
-                    kind: "permission",
-                    responderId: "morty-web",
-                    outcome: response.outcome,
-                    optionId: response.optionId,
-                },
-                signal,
-            ),
+            respond(response.interactionId, { kind: "permission", answer: response.answer }, signal),
         elicitation: (response, signal) =>
-            respond(
-                response.interactionId,
-                { kind: "elicitation", responderId: "morty-web", action: response.action, content: response.content },
-                signal,
-            ),
+            respond(response.interactionId, { kind: "elicitation", answer: response.answer }, signal),
         answerDrafts: new Map(Object.entries(centralSessionStorage.read(answerDraftsEntry) ?? {})),
         answerDraftsChanged: (drafts) => {
             if (drafts.size === 0) {

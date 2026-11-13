@@ -237,7 +237,7 @@ function transitionInteractions(
                     kind: "permission",
                     permission: {
                         ...interaction.permission,
-                        state: { kind: "resolved", optionId: change.optionId, outcome: change.outcome },
+                        state: { kind: "resolved", answer: change.answer },
                     },
                 };
             });
@@ -254,14 +254,7 @@ function transitionInteractions(
                     kind: "elicitation",
                     elicitation: {
                         ...interaction.elicitation,
-                        state: {
-                            action: change.action,
-                            content:
-                                interaction.elicitation.state.kind === "submitted"
-                                    ? interaction.elicitation.state.content
-                                    : "",
-                            kind: "resolved",
-                        },
+                        state: { action: change.action, kind: "resolved" },
                     },
                 };
             });

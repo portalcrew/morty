@@ -1262,24 +1262,22 @@ export class MortyInteractionResources {
             request.kind === "permission"
                 ? await sessionPermissionRespondCommandCodec.encode(
                       {
+                          ...request.answer,
                           kind: "session.permission.respond",
                           requestId,
                           target: sessionTarget,
                           interactionId,
-                          optionId: request.optionId,
-                          outcome: request.outcome,
                       },
                       this.#executor.payloadEncryption,
                       signal,
                   )
                 : await sessionElicitationRespondCommandCodec.encode(
                       {
+                          ...request.answer,
                           kind: "session.elicitation.respond",
                           requestId,
                           target: sessionTarget,
                           interactionId,
-                          action: request.action,
-                          content: request.content,
                       },
                       this.#executor.payloadEncryption,
                       signal,
