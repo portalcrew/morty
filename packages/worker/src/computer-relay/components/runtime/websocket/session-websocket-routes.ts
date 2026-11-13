@@ -96,27 +96,30 @@ export function createSessionWebSocketRoutes(ctx: {
         await next();
         return;
     });
-    const authenticate = createMiddleware<SessionWebSocketEnvironment>(async (context, next) => {
-        if (context.env.operation.kind === "upload-admission") {
-            return sessionContentUploadRequired();
-        }
-        const signal = AbortSignal.any([context.req.raw.signal, context.env.operation.enableCancellation()]);
-        using deadline = new RequestDeadline(signal, 30_000);
-        context.req.raw = new Request(context.req.raw, { signal: deadline.signal });
-        const request = context.req.raw;
-        const computerId = context.var.computerId;
-        const target = context.var.target;
-        const services = ctx.services.forComputer(computerId);
-        const credential = context.var.credential;
-        const access = await services.sessions.authenticate(
-            { kind: "session", computerId, target },
-            credential,
-            request.signal,
-        );
-        context.set("access", access);
-        await next();
-        return;
-    });
+    const authenticateWithDeadline = (timeoutMilliseconds: number) =>
+        createMiddleware<SessionWebSocketEnvironment>(async (context, next) => {
+            if (context.env.operation.kind === "upload-admission") {
+                return sessionContentUploadRequired();
+            }
+            const signal = AbortSignal.any([context.req.raw.signal, context.env.operation.enableCancellation()]);
+            using deadline = new RequestDeadline(signal, timeoutMilliseconds);
+            context.req.raw = new Request(context.req.raw, { signal: deadline.signal });
+            const request = context.req.raw;
+            const computerId = context.var.computerId;
+            const target = context.var.target;
+            const services = ctx.services.forComputer(computerId);
+            const credential = context.var.credential;
+            const access = await services.sessions.authenticate(
+                { kind: "session", computerId, target },
+                credential,
+                request.signal,
+            );
+            context.set("access", access);
+            await next();
+            return;
+        });
+    const authenticate = authenticateWithDeadline(30_000);
+    const authenticateUpload = authenticateWithDeadline(120_000);
     const sendSessionControl = async (
         context: Context<SessionWebSocketEnvironment>,
         command:
@@ -161,7 +164,7 @@ export function createSessionWebSocketRoutes(ctx: {
             throw new WebSocketDispatchError();
         })
         .use(`${sessionPath}/*`, authorizeTarget)
-        .put(`${sessionPath}/content/:contentKey`, admitContentUpload, authenticate, (context) =>
+        .put(`${sessionPath}/content/:contentKey`, admitContentUpload, authenticateUpload, (context) =>
             uploadContent(context.req.raw, ctx.services.forComputer(context.var.computerId), {
                 computerId: context.var.computerId,
                 target: context.var.target,

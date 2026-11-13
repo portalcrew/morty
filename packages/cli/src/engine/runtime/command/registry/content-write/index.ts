@@ -34,7 +34,7 @@ type PendingWrite =
 
 const MAX_PENDING_UPLOAD_BYTES = 2 * CONTENT_WRITE_MAX_BYTES;
 const MAX_PENDING_UPLOADS = 16;
-const UPLOAD_TIMEOUT_MILLISECONDS = 90_000;
+const UPLOAD_TIMEOUT_MILLISECONDS = 120_000;
 
 export interface ContentWriteCommands {
     readonly write: (message: CommandMessage<typeof CONTENT_WRITE_KIND>) => Promise<void>;

@@ -882,9 +882,7 @@ test("Given an existing conversation, When a repeated start is refused, Then the
             "audit-retry",
             {
                 ...settings,
-                configurations: [
-                    { configId: "removed-setting", type: "select", value: "default" },
-                ],
+                configurations: [{ configId: "removed-setting", type: "select", value: "default" }],
             },
             signal,
         ),

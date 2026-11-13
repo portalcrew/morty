@@ -230,7 +230,7 @@ export const sessionEndpoints = Object.freeze({
                 ],
             },
             transport: { kind: "websocket", cancellation: "local" },
-            timeoutMilliseconds: 20_000,
+            timeoutMilliseconds: 120_000,
         }),
     cancelTurn: ({ computerId, target, turnId }: SessionCallTarget & { readonly turnId: string }): MortyEndpointCall =>
         endpoint({
