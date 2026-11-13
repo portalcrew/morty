@@ -11,6 +11,7 @@ import {
 import type { DeliveryPlacement, DeliveryState } from "./session-delivery-store.ts";
 import { type DelegationStage, requestedInteraction, type SessionLifecycleFact } from "./session-lifecycle.ts";
 import type { SessionInteraction } from "./session-pane-types.ts";
+import type { SessionExecutionObservation } from "./session-presentation.ts";
 
 // What the page knows about one Session's execution: the current turn, the Computer's queue, the Agent's pending
 // requests, and what the Computer has shown of each command. Every fact about the execution, a live lifecycle event, an
@@ -150,13 +151,16 @@ export interface SessionExecutionState {
     /** The Agent's requests in arrival order, each with its latest resolution. */
     readonly interactions: readonly SessionInteraction[];
     readonly commands: ReadonlyMap<string, RuntimeCommand>;
+    /**
+     * What the Computer's reads reported of what runs and what is queued, by the log position each covers, in the order
+     * they were applied. The timeline is read against them; they hold nothing the timeline derives.
+     */
+    readonly observations: readonly SessionExecutionObservation[];
 }
 
 type SessionExecutionEffect =
     /** The state needs a fresh read of the Computer's execution before it is current again. */
-    | { readonly kind: "read" }
-    /** The Computer reported what runs and what is queued; the timeline marks it at this point. */
-    | { readonly kind: "mark-timeline"; readonly running: string | null; readonly queued: readonly string[] };
+    { readonly kind: "read" };
 
 interface SessionExecutionTransition {
     readonly state: SessionExecutionState;
@@ -170,6 +174,7 @@ const initialSessionExecution: SessionExecutionState = {
     listing: null,
     interactions: [],
     commands: new Map(),
+    observations: [],
 };
 
 const readEffect: SessionExecutionEffect = { kind: "read" };
@@ -455,8 +460,22 @@ function applyRead(
                     snapshot.interactionState === null
                         ? []
                         : snapshot.interactionState.interactions.map(requestedInteraction),
+                observations: [
+                    // A report of another log generation no longer describes the log this one continues.
+                    ...next.observations.filter(
+                        (observation) =>
+                            observation.kind === "through" && observation.generation === position.sessionGenerationId,
+                    ),
+                    {
+                        kind: "through",
+                        generation: position.sessionGenerationId,
+                        position: position.throughPosition,
+                        running: running?.commandId ?? null,
+                        queued,
+                    },
+                ],
             },
-            effects: [{ kind: "mark-timeline", running: running?.commandId ?? null, queued }],
+            effects: [],
         },
         held,
     );
@@ -523,8 +542,9 @@ function applyExecutionFact(state: SessionExecutionState, fact: SessionExecution
                     turn: transitionCurrentTurn(state.turn, { kind: "nothing-running" }),
                     queued: [],
                     interactions: [],
+                    observations: [...state.observations, { kind: "closed" }],
                 },
-                effects: [{ kind: "mark-timeline", running: null, queued: [] }],
+                effects: [],
             };
         default:
             return fact satisfies never;

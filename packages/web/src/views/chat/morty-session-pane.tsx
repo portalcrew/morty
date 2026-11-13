@@ -519,12 +519,12 @@ function MortySessionPaneBody({
     const computerConfiguration = computer.computerConfiguration;
     const model = useStore(pane.store);
     const composer = useStore(pane.composer);
-    const timeline = sessionProjectionTimeline(model.projection);
     const rename = useStore(pane.rename);
     const titleEdit = sessionTitleEdit(composer.titleDraft, rename.rename);
     const title = useStore(workspace.titles, (state) => sessionTitle(state.titles, pane.session.result.ready.target));
     const attachmentModel = useStore(pane.composerAttachments);
     const execution = useStore(pane.execution, (state) => state.state);
+    const timeline = sessionProjectionTimeline(model.projection, execution.observations);
     const interactionModel = useStore(pane.interactions);
     const settingsModel = useStore(pane.settings);
     const interactions = sessionInteractionPresentation(interactionModel, execution.interactions, timeline.messages);

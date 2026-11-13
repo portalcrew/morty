@@ -490,17 +490,56 @@ interface ReducedSessionMessage {
     readonly unresolvedEvents: readonly SessionPresentationEvent[];
 }
 
-type ReducedSessionEntry =
-    | ReducedSessionMessage
-    | { readonly kind: "turn-started"; readonly commandId: string }
-    | { readonly kind: "execution-idle" }
-    | { readonly kind: "queued-command"; readonly commandId: string }
+/**
+ * The log position of a live event. A history page states only the position it reads through, so its events have none:
+ * all of them come before everything the stream delivers after that page.
+ */
+function eventPosition(event: SessionPresentationEvent): string | null {
+    return "position" in event ? event.position : null;
+}
+
+/** A turn the Computer's log says started, at the log position of the event that said it. */
+interface StartedTurnEntry {
+    readonly kind: "turn-started";
+    readonly commandId: string;
+    readonly position: string | null;
+}
+
+/** Which execution a command's request belongs to: its own, or the one it steers. */
+interface ExecutionOwnerEntry {
+    readonly kind: "execution-owner";
+    readonly commandId: string;
+    readonly executionCommandId: string;
+    readonly execution: "starts" | "steers";
+    readonly position: string | null;
+}
+
+type ReducedSessionEntry = ReducedSessionMessage | StartedTurnEntry | ExecutionOwnerEntry;
+
+/**
+ * What the Computer reported of the Session's execution. It is placed in the timeline by the log position it covers,
+ * so the timeline is a function of the events and the reports, and neither holds the other's facts.
+ */
+export type SessionExecutionObservation =
+    /** The Computer's account of the execution through `position` of the log's `generation`. */
     | {
-          readonly kind: "execution-owner";
-          readonly commandId: string;
-          readonly executionCommandId: string;
-          readonly execution: "starts" | "steers";
-      };
+          readonly kind: "through";
+          readonly generation: string;
+          readonly position: string;
+          readonly running: string | null;
+          readonly queued: readonly string[];
+      }
+    /** The Computer closed the Session: nothing runs and no more events follow. */
+    | { readonly kind: "closed" };
+
+/** What a report says at its place in the timeline, which the messages after it are read against. */
+type ExecutionMarker =
+    | StartedTurnEntry
+    | ExecutionOwnerEntry
+    | { readonly kind: "execution-idle" }
+    | { readonly kind: "queued-command"; readonly commandId: string };
+
+type TimelineEntry = ReducedSessionEntry | ExecutionMarker;
 
 export interface SessionMessageReduction {
     readonly entries: readonly ReducedSessionEntry[];
@@ -676,6 +715,7 @@ function applySessionEvent(
                     commandId: result.commandId,
                     executionCommandId: result.executionCommandId,
                     execution: result.execution,
+                    position: eventPosition(event),
                 },
             ];
         }
@@ -687,7 +727,7 @@ function applySessionEvent(
             });
         }
         case "turn-started":
-            return [...entries, result];
+            return [...entries, { kind: "turn-started", commandId: result.commandId, position: eventPosition(event) }];
         case "consumed": {
             const previous = entries[result.index];
             if (previous?.kind !== "message") {
@@ -789,15 +829,78 @@ export function sessionReductionExecutionOwner(reduction: SessionMessageReductio
     return owner?.kind === "execution-owner" ? owner.executionCommandId : null;
 }
 
-export function sessionReductionMessages(reduction: SessionMessageReduction): readonly SessionExecutionMessage[] {
+/** Where in the log an entry begins: its first event's position, none for an entry the history page holds. */
+function entryPosition(entry: ReducedSessionEntry): bigint | null {
+    const position = entry.kind === "message" ? eventPosition(entry.message.firstEvent) : entry.position;
+    return position === null ? null : BigInt(position);
+}
+
+/** What the Computer's report says at its place in the timeline. */
+function observationMarkers(observation: SessionExecutionObservation): readonly ExecutionMarker[] {
+    if (observation.kind === "closed" || observation.running === null) {
+        // Native replay can retain unfinished tools without Morty lifecycle metadata.
+        return [{ kind: "execution-idle" }];
+    }
+    return [
+        {
+            kind: "execution-owner",
+            commandId: observation.running,
+            executionCommandId: observation.running,
+            execution: "starts",
+            position: null,
+        },
+        { kind: "turn-started", commandId: observation.running, position: null },
+        ...observation.queued.map((commandId): ExecutionMarker => ({ kind: "queued-command", commandId })),
+    ];
+}
+
+/**
+ * The entries with the Computer's reports placed among them: a report follows every entry that begins at or before the
+ * log position it covers. `observations` are those of this reduction's log generation that cover its history baseline.
+ */
+function placeObservations(
+    entries: readonly ReducedSessionEntry[],
+    observations: readonly SessionExecutionObservation[],
+): readonly TimelineEntry[] {
+    if (observations.length === 0) {
+        return entries;
+    }
+    const after = new Map<number, ExecutionMarker[]>();
+    for (const observation of observations) {
+        let end = entries.length;
+        if (observation.kind === "through") {
+            const covered = BigInt(observation.position);
+            for (let index = entries.length - 1; index >= 0; index -= 1) {
+                const entry = entries[index];
+                const position = entry === undefined ? null : entryPosition(entry);
+                if (position === null || position <= covered) {
+                    break;
+                }
+                end = index;
+            }
+        }
+        after.set(end, [...(after.get(end) ?? []), ...observationMarkers(observation)]);
+    }
+    const placed: TimelineEntry[] = [...(after.get(0) ?? [])];
+    entries.forEach((entry, index) => {
+        placed.push(entry, ...(after.get(index + 1) ?? []));
+    });
+    return placed;
+}
+
+export function sessionReductionMessages(
+    reduction: SessionMessageReduction,
+    observations: readonly SessionExecutionObservation[] = [],
+): readonly SessionExecutionMessage[] {
     const messages: SessionExecutionMessage[] = [];
     const unfinished = new Map<string | null, number[]>();
     const executionOwners = new Map<string, string>();
+    const entries = placeObservations(reduction.entries, observations);
     const queuedCommands = new Set(
-        reduction.entries.flatMap((entry) => (entry.kind === "queued-command" ? [entry.commandId] : [])),
+        entries.flatMap((entry) => (entry.kind === "queued-command" ? [entry.commandId] : [])),
     );
     const startedCommands = new Set(
-        reduction.entries.flatMap((entry) => (entry.kind === "turn-started" ? [entry.commandId] : [])),
+        entries.flatMap((entry) => (entry.kind === "turn-started" ? [entry.commandId] : [])),
     );
     let turn: { readonly kind: "unknown" } | { readonly kind: "active" | "terminal"; readonly commandId: string } = {
         kind: "unknown",
@@ -816,7 +919,7 @@ export function sessionReductionMessages(reduction: SessionMessageReduction): re
             }
         }
     };
-    for (const entry of reduction.entries) {
+    for (const entry of entries) {
         if (entry.kind === "queued-command") {
             continue;
         }
