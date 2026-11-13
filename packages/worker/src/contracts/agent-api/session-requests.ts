@@ -101,10 +101,11 @@ const subscribeInput = v.custom<ReturnType<typeof sessionEventsSubscribeCommandC
     }
 });
 export const eventsInput = v.union([historyInput, subscribeInput]);
-export const activeTurnInput = v.custom<ReturnType<typeof nativeSessionCommandCodec.decodeRouting>>((value) => {
+export const activeTurnInput = v.custom<
+    Extract<ReturnType<typeof nativeSessionCommandCodec.decodeRouting>, { readonly action: "active-turn" }>
+>((value) => {
     try {
-        nativeSessionCommandCodec.decodeRouting(JSON.stringify(value));
-        return true;
+        return nativeSessionCommandCodec.decodeRouting(JSON.stringify(value)).action === "active-turn";
     } catch {
         return false;
     }
