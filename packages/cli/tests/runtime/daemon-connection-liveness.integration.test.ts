@@ -1049,6 +1049,7 @@ describe("daemon relay connection liveness", () => {
                         encodeSessionPromptCommand({
                             kind: SESSION_PROMPT_KIND,
                             commandId,
+                            requestId: commandId,
                             target: sessionTarget,
                             disposition: "append",
                             attachments: [],
@@ -1098,6 +1099,7 @@ describe("daemon relay connection liveness", () => {
                     firstSocket,
                     encodeSessionPromptCommand({
                         commandId: `live-command-${turn}`,
+                        requestId: `live-command-${turn}`,
                         disposition: "append",
                         attachments: [],
                         kind: SESSION_PROMPT_KIND,

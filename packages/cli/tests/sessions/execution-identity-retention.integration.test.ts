@@ -80,6 +80,7 @@ test("Given an executed command, When its receipt is evicted and the daemon rest
                 const original: SessionPromptCommand = {
                     attachments: [],
                     commandId: "a-original-execution",
+                    requestId: "a-original-execution",
                     disposition: SessionPromptDisposition.Append,
                     kind: "session.prompt",
                     prompt: "Original operation",
@@ -93,7 +94,12 @@ test("Given an executed command, When its receipt is evicted and the daemon rest
 
                 // A fresh prompt's Agent turn number exposes any accidental re-execution.
                 send(original);
-                const control = { ...original, commandId: "b-control", prompt: "Before eviction" };
+                const control = {
+                    ...original,
+                    commandId: "b-control",
+                    requestId: "b-control",
+                    prompt: "Before eviction",
+                };
                 send(control);
                 const beforeEviction = await observe(peer, [control.commandId]);
                 expect(beforeEviction.output).toContain("Controlled ACP turn 2: Before eviction");
@@ -115,7 +121,7 @@ test("Given an executed command, When its receipt is evicted and the daemon rest
                     uri: "file:///missing.txt",
                 } as const;
                 for (const commandId of rejected) {
-                    send({ ...original, attachments: [unavailableAttachment], commandId });
+                    send({ ...original, attachments: [unavailableAttachment], commandId, requestId: commandId });
                 }
                 const failures = await observe(peer, rejected);
                 for (const outcome of failures.outcomes.values()) {
@@ -173,7 +179,8 @@ test("Given an executed command, When its receipt is evicted and the daemon rest
                     kind: "failed",
                     code: "command_result_expired",
                 });
-                const afterRestart = { ...original, commandId: randomUUID(), prompt: "After restart" };
+                const commandId = randomUUID();
+                const afterRestart = { ...original, commandId, requestId: commandId, prompt: "After restart" };
                 send(afterRestart);
                 expect((await observe(peer, [afterRestart.commandId])).output).toContain(
                     "Controlled ACP turn 3: After restart",

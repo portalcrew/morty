@@ -88,6 +88,7 @@ async function promptFromMorty(
         encodeSessionPromptCommand({
             kind: "session.prompt",
             commandId,
+            requestId: commandId,
             target: sessionTarget,
             attachments: [],
             prompt,

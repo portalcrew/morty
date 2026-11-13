@@ -159,6 +159,7 @@ test("Given a completed foreground turn, When its Agent requests background perm
         socket.send(
             encodeSessionPromptCommand({
                 commandId: "foreground",
+                requestId: "foreground",
                 target: sessionTarget,
                 disposition: "append",
                 attachments: [],

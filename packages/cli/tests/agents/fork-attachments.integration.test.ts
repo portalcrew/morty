@@ -64,10 +64,12 @@ test.each(["pi", "claude", "codex"] as const)(
             ]) {
                 attachments.push(await uploadPromptContent(peer, { ...content, uri: `attachment:///${content.name}` }));
             }
+            const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
                     kind: "session.prompt",
-                    commandId: randomUUID(),
+                    commandId,
+                    requestId: commandId,
                     target: peer.target,
                     disposition: SessionPromptDisposition.Append,
                     attachments,
@@ -127,10 +129,12 @@ test.each(["pi", "claude", "codex"] as const)(
                         ),
                     ).toBe(true);
                 }
+                const childCommandId = randomUUID();
                 peer.send(
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
-                        commandId: randomUUID(),
+                        commandId: childCommandId,
+                        requestId: childCommandId,
                         target: childTarget,
                         disposition: SessionPromptDisposition.Append,
                         attachments: [],

@@ -150,6 +150,7 @@ test("Given real Codex streams commentary after a tool, When clients watch and r
             const queuedCommandId = randomUUID();
             const originalPrompt = encodeSessionPromptCommand({
                 commandId,
+                requestId: commandId,
                 disposition: SessionPromptDisposition.Append,
                 attachments: [],
                 kind: "session.prompt",
@@ -257,6 +258,7 @@ test("Given real Codex streams commentary after a tool, When clients watch and r
                         socket.send(
                             encodeSessionPromptCommand({
                                 commandId: queuedCommandId,
+                                requestId: queuedCommandId,
                                 disposition: SessionPromptDisposition.Append,
                                 attachments: [],
                                 kind: "session.prompt",

@@ -53,6 +53,7 @@ test("Given real Claude reads an image, When its reply streams and native histor
             peer.send(
                 encodeSessionPromptCommand({
                     commandId,
+                    requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
                     attachments: [],
                     kind: "session.prompt",

@@ -18,6 +18,7 @@ const submit = (peer: RealDaemonPeer, commandId: string) =>
         encodeSessionPromptCommand({
             attachments: [],
             commandId,
+            requestId: commandId,
             disposition: "append",
             kind: "session.prompt",
             prompt: "The request completes",

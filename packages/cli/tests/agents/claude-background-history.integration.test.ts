@@ -214,6 +214,7 @@ test("Given Claude is running a background command, When two idle hours pass and
                         encodeSessionPromptCommand({
                             kind: "session.prompt",
                             commandId,
+                            requestId: commandId,
                             target: sessionTarget,
                             attachments: [],
                             prompt,

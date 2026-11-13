@@ -26,9 +26,11 @@ test("Given pi compacts the conversation, When the daemon relays the turn, Then 
     await agent.overrideSettings({ compaction: { keepRecentTokens: 1 } });
     await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
         const sendPrompt = (prompt: string): void => {
+            const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
-                    commandId: randomUUID(),
+                    commandId,
+                    requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
                     attachments: [],
                     kind: "session.prompt",

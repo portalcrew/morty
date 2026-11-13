@@ -860,6 +860,7 @@ describe("daemon session configuration boundary", () => {
             const runningCommandId = "running_configured_turn";
             const runningPrompt: SessionPromptCommand = {
                 commandId: runningCommandId,
+                requestId: runningCommandId,
                 disposition: SessionPromptDisposition.Append,
                 attachments: [],
                 kind: "session.prompt",
@@ -879,6 +880,7 @@ describe("daemon session configuration boundary", () => {
             const steeringPrompt: SessionPromptCommand = {
                 ...runningPrompt,
                 commandId: "steering_configured_turn",
+                requestId: "steering_configured_turn",
                 disposition: SessionPromptDisposition.Steer,
                 prompt: "focus on the requested fix",
                 targetCommandId: runningCommandId,
@@ -984,6 +986,7 @@ describe("daemon session configuration boundary", () => {
             const runningCommandId = "running_drifted_settings_turn";
             const runningPrompt: SessionPromptCommand = {
                 commandId: runningCommandId,
+                requestId: runningCommandId,
                 disposition: SessionPromptDisposition.Append,
                 attachments: [],
                 kind: "session.prompt",
@@ -1002,6 +1005,7 @@ describe("daemon session configuration boundary", () => {
             const steeringPrompt: SessionPromptCommand = {
                 ...runningPrompt,
                 commandId: "steering_drifted_settings_turn",
+                requestId: "steering_drifted_settings_turn",
                 disposition: SessionPromptDisposition.Steer,
                 prompt: "focus on the requested fix",
                 sessionConfigurations: [

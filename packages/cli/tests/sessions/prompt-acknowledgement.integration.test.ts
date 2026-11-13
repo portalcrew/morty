@@ -17,6 +17,7 @@ const prompt = (peer: RealDaemonPeer, commandId: string, text: string) =>
     encodeSessionPromptCommand({
         attachments: [],
         commandId,
+        requestId: commandId,
         disposition: "append",
         kind: "session.prompt",
         prompt: text,
@@ -96,6 +97,7 @@ test("Given a running prompt, When clients append messages and steer a turn that
                     encodeSessionPromptCommand({
                         attachments: [],
                         commandId: steer,
+                        requestId: steer,
                         disposition: "steer",
                         kind: "session.prompt",
                         prompt: "Use this in the same turn",

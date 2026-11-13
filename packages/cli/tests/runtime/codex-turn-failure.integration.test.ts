@@ -19,6 +19,7 @@ test("Given Codex fails a turn with a reason, When a member's prompt runs throug
             encodeSessionPromptCommand({
                 kind: "session.prompt",
                 commandId,
+                requestId: commandId,
                 target: peer.target,
                 attachments: [],
                 prompt: "Do the work",

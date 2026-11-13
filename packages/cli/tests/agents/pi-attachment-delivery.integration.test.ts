@@ -39,6 +39,7 @@ test("Given real Pi receives a file attachment, When the Agent reads its local l
         peer.send(
             encodeSessionPromptCommand({
                 commandId,
+                requestId: commandId,
                 disposition: SessionPromptDisposition.Append,
                 attachments: [attachment],
                 kind: "session.prompt",

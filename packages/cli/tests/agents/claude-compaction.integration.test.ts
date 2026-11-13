@@ -15,9 +15,11 @@ test("Given Claude Code compacts a conversation with content, When the daemon re
     await using agent = await ClaudeFixture.create(provider);
     await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
         const sendPrompt = (prompt: string): void => {
+            const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
-                    commandId: randomUUID(),
+                    commandId,
+                    requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
                     attachments: [],
                     kind: "session.prompt",

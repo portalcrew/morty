@@ -154,6 +154,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         socket.send(
             encodeSessionPromptCommand({
                 commandId: "interaction_turn",
+                requestId: "interaction_turn",
                 disposition: SessionPromptDisposition.Append,
                 attachments: [],
                 kind: "session.prompt",
@@ -337,6 +338,7 @@ test("Given an Agent announced a tool call with its input, When it requests perm
         socket.send(
             encodeSessionPromptCommand({
                 commandId: "announced_turn",
+                requestId: "announced_turn",
                 disposition: SessionPromptDisposition.Append,
                 attachments: [],
                 kind: "session.prompt",
@@ -440,6 +442,7 @@ test("Given an Agent announced a tool call and then sent a rawInput null update,
         socket.send(
             encodeSessionPromptCommand({
                 commandId: "null_input_turn",
+                requestId: "null_input_turn",
                 disposition: SessionPromptDisposition.Append,
                 attachments: [],
                 kind: "session.prompt",
@@ -543,6 +546,7 @@ test("Given an Agent's first recorded form of a tool call is an update, When it 
         socket.send(
             encodeSessionPromptCommand({
                 commandId: "orphan_update_turn",
+                requestId: "orphan_update_turn",
                 disposition: SessionPromptDisposition.Append,
                 attachments: [],
                 kind: "session.prompt",
@@ -741,6 +745,7 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
             initial.socket.send(
                 encodeSessionPromptCommand({
                     commandId: "initial_turn",
+                    requestId: "initial_turn",
                     disposition: SessionPromptDisposition.Append,
                     attachments: [],
                     kind: "session.prompt",
@@ -889,6 +894,7 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
         socket.send(
             encodeSessionPromptCommand({
                 commandId: "running_turn",
+                requestId: "running_turn",
                 disposition: SessionPromptDisposition.Append,
                 attachments: [],
                 kind: "session.prompt",
@@ -910,6 +916,7 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
         socket.send(
             encodeSessionPromptCommand({
                 commandId: "own_queued_turn",
+                requestId: "own_queued_turn",
                 disposition: SessionPromptDisposition.Append,
                 attachments: [report],
                 kind: "session.prompt",

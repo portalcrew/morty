@@ -131,6 +131,7 @@ test("Given real Codex dispatches and waits for a subagent, When the turn runs t
         socket.send(
             encodeSessionPromptCommand({
                 commandId,
+                requestId: commandId,
                 disposition: SessionPromptDisposition.Append,
                 attachments: [],
                 kind: "session.prompt",

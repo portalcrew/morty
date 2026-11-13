@@ -44,9 +44,11 @@ test("Given a deeply nested multibyte workspace, When real Codex runs a tool thr
             new CodexAgentSpecification(),
             agent.environment,
             async (peer) => {
+                const commandId = randomUUID();
                 peer.send(
                     encodeSessionPromptCommand({
-                        commandId: randomUUID(),
+                        commandId,
+                        requestId: commandId,
                         disposition: SessionPromptDisposition.Append,
                         attachments: [],
                         kind: "session.prompt",

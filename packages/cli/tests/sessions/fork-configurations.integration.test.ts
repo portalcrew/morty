@@ -53,11 +53,13 @@ test.each(["", "--fork-mode-unavailable", "--fork-omits-mode", "--fork-omits-mod
                             Parameters<typeof encodeSessionPromptCommand>[0]["sessionConfigurations"]
                         >,
                     ): Promise<void> => {
+                        const commandId = crypto.randomUUID();
                         peer.send(
                             encodeSessionPromptCommand({
                                 kind: "session.prompt",
                                 target: peer.target,
-                                commandId: crypto.randomUUID(),
+                                commandId,
+                                requestId: commandId,
                                 prompt: "Keep these source settings",
                                 attachments: [],
                                 disposition: SessionPromptDisposition.Append,

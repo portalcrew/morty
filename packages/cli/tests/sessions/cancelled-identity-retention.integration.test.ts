@@ -93,6 +93,7 @@ const promptCommand = (peer: RealDaemonPeer, commandId: string, prompt: string) 
     encodeSessionPromptCommand({
         attachments: [],
         commandId,
+        requestId: commandId,
         disposition: "append",
         kind: "session.prompt",
         prompt,
@@ -183,6 +184,7 @@ for (const admission of ["before-admission", "queued"] as const) {
                         encodeSessionPromptCommand({
                             attachments: [],
                             commandId: id,
+                            requestId: id,
                             disposition: "append",
                             kind: "session.prompt",
                             prompt: text,

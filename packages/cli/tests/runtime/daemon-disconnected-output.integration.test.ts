@@ -348,6 +348,7 @@ async function startRuntime() {
             peer.socket.send(
                 encodeSessionPromptCommand({
                     commandId: `command-${label}`,
+                    requestId: `command-${label}`,
                     disposition: "append",
                     attachments: [],
                     kind: "session.prompt",

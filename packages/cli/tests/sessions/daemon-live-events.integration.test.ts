@@ -385,6 +385,7 @@ async function uploadTextAttachment(fixture: Fixture, text: string): Promise<Pro
 function prompt(fixture: Fixture, text: string): SessionPromptCommand {
     return {
         commandId: "test-turn",
+        requestId: "test-turn",
         disposition: SessionPromptDisposition.Append,
         attachments: [],
         kind: "session.prompt",
@@ -594,6 +595,7 @@ describe("daemon V2 live delivery", () => {
                 const command = {
                     ...prompt(restarted, "Continue the saved conversation"),
                     commandId: "continue-saved-conversation",
+                    requestId: "continue-saved-conversation",
                 };
                 const events: SessionEvent[] = [];
                 let cursor: string | null = null;
@@ -773,6 +775,7 @@ describe("daemon V2 live delivery", () => {
             const queued: SessionPromptCommand = {
                 ...running,
                 commandId: "queued-follow-up",
+                requestId: "queued-follow-up",
                 disposition: SessionPromptDisposition.Append,
                 prompt: "Execute the queued follow-up",
             };
@@ -799,6 +802,7 @@ describe("daemon V2 live delivery", () => {
             const steering: SessionPromptCommand = {
                 ...running,
                 commandId: "steering-follow-up",
+                requestId: "steering-follow-up",
                 disposition: SessionPromptDisposition.Steer,
                 prompt: "Finish using the steering instruction",
                 targetCommandId: running.commandId,
@@ -934,7 +938,7 @@ describe("daemon V2 live delivery", () => {
         try {
             let previousPosition = 0;
             for (const commandId of ["first-unbuffered-answer", "second-unbuffered-answer"]) {
-                const command = { ...prompt(fixture, commandId), commandId };
+                const command = { ...prompt(fixture, commandId), commandId, requestId: commandId };
                 sendText(fixture.socket, encodeSessionPromptCommand(command));
                 let firstAnswer: SessionLiveEvent | undefined;
                 for (;;) {
@@ -978,7 +982,11 @@ describe("daemon V2 live delivery", () => {
         let lastPosition = 0;
         const first = await startControlledDaemon({ stateDirectory });
         try {
-            const command = { ...prompt(first, "first allocation"), commandId: "first-allocation" };
+            const command = {
+                ...prompt(first, "first allocation"),
+                commandId: "first-allocation",
+                requestId: "first-allocation",
+            };
             sendText(first.socket, encodeSessionPromptCommand(command));
             let firstEvent = true;
             for (;;) {
@@ -1001,7 +1009,11 @@ describe("daemon V2 live delivery", () => {
 
         const restarted = await startControlledDaemon({ stateDirectory });
         try {
-            const command = { ...prompt(restarted, "second allocation"), commandId: "second-allocation" };
+            const command = {
+                ...prompt(restarted, "second allocation"),
+                commandId: "second-allocation",
+                requestId: "second-allocation",
+            };
             sendText(restarted.socket, encodeSessionPromptCommand(command));
             const retainedOutcome = await nextLive(restarted);
             expect(
@@ -1038,6 +1050,7 @@ describe("daemon V2 live delivery", () => {
             const otherSessionCommand = {
                 ...prompt(restarted, "separate Session allocation"),
                 commandId: "separate-session-allocation",
+                requestId: "separate-session-allocation",
                 target: decodeSessionReadyEvent(created).target,
             };
             sendText(restarted.socket, encodeSessionPromptCommand(otherSessionCommand));

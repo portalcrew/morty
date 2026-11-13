@@ -106,6 +106,7 @@ test("Given setup runs in a real Codex exec conversation, When its native sessio
             encodeSessionPromptCommand({
                 kind: "session.prompt",
                 commandId,
+                requestId: commandId,
                 target: imported.target,
                 attachments: [],
                 prompt: "Continue this conversation after installation",

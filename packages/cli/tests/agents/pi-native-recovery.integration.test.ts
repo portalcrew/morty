@@ -58,6 +58,7 @@ test.each(["responsive", "stalled", "launcher-stalled"])(
                         encodeSessionPromptCommand({
                             kind: "session.prompt",
                             commandId,
+                            requestId: commandId,
                             target: nativeId,
                             attachments: [],
                             prompt: "Reply with a short greeting, without using tools",
@@ -174,6 +175,7 @@ test("Given a real Pi native Session was previewed, When the user imports it, Th
             encodeSessionPromptCommand({
                 kind: "session.prompt",
                 commandId,
+                requestId: commandId,
                 target: sourceSessionId,
                 attachments: [],
                 prompt: "Reply with a short greeting, without using tools",
@@ -292,6 +294,7 @@ test("Given a saved real Pi native Session, When the user forks it, Then its his
             encodeSessionPromptCommand({
                 kind: "session.prompt",
                 commandId: sourceCommandId,
+                requestId: sourceCommandId,
                 target: sourceSessionId,
                 attachments: [],
                 prompt: "Save this conversation so it can be forked",
@@ -416,6 +419,7 @@ test("Given a saved real Pi native Session, When the user forks it, Then its his
             encodeSessionPromptCommand({
                 kind: "session.prompt",
                 commandId: forkedCommandId,
+                requestId: forkedCommandId,
                 target: forkedSessionTarget,
                 attachments: [],
                 prompt: "Continue in the independent fork",

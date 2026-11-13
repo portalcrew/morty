@@ -73,6 +73,7 @@ export class SessionControl {
                 JSON.stringify({
                     attachments: turn.attachments,
                     commandId: turn.commandId,
+                    requestId: turn.commandId,
                     disposition: turn.disposition,
                     kind: "session.prompt",
                     prompt: turn.content,

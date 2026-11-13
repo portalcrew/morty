@@ -40,6 +40,7 @@ test("Given a real claude native Session, When the active prompt is cancelled wi
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
                         commandId,
+                        requestId: commandId,
                         target: nativeId,
                         attachments: [],
                         prompt: "Reply with a short greeting, without using tools",
@@ -131,6 +132,7 @@ test("Given a completed real Claude Session, When it is forked, Then its history
             peer.send(
                 encodeSessionPromptCommand({
                     commandId,
+                    requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
                     attachments: [],
                     kind: "session.prompt",

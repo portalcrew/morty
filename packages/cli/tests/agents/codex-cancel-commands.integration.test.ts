@@ -69,6 +69,7 @@ test.each(["foreground", "background"] as const)(
                     peer.send(
                         encodeSessionPromptCommand({
                             commandId,
+                            requestId: commandId,
                             disposition: SessionPromptDisposition.Append,
                             attachments: [],
                             kind: "session.prompt",

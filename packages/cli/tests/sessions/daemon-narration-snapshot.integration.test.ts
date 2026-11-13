@@ -197,6 +197,7 @@ describe("daemon narration delivery", () => {
             }
             const prompt: SessionPromptCommand = {
                 commandId: "narration_turn",
+                requestId: "narration_turn",
                 disposition: SessionPromptDisposition.Append,
                 attachments: [],
                 kind: "session.prompt",
