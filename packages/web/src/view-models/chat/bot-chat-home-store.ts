@@ -230,8 +230,16 @@ export const createBotChatHomeStore = (
         readonly url: string;
         readonly createId: () => string;
         readonly navigation: BotChatNavigation;
-        /** Announced when the owner must restart the home and directory loads. */
+        /**
+         * Announced when the page must start over: setup completed, the Computer changed, or a load timed out. The
+         * owner restarts the home and directory loads.
+         */
         readonly onRestart: () => void;
+        /**
+         * Announced when another conversation was selected, or the selected one is tried again: the owner restarts the
+         * home load, which loads the selected Session. The directory of conversations does not depend on the selection.
+         */
+        readonly onSelectionChanged: () => void;
         /**
          * Announced once setup pairs the Computer again after revocation. Every Session connection this page opened
          * belongs to the revoked pairing, so the owner starts the page over.
@@ -257,7 +265,14 @@ export const createBotChatHomeStore = (
     const titles = options.titles;
     const selection = initialSelection(options.url, options.createId);
     let restoredTarget = options.entry === "restore" && selection.kind === "pending" ? selection.target.identity : null;
-    const { onRestart, onDirectoryRefreshed, onDraftSelected, onSelectionTargeted, onSelectionReady } = options;
+    const {
+        onRestart,
+        onSelectionChanged,
+        onDirectoryRefreshed,
+        onDraftSelected,
+        onSelectionTargeted,
+        onSelectionReady,
+    } = options;
     return createStore<BotChatHomeStore>()((set, get) => {
         // Announced from the explicit transition sites: a ready selection
         // builds the pane for it, and every selection transition re-scopes
@@ -727,9 +742,10 @@ export const createBotChatHomeStore = (
                 get().composerAttachments.getState().clear();
                 const current = get();
                 centralSessionStorage.remove(newConversationDraftEntry(computerId));
-                // Leaving a pending selection releases its request, even when entry configuration is already ready.
-                const restart =
-                    !homeCanStartConversation(current, computer.getState()) ||
+                // Entry that is not ready starts over; leaving a pending selection releases its request, even when entry
+                // configuration is already ready.
+                const startOver = !homeCanStartConversation(current, computer.getState());
+                const releaseSelection =
                     current.selection.kind === "pending" ||
                     current.selection.kind === "loading" ||
                     current.selection.kind === "failed";
@@ -752,8 +768,10 @@ export const createBotChatHomeStore = (
                 }
                 onDraftSelected();
                 onSelectionTargeted(null);
-                if (restart) {
+                if (startOver) {
                     onRestart();
+                } else if (releaseSelection) {
+                    onSelectionChanged();
                 }
             },
             openManaged: (target) => {
@@ -773,7 +791,7 @@ export const createBotChatHomeStore = (
                     returnFirstMessage(failed);
                 }
                 onSelectionTargeted(null);
-                onRestart();
+                onSelectionChanged();
             },
             retry: () => {
                 set((current) => ({
