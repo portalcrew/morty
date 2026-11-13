@@ -40,20 +40,6 @@ export function sessionUpdatesEndedError(): MortyError {
     );
 }
 
-/** The failure message the connection shows, if any. */
-export function connectionFailure(connection: SessionConnection): string | null {
-    switch (connection.kind) {
-        case "disconnected":
-        case "failed":
-        case "reconnecting":
-            return connection.message;
-        case "closed":
-        case "first-loading":
-        case "ready":
-            return null;
-    }
-}
-
 /**
  * What an operation waiting for the connection can do now: send through the ready client, wait for the connection to
  * settle, or give up with the reason the connection cannot carry it.
@@ -94,10 +80,11 @@ export function connectionWaitsForComputer(connection: SessionConnection): boole
 
 /**
  * The next retry after `consecutiveFailures` failed attempts: a scheduled
- * automatic retry with its delay, or none once the attempts are used up.
+ * automatic retry with its delay, or none once the attempts are used up. `jitter` in [0, 1) spreads the delay.
  */
 export function sessionReconnectAttempt(
     consecutiveFailures: number,
+    jitter: number,
 ): { readonly kind: "scheduled"; readonly delayMs: number } | { readonly kind: "exhausted" } {
     if (consecutiveFailures >= SESSION_AUTO_RECONNECT_ATTEMPTS) {
         return { kind: "exhausted" };
@@ -106,7 +93,7 @@ export function sessionReconnectAttempt(
         SESSION_RECONNECT_DELAYS_MS[consecutiveFailures] ?? SESSION_RECONNECT_DELAY_CAP_MS,
         SESSION_RECONNECT_DELAY_CAP_MS,
     );
-    return { kind: "scheduled", delayMs: Math.round(ceiling * (0.5 + Math.random() * 0.5)) };
+    return { kind: "scheduled", delayMs: Math.round(ceiling * (0.5 + jitter * 0.5)) };
 }
 
 /** The disconnected state while an automatic retry counts down, or after retries are exhausted. */

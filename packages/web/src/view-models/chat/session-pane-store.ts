@@ -27,14 +27,17 @@ import { uploadPromptAttachments } from "./prompt-attachment-upload.ts";
 import { startRecoveryNotice } from "./recovery-notice.ts";
 import type { SessionActivityState } from "./session-activity-machine.ts";
 import type { SessionComposerStore } from "./session-composer-store.ts";
+import { type SessionConnection, sessionUpdatesEndedError } from "./session-connection.ts";
 import {
-    connectionFailure,
-    connectionWaitsForComputer,
-    disconnectedConnection,
-    type SessionConnection,
-    sessionReconnectAttempt,
-    sessionUpdatesEndedError,
-} from "./session-connection.ts";
+    initialSessionConnection,
+    type SessionConnectionEffect,
+    type SessionConnectionEvent,
+    type SessionConnectionState,
+    sameSessionConnection,
+    sessionConnectionClient,
+    sessionConnectionView,
+    transitionSessionConnection,
+} from "./session-connection-machine.ts";
 import { acceptedTurn, ownerRunsTurn, workingIndicator } from "./session-current-turn.ts";
 import { sessionDeliveryPresentation } from "./session-delivery-presentation.ts";
 import {
@@ -168,6 +171,11 @@ export interface SessionPaneStore {
     readonly followRevision: number;
     readonly recover: (signal: AbortSignal) => Promise<void>;
     readonly retryNow: () => void;
+    /**
+     * The owner sees the Computer reachable again: a connection that used up its automatic retries tries once more,
+     * without restoring them.
+     */
+    readonly computerReachable: () => void;
     /**
      * Records that the Computer archived the Session and ends the connection for good. `reason` is the Computer's
      * explanation, or null when a failed operation was the only sign of the closing.
@@ -457,13 +465,13 @@ export function createSessionPaneModel(options: {
         session.result.action === "conversation" && session.result.activeTurn.kind === "running"
             ? { commandId: session.result.activeTurn.commandId, turnId: session.result.activeTurn.turnId }
             : null;
-    let client: MortyClient | null = null;
-    let recoveryRequested = false;
-    let countdownInterrupt: AbortController | null = null;
-    // The Computer closed the Session. The connect loop turns this into the closed connection state.
-    let closure: { readonly reason: string | null } | null = null;
-    // The running connection attempt, which a closing of the Session interrupts.
+    // The connection is one state machine; its transitions are made only by `dispatchConnection`, and the store's
+    // `connection` is what that state shows.
+    let connectionState: SessionConnectionState = initialSessionConnection;
+    const currentConnection = (): SessionConnectionState => connectionState;
+    // The running connection attempt and retry wait, which the machine's effects interrupt.
     let attempt: AbortController | null = null;
+    let countdownInterrupt: AbortController | null = null;
     // The pane's lifetime: its owner starts it once and stops it once, so at most one connection loop ever runs for
     // the pane. React attaching or detaching its view is not part of it.
     const lifetime = new AbortController();
@@ -475,7 +483,7 @@ export function createSessionPaneModel(options: {
      * replaced describes the Session as it was, so its failure must not close the Session this pane follows now.
      */
     const closedThrough = (connected: MortyClient, cause: unknown): cause is MortyError =>
-        isSessionClosedFailure(cause) && connected === client;
+        isSessionClosedFailure(cause) && connected === sessionConnectionClient(connectionState);
     /** Closes this pane when an operation through `connected` found the Session closed now. */
     const failedThrough = (connected: MortyClient, cause: unknown): void => {
         if (closedThrough(connected, cause)) {
@@ -521,30 +529,26 @@ export function createSessionPaneModel(options: {
             );
         let connectionChangedAt = clock.now();
         let recoveryNoticeDeadline: AbortController | null = null;
-        const setAndSettle = (
-            partial:
-                | SessionPaneState
-                | Partial<SessionPaneState>
-                | ((state: SessionPaneState) => SessionPaneState | Partial<SessionPaneState>),
-        ): void => {
-            const previous = get().connection.kind;
-            set(partial);
-            const connection = get().connection;
-            const current = connection.kind;
-            if (
-                current !== "reconnecting" &&
-                (connection.kind !== "disconnected" || connection.retry.kind === "exhausted")
-            ) {
+        /** Makes `next` the connection's state and shows what it shows, once it shows something new. */
+        const showConnection = (next: SessionConnectionState): void => {
+            connectionState = next;
+            const previous = get().connection;
+            const shown = sessionConnectionView(next);
+            if (sameSessionConnection(previous, shown)) {
+                return;
+            }
+            set({ connection: shown });
+            if (shown.kind !== "reconnecting" && (shown.kind !== "disconnected" || shown.retry.kind === "exhausted")) {
                 recoveryNoticeDeadline?.abort();
                 recoveryNoticeDeadline = null;
             }
-            if (current !== previous) {
+            if (shown.kind !== previous.kind) {
                 const now = clock.now();
                 recordBrowserDiagnostic({
                     at: new Date().toISOString(),
                     component: "web",
                     operation: "session-connection",
-                    outcome: current,
+                    outcome: shown.kind,
                     elapsedMs: Math.max(0, now - connectionChangedAt),
                     requestId: "",
                 });
@@ -608,6 +612,34 @@ export function createSessionPaneModel(options: {
                 }
             }
             return read;
+        };
+        /**
+         * Moves the connection by `event` and performs the effects that settle or stop what runs. It returns the effects
+         * the connect loop acts on by waiting.
+         */
+        const dispatchConnection = (event: SessionConnectionEvent): readonly SessionConnectionEffect[] => {
+            const result = transitionSessionConnection(connectionState, event);
+            if (result.effects.some((effect) => effect.kind === "closed")) {
+                applyExecution({ kind: "closed" });
+            }
+            showConnection(result.state);
+            for (const effect of result.effects) {
+                switch (effect.kind) {
+                    case "abort-attempt":
+                        attempt?.abort(new Error("The Session closed."));
+                        break;
+                    case "interrupt-wait":
+                        countdownInterrupt?.abort(new Error("The connection wait was interrupted."));
+                        break;
+                    case "closed":
+                    case "await-retry":
+                    case "await-computer":
+                        break;
+                    default:
+                        effect satisfies never;
+                }
+            }
+            return result.effects;
         };
         /** Reads the Computer's execution and applies it; the Session's execution state decides whether it is news. */
         const readExecution = async (
@@ -776,11 +808,6 @@ export function createSessionPaneModel(options: {
                 }
             }
         };
-        // Ends the connect loop on a closed Session: it runs nothing, so its turn, queue and interactions settle.
-        const showClosed = (reason: string | null): void => {
-            applyExecution({ kind: "closed" });
-            setAndSettle({ connection: { kind: "closed", reason } });
-        };
         /**
          * Submits a message: the composer's draft, an answer to an Agent's question, a failed message again, or the
          * first message the Session's delivery holds. Delivery owns that snapshot and the attempt through
@@ -800,7 +827,7 @@ export function createSessionPaneModel(options: {
             const { commandId } = message;
             welcome.getState().dismiss();
             const sentAt = Date.now();
-            const observed = client;
+            const observed = sessionConnectionClient(connectionState);
             let deliveryClient: MortyClient | null = null;
             const releaseClients: (() => void)[] = [];
             const sending = delivery.getState().send(message, {
@@ -882,10 +909,10 @@ export function createSessionPaneModel(options: {
         let olderHistoryLoad: Promise<void> | null = null;
         const loadOlderHistory = async (): Promise<void> => {
             const pagination = sessionProjectionPagination(get().projection);
-            if (pagination === null || client === null) {
+            const connected = sessionConnectionClient(connectionState);
+            if (pagination === null || connected === null) {
                 return;
             }
-            const connected = client;
             const { revision } = pagination;
             commitProjection({ kind: "older-page-requested", revision });
             try {
@@ -931,13 +958,12 @@ export function createSessionPaneModel(options: {
                 await untilSettledOrAborted(olderHistoryLoad, signal);
             },
             connect: async (signal) => {
-                let consecutiveFailures = 0;
                 // Only the first connection reuses the access that opened the Session. Every reconnection asks Chat
                 // again, so access that ended meanwhile, including a revoked Session credential, ends the page's access.
                 let openedAccess = session.result.action === "conversation" ? session.result.access : undefined;
                 const paneSignal = signal;
                 // One grace period per interruption, shared by backoff and reconciliation.
-                // Successful recovery or a terminal outcome cancels it in the connection transition above.
+                // Successful recovery or a terminal outcome cancels it when the connection shows it.
                 const recoveryNotice = (): "quiet" | "visible" => {
                     const current = get().connection;
                     if (recoveryNoticeDeadline !== null && !recoveryNoticeDeadline.signal.aborted) {
@@ -949,10 +975,7 @@ export function createSessionPaneModel(options: {
                         clock,
                         signal: paneSignal,
                         onNotice: (notice) => {
-                            const connection = get().connection;
-                            if (connection.kind === "disconnected" || connection.kind === "reconnecting") {
-                                setAndSettle({ connection: { ...connection, notice } });
-                            }
+                            dispatchConnection({ kind: "notice-changed", notice });
                         },
                     });
                     return "quiet";
@@ -961,8 +984,8 @@ export function createSessionPaneModel(options: {
                 const observeSession = async (signal: AbortSignal): Promise<void> => {
                     const access = openedAccess;
                     openedAccess = undefined;
-                    client = await requests.connectSession(sessionTarget, signal, access);
-                    const connected = client;
+                    const connected = await requests.connectSession(sessionTarget, signal, access);
+                    dispatchConnection({ kind: "client-opened", client: connected });
                     /** Feeds a lifecycle event to the Session's execution, which decides whether it is news. */
                     const receiveLifecycle = async (
                         fact: SessionLifecycleFact,
@@ -1014,7 +1037,7 @@ export function createSessionPaneModel(options: {
                     };
                     const subscription = await connected.events.subscribeLive(sessionTarget, observer, signal);
                     signal.throwIfAborted();
-                    setAndSettle({ connection: { kind: "ready", client: connected } });
+                    dispatchConnection({ kind: "subscribed" });
                     options.onConnected();
                     const monitoring = new AbortController();
                     const monitorSignal = AbortSignal.any([signal, monitoring.signal]);
@@ -1024,9 +1047,7 @@ export function createSessionPaneModel(options: {
                             monitorSignal.throwIfAborted();
                             // Reset backoff only after the subscription stays open; transport
                             // heartbeats detect lost connections without polling Session execution.
-                            if (get().connection.kind === "ready" && client === connected) {
-                                consecutiveFailures = 0;
-                            }
+                            dispatchConnection({ kind: "stable", client: connected });
                         } catch {
                             // The subscription owns and cancels this monitor.
                         }
@@ -1046,87 +1067,25 @@ export function createSessionPaneModel(options: {
                     signal.throwIfAborted();
                     throw sessionUpdatesEndedError();
                 };
-                for (;;) {
-                    if (closure !== null) {
-                        showClosed(closure.reason);
-                        return;
-                    }
-                    if (consecutiveFailures > 0) {
-                        setAndSettle({
-                            connection: {
-                                kind: "reconnecting",
-                                message: connectionFailure(get().connection),
-                                notice: recoveryNotice(),
-                            },
-                        });
-                    }
-                    const running = new AbortController();
-                    attempt = running;
+                /** Waits as the failed attempt's effects say: a retry counts down, or the connection waits to be retried. */
+                const wait = async (effects: readonly SessionConnectionEffect[]): Promise<void> => {
+                    countdownInterrupt = new AbortController();
+                    const retrySignal = AbortSignal.any([signal, countdownInterrupt.signal]);
                     try {
-                        await observeSession(AbortSignal.any([signal, running.signal]));
-                    } catch (failure) {
-                        const cause = running.signal.aborted ? running.signal.reason : failure;
-                        running.abort();
-                        attempt = null;
-                        if (client !== null) {
-                            options.sessionPage.connection.release(client);
-                        }
-                        client = null;
-                        if (signal.aborted) {
-                            return;
-                        }
-                        if (isSessionClosedFailure(cause)) {
-                            closure ??= { reason: cause.message };
-                        }
-                        if (closure !== null) {
-                            continue;
-                        }
-                        const retryable = isRetryableComputerConnectionFailure(cause);
-                        if (recoveryRequested) {
-                            recoveryRequested = false;
-                            consecutiveFailures = 0;
-                        }
-                        const retry = retryable
-                            ? sessionReconnectAttempt(consecutiveFailures)
-                            : { kind: "exhausted" as const };
-                        consecutiveFailures += 1;
-                        recordBrowserDiagnostic({
-                            at: new Date().toISOString(),
-                            component: "web",
-                            operation: "session-interruption",
-                            outcome: cause instanceof MortyError ? cause.code : "api_unavailable",
-                            attempt: consecutiveFailures,
-                            elapsedMs: 0,
-                            requestId: "",
-                        });
-                        const message = formatError(cause, "The Session could not be opened.");
-                        setAndSettle({
-                            connection: retryable
-                                ? disconnectedConnection(
-                                      message,
-                                      retry.kind === "scheduled" ? retry.delayMs : null,
-                                      recoveryNotice(),
-                                  )
-                                : { kind: "failed", message },
-                        });
-                        countdownInterrupt = new AbortController();
-                        const retrySignal = AbortSignal.any([signal, countdownInterrupt.signal]);
-                        try {
-                            if (retry.kind === "scheduled") {
-                                const retryAt = clock.now() + retry.delayMs;
+                        for (const effect of effects) {
+                            if (effect.kind === "await-retry") {
+                                const retryAt = clock.now() + effect.delayMs;
                                 while (clock.now() < retryAt) {
                                     await clock.sleep(Math.min(1000, retryAt - clock.now()), retrySignal);
                                     retrySignal.throwIfAborted();
-                                    setAndSettle({
-                                        connection: disconnectedConnection(
-                                            message,
-                                            retryAt - clock.now(),
-                                            recoveryNotice(),
-                                        ),
+                                    dispatchConnection({
+                                        kind: "retry-ticked",
+                                        remainingMs: retryAt - clock.now(),
+                                        notice: recoveryNotice(),
                                     });
                                 }
-                            } else {
-                                if (retryable) {
+                            } else if (effect.kind === "await-computer") {
+                                if (effect.notify) {
                                     // The automatic retries are used up: the owner retries once it sees the Computer
                                     // reachable again, and the user can retry at any time.
                                     options.onWaitingForComputer();
@@ -1139,12 +1098,60 @@ export function createSessionPaneModel(options: {
                                     retrySignal.addEventListener("abort", () => resolve(), { once: true });
                                 });
                             }
-                        } catch (cause) {
-                            if (!retrySignal.aborted) {
-                                throw cause;
-                            }
                         }
-                        countdownInterrupt = null;
+                    } catch (cause) {
+                        if (!retrySignal.aborted) {
+                            throw cause;
+                        }
+                    }
+                    countdownInterrupt = null;
+                };
+                for (;;) {
+                    if (currentConnection().kind === "closed") {
+                        return;
+                    }
+                    if (currentConnection().kind === "waiting") {
+                        dispatchConnection({ kind: "attempt-starting", notice: recoveryNotice() });
+                    }
+                    const running = new AbortController();
+                    attempt = running;
+                    try {
+                        await observeSession(AbortSignal.any([signal, running.signal]));
+                    } catch (failure) {
+                        const cause = running.signal.aborted ? running.signal.reason : failure;
+                        running.abort();
+                        attempt = null;
+                        const opened = sessionConnectionClient(currentConnection());
+                        if (opened !== null) {
+                            options.sessionPage.connection.release(opened);
+                        }
+                        if (signal.aborted) {
+                            return;
+                        }
+                        const message = formatError(cause, "The Session could not be opened.");
+                        const effects = dispatchConnection({
+                            kind: "attempt-failed",
+                            failure: isSessionClosedFailure(cause)
+                                ? { kind: "session-closed", reason: cause.message }
+                                : isRetryableComputerConnectionFailure(cause)
+                                  ? { kind: "retryable", message, notice: recoveryNotice() }
+                                  : { kind: "terminal", message },
+                            jitter: Math.random(),
+                        });
+                        const interrupted = currentConnection();
+                        if (interrupted.kind === "closed") {
+                            continue;
+                        }
+                        recordBrowserDiagnostic({
+                            at: new Date().toISOString(),
+                            component: "web",
+                            operation: "session-interruption",
+                            outcome: cause instanceof MortyError ? cause.code : "api_unavailable",
+                            attempt: interrupted.kind === "waiting" ? interrupted.failures : 0,
+                            elapsedMs: 0,
+                            requestId: "",
+                        });
+                        await wait(effects);
                         if (signal.aborted) {
                             return;
                         }
@@ -1153,40 +1160,16 @@ export function createSessionPaneModel(options: {
             },
             recover: async (parent) => {
                 parent.throwIfAborted();
-                const state = get().connection;
-                if (state.kind === "disconnected") {
-                    // A foreground hint can expedite recovery without replenishing
-                    // every short-lived connection's retry budget.
-                    if (state.retry.kind === "exhausted") {
-                        recoveryRequested = true;
-                    }
-                    countdownInterrupt?.abort(new Error("The browser resumed."));
-                    return;
-                }
+                dispatchConnection({ kind: "browser-resumed" });
             },
             retryNow: () => {
-                recoveryRequested = true;
-                countdownInterrupt?.abort(new Error("Retried now"));
+                dispatchConnection({ kind: "retry-now" });
+            },
+            computerReachable: () => {
+                dispatchConnection({ kind: "computer-reachable" });
             },
             sessionClosed: (reason) => {
-                const current = get().connection;
-                // A failed operation and the Computer's notice can both report one closing; the notice has the reason.
-                if (current.kind === "closed") {
-                    if (current.reason === null && reason !== null) {
-                        set({ connection: { ...current, reason } });
-                    }
-                    return;
-                }
-                if (closure !== null) {
-                    if (closure.reason === null && reason !== null) {
-                        closure = { reason };
-                    }
-                    return;
-                }
-                closure = { reason };
-                // The connect loop takes over: it stops the running attempt or retry countdown and shows the closing.
-                attempt?.abort(new Error("The Session closed."));
-                countdownInterrupt?.abort(new Error("The Session closed."));
+                dispatchConnection({ kind: "session-closed", reason });
             },
             setDraft: (draft) => {
                 tasks.getState().dismissFailure();
@@ -1224,7 +1207,7 @@ export function createSessionPaneModel(options: {
                     execution.getState().apply({ kind: "turn-submitted" });
                 }
                 // Without a record of when this browser sent it, the retry dates the command's work.
-                const observed = client;
+                const observed = sessionConnectionClient(connectionState);
                 const startedAt = Date.now();
                 const retrying: SubmitTurn = async (request, signal) => {
                     const connected = await requests.connectSession(sessionTarget, signal);
@@ -1398,9 +1381,7 @@ export function createSessionPaneModel(options: {
      * calls it when it sees the Computer reachable again, and a failed attempt waits for the owner's next call.
      */
     const reconnect = (): void => {
-        if (connectionWaitsForComputer(store.getState().connection)) {
-            countdownInterrupt?.abort(new Error("The Computer is reachable again."));
-        }
+        store.getState().computerReachable();
     };
     /**
      * Ends the pane: its connection and everything bound to its lifetime. The Session's operations go on, waiting for
