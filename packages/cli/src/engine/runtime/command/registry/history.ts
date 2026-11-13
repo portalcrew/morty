@@ -32,6 +32,9 @@ interface OrderedHistoryEvent {
     readonly event: SessionEvent;
 }
 
+const HISTORY_FRAME_LIMIT = 8 * 1024 * 1024;
+const HISTORY_ROUTING_RESERVE = 4096;
+
 async function loadHistoryPage(
     target: NativeSessionTarget,
     eventLimit: number,
@@ -79,14 +82,56 @@ async function loadHistoryPage(
     if (sessionGenerationId === null || throughPosition === null) {
         throw new SessionError("session_history_unavailable", "The Session history is unavailable");
     }
-    const orderedEvents = loaded.slice(-eventLimit);
+    const candidates = loaded.slice(-eventLimit);
+    const tailCursor = candidates.at(-1)?.event.eventId ?? "";
+    // The encrypted private JSON contains the page and queue. Reserve space for the
+    // routing JSON, a 512-character cursor, the AES-GCM packet and base64 framing.
+    const empty = {
+        events: {
+            events: [],
+            nextCursor: null,
+            sessionGenerationId,
+            tailCursor,
+            throughPosition,
+            truncated: false,
+            version: 2,
+        },
+        queuedPromptRequests,
+    };
+    let privateBytes = Buffer.byteLength(JSON.stringify({ events: empty }));
+    if (Math.ceil(((privateBytes + 37) * 4) / 3) + HISTORY_ROUTING_RESERVE > HISTORY_FRAME_LIMIT) {
+        throw new SessionError(
+            "session_history_unavailable",
+            "The Session history metadata exceeds the supported response size",
+        );
+    }
+    let first = candidates.length;
+    while (first > 0) {
+        const candidate = candidates[first - 1];
+        if (candidate === undefined) {
+            break;
+        }
+        const bytes = Buffer.byteLength(JSON.stringify(candidate.event)) + (first === candidates.length ? 0 : 1);
+        if (Math.ceil(((privateBytes + bytes + 37) * 4) / 3) + HISTORY_ROUTING_RESERVE > HISTORY_FRAME_LIMIT) {
+            break;
+        }
+        privateBytes += bytes;
+        first -= 1;
+    }
+    if (first === candidates.length && candidates.length > 0) {
+        throw new SessionError(
+            "session_history_unavailable",
+            "A Session history event exceeds the supported response size",
+        );
+    }
+    const orderedEvents = candidates.slice(first);
     const nextCursor = orderedEvents[0]?.cursor ?? null;
     return {
         events: {
             events: orderedEvents.map(({ event }) => event),
             nextCursor,
             sessionGenerationId,
-            tailCursor: orderedEvents.at(-1)?.event.eventId ?? "",
+            tailCursor,
             throughPosition,
             truncated: nextCursor !== null,
             version: 2,
@@ -130,19 +175,23 @@ async function executeSessionHistoryPageLoad(
             async (eventLimit, cursor) => await sessions.loadSessionEvents(loadOptions, eventLimit, cursor),
         );
         signal.throwIfAborted();
-        send(
-            socket,
-            await sessionHistoryPageLoadedCodec.encode(
-                {
-                    events,
-                    kind: SESSION_HISTORY_PAGE_LOADED_KIND,
-                    requestId: command.requestId,
-                    target: command.target,
-                },
-                payloadEncryption,
-                signal,
-            ),
+        const encoded = await sessionHistoryPageLoadedCodec.encode(
+            {
+                events,
+                kind: SESSION_HISTORY_PAGE_LOADED_KIND,
+                requestId: command.requestId,
+                target: command.target,
+            },
+            payloadEncryption,
+            signal,
         );
+        if (Buffer.byteLength(encoded) > HISTORY_FRAME_LIMIT) {
+            throw new SessionError(
+                "session_history_unavailable",
+                "The Session history response exceeds the supported size",
+            );
+        }
+        send(socket, encoded);
     } catch (error) {
         if (!signal.aborted) {
             diagnostics.daemonDiagnostic(
@@ -187,19 +236,23 @@ async function executeSessionPreviewHistoryPageLoad(
                 await nativeSessions.readSessionHistory(loadOptions, command.target.sessionId, eventLimit, cursor),
         );
         signal.throwIfAborted();
-        send(
-            socket,
-            await sessionPreviewHistoryPageLoadedCodec.encode(
-                {
-                    events,
-                    kind: SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND,
-                    requestId: command.requestId,
-                    target: command.target,
-                },
-                payloadEncryption,
-                signal,
-            ),
+        const encoded = await sessionPreviewHistoryPageLoadedCodec.encode(
+            {
+                events,
+                kind: SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND,
+                requestId: command.requestId,
+                target: command.target,
+            },
+            payloadEncryption,
+            signal,
         );
+        if (Buffer.byteLength(encoded) > HISTORY_FRAME_LIMIT) {
+            throw new SessionError(
+                "session_history_unavailable",
+                "The Session history response exceeds the supported size",
+            );
+        }
+        send(socket, encoded);
     } catch (error) {
         if (!signal.aborted) {
             diagnostics.daemonDiagnostic(
