@@ -9,9 +9,6 @@ function sessionRuntimeErrorStatus(code: string): number {
         code === "session_busy" ||
         code === SESSION_CLOSED_ERROR_CODE ||
         code === "idempotency_conflict" ||
-        // An operation the Computer started but cannot tell the end of: repeating it cannot answer differently.
-        code === "session_creation_outcome_unknown" ||
-        code === "command_result_expired" ||
         code === "turn_already_started" ||
         code === "permission_response_conflict" ||
         code === "session_configuration_conflict" ||

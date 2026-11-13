@@ -198,11 +198,11 @@ export function prependToDraft(content: string, draft: string): string {
     return draft.length === 0 ? content : content.length === 0 ? draft : `${content}\n\n${draft}`;
 }
 
-/** Local validation and terminal addressed refusals settle delivery; ambiguous or retryable failures do not. */
+/** Local validation and the Computer's refusals settle delivery: nothing ran. Ambiguous failures do not. */
 export function isAuthoritativeFailure(cause: unknown): boolean {
     return (
         cause instanceof MortyValidationError ||
-        (cause instanceof MortyOperationError && cause.recovery === "terminal") ||
+        (cause instanceof MortyOperationError && cause.outcome === "refused") ||
         (cause instanceof MortyApiError && cause.status >= 400 && cause.status < 500) ||
         (cause instanceof CloudApiError && cause.status !== null && cause.status >= 400 && cause.status < 500)
     );
@@ -297,7 +297,9 @@ export const createSessionDeliveryStore = (options: {
                 return { kind: "rejected" };
             }
             const state = get().state;
-            if (state.kind === "submitting" && delivered(journal)) {
+            // A command the Computer already started will not run again: it holds the message, whatever the page saw.
+            const applied = cause instanceof MortyOperationError && cause.outcome === "applied";
+            if (state.kind === "submitting" && (applied || delivered(journal))) {
                 confirm(journal, journal.placement, set, get);
                 return { kind: "delivered" };
             }

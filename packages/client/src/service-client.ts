@@ -250,7 +250,8 @@ function record(value: unknown): Readonly<Record<string, unknown>> {
     return value;
 }
 
-const terminalOperationFailureCodes = new Set([
+/** The Computer's refusals: the operation was not run, so repeating it under a new identity cannot run it twice. */
+const refusedOperationCodes = new Set([
     "invalid_request",
     "session_not_found",
     "native_session_not_found",
@@ -262,9 +263,7 @@ const terminalOperationFailureCodes = new Set([
     SESSION_CLOSED_ERROR_CODE,
     "idempotency_conflict",
     "command_identity_conflict",
-    "command_result_expired",
     "session_creation_refused",
-    "session_creation_outcome_unknown",
     "turn_already_started",
     "turn_not_active",
     "permission_response_conflict",
@@ -273,6 +272,16 @@ const terminalOperationFailureCodes = new Set([
     "steering_target_unavailable",
     "steering_unsupported",
 ]);
+
+/** A command that already started: its result is gone, but the Computer will not run it again. */
+const appliedOperationCodes = new Set(["command_result_expired"]);
+
+function operationOutcome(code: string): MortyOperationError["outcome"] {
+    if (refusedOperationCodes.has(code)) {
+        return "refused";
+    }
+    return appliedOperationCodes.has(code) ? "applied" : "unknown";
+}
 
 function throwNativeFailure(
     failure: SessionOperationFailedEvent,
@@ -291,12 +300,7 @@ function throwNativeFailure(
     if (failure.code === "native_session_timeout" || failure.code === "operation_timeout") {
         throw new MortyTimeoutError({ cause: failure });
     }
-    throw new MortyOperationError(
-        failure.code,
-        failure.message,
-        terminalOperationFailureCodes.has(failure.code) ? "terminal" : "retryable",
-        { cause: failure },
-    );
+    throw new MortyOperationError(failure.code, failure.message, operationOutcome(failure.code), { cause: failure });
 }
 
 async function responseValue(response: Response): Promise<unknown> {

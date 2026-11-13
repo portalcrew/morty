@@ -196,7 +196,7 @@ test("Given another client used my pending message identity, When the Computer r
         await expect(daemon.steerTurn(sessionId, original.commandId)).rejects.toMatchObject({
             name: "MortyOperationError",
             code: "turn_already_started",
-            recovery: "terminal",
+            outcome: "refused",
         });
         await daemon.continueReply("wait for steering", { outcome: "complete", output: [] });
         network.releaseHeldTurn();
