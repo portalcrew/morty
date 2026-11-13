@@ -35,7 +35,7 @@
     "devDependencies": {
         "@testing-library/dom": "10.4.2",
         "@testing-library/react": "16.3.3",
-        "@testing-library/user-event": "14.6.8",
+        "@testing-library/user-event": "14.6.9",
         "@types/qrcode": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
