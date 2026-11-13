@@ -176,7 +176,7 @@ To inspect a release, open that exact version of `@morty-build/cli` on npm and
 follow its provenance details. For releases published after the organization
 transfer, check that the repository is `portalcrew/morty`, the workflow is
 `morty-cli.yml`, and the source revision matches the accepted release. Earlier
-releases retain their original `moxt-ai/morty` provenance; do not rewrite it.
+releases retain the provenance of their original source repository; do not rewrite it.
 In an isolated directory, install the exact version with `npm install
 --ignore-scripts @morty-build/cli@<version>`, then run `npm audit signatures` with
 a current npm CLI to verify registry signatures and available attestations.
