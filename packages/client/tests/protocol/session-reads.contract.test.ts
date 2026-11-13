@@ -51,7 +51,6 @@ describe("Session execution read contracts", () => {
         executionPosition: { sessionGenerationId: "generation-1", throughPosition: "4" },
         kind: "native.session.result",
         queued: [],
-        queuedCancellation: "before-start",
         interactionState: null,
         requestId: "request-execution-1",
         target: { harness: "claude", sessionId: "session-1" },

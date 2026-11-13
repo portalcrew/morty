@@ -147,7 +147,6 @@ export class NativeSessionService {
                 requestId: command.requestId,
                 target: command.target,
                 ...this.#activeTurn(command),
-                queuedCancellation: "before-start",
             };
         }
         const cwd = await this.#directories.resolve(command.directory, signal);

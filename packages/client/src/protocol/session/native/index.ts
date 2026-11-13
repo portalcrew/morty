@@ -201,8 +201,6 @@ export const activeTurnResultSchema = z
         command: commandDeliverySchema.optional(),
         // Absent while the last started command is running or none has started.
         lastTurn: lastTurnOutcomeSchema.optional(),
-        // The Computer withdraws a queued command only before it starts.
-        queuedCancellation: z.literal("before-start"),
     })
     .readonly();
 const nativeSessionResultSchema = z.discriminatedUnion("action", [

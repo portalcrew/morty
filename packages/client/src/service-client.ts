@@ -688,7 +688,7 @@ export class MortySessionResources {
     ): Promise<
         Pick<
             Extract<NativeSessionResult, { readonly action: "active-turn" }>,
-            "turn" | "queued" | "command" | "lastTurn" | "queuedCancellation" | "interactionState" | "executionPosition"
+            "turn" | "queued" | "command" | "lastTurn" | "interactionState" | "executionPosition"
         >
     > => {
         const result = decodeNativeSessionResult(
@@ -711,7 +711,6 @@ export class MortySessionResources {
             queued: result.queued,
             ...(result.command === undefined ? {} : { command: result.command }),
             ...(result.lastTurn === undefined ? {} : { lastTurn: result.lastTurn }),
-            queuedCancellation: result.queuedCancellation,
             interactionState: result.interactionState,
             executionPosition: result.executionPosition,
         };
