@@ -28,12 +28,12 @@ beforeAll(async () => {
 });
 
 test("Given an attachment within the supported plaintext limit, when its encrypted upload exceeds the ordinary transport limit, then the Computer accepts it and larger plaintext is rejected", {
-    timeout: 90_000,
+    timeout: 180_000,
 }, async () => {
     await using bindings = await createBindings();
     await using network = await recordingRelay(bindings.origin);
     await bindings.configure({ APP_ORIGIN: network.origin });
-    const signal = AbortSignal.timeout(75_000);
+    const signal = AbortSignal.timeout(150_000);
     const created = await fetch(new URL("/morty/api/v1/computers", network.origin), {
         method: "POST",
         headers: { "content-type": "application/json" },

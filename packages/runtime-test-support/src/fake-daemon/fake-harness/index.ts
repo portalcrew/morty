@@ -284,12 +284,12 @@ class ControlledAgentState {
             await active.send(notification);
             return;
         }
-        if (output.kind === "session-title") {
+        if (output.kind === "session-title" || output.kind === "session-updated-at") {
             const notification: acp.SessionNotification = {
                 sessionId: active.sessionId,
                 update: {
                     sessionUpdate: "session_info_update",
-                    title: output.title,
+                    ...(output.kind === "session-title" ? { title: output.title } : { updatedAt: output.updatedAt }),
                 },
             };
             this.#record(notification);

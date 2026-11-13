@@ -26,6 +26,7 @@ import {
     decodeFileReadCommand,
     decodeSessionAccessCredential,
     decodeWorkerToDaemonMessage,
+    encodeContentChunkAck,
     encodeContentChunkFrame,
     encodeEncryptedDaemonInboundMessage,
     encodeEncryptedDaemonMessage,
@@ -1993,6 +1994,13 @@ describe.sequential("Relay Turn submission", () => {
                 expect(chunk.requestId).toBe(requestId);
                 expect(chunk.sequence).toBe(chunks.length);
                 chunks.push(chunk.bytes);
+                runtime.daemon.send(
+                    encodeContentChunkAck({
+                        kind: "content.chunk.ack",
+                        requestId: chunk.requestId,
+                        sequence: chunk.sequence,
+                    }),
+                );
             }
             const uploadedBytes = new Uint8Array(chunks.reduce((length, chunk) => length + chunk.byteLength, 0));
             let offset = 0;
@@ -3458,8 +3466,14 @@ it("Given an anonymous browser knows a Computer, When it declares a full-budget 
         const frame = await runtime.daemonMessages.nextFrame();
         const arrayBuffer = typeof frame === "object" && frame !== null ? Reflect.get(frame, "arrayBuffer") : undefined;
         const binary = typeof arrayBuffer === "function" ? await Reflect.apply(arrayBuffer, frame, []) : frame;
-        expect((await contentChunkCodec.decode(binary, encryption.computer, signal)).bytes).toEqual(
-            new Uint8Array([120]),
+        const accepted = await contentChunkCodec.decode(binary, encryption.computer, signal);
+        expect(accepted).toMatchObject({ requestId, sequence: 0, bytes: new Uint8Array([120]) });
+        runtime.daemon.send(
+            encodeContentChunkAck({
+                kind: "content.chunk.ack",
+                requestId: accepted.requestId,
+                sequence: accepted.sequence,
+            }),
         );
         expect(
             await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),

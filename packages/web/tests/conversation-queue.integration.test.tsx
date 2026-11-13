@@ -1,6 +1,9 @@
 import { resolveObjectURL } from "node:buffer";
+import { createClientPayloadEncryption } from "@morty-build/client";
+import { sessionOperationFailedEventCodec } from "@morty-build/client/protocol";
 import { fireEvent, getAllByText, getByLabelText, getByRole, queryAllByText, queryByRole } from "@testing-library/dom";
 import { act } from "@testing-library/react";
+import * as v from "valibot";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
 import { sendPrompt } from "./infra/application-scenario.ts";
@@ -75,8 +78,21 @@ for (const eventOrder of ["before refusal", "after refusal"] as const) {
                 await app.waitForView(() => expect(app.optionalElementByTestId(dataTestId.queuedMessage)).toBeNull());
             }
             // The Computer refuses the late steer because the message already left the queue.
-            const response = await release();
-            expect(response).toMatchObject({ kind: "http.response", status: 409 });
+            const response = v.parse(
+                v.object({ kind: v.literal("http.response"), status: v.literal(200), body: v.string() }),
+                await release(),
+            );
+            const signal = AbortSignal.timeout(10_000);
+            const encryption = await createClientPayloadEncryption(await daemon.encryptionAccess(signal), signal);
+            try {
+                expect(await sessionOperationFailedEventCodec.decode(response.body, encryption, signal)).toMatchObject({
+                    kind: "session.operation.failed",
+                    code: "turn_already_started",
+                    message: "The message already left the queue and could not be steered",
+                });
+            } finally {
+                encryption.close();
+            }
             if (eventOrder === "after refusal") {
                 await app.waitForView(() =>
                     expect(document.body.textContent).toContain(

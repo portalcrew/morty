@@ -178,7 +178,7 @@ test("Given a turn that fails while I am in another Session, When I return, Then
     network.holdNextTurn();
     const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "fail this turn explicitly");
-    expect(await arriving).toContain("fail this turn explicitly");
+    expect((await app.readSubmission(await arriving)).prompt).toBe("fail this turn explicitly");
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     network.releaseHeldTurn();
@@ -248,7 +248,7 @@ test("Given my last turn completed while I was away after an earlier failure, Wh
     network.holdNextTurn();
     const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Finish while away");
-    expect(await arriving).toContain("Finish while away");
+    expect((await app.readSubmission(await arriving)).prompt).toBe("Finish while away");
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     network.releaseHeldTurn();

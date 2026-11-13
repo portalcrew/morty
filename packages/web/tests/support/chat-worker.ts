@@ -1,10 +1,15 @@
 import { resolve } from "node:path";
-import { createClientPayloadEncryption, type PayloadEncryptionConnection } from "@morty-build/client";
+import {
+    createClientPayloadEncryption,
+    createComputerPayloadEncryption,
+    type PayloadEncryptionConnection,
+} from "@morty-build/client";
 import {
     decodeKnownSessionLiveEventBatch,
     decodeMessageKind,
     nativeSessionResultCodec,
     sessionEventEnvelopeCodec,
+    sessionPromptCommandCodec,
 } from "@morty-build/client/protocol";
 import * as v from "valibot";
 import type { ControlledAgent } from "../../../../tests/support/fake-daemon/runtime.ts";
@@ -68,10 +73,28 @@ export async function createChatWorkerEnvironment(
         const computerId = identity.computerId;
         const transport = new TestApiTransport(origin);
         transport.open();
+        let submissionObserver: PayloadEncryptionConnection | null = null;
+        const submissions = new Map<
+            string,
+            Promise<Omit<Awaited<ReturnType<typeof sessionPromptCommandCodec.decode>>, "requestId">>
+        >();
         const connect = async (agents: readonly ControlledAgent[], sessionIds?: ReadonlySet<string>) => {
             const runtime = await cloud.connectAgent(identity.computerId, identity.token, agents, sessionIds);
             const access = await runtime.encryptionAccess(AbortSignal.timeout(30_000));
             rememberComputerEncryption(access);
+            const claims = new Set<string>();
+            submissionObserver = await createComputerPayloadEncryption(
+                access,
+                async (claim, signal) => {
+                    signal.throwIfAborted();
+                    if (claims.has(claim.fingerprint)) {
+                        throw new Error("The recorded submission was already decoded");
+                    }
+                    claims.add(claim.fingerprint);
+                },
+                AbortSignal.timeout(30_000),
+            );
+            observers.add(submissionObserver);
             if (cloud.executionNetwork !== null) {
                 const encryption = await createClientPayloadEncryption(access, AbortSignal.timeout(30_000));
                 observers.add(encryption);
@@ -130,6 +153,7 @@ export async function createChatWorkerEnvironment(
             };
             return {
                 failure: runtime.failure,
+                encryptionAccess: runtime.encryptionAccess,
                 continueReply: runtime.continueReply,
                 readManagedSessions: (signal: AbortSignal) => runtime.api.managedSessions(signal),
                 /** Archives a Session the way another browser window of this Computer would. */
@@ -215,6 +239,20 @@ export async function createChatWorkerEnvironment(
         };
         return {
             computerId,
+            /** Reads recorded real traffic with this Computer's local authority; retries retain intent, not ciphertext. */
+            readSubmission: async (encoded: string | undefined, signal = AbortSignal.timeout(10_000)) => {
+                if (encoded === undefined || submissionObserver === null) {
+                    throw new Error("Expected recorded traffic and the connected Computer's encryption access");
+                }
+                let decoded = submissions.get(encoded);
+                if (decoded === undefined) {
+                    decoded = sessionPromptCommandCodec
+                        .decode(encoded, submissionObserver, signal)
+                        .then(({ requestId: _requestId, ...intent }) => intent);
+                    submissions.set(encoded, decoded);
+                }
+                return await decoded;
+            },
             network: cloud.network,
             sharingNetwork,
             executionNetwork: cloud.executionNetwork,

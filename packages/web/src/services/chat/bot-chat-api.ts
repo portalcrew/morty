@@ -232,6 +232,10 @@ export class BotChatApi {
         this.#sessionClients.clear();
     };
     readonly daemonDiagnostics = async (signal: AbortSignal) => {
+        if (this.#encryptionAccess() === null) {
+            // An unpaired Computer has no encryption access yet; report the Worker's authoritative pairing failure.
+            await this.computerConfiguration(signal);
+        }
         const request = chatCalls.daemonDiagnostics({ origin: this.#origin, computerId: this.#computerId });
         const command = decodeComputerDiagnosticsRequest(request.body ?? "");
         const encryption = this.#sessionTransport().payloadEncryption;

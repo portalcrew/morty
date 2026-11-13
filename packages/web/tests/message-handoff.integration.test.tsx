@@ -155,7 +155,7 @@ test("Given an existing Session and a held submission, When I send a message and
     await sendPrompt(app, composer, "Original held message");
     expect(composer).toHaveProperty("value", "");
     expect(composer).toHaveProperty("disabled", false);
-    expect(await arriving).toContain("Original held message");
+    expect((await app.readSubmission(await arriving)).prompt).toBe("Original held message");
     const submissions = network.submissions.length;
     await app.user.paste("Next text stays mine");
     await app.user.upload(

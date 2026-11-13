@@ -96,9 +96,11 @@ for (const delivery of ["before-acceptance", "after-acceptance"] as const) {
         );
         expect(network.submissions).toHaveLength(delivery === "before-acceptance" ? 3 : 2);
         if (delivery === "before-acceptance") {
-            expect(network.submissions[2]).toBe(network.submissions[1]);
+            expect(await first.readSubmission(network.submissions[2])).toEqual(
+                await first.readSubmission(network.submissions[1]),
+            );
         }
-        expect(JSON.parse(network.submissions[1] ?? "{}")).not.toHaveProperty("sessionConfigurations");
+        expect((await first.readSubmission(network.submissions[1])).sessionConfigurations).toEqual([]);
         expect(
             first
                 .elementsByTestId(dataTestId.agentResponse)

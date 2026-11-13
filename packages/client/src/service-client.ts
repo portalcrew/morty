@@ -988,9 +988,10 @@ export class MortyTurnResources {
     ): Promise<Turn> => {
         const commandId = request.idempotencyKey;
         const requestId = commandId;
-        const result = await this.#executor.post(
-            sessionEndpoints.submitTurn({ computerId: this.#computerId, target: sessionTarget }),
-            await sessionPromptCommandCodec.encode(
+        signal.throwIfAborted();
+        let encoded: string;
+        try {
+            encoded = await sessionPromptCommandCodec.encode(
                 {
                     kind: "session.prompt",
                     requestId,
@@ -1004,7 +1005,18 @@ export class MortyTurnResources {
                 },
                 this.#executor.payloadEncryption,
                 signal,
-            ),
+            );
+        } catch (cause) {
+            signal.throwIfAborted();
+            if (cause instanceof ProtocolMessageError) {
+                // Encoding validates before transport: this failure cannot have admitted the command.
+                throw new MortyValidationError("The message or its attachments are invalid.", { cause });
+            }
+            throw cause;
+        }
+        const result = await this.#executor.post(
+            sessionEndpoints.submitTurn({ computerId: this.#computerId, target: sessionTarget }),
+            encoded,
             signal,
         );
         if (decodeMessageKind(result) === "session.operation.failed") {

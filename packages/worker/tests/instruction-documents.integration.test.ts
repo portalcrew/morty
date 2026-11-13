@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
+import * as v from "valibot";
 import { expect, test } from "vitest";
 import worker from "../src/worker/application.ts";
 

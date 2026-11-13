@@ -52,7 +52,7 @@ for (const target of ["immediate", "queued"] as const) {
             await app.waitForView(() =>
                 getByRole(document.body, "button", { name: "Retry message with unknown delivery" }),
             );
-            const original = JSON.parse(network.submissions.at(-1) ?? "{}");
+            const original = await app.readSubmission(network.submissions.at(-1));
             const submissions = network.submissions.length;
             await app.user.click(app.elementByTestId(dataTestId.messageComposer));
             await app.user.paste("Next draft survives reload");
@@ -95,7 +95,7 @@ for (const target of ["immediate", "queued"] as const) {
                 }
             });
             expect(network.submissions).toHaveLength(submissions + (interruption === "before-acceptance" ? 1 : 0));
-            expect(JSON.parse(network.submissions.at(-1) ?? "{}")).toEqual(original);
+            expect(await app.readSubmission(network.submissions.at(-1))).toEqual(original);
             expect(original.attachments).toEqual(
                 expect.arrayContaining([expect.objectContaining({ name: "recovery.json" })]),
             );
@@ -150,7 +150,7 @@ test("Given an unconfirmed message after a reload, When another device runs a tu
     if (sessionId === null) {
         throw new Error("Expected an open Session");
     }
-    const original = JSON.parse(network.submissions.at(-1) ?? "{}");
+    const original = await app.readSubmission(network.submissions.at(-1));
     const submissions = network.submissions.length;
     network.reconnect();
     const reloaded = await app.reload();
@@ -173,12 +173,12 @@ test("Given an unconfirmed message after a reload, When another device runs a tu
     });
     const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
     await reloaded.user.click(retry);
-    expect(JSON.parse(await arriving)).toEqual(original);
+    expect(await app.readSubmission(await arriving)).toEqual(original);
     await reloaded.waitForView(() =>
         expect(queryByRole(document.body, "button", { name: "Retry message with unknown delivery" })).toBeNull(),
     );
     expect(network.submissions).toHaveLength(submissions + 1);
-    expect(JSON.parse(network.submissions.at(-1) ?? "{}")).toEqual(original);
+    expect(await app.readSubmission(network.submissions.at(-1))).toEqual(original);
     await daemon.continueReply("wait for steering", { outcome: "complete", output: [] });
     await reloaded.waitForView(() =>
         expect(reloaded.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain(

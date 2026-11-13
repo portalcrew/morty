@@ -83,7 +83,7 @@ for (const message of ["first", "subsequent"] as const) {
         await app.waitForView(() =>
             getByRole(document.body, "button", { name: "Retry message with unknown delivery" }),
         );
-        const original = network.submissions.at(-1);
+        const original = await app.readSubmission(network.submissions.at(-1));
         const submissions = network.submissions.length;
         await showReconnectNotice(app, clock);
         network.reconnect();
@@ -113,7 +113,7 @@ for (const message of ["first", "subsequent"] as const) {
             expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
         });
         expect(network.submissions).toHaveLength(submissions + 1);
-        expect(network.submissions.at(-1)).toBe(original);
+        expect(await app.readSubmission(network.submissions.at(-1))).toEqual(original);
         expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "Next draft survives retry");
         expect(queryByRole(document.body, "button", { name: "Retry message with unknown delivery" })).toBeNull();
     });
@@ -137,7 +137,7 @@ test("Given a message on its way to the Computer, When Chat remounts, Then it is
     network.holdNextTurn();
     const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Survive the remount");
-    expect(await arriving).toContain("Survive the remount");
+    expect((await app.readSubmission(await arriving)).prompt).toBe("Survive the remount");
     const submissions = network.submissions.length;
 
     app.remount();
@@ -233,7 +233,7 @@ test("Given a message the network has not delivered yet, When I switch to anothe
     network.holdNextTurn();
     const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "hold after first delta");
-    expect(await arriving).toContain("hold after first delta");
+    expect((await app.readSubmission(await arriving)).prompt).toBe("hold after first delta");
     const submissions = network.submissions.length;
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
