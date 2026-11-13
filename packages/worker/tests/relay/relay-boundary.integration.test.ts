@@ -3317,12 +3317,49 @@ it("Given a Fork in flight, When it is requested again concurrently and after Re
             await nativeSessionResultCodec.decode(JSON.stringify(original), encryption.client, signal),
         ).toMatchObject({ action: "fork", target: forkTarget });
 
-        expect(
-            await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),
-        ).toEqual(fork);
-        runtime.daemon.send(
-            await nativeSessionResultCodec.encode(forkResult(requestId, forkTarget), encryption.computer, signal),
-        );
+        // Concurrent HTTP requests can finish authorization in either order. Answer each opaque
+        // attempt according to the intent the Computer actually receives, not its caller's launch order.
+        const receivedSources = new Set<string>();
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            const received = await decodeEncryptedDaemonInboundMessage(
+                await runtime.daemonMessages.next(),
+                encryption.computer,
+                signal,
+            );
+            if (
+                received.kind === "native.session.request" &&
+                received.action === "fork" &&
+                received.sessionId === "another-source"
+            ) {
+                expect(received).toEqual({ ...fork, sessionId: "another-source" });
+                expect(receivedSources.has("another-source")).toBe(false);
+                receivedSources.add("another-source");
+                runtime.daemon.send(
+                    await sessionOperationFailedEventCodec.encode(
+                        {
+                            kind: "session.operation.failed",
+                            requestId,
+                            code: "idempotency_conflict",
+                            message: "The fork intent differs",
+                        },
+                        encryption.computer,
+                        signal,
+                    ),
+                );
+            } else {
+                expect(received).toEqual(fork);
+                expect(receivedSources.has("native-source")).toBe(false);
+                receivedSources.add("native-source");
+                runtime.daemon.send(
+                    await nativeSessionResultCodec.encode(
+                        forkResult(requestId, forkTarget),
+                        encryption.computer,
+                        signal,
+                    ),
+                );
+            }
+        }
+        expect(receivedSources).toEqual(new Set(["native-source", "another-source"]));
         expect(
             await nativeSessionResultCodec.decode(
                 JSON.stringify(await responseJson(await concurrent, 200)),
@@ -3330,21 +3367,6 @@ it("Given a Fork in flight, When it is requested again concurrently and after Re
                 signal,
             ),
         ).toMatchObject({ action: "fork", target: forkTarget });
-        expect(
-            await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),
-        ).toMatchObject({ action: "fork", requestId, sessionId: "another-source" });
-        runtime.daemon.send(
-            await sessionOperationFailedEventCodec.encode(
-                {
-                    kind: "session.operation.failed",
-                    requestId,
-                    code: "idempotency_conflict",
-                    message: "The fork intent differs",
-                },
-                encryption.computer,
-                signal,
-            ),
-        );
         expect(
             await sessionOperationFailedEventCodec.decode(
                 JSON.stringify(await responseJson(await conflicting, 200)),
