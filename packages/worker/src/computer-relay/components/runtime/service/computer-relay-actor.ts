@@ -303,6 +303,11 @@ export class ComputerRelayActor {
     readonly attachDaemon = async (replacedExistingConnection: boolean, _signal: AbortSignal): Promise<void> => {
         if (replacedExistingConnection) {
             this.failPendingAgentSettingsDiscoveries();
+            // The new daemon has no live subscription registry. Clients must
+            // establish fresh encrypted subscriptions themselves.
+            for (const { socket } of this.#peers.viewers()) {
+                socket.close(1012, "Daemon connection replaced");
+            }
         }
         this.broadcastComputerStatus(true);
     };

@@ -37,12 +37,13 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
     }
     // A steer joins a running turn, so the Session admits it only while the Agent runs the turn it names. An
     // appended prompt is always admitted: the Session runs or queues it.
-    // The Turn's durable intent predates request addresses; retries may use a new requestId.
+    // The Turn's durable intent excludes the reply address. Older receipts hashed the full command with equal IDs.
     const { requestId: _requestId, ...intent } = decodeSessionPromptCommand(encodeSessionPromptCommand(message));
     const receipt = context.operations.claimExecution(
         message.commandId,
         message.target,
         JSON.stringify(intent),
+        encodeSessionPromptCommand({ ...message, requestId: message.commandId }),
         () =>
             message.disposition === SessionPromptDisposition.Append ||
             context.sessions.acceptsSteering(message.target, message.targetCommandId),

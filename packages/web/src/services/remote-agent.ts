@@ -162,13 +162,28 @@ export async function runSharedComputer(options: {
                     const cursors = new Set<string>();
                     const pages = [];
                     do {
-                        if (cursors.has(cursor) || cursors.size >= 100) {
-                            throw new MortyProtocolError("Session history is too large or invalid");
+                        if (cursors.has(cursor)) {
+                            throw new MortyProtocolError("Session history returned a repeated cursor");
                         }
                         cursors.add(cursor);
                         const page = await client.events.list(target, new MortyPageRequest(100, cursor), signal);
                         pages.unshift(...page.events);
                         cursor = page.nextCursor ?? "";
+                        // Pages run backwards, but each page is chronological. Once this turn's start (or a
+                        // failure before it started) is present, older turns cannot contribute to its answer.
+                        if (
+                            page.events.some(
+                                (event) =>
+                                    event.type === "lifecycle-metadata" &&
+                                    "commandId" in event.payload &&
+                                    event.payload.commandId === options.turnId &&
+                                    (event.payload.kind === "prompt.started" ||
+                                        event.payload.kind === "prompt.failed" ||
+                                        event.payload.kind === "prompt.failed-before-start"),
+                            )
+                        ) {
+                            break;
+                        }
                     } while (cursor !== "");
                     let collecting = false;
                     let answer = "";

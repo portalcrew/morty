@@ -3,11 +3,15 @@ import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/c
 import * as v from "valibot";
 import { expect, onTestFinished, test, vi } from "vitest";
 import { createControlledAgentRuntime } from "../../../tests/support/fake-daemon/runtime.ts";
+import { createOwnerApi } from "../../../tests/support/owner-api.ts";
 import type { runSharedComputer } from "../../web/src/services/remote-agent.ts";
 
-test("Given a shared Computer, when a remote Agent runs the served helper, then it receives the Agent's answer", {
-    timeout: 90_000,
-}, async () => {
+const scenario =
+    "Given a shared Computer with $history, when its served helper runs, then it returns the requested answer";
+test.each([
+    { history: "short history", olderChunks: 0 },
+    { history: "long history exceeding 100 pages", olderChunks: 10_001 },
+])(scenario, { timeout: 90_000 }, async ({ olderChunks }) => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-13T00:00:00Z") });
     onTestFinished(() => {
         vi.useRealTimers();
@@ -33,6 +37,12 @@ test("Given a shared Computer, when a remote Agent runs the served helper, then 
             agentName: "Controlled Codex",
             sessionIds: new Set([nativeId]),
             reply: (prompt) => {
+                if (prompt === "Earlier turn") {
+                    return {
+                        outcome: "complete",
+                        output: Array.from({ length: olderChunks }, () => ({ kind: "message", text: "old answer" })),
+                    };
+                }
                 if (prompt === "Wait") {
                     held.resolve();
                     return { outcome: "hold", output: [] };
@@ -84,6 +94,58 @@ test("Given a shared Computer, when a remote Agent runs the served helper, then 
         directory: ".",
         signal,
     };
+    if (olderChunks > 0) {
+        const ownerApi = createOwnerApi({
+            origin: bindings.origin,
+            computerId: owner.computerId,
+            credential: owner.computerToken,
+            request: (request) => fetch(request),
+            encryptionAccess: await runtime.encryptionAccess(signal),
+        });
+        try {
+            const access = await ownerApi.api.createConversation(
+                input.conversationKey,
+                { harness: input.harness, workspaceRef: ".", workspaceLabel: ".", configurations: [] },
+                signal,
+            );
+            const client = await ownerApi.api.connectSession(access.target, signal, access);
+            const seeded = Promise.withResolvers<void>();
+            const subscription = await client.events.subscribeLive(
+                access.target,
+                {
+                    reconcile: async () => undefined,
+                    receive: async (events) => {
+                        if (
+                            events.some(
+                                (event) =>
+                                    event.type === "lifecycle-metadata" &&
+                                    event.payload.kind === "prompt.completed" &&
+                                    event.payload.commandId === "earlier-turn",
+                            )
+                        ) {
+                            seeded.resolve();
+                        }
+                        return true;
+                    },
+                },
+                signal,
+            );
+            void subscription.completed.catch(() => undefined);
+            try {
+                await client.turns.submit(
+                    access.target,
+                    { content: "Earlier turn", attachments: [], idempotencyKey: "earlier-turn" },
+                    signal,
+                );
+                await Promise.race([seeded.promise, subscription.completed]);
+                signal.throwIfAborted();
+            } finally {
+                subscription.close();
+            }
+        } finally {
+            ownerApi.close();
+        }
+    }
     const result = await helper.runSharedComputer(input);
     expect(result.answer).toBe("remote answer");
     expect((await helper.runSharedComputer(input)).answer).toBe("remote answer");

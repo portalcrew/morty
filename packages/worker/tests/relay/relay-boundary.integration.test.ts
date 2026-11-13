@@ -1144,6 +1144,67 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
     };
 }
 
+it("Given an encrypted live subscription, When a still-connected daemon is replaced, Then the old subscription ends and a fresh subscription receives answers", async () => {
+    const runtime = await connectComputerDaemon("live-daemon-replacement");
+    let replacement: WebSocket | null = null;
+    try {
+        const signal = new AbortController().signal;
+        const original = await runtime.subscribe();
+        expect(original.admission).toMatchObject({ kind: "session.events.ready" });
+        expect(
+            await decodeEncryptedDaemonInboundMessage(
+                await runtime.daemonMessages.next(),
+                original.encryption.computer,
+                signal,
+            ),
+        ).toMatchObject({ kind: "session.events.subscribe", target: runtime.sessionTarget });
+
+        const connected = await runtime.reconnect();
+        expect(connected.status).toBe(101);
+        replacement = connected.webSocket;
+        if (replacement === null) {
+            throw new Error("Expected the replacement daemon socket");
+        }
+        const replacementMessages = new SocketMessages(replacement);
+        replacement.accept();
+        expect(decodeWorkerToDaemonMessage(await replacementMessages.next()).kind).toBe("computer.liveness.ready");
+        original.socket.send('{"kind":"ping"}');
+        expect(JSON.parse(await original.messages.next())).toMatchObject({
+            kind: "session.events.end",
+            subscriptionId: original.admission["subscriptionId"],
+        });
+
+        const fresh = await runtime.subscribe();
+        expect(fresh.admission).toMatchObject({ kind: "session.events.ready" });
+        expect(fresh.admission["subscriptionId"]).not.toBe(original.admission["subscriptionId"]);
+        expect(
+            await decodeEncryptedDaemonInboundMessage(
+                await replacementMessages.next(),
+                fresh.encryption.computer,
+                signal,
+            ),
+        ).toMatchObject({ kind: "session.events.subscribe", subscriptionId: fresh.admission["subscriptionId"] });
+        const answer = await sessionEventEnvelopeCodec.encode(
+            JSON.parse(liveEvent(runtime.sessionTarget, "answer after daemon replacement")),
+            fresh.encryption.computer,
+            signal,
+        );
+        replacement.send(answer);
+        const delivered = record(JSON.parse(await fresh.messages.next()));
+        expect(delivered).toMatchObject({
+            kind: "session.events.event",
+            subscriptionId: fresh.admission["subscriptionId"],
+        });
+        expect(
+            (await sessionEventEnvelopeCodec.decode(text(delivered, "data"), fresh.encryption.client, signal))
+                .events[0],
+        ).toMatchObject({ payload: { content: { text: "answer after daemon replacement" } } });
+    } finally {
+        replacement?.close(1000, "Test complete");
+        runtime.daemon.close(1000, "Test complete");
+    }
+});
+
 it.each(["text", "binary"])(
     "Given a connected Computer, When revocation commits but disconnect delivery fails and a %s message arrives, Then later events reach no viewer and the daemon is closed",
     async (format) => {
