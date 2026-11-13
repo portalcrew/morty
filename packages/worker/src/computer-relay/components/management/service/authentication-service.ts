@@ -389,10 +389,25 @@ export class AuthenticationService {
         if (access.credential.kind === "browser" && access.credential.deviceId === deviceId) {
             return { kind: "own" };
         }
-        if (!(await this.#endAccess(() => this.identities.endDeviceAccess(deviceId, Date.now(), signal)))) {
-            return { kind: "unknown" };
+        const result = await this.#endDevice(access.token, deviceId, signal);
+        return result.kind === "callerEnded" ? { kind: "unauthenticated" } : result;
+    };
+
+    /** Ends a device's access under the caller's credential, which the write checks again; the result is that write's. */
+    readonly #endDevice = async (
+        token: string,
+        deviceId: string,
+        signal: AbortSignal,
+    ): Promise<Awaited<ReturnType<IdentityStorage["endDeviceAccess"]>>> => {
+        const written: { result?: Awaited<ReturnType<IdentityStorage["endDeviceAccess"]>> } = {};
+        await this.#endAccess(async () => {
+            written.result = await this.identities.endDeviceAccess(token, deviceId, Date.now(), signal);
+            return written.result.kind === "ended";
+        });
+        if (written.result === undefined) {
+            throw new Error("The device access change did not run");
         }
-        return { kind: "ended" };
+        return written.result;
     };
 
     /**
@@ -410,12 +425,8 @@ export class AuthenticationService {
             return refused(access);
         }
         // Ends this browser's device, so every credential of the device stops, including one another tab just received.
-        const { deviceId } = access.credential;
-        return {
-            kind: (await this.#endAccess(() => this.identities.endDeviceAccess(deviceId, Date.now(), signal)))
-                ? "ended"
-                : "unauthenticated",
-        };
+        const result = await this.#endDevice(access.token, access.credential.deviceId, signal);
+        return { kind: result.kind === "ended" ? "ended" : "unauthenticated" };
     };
 
     readonly retireLocalCredential = async (

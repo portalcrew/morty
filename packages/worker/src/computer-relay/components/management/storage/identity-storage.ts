@@ -345,6 +345,15 @@ export class IdentityStorage {
             .where(and(eq(ownerCredential.tokenHash, tokenHash), ownerAccessHeld()))
             .get()) !== undefined;
 
+    /** Whether the credential `tokenHash` still holds access: the computer's own, or a browser's whose device holds. */
+    readonly #credentialHolds = async (database: IdentityDatabase, tokenHash: string, now: number): Promise<boolean> =>
+        (await this.#ownerHolds(database, tokenHash)) ||
+        (await database
+            .select({ id: browserCredential.id })
+            .from(browserCredential)
+            .where(and(eq(browserCredential.tokenHash, tokenHash), browserCredentialInForce(database, now)))
+            .get()) !== undefined;
+
     /**
      * Revokes every local credential except the caller's, ends every browser device's access, and cancels
      * the links no device has used yet. Only the computer's own credential, which belongs to no device, may do this,
@@ -455,14 +464,7 @@ export class IdentityStorage {
             signal,
         );
         signal.throwIfAborted();
-        return (
-            (await this.#ownerHolds(database, tokenHash)) ||
-            (await database
-                .select({ id: browserCredential.id })
-                .from(browserCredential)
-                .where(and(eq(browserCredential.tokenHash, tokenHash), browserCredentialInForce(database, now)))
-                .get()) !== undefined
-        );
+        return await this.#credentialHolds(database, tokenHash, now);
     };
 
     /** Claims an unopened predecessor and issues its successor atomically; retries read the committed issuance. */
@@ -728,20 +730,35 @@ export class IdentityStorage {
 
     /**
      * Ends the access of one of this Computer's browser devices, and with it every credential of that device, including one
-     * a retried or concurrent redemption issued; its unused invitations add no device once it ended. Returns false when
-     * this Computer has no such device; a device whose access already ended stays ended, so repeating is harmless.
+     * a retried or concurrent redemption issued; its unused invitations add no device once it ended. Done only while the
+     * caller's credential `token` holds access, checked in the write itself: `callerEnded`, with nothing changed, when it
+     * did not. `unknown` when this Computer has no such device; a device whose access already ended stays ended, so
+     * repeating is harmless.
      */
-    readonly endDeviceAccess = async (deviceId: string, now: number, signal: AbortSignal): Promise<boolean> => {
+    readonly endDeviceAccess = async (
+        token: string,
+        deviceId: string,
+        now: number,
+        signal: AbortSignal,
+    ): Promise<{ readonly kind: "ended" } | { readonly kind: "unknown" } | { readonly kind: "callerEnded" }> => {
         signal.throwIfAborted();
         const database = requireIdentityDatabase(this.#database);
+        const tokenHash = await digest(token);
         const device = eq(browserDevice.id, deviceId);
-        const found = await database.select({ id: browserDevice.id }).from(browserDevice).where(device).get();
-        if (found === undefined) {
-            signal.throwIfAborted();
-            return false;
+        const { meta } = this.#database.run(
+            endDevices(database, and(device, credentialHolds(database, tokenHash, now)), now),
+            signal,
+        );
+        if (meta.changes > 0) {
+            return { kind: "ended" };
         }
-        await endDevices(database, device, now).run();
+        // Nothing changed: the caller no longer holds access, or the device is unknown or already ended.
+        if (!(await this.#credentialHolds(database, tokenHash, now))) {
+            signal.throwIfAborted();
+            return { kind: "callerEnded" };
+        }
+        const found = await database.select({ id: browserDevice.id }).from(browserDevice).where(device).get();
         signal.throwIfAborted();
-        return true;
+        return found === undefined ? { kind: "unknown" } : { kind: "ended" };
     };
 }
