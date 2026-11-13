@@ -415,7 +415,7 @@ test("Given native history is loading in a retained process, When three hours pa
             encodeSessionRestoreCommand({
                 kind: "session.restore",
                 requestId: crypto.randomUUID(),
-                target: { harness: entry.harness, sessionId: entry.sessionId },
+                target: entry.target,
             }),
         );
         const restored = nextResponse(peer, "session.restored");

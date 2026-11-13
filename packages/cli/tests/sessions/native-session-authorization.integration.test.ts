@@ -43,8 +43,8 @@ describe("native session authorization", () => {
                 const first = await f.service.execute(command, new AbortController().signal);
                 expect(first).toMatchObject({
                     action: "import",
+                    target: { harness: f.agent.harness, sessionId: entry.sessionId },
                     ready: {
-                        target: { harness: f.agent.harness, sessionId: entry.sessionId },
                         restored: true,
                         directory: entry.directory,
                         directoryLabel: entry.directoryLabel,
@@ -56,7 +56,7 @@ describe("native session authorization", () => {
                     },
                 });
                 expect(await f.service.execute(command, new AbortController().signal)).toMatchObject({
-                    ready: { target: { harness: f.agent.harness, sessionId: entry.sessionId } },
+                    target: { harness: f.agent.harness, sessionId: entry.sessionId },
                 });
                 await expect(
                     f.service.execute({ ...command, sessionId: "forged" }, new AbortController().signal),
@@ -99,7 +99,7 @@ describe("native session authorization", () => {
                 ),
             ).resolves.toMatchObject({
                 action: "import",
-                ready: { target: { harness: f.agent.harness, sessionId } },
+                target: { harness: f.agent.harness, sessionId },
             });
         } finally {
             await f.close();

@@ -75,7 +75,6 @@ for (const client of ["SDK", "HTTP"] as const) {
             expect(ready).toMatchObject({
                 kind: "session.ready",
                 target: sessionTarget,
-                harness: "claude",
                 directory: ".",
             });
             await (await runtime.sessionClient(sessionTarget, cancellation.signal)).turns.submit(

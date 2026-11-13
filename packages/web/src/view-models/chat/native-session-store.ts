@@ -337,10 +337,13 @@ export const createNativeSessionStore = (
                 if (result.action !== action) {
                     throw new Error(`This agent cannot ${action} the selected native session.`);
                 }
+                const { sessionId: _sessionId, ...entry } = preview.entry;
                 onOpen({
-                    harness: directory.harness,
-                    result,
-                    entry: preview.entry,
+                    target: result.target,
+                    requestId: result.requestId,
+                    ready: result.ready,
+                    origin: { kind: "opened" },
+                    entry,
                 });
                 // A successful open unmounts the dialog, so end the discovery
                 // lifetime here; its close path never runs.

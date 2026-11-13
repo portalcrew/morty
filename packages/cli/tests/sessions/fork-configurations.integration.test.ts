@@ -130,8 +130,8 @@ test.each(["", "--fork-mode-unavailable", "--fork-omits-mode", "--fork-omits-mod
                         expect(fork).toMatchObject({
                             action: "fork",
                             requestId,
+                            target: fork.target,
                             ready: {
-                                target: fork.target,
                                 configOptions: expect.arrayContaining(
                                     fault === "--fork-omits-model" ? modeAndSpeed : selections,
                                 ),

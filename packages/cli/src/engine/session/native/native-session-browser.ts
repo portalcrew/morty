@@ -8,6 +8,7 @@ import {
     type NativeSessionTarget,
     type SessionExecution,
     type SessionMetadata,
+    type SessionReadyBody,
     type SessionReadyEvent,
 } from "@morty-build/client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
@@ -62,6 +63,12 @@ function nextForkTitle(sourceTitle: string, sessions: readonly StoredSession[]):
 }
 
 /** Only client intent identifies a Fork; native metadata is mutable execution input. */
+/** A Session's preparation without the identity the reply carrying it already states. */
+function readyBody(ready: SessionReadyEvent): SessionReadyBody {
+    const { kind: _kind, requestId: _requestId, target: _target, ...body } = ready;
+    return body;
+}
+
 function forkIntent(command: Extract<NativeSessionCommand, { readonly action: "fork" | "import" }>) {
     return { action: "fork", harness: command.harness, sessionId: command.sessionId, directory: command.directory };
 }
@@ -130,7 +137,7 @@ export class NativeSessionService {
             kind: "native.session.result",
             requestId: command.requestId,
             action: "fork",
-            ready,
+            ready: readyBody(ready),
             target: ready.target,
             title: this.#sessions.findSessions([ready.target])[0]?.title ?? "Untitled session",
         };
@@ -272,7 +279,6 @@ export class NativeSessionService {
             );
             signal.throwIfAborted();
             return {
-                harness: command.harness,
                 agentName: opened.prepared.agentName,
                 agentVersion: opened.prepared.agentVersion,
                 capabilities: opened.prepared.capabilities,
@@ -294,7 +300,7 @@ export class NativeSessionService {
         return {
             ...envelope,
             action,
-            ready,
+            ready: readyBody(ready),
             target: ready.target,
             title: this.#sessions.findSessions([ready.target])[0]?.title ?? title,
         };
@@ -319,11 +325,9 @@ export class NativeSessionService {
             // Report the recorded workspace even if it was deleted or unmounted.
             const directory = this.#directories.identifyRecorded(session.cwd);
             entries.push({
-                harness: session.harness,
                 directory: directory.directory,
                 directoryLabel: directory.label,
                 prompted: session.prompted,
-                sessionId: session.sessionId,
                 target: session.target,
                 status: this.#sessions.sessionStatus(session.target),
                 title: session.title || "Untitled session",

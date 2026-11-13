@@ -68,7 +68,6 @@ function readyEvent(
     location: { readonly directory: string; readonly directoryLabel: string },
 ): SessionReadyEvent {
     return {
-        harness: target.harness,
         agentName: prepared.agentName,
         agentVersion: prepared.agentVersion,
         capabilities: prepared.capabilities,
@@ -211,14 +210,17 @@ async function executeSessionRestore(
             sessions,
             metrics,
         );
+        // The restored Session is named once, by the reply's target.
+        const { target: _entryTarget, ...record } = entry;
+        const { kind: _kind, requestId: _requestId, target: _readyTarget, ...body } = ready;
         send(
             socket,
             await sessionRestoredEventCodec.encode(
                 {
-                    entry,
+                    entry: record,
                     target: command.target,
                     kind: "session.restored",
-                    ready: { ...ready, runtimeTimings: metrics.snapshot() },
+                    ready: { ...body, runtimeTimings: metrics.snapshot() },
                     requestId: command.requestId,
                 },
                 payloadEncryption,
@@ -258,7 +260,7 @@ async function executeSessionRename(
         const resolved = await resolveSessionDirectory(directories, entry.directory, signal);
         const renamed = await sessions.renameSession(
             {
-                ...(await resolveAgent(entry.harness, signal)),
+                ...(await resolveAgent(entry.target.harness, signal)),
                 cwd: resolved.cwd,
                 target: command.target,
                 signal,

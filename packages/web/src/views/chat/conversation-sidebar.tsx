@@ -511,7 +511,7 @@ export function ConversationSidebar({
         openPane:
             home.selection.kind === "ready" && pane !== null
                 ? {
-                      sessionTarget: pane.session.result.ready.target,
+                      sessionTarget: pane.session.target,
                       connection: paneConnection,
                       execution: paneExecution,
                       delivery: paneDelivery,

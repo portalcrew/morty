@@ -109,7 +109,7 @@ export async function runSharedComputer(options: {
         const openSession = async () => {
             if (handoffHarness !== null && handoffSession !== null) {
                 const opened = await api.continueNativeSession(handoffHarness, handoffSession, signal);
-                const target = opened.result.target;
+                const target = opened.target;
                 return { target, client: await api.connectSession(target, signal) };
             }
             const created = await api.createConversation(

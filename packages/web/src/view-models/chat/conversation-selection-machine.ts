@@ -70,10 +70,7 @@ export function transitionConversationSelection(
                       session: selectedSession(event.session),
                       target: {
                           kind: "session",
-                          identity: {
-                              harness: event.session.result.ready.harness,
-                              sessionId: event.session.entry.sessionId,
-                          },
+                          identity: event.session.target,
                       },
                   }
                 : state;

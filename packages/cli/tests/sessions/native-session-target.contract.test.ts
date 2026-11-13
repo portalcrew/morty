@@ -30,14 +30,13 @@ it("Given two harnesses create conversations, When I restore each conversation, 
                 },
                 signal,
             );
-            expect(ready.harness).toBe(harness);
+            expect(ready.target.harness).toBe(harness);
             targets.push(ready.target);
         }
         expect(targets[0]?.harness).not.toBe(targets[1]?.harness);
         for (const target of targets) {
             await expect(runtime.api.managedSession(target, signal)).resolves.toMatchObject({
-                harness: target.harness,
-                entry: { sessionId: target.sessionId },
+                target,
             });
         }
     } finally {
@@ -112,14 +111,12 @@ it("Given two harnesses own the same native session ID without prior discovery, 
             if (opened.action !== "import") {
                 throw new Error("Expected native session import");
             }
-            imported.set(harness, opened.ready.target.sessionId);
+            imported.set(harness, opened.target.sessionId);
         }
         for (const harness of ["claude", "codex"]) {
             const target = { harness, sessionId };
             await expect(runtime.api.managedSession(target, signal)).resolves.toMatchObject({
-                harness,
-                entry: { sessionId },
-                result: { target, ready: { harness, target: { harness, sessionId: imported.get(harness) } } },
+                target: { harness, sessionId: imported.get(harness) },
             });
         }
         await expect(

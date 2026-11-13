@@ -374,7 +374,7 @@ test("Given a saved real Pi native Session, When the user forks it, Then its his
                 continue;
             }
             forkedSessionTarget = result.target;
-            expect(result.ready.target).toEqual(forkedSessionTarget);
+            expect(result.target).toEqual(forkedSessionTarget);
             expect(forkedSessionTarget.sessionId).not.toBe(sourceSessionId.sessionId);
             expect(result.ready.restored).toBe(true);
             break;

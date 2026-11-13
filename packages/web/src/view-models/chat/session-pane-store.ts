@@ -453,16 +453,16 @@ export function createSessionPaneModel(options: {
     const { session, computerId, requests, clock, titles } = options;
     const { composer, delivery, execution, queue: messageQueue, rename, settings, tasks } = options.sessionPage;
     const composerAttachments = composer.getState().attachments;
-    const sessionTarget = session.result.ready.target;
+    const sessionTarget = session.target;
     // Working in a conversation makes its harness the reference for the next draft. Its settings carry into New
     // Session only where the user changes them: the others are the Agent's and its directory's, which the draft reads
     // for itself.
-    saveLastHarnessPreference(computerId, session.harness);
+    saveLastHarnessPreference(computerId, sessionTarget.harness);
     const openedAt = Date.now();
     // The turn the Session was opened with, which this pane follows from its start.
     const openedRunning =
-        session.result.action === "conversation" && session.result.activeTurn.kind === "running"
-            ? { commandId: session.result.activeTurn.commandId, turnId: session.result.activeTurn.turnId }
+        session.origin.kind === "created" && session.origin.activeTurn.kind === "running"
+            ? { commandId: session.origin.activeTurn.commandId, turnId: session.origin.activeTurn.turnId }
             : null;
     // The connection is one state machine; its transitions are made only by `dispatchConnection`, and the store's
     // `connection` is what that state shows.
@@ -943,7 +943,7 @@ export function createSessionPaneModel(options: {
             connect: async (signal) => {
                 // Only the first connection reuses the access that opened the Session. Every reconnection asks Chat
                 // again, so access that ended meanwhile, including a revoked Session credential, ends the page's access.
-                let openedAccess = session.result.action === "conversation" ? session.result.access : undefined;
+                let openedAccess = session.origin.kind === "created" ? session.origin.access : undefined;
                 const paneSignal = signal;
                 // One grace period per interruption, shared by backoff and reconciliation.
                 // Successful recovery or a terminal outcome cancels it when the connection shows it.
@@ -1344,7 +1344,7 @@ export function createSessionPaneModel(options: {
         phase = "started";
         // This pane now follows the Session for the page: it shows the settings and the running turn the Session was
         // opened with, and carries the Session's operations on its connection. What the user asked the Session stays.
-        settings.getState().opened(session.result.ready);
+        settings.getState().opened(session.ready);
         execution.getState().apply({ kind: "opened", running: openedRunning, openedAt });
         follower = options.sessionPage.connection.follow({
             connection: () => store.getState().connection,
@@ -1401,11 +1401,11 @@ export function createSessionPaneModel(options: {
         tasks,
         welcome,
         /** The agent the session runs on; the harness lock offers it. */
-        harness: session.harness,
+        harness: sessionTarget.harness,
         /** The opened session record; scopes the execution context. */
         session,
         /** Whether the Session's Agent lets a queued message steer the running turn. */
-        steeringSupported: session.result.ready.capabilities.steering,
+        steeringSupported: session.ready.capabilities.steering,
         start,
         stop,
         reconnect,

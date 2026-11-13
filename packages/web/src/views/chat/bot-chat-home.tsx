@@ -285,7 +285,7 @@ function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & 
                     {model.selection.kind === "ready" ? (
                         <div
                             className={chatSessionPaneEnterClassName}
-                            key={nativeSessionKey(model.selection.session.result.ready.target)}
+                            key={nativeSessionKey(model.selection.session.target)}
                         >
                             <MortySessionPane workspace={workspace} />
                         </div>

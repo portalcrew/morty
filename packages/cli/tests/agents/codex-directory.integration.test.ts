@@ -180,7 +180,6 @@ it.each(["import", "fork"] satisfies readonly ("import" | "fork")[])(
             if (result.action !== action) {
                 throw new Error("Expected native open result");
             }
-            expect(result.ready.target).toEqual(result.target);
             expect(result.target.harness).toBe("codex");
             if (action === "import") {
                 expect(result.target.sessionId).toBe(sourceId);

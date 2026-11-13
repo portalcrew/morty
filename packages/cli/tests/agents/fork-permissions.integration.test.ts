@@ -140,7 +140,6 @@ test.each(["codex", "claude"] as const)(
                     expect(fork.ready.configOptions).toContainEqual(
                         expect.objectContaining({ id: "mode", currentValue: mode }),
                     );
-                    expect(fork.ready.target).toEqual(fork.target);
                     expect(fork.target.sessionId).not.toBe(peer.target.sessionId);
                     if (decision === "allow_once") {
                         await peer.restart();

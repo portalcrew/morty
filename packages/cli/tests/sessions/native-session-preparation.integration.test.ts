@@ -140,7 +140,7 @@ describe("native session preparation", () => {
             await external.close();
             expect(await f.service.execute(command, new AbortController().signal)).toMatchObject({
                 action: "import",
-                ready: { target: { harness: f.agent.harness, sessionId: entry.sessionId } },
+                target: { harness: f.agent.harness, sessionId: entry.sessionId },
             });
         } finally {
             await external.close();
