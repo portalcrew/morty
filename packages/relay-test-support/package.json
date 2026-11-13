@@ -21,6 +21,6 @@
         "miniflare": "catalog:",
         "valibot": "catalog:",
         "wrangler": "catalog:",
-        "ws": "^8.22.1"
+        "ws": "^8.22.2"
     }
 }
