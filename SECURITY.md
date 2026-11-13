@@ -56,7 +56,10 @@ trusts by design helps separate a vulnerability from intended behavior.
   state file readable only by the operating-system account that ran setup. It does
   not expire. Revoking all access replaces it and ends every other credential,
   sharing link and browser device of the computer.
-- **The relay is trusted.** Session traffic is not end-to-end encrypted; see
+- **Session payloads are end-to-end encrypted (E2EE).** The browser and the local
+  daemon hold the payload encryption secret; the relay forwards ciphertext and
+  still sees routing metadata. Pairing delivers encryption access in a URL fragment,
+  not in a request to the relay. Protect sharing links and authorized devices. See
   [What Morty does with your data](README.md#what-morty-does-with-your-data).
 
 A path that gives someone access they were never given, or keeps access after it
@@ -88,8 +91,6 @@ Generally out of scope:
 - missing hardening with no demonstrated impact, and automated scanner output
   without a working path to exploitation
 - denial of service through traffic volume
-- the absence of end-to-end encryption, which is a documented design property
-  rather than a defect; see [What Morty does with your data](README.md#what-morty-does-with-your-data)
 
 ## Testing against your own setup
 

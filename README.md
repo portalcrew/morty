@@ -85,10 +85,10 @@ running it. Read it yourself before you paste the prompt.
   available in the browser. That is the design, not a cache miss.
 - **No cloud copy of your history.** Morty reads conversation history from the
   connected machine and never stores it in the cloud.
-- **The relay carries traffic; it is not a vault.** Session traffic reaches your
-  machine through the Morty relay. **Morty is not end-to-end encrypted** — the
-  relay is a trusted component in this design. If end-to-end encryption is a
-  requirement for you, Morty does not meet it today.
+- **Session payloads are end-to-end encrypted (E2EE).** Your browser and the daemon
+  on your computer encrypt and decrypt session payloads. The Morty relay forwards
+  ciphertext without the payload encryption secret. Routing metadata remains
+  visible to the relay; E2EE does not hide all connection information.
 - **Your machine's identity stays on your machine.** Setup stores this computer's
   Morty identity in your user's local application data directory, protected by
   filesystem permissions. It is not synced between computers, and each computer has
