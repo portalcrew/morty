@@ -5,6 +5,7 @@ import {
     computerPongEventCodec,
     decodeComputerHeartbeatEvent,
 } from "../computer/liveness.ts";
+import { computerMetadataResultCodec } from "../computer/metadata.ts";
 import { CONTENT_CHUNK_ACK_KIND, decodeContentChunkAck } from "../relay/content-chunk-ack.ts";
 import {
     AGENT_SETTINGS_DISCOVERED_KIND,
@@ -75,6 +76,7 @@ import { decodeMessageKind, ProtocolMessageError } from "../shared/message-codec
 import type { daemonEventSignatures } from "./event-codecs.ts";
 
 export const daemonToRelayDecoders = {
+    "computer.metadata.result": computerMetadataResultCodec.decodeRouting,
     [CONTENT_CHUNK_ACK_KIND]: decodeContentChunkAck,
     [SESSION_ARCHIVED_KIND]: sessionArchivedEventCodec.decodeRouting,
     [SESSION_CLOSE_NOTICE_KIND]: sessionCloseNoticeEventCodec.decodeRouting,

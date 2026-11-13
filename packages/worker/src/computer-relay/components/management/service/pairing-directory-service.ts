@@ -89,6 +89,32 @@ export class PairingDirectoryService {
     readonly authorizeComputer = async (computerId: string, signal: AbortSignal): Promise<ComputerAccess> =>
         await this.#cx.services.computerAccounts.authorizeComputer(computerId, signal);
 
+    readonly authorizeMetadataSnapshot = async (
+        token: string,
+        successor: string | null,
+        signal: AbortSignal,
+    ): Promise<void> => {
+        for (const presented of successor === null ? [token] : [token, successor]) {
+            try {
+                await this.identityStorage(
+                    {
+                        kind: "daemon",
+                        computerId: this.#cx.computerId,
+                        tokenHash: await hashPairingCredential(validateToken(presented)),
+                    },
+                    signal,
+                );
+                return;
+            } catch (cause) {
+                signal.throwIfAborted();
+                if (!(cause instanceof PairingDirectoryError && cause.code === "unauthorized")) {
+                    throw cause;
+                }
+            }
+        }
+        throw new PairingDirectoryError("unauthorized", "An active Computer credential is required");
+    };
+
     private readonly decodeCreatedComputerPairing = async (
         row: ComputerPairingRow,
         owner: ComputerAccess,

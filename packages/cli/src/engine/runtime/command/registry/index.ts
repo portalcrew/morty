@@ -3,6 +3,7 @@ import { contentChunkCodec, decodeRelayToDaemonMessage } from "@morty-build/clie
 import { createAgentSettingsDiscoveryHandler } from "../agent-settings-discovery.ts";
 import type { CommandContext } from "../context.ts";
 import type { DaemonCommand } from "../definition.ts";
+import { createComputerMetadataReads } from "../metadata-reads.ts";
 import { createNativeSessionRequestHandler } from "../native-session-requests.ts";
 import { reportAuthenticatedCapacity } from "./capacity.ts";
 import { handleComputerDiagnostics, handleComputerPing } from "./computer.ts";
@@ -39,6 +40,7 @@ export function createCommandRegistry(context: CommandContext): {
     const fileReads = createFileReadCommands(context);
     const nativeRequests = createNativeSessionRequestHandler(context);
     const agentSettings = createAgentSettingsDiscoveryHandler(context);
+    const metadataReads = createComputerMetadataReads(context);
     return {
         reportCapacity: async (encoded) => {
             const routing = decodeRelayToDaemonMessage(encoded);
@@ -52,6 +54,8 @@ export function createCommandRegistry(context: CommandContext): {
         },
         dispatch: (message): void | Promise<void> => {
             switch (message.kind) {
+                case "computer.metadata.read":
+                    return metadataReads.handle(message);
                 case "session.events.subscribe":
                     return context.subscriptions.subscribe(message);
                 case "session.events.unsubscribe":
@@ -68,6 +72,7 @@ export function createCommandRegistry(context: CommandContext): {
                     nativeRequests.cancel(message.requestId);
                     return;
                 case "worker.request.cancel":
+                    metadataReads.cancel(message.requestId);
                     nativeRequests.cancel(message.requestId);
                     contentWrites.cancel(message.requestId);
                     fileReads.cancel(message.requestId);
@@ -153,6 +158,7 @@ export function createCommandRegistry(context: CommandContext): {
                 fileReads.settle(),
                 nativeRequests.settle(),
                 agentSettings.settle(),
+                metadataReads.settle(),
             ]);
         },
     };

@@ -2,8 +2,10 @@ import {
     type AgentSettingsDiscoverCommandRouting,
     agentSettingsDiscoverCommandCodec,
     type ComputerDiagnosticsRequestRouting,
+    type ComputerMetadataRequestRouting,
     type ComputerPingCommandRouting,
     computerDiagnosticsRequestCodec,
+    computerMetadataRequestCodec,
     computerPingCommandCodec,
     type NativeSessionCommandRouting,
     nativeSessionCommandCodec,
@@ -43,6 +45,14 @@ export const diagnosticsInput = v.custom<ComputerDiagnosticsRequestRouting>((val
         return false;
     }
 }, "An encrypted diagnostics request is required.");
+export const metadataInput = v.custom<ComputerMetadataRequestRouting>((value) => {
+    try {
+        computerMetadataRequestCodec.decodeRouting(JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+}, "An encrypted metadata request is required.");
 export const networkDiagnosticInput = v.custom<ComputerPingCommandRouting>((value) => {
     try {
         computerPingCommandCodec.decodeRouting(JSON.stringify(value));

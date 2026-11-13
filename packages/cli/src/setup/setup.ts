@@ -4,13 +4,21 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { type ComputerEncryptionAccess, createClientPayloadEncryption } from "@morty-build/client";
+import {
+    type ComputerEncryptionAccess,
+    createClientPayloadEncryption,
+    MortyOperationError,
+    MortyProtocolError,
+} from "@morty-build/client";
 import {
     agentSettingsDiscoverCommandCodec,
     agentSettingsDiscoveredEventCodec,
     agentSettingsDiscoveryFailedEventCodec,
+    computerMetadataRequestCodec,
+    computerMetadataResultCodec,
     decodeIdentifier,
     decodeMessageKind,
+    sessionOperationFailedEventCodec,
 } from "@morty-build/client/protocol";
 import jsQrImport from "jsqr";
 import { PNG } from "pngjs";
@@ -1096,12 +1104,45 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         const botPath = `/computers/${context.identity.computerId}`;
         // A paired Computer is read through management; one still waiting for its pairing is among the setup candidates.
         const alreadyPaired = computer.kind === "existing" && computer.paired;
-        const state = await request(context, `${botPath}/${alreadyPaired ? "workspace" : "setup/computers"}`, {});
-        const candidates = alreadyPaired
-            ? [object(state["computer"])]
-            : Array.isArray(state["computers"])
-              ? state["computers"].map(object)
-              : [];
+        const access = await host.runtime.encryptionAccess(context.directory, context.identity.computerId, signal);
+        const encryption = await createClientPayloadEncryption(access, signal);
+        const requestId = crypto.randomUUID();
+        const resource = alreadyPaired ? "computer" : "computers";
+        const result = await (async () => {
+            try {
+                const command = await computerMetadataRequestCodec.encode(
+                    { kind: "computer.metadata.read", requestId, resource, credential: context.identity.computerToken },
+                    encryption,
+                    signal,
+                );
+                const reply = await request(
+                    context,
+                    `${botPath}/${alreadyPaired ? "workspace" : "setup/computers"}`,
+                    object(JSON.parse(command)),
+                );
+                const encoded = JSON.stringify(reply);
+                if (decodeMessageKind(encoded) === "session.operation.failed") {
+                    const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
+                    if (failure.requestId !== requestId) {
+                        throw new MortyProtocolError("Invalid Computer metadata response");
+                    }
+                    throw new MortyOperationError(failure.code, failure.message, "retryable");
+                }
+                const answer = await computerMetadataResultCodec.decode(encoded, encryption, signal);
+                if (answer.requestId !== requestId || answer.result.resource !== resource) {
+                    throw new MortyProtocolError("Invalid Computer metadata response");
+                }
+                return answer.result;
+            } finally {
+                encryption.close();
+            }
+        })();
+        const candidates =
+            result.resource === "computer"
+                ? [result.computer]
+                : result.resource === "computers"
+                  ? result.computers
+                  : [];
         const current = candidates.find(
             (candidate) => candidate["computerId"] === computer.computerId && candidate["online"] === true,
         );

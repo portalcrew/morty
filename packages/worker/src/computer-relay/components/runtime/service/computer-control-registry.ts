@@ -5,6 +5,7 @@ import {
 } from "@morty-build/client/protocol";
 
 export const computerControlReplyDecoders = {
+    "computer.metadata.result": daemonToRelayDecoders["computer.metadata.result"],
     "computer.diagnostics.result": daemonToRelayDecoders["computer.diagnostics.result"],
     "computer.pong": daemonToRelayDecoders["computer.pong"],
     "native.session.result": daemonToRelayDecoders["native.session.result"],
@@ -46,6 +47,7 @@ export type ClientControlCommand = Exclude<
 
 /** Only these native success kinds answer the corresponding commands. */
 export const computerControlRegistry = {
+    "computer.metadata.read": "computer.metadata.result",
     "computer.diagnostics.read": "computer.diagnostics.result",
     "computer.ping": "computer.pong",
     "native.session.request": "native.session.result",
@@ -94,6 +96,7 @@ export function computerControlTarget(command: ClientControlCommand): NativeSess
         case "session.restore":
             return command.target;
         case "computer.diagnostics.read":
+        case "computer.metadata.read":
         case "computer.ping":
         case "session.create":
         case "session.list":

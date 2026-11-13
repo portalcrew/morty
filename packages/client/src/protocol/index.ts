@@ -40,6 +40,20 @@ export {
     encodeComputerLivenessReadyEvent,
     encodeComputerStatusEvent,
 } from "./computer/liveness.ts";
+export type {
+    ComputerMetadataRequest,
+    ComputerMetadataRequestRouting,
+    ComputerMetadataResource,
+    ComputerMetadataSnapshot,
+} from "./computer/metadata.ts";
+export {
+    COMPUTER_METADATA_CREDENTIAL_HEADER,
+    COMPUTER_METADATA_SUCCESSOR_HEADER,
+    computerMetadataRequestCodec,
+    computerMetadataResultCodec,
+    decodeComputerMetadataRequest,
+    decodeComputerMetadataSnapshot,
+} from "./computer/metadata.ts";
 export type { ContentChunkAck } from "./relay/content-chunk-ack.ts";
 export { CONTENT_CHUNK_ACK_KIND, decodeContentChunkAck, encodeContentChunkAck } from "./relay/content-chunk-ack.ts";
 export type { WorkerFileCredit } from "./relay/file-credit.ts";

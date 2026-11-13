@@ -84,7 +84,9 @@ export class ManagementService {
 
     readonly readComputerPairing = async (computerId: string, signal: AbortSignal) => {
         const computer = await this.#requireComputer(computerId, signal);
-        return await this.#relay.readPairing(computer.computerId, signal);
+        const pairing = await this.#relay.readPairing(computer.computerId, signal);
+        // Pairing polling needs lifecycle only. Descriptive metadata belongs to the encrypted read operation.
+        return pairing.status === "paired" ? { status: "paired" } : pairing;
     };
 
     /**

@@ -1,5 +1,6 @@
 import { computerDiagnosticsRequestCodec } from "../computer/diagnostics.ts";
 import { COMPUTER_PING_KIND, computerPingCommandCodec } from "../computer/liveness.ts";
+import { computerMetadataRequestCodec } from "../computer/metadata.ts";
 import { AGENT_SETTINGS_DISCOVER_KIND, agentSettingsDiscoverCommandCodec } from "../session/agent/settings.ts";
 import {
     SESSION_CONFIG_READ_KIND,
@@ -65,6 +66,7 @@ import { decodeMessageKind, ProtocolMessageError } from "../shared/message-codec
 import type { daemonInboundSignatures } from "./command-codecs.ts";
 
 const clientToRelayDecoders = {
+    "computer.metadata.read": computerMetadataRequestCodec.decodeRouting,
     [SESSION_EVENTS_SUBSCRIBE_KIND]: sessionEventsSubscribeCommandCodec.decodeRouting,
     [SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND]: sessionPreviewHistoryPageLoadCodec.decodeRouting,
     [AGENT_SETTINGS_DISCOVER_KIND]: agentSettingsDiscoverCommandCodec.decodeRouting,
@@ -111,6 +113,8 @@ export function decodeClientToRelayMessage(encoded: string): ClientToRelayMessag
 
 export function encodeClientToRelayMessage(message: ClientToRelayMessage): string {
     switch (message.kind) {
+        case "computer.metadata.read":
+            return computerMetadataRequestCodec.encodeRouting(message);
         case SESSION_EVENTS_SUBSCRIBE_KIND:
             return sessionEventsSubscribeCommandCodec.encodeRouting(message);
         case SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND:

@@ -44,6 +44,8 @@ export class ComputerBackendService {
         await this.#context.services.computerPairings.listComputers(this.computerId, signal);
     readonly agents = async (signal: AbortSignal) =>
         await this.#context.services.computerPairings.getComputerAgents(this.computerId, signal);
+    readonly authorizeMetadataSnapshot = async (token: string, successor: string | null, signal: AbortSignal) =>
+        await this.#context.services.pairings.authorizeMetadataSnapshot(token, successor, signal);
     readonly issueSessionAccess = async (
         target: NativeSessionTarget,
         lifetime: number,

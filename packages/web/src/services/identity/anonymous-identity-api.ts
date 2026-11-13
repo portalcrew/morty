@@ -2,6 +2,7 @@ import * as v from "valibot";
 import type { ApiTransport } from "../api/api-transport.ts";
 import type { ApiRequest } from "../api/calls/call.ts";
 import { identityCalls } from "../api/calls/identity.ts";
+import { readEncryptedMetadata, waitForDecryptedChange } from "../api/metadata-read.ts";
 import { browserAccessEntry } from "../local-storage/central-local-storage.ts";
 import { CloudApiError, ManagementApi } from "../management/management-api.ts";
 import { centralSessionStorage, transferRedemptionEntry } from "../session-storage/central-session-storage.ts";
@@ -107,6 +108,7 @@ const ACCESS_REVOKED = "ACCESS_REVOKED";
 interface Options {
     readonly fetchRequest: ApiTransport["fetch"];
     readonly origin: string;
+    readonly computerTransport?: ApiTransport["computerTransport"];
 }
 
 interface IdentityRequest {
@@ -133,10 +135,13 @@ function transferRedemptionKey(code: string): string {
 export class AnonymousIdentityApi {
     readonly #fetchRequest: ApiTransport["fetch"];
     readonly #origin: string;
+    readonly #computerTransport: ApiTransport["computerTransport"] | undefined;
+    readonly #deviceBaselines = new Map<string, string>();
 
     constructor(options: Options) {
         this.#fetchRequest = options.fetchRequest;
         this.#origin = v.parse(v.pipe(v.string(), v.url()), options.origin);
+        this.#computerTransport = options.computerTransport;
     }
 
     readonly loadScope = async (scope: IdentityScope, signal: AbortSignal): Promise<AnonymousIdentity | null> => {
@@ -277,14 +282,16 @@ export class AnonymousIdentityApi {
     /** Resolves once the devices holding this access through a link differ from the list this client last read. */
     readonly waitForLinkedDevicesChange = async (
         token: string,
-        waitForChange: ApiTransport["waitForChange"],
+        _waitForChange: ApiTransport["waitForChange"],
         signal: AbortSignal,
     ): Promise<void> =>
-        await waitForChange({
-            ...identityCalls.linkedDevices({ origin: this.#origin, computerId: this.#computerId() }),
-            headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` },
+        await waitForDecryptedChange(
+            {
+                read: (signal) => this.linkedDevices(token, signal),
+                baseline: this.#deviceBaselines.get(this.#computerId()),
+            },
             signal,
-        });
+        );
 
     /** When this access ends: the browser's device term, the latest among the links it opened; null without one. */
     readonly accessExpiresAt = async (token: string, signal: AbortSignal): Promise<string | null> =>
@@ -298,15 +305,31 @@ export class AnonymousIdentityApi {
         ).accessExpiresAt;
 
     /** The other devices that hold this access through a link now. */
-    readonly linkedDevices = async (token: string, signal: AbortSignal): Promise<readonly LinkedDevice[]> =>
-        v.parse(
-            linkedDevicesSchema,
-            await this.#request(
-                identityCalls.linkedDevices({ origin: this.#origin, computerId: this.#computerId() }),
-                { headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` } },
-                signal,
-            ),
-        ).devices;
+    readonly linkedDevices = async (token: string, signal: AbortSignal): Promise<readonly LinkedDevice[]> => {
+        const computerId = this.#computerId();
+        if (this.#computerTransport === undefined) {
+            throw new IdentityApiError("E2EE_REQUIRED", "Encrypted Computer access is required.");
+        }
+        const credential = v.parse(tokenSchema, token);
+        const result = await readEncryptedMetadata(
+            {
+                origin: this.#origin,
+                computerId,
+                credential,
+                resource: "devices",
+                encryption: this.#computerTransport(computerId).payloadEncryption,
+                request: (request, signal) =>
+                    this.#request(request, { headers: { authorization: `Bearer ${credential}` } }, signal),
+            },
+            signal,
+        );
+        if (result.resource !== "devices") {
+            throw new IdentityApiError("INVALID_METADATA", "The Computer returned invalid metadata.");
+        }
+        const devices = v.parse(linkedDevicesSchema, result).devices;
+        this.#deviceBaselines.set(computerId, JSON.stringify(devices));
+        return devices;
+    };
 
     /**
      * Ends the access of every other browser that joined through a link, and closes the chat windows open with it;

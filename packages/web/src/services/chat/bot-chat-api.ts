@@ -52,6 +52,7 @@ import type { ApiResponseSnapshot, ApiTransport } from "../api/api-transport.ts"
 import type { ApiRequest } from "../api/calls/call.ts";
 import { chatCalls } from "../api/calls/chat.ts";
 import { managementCalls } from "../api/calls/management.ts";
+import { readEncryptedMetadata, waitForDecryptedChange } from "../api/metadata-read.ts";
 import { recordBrowserDiagnostic } from "../diagnostics/browser-diagnostics.ts";
 import type { AgentModelCatalog } from "../diagnostics/model-catalog.ts";
 import { storedComputerEncryption } from "../identity/remembered-computers.ts";
@@ -194,6 +195,7 @@ export class BotChatApi {
     readonly #encryptionAccess: () => ComputerEncryptionAccess | null;
     readonly #lifetime = new AbortController();
     readonly #waitForChange: ApiTransport["waitForChange"];
+    #configurationBaseline: string | undefined;
     readonly readComputerPairing: ManagementApi["readComputerPairing"];
     constructor(options: {
         readonly fetchRequest: ApiTransport["fetch"];
@@ -543,14 +545,29 @@ export class BotChatApi {
         };
         return settings;
     };
-    readonly computerConfiguration = async (parent: AbortSignal): Promise<BotComputerConfiguration> =>
-        v.parse(
-            computerConfigurationSchema,
-            await this.#request(
-                chatCalls.computerConfiguration({ origin: this.#origin, computerId: this.#computerId }),
-                parent,
-            ),
+    readonly computerConfiguration = async (parent: AbortSignal): Promise<BotComputerConfiguration> => {
+        const credential = await this.#getToken(parent);
+        if (credential === null) {
+            throw new CloudApiError("UNAUTHENTICATED", "Your session is unavailable.");
+        }
+        const result = await readEncryptedMetadata(
+            {
+                origin: this.#origin,
+                computerId: this.#computerId,
+                credential,
+                resource: "computer",
+                encryption: this.#sessionTransport().payloadEncryption,
+                request: this.#request,
+            },
+            parent,
         );
+        if (result.resource !== "computer") {
+            throw new CloudApiError("INVALID_METADATA", "The Computer returned invalid metadata.");
+        }
+        const configuration = v.parse(computerConfigurationSchema, result);
+        this.#configurationBaseline = JSON.stringify(configuration);
+        return configuration;
+    };
     readonly directory = async (directory: string, signal: AbortSignal) => {
         const request = chatCalls.directory({ origin: this.#origin, computerId: this.#computerId, directory });
         const command = decodeWorkspaceListCommand(request.body ?? "");
@@ -594,15 +611,13 @@ export class BotChatApi {
         parent: AbortSignal,
         onReady?: (configuration: BotComputerConfiguration) => void,
     ): Promise<void> =>
-        await this.#waitForResourceChange(
-            chatCalls.computerConfiguration({ origin: this.#origin, computerId: this.#computerId }),
+        await waitForDecryptedChange(
+            {
+                read: this.computerConfiguration,
+                baseline: this.#configurationBaseline,
+                ...(onReady === undefined ? {} : { onReady }),
+            },
             parent,
-            onReady === undefined
-                ? undefined
-                : (snapshot) => {
-                      const value = this.#readResponse(snapshot, parent);
-                      onReady(v.parse(computerConfigurationSchema, value));
-                  },
         );
     readonly forkNativeSession = async (
         operationId: string,

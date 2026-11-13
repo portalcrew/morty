@@ -1,6 +1,7 @@
 import type { PayloadDecryptor, PayloadEncryptor } from "../../encryption.ts";
 import { computerDiagnosticsRequestCodec } from "../computer/diagnostics.ts";
 import { COMPUTER_PING_KIND, computerPingCommandCodec } from "../computer/liveness.ts";
+import { computerMetadataRequestCodec } from "../computer/metadata.ts";
 import { AGENT_SETTINGS_DISCOVER_KIND, agentSettingsDiscoverCommandCodec } from "../session/agent/settings.ts";
 import {
     SESSION_CONFIG_READ_KIND,
@@ -68,6 +69,10 @@ import { decodeMessageKind, ProtocolMessageError } from "../shared/message-codec
 import { defineMessageSignature } from "./message-signature.ts";
 
 export const daemonInboundSignatures = {
+    "computer.metadata.read": defineMessageSignature({
+        kind: "computer.metadata.read",
+        codec: computerMetadataRequestCodec,
+    }),
     [SESSION_EVENTS_SUBSCRIBE_KIND]: defineMessageSignature({
         kind: SESSION_EVENTS_SUBSCRIBE_KIND,
         codec: sessionEventsSubscribeCommandCodec,

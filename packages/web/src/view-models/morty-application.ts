@@ -121,6 +121,7 @@ export function createMortyApplication(options: {
         };
         const access = createIdentityAccess({
             fetchRequest: transport.fetch,
+            computerTransport: transport.computerTransport,
             waitForChange: transport.waitForChange,
             origin: options.origin,
             identity: scope,

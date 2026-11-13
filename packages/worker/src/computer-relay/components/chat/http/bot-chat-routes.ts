@@ -1,4 +1,8 @@
-import type { SessionAccessHolder } from "@morty-build/client/protocol";
+import {
+    COMPUTER_METADATA_CREDENTIAL_HEADER,
+    COMPUTER_METADATA_SUCCESSOR_HEADER,
+    type SessionAccessHolder,
+} from "@morty-build/client/protocol";
 import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import * as v from "valibot";
@@ -8,6 +12,7 @@ import {
     diagnosticsInput,
     directoryInput,
     managedSessionsInput,
+    metadataInput,
     nativeContinuationCommandInput,
     nativeForkInput,
     nativeImportInput,
@@ -18,7 +23,7 @@ import {
     sessionAccessInput,
     setupInput,
 } from "../../../../contracts/agent-api/chat-requests.ts";
-import { chatAccessResponse, documented, workspaceResponse } from "../../../../contracts/agent-api/responses.ts";
+import { chatAccessResponse, documented } from "../../../../contracts/agent-api/responses.ts";
 import type { Session } from "../../../../contracts/authentication/session.ts";
 import { relayIdentifier } from "../../../../contracts/computer-management.ts";
 import { bodyParser } from "../../../../http/body-parser.ts";
@@ -94,20 +99,77 @@ function privateJson(value: unknown) {
     return response;
 }
 
+const metadataSnapshotInput = v.strictObject({ resource: v.picklist(["computer", "computers", "devices"]) });
+
 export function createBotChatRoutes(ctx: ManagementRouteContext) {
     const authenticatedSession = createAuthenticatedSession(ctx);
     const issuesSessionCredential = createSessionCredentialGuard(ctx);
     const authorizedChat = (timeout = 45000) => createAuthorizedChat(ctx, timeout);
+    const encryptedMetadata = async (
+        context: Context<AuthorizedChatEnvironment, string, { out: { json: v.InferOutput<typeof metadataInput> } }>,
+    ) => {
+        const application = await applicationForRequest(ctx, context);
+        const scope = context.get("chatScope");
+        return privateJson(
+            await application.services.computers.readMetadata(
+                scope.computerId,
+                context.req.valid("json"),
+                scope.signal,
+            ),
+        );
+    };
     return new Hono<AuthorizedChatEnvironment>()
-        .post("/workspace", authenticatedSession, authorizedChat(), async (context) => {
-            const application = await applicationForRequest(ctx, context);
-            return privateJson(
-                documented(
-                    workspaceResponse,
-                    await application.services.chat.computerConfiguration(context.get("chatScope")),
-                ),
-            );
-        })
+        .post(
+            "/workspace",
+            authenticatedSession,
+            authorizedChat(),
+            bodyParser<AuthorizedChatEnvironment, typeof metadataInput>(metadataInput),
+            encryptedMetadata,
+        )
+        .post(
+            "/metadata/snapshot",
+            authenticatedSession,
+            authorizedChat(),
+            bodyParser<AuthorizedChatEnvironment, typeof metadataSnapshotInput>(metadataSnapshotInput),
+            async (context) => {
+                const application = await applicationForRequest(ctx, context);
+                const scope = context.get("chatScope");
+                await application.services.computers.authorizeMetadataSnapshot(
+                    context.req.header(COMPUTER_METADATA_CREDENTIAL_HEADER) ?? "",
+                    context.req.header(COMPUTER_METADATA_SUCCESSOR_HEADER) ?? null,
+                    scope.signal,
+                );
+                switch (context.req.valid("json").resource) {
+                    case "computer":
+                        return privateJson({
+                            resource: "computer",
+                            ...(await application.services.chat.computerConfiguration(scope)),
+                        });
+                    case "computers":
+                        return privateJson({
+                            resource: "computers",
+                            ...(await application.services.chat.setupComputers(scope)),
+                        });
+                    case "devices": {
+                        const result = await application.services.authentication.linkedDevices(
+                            readBearerToken(context.req.raw),
+                            scope.signal,
+                        );
+                        if (result.kind !== "listed") {
+                            throw credentialRejected(result.kind);
+                        }
+                        return privateJson({
+                            resource: "devices",
+                            devices: result.devices.map((device) => ({
+                                ...device,
+                                joinedAt: new Date(device.joinedAt).toISOString(),
+                                accessExpiresAt: new Date(device.accessExpiresAt).toISOString(),
+                            })),
+                        });
+                    }
+                }
+            },
+        )
         .post(
             "/diagnostics/daemon",
             authenticatedSession,
@@ -138,10 +200,13 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
                 );
             },
         )
-        .post("/setup/computers", authenticatedSession, authorizedChat(), async (context) => {
-            const application = await applicationForRequest(ctx, context);
-            return privateJson(await application.services.chat.setupComputers(context.get("chatScope")));
-        })
+        .post(
+            "/setup/computers",
+            authenticatedSession,
+            authorizedChat(),
+            bodyParser<AuthorizedChatEnvironment, typeof metadataInput>(metadataInput),
+            encryptedMetadata,
+        )
         .post(
             "/workspace/directory",
             authenticatedSession,

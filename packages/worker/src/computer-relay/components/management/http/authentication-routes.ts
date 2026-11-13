@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import * as v from "valibot";
+import { metadataInput } from "../../../../contracts/agent-api/chat-requests.ts";
 import { transferRedemptionInput } from "../../../../contracts/agent-api/identity-requests.ts";
 import { documented, identityResponse } from "../../../../contracts/agent-api/responses.ts";
 import {
@@ -141,30 +142,26 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
                 );
             },
         )
-        .get("/identity/devices", async (context) => {
-            const application = await applicationForRequest(ctx, context);
-            const result = await application.services.authentication.linkedDevices(
-                readBearerToken(context.req.raw),
-                context.req.raw.signal,
-            );
-            if (result.kind !== "listed") {
-                throw credentialRejected(result.kind);
-            }
-            return json(
-                {
-                    devices: result.devices.map((device) => ({
-                        id: device.id,
-                        joinedAt: new Date(device.joinedAt).toISOString(),
-                        label: device.label,
-                        location: device.location,
-                        addedBy: device.addedBy,
-                        accessExpiresAt: new Date(device.accessExpiresAt).toISOString(),
-                    })),
-                },
-                200,
-                { "Cache-Control": "no-store" },
-            );
-        })
+        .post(
+            "/identity/devices",
+            bodyParser<ManagementHttpEnvironment, typeof metadataInput>(metadataInput),
+            async (context) => {
+                const application = await applicationForRequest(ctx, context);
+                const access = await application.services.authentication.session(
+                    readBearerToken(context.req.raw),
+                    context.req.raw.signal,
+                );
+                if (access.kind !== "authenticated") {
+                    throw credentialRejected(access.kind);
+                }
+                const result = await application.services.computers.readMetadata(
+                    context.var.computerId,
+                    context.req.valid("json"),
+                    context.req.raw.signal,
+                );
+                return json(result, 200, { "Cache-Control": "no-store" });
+            },
+        )
         .post(
             "/identity/revoke-all-access",
             bodyParser<ManagementHttpEnvironment, typeof revokeAllAccessInput>(revokeAllAccessInput),

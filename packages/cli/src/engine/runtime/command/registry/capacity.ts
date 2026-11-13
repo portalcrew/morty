@@ -53,6 +53,7 @@ export async function reportAuthenticatedCapacity(
             );
             return true;
         case "computer.diagnostics.read":
+        case "computer.metadata.read":
         case "computer.ping":
         case "native.session.cancel":
         case "native.session.request":

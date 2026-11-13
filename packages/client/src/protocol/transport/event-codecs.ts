@@ -1,6 +1,7 @@
 import type { PayloadDecryptor, PayloadEncryptor } from "../../encryption.ts";
 import { computerDiagnosticsResultCodec } from "../computer/diagnostics.ts";
 import { COMPUTER_PONG_KIND, computerPongEventCodec } from "../computer/liveness.ts";
+import { computerMetadataResultCodec } from "../computer/metadata.ts";
 import {
     AGENT_SETTINGS_DISCOVERED_KIND,
     AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
@@ -70,6 +71,10 @@ import { decodeMessageKind, ProtocolMessageError } from "../shared/message-codec
 import { defineMessageSignature } from "./message-signature.ts";
 
 export const daemonEventSignatures = {
+    "computer.metadata.result": defineMessageSignature({
+        kind: "computer.metadata.result",
+        codec: computerMetadataResultCodec,
+    }),
     [SESSION_ARCHIVED_KIND]: defineMessageSignature({ kind: SESSION_ARCHIVED_KIND, codec: sessionArchivedEventCodec }),
     [SESSION_CLOSE_NOTICE_KIND]: defineMessageSignature({
         kind: SESSION_CLOSE_NOTICE_KIND,

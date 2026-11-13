@@ -196,6 +196,7 @@ export class ComputerRelayActor {
             this.forwardNativeRequest(socket, command, encoded),
         ),
         "computer.diagnostics.read": this.clientOperation("computer.diagnostics.read"),
+        "computer.metadata.read": this.clientOperation("computer.metadata.read"),
         "computer.ping": this.clientOperation("computer.ping"),
         "session.cancel-before-start": this.clientOperation("session.cancel-before-start"),
         "session.cancel": this.clientOperation("session.cancel"),
@@ -274,6 +275,7 @@ export class ComputerRelayActor {
             }
         }),
         "computer.diagnostics.result": this.addressedDaemon("computer.diagnostics.result"),
+        "computer.metadata.result": this.addressedDaemon("computer.metadata.result"),
         "computer.pong": this.addressedDaemon("computer.pong"),
         "session.operation.failed": this.addressedDaemon("session.operation.failed"),
         "session.prompt.accepted": this.addressedDaemon("session.prompt.accepted"),

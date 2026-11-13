@@ -1,4 +1,9 @@
 import { MortyClient, MortyPageRequest, WsTransport } from "@morty-build/client";
+import {
+    type ComputerMetadataResource,
+    computerMetadataRequestCodec,
+    computerMetadataResultCodec,
+} from "@morty-build/client/protocol";
 import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
 import * as v from "valibot";
 import { afterEach, beforeAll, beforeEach, expect, onTestFinished, test, vi } from "vitest";
@@ -57,8 +62,7 @@ test("Given canonical Computer paths, When an owner manages identity and pairing
         expect(pairing.status).toBe(201);
         expect(await pairing.json()).toMatchObject({ pairingCode: expect.any(String) });
         const devices = await transport.fetch(request("/identity/devices"));
-        expect(devices.status).toBe(200);
-        expect(await devices.json()).toEqual({ devices: [] });
+        expect(devices.status).toBe(404);
         const sharing = { operationId: crypto.randomUUID() };
         const shared = await transport.fetch(request("/identity/transfers", sharing));
         expect(shared.status).toBe(201);
@@ -186,6 +190,7 @@ test.each(["http", "websocket"] as const)(
         const chat = `/v1/computers/${owner.computerId}`;
         const encryptionAccess = await _runtime.encryptionAccess(signal);
         const ownerTransport = new WorkerApiTransport(bindings.origin, () => encryptionAccess);
+        const metadataWire: string[] = [];
         const observed: { readonly method: string; readonly path: string; readonly status: number }[] = [];
         const ownerClient = new BotChatApi({
             origin: bindings.origin,
@@ -208,6 +213,9 @@ test.each(["http", "websocket"] as const)(
                 if (response === undefined) {
                     throw new Error("Expected the Computer WebSocket transport");
                 }
+                if (input.url.endsWith("/workspace")) {
+                    metadataWire.push(await response.clone().text());
+                }
                 observed.push({ method: input.method, path: new URL(input.url).pathname, status: response.status });
                 return response;
             },
@@ -219,19 +227,71 @@ test.each(["http", "websocket"] as const)(
         await ownerClient.verifyAgent("codex", signal);
         expect(observed).toContainEqual({ method: "POST", path: `/morty/api${chat}/setup`, status: 202 });
         const workspace = await request(`${chat}/workspace`, owner.token, {});
-        expect(workspace.status).toBe(200);
-        expect(await workspace.json()).toEqual({
+        expect(workspace.status).toBe(400);
+        expect(await ownerClient.computerConfiguration(signal)).toEqual({
             computer: expect.objectContaining({
                 computerId: owner.computerId,
                 computerName: "Single Worker",
                 online: true,
             }),
         });
-        const computers = await request(`${chat}/setup/computers`, owner.token, {});
-        expect(computers.status).toBe(200);
-        expect(await computers.json()).toEqual({
+        expect(metadataWire).toHaveLength(1);
+        expect(JSON.parse(metadataWire[0] ?? "")).toEqual({
+            kind: "computer.metadata.result",
+            requestId: expect.any(String),
+            encrypted: expect.any(String),
+        });
+        expect(metadataWire[0]).not.toContain("Single Worker");
+        const readMetadata = async (resource: ComputerMetadataResource, path: string) => {
+            const requestId = crypto.randomUUID();
+            const encryption = ownerTransport.computerTransport(owner.computerId).payloadEncryption;
+            const command: object = JSON.parse(
+                await computerMetadataRequestCodec.encode(
+                    { kind: "computer.metadata.read", requestId, resource, credential: owner.token },
+                    encryption,
+                    signal,
+                ),
+            );
+            const response = await request(`${chat}/${path}`, owner.token, command);
+            expect(response.status).toBe(200);
+            const encoded = await response.text();
+            expect(JSON.parse(encoded)).toEqual({
+                kind: "computer.metadata.result",
+                requestId,
+                encrypted: expect.any(String),
+            });
+            const reply = await computerMetadataResultCodec.decode(encoded, encryption, signal);
+            expect(reply.requestId).toBe(requestId);
+            expect(reply.result.resource).toBe(resource);
+            return { result: reply.result, encoded };
+        };
+        const computers = await readMetadata("computers", "setup/computers");
+        expect(computers.result).toEqual({
+            resource: "computers",
             computers: [expect.objectContaining({ computerId: owner.computerId, online: true })],
         });
+        expect(computers.encoded).not.toContain("Single Worker");
+        const shared = await request(`${chat}/identity/transfers`, owner.token, { operationId: crypto.randomUUID() });
+        expect(shared.status).toBe(201);
+        const sharedUrl = new URL(v.parse(v.object({ url: v.string() }), await shared.json()).url);
+        const added = await bindings.request(
+            operation("/v1/identity/transfers/redeem", undefined, {
+                code: new URLSearchParams(sharedUrl.hash.slice(1)).get("code"),
+                device: "Private phone · Safari",
+            }),
+        );
+        expect(added.status).toBe(200);
+        const devices = await readMetadata("devices", "identity/devices");
+        expect(devices.result).toMatchObject({
+            resource: "devices",
+            devices: [{ label: "Private phone · Safari", addedBy: { kind: "computer" } }],
+        });
+        expect(devices.encoded).not.toContain("Private phone");
+        expect((await request(`${chat}/identity/devices`, owner.token)).status).toBe(404);
+        const snapshotWithoutComputerCredential = await request(`${chat}/metadata/snapshot`, owner.token, {
+            resource: "computer",
+        });
+        expect(snapshotWithoutComputerCredential.status).toBe(401);
         const computer = await request(`/v1/computers/${owner.computerId}/pairing-state`, owner.token);
         expect(computer.status).toBe(200);
         expect(await computer.json()).toEqual({ computerPairing: "paired" });

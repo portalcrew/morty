@@ -35,6 +35,7 @@ class IdentitySharingUnavailable extends Error {
 
 export function createIdentityAccess(options: {
     readonly fetchRequest: ApiTransport["fetch"];
+    readonly computerTransport: ApiTransport["computerTransport"];
     readonly waitForChange: ApiTransport["waitForChange"];
     readonly origin: string;
     readonly identity: { readonly computerId: string; readonly getToken: (signal: AbortSignal) => Promise<string> };
@@ -44,7 +45,11 @@ export function createIdentityAccess(options: {
     ) => Promise<{ readonly computerId: string; readonly computerToken: string } | null>;
     readonly credentialRejected: () => Promise<void>;
 }): IdentityAccess {
-    const api = new AnonymousIdentityApi({ fetchRequest: options.fetchRequest, origin: options.origin });
+    const api = new AnonymousIdentityApi({
+        fetchRequest: options.fetchRequest,
+        origin: options.origin,
+        computerTransport: options.computerTransport,
+    });
     const remoteAccess = createRemoteAccessOperations({ ...options, onEnded: options.onAccessEnded });
     /** A refusal of this browser's own access is reported to its owner before the caller sees it. */
     const withCurrentAccess = async <T>(signal: AbortSignal, operation: (token: string) => Promise<T>): Promise<T> => {

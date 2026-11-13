@@ -80,6 +80,8 @@ function createComputerForwardingRoutes() {
             .delete(`/morty/api/v1/computers/:computerId${credentialRevocationPaths.local}`, computerFromPath, forward)
             .get("/morty/api/v1/computers/:computerId/pairing-state", computerFromPath, forward)
             .post("/morty/api/v1/computers/:computerId/workspace", computerFromPath, forward)
+            .post("/morty/api/v1/computers/:computerId/metadata/snapshot", computerFromPath, forward)
+            .post("/morty/api/v1/computers/:computerId/identity/devices", computerFromPath, forward)
             // Deprecated browser HTTP operations: remove after web clients migrate to the Computer WebSocket.
             .all("/morty/api/v1/computers/:computerId/session", computerFromPath, forward)
             .get("/morty/api/v1/computers/:computerId/identity/devices", computerFromPath, forward)

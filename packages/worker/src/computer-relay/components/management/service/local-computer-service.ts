@@ -1,6 +1,7 @@
 import type {
     AgentSettingsDiscoverCommandRouting,
     ComputerDiagnosticsRequestRouting,
+    ComputerMetadataRequestRouting,
     ComputerPingCommandRouting,
     NativeSessionCommandRouting,
     NativeSessionTarget,
@@ -108,6 +109,24 @@ export class LocalComputerService {
     };
     readonly getChatComputerAgents = async (computerId: string, signal: AbortSignal) =>
         await this.#run(computerId, signal, (computer, signal) => computer.agents(signal), 15_000);
+    readonly authorizeMetadataSnapshot = async (token: string, successor: string | null, signal: AbortSignal) =>
+        await this.computer.authorizeMetadataSnapshot(token, successor, signal);
+    readonly readMetadata = async (
+        computerId: string,
+        command: ComputerMetadataRequestRouting,
+        signal: AbortSignal,
+    ) => {
+        const result = await this.#run(
+            computerId,
+            signal,
+            (computer, signal) => computer.clientControl(command, signal),
+            30_000,
+        );
+        if (result.kind !== "computer.metadata.result" && result.kind !== "session.operation.failed") {
+            throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned invalid metadata.", 502);
+        }
+        return result;
+    };
     readonly readComputerDiagnostics = async (
         computerId: string,
         command: ComputerDiagnosticsRequestRouting,
