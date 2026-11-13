@@ -970,18 +970,6 @@ it.each(["text", "binary"])(
                     },
                 );
             }
-            // A revoked Computer's daemon is told so, and stops instead of retrying.
-            const reconnected = await runtime.reconnect();
-            expect(reconnected.status).toBe(101);
-            const refused = reconnected.webSocket;
-            if (refused === null) {
-                throw new Error("Expected the refused Computer socket");
-            }
-            const refusal = new Promise<CloseEvent>((resolve) =>
-                refused.addEventListener("close", resolve, { once: true }),
-            );
-            refused.accept();
-            expect(await refusal).toMatchObject({ code: 1008, reason: "Computer revoked" });
             await deliver(
                 format === "text"
                     ? liveEvent(runtime.sessionTarget, "after revocation")
@@ -1000,6 +988,46 @@ it.each(["text", "binary"])(
         }
     },
 );
+
+it("Given a connected Computer, When revocation commits but disconnect delivery fails and its daemon retries, Then the daemon is told it was revoked and the earlier connection closes", async () => {
+    const runtime = await connectComputerDaemon("revoked-retry");
+    const { socket: viewer, admission } = await runtime.subscribe();
+    expect(admission).toMatchObject({ kind: "session.events.ready" });
+    try {
+        await runInDurableObject(
+            env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)),
+            (_instance, state) => {
+                state.storage.sql.exec(`CREATE TRIGGER reject_computer_disconnect BEFORE UPDATE OF disconnected_at ON computer_connection
+                BEGIN SELECT RAISE(ABORT, 'Controlled disconnect failure'); END`);
+            },
+        );
+        try {
+            await expect(runtime.revoke()).rejects.toThrow();
+        } finally {
+            await runInDurableObject(
+                env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)),
+                (_instance, state) => {
+                    state.storage.sql.exec("DROP TRIGGER reject_computer_disconnect");
+                },
+            );
+        }
+        const reconnected = await runtime.reconnect();
+        expect(reconnected.status).toBe(101);
+        const refused = reconnected.webSocket;
+        if (refused === null) {
+            throw new Error("Expected the refused Computer socket");
+        }
+        const refusal = new Promise<CloseEvent>((resolve) =>
+            refused.addEventListener("close", resolve, { once: true }),
+        );
+        refused.accept();
+        expect(await refusal).toMatchObject({ code: 1008, reason: "Computer revoked" });
+        expect(await runtime.daemonClosed).toMatchObject({ code: 1008, reason: "Computer revoked" });
+    } finally {
+        runtime.daemon.close(1000, "Test complete");
+        viewer.close(1000, "Test complete");
+    }
+});
 
 it("Given a Computer its owner revoked and then paired again, When the earlier daemon reconnects with its saved credential, Then the Relay tells it the Computer was revoked while the new daemon connects", async () => {
     const runtime = await connectComputerDaemon("paired-again");

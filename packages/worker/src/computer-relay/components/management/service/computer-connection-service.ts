@@ -39,7 +39,11 @@ export class ComputerConnectionService {
             case "rotated":
                 return { kind: "accepted", access: rotation.access };
             case "revoked":
-                return rotation;
+                // Ending the Computer's access is committed before its connections are closed, so a daemon that
+                // retries after the closing failed midway completes it. Closing is idempotent, and leaves the daemon
+                // of a newer pairing generation alone.
+                await this.#runtime.revokeComputer(rotation.access.computerId, signal);
+                return { kind: "revoked" };
             case "reused":
                 break;
         }

@@ -340,10 +340,9 @@ export class AuthenticationService {
         if (access.kind !== "authorized") {
             return refused(access);
         }
-        await this.#endAccess(async () => {
-            await this.identities.revokeOtherAccess(access.token, Date.now(), signal);
-            return true;
-        });
+        if (!(await this.#endAccess(() => this.identities.revokeOtherAccess(access.token, Date.now(), signal)))) {
+            return { kind: "unauthenticated" };
+        }
         return { kind: "revoked" };
     };
 
@@ -359,14 +358,14 @@ export class AuthenticationService {
         if (access.kind !== "authorized") {
             return refused(access);
         }
-        await this.#endAccess(async () => {
-            await this.identities.endOtherBrowserAccess(
-                access.credential.kind === "browser" ? access.credential.deviceId : null,
-                Date.now(),
-                signal,
-            );
-            return true;
-        });
+        const kept = access.credential.kind === "browser" ? access.credential.deviceId : null;
+        if (
+            !(await this.#endAccess(() =>
+                this.identities.endOtherBrowserAccess(access.token, kept, Date.now(), signal),
+            ))
+        ) {
+            return { kind: "unauthenticated" };
+        }
         return { kind: "ended" };
     };
 

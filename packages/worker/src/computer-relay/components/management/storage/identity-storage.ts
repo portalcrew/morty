@@ -54,12 +54,15 @@ function linkInForce(
     );
 }
 
-/** Cancels this Computer's invitations no device has used yet; a cancelled link stays cancelled. */
-function cancelUnusedLinks(database: IdentityDatabase, now: number) {
+/**
+ * Cancels this Computer's invitations no device has used yet; a cancelled link stays cancelled. `by` is the access the
+ * cancelling is done under, checked in the write itself.
+ */
+function cancelUnusedLinks(database: IdentityDatabase, now: number, by: SQL) {
     return database
         .update(continueLink)
         .set({ cancelledAt: now })
-        .where(and(isNull(continueLink.cancelledAt), unusedLink(database)));
+        .where(and(isNull(continueLink.cancelledAt), unusedLink(database), by));
 }
 const successorCredential = alias(ownerCredential, "successor_credential");
 const heldDevice = alias(browserDevice, "held_device");
@@ -121,6 +124,32 @@ function endDevices(database: IdentityDatabase, devices: SQL | undefined, now: n
         .update(browserDevice)
         .set({ endedAt: now })
         .where(and(devices, isNull(browserDevice.endedAt)));
+}
+
+const callerOwnerCredential = alias(ownerCredential, "caller_owner_credential");
+
+/**
+ * The credential `tokenHash` is the computer's own and still holds access. Operations that end other access apply it in
+ * their writes, so a credential ended while the request waited cannot still end anything.
+ */
+function ownerCredentialHolds(database: IdentityDatabase, tokenHash: string) {
+    return exists(
+        database
+            .select({ id: callerOwnerCredential.id })
+            .from(callerOwnerCredential)
+            .where(and(eq(callerOwnerCredential.tokenHash, tokenHash), ownerAccessHeld(callerOwnerCredential))),
+    );
+}
+
+/** The credential `tokenHash` still holds access: the computer's own, or a browser's whose device holds. */
+function credentialHolds(database: IdentityDatabase, tokenHash: string, now: number) {
+    const browserHolds = exists(
+        database
+            .select({ id: browserCredential.id })
+            .from(browserCredential)
+            .where(and(eq(browserCredential.tokenHash, tokenHash), browserCredentialInForce(database, now))),
+    );
+    return sql`(${ownerCredentialHolds(database, tokenHash)} OR ${browserHolds})`;
 }
 
 /** How a browser joining through a link describes itself, and roughly where Cloudflare saw it connect from. */
@@ -308,26 +337,37 @@ export class IdentityStorage {
         return rows;
     };
 
+    /** Whether the computer's own credential `tokenHash` still holds access; once it does not, it never does again. */
+    readonly #ownerHolds = async (database: IdentityDatabase, tokenHash: string): Promise<boolean> =>
+        (await database
+            .select({ id: ownerCredential.id })
+            .from(ownerCredential)
+            .where(and(eq(ownerCredential.tokenHash, tokenHash), ownerAccessHeld()))
+            .get()) !== undefined;
+
     /**
      * Revokes every local credential except the caller's, ends every browser device's access, and cancels
-     * the links no device has used yet. Only the computer's own credential, which belongs to no device, may do this.
+     * the links no device has used yet. Only the computer's own credential, which belongs to no device, may do this,
+     * and only while it holds access: false when it did not, with nothing changed.
      */
-    readonly revokeOtherAccess = async (token: string, now: number, signal: AbortSignal): Promise<void> => {
+    readonly revokeOtherAccess = async (token: string, now: number, signal: AbortSignal): Promise<boolean> => {
         signal.throwIfAborted();
         const database = requireIdentityDatabase(this.#database);
         const tokenHash = await digest(token);
+        const callerHolds = ownerCredentialHolds(database, tokenHash);
         this.#database.batch(
             [
-                cancelUnusedLinks(database, now),
+                cancelUnusedLinks(database, now, callerHolds),
                 database
                     .update(ownerCredential)
                     .set({ revokedAt: now })
-                    .where(and(ne(ownerCredential.tokenHash, tokenHash), ownerAccessHeld())),
-                endDevices(database, undefined, now),
+                    .where(and(ne(ownerCredential.tokenHash, tokenHash), ownerAccessHeld(), callerHolds)),
+                endDevices(database, callerHolds, now),
             ],
             signal,
         );
         signal.throwIfAborted();
+        return await this.#ownerHolds(database, tokenHash);
     };
 
     /**
@@ -390,23 +430,39 @@ export class IdentityStorage {
 
     /**
      * Ends the access of every browser device except the one kept, and cancels the links no device has used yet. The
-     * computer's own credential belongs to no device, so it stays.
+     * computer's own credential belongs to no device, so it stays. Done only while the caller's credential `token`
+     * holds access: false when it did not, with nothing changed.
      */
     readonly endOtherBrowserAccess = async (
+        token: string,
         keptDeviceId: string | null,
         now: number,
         signal: AbortSignal,
-    ): Promise<void> => {
+    ): Promise<boolean> => {
         signal.throwIfAborted();
         const database = requireIdentityDatabase(this.#database);
+        const tokenHash = await digest(token);
+        const callerHolds = credentialHolds(database, tokenHash, now);
         this.#database.batch(
             [
-                cancelUnusedLinks(database, now),
-                endDevices(database, keptDeviceId === null ? undefined : ne(browserDevice.id, keptDeviceId), now),
+                cancelUnusedLinks(database, now, callerHolds),
+                endDevices(
+                    database,
+                    and(keptDeviceId === null ? undefined : ne(browserDevice.id, keptDeviceId), callerHolds),
+                    now,
+                ),
             ],
             signal,
         );
         signal.throwIfAborted();
+        return (
+            (await this.#ownerHolds(database, tokenHash)) ||
+            (await database
+                .select({ id: browserCredential.id })
+                .from(browserCredential)
+                .where(and(eq(browserCredential.tokenHash, tokenHash), browserCredentialInForce(database, now)))
+                .get()) !== undefined
+        );
     };
 
     /** Claims an unopened predecessor and issues its successor atomically; retries read the committed issuance. */
