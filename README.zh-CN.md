@@ -8,6 +8,8 @@ metadata:
 
 <div align="center">
 
+<img src="docs/assets/morty-repository-logo.svg" width="240" height="240" alt="Morty logo" />
+
 # Morty
 
 [English](README.md) · **简体中文**
