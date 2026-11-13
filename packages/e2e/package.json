@@ -16,6 +16,6 @@
         "@playwright/test": "catalog:",
         "@types/ws": "^8.18.2",
         "playwright-core": "catalog:",
-        "ws": "^8.22.1"
+        "ws": "^8.22.2"
     }
 }
