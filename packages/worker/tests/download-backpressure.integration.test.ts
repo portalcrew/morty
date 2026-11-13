@@ -1,5 +1,5 @@
 import { MortyClient, WsTransport } from "@morty-build/client";
-import { decodeSessionReadyEvent } from "@morty-build/client/protocol";
+import { decodeSessionReadyEvent, fileReadCommandCodec } from "@morty-build/client/protocol";
 import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
 import * as v from "valibot";
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
@@ -74,9 +74,21 @@ test("Given a slow file download, When the browser stops reading and cancels, Th
         try {
             const start = network.frames.length;
             const gate = network.pauseNextDownload();
-            const path = `/morty/api/v1/computers/${owner.computerId}/harnesses/${target.harness}/sessions/${target.sessionId}/files/content?path=slow-download.bin&maxBytes=${16 * 1024 * 1024}`;
+            const path = `/morty/api/v1/computers/${owner.computerId}/harnesses/${target.harness}/sessions/${target.sessionId}/files/content`;
             const response = await fetch(new URL(path, network.origin), {
-                headers: { authorization: `Bearer ${access.credential}` },
+                body: await fileReadCommandCodec.encode(
+                    {
+                        kind: "file.read",
+                        maxBytes: 16 * 1024 * 1024,
+                        path: "slow-download.bin",
+                        requestId: crypto.randomUUID(),
+                        target,
+                    },
+                    transport.payloadEncryption,
+                    signal,
+                ),
+                headers: { authorization: `Bearer ${access.credential}`, "content-type": "application/json" },
+                method: "POST",
                 signal,
             });
             expect(response.status).toBe(200);

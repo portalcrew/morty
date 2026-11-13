@@ -40,6 +40,7 @@ export async function reportAuthenticatedCapacity(
             return true;
         case "content.write":
         case "content.commit":
+        case "file.read":
             if (address.target === undefined) {
                 return false;
             }

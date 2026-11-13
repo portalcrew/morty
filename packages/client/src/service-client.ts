@@ -67,6 +67,7 @@ import {
     fileBeginEventCodec,
     fileEndEventCodec,
     fileFailedEventCodec,
+    fileReadCommandCodec,
 } from "./protocol/session/files/index.ts";
 import {
     sessionElicitationRespondCommandCodec,
@@ -387,11 +388,17 @@ type FileDownloadState =
       }
     | { readonly kind: "end"; readonly begin: FileBeginEvent; readonly bytes: Uint8Array };
 
+/** What the reader asked for: every record of the answer must carry this address and Session. */
+interface FileDownloadRequest {
+    readonly requestId: string;
+    readonly target: NativeSessionTarget;
+    readonly maximumBytes: number;
+}
+
 async function consumeFileRecord(
     record: FileStreamRecord,
     state: FileDownloadState,
-    target: NativeSessionTarget,
-    maximumBytes: number,
+    request: FileDownloadRequest,
     decryptor: PayloadDecryptor,
     signal: AbortSignal,
 ): Promise<FileDownloadState> {
@@ -404,7 +411,7 @@ async function consumeFileRecord(
         }
         const chunk = await contentChunkCodec.decode(record.encoded, decryptor, signal);
         if (
-            chunk.requestId !== state.begin.requestId ||
+            chunk.requestId !== request.requestId ||
             chunk.sequence !== state.sequence ||
             state.offset + chunk.bytes.byteLength > state.bytes.byteLength
         ) {
@@ -416,17 +423,18 @@ async function consumeFileRecord(
     const kind = decodeMessageKind(record.encoded);
     if (kind === "file.failed") {
         const failure = await fileFailedEventCodec.decode(record.encoded, decryptor, signal);
-        if (
-            !sameNativeSession(failure.target, target) ||
-            (state.kind === "chunks" && failure.requestId !== state.begin.requestId)
-        ) {
+        if (!sameNativeSession(failure.target, request.target) || failure.requestId !== request.requestId) {
             throw new MortyProtocolError("The Computer returned a file failure for another request");
         }
         throw new MortyError(failure.code, failure.message, { cause: failure });
     }
     if (kind === "file.begin" && state.kind === "begin") {
         const begin = await fileBeginEventCodec.decode(record.encoded, decryptor, signal);
-        if (!sameNativeSession(begin.target, target) || begin.byteLength > maximumBytes) {
+        if (
+            begin.requestId !== request.requestId ||
+            !sameNativeSession(begin.target, request.target) ||
+            begin.byteLength > request.maximumBytes
+        ) {
             throw new MortyProtocolError("The Computer returned invalid file metadata");
         }
         return { kind: "chunks", begin, bytes: new Uint8Array(begin.byteLength), offset: 0, sequence: 0 };
@@ -434,8 +442,8 @@ async function consumeFileRecord(
     if (kind === "file.end" && state.kind === "chunks") {
         const end = await fileEndEventCodec.decode(record.encoded, decryptor, signal);
         if (
-            end.requestId !== state.begin.requestId ||
-            !sameNativeSession(end.target, target) ||
+            end.requestId !== request.requestId ||
+            !sameNativeSession(end.target, request.target) ||
             state.offset !== state.bytes.byteLength
         ) {
             throw new MortyProtocolError("The encrypted file ended before it was complete");
@@ -447,8 +455,7 @@ async function consumeFileRecord(
 
 async function readEncryptedFile(
     response: Response,
-    target: NativeSessionTarget,
-    maximumBytes: number,
+    request: FileDownloadRequest,
     decryptor: PayloadDecryptor,
     signal: AbortSignal,
 ): Promise<{
@@ -497,7 +504,7 @@ async function readEncryptedFile(
                 if (decoded.kind !== "record" || decoded.byteLength !== buffer.byteLength) {
                     throw new MortyProtocolError("The encrypted file record is incomplete");
                 }
-                state = await consumeFileRecord(decoded.record, state, target, maximumBytes, decryptor, signal);
+                state = await consumeFileRecord(decoded.record, state, request, decryptor, signal);
                 buffer = new Uint8Array(5);
                 used = 0;
             }
@@ -570,10 +577,11 @@ export class MortyRequestExecutor {
     readonly get = async (endpoint: MortyEndpointCall, body: string, signal: AbortSignal): Promise<string> =>
         await this.request(endpoint, body, "application/json", signal);
 
-    readonly getFile = async (
+    /** Sends the encrypted file read and returns the file only when every record of the answer answers that read. */
+    readonly readFileStream = async (
         endpoint: MortyEndpointCall,
-        target: NativeSessionTarget,
-        maximumBytes: number,
+        body: string,
+        request: FileDownloadRequest,
         signal: AbortSignal,
     ): Promise<{
         readonly bytes: Uint8Array;
@@ -590,8 +598,11 @@ export class MortyRequestExecutor {
             const response = await this.#transport.fetch({
                 endpoint,
                 origin: this.#endpoint,
-                body: null,
-                headers: this.authenticationHeaders(credential, "application/vnd.morty.encrypted-file"),
+                body,
+                headers: {
+                    ...this.authenticationHeaders(credential, "application/vnd.morty.encrypted-file"),
+                    "content-type": "application/json",
+                },
                 signal: deadline.signal,
             });
             this.#observeResponse?.({ serverTiming: response.headers.get("server-timing"), status: response.status });
@@ -604,13 +615,7 @@ export class MortyRequestExecutor {
             ) {
                 throw new MortyProtocolError("The Computer returned an invalid encrypted file response");
             }
-            return await readEncryptedFile(
-                response,
-                target,
-                maximumBytes,
-                this.#transport.payloadEncryption,
-                deadline.signal,
-            );
+            return await readEncryptedFile(response, request, this.#transport.payloadEncryption, deadline.signal);
         } catch (cause) {
             if (!signal.aborted) {
                 this.#lifetime.signal.throwIfAborted();
@@ -954,10 +959,17 @@ export class MortySessionResources {
         if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1 || maximumBytes > 128 * 1024 * 1024) {
             throw new MortyValidationError("The file size limit is invalid");
         }
-        return await this.#executor.getFile(
-            sessionEndpoints.readFile({ computerId: this.#computerId, target: sessionTarget, path, maximumBytes }),
-            sessionTarget,
-            maximumBytes,
+        // Reading a file changes nothing, so a read that fails ambiguously is repeated as a new request.
+        const requestId = crypto.randomUUID();
+        const body = await fileReadCommandCodec.encode(
+            { kind: "file.read", maxBytes: maximumBytes, path, requestId, target: sessionTarget },
+            this.#executor.payloadEncryption,
+            signal,
+        );
+        return await this.#executor.readFileStream(
+            sessionEndpoints.readFile({ computerId: this.#computerId, target: sessionTarget }),
+            body,
+            { maximumBytes, requestId, target: sessionTarget },
             signal,
         );
     };

@@ -1,4 +1,4 @@
-import type { FileReadCommand, NativeSessionTarget, SessionAccessGrant } from "@morty-build/client/protocol";
+import type { FileReadCommandRouting, NativeSessionTarget, SessionAccessGrant } from "@morty-build/client/protocol";
 import {
     type AgentSettingsDiscoverCommandRouting,
     contentWriteCommandCodec,
@@ -158,7 +158,7 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
         },
         readSessionFile: async (
             requestedComputerId: string,
-            command: FileReadCommand,
+            command: FileReadCommandRouting,
             signal: AbortSignal,
         ): Promise<Response> => {
             checkTarget(requestedComputerId);

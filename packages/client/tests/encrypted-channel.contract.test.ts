@@ -149,25 +149,18 @@ it("Given a full replay window, when authenticated traffic and tampered traffic 
     }
 });
 
-it("Given a file read and a history request, when a client addresses them, then the existing HTTP file query is preserved and the history cursor stays private", () => {
+it("Given a file read and a history request, when a client addresses them, then neither the file path nor the history cursor appears in the request address", () => {
     const target = { harness: "codex", sessionId: "session-1" };
-    const file = sessionEndpoints.readFile({
-        computerId: "computer-1",
-        target,
-        path: "/private/project/secret.txt",
-        maximumBytes: 4096,
-    });
+    const file = sessionEndpoints.readFile({ computerId: "computer-1", target });
     const history = sessionEndpoints.listEvents({
         computerId: "computer-1",
         target,
         limit: 25,
         cursor: "private-cursor",
     });
-    const fileUrl = new URL(file.path, "https://example.invalid");
-    expect(file.method).toBe("GET");
+    expect(file.method).toBe("POST");
     expect(file.transport).toEqual({ kind: "http" });
-    expect(fileUrl.searchParams.get("path")).toBe("/private/project/secret.txt");
-    expect(fileUrl.searchParams.get("maxBytes")).toBe("4096");
+    expect(new URL(file.path, "https://example.invalid").search).toBe("");
     expect(history.path).not.toContain("cursor");
     expect(history.path).not.toContain("private");
 });

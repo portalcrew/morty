@@ -126,16 +126,11 @@ export const sessionEndpoints = Object.freeze({
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
-    readFile: ({
-        computerId,
-        target,
-        path,
-        maximumBytes,
-    }: SessionCallTarget & { readonly path: string; readonly maximumBytes: number }): MortyEndpointCall =>
+    readFile: ({ computerId, target }: SessionCallTarget): MortyEndpointCall =>
         endpoint({
             computerId,
             target,
-            method: "GET",
+            method: "POST",
             resource: "files/content",
             encrypted: {
                 request: [fileReadCommandCodec],
@@ -148,7 +143,6 @@ export const sessionEndpoints = Object.freeze({
             },
             transport: { kind: "http" },
             timeoutMilliseconds: 20_000,
-            query: new URLSearchParams({ maxBytes: maximumBytes.toString(), path }),
         }),
     readExecution: ({
         computerId,

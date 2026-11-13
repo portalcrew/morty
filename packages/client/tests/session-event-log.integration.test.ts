@@ -1,10 +1,11 @@
 import { once } from "node:events";
 import { createServer } from "node:http";
-import type { SessionEvent } from "@morty-build/client/protocol";
+import type { NativeSessionTarget, SessionEvent } from "@morty-build/client/protocol";
 import { base64urlnopad } from "@scure/base";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { createComputerPayloadEncryption, exportE2EPublicKey, generateE2EIdentity } from "../src/encryption.ts";
+import { MortyProtocolError } from "../src/errors.ts";
 import { MortyClient, MortyPageRequest, WsTransport } from "../src/index.ts";
 import {
     contentAvailableEventCodec,
@@ -16,6 +17,7 @@ import {
     encodeFileStreamRecord,
     fileBeginEventCodec,
     fileEndEventCodec,
+    fileReadCommandCodec,
 } from "../src/protocol/session/files/index.ts";
 import {
     sessionHistoryPageLoadCodec,
@@ -223,7 +225,11 @@ describe("Session Event Log V2 SDK", () => {
         }
     });
 
-    it("Given an encrypted file download, when a client reads it over the existing HTTP GET, then only the client recovers the bytes and metadata", async () => {
+    /** A Computer that answers an encrypted file read over HTTP: `answer` chooses which request the stream answers. */
+    async function withFileReadServer(
+        answer: (read: { readonly requestId: string }) => string,
+        scenario: (client: MortyClient, target: NativeSessionTarget) => Promise<void>,
+    ): Promise<void> {
         vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-12T00:00:00Z") });
         const identity = await generateE2EIdentity();
         const access = {
@@ -235,40 +241,54 @@ describe("Session Event Log V2 SDK", () => {
         const box = await createComputerPayloadEncryption(access, async () => {}, signal);
         const target = { harness: "claude", sessionId: "session-1" };
         const bytes = new TextEncoder().encode("private file contents");
-        const begin = await fileBeginEventCodec.encode(
-            {
-                kind: "file.begin",
-                requestId: "request-1",
-                target,
-                byteLength: bytes.length,
-                mediaType: "text/plain",
-                modifiedAt: "2026-10-07T00:00:00.000Z",
-                name: "private.txt",
-            },
-            box,
-            signal,
-        );
-        const chunk = await contentChunkCodec.encode({ requestId: "request-1", sequence: 0, bytes }, box, signal);
-        const end = await fileEndEventCodec.encode({ kind: "file.end", requestId: "request-1", target }, box, signal);
-        const records = [
-            encodeFileStreamRecord({ kind: "message", encoded: begin }),
-            encodeFileStreamRecord({ kind: "chunk", encoded: chunk }),
-            encodeFileStreamRecord({ kind: "message", encoded: end }),
-        ];
-        expect(new TextDecoder().decode(records[1])).not.toContain("private file contents");
-        expect(begin).not.toContain("private.txt");
         const server = createServer((request, response) => {
-            expect(request.method).toBe("GET");
-            expect(request.headers["x-morty-request"]).toBeUndefined();
-            const url = new URL(request.url ?? "", "http://localhost");
-            expect(url.searchParams.get("path")).toBe("/workspace/private.txt");
-            expect(url.searchParams.get("maxBytes")).toBe("4096");
-            response.writeHead(200, { "content-type": "application/vnd.morty.encrypted-file" });
-            for (const record of records) {
-                response.write(record.subarray(0, 2));
-                response.write(record.subarray(2));
-            }
-            response.end();
+            void (async () => {
+                const chunks: Buffer[] = [];
+                for await (const chunk of request) {
+                    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+                }
+                const body = Buffer.concat(chunks).toString();
+                expect(request.method).toBe("POST");
+                expect(request.url).not.toContain("?");
+                expect(body).not.toContain("private.txt");
+                const read = await fileReadCommandCodec.decode(body, box, signal);
+                expect(read.path).toBe("/workspace/private.txt");
+                expect(read.maxBytes).toBe(4096);
+                const requestId = answer(read);
+                const records = [
+                    encodeFileStreamRecord({
+                        kind: "message",
+                        encoded: await fileBeginEventCodec.encode(
+                            {
+                                kind: "file.begin",
+                                requestId,
+                                target,
+                                byteLength: bytes.length,
+                                mediaType: "text/plain",
+                                modifiedAt: "2026-10-07T00:00:00.000Z",
+                                name: "private.txt",
+                            },
+                            box,
+                            signal,
+                        ),
+                    }),
+                    encodeFileStreamRecord({
+                        kind: "chunk",
+                        encoded: await contentChunkCodec.encode({ requestId, sequence: 0, bytes }, box, signal),
+                    }),
+                    encodeFileStreamRecord({
+                        kind: "message",
+                        encoded: await fileEndEventCodec.encode({ kind: "file.end", requestId, target }, box, signal),
+                    }),
+                ];
+                expect(new TextDecoder().decode(records[1])).not.toContain("private file contents");
+                response.writeHead(200, { "content-type": "application/vnd.morty.encrypted-file" });
+                for (const record of records) {
+                    response.write(record.subarray(0, 2));
+                    response.write(record.subarray(2));
+                }
+                response.end();
+            })().catch((cause: unknown) => response.destroy(cause instanceof Error ? cause : undefined));
         });
         servers.push(server);
         server.listen(0, "127.0.0.1");
@@ -286,18 +306,45 @@ describe("Session Event Log V2 SDK", () => {
             computerId: "computer-1",
         });
         try {
-            expect(await client.sessions.readFile(target, "/workspace/private.txt", signal, 4096)).toEqual({
-                bytes,
-                mediaType: "text/plain",
-                modifiedAt: "2026-10-07T00:00:00.000Z",
-                name: "private.txt",
-            });
+            await scenario(client, target);
         } finally {
             client.close();
             transport.close();
             box.close();
             vi.useRealTimers();
         }
+    }
+
+    it("Given an encrypted file download, when a client reads it, then only the client recovers the bytes and metadata", async () => {
+        await withFileReadServer(
+            (read) => read.requestId,
+            async (client, target) => {
+                expect(
+                    await client.sessions.readFile(
+                        target,
+                        "/workspace/private.txt",
+                        new AbortController().signal,
+                        4096,
+                    ),
+                ).toEqual({
+                    bytes: new TextEncoder().encode("private file contents"),
+                    mediaType: "text/plain",
+                    modifiedAt: "2026-10-07T00:00:00.000Z",
+                    name: "private.txt",
+                });
+            },
+        );
+    });
+
+    it("Given an encrypted file stream that answers another read, when a client reads a file, then it refuses the file instead of showing it", async () => {
+        await withFileReadServer(
+            () => "another-request",
+            async (client, target) => {
+                await expect(
+                    client.sessions.readFile(target, "/workspace/private.txt", new AbortController().signal, 4096),
+                ).rejects.toBeInstanceOf(MortyProtocolError);
+            },
+        );
     });
 
     it("Given a V2 event page, When a consumer lists events with the default SDK, Then raw pages cross the WebSocket boundary unchanged", async () => {

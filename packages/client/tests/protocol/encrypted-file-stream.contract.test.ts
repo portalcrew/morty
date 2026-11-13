@@ -52,8 +52,15 @@ it("Given a file GET, when the Worker forwards the clear request and encrypted r
         path: "/workspace/private.txt",
         maxBytes: 4096,
     };
-    const clearRequest = await fileReadCommandCodec.encode(request, client, signal);
-    expect(decodeClientToRelayMessage(clearRequest)).toEqual(request);
+    const sealedRequest = await fileReadCommandCodec.encode(request, client, signal);
+    expect(sealedRequest).not.toContain("private.txt");
+    expect(decodeClientToRelayMessage(sealedRequest)).toMatchObject({
+        kind: "file.read",
+        maxBytes: 4096,
+        requestId: "request-1",
+        target,
+    });
+    expect(await fileReadCommandCodec.decode(sealedRequest, computer, signal)).toEqual(request);
 
     const begin = {
         kind: "file.begin",

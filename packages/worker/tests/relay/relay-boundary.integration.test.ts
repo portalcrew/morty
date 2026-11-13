@@ -8,6 +8,7 @@ import {
     generateE2EIdentity,
     MortyClient,
     MortyPageRequest,
+    type PayloadEncryptor,
     WsTransport,
 } from "@morty-build/client";
 import {
@@ -23,7 +24,6 @@ import {
     contentWriteCommandCodec,
     decodeEncryptedDaemonInboundMessage,
     decodeEncryptedDaemonMessage,
-    decodeFileReadCommand,
     decodeSessionAccessCredential,
     decodeWorkerToDaemonMessage,
     encodeContentChunkAck,
@@ -35,6 +35,7 @@ import {
     encodeSessionPromptAcceptedEvent,
     FILE_STREAM_CONTENT_TYPE,
     fileBeginEventCodec,
+    fileReadCommandCodec,
     MORTY_API_PREFIX,
     type NativeSessionTarget,
     nativeSessionCommandCodec,
@@ -345,11 +346,11 @@ describe.sequential("Relay Session-only boundary", () => {
 
         const response = await worker.fetch(
             new Request(
-                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${computerId}/harnesses/codex/sessions/local-session/files/content?maxBytes=33554432&path=%2Fworkspace%2Fpackage.json`,
+                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${computerId}/harnesses/codex/sessions/local-session/files/content`,
                 {
                     headers: {
-                        "access-control-request-headers": "authorization",
-                        "access-control-request-method": "GET",
+                        "access-control-request-headers": "authorization, content-type",
+                        "access-control-request-method": "POST",
                         origin: browserOrigin,
                     },
                     method: "OPTIONS",
@@ -360,8 +361,9 @@ describe.sequential("Relay Session-only boundary", () => {
 
         expect(response.status).toBe(204);
         expect(response.headers.get("access-control-allow-origin")).toBe(browserOrigin);
-        expect(response.headers.get("access-control-allow-methods")).toContain("GET");
+        expect(response.headers.get("access-control-allow-methods")).toContain("POST");
         expect(response.headers.get("access-control-allow-headers")).toContain("authorization");
+        expect(response.headers.get("access-control-allow-headers")).toContain("content-type");
     });
 
     it("Given a linked Computer, When browser subscriptions and history cross Relay hibernation, Then events stay lossless and replies stay correlated without cloud Session storage", async () => {
@@ -1086,11 +1088,25 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
                     },
                 ),
             ),
-        readFile: async (path: string) =>
+        readFile: async (path: string, encryption: PayloadEncryptor) =>
             await worker.fetch(
                 new Request(
-                    `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${computerId}/harnesses/codex/sessions/${sessionId}/files/content?${new URLSearchParams({ maxBytes: "1024", path }).toString()}`,
-                    { headers: credentialHeaders(text(sessionAccess, "credential")) },
+                    `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${computerId}/harnesses/codex/sessions/${sessionId}/files/content`,
+                    {
+                        body: await fileReadCommandCodec.encode(
+                            {
+                                kind: "file.read",
+                                maxBytes: 1024,
+                                path,
+                                requestId: crypto.randomUUID(),
+                                target: nativeTarget(sessionId),
+                            },
+                            encryption,
+                            new AbortController().signal,
+                        ),
+                        headers: credentialHeaders(text(sessionAccess, "credential")),
+                        method: "POST",
+                    },
                 ),
                 environment,
             ),
@@ -2158,8 +2174,12 @@ describe.sequential("Relay Turn submission", () => {
                 runtime.computerId,
                 signal,
             );
-            const pending = runtime.readFile("/workspace/image.png");
-            const read = decodeFileReadCommand(await runtime.daemonMessages.next());
+            const pending = runtime.readFile("/workspace/image.png", clientEncryption);
+            const read = await fileReadCommandCodec.decode(
+                await runtime.daemonMessages.next(),
+                daemonEncryption,
+                signal,
+            );
             runtime.daemon.send(
                 await fileBeginEventCodec.encode(
                     {

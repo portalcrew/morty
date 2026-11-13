@@ -42,14 +42,16 @@ export const PROMPT_IMAGE_MAX_BYTES = 5_000_000;
 const CONTENT_CHUNK_MAGIC = new Uint8Array([0x4d, 0x42, 0x43, 0x31]);
 const CONTENT_CHUNK_HEADER_BYTES = CONTENT_CHUNK_MAGIC.byteLength + 1 + 4;
 
+const fileReadMaxBytes = z
+    .number()
+    .int()
+    .positive()
+    .max(128 * 1024 * 1024);
+
 const fileReadCommandSchema = z
     .object({
         kind: z.literal(FILE_READ_KIND),
-        maxBytes: z
-            .number()
-            .int()
-            .positive()
-            .max(128 * 1024 * 1024),
+        maxBytes: fileReadMaxBytes,
         requestId: IDENTIFIER,
         target: nativeSessionTargetSchema,
         path: z.string().min(1).max(4_096),
@@ -353,24 +355,25 @@ export const decodeContentReadyEvent = (encoded: string): ContentReadyEvent => d
 export const decodeContentAvailableEvent = (encoded: string): ContentAvailableEvent =>
     decode(encoded, contentAvailableEventSchema);
 
-// GET file reads have no private request body: these are the URL and routing fields.
-const fileReadCommandRoutingSchema = fileReadCommandSchema.unwrap().strict();
+// The path is private. The Relay routes by the address and Session and bounds the transfer by the size limit, so those
+// stay public; they are still authenticated, and the Computer refuses a read that does not carry its encryption.
+const fileReadCommandPublicRoutingSchema = z.object({
+    kind: z.literal(FILE_READ_KIND),
+    maxBytes: fileReadMaxBytes,
+    requestId: routingIdentifier,
+    target: routingTarget,
+});
+const fileReadCommandRoutingSchema = fileReadCommandPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
 export type FileReadCommandRouting = z.infer<typeof fileReadCommandRoutingSchema>;
 const decodeFileReadCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, fileReadCommandRoutingSchema);
-export const fileReadCommandCodec = Object.freeze({
+export const fileReadCommandCodec = encryptedMessageCodec({
     kind: FILE_READ_KIND,
+    decode: decodeFileReadCommand,
     decodeRouting: decodeFileReadCommandRouting,
-    encodeRouting: (message: FileReadCommandRouting): string =>
-        JSON.stringify(decodeFileReadCommandRouting(JSON.stringify(message))),
-    encode: async (message: unknown, _encryptor: PayloadEncryptor, signal: AbortSignal): Promise<string> => {
-        signal.throwIfAborted();
-        return JSON.stringify(decodeFileReadCommandRouting(JSON.stringify(message)));
-    },
-    decode: async (encoded: string, _decryptor: PayloadDecryptor, signal: AbortSignal): Promise<FileReadCommand> => {
-        signal.throwIfAborted();
-        return decodeFileReadCommandRouting(encoded);
-    },
+    publicRoutingSchema: fileReadCommandPublicRoutingSchema,
 });
 
 const contentWriteCommandPublicRoutingSchema = z.object({
