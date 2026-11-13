@@ -195,7 +195,8 @@ async function withDaemonConnection(
         });
     };
     let socket: WebSocket | undefined;
-    const stateDirectory = launch === "managed" ? join(directory, "state") : directory;
+    const stateDirectory =
+        launch === "managed" ? (await openMortyInstallation(signal, cliEnvironment)).stateDirectory : directory;
     const encryption = await createEncryptedDaemonFrames(stateDirectory, "real-agent", signal);
     const subscriptions = new Map<string, NativeSessionTarget>();
     let sendTail: Promise<void> = Promise.resolve();
@@ -511,6 +512,7 @@ export async function importRealSession(
     if (imported.action !== "import") {
         throw new Error("Expected a native Session import");
     }
+    await peer.subscribe(imported.target);
     return imported.target;
 }
 

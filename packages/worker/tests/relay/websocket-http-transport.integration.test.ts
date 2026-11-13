@@ -2,7 +2,9 @@ import { SELF } from "cloudflare:test";
 import { createClientPayloadEncryption, exportE2EPublicKey, generateE2EIdentity } from "@morty-build/client";
 import {
     CONTENT_CHUNK_MAX_BYTES,
+    CONTENT_UPLOAD_MAX_ENCODED_BYTES,
     encodeContentChunkFrame,
+    FILE_STREAM_CONTENT_TYPE,
     sessionEventsSubscribeCommandCodec,
 } from "@morty-build/client/protocol";
 import { expect, it, vi } from "vitest";
@@ -668,6 +670,33 @@ it("Given an incomplete upload consumes the aggregate byte budget, When its dead
     } finally {
         vi.useRealTimers();
     }
+});
+
+it("Given binary requests, when their declared sizes exceed their owning limits, then ordinary requests and encrypted uploads are both refused", async () => {
+    const daemon = new TextDaemonBoundary("uploaded");
+    const response = acceptWebSocketHttpTransport({
+        request: new Request("https://relay.test/morty/api/v1/transport", { headers: { Upgrade: "websocket" } }),
+        dispatch: daemon.fetch,
+    });
+    const socket = response.webSocket;
+    if (socket === null) {
+        throw new Error("Expected a WebSocket transport response");
+    }
+    socket.accept();
+    const ordinary = nextMessage(socket);
+    socket.send(JSON.stringify({
+        kind: "http.request", requestId: "ordinary-too-large", method: "POST",
+        path: "/morty/api/v1/computers/computer/sessions", headers: [], body: "", bodyByteLength: 12_582_913,
+    }));
+    expect(JSON.parse(await ordinary)).toMatchObject({ code: "invalid_message", requestId: "ordinary-too-large", status: 400 });
+    const upload = nextMessage(socket);
+    socket.send(JSON.stringify({
+        kind: "http.request", requestId: "encrypted-too-large", method: "PUT",
+        path: `/morty/api/v1/computers/computer/harnesses/codex/sessions/session/content/${"a".repeat(64)}`,
+        headers: [["content-type", FILE_STREAM_CONTENT_TYPE]], body: "", bodyByteLength: CONTENT_UPLOAD_MAX_ENCODED_BYTES + 1,
+    }));
+    expect(JSON.parse(await upload)).toMatchObject({ code: "invalid_message", requestId: "encrypted-too-large", status: 400 });
+    socket.close();
 });
 
 it("Given many incomplete binary uploads, When their count reaches the pending limit, Then another declaration is rejected", async () => {

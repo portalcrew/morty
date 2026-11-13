@@ -14,10 +14,15 @@ import {
     type PayloadEncryptor,
 } from "../encryption.ts";
 import { MortyApiError, MortyConnectionError, MortyProtocolError, MortyValidationError } from "../errors.ts";
+import { decodeMessageKind } from "../protocol/shared/message-codec.ts";
+import { sessionEventEnvelopeCodec } from "../protocol/session/events/index.ts";
+import { sessionCloseNoticeEventCodec } from "../protocol/session/lifecycle/index.ts";
 
 const CONNECTION_TIMEOUT_MILLISECONDS = 15_000;
 const HEARTBEAT_INTERVAL_MILLISECONDS = 20_000;
 const HEARTBEAT_TIMEOUT_MILLISECONDS = 10_000;
+const MAX_PENDING_LIVE_FANOUTS = 128;
+const MAX_PENDING_LIVE_FANOUT_BYTES = 32 * 1024 * 1024;
 
 export interface MortyTransportSessionEvent {
     readonly data: string;
@@ -38,6 +43,7 @@ type PayloadConnectionState =
     | { readonly kind: "idle" }
     | {
           readonly kind: "opening";
+          readonly scope: string;
           readonly operation: Promise<PayloadEncryptionConnection>;
           readonly controller: AbortController;
       }
@@ -67,7 +73,20 @@ type LiveEventSubscription =
           readonly cleanup: () => void;
           readonly controller: ReadableStreamDefaultController<MortyTransportSessionEvent>;
           readonly kind: "open";
-      };
+          readonly scope: string;
+       };
+
+type LiveMessage =
+    | Awaited<ReturnType<typeof sessionEventEnvelopeCodec.decode>>
+    | Awaited<ReturnType<typeof sessionCloseNoticeEventCodec.decode>>;
+interface LiveDecryption {
+    readonly read: () => Promise<LiveMessage>;
+}
+interface PendingLiveFanout {
+    readonly remaining: Set<string>;
+    readonly decryption: LiveDecryption;
+    readonly bytes: number;
+}
 
 const WS_REQUEST_KIND = "http.request";
 const WS_RESPONSE_KIND = "http.response";
@@ -173,6 +192,11 @@ export class WsTransport {
     readonly #connector: MortyWebSocketConnector;
     readonly #pending = new Map<string, PendingWsRequest>();
     readonly #subscriptions = new Map<string, LiveEventSubscription>();
+    readonly #liveDecryptions = new WeakMap<MortyTransportSessionEvent, LiveDecryption>();
+    readonly #pendingLiveFanouts = new Map<string, Map<string, PendingLiveFanout>>();
+    #pendingLiveFanoutCount = 0;
+    #pendingLiveFanoutBytes = 0;
+    #liveDecryptionController = new AbortController();
     #endpoint: string | null = null;
     #state: WsTransportState = { kind: "disconnected" };
     #access: ComputerEncryptionAccess | null = null;
@@ -402,6 +426,9 @@ export class WsTransport {
             const subscription = this.#subscriptions.get(id);
             this.#subscriptions.delete(id);
             subscription?.cleanup();
+            if (subscription?.kind === "open") {
+                this.#removeLiveFanoutSubscriber(id, subscription.scope);
+            }
             if (subscription?.kind === "opening") {
                 subscription.reject(request.signal.reason);
             } else {
@@ -411,7 +438,7 @@ export class WsTransport {
         };
         const cleanup = (): void => request.signal.removeEventListener("abort", abort);
         const events = new Promise<ReadableStream<MortyTransportSessionEvent>>((resolve, reject) => {
-            this.#subscriptions.set(id, { cleanup, kind: "opening", reject, resolve });
+            this.#subscriptions.set(id, { cleanup, kind: "opening", scope: requestUrl.href, reject, resolve });
         });
         request.signal.addEventListener("abort", abort, { once: true });
         try {

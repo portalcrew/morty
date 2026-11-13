@@ -2176,19 +2176,57 @@ describe.sequential("Relay Turn submission", () => {
     it("Given a Session credential, When the transport reaches ComputerRelay directly, Then the command executes without another relay hop and remains correlated", async () => {
         const runtime = await connectComputerDaemon("direct-runtime");
         try {
-            const submitted = runtime.submitComputerTurn("direct-command");
+            const signal = new AbortController().signal;
+            const encryption = await endpointEncryption(runtime.computerId, signal);
+            const encoded = await sessionPromptCommandCodec.encode(
+                {
+                    kind: "session.prompt",
+                    requestId: "direct-request",
+                    commandId: "direct-command",
+                    target: runtime.sessionTarget,
+                    prompt: "Direct execution",
+                    disposition: "append",
+                    attachments: [],
+                },
+                encryption.client,
+                signal,
+            );
+            const request = new Request(
+                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/turns`,
+                { method: "POST", headers: credentialHeaders(runtime.credential), body: encoded, signal },
+            );
+            const submitted = requestBrowserOperation(
+                (input) => env.COMPUTER_RELAY.getByName(runtime.computerId).fetch(input),
+                request,
+            );
             const first = await Promise.race([
                 runtime.daemonMessages.next().then((message) => ({ kind: "command", message })),
                 submitted.then((response) => ({ kind: "response", message: String(response.status) })),
             ]);
             expect(first.kind).toBe("command");
-            expect(decodeDaemonInboundMessage(first.message)).toMatchObject({
-                kind: "session.prompt",
-                commandId: "direct-command",
-                requestId: "direct-command",
-            });
-            runtime.startTurn("direct-command", "1");
-            expect(await responseJson(await submitted, 200)).toMatchObject({ state: { kind: "running" } });
+            expect(await decodeEncryptedDaemonInboundMessage(first.message, encryption.computer, signal)).toMatchObject(
+                {
+                    kind: "session.prompt",
+                    commandId: "direct-command",
+                    requestId: "direct-request",
+                },
+            );
+            runtime.daemon.send(
+                await sessionPromptAcceptedEventCodec.encode(
+                    {
+                        kind: "session.prompt.accepted",
+                        requestId: "direct-request",
+                        target: runtime.sessionTarget,
+                        state: "running",
+                    },
+                    encryption.computer,
+                    signal,
+                ),
+            );
+            const routed = await responseJson(await submitted, 200);
+            expect(
+                await sessionPromptAcceptedEventCodec.decode(JSON.stringify(routed), encryption.client, signal),
+            ).toMatchObject({ requestId: "direct-request", state: "running" });
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }

@@ -41,7 +41,7 @@ export class ControlledSetupRuntime implements SetupRuntime {
     };
 
     readonly encryptionAccess: SetupRuntime["encryptionAccess"] = async (_directory, computerId, signal) => {
-        const connection = Array.from(this.#saved.values()).find((entry) => entry.computer_id === computerId);
+        const connection = Array.from(this.#saved.values()).findLast((entry) => entry.computer_id === computerId);
         const daemon = connection === undefined ? undefined : this.#active.get(connection.pairingGeneration);
         if (daemon === undefined) {
             throw new Error("The requested computer has no local Runtime");
@@ -89,9 +89,25 @@ export class ControlledSetupRuntime implements SetupRuntime {
             credential: text(claim["computerCredential"], "Computer credential"),
             origin: pairing.relayOrigin,
         };
+        const prior = Array.from(this.#saved.values()).findLast(
+            (entry) => entry.computer_id === connection.computer_id,
+        );
+        const existing = prior === undefined ? undefined : this.#active.get(prior.pairingGeneration);
+        const credentials = memoryComputerCredentials(connection.credential);
         this.#saved.set(connection.pairingGeneration, connection);
-        this.#credentials.set(connection.pairingGeneration, memoryComputerCredentials(connection.credential));
-        await this.#connect(connection, signal);
+        this.#credentials.set(connection.pairingGeneration, credentials);
+        if (existing === undefined || prior === undefined) {
+            await this.#connect(connection, signal);
+        } else {
+            await existing.reconnectWithConnection({
+                computerId: connection.computer_id,
+                origin: connection.origin,
+                credentials,
+            });
+            this.#active.delete(prior.pairingGeneration);
+            this.#active.set(connection.pairingGeneration, existing);
+            this.#watch(connection.pairingGeneration, existing);
+        }
     };
 
     /**
@@ -126,13 +142,17 @@ export class ControlledSetupRuntime implements SetupRuntime {
             signal: new AbortController().signal,
         });
         this.#active.set(connection.pairingGeneration, daemon);
+        this.#watch(connection.pairingGeneration, daemon);
+    }
+
+    #watch(pairingGeneration: string, daemon: Awaited<ReturnType<typeof connectControlledAgentRuntime>>): void {
         void daemon.failure.catch((error: unknown) => {
-            if (this.#active.get(connection.pairingGeneration) !== daemon) {
+            if (this.#active.get(pairingGeneration) !== daemon) {
                 return;
             }
             // Like the manager's daemon, a revoked Computer stops its own connection and the others keep running.
             if (Reflect.get(Object(error), "code") === "computer_relay_revoked") {
-                this.#active.delete(connection.pairingGeneration);
+                this.#active.delete(pairingGeneration);
                 return;
             }
             this.#failed.reject(error);

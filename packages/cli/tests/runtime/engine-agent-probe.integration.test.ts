@@ -235,7 +235,9 @@ async function request(
         socket.send(await encryption.encode(JSON.stringify(message)));
         for await (const [encoded] of messages) {
             const raw = String(encoded);
-            if (raw === COMPUTER_HEARTBEAT_MESSAGE) continue;
+            if (raw === COMPUTER_HEARTBEAT_MESSAGE) {
+                continue;
+            }
             const decodedFrame = await encryption.decode(raw);
             if (typeof decodedFrame !== "string") {
                 throw new Error("Expected a text daemon response");

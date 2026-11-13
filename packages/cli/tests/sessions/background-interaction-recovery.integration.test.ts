@@ -61,7 +61,9 @@ test("Given a completed foreground turn, When its Agent requests background perm
     const next = async () => {
         const frame = frames.shift() ?? (await new Promise<string>((resolve) => readers.push(resolve)));
         const encoded = await encryption.decode(frame);
-        if (typeof encoded !== "string") throw new Error("Expected a text daemon response");
+        if (typeof encoded !== "string") {
+            throw new Error("Expected a text daemon response");
+        }
         switch (decodeMessageKind(encoded)) {
             case "session.ready":
                 return decodeSessionReadyEvent(encoded);
@@ -162,7 +164,9 @@ test("Given a completed foreground turn, When its Agent requests background perm
     try {
         const socket = await connected.promise;
         socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
-        const send = async (message: string): Promise<void> => { socket.send(await encryption.encode(message)); };
+        const send = async (message: string): Promise<void> => {
+            socket.send(await encryption.encode(message));
+        };
         const identity = {
             harness: "claude",
             directory: ".",
@@ -184,7 +188,13 @@ test("Given a completed foreground turn, When its Agent requests background perm
             created = await next();
         }
         const sessionTarget = created.target;
-        await send(JSON.stringify({ kind: "session.events.subscribe", subscriptionId: "background-subscription", target: sessionTarget }));
+        await send(
+            JSON.stringify({
+                kind: "session.events.subscribe",
+                subscriptionId: "background-subscription",
+                target: sessionTarget,
+            }),
+        );
         await send(
             encodeSessionPromptCommand({
                 requestId: "foreground",

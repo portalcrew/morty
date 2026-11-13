@@ -257,7 +257,11 @@ export async function connectControlledAgentRuntime(options: {
         },
         /** Re-pairs this same Computer without replacing its local identity or Agent-owned history. */
         reconnectWithConnection: async (next: ControlledComputerConnection): Promise<void> => {
-            if (state.kind === "disposed" || next.computerId !== connection.computerId || next.origin !== connection.origin) {
+            if (
+                state.kind === "disposed" ||
+                next.computerId !== connection.computerId ||
+                next.origin !== connection.origin
+            ) {
                 throw new Error("Cannot replace this controlled Computer connection");
             }
             await disconnect();

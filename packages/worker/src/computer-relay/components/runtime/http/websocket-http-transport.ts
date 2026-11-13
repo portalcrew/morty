@@ -1,5 +1,7 @@
 import {
+    CONTENT_UPLOAD_MAX_ENCODED_BYTES,
     decodeContentChunkFrame,
+    FILE_STREAM_CONTENT_TYPE,
     MORTY_API_PREFIX,
     sessionEventsSubscribeCommandCodec,
 } from "@morty-build/client/protocol";
@@ -23,7 +25,7 @@ import type { WebSocketHttpDispatch } from "../../../../contracts/websocket-http
 import { diagnosticText, serializeDiagnosticError } from "../../../../infra/log-diagnostics.ts";
 import { logger } from "../../../../infra/logger.ts";
 
-const MAX_PENDING_BINARY_BYTES = MAX_BODY_BYTES;
+const MAX_PENDING_BINARY_BYTES = CONTENT_UPLOAD_MAX_ENCODED_BYTES;
 const MAX_PENDING_BINARY_REQUESTS = 16;
 const BINARY_REQUEST_TIMEOUT_MILLISECONDS = 30_000;
 const IDLE_TIMEOUT_MILLISECONDS = 60_000;
@@ -82,21 +84,33 @@ function transportError(code: WebSocketTransportErrorCode): WebSocketTransportEr
     return new WebSocketTransportError(code);
 }
 
+function isEncryptedContentUpload(request: Request): boolean {
+    const path = new URL(request.url).pathname;
+    return request.method === "PUT" &&
+        request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() === FILE_STREAM_CONTENT_TYPE &&
+        new RegExp(`^${MORTY_API_PREFIX}/v1/computers/[^/]+/harnesses/[^/]+/sessions/[^/]+/content/[a-f0-9]{64}$`, "u").test(path);
+}
+
 /** Bounds buffering on this connection while the application admits each upload. */
 class ConnectionUploadBudget {
     #bytes = 0;
+    #ordinaryBytes = 0;
     #requests = 0;
 
-    readonly reserve = (bytes: number): void => {
-        if (this.#bytes + bytes > MAX_PENDING_BINARY_BYTES || this.#requests >= MAX_PENDING_BINARY_REQUESTS) {
+    readonly reserve = (bytes: number, encryptedUpload: boolean): void => {
+        if (this.#bytes + bytes > MAX_PENDING_BINARY_BYTES ||
+            (!encryptedUpload && this.#ordinaryBytes + bytes > MAX_BODY_BYTES) ||
+            this.#requests >= MAX_PENDING_BINARY_REQUESTS) {
             throw transportError("request_capacity_exceeded");
         }
         this.#bytes += bytes;
+        if (!encryptedUpload) this.#ordinaryBytes += bytes;
         this.#requests += 1;
     };
 
-    readonly release = (bytes: number): void => {
+    readonly release = (bytes: number, encryptedUpload: boolean): void => {
         this.#bytes -= bytes;
+        if (!encryptedUpload) this.#ordinaryBytes -= bytes;
         this.#requests -= 1;
     };
 }
@@ -114,18 +128,21 @@ class PendingBinaryUpload {
     readonly byteLength: number;
     readonly message: Readonly<Record<string, unknown>>;
     readonly #connectionBudget: ConnectionUploadBudget;
+    readonly #encryptedUpload: boolean;
     readonly #onFailure: (cause: unknown) => Promise<void>;
 
     constructor(
         byteLength: number,
         message: Readonly<Record<string, unknown>>,
         connectionBudget: ConnectionUploadBudget,
+        encryptedUpload: boolean,
         onFailure: (cause: unknown) => Promise<void>,
     ) {
-        connectionBudget.reserve(byteLength);
+        connectionBudget.reserve(byteLength, encryptedUpload);
         this.byteLength = byteLength;
         this.message = message;
         this.#connectionBudget = connectionBudget;
+        this.#encryptedUpload = encryptedUpload;
         this.#onFailure = onFailure;
         this.#timeout = setTimeout(() => {
             void this.fail(transportError("request_timeout"));
@@ -161,7 +178,7 @@ class PendingBinaryUpload {
         }
         this.#state = "closed";
         clearTimeout(this.#timeout);
-        this.#connectionBudget.release(this.byteLength);
+        this.#connectionBudget.release(this.byteLength, this.#encryptedUpload);
         this.#controller.abort();
         this.#ready.resolve(false);
     };
@@ -667,7 +684,6 @@ export function acceptWebSocketHttpTransport({
                         !Number.isSafeInteger(bodyByteLength) ||
                         typeof bodyByteLength !== "number" ||
                         bodyByteLength < 1 ||
-                        bodyByteLength > MAX_BODY_BYTES ||
                         requestBody(message).length !== 0 ||
                         binaryRequests.has(requestId)
                     ) {
@@ -684,10 +700,15 @@ export function acceptWebSocketHttpTransport({
                     if (declaration.request.method === "GET") {
                         throw transportError("invalid_message");
                     }
+                    const encryptedUpload = isEncryptedContentUpload(declaration.request);
+                    if (bodyByteLength > (encryptedUpload ? CONTENT_UPLOAD_MAX_ENCODED_BYTES : MAX_BODY_BYTES)) {
+                        throw transportError("invalid_message");
+                    }
                     const upload = new PendingBinaryUpload(
                         bodyByteLength,
                         message,
                         connectionUploads,
+                        encryptedUpload,
                         async (cause) => {
                             if (binaryRequests.get(requestId) !== upload) {
                                 return;
