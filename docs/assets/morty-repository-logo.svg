@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="853.3334" height="853.3333" viewBox="0 0 853.3334 853.3333">
+	<title>Morty logo</title>
+	<defs>
+		<filter id="filter3010043881" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+			<feComponentTransfer in="SourceAlpha" result="componentTransfer5860849203">
+				<feFuncR type="linear" slope="0" intercept="0.17271896"/>
+				<feFuncG type="linear" slope="0" intercept="0.18060784"/>
+				<feFuncB type="linear" slope="0" intercept="0.36435547"/>
+				<feFuncA type="linear" slope="10000" intercept="0"/>
+			</feComponentTransfer>
+			<feComponentTransfer in="componentTransfer5860849203" result="componentTransfer5794122581">
+				<feFuncA type="linear" slope="0.090000004" intercept="0"/>
+			</feComponentTransfer>
+			<feOffset dx="0" dy="77.57576" in="componentTransfer5794122581" result="offset4530031183"/>
+			<feGaussianBlur stdDeviation="85.333336" in="offset4530031183" result="gaussianBlur2293382100"/>
+			<feMerge>
+				<feMergeNode in="gaussianBlur2293382100"/>
+				<feMergeNode in="SourceGraphic"/>
+			</feMerge>
+		</filter>
+	</defs>
+	<g filter="url(#filter3010043881)">
+		<rect width="512" height="512" transform="matrix(1 0 0 1 170.667 93.0908)" fill="rgb(255, 255, 255)"/>
+		<defs>
+			<clipPath id="clipPath5697474711">
+				<path d="M0 0L512 0L512 512L0 512L0 0Z" fill-rule="nonzero" transform="matrix(1 0 0 1 170.667 93.0908)"/>
+			</clipPath>
+		</defs>
+		<g clip-path="url(#clipPath5697474711)">
+			<path d="M187.248 121.795C187.248 138.151 173.99 151.409 157.634 151.409L53.4678 151.409C33.5476 151.409 16.2642 137.66 11.7845 118.25L11.3988 116.578C7.10668 97.9791 11.2389 78.4338 22.6916 63.1635L22.7365 63.1036C44.6106 33.9538 75.6227 13.0836 110.858 3.77606L118.129 1.85546C153.052 -7.36955 187.248 18.9663 187.248 55.0874L187.248 121.795ZM206.991 57.1837C206.991 51.9798 211.209 47.7612 216.413 47.7612L216.832 47.7612C268.871 47.7612 310.639 89.9475 310.639 141.987L310.639 142.004C310.639 147.208 306.42 151.41 301.217 151.41L235.259 151.41C219.647 151.41 206.991 138.754 206.991 123.142L206.991 57.1837ZM30.7668 171.152C10.2843 171.152 -4.47231 190.802 1.23844 210.472L1.27794 210.608C21.831 281.397 76.9999 336.579 147.792 357.122L147.928 357.162C167.598 362.872 187.248 348.116 187.248 327.633L187.248 200.766C187.248 184.411 173.99 171.152 157.634 171.152L30.7668 171.152ZM236.605 171.152C220.249 171.152 206.991 184.411 206.991 200.766L206.991 304.932C206.991 324.853 220.74 342.136 240.15 346.616L241.822 347.001C260.421 351.294 279.966 347.161 295.237 335.709L295.296 335.664C324.446 313.79 345.316 282.778 354.624 247.542L356.544 240.271C365.77 205.348 339.434 171.152 303.313 171.152L236.605 171.152Z" fill-rule="evenodd" transform="matrix(1 0 0 1 247.667 170.091)" fill="rgb(255, 255, 255)"/>
+			<defs>
+				<mask id="mask8008177130" style="mask-type:alpha">
+					<path d="M187.248 121.795C187.248 138.151 173.99 151.409 157.634 151.409L53.4678 151.409C33.5476 151.409 16.2642 137.66 11.7845 118.25L11.3988 116.578C7.10668 97.9791 11.2389 78.4338 22.6916 63.1635L22.7365 63.1036C44.6106 33.9538 75.6227 13.0836 110.858 3.77606L118.129 1.85546C153.052 -7.36955 187.248 18.9663 187.248 55.0874L187.248 121.795ZM206.991 57.1837C206.991 51.9798 211.209 47.7612 216.413 47.7612L216.832 47.7612C268.871 47.7612 310.639 89.9475 310.639 141.987L310.639 142.004C310.639 147.208 306.42 151.41 301.217 151.41L235.259 151.41C219.647 151.41 206.991 138.754 206.991 123.142L206.991 57.1837ZM30.7668 171.152C10.2843 171.152 -4.47231 190.802 1.23844 210.472L1.27794 210.608C21.831 281.397 76.9999 336.579 147.792 357.122L147.928 357.162C167.598 362.872 187.248 348.116 187.248 327.633L187.248 200.766C187.248 184.411 173.99 171.152 157.634 171.152L30.7668 171.152ZM236.605 171.152C220.249 171.152 206.991 184.411 206.991 200.766L206.991 304.932C206.991 324.853 220.74 342.136 240.15 346.616L241.822 347.001C260.421 351.294 279.966 347.161 295.237 335.709L295.296 335.664C324.446 313.79 345.316 282.778 354.624 247.542L356.544 240.271C365.77 205.348 339.434 171.152 303.313 171.152L236.605 171.152Z" fill-rule="evenodd" transform="matrix(1 0 0 1 247.667 170.091)" fill="rgb(0, 0, 0)"/>
+				</mask>
+			</defs>
+			<g mask="url(#mask8008177130)">
+				<g opacity="0.8">
+					<defs>
+						<filter id="filter1662311791" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+							<feGaussianBlur in="SourceGraphic" stdDeviation="41.845589"/>
+						</filter>
+					</defs>
+					<g filter="url(#filter1662311791)">
+						<ellipse cx="107.32875" cy="83.713455" rx="107.32875" ry="83.713455" transform="matrix(0.979109 0.203336 -0.203336 0.979109 176.494 219.443)" fill="rgb(38, 219, 255)"/>
+					</g>
+				</g>
+				<g opacity="0.9">
+					<defs>
+						<filter id="filter8381160754" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+							<feGaussianBlur in="SourceGraphic" stdDeviation="41.845589"/>
+						</filter>
+					</defs>
+					<g filter="url(#filter8381160754)">
+						<ellipse cx="173.81381" cy="107.0377" rx="173.81381" ry="107.0377" transform="matrix(0.979109 0.203336 -0.203336 0.979109 238.044 328.718)" fill="rgb(78, 102, 252)"/>
+					</g>
+				</g>
+				<g opacity="0.8">
+					<defs>
+						<filter id="filter3122456719" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+							<feGaussianBlur in="SourceGraphic" stdDeviation="41.845589"/>
+						</filter>
+					</defs>
+					<g filter="url(#filter3122456719)">
+						<ellipse cx="152.32288" cy="122.04326" rx="152.32288" ry="122.04326" transform="matrix(0.979109 0.203336 -0.203336 0.979109 341.32 308.279)" fill="rgb(38, 68, 255)"/>
+					</g>
+				</g>
+				<g opacity="0.8">
+					<defs>
+						<filter id="filter4880736878" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+							<feGaussianBlur in="SourceGraphic" stdDeviation="41.845589"/>
+						</filter>
+					</defs>
+					<g filter="url(#filter4880736878)">
+						<ellipse cx="100.33524" cy="67.141754" rx="100.33524" ry="67.141754" transform="matrix(0.979109 0.203336 -0.203336 0.979109 375.579 427.54)" fill="rgb(38, 68, 255)"/>
+					</g>
+				</g>
+				<defs>
+					<filter id="filter1538302729" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+						<feGaussianBlur in="SourceGraphic" stdDeviation="80"/>
+					</filter>
+				</defs>
+				<g filter="url(#filter1538302729)">
+					<ellipse cx="195.12804" cy="176.32162" rx="195.12804" ry="176.32162" transform="matrix(0.942533 0.334111 -0.334111 0.942534 289.364 -33.7842)" fill="rgb(255, 145, 218)"/>
+				</g>
+				<g opacity="0.8">
+					<defs>
+						<filter id="filter4873160158" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+							<feGaussianBlur in="SourceGraphic" stdDeviation="41.845589"/>
+						</filter>
+					</defs>
+					<g filter="url(#filter4873160158)">
+						<ellipse cx="70.994827" cy="64.52002" rx="70.994827" ry="64.52002" transform="matrix(0.979109 0.203336 -0.203336 0.979109 171.905 252.091)" fill="rgb(38, 219, 255)"/>
+					</g>
+				</g>
+				<g opacity="0.8">
+					<defs>
+						<filter id="filter3261824826" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+							<feGaussianBlur in="SourceGraphic" stdDeviation="41.845589"/>
+						</filter>
+					</defs>
+					<g filter="url(#filter3261824826)">
+						<ellipse cx="45.092636" cy="45.271599" rx="45.092636" ry="45.271599" transform="matrix(0.979109 0.203336 -0.203336 0.979109 536.366 280.753)" fill="rgb(87, 227, 255)"/>
+					</g>
+				</g>
+				<defs>
+					<filter id="filter2021938177" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+						<feGaussianBlur in="SourceGraphic" stdDeviation="35.568745"/>
+					</filter>
+				</defs>
+				<g filter="url(#filter2021938177)">
+					<ellipse cx="163.0724" cy="38.452366" rx="163.0724" ry="38.452366" transform="matrix(0.942533 0.334111 -0.334111 0.942534 273.361 96.8756)" fill="rgb(255, 227, 137)" fill-opacity="0.98"/>
+				</g>
+				<defs>
+					<filter id="filter4689883474" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+						<feGaussianBlur in="SourceGraphic" stdDeviation="35.568745"/>
+					</filter>
+				</defs>
+				<g filter="url(#filter4689883474)">
+					<ellipse cx="112.50252" cy="26.528021" rx="112.50252" ry="26.528021" transform="matrix(0.942533 0.334111 -0.334111 0.942534 335.041 117.226)" fill="rgb(255, 241, 196)" fill-opacity="0.98"/>
+				</g>
+			</g>
+		</g>
+	</g>
+</svg>
