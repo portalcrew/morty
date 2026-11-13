@@ -6,7 +6,6 @@ import {
     ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     type NativeSessionEvents,
     type NativeSessionTarget,
-    type QueuedPromptRequestEventLog,
     type SESSION_HISTORY_PAGE_LOAD_KIND,
     SESSION_HISTORY_PAGE_LOADED_KIND,
     type SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND,
@@ -21,7 +20,6 @@ import { SessionError } from "../../../session/api/session-error.ts";
 import type { SessionEventPage } from "../../../session/history/session-event-store.ts";
 import type { SessionManager } from "../../../session/manager/session-manager.ts";
 import type { NativeSessionService } from "../../../session/native/native-session-browser.ts";
-import type { PromptLifecycle } from "../../../session/prompt/prompt-lifecycle.ts";
 import { resolveSessionDirectory } from "../../../session/workspace/resolve-session-directory.ts";
 import type { WorkspaceDirectoryService } from "../../../session/workspace/workspace-directory.ts";
 import type { RelayConnectionDiagnostics } from "../../relay/diagnostics.ts";
@@ -44,7 +42,6 @@ async function loadHistoryPage(
     target: NativeSessionTarget,
     eventLimit: number,
     initialCursor: string | null,
-    queuedPromptRequests: readonly QueuedPromptRequestEventLog[],
     load: (eventLimit: number, cursor: string | null) => Promise<SessionEventPage>,
 ): Promise<NativeSessionEvents> {
     let cursor = initialCursor;
@@ -101,7 +98,6 @@ async function loadHistoryPage(
             truncated: false,
             version: 2,
         },
-        queuedPromptRequests,
     };
     let privateBytes = Buffer.byteLength(JSON.stringify({ events: empty }));
     if (!fitsHistoryFrame(privateBytes)) {
@@ -141,7 +137,6 @@ async function loadHistoryPage(
             truncated: nextCursor !== null,
             version: 2,
         },
-        queuedPromptRequests,
     };
 }
 
@@ -153,7 +148,6 @@ async function executeSessionHistoryPageLoad(
     diagnostics: RelayConnectionDiagnostics,
     sessions: SessionManager,
     nativeSessions: NativeSessionService,
-    eventProjection: PromptLifecycle,
     signal: AbortSignal,
 ): Promise<void> {
     const { socket, payloadEncryption } = context;
@@ -171,12 +165,10 @@ async function executeSessionHistoryPageLoad(
             target: command.target,
             signal,
         };
-        const recovery = eventProjection.promptRequestRecovery(command.target);
         const events = await loadHistoryPage(
             command.target,
             command.eventLimit,
             command.cursor,
-            recovery.queuedPromptRequests,
             async (eventLimit, cursor) => await sessions.loadSessionEvents(loadOptions, eventLimit, cursor),
         );
         signal.throwIfAborted();
@@ -236,7 +228,6 @@ async function executeSessionPreviewHistoryPageLoad(
             command.target,
             command.eventLimit,
             command.cursor,
-            [],
             async (eventLimit, cursor) =>
                 await nativeSessions.readSessionHistory(loadOptions, command.target.sessionId, eventLimit, cursor),
         );
@@ -287,7 +278,6 @@ export const handleSessionHistoryPageLoad: CommandHandler<typeof SESSION_HISTORY
         context.diagnostics,
         context.sessions,
         context.nativeSessions,
-        context.eventProjection,
         context.signal,
     );
 };

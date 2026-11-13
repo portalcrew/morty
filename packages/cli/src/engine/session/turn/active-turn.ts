@@ -3,28 +3,12 @@ import { sameNativeSession } from "@morty-build/client/native-session";
 import {
     decodeIdentifier,
     type NativeSessionResult,
-    type NativeSessionTarget,
-    SESSION_ELICITATION_REQUESTED_KIND,
-    SESSION_ELICITATION_RESOLVED_KIND,
-    SESSION_PERMISSION_REQUESTED_KIND,
-    SESSION_PERMISSION_RESOLVED_KIND,
-    type SessionElicitationRequestedEvent,
-    type SessionElicitationResolvedEvent,
-    type SessionPermissionRequestedEvent,
-    type SessionPermissionResolvedEvent,
     type SessionPromptCommand,
     SessionPromptDisposition,
     type SessionPromptDispositionCommand,
 } from "@morty-build/client/protocol";
 
 type ActiveTurnSnapshot = Extract<NativeSessionResult, { readonly action: "active-turn" }>["turn"];
-
-/** Interaction events the daemon folds into an in-flight prompt Turn. */
-export type RecordedSessionEvent =
-    | SessionElicitationRequestedEvent
-    | SessionElicitationResolvedEvent
-    | SessionPermissionRequestedEvent
-    | SessionPermissionResolvedEvent;
 
 /**
  * How an admitted prompt executes: as its own turn, or by steering the running turn of `targetCommandId`. An appended
@@ -72,11 +56,6 @@ export class ActiveRuntimeTurn {
     readonly #startedAt: () => string | undefined;
     readonly #executing: () => boolean;
     #admission: TurnAdmission = { kind: "waiting" };
-    #sequence = 0;
-    #interaction: Extract<
-        RecordedSessionEvent,
-        { readonly kind: typeof SESSION_PERMISSION_REQUESTED_KIND | typeof SESSION_ELICITATION_REQUESTED_KIND }
-    > | null = null;
 
     /**
      * `started` and `startedAt` read the command's execution receipt, the single owner of whether and when the command
@@ -187,24 +166,6 @@ export class ActiveRuntimeTurn {
             ? this.#admission.dispatch.targetCommandId
             : this.command.commandId;
 
-    readonly recordEvent = (event: RecordedSessionEvent): RecordedSessionEvent => {
-        if (
-            !sameNativeSession(event.target, this.command.target) ||
-            ("commandId" in event && event.commandId !== this.command.commandId)
-        ) {
-            return event;
-        }
-        if (event.kind === SESSION_PERMISSION_REQUESTED_KIND || event.kind === SESSION_ELICITATION_REQUESTED_KIND) {
-            this.#interaction = event;
-        } else if (
-            (event.kind === SESSION_PERMISSION_RESOLVED_KIND || event.kind === SESSION_ELICITATION_RESOLVED_KIND) &&
-            this.#interaction?.interactionId === event.interactionId
-        ) {
-            this.#interaction = null;
-        }
-        return event;
-    };
-
     readonly snapshot = (): ActiveTurnSnapshot => {
         const startedAt = this.#startedAt();
         if (startedAt === undefined) {
@@ -214,15 +175,10 @@ export class ActiveRuntimeTurn {
         return {
             commandId: decodeIdentifier(this.command.commandId),
             epoch: this.epoch,
-            interaction: this.#interaction,
-            sequence: this.#sequence,
             startedAt,
             state: "running",
         };
     };
-
-    readonly matchesInteraction = (interactionId: string, sessionTarget: NativeSessionTarget): boolean =>
-        sameNativeSession(this.command.target, sessionTarget) && this.#interaction?.interactionId === interactionId;
 
     /**
      * Withdraws the prompt while the Session has not begun executing it; otherwise names the execution whose

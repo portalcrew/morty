@@ -1,11 +1,9 @@
 import {
     type NativeSessionTarget,
-    SESSION_ELICITATION_RESOLVED_KIND,
-    SESSION_PERMISSION_RESOLVED_KIND,
     type SessionPromptCommand,
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
-import { ActiveRuntimeTurn, type PromptDispatch, type RecordedSessionEvent } from "./active-turn.ts";
+import { ActiveRuntimeTurn, type PromptDispatch } from "./active-turn.ts";
 import type { ExecutionReceipts } from "./execution-receipts.ts";
 
 /** Whether the Session began executing the command and still holds it, as its execution authority answers. */
@@ -84,23 +82,6 @@ export class SessionExecutionState {
     readonly finish = (turn: ActiveRuntimeTurn): void => {
         this.#turnsByCommandId.delete(turn.command.commandId);
         turn.finish();
-    };
-
-    readonly recordEvent = (event: RecordedSessionEvent): RecordedSessionEvent => {
-        if ("commandId" in event) {
-            const turn = this.#turnsByCommandId.get(event.commandId);
-            if (turn !== undefined) {
-                return turn.recordEvent(event);
-            }
-        }
-        if (event.kind === SESSION_PERMISSION_RESOLVED_KIND || event.kind === SESSION_ELICITATION_RESOLVED_KIND) {
-            for (const turn of this.#turnsByCommandId.values()) {
-                if (turn.matchesInteraction(event.interactionId, this.#sessionTarget)) {
-                    return turn.recordEvent(event);
-                }
-            }
-        }
-        return event;
     };
 
     readonly turns = (): readonly ActiveRuntimeTurn[] => [...this.#turnsByCommandId.values()];

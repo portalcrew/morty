@@ -542,21 +542,7 @@ const sessionEventLogPageSchema = z
     })
     .readonly();
 export type SessionEventLogPage = z.infer<typeof sessionEventLogPageSchema>;
-const queuedPromptRequestEventLogSchema = z
-    .object({
-        commandId: identifier,
-        content: z.array(contentBlockSchema).min(1).max(100).readonly(),
-        disposition: shortString.optional(),
-        targetCommandId: identifier.optional(),
-    })
-    .readonly();
-export type QueuedPromptRequestEventLog = z.infer<typeof queuedPromptRequestEventLogSchema>;
-export const nativeSessionEventsSchema = z
-    .object({
-        events: sessionEventLogPageSchema,
-        queuedPromptRequests: z.array(queuedPromptRequestEventLogSchema).max(MAX_COLLECTION_SIZE).readonly(),
-    })
-    .readonly();
+export const nativeSessionEventsSchema = z.object({ events: sessionEventLogPageSchema }).readonly();
 export type NativeSessionEvents = z.infer<typeof nativeSessionEventsSchema>;
 
 function inputValue(value: unknown): unknown {
@@ -592,17 +578,7 @@ function sanitizeConsumableNativeSessionEvents(value: unknown): unknown {
     if (!isRecord(input)) {
         return input;
     }
-    const page = input["events"];
-    const queuedPromptRequests = input["queuedPromptRequests"];
-    return {
-        ...input,
-        events: sanitizeConsumableSessionEventLogPage(page),
-        queuedPromptRequests: decodedEntries(
-            queuedPromptRequests,
-            queuedPromptRequestEventLogSchema,
-            MAX_COLLECTION_SIZE,
-        ),
-    };
+    return { ...input, events: sanitizeConsumableSessionEventLogPage(input["events"]) };
 }
 function sanitizeConsumableSessionEventLogPage(value: unknown): unknown {
     const input = inputValue(value);

@@ -146,7 +146,6 @@ export type {
     PromptCompletion,
     PromptExecutionContext,
     PromptTerminalLifecycle,
-    QueuedPromptRequestEventLog,
     SessionEvent,
     SessionEventEnvelope,
     SessionEventEnvelopeRouting,

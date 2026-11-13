@@ -9,7 +9,7 @@ import { resolveSessionDirectory } from "../workspace/resolve-session-directory.
 import type { WorkspaceDirectoryService } from "../workspace/workspace-directory.ts";
 import { applyCompleteSessionConfiguration } from "./apply-session-configuration.ts";
 import { PromptArtifactError, type ReadPromptArtifact, resolvePromptArtifacts } from "./prompt-artifacts.ts";
-import type { PromptLifecycle } from "./prompt-lifecycle.ts";
+import { type PromptLifecycle, promptLifecycle } from "./prompt-lifecycle.ts";
 
 export interface ExecutePromptOptions {
     readonly eventProjection: PromptLifecycle;
@@ -89,7 +89,13 @@ export async function executePrompt({
             prepared = await sessions.prepareExecutionSession(preparation);
         }
         signal.throwIfAborted();
-        const lifecycle = eventProjection.lifecycle(command.target, command.commandId, attemptId, epoch, dispatch);
+        const lifecycle = promptLifecycle(
+            command,
+            { harness: session.harness, directory: session.cwd },
+            attemptId,
+            epoch,
+            dispatch,
+        );
         const attachments = await resolvePromptArtifacts(readArtifact, command.attachments, signal);
         const skipped = command.attachments.length - attachments.images.length - attachments.resources.length;
         if (skipped > 0) {

@@ -563,7 +563,6 @@ describe.sequential("Relay Session-only boundary", () => {
                         truncated: false,
                         version: 2,
                     },
-                    queuedPromptRequests: [],
                 },
             };
             const historyAddress = {
@@ -597,7 +596,6 @@ describe.sequential("Relay Session-only boundary", () => {
                         truncated: false,
                         version: 2,
                     },
-                    queuedPromptRequests: [],
                 },
             });
             // Browser transports are not hibernatable. Finish the subscription before waking the daemon again.
@@ -1840,7 +1838,7 @@ describe.sequential("Relay Turn submission", () => {
                         kind: "session.live-history.v2.page.loaded",
                         requestId: command.requestId,
                         target: runtime.sessionTarget,
-                        events: { events: page, queuedPromptRequests: [] },
+                        events: { events: page },
                     },
                     encryption.computer,
                     signal,

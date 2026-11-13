@@ -129,7 +129,6 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
         );
         return;
     }
-    context.eventProjection.requested(message, { harness: session.harness, directory: session.cwd });
     const { commandId, requestId, target } = message;
     // A prompt is answered once, at the first of: it entered the queue, it started, or it ended without starting.
     let answered = false;

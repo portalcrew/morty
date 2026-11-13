@@ -48,7 +48,6 @@ test("Given a newly created real Codex Session, When Chat requests its V2 histor
                         truncated: false,
                         version: 2,
                     },
-                    queuedPromptRequests: [],
                 },
                 requestId,
                 target: sessionTarget,

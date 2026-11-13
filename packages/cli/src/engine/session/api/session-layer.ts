@@ -82,7 +82,6 @@ export function buildSessionLayer(options: SessionLayerOptions) {
             eventProjection.record(recorded);
         },
         (sessionTarget, event, recordedAt) => events.append(sessionTarget, event, recordedAt),
-        activeSessions.recordSessionEvent,
         operations,
     );
     // The Session's commands, receipts, interactions and event position are read in one synchronous step.

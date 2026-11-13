@@ -3,7 +3,6 @@ import type {
     ContentBlock,
     NativeSessionTarget,
     PromptExecutionContext,
-    QueuedPromptRequestEventLog,
     SessionCancelCommand,
     SessionEventPayload,
     SessionLiveEvent,
@@ -15,19 +14,6 @@ import { SessionError } from "../api/session-error.ts";
 import type { PromptDispatch } from "../turn/active-turn.ts";
 import type { ExecutionReceipts, RestatedOutcome } from "../turn/execution-receipts.ts";
 import { isTextPromptResourceMediaType } from "./prompt-artifacts.ts";
-
-interface QueuedPromptRequest {
-    readonly commandId: string;
-    readonly content: readonly ContentBlock[];
-    readonly disposition?: string;
-    readonly target: NativeSessionTarget;
-    readonly targetCommandId?: string;
-    readonly context: PromptExecutionContext;
-}
-
-export interface PromptRequestRecovery {
-    readonly queuedPromptRequests: readonly QueuedPromptRequestEventLog[];
-}
 
 function promptContent(command: SessionPromptCommand): readonly ContentBlock[] {
     const content: ContentBlock[] = [];
@@ -57,6 +43,32 @@ function promptContent(command: SessionPromptCommand): readonly ContentBlock[] {
     return content;
 }
 
+/** The lifecycle metadata the Agent session records when it starts this claimed command. */
+export function promptLifecycle(
+    command: SessionPromptCommand,
+    context: PromptExecutionContext,
+    attemptId: string,
+    epoch: string,
+    dispatch: PromptDispatch,
+): {
+    readonly attemptId: string;
+    readonly content: readonly ContentBlock[];
+    readonly disposition: string;
+    readonly epoch: string;
+    readonly context: PromptExecutionContext;
+    readonly targetCommandId?: string;
+} {
+    return {
+        attemptId,
+        content: promptContent(command),
+        epoch,
+        context,
+        ...(dispatch.kind === "steer"
+            ? { disposition: SessionPromptDisposition.Steer, targetCommandId: dispatch.targetCommandId }
+            : { disposition: SessionPromptDisposition.Append }),
+    };
+}
+
 /** Whether a command started or settled, as its execution receipt records it. */
 type ExecutionProgress = Pick<ExecutionReceipts, "findUnsettledAttemptId" | "hasStarted" | "isTerminalExecution">;
 
@@ -65,8 +77,6 @@ export class PromptLifecycle {
     /** Terminal events held until their command's admission and execution state are released. */
     readonly #terminal = new Map<string, SessionLiveEvent>();
     readonly #publications = new NativeSessionMap<SessionLiveEvent[]>();
-    readonly #queued = new Map<string, QueuedPromptRequest>();
-    readonly #recordActiveTurn: (event: SessionLiveEvent) => void;
     readonly #executions: ExecutionProgress;
 
     readonly #recordLifecycle: (sessionTarget: NativeSessionTarget, event: SessionEventPayload) => Promise<void>;
@@ -83,62 +93,15 @@ export class PromptLifecycle {
             event: SessionEventPayload,
             recordedAt?: string,
         ) => SessionLiveEvent,
-        recordActiveTurn: (event: SessionLiveEvent) => void,
         executions: ExecutionProgress,
     ) {
         this.#recordLifecycle = recordLifecycle;
         this.#append = append;
-        this.#recordActiveTurn = recordActiveTurn;
         this.#executions = executions;
         this.#sink = sink;
     }
 
-    /** Registers a prompt for the Session it names, which runs in `context`: the Session's own Agent and directory. */
-    readonly requested = (command: SessionPromptCommand, context: PromptExecutionContext): void => {
-        this.#queued.set(command.commandId, {
-            commandId: command.commandId,
-            content: promptContent(command),
-            disposition: command.disposition,
-            context,
-            target: command.target,
-            ...(command.disposition === SessionPromptDisposition.Steer
-                ? { targetCommandId: command.targetCommandId }
-                : {}),
-        });
-    };
-
-    /** The lifecycle metadata the Agent session records when it starts this claimed command. */
-    readonly lifecycle = (
-        sessionTarget: NativeSessionTarget,
-        commandId: string,
-        attemptId: string,
-        epoch: string,
-        dispatch: PromptDispatch,
-    ): {
-        readonly attemptId: string;
-        readonly content: readonly ContentBlock[];
-        readonly disposition?: string;
-        readonly epoch: string;
-        readonly context: PromptExecutionContext;
-        readonly targetCommandId?: string;
-    } => {
-        const request = this.#queued.get(commandId);
-        if (request !== undefined && sameNativeSession(request.target, sessionTarget)) {
-            return {
-                attemptId,
-                content: request.content,
-                epoch,
-                context: request.context,
-                ...(dispatch.kind === "steer"
-                    ? { disposition: SessionPromptDisposition.Steer, targetCommandId: dispatch.targetCommandId }
-                    : { disposition: SessionPromptDisposition.Append }),
-            };
-        }
-        throw new Error("The executing prompt was not registered in the V2 queue");
-    };
-
     readonly record = (recorded: SessionLiveEvent): void => {
-        this.#recordActiveTurn(recorded);
         const sessionTarget = recorded.target;
         if (recorded.type === "lifecycle-metadata" && isPromptTerminal(recorded.payload)) {
             // Publish termination after prompt admission and execution state are settled.
@@ -185,7 +148,6 @@ export class PromptLifecycle {
                 this.#publications.delete(sessionTarget);
             }
         }
-        this.#queued.delete(commandId);
     };
 
     readonly recordOutcome = async (sessionTarget: NativeSessionTarget, event: SessionEventPayload): Promise<void> => {
@@ -224,12 +186,7 @@ export class PromptLifecycle {
         commandId: string,
         stopReason: string,
     ): Promise<void> => {
-        const request = this.#queued.get(commandId);
-        if (
-            request === undefined ||
-            !sameNativeSession(request.target, sessionTarget) ||
-            this.#executions.isTerminalExecution(commandId, sessionTarget)
-        ) {
+        if (this.#executions.isTerminalExecution(commandId, sessionTarget)) {
             return;
         }
         await this.#recordLifecycle(sessionTarget, {
@@ -265,21 +222,6 @@ export class PromptLifecycle {
                 : { kind: "prompt.failed-before-start", commandId, code, message },
         });
     };
-
-    readonly promptRequestRecovery = (sessionTarget: NativeSessionTarget): PromptRequestRecovery => ({
-        queuedPromptRequests: [...this.#queued.values()]
-            .filter(
-                (request) =>
-                    sameNativeSession(request.target, sessionTarget) &&
-                    !this.#executions.hasStarted(request.commandId, sessionTarget),
-            )
-            .map(({ commandId, content, disposition, targetCommandId }) => ({
-                commandId,
-                content,
-                ...(disposition === undefined ? {} : { disposition }),
-                ...(targetCommandId === undefined ? {} : { targetCommandId }),
-            })),
-    });
 }
 
 export async function settleAbandonedTurn(

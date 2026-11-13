@@ -239,7 +239,6 @@ test("Given real Codex advances between repeated prompts, When V2 recovery pagin
                 if (result.requestId !== requestId) {
                     continue;
                 }
-                expect(result.events.queuedPromptRequests).toEqual([]);
                 const sessionGenerationId = result.events.events.sessionGenerationId;
                 const historyEvents = [...result.events.events.events];
                 let cursor = result.events.events.nextCursor;
@@ -365,28 +364,6 @@ test("Given real Codex with an active turn, When three follow-ups are accepted a
                         break;
                     }
                 }
-            }
-            peer.send(
-                encodeSessionHistoryPageLoad({
-                    cursor: null,
-                    eventLimit: 25,
-                    kind: "session.live-history.v2.page.load",
-                    requestId: randomUUID(),
-                    target: peer.target,
-                }),
-            );
-            for (;;) {
-                const message = await peer.nextMessage();
-                if (decodeMessageKind(message) !== "session.live-history.v2.page.loaded") {
-                    continue;
-                }
-                const recovered = decodeSessionHistoryPageLoaded(message).events;
-                expect(recovered.queuedPromptRequests).toEqual([
-                    expect.objectContaining({ commandId: first }),
-                    expect.objectContaining({ commandId: cancelled }),
-                    expect.objectContaining({ commandId: last }),
-                ]);
-                break;
             }
             peer.send(
                 encodeSessionCancelCommand({

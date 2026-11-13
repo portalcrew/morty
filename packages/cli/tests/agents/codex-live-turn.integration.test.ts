@@ -170,8 +170,6 @@ test("Given real Codex streams commentary after a tool, When clients watch and r
                         expect(result.turn).toMatchObject({
                             commandId,
                             epoch: expect.any(String),
-                            interaction: null,
-                            sequence: expect.any(Number),
                             state: "running",
                         });
                     }
