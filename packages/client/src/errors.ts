@@ -20,12 +20,16 @@ export class MortyApiError extends MortyError {
 
 /** A validated Computer reply, distinct from HTTP, malformed responses, and an attempt whose outcome is unknown. */
 export class MortyOperationError extends MortyError {
-    readonly recovery: "terminal" | "retryable";
+    /**
+     * What the Computer's reply says of the operation: it `refused` it and nothing ran, it `applied` it already and
+     * will not run it again, or the reply does not say, so the operation may have run and may be repeated.
+     */
+    readonly outcome: "refused" | "applied" | "unknown";
 
-    constructor(code: string, message: string, recovery: "terminal" | "retryable", options: ErrorOptions = {}) {
+    constructor(code: string, message: string, outcome: "refused" | "applied" | "unknown", options: ErrorOptions = {}) {
         super(code, message, options);
         this.name = "MortyOperationError";
-        this.recovery = recovery;
+        this.outcome = outcome;
     }
 }
 

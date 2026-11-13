@@ -98,7 +98,7 @@ test("Given native operation capacity is occupied, When I reopen a saved Session
     await expect(daemon.readExecution(sessionId, signal)).rejects.toMatchObject({
         name: "MortyOperationError",
         code: "native_session_busy",
-        recovery: "retryable",
+        outcome: "unknown",
     });
     const reloaded = await app.reload();
     await clock.waitForSleep(1000, AbortSignal.timeout(10_000));

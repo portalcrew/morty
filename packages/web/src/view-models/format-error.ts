@@ -86,7 +86,7 @@ export function isSessionClosedFailure(cause: unknown): cause is MortyError {
  */
 export function isRetryableComputerConnectionFailure(cause: unknown): boolean {
     if (cause instanceof MortyOperationError) {
-        return cause.recovery === "retryable";
+        return cause.outcome === "unknown";
     }
     if (
         isApiConnectionError(cause) ||
