@@ -2,11 +2,12 @@ import type {
     ClientCommand,
     ClientRequest,
     SessionEventsUnsubscribeControl,
+    WorkerFileCredit,
     WorkerRequestCancel,
 } from "@morty-build/client/protocol";
 import type { CommandContext } from "./context.ts";
 
-export type DaemonCommand = ClientCommand | SessionEventsUnsubscribeControl | WorkerRequestCancel;
+export type DaemonCommand = ClientCommand | SessionEventsUnsubscribeControl | WorkerRequestCancel | WorkerFileCredit;
 
 /** The request of one kind the Relay sends this Computer. */
 export type CommandMessage<K extends ClientRequest["kind"]> = Extract<ClientRequest, { readonly kind: K }>;

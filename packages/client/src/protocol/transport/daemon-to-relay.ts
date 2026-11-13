@@ -5,6 +5,7 @@ import {
     computerPongEventCodec,
     decodeComputerHeartbeatEvent,
 } from "../computer/liveness.ts";
+import { CONTENT_CHUNK_ACK_KIND, decodeContentChunkAck } from "../relay/content-chunk-ack.ts";
 import {
     AGENT_SETTINGS_DISCOVERED_KIND,
     AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
@@ -74,6 +75,7 @@ import { decodeMessageKind, ProtocolMessageError } from "../shared/message-codec
 import type { daemonEventSignatures } from "./event-codecs.ts";
 
 export const daemonToRelayDecoders = {
+    [CONTENT_CHUNK_ACK_KIND]: decodeContentChunkAck,
     [SESSION_ARCHIVED_KIND]: sessionArchivedEventCodec.decodeRouting,
     [SESSION_CLOSE_NOTICE_KIND]: sessionCloseNoticeEventCodec.decodeRouting,
     [SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND]: sessionPreviewHistoryPageLoadedCodec.decodeRouting,
@@ -105,7 +107,10 @@ export const daemonToRelayDecoders = {
     [SESSION_READY_KIND]: sessionReadyEventCodec.decodeRouting,
     [WORKSPACE_ENTRIES_KIND]: workspaceEntriesEventCodec.decodeRouting,
 } as const satisfies {
-    readonly [K in keyof typeof daemonEventSignatures | typeof COMPUTER_HEARTBEAT_KIND]: (encoded: string) => {
+    readonly [K in
+        | keyof typeof daemonEventSignatures
+        | typeof COMPUTER_HEARTBEAT_KIND
+        | typeof CONTENT_CHUNK_ACK_KIND]: (encoded: string) => {
         readonly kind: K;
     };
 };

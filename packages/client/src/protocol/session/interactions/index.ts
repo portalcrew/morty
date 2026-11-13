@@ -177,20 +177,18 @@ export type SessionInteractionAnsweredEvent = z.infer<typeof sessionInteractionA
 
 export const decodeSessionPermissionRequestedEvent = (encoded: string): SessionPermissionRequestedEvent =>
     decode(encoded, sessionPermissionRequestedEventSchema);
-export const decodeSessionPermissionRespondCommand = (encoded: string): SessionPermissionRespondCommand =>
+const decodeSessionPermissionRespondCommand = (encoded: string): SessionPermissionRespondCommand =>
     decode(encoded, sessionPermissionRespondCommandSchema);
 export const encodeSessionPermissionRespondCommand = (message: SessionPermissionRespondCommand): string =>
     encode(message, sessionPermissionRespondCommandSchema);
 export const decodeSessionElicitationRequestedEvent = (encoded: string): SessionElicitationRequestedEvent =>
     decode(encoded, sessionElicitationRequestedEventSchema);
-export const decodeSessionElicitationRespondCommand = (encoded: string): SessionElicitationRespondCommand =>
+const decodeSessionElicitationRespondCommand = (encoded: string): SessionElicitationRespondCommand =>
     decode(encoded, sessionElicitationRespondCommandSchema);
 export const encodeSessionElicitationRespondCommand = (message: SessionElicitationRespondCommand): string =>
     encode(message, sessionElicitationRespondCommandSchema);
 export const decodeSessionInteractionAnsweredEvent = (encoded: string): SessionInteractionAnsweredEvent =>
     decode(encoded, sessionInteractionAnsweredEventSchema);
-export const encodeSessionInteractionAnsweredEvent = (message: SessionInteractionAnsweredEvent): string =>
-    encode(message, sessionInteractionAnsweredEventSchema);
 
 /** What the Relay answers when it took an answer to one of the Agent's requests. */
 const interactionAcceptedSchema = z.object({ accepted: z.literal(true) }).readonly();

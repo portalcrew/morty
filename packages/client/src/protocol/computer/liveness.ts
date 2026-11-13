@@ -81,13 +81,13 @@ export function decodeComputerHeartbeatAckEvent(encoded: string): ComputerHeartb
     return { kind: COMPUTER_HEARTBEAT_ACK_KIND };
 }
 
-export function decodeComputerPingCommand(encoded: string): ComputerPingCommand {
+function decodeComputerPingCommand(encoded: string): ComputerPingCommand {
     const value = parseJson(encoded);
     assertKind(value, COMPUTER_PING_KIND);
     return { kind: COMPUTER_PING_KIND, requestId: readIdentifier(value, "requestId") };
 }
 
-export function decodeComputerPongEvent(encoded: string): ComputerPongEvent {
+function decodeComputerPongEvent(encoded: string): ComputerPongEvent {
     const value = parseJson(encoded);
     assertKind(value, COMPUTER_PONG_KIND);
     return { kind: COMPUTER_PONG_KIND, requestId: readIdentifier(value, "requestId") };
@@ -100,56 +100,6 @@ export function encodeComputerStatusEvent(message: ComputerStatusEvent): string 
 export function encodeComputerLivenessReadyEvent(message: ComputerLivenessReadyEvent): string {
     return JSON.stringify(decodeComputerLivenessReadyEvent(JSON.stringify(message)));
 }
-
-export function encodeComputerHeartbeatEvent(message: ComputerHeartbeatEvent): string {
-    decodeComputerHeartbeatEvent(JSON.stringify(message));
-    return COMPUTER_HEARTBEAT_MESSAGE;
-}
-
-export function encodeComputerHeartbeatAckEvent(message: ComputerHeartbeatAckEvent): string {
-    decodeComputerHeartbeatAckEvent(JSON.stringify(message));
-    return COMPUTER_HEARTBEAT_ACK_MESSAGE;
-}
-
-export function encodeComputerPingCommand(message: ComputerPingCommand): string {
-    return JSON.stringify(decodeComputerPingCommand(JSON.stringify(message)));
-}
-
-export function encodeComputerPongEvent(message: ComputerPongEvent): string {
-    return JSON.stringify(decodeComputerPongEvent(JSON.stringify(message)));
-}
-
-const computerHeartbeatAckEventPublicRoutingSchema = routingZ.object({
-    kind: routingZ.literal(COMPUTER_HEARTBEAT_ACK_KIND),
-});
-const computerHeartbeatAckEventRoutingSchema = computerHeartbeatAckEventPublicRoutingSchema
-    .extend({ encrypted: encryptedFieldSchema })
-    .strict();
-export type ComputerHeartbeatAckEventRouting = routingZ.infer<typeof computerHeartbeatAckEventRoutingSchema>;
-const decodeComputerHeartbeatAckEventRouting = (encoded: string) =>
-    decodeRoutingZodMessage(encoded, computerHeartbeatAckEventRoutingSchema);
-export const computerHeartbeatAckEventCodec = encryptedMessageCodec({
-    kind: COMPUTER_HEARTBEAT_ACK_KIND,
-    decode: decodeComputerHeartbeatAckEvent,
-    decodeRouting: decodeComputerHeartbeatAckEventRouting,
-    publicRoutingSchema: computerHeartbeatAckEventPublicRoutingSchema,
-});
-
-const computerLivenessReadyEventPublicRoutingSchema = routingZ.object({
-    kind: routingZ.literal(COMPUTER_LIVENESS_READY_KIND),
-});
-const computerLivenessReadyEventRoutingSchema = computerLivenessReadyEventPublicRoutingSchema
-    .extend({ encrypted: encryptedFieldSchema })
-    .strict();
-export type ComputerLivenessReadyEventRouting = routingZ.infer<typeof computerLivenessReadyEventRoutingSchema>;
-const decodeComputerLivenessReadyEventRouting = (encoded: string) =>
-    decodeRoutingZodMessage(encoded, computerLivenessReadyEventRoutingSchema);
-export const computerLivenessReadyEventCodec = encryptedMessageCodec({
-    kind: COMPUTER_LIVENESS_READY_KIND,
-    decode: decodeComputerLivenessReadyEvent,
-    decodeRouting: decodeComputerLivenessReadyEventRouting,
-    publicRoutingSchema: computerLivenessReadyEventPublicRoutingSchema,
-});
 
 const computerPingCommandPublicRoutingSchema = routingZ.object({
     kind: routingZ.literal(COMPUTER_PING_KIND),
@@ -166,20 +116,6 @@ export const computerPingCommandCodec = encryptedMessageCodec({
     decode: decodeComputerPingCommand,
     decodeRouting: decodeComputerPingCommandRouting,
     publicRoutingSchema: computerPingCommandPublicRoutingSchema,
-});
-
-const computerHeartbeatEventPublicRoutingSchema = routingZ.object({ kind: routingZ.literal(COMPUTER_HEARTBEAT_KIND) });
-const computerHeartbeatEventRoutingSchema = computerHeartbeatEventPublicRoutingSchema
-    .extend({ encrypted: encryptedFieldSchema })
-    .strict();
-export type ComputerHeartbeatEventRouting = routingZ.infer<typeof computerHeartbeatEventRoutingSchema>;
-const decodeComputerHeartbeatEventRouting = (encoded: string) =>
-    decodeRoutingZodMessage(encoded, computerHeartbeatEventRoutingSchema);
-export const computerHeartbeatEventCodec = encryptedMessageCodec({
-    kind: COMPUTER_HEARTBEAT_KIND,
-    decode: decodeComputerHeartbeatEvent,
-    decodeRouting: decodeComputerHeartbeatEventRouting,
-    publicRoutingSchema: computerHeartbeatEventPublicRoutingSchema,
 });
 
 const computerPongEventPublicRoutingSchema = routingZ.object({

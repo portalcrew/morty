@@ -1,4 +1,5 @@
 import { COMPUTER_HEARTBEAT_ACK_KIND, COMPUTER_LIVENESS_READY_KIND } from "../computer/liveness.ts";
+import { WORKER_FILE_CREDIT_KIND } from "../relay/file-credit.ts";
 import { WORKER_REQUEST_CANCEL_KIND } from "../relay/request-cancellation.ts";
 import { SESSION_EVENTS_UNSUBSCRIBE_KIND } from "../session/events/index.ts";
 import { decodeMessageKind } from "../shared/message-codec.ts";
@@ -13,6 +14,7 @@ export function decodeRelayToDaemonMessage(encoded: string): RelayToDaemonMessag
         case COMPUTER_LIVENESS_READY_KIND:
         case SESSION_EVENTS_UNSUBSCRIBE_KIND:
         case WORKER_REQUEST_CANCEL_KIND:
+        case WORKER_FILE_CREDIT_KIND:
             return decodeWorkerToDaemonMessage(encoded);
         default:
             return decodeClientToRelayMessage(encoded);

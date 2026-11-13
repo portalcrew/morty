@@ -1,15 +1,25 @@
-import { MortyClient, MortyPageRequest, WsTransport } from "@morty-build/client";
+import { MortyClient, MortyPageRequest, sessionEndpoints, WsTransport } from "@morty-build/client";
 import {
     CONTENT_WRITE_MAX_BYTES,
+    contentAvailableEventCodec,
+    contentChunkCodec,
+    contentCommitCommandCodec,
+    contentWriteCommandCodec,
     decodeSessionReadyEvent,
+    encodeFileStreamRecord,
+    FILE_STREAM_CONTENT_TYPE,
     sessionPromptAcceptedEventCodec,
     sessionPromptCommandCodec,
 } from "@morty-build/client/protocol";
 import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
 import * as v from "valibot";
 import { afterEach, beforeAll, beforeEach, expect, onTestFailed, onTestFinished, test, vi } from "vitest";
-import { createControlledAgentRuntime } from "../../../tests/support/fake-daemon/runtime.ts";
+import {
+    connectControlledAgentRuntime,
+    createControlledAgentRuntime,
+} from "../../../tests/support/fake-daemon/runtime.ts";
 import { createOwnerApi } from "../../../tests/support/owner-api.ts";
+import { memoryComputerCredentials } from "../../cli/tests/support/computer-credentials.ts";
 import { recordingRelay } from "./support/recording-relay.ts";
 
 let createBindings: Awaited<ReturnType<typeof prepareTestMortyRelayBindings>>;
@@ -75,7 +85,7 @@ test("Given an attachment within the supported plaintext limit, when its encrypt
             encryption: { access: encryptionAccess },
         });
         try {
-            const bytes = new Uint8Array(10 * 1024 * 1024).fill(0x5a);
+            const bytes = new Uint8Array(CONTENT_WRITE_MAX_BYTES).fill(0x5a);
             const contentKey = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (byte) =>
                 byte.toString(16).padStart(2, "0"),
             ).join("");
@@ -94,7 +104,25 @@ test("Given an attachment within the supported plaintext limit, when its encrypt
                     signal,
                 ),
             ).rejects.toMatchObject({ code: "invalid_request" });
-            expect(await client.sessions.uploadContent(access.target, input, signal)).toMatchObject({
+            const gate = network.pauseUploadAcknowledgements();
+            const upload = client.sessions.uploadContent(access.target, input, signal);
+            void upload.catch(() => undefined);
+            try {
+                const requestId = await gate.entered;
+                const turn = await client.turns.submit(
+                    access.target,
+                    { content: "unrelated while uploading", idempotencyKey: "upload-concurrent-turn", attachments: [] },
+                    signal,
+                );
+                expect(turn.turnId).toBe("upload-concurrent-turn");
+                expect(
+                    gate.chunks.filter((chunk) => chunk.requestId === requestId).map((chunk) => chunk.sequence),
+                ).toEqual([0]);
+            } finally {
+                gate.release();
+            }
+            const uploaded = await upload;
+            expect(uploaded).toMatchObject({
                 contentKey,
                 byteLength: bytes.byteLength,
             });
@@ -122,6 +150,42 @@ test("Given an attachment within the supported plaintext limit, when its encrypt
                 throw new Error("Expected the binary upload declaration");
             }
             expect(declaration.output.bodyByteLength).toBeGreaterThan(12 * 1024 * 1024);
+            const replacementGate = network.pauseUploadAcknowledgements();
+            const interrupted = client.sessions.uploadContent(access.target, input, signal);
+            void interrupted.catch(() => undefined);
+            try {
+                await replacementGate.entered;
+                const credential = network.successorCredential();
+                await using replacement = await connectControlledAgentRuntime({
+                    behavior: {
+                        harness: "codex",
+                        agentName: "Controlled Codex",
+                        reply: () => ({ outcome: "complete", output: [] }),
+                    },
+                    connection: {
+                        computerId: owner.computerId,
+                        origin: network.origin,
+                        credentials: memoryComputerCredentials(credential),
+                    },
+                    signal,
+                });
+                await runtime.disconnect();
+                await expect(interrupted).rejects.toMatchObject({ code: "computer_offline" });
+                const replacementOwner = createOwnerApi({
+                    origin: network.origin,
+                    computerId: owner.computerId,
+                    credential: owner.computerToken,
+                    request: async (request) => await fetch(request),
+                    encryptionAccess: await replacement.encryptionAccess(signal),
+                });
+                try {
+                    await expect(replacementOwner.api.verifyAgent("codex", signal)).resolves.toBeUndefined();
+                } finally {
+                    replacementOwner.close();
+                }
+            } finally {
+                replacementGate.release();
+            }
         } finally {
             client.close();
         }
@@ -132,6 +196,177 @@ test("Given an attachment within the supported plaintext limit, when its encrypt
 });
 beforeEach(() => vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-12T00:00:00Z") }));
 afterEach(() => vi.useRealTimers());
+
+test("Given interrupted content uploads, when their request identities are reused and another prompt is submitted, then no abandoned upload can affect the new operations", {
+    timeout: 90_000,
+}, async () => {
+    await using bindings = await createBindings();
+    await bindings.configure({ APP_ORIGIN: bindings.origin });
+    const signal = AbortSignal.timeout(75_000);
+    const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
+        }),
+        signal,
+    });
+    expect(created.status).toBe(201);
+    const owner = v.parse(v.object({ computerId: v.string(), computerToken: v.string() }), await created.json());
+    await using runtime = await createControlledAgentRuntime({
+        behavior: {
+            harness: "codex",
+            agentName: "Controlled Codex",
+            reply: () => ({ outcome: "complete", output: [] }),
+        },
+        credential: owner.computerToken,
+        computerId: owner.computerId,
+        origin: bindings.origin,
+        server: { request: async (input) => await fetch(input) },
+        signal,
+    });
+    const encryptionAccess = await runtime.encryptionAccess(signal);
+    const ownerClient = createOwnerApi({
+        origin: bindings.origin,
+        computerId: owner.computerId,
+        credential: owner.computerToken,
+        encryptionAccess,
+        request: (request) => fetch(request),
+    });
+    const transport = new WsTransport();
+    try {
+        await ownerClient.api.verifyAgent("codex", signal);
+        const access = await ownerClient.api.createConversation(
+            "interrupted-uploads",
+            {
+                harness: "codex",
+                configurations: [],
+                workspaceRef: ".",
+                workspaceLabel: ".",
+            },
+            signal,
+        );
+        const client = new MortyClient({
+            endpoint: bindings.origin,
+            computerId: owner.computerId,
+            transport,
+            credentialProvider: { credential: async () => access.credential },
+            encryption: { access: encryptionAccess },
+        });
+        try {
+            const bytes = new TextEncoder().encode("retained upload test");
+            const contentKey = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (byte) =>
+                byte.toString(16).padStart(2, "0"),
+            ).join("");
+            const endpoint = sessionEndpoints.uploadContent({
+                computerId: owner.computerId,
+                target: access.target,
+                key: contentKey,
+                uri: "file:///test.txt",
+            });
+            const sendUpload = (body: Uint8Array) =>
+                transport.fetch({
+                    endpoint,
+                    origin: new URL("/morty/api/", bindings.origin),
+                    headers: { authorization: `Bearer ${access.credential}`, "content-type": FILE_STREAM_CONTENT_TYPE },
+                    body,
+                    signal,
+                });
+            const pack = (records: readonly Uint8Array[]): Uint8Array => {
+                const body = new Uint8Array(records.reduce((total, record) => total + record.length, 0));
+                let offset = 0;
+                for (const record of records) {
+                    body.set(record, offset);
+                    offset += record.length;
+                }
+                return body;
+            };
+            for (let index = 0; index < 4; index += 1) {
+                const requestId = `interrupted-upload-${index}`;
+                const base = {
+                    kind: "content.write",
+                    requestId,
+                    target: access.target,
+                    contentKey,
+                    contentKind: "resource",
+                    mediaType: "text/plain",
+                    byteLength: bytes.byteLength,
+                };
+                const first = await contentWriteCommandCodec.encode(
+                    { ...base, name: "content.txt" },
+                    transport.payloadEncryption,
+                    signal,
+                );
+                const abandonedChunk = await contentChunkCodec.encode(
+                    { requestId, sequence: 0, bytes },
+                    transport.payloadEncryption,
+                    signal,
+                );
+                const interrupted = await sendUpload(
+                    pack([
+                        encodeFileStreamRecord({ kind: "message", encoded: first }),
+                        encodeFileStreamRecord({ kind: "chunk", encoded: abandonedChunk }),
+                    ]),
+                );
+                expect(interrupted.ok).toBe(false);
+                const second = await contentWriteCommandCodec.encode(
+                    { ...base, name: "content.txt" },
+                    transport.payloadEncryption,
+                    signal,
+                );
+                const earlyCommit = await contentCommitCommandCodec.encode(
+                    { kind: "content.commit", requestId, target: access.target },
+                    transport.payloadEncryption,
+                    signal,
+                );
+                const attemptedCommit = await sendUpload(
+                    pack([
+                        encodeFileStreamRecord({ kind: "message", encoded: second }),
+                        encodeFileStreamRecord({ kind: "message", encoded: earlyCommit }),
+                    ]),
+                );
+                expect(attemptedCommit.ok).toBe(false);
+                const freshWrite = await contentWriteCommandCodec.encode(
+                    { ...base, name: "content.txt" },
+                    transport.payloadEncryption,
+                    signal,
+                );
+                const chunk = await contentChunkCodec.encode(
+                    { requestId, sequence: 0, bytes },
+                    transport.payloadEncryption,
+                    signal,
+                );
+                const commit = await contentCommitCommandCodec.encode(
+                    { kind: "content.commit", requestId, target: access.target },
+                    transport.payloadEncryption,
+                    signal,
+                );
+                const records = [
+                    encodeFileStreamRecord({ kind: "message", encoded: freshWrite }),
+                    encodeFileStreamRecord({ kind: "chunk", encoded: chunk }),
+                    encodeFileStreamRecord({ kind: "message", encoded: commit }),
+                ];
+                const retried = await sendUpload(pack(records));
+                expect(retried.ok, await retried.clone().text()).toBe(true);
+                expect(
+                    await contentAvailableEventCodec.decode(await retried.text(), transport.payloadEncryption, signal),
+                ).toMatchObject({ requestId, contentKey });
+            }
+            expect(
+                await client.turns.submit(
+                    access.target,
+                    { content: "unrelated prompt", idempotencyKey: "after-interrupted-uploads", attachments: [] },
+                    signal,
+                ),
+            ).toMatchObject({ turnId: "after-interrupted-uploads" });
+        } finally {
+            client.close();
+        }
+    } finally {
+        transport.close();
+        ownerClient.close();
+    }
+});
 
 test("Given a paired Computer, when its owner selects an Agent, then setup receives the Agent settings reply addressed by its public request identity", {
     timeout: 45_000,

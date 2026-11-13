@@ -7,7 +7,7 @@ import { createNativeSessionRequestHandler } from "../native-session-requests.ts
 import { reportAuthenticatedCapacity } from "./capacity.ts";
 import { handleComputerDiagnostics, handleComputerPing } from "./computer.ts";
 import { createContentWriteCommands } from "./content-write/index.ts";
-import { handleFileRead } from "./file-read/index.ts";
+import { createFileReadCommands } from "./file-read/index.ts";
 import { handlePreviewHistoryPageLoad, handleSessionHistoryPageLoad } from "./history.ts";
 import {
     handleElicitationRespond,
@@ -36,6 +36,7 @@ export function createCommandRegistry(context: CommandContext): {
     readonly settle: () => Promise<void>;
 } {
     const contentWrites = createContentWriteCommands(context);
+    const fileReads = createFileReadCommands(context);
     const nativeRequests = createNativeSessionRequestHandler(context);
     const agentSettings = createAgentSettingsDiscoveryHandler(context);
     return {
@@ -64,8 +65,15 @@ export function createCommandRegistry(context: CommandContext): {
                 case "session.preview-history.page.load":
                     return handlePreviewHistoryPageLoad(context, message);
                 case "native.session.cancel":
+                    nativeRequests.cancel(message.requestId);
+                    return;
                 case "worker.request.cancel":
                     nativeRequests.cancel(message.requestId);
+                    contentWrites.cancel(message.requestId);
+                    fileReads.cancel(message.requestId);
+                    return;
+                case "worker.file.credit":
+                    fileReads.credit(message.requestId);
                     return;
                 case "native.session.request":
                     return nativeRequests.handle(message);
@@ -81,7 +89,7 @@ export function createCommandRegistry(context: CommandContext): {
                 case "content.commit":
                     return contentWrites.commit(message);
                 case "file.read":
-                    return handleFileRead(context, message);
+                    return fileReads.read(message);
                 case "session.cancel-before-start":
                     return handleSessionCancelBeforeStart(context, message);
                 case "session.cancel":
@@ -140,7 +148,12 @@ export function createCommandRegistry(context: CommandContext): {
             }
         },
         settle: async (): Promise<void> => {
-            await Promise.all([contentWrites.settle(), nativeRequests.settle(), agentSettings.settle()]);
+            await Promise.all([
+                contentWrites.settle(),
+                fileReads.settle(),
+                nativeRequests.settle(),
+                agentSettings.settle(),
+            ]);
         },
     };
 }

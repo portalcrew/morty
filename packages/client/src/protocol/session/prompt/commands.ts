@@ -9,7 +9,6 @@ import {
     decodeZodMessage as decodeRoutingZodMessage,
     decodeZodMessage,
     decodeZodValue,
-    encodeZodMessage,
     encryptedFieldSchema,
     ProtocolMessageError,
     parseJson,
@@ -84,7 +83,7 @@ export interface SessionCancelBeforeStartCommand {
     readonly target: NativeSessionTarget;
 }
 
-export function decodeSessionCancelBeforeStartCommand(encoded: string): SessionCancelBeforeStartCommand {
+function decodeSessionCancelBeforeStartCommand(encoded: string): SessionCancelBeforeStartCommand {
     const value = parseJson(encoded);
     assertKind(value, SESSION_CANCEL_BEFORE_START_KIND);
     return {
@@ -94,9 +93,6 @@ export function decodeSessionCancelBeforeStartCommand(encoded: string): SessionC
         target: decodeZodValue(value["target"], nativeSessionTargetSchema),
     };
 }
-
-export const encodeSessionCancelBeforeStartCommand = (message: SessionCancelBeforeStartCommand): string =>
-    JSON.stringify(decodeSessionCancelBeforeStartCommand(JSON.stringify(message)));
 
 /** Steers a queued prompt into the running Turn; answered by `session.prompt.steered` once it has started. */
 export interface SessionPromptDispositionCommand {
@@ -181,7 +177,7 @@ export function decodeSessionPromptCommand(encoded: string): SessionPromptComman
     };
 }
 
-export function decodeSessionCancelCommand(encoded: string): SessionCancelCommand {
+function decodeSessionCancelCommand(encoded: string): SessionCancelCommand {
     const value = parseJson(encoded);
     assertKind(value, SESSION_CANCEL_KIND);
 
@@ -193,7 +189,7 @@ export function decodeSessionCancelCommand(encoded: string): SessionCancelComman
     };
 }
 
-export function decodeSessionPromptDispositionCommand(encoded: string): SessionPromptDispositionCommand {
+function decodeSessionPromptDispositionCommand(encoded: string): SessionPromptDispositionCommand {
     const value = parseJson(encoded);
     assertKind(value, SESSION_PROMPT_DISPOSITION_KIND);
     if (value["disposition"] !== SessionPromptDisposition.Steer) {
@@ -246,16 +242,10 @@ export type SessionTurnWithdrawnEvent = z.infer<typeof sessionTurnWithdrawnEvent
 
 export const decodeSessionPromptSteeredEvent = (encoded: string): SessionPromptSteeredEvent =>
     decodeZodMessage(encoded, sessionPromptSteeredEventSchema);
-export const encodeSessionPromptSteeredEvent = (message: SessionPromptSteeredEvent): string =>
-    encodeZodMessage(message, sessionPromptSteeredEventSchema);
-export const decodeSessionTurnStoppedEvent = (encoded: string): SessionTurnStoppedEvent =>
+const decodeSessionTurnStoppedEvent = (encoded: string): SessionTurnStoppedEvent =>
     decodeZodMessage(encoded, sessionTurnStoppedEventSchema);
-export const encodeSessionTurnStoppedEvent = (message: SessionTurnStoppedEvent): string =>
-    encodeZodMessage(message, sessionTurnStoppedEventSchema);
 export const decodeSessionTurnWithdrawnEvent = (encoded: string): SessionTurnWithdrawnEvent =>
     decodeZodMessage(encoded, sessionTurnWithdrawnEventSchema);
-export const encodeSessionTurnWithdrawnEvent = (message: SessionTurnWithdrawnEvent): string =>
-    encodeZodMessage(message, sessionTurnWithdrawnEventSchema);
 
 const sessionCancelBeforeStartCommandPublicRoutingSchema = z.object({
     kind: z.literal(SESSION_CANCEL_BEFORE_START_KIND),

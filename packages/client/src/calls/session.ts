@@ -28,7 +28,7 @@ import {
     sessionOperationFailedEventCodec,
     sessionPromptAcceptedEventCodec,
 } from "../protocol/session/lifecycle/index.ts";
-import { nativeSessionRequestCodec, nativeSessionResultCodec } from "../protocol/session/native/index.ts";
+import { nativeSessionCommandCodec, nativeSessionResultCodec } from "../protocol/session/native/index.ts";
 import {
     sessionHistoryPageLoadCodec,
     sessionHistoryPageLoadedCodec,
@@ -161,7 +161,7 @@ export const sessionEndpoints = Object.freeze({
             method: "GET",
             resource: "active-turn",
             encrypted: {
-                request: [nativeSessionRequestCodec],
+                request: [nativeSessionCommandCodec],
                 response: [nativeSessionResultCodec, sessionOperationFailedEventCodec],
             },
             transport: { kind: "websocket", cancellation: "local" },

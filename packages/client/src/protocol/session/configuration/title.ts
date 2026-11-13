@@ -41,14 +41,12 @@ const sessionRenamedEventSchema = z
 
 export type SessionRenamedEvent = z.infer<typeof sessionRenamedEventSchema>;
 
-export const decodeSessionRenameCommand = (encoded: string): SessionRenameCommand =>
+const decodeSessionRenameCommand = (encoded: string): SessionRenameCommand =>
     decode(encoded, sessionRenameCommandSchema);
 export const encodeSessionRenameCommand = (message: SessionRenameCommand): string =>
     encode(message, sessionRenameCommandSchema);
 export const decodeSessionRenamedEvent = (encoded: string): SessionRenamedEvent =>
     decode(encoded, sessionRenamedEventSchema);
-export const encodeSessionRenamedEvent = (message: SessionRenamedEvent): string =>
-    encode(message, sessionRenamedEventSchema);
 
 const sessionRenameCommandPublicRoutingSchema = z.object({
     kind: z.literal(SESSION_RENAME_KIND),

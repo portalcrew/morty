@@ -519,56 +519,6 @@ const sessionLiveEventSchema = z.discriminatedUnion("type", [
 ]);
 export type SessionLiveEvent = z.infer<typeof sessionLiveEventSchema>;
 
-// Forwarders own routing and archive identity, not the independently versioned content model.
-// Keep opaque payload fields intact; consumers must still validate content before interpreting it.
-const wireLifecyclePayloadSchema = z
-    .object({
-        kind: identifier,
-        commandId: identifier.optional(),
-        context: promptExecutionContextSchema.unwrap().passthrough().readonly().optional(),
-        event: z.object({ interactionId: identifier.optional() }).passthrough().readonly().optional(),
-    })
-    .passthrough()
-    .readonly();
-const wireEventFields = {
-    ...sessionLiveEventFields,
-    mortyMetadata: z.object(mortyMetadataFields).passthrough().readonly().optional(),
-};
-const sessionWireEventSchema = z.union([
-    z
-        .object({
-            ...wireEventFields,
-            type: z.literal("acp"),
-            payload: z.object({ sessionUpdate: identifier }).passthrough().readonly(),
-        })
-        .passthrough()
-        .readonly(),
-    z
-        .object({
-            ...wireEventFields,
-            type: z.literal("lifecycle-metadata"),
-            payload: wireLifecyclePayloadSchema,
-        })
-        .passthrough()
-        .readonly(),
-    z
-        .object({
-            ...wireEventFields,
-            type: identifier.refine((type) => type !== "acp" && type !== "lifecycle-metadata"),
-            payload: z.record(z.string(), z.unknown()).readonly(),
-        })
-        .passthrough()
-        .readonly(),
-]);
-const sessionWireEnvelopeSchema = z
-    .object({
-        kind: z.literal(SESSION_EVENT_KIND),
-        events: z.array(sessionWireEventSchema).min(1).max(SESSION_EVENT_BATCH_MAX_SIZE).readonly(),
-    })
-    .passthrough()
-    .readonly();
-export type SessionWireEnvelope = z.infer<typeof sessionWireEnvelopeSchema>;
-
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -578,7 +528,7 @@ const sessionEventEnvelopeSchema = z
     .object({ events: sessionLiveEventBatchSchema, kind: z.literal(SESSION_EVENT_KIND) })
     .readonly();
 export type SessionEventEnvelope = z.infer<typeof sessionEventEnvelopeSchema>;
-export const sessionEventLogPageSchema = z
+const sessionEventLogPageSchema = z
     .object({
         events: z.array(sessionEventSchema).max(MAX_EVENT_COUNT).readonly(),
         nextCursor: z.string().min(1).max(512).nullable(),
@@ -592,13 +542,6 @@ export const sessionEventLogPageSchema = z
     })
     .readonly();
 export type SessionEventLogPage = z.infer<typeof sessionEventLogPageSchema>;
-const nativeEventPageRequestSchema = z
-    .object({
-        cursor: z.string().min(1).max(512).nullable(),
-        eventLimit: z.number().int().min(1).max(10_000),
-    })
-    .readonly();
-export type NativeEventPageRequest = z.infer<typeof nativeEventPageRequestSchema>;
 const queuedPromptRequestEventLogSchema = z
     .object({
         commandId: identifier,
@@ -677,8 +620,6 @@ export const decodeKnownSessionEventPayload = (value: unknown): SessionEventPayl
     return decoded.success ? decoded.data : null;
 };
 export const decodeSessionLiveEvent = (value: unknown): SessionLiveEvent => decode(value, sessionLiveEventSchema);
-export const decodeSessionWireEnvelope = (value: unknown): SessionWireEnvelope =>
-    decode(value, sessionWireEnvelopeSchema);
 export const decodeKnownSessionLiveEventBatch = (value: unknown): SessionLiveEventBatch =>
     decode(
         decodedEntries(inputValue(value), sessionLiveEventSchema, SESSION_EVENT_BATCH_MAX_SIZE),
@@ -789,13 +730,11 @@ const sessionEventsUnsubscribeSchema = z
     })
     .readonly();
 export type SessionEventsSubscribeCommand = z.infer<typeof sessionEventsSubscribeSchema>;
-export type SessionEventsUnsubscribe = z.infer<typeof sessionEventsUnsubscribeSchema>;
+type SessionEventsUnsubscribe = z.infer<typeof sessionEventsUnsubscribeSchema>;
 export type SessionEventsUnsubscribeControl = SessionEventsUnsubscribe;
 
-export const decodeSessionEventsSubscribeCommand = (encoded: string): SessionEventsSubscribeCommand =>
+const decodeSessionEventsSubscribeCommand = (encoded: string): SessionEventsSubscribeCommand =>
     decode(encoded, sessionEventsSubscribeSchema);
-export const encodeSessionEventsSubscribeCommand = (message: SessionEventsSubscribeCommand): string =>
-    JSON.stringify(decodeSessionEventsSubscribeCommand(JSON.stringify(message)));
 export const decodeSessionEventsUnsubscribe = (encoded: string): SessionEventsUnsubscribe =>
     decode(encoded, sessionEventsUnsubscribeSchema);
 export const encodeSessionEventsUnsubscribe = (message: SessionEventsUnsubscribe): string =>

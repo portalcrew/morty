@@ -3,9 +3,11 @@ import {
     type AgentSettingsDiscoverCommandRouting,
     contentWriteCommandCodec,
     decodeMessageKind,
+    decodeWorkerFileCredit,
     decodeWorkerRequestCancel,
     ProtocolMessageError,
     type SessionEventsSubscribeCommandRouting,
+    WORKER_FILE_CREDIT_KIND,
     WORKER_REQUEST_CANCEL_KIND,
 } from "@morty-build/client/protocol";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
@@ -39,6 +41,15 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
         await cx.services.runtime.expireSilentDaemons();
         signal.throwIfAborted();
         return cx.gateways.requests.open(requestId, target, async (socket, message) => {
+            if (typeof message === "string" && decodeMessageKind(message) === WORKER_FILE_CREDIT_KIND) {
+                const credit = decodeWorkerFileCredit(message);
+                if (credit.requestId !== requestId) {
+                    throw new PairingDirectoryError("invalid_request", "The credit does not own this operation");
+                }
+                signal.throwIfAborted();
+                cx.services.runtime.grantFileCredit(computerId, socket, requestId, signal);
+                return;
+            }
             if (typeof message === "string" && decodeMessageKind(message) === WORKER_REQUEST_CANCEL_KIND) {
                 const cancellation = decodeWorkerRequestCancel(message);
                 if (cancellation.requestId !== requestId) {
@@ -50,7 +61,7 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
                     15_000,
                 );
                 try {
-                    cx.services.runtime.cancelNativeRequest(computerId, socket, requestId, cleanup.signal);
+                    cx.services.runtime.cancelRequest(computerId, socket, requestId, cleanup.signal);
                 } finally {
                     clearTimeout(timer);
                 }

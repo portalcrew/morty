@@ -29,7 +29,7 @@ export const CONTENT_AVAILABLE_KIND = "content.available";
 
 export const CONTENT_CHUNK_MAX_BYTES = 192 * 1024;
 /** Maximum ASCII ciphertext body, including bounded encryption framing overhead. */
-export const CONTENT_CHUNK_ENCRYPTED_MAX_BYTES = Math.ceil(((CONTENT_CHUNK_MAX_BYTES + 1024) * 4) / 3);
+const CONTENT_CHUNK_ENCRYPTED_MAX_BYTES = Math.ceil(((CONTENT_CHUNK_MAX_BYTES + 1024) * 4) / 3);
 export const FILE_STREAM_CONTENT_TYPE = "application/vnd.morty.encrypted-file";
 export const FILE_STREAM_MAX_MESSAGE_BYTES = 12 * 1024 * 1024 + 32 * 1024;
 export const FILE_STREAM_MAX_CHUNK_BYTES = CONTENT_CHUNK_ENCRYPTED_MAX_BYTES + 255 + 9;
@@ -340,25 +340,18 @@ export type FileFailedEvent = z.infer<typeof fileFailedEventSchema>;
 export const decodeFileReadCommand = (encoded: string): FileReadCommand => decode(encoded, fileReadCommandSchema);
 export const encodeFileReadCommand = (message: FileReadCommand): string => encode(message, fileReadCommandSchema);
 export const decodeFileBeginEvent = (encoded: string): FileBeginEvent => decode(encoded, fileBeginEventSchema);
-export const encodeFileBeginEvent = (message: FileBeginEvent): string => encode(message, fileBeginEventSchema);
 export const decodeFileEndEvent = (encoded: string): FileEndEvent => decode(encoded, fileEndEventSchema);
-export const encodeFileEndEvent = (message: FileEndEvent): string => encode(message, fileEndEventSchema);
 export const decodeFileFailedEvent = (encoded: string): FileFailedEvent => decode(encoded, fileFailedEventSchema);
-export const encodeFileFailedEvent = (message: FileFailedEvent): string => encode(message, fileFailedEventSchema);
-export const decodeContentWriteCommand = (encoded: string): ContentWriteCommand =>
-    decode(encoded, contentWriteCommandSchema);
+const decodeContentWriteCommand = (encoded: string): ContentWriteCommand => decode(encoded, contentWriteCommandSchema);
 export const encodeContentWriteCommand = (message: ContentWriteCommand): string =>
     encode(message, contentWriteCommandSchema);
-export const decodeContentCommitCommand = (encoded: string): ContentCommitCommand =>
+const decodeContentCommitCommand = (encoded: string): ContentCommitCommand =>
     decode(encoded, contentCommitCommandSchema);
 export const encodeContentCommitCommand = (message: ContentCommitCommand): string =>
     encode(message, contentCommitCommandSchema);
 export const decodeContentReadyEvent = (encoded: string): ContentReadyEvent => decode(encoded, contentReadyEventSchema);
-export const encodeContentReadyEvent = (message: ContentReadyEvent): string => encode(message, contentReadyEventSchema);
 export const decodeContentAvailableEvent = (encoded: string): ContentAvailableEvent =>
     decode(encoded, contentAvailableEventSchema);
-export const encodeContentAvailableEvent = (message: ContentAvailableEvent): string =>
-    encode(message, contentAvailableEventSchema);
 
 // GET file reads have no private request body: these are the URL and routing fields.
 const fileReadCommandRoutingSchema = fileReadCommandSchema.unwrap().strict();

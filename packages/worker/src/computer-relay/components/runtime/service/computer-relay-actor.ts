@@ -8,6 +8,7 @@ import {
     decodeClientToRelayMessage,
     encodeComputerStatusEvent,
     encodeSessionEventsUnsubscribe,
+    encodeWorkerFileCredit,
     encodeWorkerRequestCancel,
     encodeWorkerRequestRejected,
     type NativeSessionCommandRouting,
@@ -112,6 +113,8 @@ export interface RelaySocket {
 
 export interface ComputerOperationSocket extends RelaySocket {
     readonly recordRequestDaemon: (daemon: RelaySocket, action: NativeSessionCommandRouting["action"]) => void;
+    readonly recordTransferDaemon: (daemon: RelaySocket, kind: "file-read" | "content-write") => void;
+    readonly requestTransferKind: () => "file-read" | "content-write" | null;
     readonly requestDaemon: () => RelaySocket | null;
     readonly requestAction: () => NativeSessionCommandRouting["action"] | null;
     readonly consumeAgentSettingsDiscovery: (requestId: string, harness: string) => boolean;
@@ -257,6 +260,7 @@ export class ComputerRelayActor {
         "file.end": this.addressedDaemon("file.end"),
         "file.failed": this.addressedDaemon("file.failed"),
         "content.ready": this.addressedDaemon("content.ready"),
+        "content.chunk.ack": daemonHandler("content.chunk.ack", () => {}),
         "content.available": this.addressedDaemon("content.available"),
         "session.listed": this.addressedDaemon("session.listed"),
         "session.queried": this.addressedDaemon("session.queried"),
@@ -302,6 +306,14 @@ export class ComputerRelayActor {
         this.broadcastComputerStatus(true);
     };
 
+    readonly failTransfersOwnedBy = (daemon: RelaySocket): void => {
+        for (const route of this.#peers.operations()) {
+            if (route.socket.requestTransferKind() !== null && route.socket.requestDaemon()?.isSame(daemon)) {
+                this.refuseOffline(route.socket, route.requestId);
+            }
+        }
+    };
+
     readonly detachDaemon = async (socket: RelaySocket, _signal: AbortSignal): Promise<void> => {
         const anotherDaemonOnline = this.#peers
             .daemons()
@@ -328,8 +340,12 @@ export class ComputerRelayActor {
         daemon.send(encodeSessionEventsUnsubscribe({ kind: "session.events.unsubscribe", subscriptionId, target }));
     };
 
-    readonly forwardNativeCancellation = (daemon: RelaySocket, requestId: string): void => {
+    readonly forwardRequestCancellation = (daemon: RelaySocket, requestId: string): void => {
         daemon.send(encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId }));
+    };
+
+    readonly forwardFileCredit = (daemon: RelaySocket, requestId: string): void => {
+        daemon.send(encodeWorkerFileCredit({ kind: "worker.file.credit", requestId, chunks: 1 }));
     };
 
     readonly receiveDaemonMessage = async (
@@ -345,6 +361,17 @@ export class ComputerRelayActor {
             }
             if (encoded === undefined) {
                 this.recordSkipped("missing_daemon_payload");
+                return;
+            }
+            if (message.kind === "content.chunk.ack") {
+                const route = this.#peers.operations().find((candidate) => candidate.requestId === message.requestId);
+                if (
+                    route !== undefined &&
+                    route.socket.requestTransferKind() === "content-write" &&
+                    route.socket.requestDaemon()?.isSame(socket)
+                ) {
+                    route.socket.send(encoded);
+                }
                 return;
             }
             this.#daemonHandlers[message.kind](message, encoded);
@@ -381,7 +408,7 @@ export class ComputerRelayActor {
         recipient.send(copyBinaryFrame(message));
     };
 
-    readonly receiveOperationChunk = (socket: RelaySocket, message: unknown): void => {
+    readonly receiveOperationChunk = (socket: ComputerOperationSocket, message: unknown): void => {
         const chunk = knownChunk(message, () => this.recordSkipped("unsupported_operation_frame"));
         if (chunk === null) {
             return;
@@ -392,7 +419,11 @@ export class ComputerRelayActor {
         if (!ownsOperation) {
             throw new ProtocolMessageError("Content chunk does not belong to this operation");
         }
-        const daemon = this.#peers.daemons().find((candidate) => candidate.isOpen());
+        if (socket.requestTransferKind() !== "content-write") {
+            throw new ProtocolMessageError("Content chunk does not belong to an upload");
+        }
+        const original = socket.requestDaemon();
+        const daemon = this.#peers.daemons().find((candidate) => candidate.isOpen() && original?.isSame(candidate));
         if (daemon === undefined) {
             throw new SessionRuntimeError("computer_offline", "The local computer is offline");
         }
@@ -445,8 +476,21 @@ export class ComputerRelayActor {
         command: OperationRouting,
         encoded: string,
     ): void => {
-        if (this.sendToDaemon(encoded) === null) {
+        if (command.kind === "content.commit") {
+            const original = socket.requestDaemon();
+            const daemon = this.#peers.daemons().find((candidate) => candidate.isOpen() && original?.isSame(candidate));
+            if (socket.requestTransferKind() !== "content-write" || daemon === undefined) {
+                this.refuseOffline(socket, command.requestId);
+            } else {
+                daemon.send(encoded);
+            }
+            return;
+        }
+        const daemon = this.sendToDaemon(encoded);
+        if (daemon === null) {
             this.refuseOffline(socket, operationAddress(command));
+        } else if (command.kind === "content.write" || command.kind === "file.read") {
+            socket.recordTransferDaemon(daemon, command.kind === "file.read" ? "file-read" : "content-write");
         }
     };
 

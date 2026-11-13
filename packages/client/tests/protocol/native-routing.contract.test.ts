@@ -13,7 +13,7 @@ import {
     decodeNativeSessionResult,
     type NativeSessionCommandRouting,
     type NativeSessionResultRouting,
-    nativeSessionRequestCodec,
+    nativeSessionCommandCodec,
     nativeSessionResultCodec,
 } from "../../src/protocol/index.ts";
 
@@ -93,7 +93,7 @@ describe("Native Session routing", () => {
         async ({ message, routing }) => {
             const { client, computer, signal } = await endpoints();
             const expected = decodeNativeSessionRequest(JSON.stringify(message));
-            const wire = await nativeSessionRequestCodec.encode(expected, client, signal);
+            const wire = await nativeSessionCommandCodec.encode(expected, client, signal);
             const route = decodeClientToRelayMessage(wire);
             expect(route).toEqual({
                 kind: requestBase.kind,
@@ -102,19 +102,19 @@ describe("Native Session routing", () => {
                 encrypted: expect.any(String),
             });
             expect(wire).not.toContain("/private/workspace");
-            expect(await nativeSessionRequestCodec.decode(wire, computer, signal)).toEqual(expected);
+            expect(await nativeSessionCommandCodec.decode(wire, computer, signal)).toEqual(expected);
         },
     );
 
     it("Given a routed native request, when its authenticated action or target is changed, then the Computer rejects it", async () => {
         const { client, computer, signal } = await endpoints();
-        const wire = await nativeSessionRequestCodec.encode(requests[2]?.message, client, signal);
-        const route = nativeSessionRequestCodec.decodeRouting(wire);
+        const wire = await nativeSessionCommandCodec.encode(requests[2]?.message, client, signal);
+        const route = nativeSessionCommandCodec.decodeRouting(wire);
         if (route.action !== "find") {
             throw new Error("Expected find route");
         }
         await expect(
-            nativeSessionRequestCodec.decode(
+            nativeSessionCommandCodec.decode(
                 JSON.stringify({ ...route, target: { ...route.target, sessionId: "other" } }),
                 computer,
                 signal,
@@ -124,7 +124,7 @@ describe("Native Session routing", () => {
 
     it("Given a routed import, when its action is changed to fork, then the Computer rejects it", async () => {
         const { client, computer, signal } = await endpoints();
-        const wire = await nativeSessionRequestCodec.encode(
+        const wire = await nativeSessionCommandCodec.encode(
             {
                 ...requestBase,
                 action: "import",
@@ -135,12 +135,12 @@ describe("Native Session routing", () => {
             client,
             signal,
         );
-        const route = nativeSessionRequestCodec.decodeRouting(wire);
+        const route = nativeSessionCommandCodec.decodeRouting(wire);
         if (route.action !== "import") {
             throw new Error("Expected import route");
         }
         await expect(
-            nativeSessionRequestCodec.decode(JSON.stringify({ ...route, action: "fork" }), computer, signal),
+            nativeSessionCommandCodec.decode(JSON.stringify({ ...route, action: "fork" }), computer, signal),
         ).rejects.toMatchObject({ code: "e2e_authentication_failed" });
     });
 
@@ -155,7 +155,7 @@ describe("Native Session routing", () => {
             signal,
         );
         await expect(
-            nativeSessionRequestCodec.decode(JSON.stringify({ ...routing, encrypted }), computer, signal),
+            nativeSessionCommandCodec.decode(JSON.stringify({ ...routing, encrypted }), computer, signal),
         ).rejects.toMatchObject({ code: "invalid_protocol_message" });
     });
 });

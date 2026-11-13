@@ -21,14 +21,23 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
                   readonly kind: "forwarded";
                   readonly daemon: RelaySocket;
                   readonly action: NativeSessionCommandRouting["action"];
+              }
+            | {
+                  readonly kind: "file-read" | "content-write";
+                  readonly daemon: RelaySocket;
               } = { kind: "not-forwarded" };
         const discoveries = new Map<string, string>();
         this.server = {
             recordRequestDaemon: (daemon, action) => {
                 request = { kind: "forwarded", daemon, action };
             },
-            requestDaemon: () => (request.kind === "forwarded" ? request.daemon : null),
+            recordTransferDaemon: (daemon, kind) => {
+                request = { kind, daemon };
+            },
+            requestDaemon: () => (request.kind === "not-forwarded" ? null : request.daemon),
             requestAction: () => (request.kind === "forwarded" ? request.action : null),
+            requestTransferKind: () =>
+                request.kind === "file-read" || request.kind === "content-write" ? request.kind : null,
             close: (code, reason) => this.close(code, reason),
             send: (message) => {
                 if (this.isOpen()) {

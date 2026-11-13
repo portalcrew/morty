@@ -102,7 +102,7 @@ const agentSettingsDiscoveryFailedEventSchema = z
     })
     .readonly();
 
-export type AgentSettingsDiscoveryFailedEvent = z.infer<typeof agentSettingsDiscoveryFailedEventSchema>;
+type AgentSettingsDiscoveryFailedEvent = z.infer<typeof agentSettingsDiscoveryFailedEventSchema>;
 
 export const decodeAgentSettingsDiscoverCommand = (encoded: string): AgentSettingsDiscoverCommand =>
     decode(encoded, agentSettingsDiscoverCommandSchema);
@@ -110,12 +110,8 @@ export const encodeAgentSettingsDiscoverCommand = (message: AgentSettingsDiscove
     encode(message, agentSettingsDiscoverCommandSchema);
 export const decodeAgentSettingsDiscoveredEvent = (encoded: string): AgentSettingsDiscoveredEvent =>
     decode(encoded, agentSettingsDiscoveredEventSchema);
-export const encodeAgentSettingsDiscoveredEvent = (message: AgentSettingsDiscoveredEvent): string =>
-    encode(message, agentSettingsDiscoveredEventSchema);
-export const decodeAgentSettingsDiscoveryFailedEvent = (encoded: string): AgentSettingsDiscoveryFailedEvent =>
+const decodeAgentSettingsDiscoveryFailedEvent = (encoded: string): AgentSettingsDiscoveryFailedEvent =>
     decode(encoded, agentSettingsDiscoveryFailedEventSchema);
-export const encodeAgentSettingsDiscoveryFailedEvent = (message: AgentSettingsDiscoveryFailedEvent): string =>
-    encode(message, agentSettingsDiscoveryFailedEventSchema);
 
 const agentSettingsDiscoverCommandPublicRoutingSchema = z.object({
     kind: z.literal(AGENT_SETTINGS_DISCOVER_KIND),

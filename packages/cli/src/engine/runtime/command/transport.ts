@@ -8,6 +8,7 @@ import {
     type NativeSessionTarget,
     SESSION_EVENTS_UNSUBSCRIBE_KIND,
     sessionOperationFailedEventCodec,
+    WORKER_FILE_CREDIT_KIND,
     WORKER_REQUEST_CANCEL_KIND,
 } from "@morty-build/client/protocol";
 import { WebSocket } from "undici";
@@ -25,7 +26,11 @@ export async function receive(
 ): Promise<DaemonCommand> {
     signal.throwIfAborted();
     const routing = decodeRelayToDaemonMessage(encoded);
-    if (routing.kind === SESSION_EVENTS_UNSUBSCRIBE_KIND || routing.kind === WORKER_REQUEST_CANCEL_KIND) {
+    if (
+        routing.kind === SESSION_EVENTS_UNSUBSCRIBE_KIND ||
+        routing.kind === WORKER_REQUEST_CANCEL_KIND ||
+        routing.kind === WORKER_FILE_CREDIT_KIND
+    ) {
         return routing;
     }
     if (routing.kind === COMPUTER_HEARTBEAT_ACK_KIND || routing.kind === COMPUTER_LIVENESS_READY_KIND) {

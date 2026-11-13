@@ -3,6 +3,7 @@ import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/c
 import * as v from "valibot";
 import { expect, onTestFinished, test, vi } from "vitest";
 import { createControlledAgentRuntime } from "../../../tests/support/fake-daemon/runtime.ts";
+import type { runSharedComputer } from "../../web/src/services/remote-agent.ts";
 
 test("Given a shared Computer, when a remote Agent runs the served helper, then it receives the Agent's answer", {
     timeout: 90_000,
@@ -68,18 +69,11 @@ test("Given a shared Computer, when a remote Agent runs the served helper, then 
     if (bundle === undefined) {
         throw new Error("Missing served helper");
     }
-    const helper: {
-        runSharedComputer: (options: {
-            link: string;
-            redemptionKey: string;
-            conversationKey: string;
-            turnId: string;
-            prompt: string;
-            harness: string;
-            directory: string;
-            signal: AbortSignal;
-        }) => Promise<{ answer: string }>;
-    } = await import(`data:text/javascript;base64,${Buffer.from(bundle).toString("base64")}`);
+    const module: unknown = await import(`data:text/javascript;base64,${Buffer.from(bundle).toString("base64")}`);
+    const helper = v.parse(
+        v.object({ runSharedComputer: v.custom<typeof runSharedComputer>((value) => typeof value === "function") }),
+        module,
+    );
     const input = {
         link: link.href,
         redemptionKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),

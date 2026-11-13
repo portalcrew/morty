@@ -78,7 +78,7 @@ import {
     sessionOperationFailedEventCodec,
     sessionPromptAcceptedEventCodec,
 } from "./protocol/session/lifecycle/index.ts";
-import { nativeSessionRequestCodec, nativeSessionResultCodec } from "./protocol/session/native/index.ts";
+import { nativeSessionCommandCodec, nativeSessionResultCodec } from "./protocol/session/native/index.ts";
 import {
     sessionHistoryPageLoadCodec,
     sessionHistoryPageLoadedCodec,
@@ -939,7 +939,7 @@ export class MortySessionResources {
                 target: sessionTarget,
                 ...(commandId === undefined ? {} : { commandId }),
             }),
-            await nativeSessionRequestCodec.encode(
+            await nativeSessionCommandCodec.encode(
                 {
                     kind: "native.session.request",
                     action: "active-turn",

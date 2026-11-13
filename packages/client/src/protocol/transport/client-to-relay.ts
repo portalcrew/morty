@@ -64,7 +64,7 @@ import { decodeMessageKind, ProtocolMessageError } from "../shared/message-codec
 
 import type { daemonInboundSignatures } from "./command-codecs.ts";
 
-export const clientToRelayDecoders = {
+const clientToRelayDecoders = {
     [SESSION_EVENTS_SUBSCRIBE_KIND]: sessionEventsSubscribeCommandCodec.decodeRouting,
     [SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND]: sessionPreviewHistoryPageLoadCodec.decodeRouting,
     [AGENT_SETTINGS_DISCOVER_KIND]: agentSettingsDiscoverCommandCodec.decodeRouting,

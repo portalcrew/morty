@@ -78,6 +78,7 @@ export async function streamLocalFile({
     sendBegin,
     sendEnd,
     sendChunk,
+    takeCredit,
     signal,
     workingDirectory,
     externalContent,
@@ -86,6 +87,7 @@ export async function streamLocalFile({
     readonly sendBegin: (message: ReturnType<typeof decodeFileBeginEvent>) => Promise<void>;
     readonly sendEnd: (message: ReturnType<typeof decodeFileEndEvent>) => Promise<void>;
     readonly sendChunk: (requestId: string, sequence: number, bytes: Uint8Array) => Promise<void>;
+    readonly takeCredit: (signal: AbortSignal) => Promise<void>;
     readonly signal: AbortSignal;
     readonly workingDirectory: string | null;
     readonly externalContent: ExternalContentStore;
@@ -114,9 +116,21 @@ export async function streamLocalFile({
         target: command.target,
     });
     let sequence = 0;
-    for await (const bytes of readFileChunks(target, CONTENT_CHUNK_MAX_BYTES, signal)) {
-        await sendChunk(command.requestId, sequence, bytes);
-        sequence += 1;
+    const chunks = readFileChunks(target, CONTENT_CHUNK_MAX_BYTES, signal)[Symbol.asyncIterator]();
+    try {
+        while (true) {
+            signal.throwIfAborted();
+            await takeCredit(signal);
+            signal.throwIfAborted();
+            const next = await chunks.next();
+            if (next.done) {
+                break;
+            }
+            await sendChunk(command.requestId, sequence, next.value);
+            sequence += 1;
+        }
+    } finally {
+        await chunks.return?.();
     }
     const after = await readPathMetadata(target);
     signal.throwIfAborted();

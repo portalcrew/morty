@@ -60,45 +60,6 @@ export type SessionHistoryPageLoaded = z.infer<typeof sessionHistoryPageLoadedSc
 export type SessionPreviewHistoryPageLoad = z.infer<typeof sessionPreviewHistoryPageLoadSchema>;
 export type SessionPreviewHistoryPageLoaded = z.infer<typeof sessionPreviewHistoryPageLoadedSchema>;
 
-const wireNativeSessionEventsSchema = z
-    .object({
-        events: z
-            .object({
-                events: z.array(z.unknown()).max(10_000).readonly(),
-                nextCursor: z.string().min(1).max(512).nullable(),
-                sessionGenerationId: identifier,
-                tailCursor: z.string().max(512),
-                throughPosition: z.string().regex(/^(0|[1-9][0-9]*)$/u),
-                truncated: z.boolean(),
-                version: z.literal(2),
-            })
-            .passthrough()
-            .readonly(),
-        queuedPromptRequests: z.array(z.unknown()).max(1_000).readonly(),
-    })
-    .passthrough()
-    .readonly();
-const sessionHistoryWirePageLoadedSchema = z
-    .object({
-        events: wireNativeSessionEventsSchema,
-        kind: z.literal(SESSION_HISTORY_PAGE_LOADED_KIND),
-        requestId: identifier,
-        target: nativeSessionTargetSchema,
-    })
-    .passthrough()
-    .readonly();
-const sessionPreviewHistoryWirePageLoadedSchema = z
-    .object({
-        events: wireNativeSessionEventsSchema,
-        kind: z.literal(SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND),
-        requestId: identifier,
-        target: nativeSessionTargetSchema,
-    })
-    .passthrough()
-    .readonly();
-export type SessionHistoryWirePageLoaded = z.infer<typeof sessionHistoryWirePageLoadedSchema>;
-export type SessionPreviewHistoryWirePageLoaded = z.infer<typeof sessionPreviewHistoryWirePageLoadedSchema>;
-
 function decode<T>(schema: z.ZodType<T>, encoded: string): T {
     try {
         const value: unknown = JSON.parse(encoded);
@@ -128,18 +89,10 @@ export const decodeSessionPreviewHistoryPageLoad = (encoded: string): SessionPre
     decode(sessionPreviewHistoryPageLoadSchema, encoded);
 export const decodeSessionPreviewHistoryPageLoaded = (encoded: string): SessionPreviewHistoryPageLoaded =>
     decodeLoaded(sessionPreviewHistoryPageLoadedSchema, encoded);
-export const decodeSessionHistoryWirePageLoaded = (encoded: string): SessionHistoryWirePageLoaded =>
-    decode(sessionHistoryWirePageLoadedSchema, encoded);
-export const decodeSessionPreviewHistoryWirePageLoaded = (encoded: string): SessionPreviewHistoryWirePageLoaded =>
-    decode(sessionPreviewHistoryWirePageLoadedSchema, encoded);
 export const encodeSessionHistoryPageLoad = (value: SessionHistoryPageLoad): string =>
     JSON.stringify(sessionHistoryPageLoadSchema.parse(value));
-export const encodeSessionHistoryPageLoaded = (value: SessionHistoryPageLoaded): string =>
-    JSON.stringify(sessionHistoryPageLoadedSchema.parse(value));
 export const encodeSessionPreviewHistoryPageLoad = (value: SessionPreviewHistoryPageLoad): string =>
     JSON.stringify(sessionPreviewHistoryPageLoadSchema.parse(value));
-export const encodeSessionPreviewHistoryPageLoaded = (value: SessionPreviewHistoryPageLoaded): string =>
-    JSON.stringify(sessionPreviewHistoryPageLoadedSchema.parse(value));
 
 const sessionPreviewHistoryPageLoadPublicRoutingSchema = z.object({
     kind: z.literal(SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND),

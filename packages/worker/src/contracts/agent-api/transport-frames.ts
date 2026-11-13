@@ -99,6 +99,13 @@ export const transportFrames = {
             subscriptionId: frameIdentifier,
             path: v.pipe(sessionPath, v.description("The Session's events path.")),
             headers,
+            body: v.pipe(
+                v.string(),
+                v.maxLength(MAX_BODY_BYTES),
+                v.description(
+                    "The JSON-encoded encrypted session.events.subscribe command. Its subscriptionId must match this frame's caller-owned subscriptionId.",
+                ),
+            ),
         }),
     },
     eventsUnsubscribe: {

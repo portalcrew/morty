@@ -190,6 +190,7 @@ export class ComputerService {
             }
         }
         for (const { socket } of previous) {
+            this.relay(computerId).failTransfersOwnedBy(socket);
             socket.replaceDaemon();
         }
         const connection = this.#cx.services.connections.next(computerId);
@@ -371,12 +372,40 @@ export class ComputerService {
         }
     };
 
-    readonly cancelNativeRequest = (
+    readonly cancelRequest = (
         computerId: string,
         operation: ComputerOperationSocket,
         requestId: string,
         signal: AbortSignal,
     ): void => {
+        const daemon = this.requestControlDaemon(computerId, operation, requestId, signal);
+        if (daemon !== null) {
+            this.relay(computerId).forwardRequestCancellation(daemon, requestId);
+        }
+    };
+
+    readonly grantFileCredit = (
+        computerId: string,
+        operation: ComputerOperationSocket,
+        requestId: string,
+        signal: AbortSignal,
+    ): void => {
+        if (operation.requestTransferKind() !== "file-read") {
+            throw new PairingDirectoryError("invalid_request", "The credit does not own a file read");
+        }
+        const daemon = this.requestControlDaemon(computerId, operation, requestId, signal);
+        if (daemon === null) {
+            throw new PairingDirectoryError("computer_offline", "The Computer connection closed");
+        }
+        this.relay(computerId).forwardFileCredit(daemon, requestId);
+    };
+
+    private readonly requestControlDaemon = (
+        computerId: string,
+        operation: ComputerOperationSocket,
+        requestId: string,
+        signal: AbortSignal,
+    ): RelaySocket | null => {
         signal.throwIfAborted();
         const ownsOperation = this.#cx.gateways.peers
             .operations()
@@ -386,7 +415,7 @@ export class ComputerService {
         }
         const original = operation.requestDaemon();
         if (original === null) {
-            return;
+            return null;
         }
         const daemon = this.#cx.gateways.peers
             .sockets()
@@ -399,10 +428,10 @@ export class ComputerService {
                     this.#cx.services.connections.isCurrent(identity),
             );
         if (daemon === undefined) {
-            return;
+            return null;
         }
         signal.throwIfAborted();
-        this.relay(computerId).forwardNativeCancellation(daemon.socket, requestId);
+        return daemon.socket;
     };
 
     readonly receiveMessage = async (

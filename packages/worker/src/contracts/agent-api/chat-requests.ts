@@ -5,7 +5,6 @@ import {
     type ComputerPingCommandRouting,
     computerDiagnosticsRequestCodec,
     computerPingCommandCodec,
-    isDirectoryPath,
     type NativeSessionCommandRouting,
     nativeSessionCommandCodec,
     type SessionArchiveCommandRouting,
@@ -24,13 +23,10 @@ import {
     workspaceListCommandCodec,
 } from "@morty-build/client/protocol";
 import * as v from "valibot";
-import { relayIdentifier } from "../computer-management.ts";
 
 // The request bodies the Chat API accepts. Its routes validate with these schemas, and the published agent API
 // description is generated from them.
 
-/** An absolute directory on the Computer. */
-export const nativeDirectory = v.custom<string>(isDirectoryPath);
 export const setupInput = v.custom<AgentSettingsDiscoverCommandRouting>((value) => {
     try {
         agentSettingsDiscoverCommandCodec.decodeRouting(JSON.stringify(value));
@@ -137,10 +133,6 @@ export const sessionAccessInput = v.custom<SessionPrepareCommandRouting>((value)
         return false;
     }
 }, "An encrypted Session access request is required.");
-/** One Session the Computer holds. */
-export const nativeSessionTargetInput = v.strictObject({ harness: relayIdentifier, sessionId: relayIdentifier });
-/** Imports a native Session the Computer has but Morty Recent does not list yet. */
-export const nativeContinuationInput = v.strictObject({ harness: relayIdentifier, sessionId: relayIdentifier });
 /** The client owns Session creation; the Worker authorizes only its declared route. */
 export const accessInput = v.custom<SessionCreateCommandRouting>((value) => {
     try {

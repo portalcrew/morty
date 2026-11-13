@@ -3,6 +3,7 @@ import {
     agentSettingsDiscoveredEventCodec,
     agentSettingsDiscoveryFailedEventCodec,
     CONTENT_AVAILABLE_KIND,
+    CONTENT_CHUNK_ACK_KIND,
     CONTENT_CHUNK_MAX_BYTES,
     CONTENT_READY_KIND,
     CONTENT_WRITE_MAX_BYTES,
@@ -12,10 +13,12 @@ import {
     contentReadyEventCodec,
     contentWriteCommandCodec,
     decodeComputerStatusEvent,
+    decodeContentChunkAck,
     decodeMessageKind,
     decodeWorkerRequestRejected,
     encodeClientToRelayMessage,
     encodeFileStreamRecord,
+    encodeWorkerFileCredit,
     encodeWorkerRequestCancel,
     FILE_BEGIN_KIND,
     FILE_END_KIND,
@@ -29,6 +32,7 @@ import {
     type NativeSessionTarget,
 } from "@morty-build/client/protocol";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
+import { logger } from "../../../../infra/logger.ts";
 import {
     type ClientControlCommand,
     type ClientControlReply,
@@ -74,15 +78,11 @@ async function awaitComputerReply<Reply>(
     );
     const deadline = AbortSignal.any([signal, timeout.signal, stopped.signal]);
     let cleanup = () => {};
+    let completed = false;
     try {
-        return await new Promise<Reply>((resolve, reject) => {
+        const result = await new Promise<Reply>((resolve, reject) => {
             const onClose = () => reject(new SessionRuntimeError("computer_offline", "The Computer connection closed"));
             const onAbort = () => {
-                try {
-                    exchange.abandoned?.();
-                } catch {
-                    // The cancellation remains authoritative when cleanup cannot reach the Computer.
-                }
                 reject(deadline.reason);
             };
             const onMessage = (event: Event) => {
@@ -141,7 +141,16 @@ async function awaitComputerReply<Reply>(
                 reject(cause);
             }
         });
+        completed = true;
+        return result;
     } finally {
+        if (!completed) {
+            try {
+                exchange.abandoned?.();
+            } catch {
+                // The original failure remains authoritative if cleanup cannot reach the Computer.
+            }
+        }
         cleanup();
         stopped.abort();
         clearTimeout(timer);
@@ -219,6 +228,26 @@ export async function requestComputerContentWrite(
     type UploadState = { readonly kind: "waiting" } | { readonly kind: "uploading" } | { readonly kind: "committed" };
     let state: UploadState = { kind: "waiting" };
     let upload: Promise<void> = Promise.resolve();
+    let acknowledgement: { readonly sequence: number; readonly resolve: () => void } | null = null;
+    const waitForAck = (sequence: number, deadline: AbortSignal): Promise<void> =>
+        new Promise((resolve, reject) => {
+            const abort = () => {
+                acknowledgement = null;
+                reject(deadline.reason);
+            };
+            acknowledgement = {
+                sequence,
+                resolve: () => {
+                    deadline.removeEventListener("abort", abort);
+                    acknowledgement = null;
+                    resolve();
+                },
+            };
+            deadline.addEventListener("abort", abort, { once: true });
+            if (deadline.aborted) {
+                abort();
+            }
+        });
     const sendBody = async (deadline: AbortSignal): Promise<void> => {
         let sequence = 0;
         let sentBytes = 0;
@@ -235,7 +264,14 @@ export async function requestComputerContentWrite(
                 if (chunk.requestId !== command.requestId || chunk.sequence !== sequence || sentBytes > maximum) {
                     throw new SessionRuntimeError("invalid_request", "The encrypted content chunks are invalid");
                 }
-                socket.send(record.encoded);
+                const accepted = waitForAck(sequence, deadline);
+                try {
+                    socket.send(record.encoded);
+                } catch (cause) {
+                    void accepted.catch(() => undefined);
+                    throw cause;
+                }
+                await accepted;
                 sequence += 1;
                 continue;
             }
@@ -269,8 +305,28 @@ export async function requestComputerContentWrite(
     };
     return await awaitComputerReply(socket, command.requestId, signal, {
         send: () => socket.send(encodedCommand),
+        abandoned: () => {
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId: command.requestId }));
+            }
+        },
         receive: (encoded, kind, fail, deadline) => {
             switch (kind) {
+                case CONTENT_CHUNK_ACK_KIND: {
+                    const ack = decodeContentChunkAck(encoded);
+                    if (
+                        ack.requestId !== command.requestId ||
+                        acknowledgement === null ||
+                        ack.sequence !== acknowledgement.sequence
+                    ) {
+                        throw new SessionRuntimeError(
+                            "invalid_request",
+                            "The Computer returned an invalid content acknowledgement",
+                        );
+                    }
+                    acknowledgement.resolve();
+                    return { kind: "ignore" };
+                }
                 case CONTENT_READY_KIND:
                     if (!matches(contentReadyEventCodec.decodeRouting(encoded))) {
                         return { kind: "ignore" };
@@ -328,6 +384,7 @@ export async function requestComputerFile(
               readonly controller: ReadableStreamDefaultController<Uint8Array>;
               readonly receivedBytes: number;
               readonly nextSequence: number;
+              readonly credit: "available" | "outstanding";
           }
         | { readonly kind: "finished" };
     let state: TransferState = { kind: "waiting" };
@@ -336,7 +393,7 @@ export async function requestComputerFile(
     const maxCiphertextBytes = Math.ceil(command.maxBytes / CONTENT_CHUNK_MAX_BYTES) * FILE_STREAM_MAX_CHUNK_BYTES;
     let cleanup = () => {};
     const response = await new Promise<Response>((resolve, reject) => {
-        const finish = (): void => {
+        const finish = (completed: boolean): void => {
             if (state.kind === "finished") {
                 return;
             }
@@ -344,9 +401,22 @@ export async function requestComputerFile(
             clearTimeout(timer);
             cleanup();
             try {
-                socket.close(1000, "Operation finished");
+                if (!completed && socket.readyState === WebSocket.OPEN) {
+                    socket.send(
+                        encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId: command.requestId }),
+                    );
+                }
+            } catch (cause) {
+                logger.warn(
+                    { err: cause, event: "file_download_cancellation_failed" },
+                    "File download cancellation failed",
+                );
             } finally {
-                settleFinished();
+                try {
+                    socket.close(1000, "Operation finished");
+                } finally {
+                    settleFinished();
+                }
             }
         };
         const fail = (cause: unknown): void => {
@@ -358,20 +428,38 @@ export async function requestComputerFile(
             } else {
                 reject(cause);
             }
-            finish();
+            finish(false);
         };
         const startResponse = (encoded: string, terminal: boolean): void => {
             const record = encodeFileStreamRecord({ kind: "message", encoded });
             const body = new ReadableStream<Uint8Array>({
                 start(controller) {
-                    state = { kind: "streaming", controller, receivedBytes: 0, nextSequence: 0 };
+                    state = { kind: "streaming", controller, receivedBytes: 0, nextSequence: 0, credit: "available" };
                     controller.enqueue(record);
                     if (terminal) {
                         controller.close();
                     }
                 },
+                pull() {
+                    if (state.kind !== "streaming" || state.credit !== "available") {
+                        return;
+                    }
+                    try {
+                        deadline.throwIfAborted();
+                        state = { ...state, credit: "outstanding" };
+                        socket.send(
+                            encodeWorkerFileCredit({
+                                kind: "worker.file.credit",
+                                requestId: command.requestId,
+                                chunks: 1,
+                            }),
+                        );
+                    } catch (cause) {
+                        fail(cause);
+                    }
+                },
                 cancel() {
-                    finish();
+                    finish(false);
                 },
             });
             resolve(
@@ -403,7 +491,7 @@ export async function requestComputerFile(
             }
             state.controller.enqueue(encodeFileStreamRecord({ kind: "message", encoded }));
             state.controller.close();
-            finish();
+            finish(true);
         };
         const handlers: Readonly<Record<string, ((encoded: string) => void) | undefined>> = {
             [FILE_BEGIN_KIND]: (encoded) => {
@@ -426,7 +514,7 @@ export async function requestComputerFile(
                 }
                 if (state.kind === "waiting") {
                     startResponse(encoded, true);
-                    finish();
+                    finish(true);
                     return;
                 }
                 endStream(encoded);
@@ -453,7 +541,11 @@ export async function requestComputerFile(
                     if (chunk.requestId !== command.requestId) {
                         return;
                     }
-                    if (state.kind !== "streaming" || chunk.sequence !== state.nextSequence) {
+                    if (
+                        state.kind !== "streaming" ||
+                        state.credit !== "outstanding" ||
+                        chunk.sequence !== state.nextSequence
+                    ) {
                         throw new SessionRuntimeError("invalid_request", "The Computer returned invalid file chunks");
                     }
                     const data: unknown = event.data;
@@ -469,8 +561,9 @@ export async function requestComputerFile(
                     if (receivedBytes > maxCiphertextBytes) {
                         throw new SessionRuntimeError("invalid_request", "The Computer exceeded the file size limit");
                     }
-                    state.controller.enqueue(encodeFileStreamRecord({ kind: "chunk", encoded }));
-                    state = { ...state, receivedBytes, nextSequence: state.nextSequence + 1 };
+                    const controller = state.controller;
+                    state = { ...state, receivedBytes, nextSequence: state.nextSequence + 1, credit: "available" };
+                    controller.enqueue(encodeFileStreamRecord({ kind: "chunk", encoded }));
                     return;
                 }
                 handlers[decodeMessageKind(event.data)]?.(event.data);

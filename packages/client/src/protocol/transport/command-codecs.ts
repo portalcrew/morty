@@ -66,7 +66,6 @@ import { isIdentifier } from "../shared/identifier.ts";
 import { decodeMessageKind, ProtocolMessageError } from "../shared/message-codec.ts";
 
 import { defineMessageSignature } from "./message-signature.ts";
-import type { WorkerToDaemonMessage } from "./worker-to-daemon.ts";
 
 export const daemonInboundSignatures = {
     [SESSION_EVENTS_SUBSCRIBE_KIND]: defineMessageSignature({
@@ -140,7 +139,6 @@ export const daemonInboundSignatures = {
 export type ClientCommand = Awaited<
     ReturnType<(typeof daemonInboundSignatures)[keyof typeof daemonInboundSignatures]["decode"]>
 >;
-export type DaemonInboundMessage = ClientCommand | WorkerToDaemonMessage;
 const daemonInboundRegistry: Readonly<
     Record<
         string,

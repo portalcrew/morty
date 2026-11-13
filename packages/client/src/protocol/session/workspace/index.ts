@@ -44,10 +44,8 @@ export const decodeWorkspaceListCommand = (encoded: string): WorkspaceListComman
     decode(encoded, workspaceListCommandSchema);
 export const encodeWorkspaceListCommand = (message: WorkspaceListCommand): string =>
     encode(message, workspaceListCommandSchema);
-export const decodeWorkspaceEntriesEvent = (encoded: string): WorkspaceEntriesEvent =>
+const decodeWorkspaceEntriesEvent = (encoded: string): WorkspaceEntriesEvent =>
     decode(encoded, workspaceEntriesEventSchema);
-export const encodeWorkspaceEntriesEvent = (message: WorkspaceEntriesEvent): string =>
-    encode(message, workspaceEntriesEventSchema);
 
 const workspaceListCommandPublicRoutingSchema = z.object({
     kind: z.literal(WORKSPACE_LIST_KIND),

@@ -11,7 +11,7 @@ import {
     computerCredentialSuccessor,
     decodeSessionEventEnvelope,
     type NativeSessionTarget,
-    nativeSessionRequestCodec,
+    nativeSessionCommandCodec,
     nativeSessionResultCodec,
     sessionCloseNoticeEventCodec,
     sessionConfigReadCommandCodec,
@@ -553,7 +553,7 @@ it("Given a Session credential, When the browser requests its encrypted active T
     socket.accept();
     onTestFinished(() => closeBrowserSocket(socket, new AbortController().signal));
     const other = await encryptionPair();
-    const wrong = await nativeSessionRequestCodec.encode(
+    const wrong = await nativeSessionCommandCodec.encode(
         {
             kind: "native.session.request",
             requestId: "wrong-active",
@@ -579,7 +579,7 @@ it("Given a Session credential, When the browser requests its encrypted active T
     expect(await inbox.next()).toMatchObject({ kind: "http.response", requestId: "wrong-active-http", status: 400 });
     const { sender, receiver } = await encryptionPair();
     const signal = new AbortController().signal;
-    const command = await nativeSessionRequestCodec.encode(
+    const command = await nativeSessionCommandCodec.encode(
         {
             kind: "native.session.request",
             requestId: "active-1",
@@ -641,7 +641,7 @@ it("Given an authorized native Fork, When the Computer returns a new Session, Th
     );
     const requestId = `chat_${[...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
     const encryption = await encryptionPair();
-    const encoded = await nativeSessionRequestCodec.encode(
+    const encoded = await nativeSessionCommandCodec.encode(
         {
             kind: "native.session.request",
             action: "fork",
@@ -738,7 +738,7 @@ it("Given a forwarded native Session request, When the browser cancels it, Then 
     socket.accept();
     onTestFinished(() => closeBrowserSocket(socket, new AbortController().signal));
     const { receiver } = await encryptionPair();
-    const command = await nativeSessionRequestCodec.encode(
+    const command = await nativeSessionCommandCodec.encode(
         { kind: "native.session.request", requestId: "native-cancel-id", action: "active-turn", target },
         receiver,
         new AbortController().signal,
@@ -786,7 +786,7 @@ it("Given a native request forwarded to an earlier daemon, When the daemon is re
         ["authorization", `Bearer ${credential}`],
         ["content-type", "application/json"],
     ];
-    const initial = await nativeSessionRequestCodec.encode(
+    const initial = await nativeSessionCommandCodec.encode(
         { kind: "native.session.request", requestId: "old-native", action: "active-turn", target },
         initialCrypto.receiver,
         signal,
@@ -904,7 +904,7 @@ it("Given a forwarded prompt, When the browser cancels its HTTP request, Then th
     socket.send(JSON.stringify({ kind: "http.cancel", requestId: "prompt-http" }));
     socket.send('{"kind":"ping"}');
     expect(await inbox.next()).toEqual({ kind: "pong" });
-    const native = await nativeSessionRequestCodec.encode(
+    const native = await nativeSessionCommandCodec.encode(
         { kind: "native.session.request", requestId: "next-native", action: "active-turn", target },
         nativeEncryption.receiver,
         signal,

@@ -36,7 +36,7 @@ import {
     fileBeginEventCodec,
     MORTY_API_PREFIX,
     type NativeSessionTarget,
-    nativeSessionRequestCodec,
+    nativeSessionCommandCodec,
     nativeSessionResultCodec,
     type SessionConfigReadResult,
     sessionCancelBeforeStartCommandCodec,
@@ -1377,7 +1377,7 @@ it("Given Chat reads the Session execution naming an unconfirmed command, When t
     try {
         const signal = new AbortController().signal;
         const encryption = await endpointEncryption(runtime.computerId, signal);
-        const encoded = await nativeSessionRequestCodec.encode(
+        const encoded = await nativeSessionCommandCodec.encode(
             {
                 kind: "native.session.request",
                 requestId: "delivery-read",
@@ -1438,7 +1438,7 @@ it("Given Chat reads the Session execution after missing a turn's outcome, When 
     try {
         const signal = new AbortController().signal;
         const encryption = await endpointEncryption(runtime.computerId, signal);
-        const encoded = await nativeSessionRequestCodec.encode(
+        const encoded = await nativeSessionCommandCodec.encode(
             {
                 kind: "native.session.request",
                 requestId: "last-turn-read",
@@ -2104,6 +2104,14 @@ describe.sequential("Relay Turn submission", () => {
             );
             const response = await pending;
             await response.body?.cancel();
+            const control = decodeWorkerToDaemonMessage(await runtime.daemonMessages.next());
+            if (control.kind === "worker.file.credit") {
+                expect(control.requestId).toBe(read.requestId);
+                const cancellation = decodeWorkerToDaemonMessage(await runtime.daemonMessages.next());
+                expect(cancellation).toMatchObject({ kind: "worker.request.cancel", requestId: read.requestId });
+            } else {
+                expect(control).toMatchObject({ kind: "worker.request.cancel", requestId: read.requestId });
+            }
 
             runtime.daemon.send(
                 await contentChunkCodec.encode(
@@ -2117,7 +2125,7 @@ describe.sequential("Relay Turn submission", () => {
                 ),
             );
 
-            const encoded = await nativeSessionRequestCodec.encode(
+            const encoded = await nativeSessionCommandCodec.encode(
                 {
                     kind: "native.session.request",
                     requestId: "after-late-file",
@@ -2282,7 +2290,7 @@ describe.sequential("Relay Turn submission", () => {
                 runtime.computerId,
                 controller.signal,
             );
-            const encoded = await nativeSessionRequestCodec.encode(
+            const encoded = await nativeSessionCommandCodec.encode(
                 {
                     kind: "native.session.request",
                     requestId: "cancel-native-request",
@@ -3199,7 +3207,7 @@ it("Given a Fork in flight, When it is requested again concurrently and after Re
         const encryption = await endpointEncryption(runtime.computerId, signal);
         const requestId = await forkRequestId(runtime.computerId, operationId);
         const makeFork = (source: typeof input) =>
-            nativeSessionRequestCodec.encode(
+            nativeSessionCommandCodec.encode(
                 { kind: "native.session.request", action: "fork", requestId, ...source },
                 encryption.client,
                 signal,
@@ -3271,7 +3279,7 @@ it("Given the Computer rejects a Fork, When the same operation is retried, Then 
         const encryption = await endpointEncryption(runtime.computerId, signal);
         const requestId = await forkRequestId(runtime.computerId, operationId);
         const makeFork = () =>
-            nativeSessionRequestCodec.encode(
+            nativeSessionCommandCodec.encode(
                 { kind: "native.session.request", action: "fork", requestId, ...input },
                 encryption.client,
                 signal,

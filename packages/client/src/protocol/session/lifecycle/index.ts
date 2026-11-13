@@ -260,46 +260,32 @@ export const encodeSessionListCommand = (message: SessionListCommand): string =>
     encode(message, sessionListCommandSchema);
 export const decodeSessionsListedEvent = (encoded: string): SessionsListedEvent =>
     decode(encoded, sessionsListedEventSchema);
-export const encodeSessionsListedEvent = (message: SessionsListedEvent): string =>
-    encode(message, sessionsListedEventSchema);
-export const decodeSessionQueryCommand = (encoded: string): SessionQueryCommand =>
-    decode(encoded, sessionQueryCommandSchema);
+const decodeSessionQueryCommand = (encoded: string): SessionQueryCommand => decode(encoded, sessionQueryCommandSchema);
 export const encodeSessionQueryCommand = (message: SessionQueryCommand): string =>
     encode(message, sessionQueryCommandSchema);
 export const decodeSessionsQueriedEvent = (encoded: string): SessionsQueriedEvent =>
     decode(encoded, sessionsQueriedEventSchema);
-export const encodeSessionsQueriedEvent = (message: SessionsQueriedEvent): string =>
-    encode(message, sessionsQueriedEventSchema);
 export const decodeSessionRestoreCommand = (encoded: string): SessionRestoreCommand =>
     decode(encoded, sessionRestoreCommandSchema);
 export const encodeSessionRestoreCommand = (message: SessionRestoreCommand): string =>
     encode(message, sessionRestoreCommandSchema);
 export const decodeSessionRestoredEvent = (encoded: string): SessionRestoredEvent =>
     decode(encoded, sessionRestoredEventSchema);
-export const encodeSessionRestoredEvent = (message: SessionRestoredEvent): string =>
-    encode(message, sessionRestoredEventSchema);
 export const decodeSessionArchiveCommand = (encoded: string): SessionArchiveCommand =>
     decode(encoded, sessionArchiveCommandSchema);
 export const encodeSessionArchiveCommand = (message: SessionArchiveCommand): string =>
     encode(message, sessionArchiveCommandSchema);
 export const decodeSessionArchivedEvent = (encoded: string): SessionArchivedEvent =>
     decode(encoded, sessionArchivedEventSchema);
-export const encodeSessionArchivedEvent = (message: SessionArchivedEvent): string =>
-    encode(message, sessionArchivedEventSchema);
 export const decodeSessionCloseNoticeEvent = (encoded: string): SessionCloseNoticeEvent =>
     decode(encoded, sessionCloseNoticeEventSchema);
-export const encodeSessionCloseNoticeEvent = (message: SessionCloseNoticeEvent): string =>
-    encode(message, sessionCloseNoticeEventSchema);
 export const decodeSessionPrepareCommand = (encoded: string): SessionPrepareCommand =>
     decode(encoded, sessionPrepareCommandSchema);
 export const encodeSessionPrepareCommand = (message: SessionPrepareCommand): string =>
     encode(message, sessionPrepareCommandSchema);
 export const decodeSessionReadyEvent = (encoded: string): SessionReadyEvent => decode(encoded, sessionReadyEventSchema);
-export const encodeSessionReadyEvent = (message: SessionReadyEvent): string => encode(message, sessionReadyEventSchema);
 export const decodeSessionOperationFailedEvent = (encoded: string): SessionOperationFailedEvent =>
     decode(encoded, sessionOperationFailedEventSchema);
-export const encodeSessionOperationFailedEvent = (message: SessionOperationFailedEvent): string =>
-    encode(message, sessionOperationFailedEventSchema);
 export const decodeSessionPromptAcceptedEvent = (encoded: string): SessionPromptAcceptedEvent =>
     decode(encoded, sessionPromptAcceptedEventSchema);
 export const encodeSessionPromptAcceptedEvent = (message: SessionPromptAcceptedEvent): string =>

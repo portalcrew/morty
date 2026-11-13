@@ -85,7 +85,7 @@ const sessionConfigureCommandSchema = z.discriminatedUnion("type", [
 
 export type SessionConfigureCommand = z.infer<typeof sessionConfigureCommandSchema>;
 
-export const sessionConfigUpdatedEventSchema = z
+const sessionConfigUpdatedEventSchema = z
     .object({
         configOptions: sessionConfigOptionsSchema,
         // An opaque Computer generation token.
@@ -107,14 +107,12 @@ export const sessionConfigurationSelection = (command: SessionConfigureCommand):
         ? { booleanValue: command.booleanValue, configId: command.configId, type: "boolean" }
         : { configId: command.configId, type: "select", value: command.value };
 
-export const decodeSessionConfigureCommand = (encoded: string): SessionConfigureCommand =>
+const decodeSessionConfigureCommand = (encoded: string): SessionConfigureCommand =>
     decodeZodMessage(encoded, sessionConfigureCommandSchema);
 export const encodeSessionConfigureCommand = (message: SessionConfigureCommand): string =>
     encodeZodMessage(message, sessionConfigureCommandSchema);
 export const decodeSessionConfigUpdatedEvent = (encoded: string): SessionConfigUpdatedEvent =>
     decodeZodMessage(encoded, sessionConfigUpdatedEventSchema);
-export const encodeSessionConfigUpdatedEvent = (message: SessionConfigUpdatedEvent): string =>
-    encodeZodMessage(message, sessionConfigUpdatedEventSchema);
 
 export const SESSION_CONFIG_READ_KIND = "session.config.read";
 export const SESSION_CONFIG_READ_RESULT_KIND = "session.config.read.result";
@@ -129,7 +127,7 @@ const sessionConfigReadCommandSchema = z
 
 export type SessionConfigReadCommand = z.infer<typeof sessionConfigReadCommandSchema>;
 
-export const sessionConfigReadResultSchema = z
+const sessionConfigReadResultSchema = z
     .object({
         configOptions: sessionConfigOptionsSchema,
         // An opaque Computer generation token.
@@ -142,14 +140,12 @@ export const sessionConfigReadResultSchema = z
 
 export type SessionConfigReadResult = z.infer<typeof sessionConfigReadResultSchema>;
 
-export const decodeSessionConfigReadCommand = (encoded: string): SessionConfigReadCommand =>
+const decodeSessionConfigReadCommand = (encoded: string): SessionConfigReadCommand =>
     decodeZodMessage(encoded, sessionConfigReadCommandSchema);
 export const encodeSessionConfigReadCommand = (message: SessionConfigReadCommand): string =>
     encodeZodMessage(message, sessionConfigReadCommandSchema);
 export const decodeSessionConfigReadResult = (encoded: string): SessionConfigReadResult =>
     decodeZodMessage(encoded, sessionConfigReadResultSchema);
-export const encodeSessionConfigReadResult = (message: SessionConfigReadResult): string =>
-    encodeZodMessage(message, sessionConfigReadResultSchema);
 
 const sessionConfigureCommandPublicRoutingSchema = z.object({
     kind: z.literal(SESSION_CONFIGURE_KIND),

@@ -14,7 +14,7 @@
             "entry": ["*.e2e.test.ts", "release-acceptance.mjs"]
         },
         "packages/web": {
-            "entry": ["src/main.tsx", "tests/**/*.integration.test.tsx"],
+            "entry": ["src/main.tsx", "src/services/remote-agent.ts", "tests/**/*.integration.test.tsx"],
             "includeEntryExports": true
         },
         "packages/worker": {
@@ -31,7 +31,7 @@
             "includeEntryExports": true
         },
         "packages/client": {
-            "includeEntryExports": true
+            "includeEntryExports": false
         },
         "packages/relay-test-support": {
             "entry": ["src/worker-entry.ts"]

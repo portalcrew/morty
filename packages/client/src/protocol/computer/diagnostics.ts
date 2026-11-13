@@ -26,10 +26,6 @@ export const decodeComputerDiagnosticsRequest = (raw: string): ComputerDiagnosti
     computerDiagnosticsRequestSchema.parse(JSON.parse(raw));
 export const decodeComputerDiagnosticsResult = (raw: string): ComputerDiagnosticsResult =>
     computerDiagnosticsResultSchema.parse(JSON.parse(raw));
-export const encodeComputerDiagnosticsRequest = (value: ComputerDiagnosticsRequest): string =>
-    JSON.stringify(computerDiagnosticsRequestSchema.parse(value));
-export const encodeComputerDiagnosticsResult = (value: ComputerDiagnosticsResult): string =>
-    JSON.stringify(computerDiagnosticsResultSchema.parse(value));
 
 const computerDiagnosticsRequestPublicRoutingSchema = z.object({
     kind: z.literal("computer.diagnostics.read"),

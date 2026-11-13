@@ -266,7 +266,7 @@ function decode<T>(schema: z.ZodType<T>, encoded: string): T {
     }
 }
 
-export const decodeNativeSessionCommand = (encoded: string): NativeSessionCommand =>
+const decodeNativeSessionCommand = (encoded: string): NativeSessionCommand =>
     decode(nativeSessionCommandSchema, encoded);
 export const encodeNativeSessionCommand = (value: NativeSessionCommand): string =>
     JSON.stringify(nativeSessionCommandSchema.parse(value));
@@ -276,10 +276,7 @@ export const encodeNativeSessionRequest = (value: NativeSessionRequest): string 
     JSON.stringify(nativeSessionRequestSchema.parse(value));
 export const decodeNativeSessionResult = (encoded: string): NativeSessionResult =>
     decode(nativeSessionResultSchema, encoded);
-export const encodeNativeSessionResult = (value: NativeSessionResult): string =>
-    JSON.stringify(nativeSessionResultSchema.parse(value));
-export const decodeNativeSessionCancel = (encoded: string): NativeSessionCancel =>
-    decode(nativeSessionCancelSchema, encoded);
+const decodeNativeSessionCancel = (encoded: string): NativeSessionCancel => decode(nativeSessionCancelSchema, encoded);
 export const encodeNativeSessionCancel = (value: NativeSessionCancel): string =>
     JSON.stringify(nativeSessionCancelSchema.parse(value));
 
@@ -430,8 +427,6 @@ export const nativeSessionCommandCodec = Object.freeze({
         }
     },
 });
-export const nativeSessionRequestCodec = nativeSessionCommandCodec;
-
 const nativeSessionResultPublicRoutingSchema = z.object({
     kind: z.literal(NATIVE_SESSION_RESULT_KIND),
     requestId: routingIdentifier,

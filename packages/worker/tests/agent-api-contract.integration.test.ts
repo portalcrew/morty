@@ -77,6 +77,37 @@ test("Given the agent OpenAPI document, when a peer reads encrypted Session oper
     expect(JSON.stringify(renewed.responses)).toContain('"session.operation.failed"');
 });
 
+test("Given the served transport contract, when an Agent constructs a live subscription, then its frame requires an encrypted body with the caller's subscription identity", async () => {
+    await using bindings = await createBindings();
+    await bindings.configure({ APP_ORIGIN: bindings.origin });
+    const response = await bindings.request(new Request(`${bindings.origin}/agent-api/asyncapi.json`));
+    expect(response.status).toBe(200);
+    const document = v.parse(
+        v.object({
+            channels: v.object({
+                transport: v.object({
+                    messages: v.object({
+                        eventsSubscribe: v.object({
+                            payload: v.object({
+                                required: v.array(v.string()),
+                                properties: v.record(v.string(), v.unknown()),
+                            }),
+                        }),
+                    }),
+                }),
+            }),
+        }),
+        await response.json(),
+    );
+    const subscription = document.channels.transport.messages.eventsSubscribe.payload;
+    expect(subscription.required).toContain("body");
+    expect(subscription.properties["body"]).toMatchObject({
+        type: "string",
+        description: expect.stringContaining("encrypted"),
+    });
+    expect(JSON.stringify(subscription.properties["body"])).toContain("subscriptionId");
+});
+
 test("Given the agent transport description, when a remote agent reads the request body instructions, then it is told that GET requests carry encrypted bodies", async () => {
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });
