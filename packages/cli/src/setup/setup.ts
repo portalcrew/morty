@@ -4,13 +4,24 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { decodeIdentifier, isIdentifier } from "@morty-build/client/protocol";
+import { decodeIdentifier } from "@morty-build/client/protocol";
 import jsQrImport from "jsqr";
 import { PNG } from "pngjs";
 import QRCode from "qrcode";
 import { validateLocalPath } from "../engine/util/filesystem/private-path.ts";
 import { readStateDirectory } from "../storage/state-directory.ts";
 import { StateRootError, validateStateRoot } from "../storage/state-root.ts";
+import {
+    type CreatingIdentity,
+    decodeSavedState,
+    encodeSavedState,
+    type IdentityState,
+    type IssuedIdentity,
+    type ReadyIdentity,
+    type RetiringIdentity,
+    type SavedState,
+    serviceOrigin,
+} from "./saved-state.ts";
 
 /** A pairing the browser offered this computer. Its code is redeemed once and never appears on a command line. */
 export interface SetupPairing {
@@ -70,63 +81,6 @@ const harnessSessionVariables: ReadonlyMap<string, string> = new Map([
     ["pi", "PI_SESSION_ID"],
 ]);
 
-interface RetiringIdentity {
-    readonly kind: "pending";
-    readonly computerId: string;
-    readonly token: string;
-}
-
-type ReplacementState =
-    | { readonly kind: "unchanged" }
-    | { readonly kind: "unknown" }
-    | {
-          readonly kind: "revoked";
-          readonly previous: RetiringIdentity | { readonly kind: "retired"; readonly computerId: string };
-      };
-
-/** The identity that a bootstrap or replacement returned. */
-interface IssuedIdentity {
-    readonly computerToken: string;
-    readonly computerId: string;
-}
-
-/** The user creation secret, saved before requesting a new computer. */
-interface CreatingIdentity {
-    readonly kind: "creating";
-    readonly creationKey: string;
-}
-
-type PairingIntent = { readonly kind: "none" } | { readonly kind: "requesting"; readonly requestKey: string };
-
-/**
- * Revoking all access also replaces the local credential, so a copy of it stops working too. Setup saves the successor
- * before the request: a lost reply then leaves one of the two credentials in force, never neither.
- */
-type CredentialRotation = { readonly kind: "none" } | { readonly kind: "requested"; readonly successor: string };
-
-interface ReadyIdentity extends IssuedIdentity {
-    readonly kind: "ready";
-    /** Setup owns the unfinished pairing intent; the Worker owns the final Computer binding. */
-    readonly pairing: PairingIntent;
-    readonly replacement: ReplacementState;
-    readonly rotation: CredentialRotation;
-}
-
-/**
- * What this computer's setup holds for the one Morty service its state directory belongs to. Only setup's intent is
- * kept here; the Computer owns its pairings and connections in its own state.
- */
-type IdentityState = { readonly kind: "none" } | CreatingIdentity | ReadyIdentity;
-
-/** The saved setup state. The service origin is part of the identity, never a setting that selects another one. */
-interface SavedState {
-    readonly base: string;
-    readonly identity: CreatingIdentity | ReadyIdentity;
-}
-
-/** Version of the saved state's representation; any other representation is refused, never converted. */
-const SAVED_STATE_VERSION = 4;
-
 function createdIdentity(issued: IssuedIdentity): ReadyIdentity {
     return {
         kind: "ready",
@@ -182,63 +136,6 @@ function withReplacementReported(identity: ReadyIdentity): ReadyIdentity {
     return { ...identity, replacement: { kind: "unchanged" } };
 }
 
-function encodeReplacement(replacement: ReplacementState) {
-    switch (replacement.kind) {
-        case "unchanged":
-        case "unknown":
-            return { kind: replacement.kind };
-        case "revoked":
-            return {
-                kind: "revoked",
-                previous:
-                    replacement.previous.kind === "pending"
-                        ? {
-                              kind: "pending",
-                              computer_id: replacement.previous.computerId,
-                              computer_token: replacement.previous.token,
-                          }
-                        : { kind: "retired", computer_id: replacement.previous.computerId },
-            };
-        default: {
-            const exhaustive: never = replacement;
-            return exhaustive;
-        }
-    }
-}
-
-function encodeSavedState(state: SavedState) {
-    const identity = state.identity;
-    switch (identity.kind) {
-        case "creating":
-            return {
-                version: SAVED_STATE_VERSION,
-                base_url: state.base,
-                identity: { kind: "creating", creation_key: identity.creationKey },
-            };
-        case "ready":
-            return {
-                version: SAVED_STATE_VERSION,
-                base_url: state.base,
-                identity: {
-                    kind: "ready",
-                    computer_token: identity.computerToken,
-                    computer_id: identity.computerId,
-                    pairing: identity.pairing,
-                    replacement: encodeReplacement(identity.replacement),
-                    // Present only while a rotation is requested; a state without one keeps its representation.
-                    ...(identity.rotation.kind === "requested"
-                        ? { credential_rotation: { successor_token: identity.rotation.successor } }
-                        : {}),
-                },
-            };
-        default: {
-            const exhaustive: never = identity;
-            return exhaustive;
-        }
-    }
-}
-
-/** Where setup keeps its state, and the one Morty service that state belongs to. */
 interface StateLocation {
     readonly directory: string;
     readonly base: string;
@@ -573,19 +470,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
     const credential = (value: unknown) => text(value, /^morty_computer_v1_[A-Za-z0-9_-]{43}$/u);
 
     function origin(value: unknown) {
-        const url = new URL(text(value));
-        if (
-            url.username ||
-            url.password ||
-            url.pathname !== "/" ||
-            url.search ||
-            url.hash ||
-            (url.protocol !== "https:" &&
-                !(url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)))
-        ) {
-            fail("INVALID_ORIGIN");
-        }
-        return url.origin;
+        return serviceOrigin(text(value)) ?? fail("INVALID_ORIGIN");
     }
 
     async function safeLocalPath(path: string, directory: boolean, privateAccess: boolean) {
@@ -646,128 +531,6 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         }
     }
 
-    /** Decodes exactly the representation this Setup writes. Any other state is refused, never converted or rewritten. */
-    function decodeSavedState(value: unknown): SavedState {
-        const invalid = (): never => fail("INVALID_CONFIGURATION");
-        const fieldsOf = (input: unknown): Readonly<Record<string, unknown>> => {
-            if (input === null || typeof input !== "object" || Array.isArray(input)) {
-                return invalid();
-            }
-            return Object.fromEntries(Object.entries(input));
-        };
-        const exactly = (input: unknown, keys: readonly string[]): Readonly<Record<string, unknown>> => {
-            const fields = fieldsOf(input);
-            const names = Object.keys(fields);
-            if (names.length !== keys.length || names.some((name) => !keys.includes(name))) {
-                invalid();
-            }
-            return fields;
-        };
-        const savedIdentifier = (input: unknown): string => (isIdentifier(input) ? input : invalid());
-        const savedCredential = (input: unknown): string =>
-            typeof input === "string" && /^morty_computer_v1_[A-Za-z0-9_-]{43}$/u.test(input) ? input : invalid();
-        const savedOrigin = (input: unknown): string => {
-            try {
-                if (origin(input) === input) {
-                    return input;
-                }
-            } catch {
-                // Reported as an invalid configuration below.
-            }
-            return invalid();
-        };
-        const replacement = (input: unknown): ReplacementState => {
-            switch (fieldsOf(input)["kind"]) {
-                case "unchanged":
-                    exactly(input, ["kind"]);
-                    return { kind: "unchanged" };
-                case "unknown":
-                    exactly(input, ["kind"]);
-                    return { kind: "unknown" };
-                case "revoked": {
-                    const previous = exactly(input, ["kind", "previous"])["previous"];
-                    switch (fieldsOf(previous)["kind"]) {
-                        case "pending": {
-                            const fields = exactly(previous, ["kind", "computer_id", "computer_token"]);
-                            return {
-                                kind: "revoked",
-                                previous: {
-                                    kind: "pending",
-                                    computerId: savedIdentifier(fields["computer_id"]),
-                                    token: savedCredential(fields["computer_token"]),
-                                },
-                            };
-                        }
-                        case "retired": {
-                            const fields = exactly(previous, ["kind", "computer_id"]);
-                            return {
-                                kind: "revoked",
-                                previous: { kind: "retired", computerId: savedIdentifier(fields["computer_id"]) },
-                            };
-                        }
-                        default:
-                            return invalid();
-                    }
-                }
-                default:
-                    return invalid();
-            }
-        };
-        const pairingIntent = (value: unknown): PairingIntent => {
-            switch (fieldsOf(value)["kind"]) {
-                case "none":
-                    exactly(value, ["kind"]);
-                    return { kind: "none" };
-                case "requesting": {
-                    const fields = exactly(value, ["kind", "requestKey"]);
-                    return { kind: "requesting", requestKey: savedIdentifier(fields["requestKey"]) };
-                }
-                default:
-                    return invalid();
-            }
-        };
-        const saved = exactly(value, ["version", "base_url", "identity"]);
-        if (saved["version"] !== SAVED_STATE_VERSION) {
-            invalid();
-        }
-        const base = savedOrigin(saved["base_url"]);
-        switch (fieldsOf(saved["identity"])["kind"]) {
-            case "creating": {
-                const creating = exactly(saved["identity"], ["kind", "creation_key"]);
-                const creationKey = creating["creation_key"];
-                if (typeof creationKey !== "string" || !/^[A-Za-z0-9_-]{43}$/u.test(creationKey)) {
-                    return invalid();
-                }
-                return { base, identity: { kind: "creating", creationKey } };
-            }
-            case "ready": {
-                const keys = ["kind", "computer_token", "computer_id", "pairing", "replacement"];
-                const rotating = "credential_rotation" in fieldsOf(saved["identity"]);
-                const ready = exactly(saved["identity"], rotating ? [...keys, "credential_rotation"] : keys);
-                return {
-                    base,
-                    identity: {
-                        kind: "ready",
-                        computerToken: savedCredential(ready["computer_token"]),
-                        computerId: savedIdentifier(ready["computer_id"]),
-                        pairing: pairingIntent(ready["pairing"]),
-                        replacement: replacement(ready["replacement"]),
-                        rotation: rotating
-                            ? {
-                                  kind: "requested",
-                                  successor: savedCredential(
-                                      exactly(ready["credential_rotation"], ["successor_token"])["successor_token"],
-                                  ),
-                              }
-                            : { kind: "none" },
-                    },
-                };
-            }
-            default:
-                return invalid();
-        }
-    }
-
     /** The saved state, or null before this computer's first setup. */
     async function readSavedState(directory: string): Promise<SavedState | null> {
         const path = join(directory, "config.json");
@@ -787,7 +550,8 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         } catch {
             fail("INVALID_CONFIGURATION");
         }
-        return decodeSavedState(value);
+        const saved = decodeSavedState(value);
+        return saved ?? fail("INVALID_CONFIGURATION");
     }
 
     /** The identity saved for the requested service. A state that belongs to another service is refused unchanged. */
