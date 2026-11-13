@@ -139,9 +139,16 @@ def main():
     previous_migration = cloud(service)['default_environment']['script'].get('migration_tag')
     if previous_migration and previous_migration not in {item['tag'] for item in morty.get('migrations', [])}:
         raise ValueError('Release omits an existing Durable Object migration')
-    secrets = {'MORTY_SESSION_SIGNING_SECRET': os.environ['MORTY_SESSION_SIGNING_SECRET']}
-    if len(secrets['MORTY_SESSION_SIGNING_SECRET']) < 32:
-        raise ValueError('The Session credential signing secret must be at least 32 characters')
+    signing_secret = os.environ.get('MORTY_SESSION_SIGNING_SECRET')
+    secrets = {}
+    if signing_secret:
+        if len(signing_secret) < 32:
+            raise ValueError('The Session credential signing secret must be at least 32 characters')
+        secrets['MORTY_SESSION_SIGNING_SECRET'] = signing_secret
+    elif 'MORTY_SESSION_SIGNING_SECRET' not in {
+        item['name'] for item in cloud('/workers/scripts/' + expected['morty'] + '/secrets')
+    }:
+        raise ValueError('The existing Session signing secret binding is missing; explicit provisioning is required')
     if args.preflight_only:
         print(json.dumps({'preflightPassed': True, 'revision': manifest['revision'], 'deploymentAttempted': False}))
         return
@@ -188,7 +195,7 @@ def main():
             if deployed.get('annotations', {}).get('workers/message') != 'morty ' + manifest['revision']:
                 raise ValueError('Active Worker deployment does not match the accepted source')
             active_secrets = cloud('/workers/scripts/' + expected['morty'] + '/secrets')
-            if not secrets.keys() <= {item['name'] for item in active_secrets}:
+            if 'MORTY_SESSION_SIGNING_SECRET' not in {item['name'] for item in active_secrets}:
                 raise ValueError('The deployed Session signing secret binding is missing')
             run(['node', str(ROOT / 'deployment/verify-session-access.ts')], env)
         except Exception:

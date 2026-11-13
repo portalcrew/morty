@@ -25,7 +25,10 @@ if (
 ) {
     throw new Error("Verification may only target Morty production or an isolated local Worker");
 }
-const signingSecret = v.parse(v.pipe(v.string(), v.minLength(32)), process.env["MORTY_SESSION_SIGNING_SECRET"]);
+const signingSecret = v.parse(
+    v.optional(v.pipe(v.string(), v.minLength(32))),
+    process.env["MORTY_SESSION_SIGNING_SECRET"] || undefined,
+);
 const signal = AbortSignal.timeout(120_000);
 using sessionConnection = {
     transport: new WsTransport(),
@@ -117,9 +120,11 @@ if (payload === undefined || signature === undefined) {
     throw new Error("Invalid issued Session credential");
 }
 const signed = `msession_${payload}`;
-const expected = createHmac("sha256", signingSecret).update(signed).digest();
-if (!timingSafeEqual(expected, Buffer.from(signature, "base64url"))) {
-    throw new Error("The configured signing key was not used");
+if (signingSecret !== undefined) {
+    const expected = createHmac("sha256", signingSecret).update(signed).digest();
+    if (!timingSafeEqual(expected, Buffer.from(signature, "base64url"))) {
+        throw new Error("The configured signing key was not used");
+    }
 }
 const readConfiguration = sessionEndpoints.readConfiguration({ computerId: owner.computerId, target: access.target });
 await requestSession(readConfiguration, 200, access.credential);
@@ -141,7 +146,8 @@ await writeFile(
             passed: true,
             architecture: "single-worker",
             revision: process.env["EXPECTED_REVISION"],
-            configuredSigningKeyVerified: true,
+            configuredSigningKeyVerified: signingSecret !== undefined,
+            signingKeyMode: signingSecret === undefined ? "preserved" : "supplied",
             runtimeVerificationStatus: 200,
             forgeryStatus: 401,
             endedHolderStatus: 401,
