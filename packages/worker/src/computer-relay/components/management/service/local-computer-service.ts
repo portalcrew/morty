@@ -1,27 +1,17 @@
-import { sameNativeSession } from "@morty-build/client/native-session";
-import {
-    decodeAgentSettingsDiscoverCommand,
-    decodeComputerDiagnosticsResult,
-    decodeNativeSessionRequest,
-    decodeNativeSessionResult,
-    decodeSessionArchiveCommand,
-    decodeSessionArchivedEvent,
-    decodeSessionCreateCommand,
-    decodeSessionListCommand,
-    decodeSessionPrepareCommand,
-    decodeSessionQueryCommand,
-    decodeSessionReadyEvent,
-    decodeSessionRestoreCommand,
-    decodeSessionRestoredEvent,
-    decodeSessionsListedEvent,
-    decodeSessionsQueriedEvent,
-    decodeWorkspaceListCommand,
-    type NativeEventPageRequest,
-    type NativeSessionRequest,
-    type NativeSessionTarget,
-    type SessionAccessHolder,
-    type SessionConfigurationSelection,
-    type SessionReadyEvent,
+import type {
+    AgentSettingsDiscoverCommandRouting,
+    ComputerDiagnosticsRequestRouting,
+    ComputerPingCommandRouting,
+    NativeSessionCommandRouting,
+    NativeSessionTarget,
+    SessionAccessHolder,
+    SessionArchiveCommandRouting,
+    SessionCreateCommandRouting,
+    SessionListCommandRouting,
+    SessionPrepareCommandRouting,
+    SessionPreviewHistoryPageLoadRouting,
+    SessionRestoreCommandRouting,
+    WorkspaceListCommandRouting,
 } from "@morty-build/client/protocol";
 import * as v from "valibot";
 import { ComputerManagementError, relayIdentifier } from "../../../../contracts/computer-management.ts";
@@ -29,21 +19,6 @@ import type { ComputerPairing } from "../../../../contracts/computer-pairing.ts"
 import { isHttpError } from "../../../../contracts/http-error.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import type { ComputerBackendService } from "../../computer/service/computer-backend-service.ts";
-
-type ChatSessionTarget = {
-    readonly target: NativeSessionTarget;
-    readonly computerId: string;
-    readonly harness: string;
-    readonly workspaceRef: string;
-};
-export type ExistingChatSessionInput = ChatSessionTarget;
-export type NewChatSessionInput = {
-    readonly computerId: string;
-    readonly harness: string;
-    readonly workspaceRef: string;
-    readonly operationId: string;
-    readonly configurations: readonly SessionConfigurationSelection[];
-};
 
 /** Application use cases call the services in their own ComputerRelay, not an HTTP client or another Worker. */
 export class LocalComputerService {
@@ -133,218 +108,98 @@ export class LocalComputerService {
     };
     readonly getChatComputerAgents = async (computerId: string, signal: AbortSignal) =>
         await this.#run(computerId, signal, (computer, signal) => computer.agents(signal), 15_000);
-    readonly readComputerDiagnostics = async (computerId: string, signal: AbortSignal) =>
+    readonly readComputerDiagnostics = async (
+        computerId: string,
+        command: ComputerDiagnosticsRequestRouting,
+        signal: AbortSignal,
+    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal), 10_000);
+    readonly measureComputerLatency = async (
+        computerId: string,
+        command: ComputerPingCommandRouting,
+        signal: AbortSignal,
+    ) =>
         await this.#run(
             computerId,
             signal,
-            async (computer, signal) =>
-                decodeComputerDiagnosticsResult(JSON.stringify(await computer.diagnostics(signal))),
-            10_000,
+            async (computer, signal) => {
+                const started = performance.now();
+                const reply = await computer.clientControl(command, signal);
+                const computerLatencyMs = Math.max(0, Math.round(performance.now() - started));
+                if (reply.kind !== "computer.pong" || reply.requestId !== command.requestId) {
+                    throw new ComputerManagementError(
+                        "RELAY_INVALID_RESPONSE",
+                        "Morty returned an invalid Computer response.",
+                        502,
+                    );
+                }
+                return { computerLatencyMs, reply };
+            },
+            15_000,
         );
-    readonly measureComputerLatency = async (computerId: string, signal: AbortSignal) =>
-        await this.#run(computerId, signal, (computer, signal) => computer.latency(signal), 15_000);
-    readonly listChatDirectory = async (computerId: string, directory: string, signal: AbortSignal) =>
-        await this.#run(computerId, signal, (computer, signal) =>
-            computer.workspace(
-                decodeWorkspaceListCommand(
-                    JSON.stringify({
-                        kind: "workspace.list",
-                        requestId: crypto.randomUUID(),
-                        directory,
-                    }),
-                ),
-                signal,
-            ),
-        );
+    readonly listChatDirectory = async (
+        computerId: string,
+        command: WorkspaceListCommandRouting,
+        signal: AbortSignal,
+    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
     readonly discoverChatAgentSettings = async (
         computerId: string,
-        selection: { readonly harness: string; readonly workspaceRef: string },
+        command: AgentSettingsDiscoverCommandRouting,
         signal: AbortSignal,
-    ) =>
-        await this.#run(computerId, signal, (computer, signal) =>
-            computer.settings(
-                decodeAgentSettingsDiscoverCommand(
-                    JSON.stringify({
-                        kind: "agent.settings.discover",
-                        requestId: crypto.randomUUID(),
-                        harness: selection.harness,
-                        directory: selection.workspaceRef,
-                    }),
-                ),
-                signal,
-            ),
-        );
-    readonly createChatSession = async (computerId: string, input: NewChatSessionInput, signal: AbortSignal) =>
-        await this.#run(computerId, signal, async (computer, signal) =>
-            decodeSessionReadyEvent(
-                JSON.stringify(
-                    await computer.control(
-                        decodeSessionCreateCommand(
-                            JSON.stringify({
-                                kind: "session.create",
-                                requestId: crypto.randomUUID(),
-                                harness: input.harness,
-                                configurations: input.configurations,
-                                directory: input.workspaceRef,
-                                computerId: input.computerId,
-                                operationId: input.operationId,
-                            }),
-                        ),
-                        signal,
-                    ),
-                ),
-            ),
-        );
-    readonly #expectSession = (ready: SessionReadyEvent, target: NativeSessionTarget) => {
-        if (!sameNativeSession(ready.target, target)) {
-            throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned an unexpected Session.", 502);
-        }
-        return ready;
-    };
-    readonly #sessionAccess = async (
-        computer: ComputerBackendService,
+    ) => await this.#run(computerId, signal, (computer, signal) => computer.settings(command, signal));
+    readonly createChatSession = async (
         computerId: string,
-        session: ChatSessionTarget,
-        ready: SessionReadyEvent,
-        lifetime: number,
-        holder: SessionAccessHolder,
-        signal: AbortSignal,
-    ) => ({
-        ...(await computer.issueSessionAccess(session.target, lifetime, holder, signal)),
-        computerId,
-        target: session.target,
-        ready,
-        harness: session.harness,
-        workspaceRef: session.workspaceRef,
-    });
-    readonly createdChatSessionAccess = async (
-        computerId: string,
-        session: ChatSessionTarget,
-        ready: SessionReadyEvent,
-        lifetime: number,
-        holder: SessionAccessHolder,
-        signal: AbortSignal,
-    ) =>
-        await this.#run(computerId, signal, (computer, signal) =>
-            this.#sessionAccess(computer, computerId, session, ready, lifetime, holder, signal),
-        );
-    readonly openChatSession = async (
-        computerId: string,
-        input: ExistingChatSessionInput,
+        command: SessionCreateCommandRouting,
         lifetime: number,
         holder: SessionAccessHolder,
         signal: AbortSignal,
     ) =>
         await this.#run(computerId, signal, async (computer, signal) => {
-            const ready = this.#expectSession(
-                decodeSessionReadyEvent(
-                    JSON.stringify(
-                        await computer.control(
-                            decodeSessionPrepareCommand(
-                                JSON.stringify({
-                                    kind: "session.prepare",
-                                    requestId: crypto.randomUUID(),
-                                    target: input.target,
-                                }),
-                            ),
-                            signal,
-                        ),
-                    ),
-                ),
-                input.target,
-            );
-            return await this.#sessionAccess(computer, computerId, input, ready, lifetime, holder, signal);
-        });
-    readonly listChatSessions = async (computerId: string, limit: number, signal: AbortSignal) =>
-        await this.#run(
-            computerId,
-            signal,
-            async (computer, signal) =>
-                decodeSessionsListedEvent(
-                    JSON.stringify(
-                        await computer.control(
-                            decodeSessionListCommand(
-                                JSON.stringify({ kind: "session.list", requestId: crypto.randomUUID(), limit }),
-                            ),
-                            signal,
-                        ),
-                    ),
-                ).entries,
-        );
-    readonly queryChatSessions = async (
-        computerId: string,
-        targets: readonly NativeSessionTarget[],
-        signal: AbortSignal,
-    ) =>
-        await this.#run(
-            computerId,
-            signal,
-            async (computer, signal) =>
-                decodeSessionsQueriedEvent(
-                    JSON.stringify(
-                        await computer.control(
-                            decodeSessionQueryCommand(
-                                JSON.stringify({ kind: "session.query", requestId: crypto.randomUUID(), targets }),
-                            ),
-                            signal,
-                        ),
-                    ),
-                ).entries,
-        );
-    readonly readChatSession = async (computerId: string, target: NativeSessionTarget, signal: AbortSignal) =>
-        await this.#run(computerId, signal, async (computer, signal) => {
-            const restored = decodeSessionRestoredEvent(
-                JSON.stringify(
-                    await computer.control(
-                        decodeSessionRestoreCommand(
-                            JSON.stringify({
-                                kind: "session.restore",
-                                requestId: crypto.randomUUID(),
-                                target,
-                            }),
-                        ),
-                        signal,
-                    ),
-                ),
-            );
+            const ready = await computer.clientControl(command, signal);
+            if (ready.kind === "session.operation.failed") {
+                return ready;
+            }
+            if (
+                ready.kind !== "session.ready" ||
+                ready.harness !== command.harness ||
+                ready.target.harness !== command.harness
+            ) {
+                throw new ComputerManagementError(
+                    "RELAY_INVALID_RESPONSE",
+                    "The Computer returned an invalid Session route.",
+                    502,
+                );
+            }
             return {
-                harness: restored.entry.harness,
-                ready: restored.ready,
-                entry: {
-                    target: restored.entry.target,
-                    sessionId: restored.entry.sessionId,
-                    title: restored.entry.title,
-                    directory: restored.ready.directory,
-                    directoryLabel: restored.ready.directoryLabel,
-                    updatedAt: restored.entry.updatedAt,
-                },
+                ...(await computer.issueSessionAccess(ready.target, lifetime, holder, signal)),
+                computerId,
+                target: ready.target,
+                harness: ready.harness,
+                ready,
             };
         });
-    readonly archiveChatSession = async (
+    readonly listEncryptedChatSessions = async (
         computerId: string,
-        target: NativeSessionTarget,
+        command: SessionListCommandRouting,
         signal: AbortSignal,
-    ): Promise<NativeSessionTarget> =>
-        await this.#run(computerId, signal, async (computer, signal) => {
-            const archived = decodeSessionArchivedEvent(
-                JSON.stringify(
-                    await computer.control(
-                        decodeSessionArchiveCommand(
-                            JSON.stringify({
-                                kind: "session.archive",
-                                requestId: crypto.randomUUID(),
-                                target,
-                            }),
-                        ),
-                        signal,
-                    ),
-                ),
-            );
-            if (!sameNativeSession(archived.target, target)) {
-                throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty archived a different Session.", 502);
-            }
-            return archived.target;
-        });
+    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
+
+    readonly readEncryptedChatSession = async (
+        computerId: string,
+        command: SessionRestoreCommandRouting,
+        signal: AbortSignal,
+    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
+    readonly prepareEncryptedChatSession = async (
+        computerId: string,
+        command: SessionPrepareCommandRouting,
+        signal: AbortSignal,
+    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
+
+    readonly archiveEncryptedChatSession = async (
+        computerId: string,
+        command: SessionArchiveCommandRouting,
+        signal: AbortSignal,
+    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
+
     readonly nativeSessionAccess = async (
         computerId: string,
         target: NativeSessionTarget,
@@ -355,76 +210,14 @@ export class LocalComputerService {
         await this.#run(computerId, signal, async (computer, signal) =>
             computer.issueSessionAccess(target, lifetime, holder, signal),
         );
-    readonly nativeSessions = async (
+    readonly encryptedNativeSessions = async (
         computerId: string,
-        request:
-            | Omit<Extract<NativeSessionRequest, { readonly action: "list" }>, "kind" | "requestId">
-            | (Omit<
-                  Extract<NativeSessionRequest, { readonly action: "import" | "fork" }>,
-                  "kind" | "requestId" | "action"
-              > & { readonly action: "import" }),
+        command: NativeSessionCommandRouting,
         signal: AbortSignal,
-    ) =>
-        await this.#run(computerId, signal, async (computer, signal) =>
-            decodeNativeSessionResult(
-                JSON.stringify(
-                    await computer.control(
-                        decodeNativeSessionRequest(
-                            JSON.stringify({
-                                ...request,
-                                kind: "native.session.request",
-                                requestId: crypto.randomUUID(),
-                            }),
-                        ),
-                        signal,
-                    ),
-                ),
-            ),
-        );
-    readonly forkNativeSession = async (
+    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
+    readonly encryptedPreviewSession = async (
         computerId: string,
-        operationId: string,
-        input: { readonly harness: string; readonly sessionId: string; readonly directory: string },
+        command: SessionPreviewHistoryPageLoadRouting,
         signal: AbortSignal,
-    ) => await this.#run(computerId, signal, (computer, signal) => computer.fork(operationId, input, signal));
-    readonly previewComputerNativeEvents = async (
-        computerId: string,
-        target: NativeSessionTarget,
-        directory: string,
-        page: NativeEventPageRequest,
-        signal: AbortSignal,
-    ) =>
-        await this.#run(computerId, signal, (computer, signal) =>
-            computer.session(target, signal).previewEvents(directory, page),
-        );
-    readonly findNativeSessionBySessionId = async (
-        computerId: string,
-        request: Omit<Extract<NativeSessionRequest, { readonly action: "find" }>, "kind" | "requestId" | "action">,
-        signal: AbortSignal,
-    ) =>
-        await this.#run(computerId, signal, async (computer, signal) => {
-            const result = decodeNativeSessionResult(
-                JSON.stringify(
-                    await computer.control(
-                        decodeNativeSessionRequest(
-                            JSON.stringify({
-                                ...request,
-                                kind: "native.session.request",
-                                action: "find",
-                                requestId: crypto.randomUUID(),
-                            }),
-                        ),
-                        signal,
-                    ),
-                ),
-            );
-            if (result.action !== "find") {
-                throw new ComputerManagementError(
-                    "RELAY_INVALID_RESPONSE",
-                    "Morty returned an invalid Session lookup.",
-                    502,
-                );
-            }
-            return result;
-        });
+    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
 }

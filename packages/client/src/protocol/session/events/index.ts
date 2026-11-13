@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { DIRECTORY_PATH } from "../../shared/directory.ts";
+import { encryptedMessageCodec } from "../../shared/encrypted-message.ts";
 import { identifierStringSchema as identifier } from "../../shared/identifier.ts";
-import { ProtocolMessageError } from "../../shared/message-codec.ts";
+import {
+    decodeZodMessage as decodeRoutingZodMessage,
+    encryptedFieldSchema,
+    ProtocolMessageError,
+} from "../../shared/message-codec.ts";
 import { boundedJsonSchema, toolCallLocationSchema } from "../../shared/tool-input.ts";
 import {
     sessionElicitationRequestedEventSchema,
@@ -15,6 +20,8 @@ const MAX_EVENT_COUNT = 10_000;
 const MAX_COLLECTION_SIZE = 1_000;
 const MAX_CONTENT_LENGTH = 1_000_000;
 export const SESSION_EVENT_KIND = "session.event.v2";
+export const SESSION_EVENTS_SUBSCRIBE_KIND = "session.events.subscribe";
+export const SESSION_EVENTS_UNSUBSCRIBE_KIND = "session.events.unsubscribe";
 export const SESSION_EVENT_BATCH_MAX_SIZE = 1_000;
 
 const boundedString = z.string().max(MAX_CONTENT_LENGTH);
@@ -629,9 +636,6 @@ function decode<T>(value: unknown, schema: z.ZodType<T>): T {
     }
     return result.data;
 }
-function encode<T>(value: T, schema: z.ZodType<T>): string {
-    return JSON.stringify(decode(value, schema));
-}
 function decodedEntries<T>(value: unknown, schema: z.ZodType<T>, maximum: number): unknown {
     return Array.isArray(value) && value.length <= maximum
         ? value.flatMap((entry) => {
@@ -682,8 +686,25 @@ export const decodeKnownSessionLiveEventBatch = (value: unknown): SessionLiveEve
     );
 export const decodeSessionEventEnvelope = (value: unknown): SessionEventEnvelope =>
     decode(value, sessionEventEnvelopeSchema);
-export const encodeSessionEventEnvelope = (value: SessionEventEnvelope): string =>
-    encode(value, sessionEventEnvelopeSchema);
+function eventBatchTarget(message: SessionEventEnvelope): z.infer<typeof nativeSessionTargetSchema> {
+    const first = message.events[0];
+    if (first === undefined) {
+        throw new ProtocolMessageError("Session event batch must not be empty");
+    }
+    const target = first.target;
+    if (
+        message.events.some(
+            (event) => event.target.harness !== target.harness || event.target.sessionId !== target.sessionId,
+        )
+    ) {
+        throw new ProtocolMessageError("Session event batch must have one target");
+    }
+    return target;
+}
+export const encodeSessionEventEnvelope = (value: SessionEventEnvelope): string => {
+    const message = decodeSessionEventEnvelope(value);
+    return JSON.stringify({ ...message, target: eventBatchTarget(message) });
+};
 export const decodeAcpSessionUpdate = (value: unknown): AcpSessionUpdate => decode(value, acpSessionUpdateSchema);
 export const decodeKnownSessionEventLogPage = (value: unknown): SessionEventLogPage =>
     decode(sanitizeConsumableSessionEventLogPage(value), sessionEventLogPageSchema);
@@ -691,3 +712,105 @@ export const decodeNativeSessionEvents = (value: unknown): NativeSessionEvents =
     decode(value, nativeSessionEventsSchema);
 export const decodeKnownNativeSessionEvents = (value: unknown): NativeSessionEvents =>
     decode(sanitizeConsumableNativeSessionEvents(value), nativeSessionEventsSchema);
+
+const sessionEventEnvelopePublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_EVENT_KIND),
+    target: nativeSessionTargetSchema,
+});
+const sessionEventEnvelopeRoutingSchema = sessionEventEnvelopePublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionEventEnvelopeRouting = z.infer<typeof sessionEventEnvelopeRoutingSchema>;
+const decodeSessionEventEnvelopeRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionEventEnvelopeRoutingSchema);
+function decodeRoutedSessionEventEnvelope(encoded: string) {
+    const value = inputValue(encoded);
+    if (!isRecord(value)) {
+        throw new ProtocolMessageError("Session event message must be an object");
+    }
+    const message = decodeSessionEventEnvelope(value);
+    const target = decode(value["target"], nativeSessionTargetSchema);
+    const actual = eventBatchTarget(message);
+    if (actual.harness !== target.harness || actual.sessionId !== target.sessionId) {
+        throw new ProtocolMessageError("Session event batch target does not match its route");
+    }
+    return { ...message, target };
+}
+
+const encryptedSessionEventEnvelopeCodec = encryptedMessageCodec({
+    kind: SESSION_EVENT_KIND,
+    decode: decodeRoutedSessionEventEnvelope,
+    decodeRouting: decodeSessionEventEnvelopeRouting,
+    publicRoutingSchema: sessionEventEnvelopePublicRoutingSchema,
+});
+export const sessionEventEnvelopeCodec = Object.freeze({
+    kind: SESSION_EVENT_KIND,
+    decodeRouting: decodeSessionEventEnvelopeRouting,
+    encodeRouting: (message: SessionEventEnvelopeRouting): string =>
+        JSON.stringify(decodeSessionEventEnvelopeRouting(JSON.stringify(message))),
+    encode: async (
+        value: unknown,
+        encryptor: Parameters<typeof encryptedSessionEventEnvelopeCodec.encode>[1],
+        signal: AbortSignal,
+    ): Promise<string> => {
+        const message = decodeSessionEventEnvelope(value);
+        return encryptedSessionEventEnvelopeCodec.encode(
+            { ...message, target: eventBatchTarget(message) },
+            encryptor,
+            signal,
+        );
+    },
+    decode: async (
+        encoded: string,
+        decryptor: Parameters<typeof encryptedSessionEventEnvelopeCodec.decode>[1],
+        signal: AbortSignal,
+    ): Promise<SessionEventEnvelope> => {
+        const { target: _target, ...message } = await encryptedSessionEventEnvelopeCodec.decode(
+            encoded,
+            decryptor,
+            signal,
+        );
+        return message;
+    },
+});
+
+const sessionEventsSubscribeSchema = z
+    .strictObject({
+        kind: z.literal(SESSION_EVENTS_SUBSCRIBE_KIND),
+        subscriptionId: identifier,
+        target: nativeSessionTargetSchema,
+    })
+    .readonly();
+const sessionEventsUnsubscribeSchema = z
+    .strictObject({
+        kind: z.literal(SESSION_EVENTS_UNSUBSCRIBE_KIND),
+        subscriptionId: identifier,
+        target: nativeSessionTargetSchema,
+    })
+    .readonly();
+export type SessionEventsSubscribeCommand = z.infer<typeof sessionEventsSubscribeSchema>;
+export type SessionEventsUnsubscribe = z.infer<typeof sessionEventsUnsubscribeSchema>;
+export type SessionEventsUnsubscribeControl = SessionEventsUnsubscribe;
+
+export const decodeSessionEventsSubscribeCommand = (encoded: string): SessionEventsSubscribeCommand =>
+    decode(encoded, sessionEventsSubscribeSchema);
+export const encodeSessionEventsSubscribeCommand = (message: SessionEventsSubscribeCommand): string =>
+    JSON.stringify(decodeSessionEventsSubscribeCommand(JSON.stringify(message)));
+export const decodeSessionEventsUnsubscribe = (encoded: string): SessionEventsUnsubscribe =>
+    decode(encoded, sessionEventsUnsubscribeSchema);
+export const encodeSessionEventsUnsubscribe = (message: SessionEventsUnsubscribe): string =>
+    JSON.stringify(decodeSessionEventsUnsubscribe(JSON.stringify(message)));
+
+const sessionEventsSubscribeRoutingSchema = sessionEventsSubscribeSchema
+    .unwrap()
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionEventsSubscribeCommandRouting = z.infer<typeof sessionEventsSubscribeRoutingSchema>;
+
+export const sessionEventsSubscribeCommandCodec = encryptedMessageCodec({
+    kind: SESSION_EVENTS_SUBSCRIBE_KIND,
+    decode: decodeSessionEventsSubscribeCommand,
+    decodeRouting: (encoded: string): SessionEventsSubscribeCommandRouting =>
+        decodeRoutingZodMessage(encoded, sessionEventsSubscribeRoutingSchema),
+    publicRoutingSchema: sessionEventsSubscribeSchema.unwrap(),
+});

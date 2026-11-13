@@ -129,6 +129,7 @@ async function prompt(peer: RealDaemonPeer, sessionTarget: RealDaemonPeer["targe
     peer.send(
         encodeSessionPromptCommand({
             kind: "session.prompt",
+            requestId: commandId,
             commandId,
             requestId: commandId,
             target: sessionTarget,

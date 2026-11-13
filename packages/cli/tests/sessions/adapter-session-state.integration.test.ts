@@ -61,6 +61,7 @@ test("Given a resumed conversation with a configuration edit awaiting the Agent,
                 peer.send(
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
+                        requestId: commandId,
                         commandId,
                         requestId: commandId,
                         disposition: SessionPromptDisposition.Append,

@@ -87,6 +87,7 @@ async function promptFromMorty(
     peer.send(
         encodeSessionPromptCommand({
             kind: "session.prompt",
+            requestId: commandId,
             commandId,
             requestId: commandId,
             target: sessionTarget,

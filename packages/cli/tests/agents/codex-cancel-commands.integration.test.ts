@@ -68,6 +68,7 @@ test.each(["foreground", "background"] as const)(
                     const commandId = randomUUID();
                     peer.send(
                         encodeSessionPromptCommand({
+                            requestId: commandId,
                             commandId,
                             requestId: commandId,
                             disposition: SessionPromptDisposition.Append,

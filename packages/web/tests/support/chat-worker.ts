@@ -1,9 +1,16 @@
 import { resolve } from "node:path";
-import { MortyClient, WsTransport } from "@morty-build/client";
+import { createClientPayloadEncryption, type PayloadEncryptionConnection } from "@morty-build/client";
+import {
+    decodeKnownSessionLiveEventBatch,
+    decodeMessageKind,
+    nativeSessionResultCodec,
+    sessionEventEnvelopeCodec,
+} from "@morty-build/client/protocol";
 import * as v from "valibot";
 import type { ControlledAgent } from "../../../../tests/support/fake-daemon/runtime.ts";
 import { createResponseLossProxy } from "../../../relay-test-support/src/response-loss-proxy.ts";
 import { createIdentityFixture } from "../../../worker/tests/support/identity-fixture.ts";
+import { rememberComputerEncryption } from "../../src/services/identity/remembered-computers.ts";
 import { TestApiTransport } from "./test-api-transport.ts";
 
 /**
@@ -17,6 +24,7 @@ export async function createChatWorkerEnvironment(
     delayExecutionReads = false,
     loseSharingResponses = false,
 ) {
+    const observers = new Set<PayloadEncryptionConnection>();
     const cloud = await createIdentityFixture({
         listenOnLoopback: true,
         ...(loseTurnResponses ? { loseTurnResponses: true as const } : {}),
@@ -62,60 +70,74 @@ export async function createChatWorkerEnvironment(
         transport.open();
         const connect = async (agents: readonly ControlledAgent[], sessionIds?: ReadonlySet<string>) => {
             const runtime = await cloud.connectAgent(identity.computerId, identity.token, agents, sessionIds);
-            const setup = await request(`v1/computers/${identity.computerId}/setup`, {
-                harness: agents[0]?.harness ?? "codex",
-            });
-            if (setup.status !== 202) {
-                throw new Error(`Could not prepare the test Computer: ${setup.status} ${await setup.text()}`);
+            const access = await runtime.encryptionAccess(AbortSignal.timeout(30_000));
+            rememberComputerEncryption(access);
+            if (cloud.executionNetwork !== null) {
+                const encryption = await createClientPayloadEncryption(access, AbortSignal.timeout(30_000));
+                observers.add(encryption);
+                const terminalEvents = new Map<string, Promise<boolean>>();
+                cloud.executionNetwork.observeComputer(identity.computerId, {
+                    execution: async (encoded, signal) => {
+                        if (decodeMessageKind(encoded) !== "native.session.result") {
+                            return null;
+                        }
+                        const snapshot = await nativeSessionResultCodec.decode(encoded, encryption, signal);
+                        if (snapshot.action !== "active-turn") {
+                            throw new Error("Expected an execution snapshot");
+                        }
+                        return {
+                            turn: snapshot.turn?.commandId ?? null,
+                            lastTurn: snapshot.lastTurn?.commandId ?? null,
+                            lastTurnState: snapshot.lastTurn?.state ?? null,
+                            interactionPosition: snapshot.interactionState?.throughPosition ?? null,
+                        };
+                    },
+                    terminal: (encoded, signal) => {
+                        if (decodeMessageKind(encoded) !== "session.event.v2") {
+                            return Promise.resolve(false);
+                        }
+                        let result = terminalEvents.get(encoded);
+                        if (result === undefined) {
+                            result = sessionEventEnvelopeCodec
+                                .decode(encoded, encryption, signal)
+                                .then((message) =>
+                                    decodeKnownSessionLiveEventBatch(message.events).some(
+                                        (event) =>
+                                            event.type === "lifecycle-metadata" &&
+                                            (event.payload.kind === "prompt.completed" ||
+                                                event.payload.kind === "prompt.failed"),
+                                    ),
+                                );
+                            if (terminalEvents.size >= 4096) {
+                                const oldest = terminalEvents.keys().next().value;
+                                if (oldest !== undefined) {
+                                    terminalEvents.delete(oldest);
+                                }
+                            }
+                            terminalEvents.set(encoded, result);
+                        }
+                        return result;
+                    },
+                });
             }
+            await runtime.api.verifyAgent(agents[0]?.harness ?? "codex", AbortSignal.timeout(120_000));
             // The second client reaches the same Worker directly; only the browser uses the failing network.
             const sessionClient = async (
                 target: { readonly harness: string; readonly sessionId: string },
                 signal: AbortSignal,
             ) => {
-                const response = await cloud.dispatchFetch(
-                    `${cloud.directOrigin}/morty/api/v1/computers/${runtime.computerId}/native-sessions/access`,
-                    {
-                        method: "POST",
-                        signal,
-                        headers: {
-                            authorization: `Bearer ${identity.token}`,
-                            "content-type": "application/json",
-                        },
-                        body: JSON.stringify(target),
-                    },
-                );
-                if (!response.ok) {
-                    throw new Error(`Could not authorize the second client: ${response.status}`);
-                }
-                const access = v.parse(v.object({ credential: v.string() }), await response.json());
-                signal.throwIfAborted();
-                const transport = new WsTransport();
-                return new MortyClient({
-                    transport,
-                    onClose: transport.close,
-                    endpoint: cloud.directOrigin,
-                    computerId: runtime.computerId,
-                    credentialProvider: {
-                        credential: async (signal: AbortSignal) => {
-                            signal.throwIfAborted();
-                            return access.credential;
-                        },
-                    },
-                });
+                return await runtime.api.connectSession(target, signal);
             };
             return {
                 failure: runtime.failure,
                 continueReply: runtime.continueReply,
+                readManagedSessions: (signal: AbortSignal) => runtime.api.managedSessions(signal),
                 /** Archives a Session the way another browser window of this Computer would. */
                 archiveSession: async (sessionId: string): Promise<void> => {
-                    const response = await request(`v1/computers/${identity.computerId}/managed-sessions/archive`, {
-                        harness: agents[0]?.harness ?? "codex",
-                        sessionId,
-                    });
-                    if (response.status !== 200) {
-                        throw new Error(`Could not archive the test Session: ${response.status}`);
-                    }
+                    await runtime.api.archiveManagedSession(
+                        { harness: agents[0]?.harness ?? "codex", sessionId },
+                        AbortSignal.timeout(30_000),
+                    );
                 },
                 /** Applies another client's explicit model edit through the public Relay contract. */
                 selectModel: async (sessionId: string, value: string): Promise<void> => {
@@ -233,7 +255,13 @@ export async function createChatWorkerEnvironment(
             try {
                 await sharingNetwork?.close();
             } finally {
-                await cloud.close();
+                try {
+                    await cloud.close();
+                } finally {
+                    for (const observer of observers) {
+                        observer.close();
+                    }
+                }
             }
         },
     };

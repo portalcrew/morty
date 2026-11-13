@@ -1,15 +1,16 @@
-import { nativeSessionKey } from "@morty-build/client/native-session";
+import { nativeSessionKey, sameNativeSession } from "@morty-build/client/native-session";
 import {
     COMPUTER_LIVENESS_READY_KIND,
     COMPUTER_STATUS_KIND,
     type ComputerLivenessReadyEvent,
     type DaemonToRelayMessage,
     decodeDaemonToRelayMessage,
+    encodeComputerLivenessReadyEvent,
     encodeComputerStatusEvent,
-    encodeServiceToDaemonMessage,
     type NativeSessionTarget,
     SESSION_EVENT_KIND,
     type SessionAccessGrant,
+    type SessionEventsSubscribeCommandRouting,
 } from "@morty-build/client/protocol";
 import { ComputerStatus } from "../../../../contracts/relay/computer-status.ts";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
@@ -44,6 +45,7 @@ export type ComputerSocketIdentity =
           readonly computerId: string;
 
           readonly sessionFilter: NativeSessionTarget;
+          readonly subscriptionId: string;
       }
     | {
           readonly role: "daemon" | "replaced-daemon";
@@ -223,7 +225,7 @@ export class ComputerService {
                     return;
                 }
                 const ready: ComputerLivenessReadyEvent = { kind: COMPUTER_LIVENESS_READY_KIND };
-                socket.send(encodeServiceToDaemonMessage(ready));
+                socket.send(encodeComputerLivenessReadyEvent(ready));
             } catch (error) {
                 if (!attachment.controller.signal.aborted) {
                     logger.error(
@@ -306,6 +308,32 @@ export class ComputerService {
         return current !== null && this.#cx.gateways.peers.daemons().length > 0;
     };
 
+    readonly registerSessionSubscription = async (
+        computerId: string,
+        target: NativeSessionTarget,
+        routing: SessionEventsSubscribeCommandRouting,
+        signal: AbortSignal,
+    ): Promise<void> => {
+        signal.throwIfAborted();
+        if (!sameNativeSession(routing.target, target)) {
+            throw new PairingDirectoryError("invalid_request", "The subscription does not match its Session");
+        }
+        const daemon = this.#cx.gateways.peers
+            .sockets()
+            .find(
+                ({ identity, socket }) =>
+                    identity.role === "daemon" &&
+                    identity.computerId === computerId &&
+                    socket.isOpen() &&
+                    this.#cx.services.connections.isCurrent(identity),
+            );
+        if (daemon === undefined) {
+            throw new PairingDirectoryError("computer_offline", "The Computer is offline");
+        }
+        signal.throwIfAborted();
+        this.relay(computerId).forwardSessionSubscription(daemon.socket, routing);
+    };
+
     readonly attachDaemon = async (computerId: string, replaced: boolean, signal: AbortSignal): Promise<void> => {
         const relay = this.relay(computerId);
         await relay.attachDaemon(replaced, signal);
@@ -341,6 +369,40 @@ export class ComputerService {
         } finally {
             await this.detachDaemons(silent);
         }
+    };
+
+    readonly cancelNativeRequest = (
+        computerId: string,
+        operation: ComputerOperationSocket,
+        requestId: string,
+        signal: AbortSignal,
+    ): void => {
+        signal.throwIfAborted();
+        const ownsOperation = this.#cx.gateways.peers
+            .operations()
+            .some((route) => route.requestId === requestId && route.socket.isSame(operation));
+        if (!ownsOperation) {
+            throw new PairingDirectoryError("invalid_request", "The cancellation does not own this operation");
+        }
+        const original = operation.requestDaemon();
+        if (original === null) {
+            return;
+        }
+        const daemon = this.#cx.gateways.peers
+            .sockets()
+            .find(
+                ({ identity, socket }) =>
+                    identity.role === "daemon" &&
+                    identity.computerId === computerId &&
+                    socket.isOpen() &&
+                    socket.isSame(original) &&
+                    this.#cx.services.connections.isCurrent(identity),
+            );
+        if (daemon === undefined) {
+            return;
+        }
+        signal.throwIfAborted();
+        this.relay(computerId).forwardNativeCancellation(daemon.socket, requestId);
     };
 
     readonly receiveMessage = async (
@@ -469,13 +531,11 @@ export class ComputerService {
     };
 
     /**
-     * A Session's events are delivered in the order the daemon sent them. A batch that carries several
-     * Sessions takes its place in each of their lanes, so a later batch for one of them cannot overtake it.
+     * Each event batch declares one Session. Its public target selects the ordering lane without reading events.
      */
     private readonly daemonMessageLanes = (message: DaemonToRelayMessage): readonly string[] => {
         if (message.kind === SESSION_EVENT_KIND) {
-            const sessionKeys = new Set(message.events.map((event) => nativeSessionKey(event.target)));
-            return sessionKeys.size === 0 ? ["session:unknown"] : [...sessionKeys].map((key) => `session:${key}`);
+            return [`session:${nativeSessionKey(message.target)}`];
         }
         return ["runtime"];
     };
@@ -495,6 +555,32 @@ export class ComputerService {
         socket: RelaySocket,
         signal: AbortSignal,
     ): Promise<void> => {
+        if (identity.role === "viewer") {
+            const daemon = this.#cx.gateways.peers
+                .sockets()
+                .find(
+                    ({ identity: candidate, socket: peer }) =>
+                        candidate.role === "daemon" &&
+                        candidate.computerId === identity.computerId &&
+                        peer.isOpen() &&
+                        this.#cx.services.connections.isCurrent(candidate),
+                );
+            if (daemon !== undefined) {
+                try {
+                    this.relay(identity.computerId).forwardSessionUnsubscribe(
+                        daemon.socket,
+                        identity.subscriptionId,
+                        identity.sessionFilter,
+                    );
+                } catch (error) {
+                    logger.warn(
+                        { err: error, event: "session_subscription_cleanup_failed" },
+                        "Session subscription cleanup failed",
+                    );
+                }
+            }
+            return;
+        }
         // The latest connection detaches once it closes, also after its generation ended: what was sent into it
         // must still be released.
         const latest = () =>

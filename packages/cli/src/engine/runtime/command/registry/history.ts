@@ -10,8 +10,9 @@ import {
     type SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND,
     SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND,
     type SessionEvent,
+    sessionHistoryPageLoadedCodec,
+    sessionPreviewHistoryPageLoadedCodec,
 } from "@morty-build/client/protocol";
-import type { WebSocket } from "undici";
 import { operationErrorCode } from "../../../infra/operation-error.ts";
 import type { ResolveAgent } from "../../../session/api/session-api.ts";
 import { SessionError } from "../../../session/api/session-error.ts";
@@ -22,6 +23,7 @@ import type { PromptLifecycle } from "../../../session/prompt/prompt-lifecycle.t
 import { resolveSessionDirectory } from "../../../session/workspace/resolve-session-directory.ts";
 import type { WorkspaceDirectoryService } from "../../../session/workspace/workspace-directory.ts";
 import type { RelayConnectionDiagnostics } from "../../relay/diagnostics.ts";
+import type { CommandContext } from "../context.ts";
 import type { CommandHandler } from "../definition.ts";
 import { reportOperationFailure, send } from "../transport.ts";
 
@@ -94,7 +96,7 @@ async function loadHistoryPage(
 }
 
 async function executeSessionHistoryPageLoad(
-    socket: WebSocket,
+    context: CommandContext,
     command: ReturnType<typeof decodeSessionHistoryPageLoad>,
     resolveAgent: ResolveAgent,
     directories: WorkspaceDirectoryService,
@@ -104,6 +106,7 @@ async function executeSessionHistoryPageLoad(
     eventProjection: PromptLifecycle,
     signal: AbortSignal,
 ): Promise<void> {
+    const { socket, payloadEncryption } = context;
     let harness: string | undefined;
     try {
         const [entry] = await nativeSessions.querySessions([command.target], signal);
@@ -127,12 +130,19 @@ async function executeSessionHistoryPageLoad(
             async (eventLimit, cursor) => await sessions.loadSessionEvents(loadOptions, eventLimit, cursor),
         );
         signal.throwIfAborted();
-        send(socket, {
-            events,
-            kind: SESSION_HISTORY_PAGE_LOADED_KIND,
-            requestId: command.requestId,
-            target: command.target,
-        });
+        send(
+            socket,
+            await sessionHistoryPageLoadedCodec.encode(
+                {
+                    events,
+                    kind: SESSION_HISTORY_PAGE_LOADED_KIND,
+                    requestId: command.requestId,
+                    target: command.target,
+                },
+                payloadEncryption,
+                signal,
+            ),
+        );
     } catch (error) {
         if (!signal.aborted) {
             diagnostics.daemonDiagnostic(
@@ -145,13 +155,13 @@ async function executeSessionHistoryPageLoad(
                 },
                 error,
             );
-            reportOperationFailure(socket, command.requestId, command.target, error);
+            await reportOperationFailure(context, command.requestId, command.target, error);
         }
     }
 }
 
 async function executeSessionPreviewHistoryPageLoad(
-    socket: WebSocket,
+    context: CommandContext,
     command: ReturnType<typeof decodeSessionPreviewHistoryPageLoad>,
     resolveAgent: ResolveAgent,
     directories: WorkspaceDirectoryService,
@@ -159,6 +169,7 @@ async function executeSessionPreviewHistoryPageLoad(
     nativeSessions: NativeSessionService,
     signal: AbortSignal,
 ): Promise<void> {
+    const { socket, payloadEncryption } = context;
     try {
         const resolved = await resolveSessionDirectory(directories, command.directory, signal);
         const loadOptions = {
@@ -176,12 +187,19 @@ async function executeSessionPreviewHistoryPageLoad(
                 await nativeSessions.readSessionHistory(loadOptions, command.target.sessionId, eventLimit, cursor),
         );
         signal.throwIfAborted();
-        send(socket, {
-            events,
-            kind: SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND,
-            requestId: command.requestId,
-            target: command.target,
-        });
+        send(
+            socket,
+            await sessionPreviewHistoryPageLoadedCodec.encode(
+                {
+                    events,
+                    kind: SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND,
+                    requestId: command.requestId,
+                    target: command.target,
+                },
+                payloadEncryption,
+                signal,
+            ),
+        );
     } catch (error) {
         if (!signal.aborted) {
             diagnostics.daemonDiagnostic(
@@ -194,7 +212,7 @@ async function executeSessionPreviewHistoryPageLoad(
                 },
                 error,
             );
-            reportOperationFailure(socket, command.requestId, command.target, error);
+            await reportOperationFailure(context, command.requestId, command.target, error);
         }
     }
 }
@@ -202,9 +220,9 @@ async function executeSessionPreviewHistoryPageLoad(
 export const handleSessionHistoryPageLoad: CommandHandler<typeof SESSION_HISTORY_PAGE_LOAD_KIND> = (
     context,
     message,
-): void => {
-    void executeSessionHistoryPageLoad(
-        context.socket,
+): Promise<void> => {
+    return executeSessionHistoryPageLoad(
+        context,
         message,
         context.resolveAgent,
         context.directories,
@@ -219,9 +237,9 @@ export const handleSessionHistoryPageLoad: CommandHandler<typeof SESSION_HISTORY
 export const handlePreviewHistoryPageLoad: CommandHandler<typeof SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND> = (
     context,
     message,
-): void => {
-    void executeSessionPreviewHistoryPageLoad(
-        context.socket,
+): Promise<void> => {
+    return executeSessionPreviewHistoryPageLoad(
+        context,
         message,
         context.resolveAgent,
         context.directories,

@@ -18,6 +18,7 @@ test("Given Codex fails a turn with a reason, When a member's prompt runs throug
         peer.send(
             encodeSessionPromptCommand({
                 kind: "session.prompt",
+                requestId: commandId,
                 commandId,
                 requestId: commandId,
                 target: peer.target,

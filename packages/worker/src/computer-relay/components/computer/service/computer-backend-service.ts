@@ -1,17 +1,13 @@
-import type { ForkMortyNativeSessionRequest } from "@morty-build/client";
 import type {
-    AgentSettingsDiscoverCommand,
+    AgentSettingsDiscoverCommandRouting,
     NativeSessionTarget,
     SessionAccessHolder,
-    WorkspaceListCommand,
 } from "@morty-build/client/protocol";
-import { decodeComputerDiagnosticsRequest } from "@morty-build/client/protocol";
 import { hashSecret, PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
 import type { RelayContext } from "../../../composition/relay-services.ts";
-import type { ComputerControlCommand } from "../../runtime/service/computer-control-request.ts";
+import type { ClientControlCommand } from "../../runtime/service/computer-control-registry.ts";
 import type { LocalSessionOperations } from "../../runtime/service/local-session-operations.ts";
 import type { SessionAccessService } from "../../runtime/service/session-access-service.ts";
-import { SessionControl } from "../../runtime/service/session-control.ts";
 
 /** Only constructed inside the ComputerRelay that owns these Computer operations. */
 export class ComputerBackendService {
@@ -60,29 +56,11 @@ export class ComputerBackendService {
             holder,
             signal,
         );
-    readonly diagnostics = async (signal: AbortSignal) =>
-        await this.control(
-            decodeComputerDiagnosticsRequest(
-                JSON.stringify({ kind: "computer.diagnostics.read", requestId: crypto.randomUUID() }),
-            ),
-            signal,
-        );
-    readonly latency = async (signal: AbortSignal): Promise<number> => {
-        const command: ComputerControlCommand = { kind: "computer.ping", requestId: `ping_${crypto.randomUUID()}` };
+    readonly clientControl = async (command: ClientControlCommand, signal: AbortSignal) => {
         const access = await this.#context.services.pairings.authorizeComputer(this.computerId, signal);
-        const started = performance.now();
-        await this.operations.requestControl(access.computerId, command, signal);
-        return Math.max(0, Math.round(performance.now() - started));
+        return await this.operations.requestClientControl(access.computerId, command, signal);
     };
-    readonly control = async (command: ComputerControlCommand, signal: AbortSignal) => {
-        const access = await this.#context.services.pairings.authorizeComputer(this.computerId, signal);
-        return await this.operations.requestControl(access.computerId, command, signal);
-    };
-    readonly workspace = async (command: WorkspaceListCommand, signal: AbortSignal) => {
-        const access = await this.#context.services.pairings.authorizeComputer(this.computerId, signal);
-        return await this.operations.requestWorkspace(access.computerId, command, signal);
-    };
-    readonly settings = async (command: AgentSettingsDiscoverCommand, signal: AbortSignal) => {
+    readonly settings = async (command: AgentSettingsDiscoverCommandRouting, signal: AbortSignal) => {
         const computers = await this.#context.services.pairings.listComputers(this.computerId, signal);
         if (!computers.some((computer) => computer.computerId === this.computerId)) {
             throw new PairingDirectoryError("computer_access_denied", "This credential cannot access this Computer");
@@ -90,10 +68,4 @@ export class ComputerBackendService {
         const access = await this.#context.services.pairings.authorizeComputer(this.computerId, signal);
         return await this.operations.requestAgentSettings(access.computerId, command, signal);
     };
-    readonly fork = async (operationId: string, input: ForkMortyNativeSessionRequest, signal: AbortSignal) => {
-        const access = await this.#context.services.pairings.authorizeComputer(this.computerId, signal);
-        return await this.operations.forkNativeSession(access.computerId, operationId, input, signal);
-    };
-    readonly session = (target: NativeSessionTarget, signal: AbortSignal) =>
-        new SessionControl(async (command) => await this.control(command, signal), target);
 }

@@ -1,29 +1,61 @@
 import { abortAllDurableObjects, evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type { ForkMortyNativeSessionRequest } from "@morty-build/client";
+import {
+    createClientPayloadEncryption,
+    createComputerPayloadEncryption,
+    exportE2EPublicKey,
+    type ForkMortyNativeSessionRequest,
+    generateE2EIdentity,
+} from "@morty-build/client";
 import {
     COMPUTER_HEARTBEAT_ACK_MESSAGE,
     COMPUTER_HEARTBEAT_MESSAGE,
     COMPUTER_SUCCESSOR_CREDENTIAL_HEADER,
+    CONTENT_CHUNK_MAX_BYTES,
     computerCredentialSuccessor,
+    contentAvailableEventCodec,
+    contentChunkCodec,
+    contentCommitCommandCodec,
+    contentReadyEventCodec,
+    contentWriteCommandCodec,
     decodeContentChunkFrame,
-    decodeServiceToDaemonMessage,
+    decodeDaemonInboundMessage,
+    decodeEncryptedDaemonInboundMessage,
+    decodeEncryptedDaemonMessage,
+    decodeFileReadCommand,
     decodeSessionAccessCredential,
+    decodeWorkerToDaemonMessage,
     encodeContentAvailableEvent,
     encodeContentChunkFrame,
     encodeContentReadyEvent,
-    encodeFileBeginEvent,
-    encodeNativeSessionResult,
-    encodeSessionConfigReadResult,
+    encodeEncryptedDaemonInboundMessage,
+    encodeEncryptedDaemonMessage,
+    encodeFileStreamRecord,
     encodeSessionEventEnvelope,
-    encodeSessionHistoryPageLoaded,
     encodeSessionOperationFailedEvent,
     encodeSessionPromptAcceptedEvent,
     encodeSessionRenamedEvent,
     encodeSessionTurnStoppedEvent,
+    FILE_STREAM_CONTENT_TYPE,
+    fileBeginEventCodec,
     MORTY_API_PREFIX,
     type NativeSessionTarget,
+    nativeSessionRequestCodec,
+    nativeSessionResultCodec,
     type SessionConfigReadResult,
+    sessionCancelBeforeStartCommandCodec,
+    sessionCancelCommandCodec,
+    sessionConfigReadCommandCodec,
+    sessionConfigReadResultCodec,
+    sessionElicitationRespondCommandCodec,
+    sessionEventEnvelopeCodec,
+    sessionHistoryPageLoadCodec,
+    sessionHistoryPageLoadedCodec,
+    sessionOperationFailedEventCodec,
+    sessionPermissionRespondCommandCodec,
+    sessionPromptAcceptedEventCodec,
+    sessionPromptCommandCodec,
+    sessionTurnStoppedEventCodec,
 } from "@morty-build/client/protocol";
 import { afterAll, afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";
@@ -40,6 +72,37 @@ import { computerBackend, createOwner, issueSession, ownerRequest } from "./owne
 import { computerAccess, revokeTestComputer } from "./registered-computer.ts";
 
 const nativeTarget = (sessionId: string): NativeSessionTarget => ({ harness: "codex", sessionId });
+
+async function endpointEncryption(computerId: string, signal: AbortSignal) {
+    const identity = await generateE2EIdentity();
+    const secret = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
+        .replaceAll("+", "-")
+        .replaceAll("/", "_")
+        .replaceAll("=", "");
+    const access = {
+        computerId,
+        computerE2EPublicKey: await exportE2EPublicKey(identity.publicKey),
+        computerE2EAccessSecret: secret,
+    };
+    const seen = new Set<string>();
+    const computer = await createComputerPayloadEncryption(
+        access,
+        async (claim, claimSignal) => {
+            claimSignal.throwIfAborted();
+            if (seen.has(claim.fingerprint)) {
+                throw new Error("Duplicate encrypted request");
+            }
+            seen.add(claim.fingerprint);
+        },
+        signal,
+    );
+    const client = await createClientPayloadEncryption(access, signal);
+    onTestFinished(() => {
+        computer.close();
+        client.close();
+    });
+    return { computer, client };
+}
 
 function liveEvent(sessionTarget: NativeSessionTarget, text: string): string {
     return encodeSessionEventEnvelope({
@@ -310,7 +373,7 @@ describe.sequential("Relay Session-only boundary", () => {
         const daemonMessages = new SocketMessages(daemon);
         daemon.accept();
         try {
-            expect(decodeServiceToDaemonMessage(await daemonMessages.next()).kind).toBe("computer.liveness.ready");
+            expect(decodeWorkerToDaemonMessage(await daemonMessages.next()).kind).toBe("computer.liveness.ready");
             const answer = liveEvent(nativeTarget(sessionId), "local answer");
 
             const browserAccess = await issueSession(computerId, nativeTarget(sessionId));
@@ -385,7 +448,7 @@ describe.sequential("Relay Session-only boundary", () => {
                     { headers: { authorization: `Bearer ${text(browserAccess, "credential")}` } },
                 ),
             );
-            const historyLoad = decodeServiceToDaemonMessage(await daemonMessages.next());
+            const historyLoad = decodeDaemonInboundMessage(await daemonMessages.next());
             if (historyLoad.kind !== "session.live-history.v2.page.load") {
                 throw new Error("Expected history loading without a preceding Session query");
             }
@@ -433,7 +496,7 @@ describe.sequential("Relay Session-only boundary", () => {
                     { headers: { authorization: `Bearer ${text(browserAccess, "credential")}` } },
                 ),
             );
-            const closedHistoryLoad = decodeServiceToDaemonMessage(await daemonMessages.next());
+            const closedHistoryLoad = decodeDaemonInboundMessage(await daemonMessages.next());
             if (closedHistoryLoad.kind !== "session.live-history.v2.page.load") {
                 throw new Error("Expected a live Session history request");
             }
@@ -660,7 +723,7 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
         daemon.addEventListener("close", resolve, { once: true });
     });
     daemon.accept();
-    expect(decodeServiceToDaemonMessage(await daemonMessages.next()).kind).toBe("computer.liveness.ready");
+    expect(decodeWorkerToDaemonMessage(await daemonMessages.next()).kind).toBe("computer.liveness.ready");
     /** Heartbeats exactly as the daemon does and returns when Cloudflare answered, by its own clock. */
     const heartbeat = async (): Promise<number> => {
         daemon.send(COMPUTER_HEARTBEAT_MESSAGE);
@@ -1055,7 +1118,7 @@ it("Given a Computer its owner revoked and then paired again, When the earlier d
         }
         const messages = new SocketMessages(daemon);
         daemon.accept();
-        expect(decodeServiceToDaemonMessage(await messages.next()).kind).toBe("computer.liveness.ready");
+        expect(decodeWorkerToDaemonMessage(await messages.next()).kind).toBe("computer.liveness.ready");
         daemon.close(1000, "Test complete");
     } finally {
         runtime.daemon.close(1000, "Test complete");
@@ -1081,7 +1144,7 @@ it("Given a Session credential with an open live view, When the owner revokes th
         }
         const messages = new SocketMessages(daemon);
         daemon.accept();
-        expect(decodeServiceToDaemonMessage(await messages.next()).kind).toBe("computer.liveness.ready");
+        expect(decodeWorkerToDaemonMessage(await messages.next()).kind).toBe("computer.liveness.ready");
 
         expect((await runtime.subscribe()).admission).toMatchObject({
             kind: "session.events.error",
@@ -1103,7 +1166,24 @@ it("Given a Session credential with an open live view, When the owner revokes th
 it("Given Chat reads the Session execution naming an unconfirmed command, When the Computer reports that command's delivery, Then the Relay returns the delivery", async () => {
     const runtime = await connectComputerDaemon("command-delivery");
     try {
-        const response = runtime.readSessionExecution("unconfirmed-command");
+        const signal = new AbortController().signal;
+        const encryption = await endpointEncryption(runtime.computerId, signal);
+        const encoded = await nativeSessionRequestCodec.encode(
+            {
+                kind: "native.session.request",
+                requestId: "delivery-read",
+                action: "active-turn",
+                target: runtime.sessionTarget,
+                deliveryCommandId: "unconfirmed-command",
+            },
+            encryption.client,
+            signal,
+        );
+        const request = new Request(
+            `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/active-turn?commandId=unconfirmed-command`,
+            { method: "GET", headers: credentialHeaders(runtime.credential), signal },
+        );
+        const response = requestBrowserOperation((input) => ownerRequest(input), request, encoded);
         const first = await Promise.race([
             runtime.daemonMessages.next().then((message) => ({ kind: "command" as const, message })),
             response.then((answered) => ({ kind: "response" as const, response: answered })),
@@ -1113,25 +1193,30 @@ it("Given Chat reads the Session execution naming an unconfirmed command, When t
                 `Expected a daemon request, received ${first.response.status}: ${await first.response.text()}`,
             );
         }
-        const query = decodeServiceToDaemonMessage(first.message);
+        const query = await decodeEncryptedDaemonInboundMessage(first.message, encryption.computer, signal);
         if (query.kind !== "native.session.request" || query.action !== "active-turn") {
             throw new Error("Expected the Session execution read to reach the daemon");
         }
         expect(query.deliveryCommandId).toBe("unconfirmed-command");
         runtime.daemon.send(
-            encodeNativeSessionResult({
-                kind: "native.session.result",
-                action: "active-turn",
-                requestId: query.requestId,
-                target: runtime.sessionTarget,
-                turn: null,
-                queued: [],
-                command: { state: "completed", stopReason: "end_turn" },
-                executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
-                interactionState: null,
-            }),
+            await nativeSessionResultCodec.encode(
+                {
+                    kind: "native.session.result",
+                    action: "active-turn",
+                    requestId: query.requestId,
+                    target: runtime.sessionTarget,
+                    turn: null,
+                    queued: [],
+                    command: { state: "completed", stopReason: "end_turn" },
+                    executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
+                    interactionState: null,
+                },
+                encryption.computer,
+                signal,
+            ),
         );
-        expect(await responseJson(await response, 200)).toMatchObject({
+        const routed = await responseJson(await response, 200);
+        expect(await nativeSessionResultCodec.decode(JSON.stringify(routed), encryption.client, signal)).toMatchObject({
             command: { state: "completed", stopReason: "end_turn" },
         });
     } finally {
@@ -1142,7 +1227,23 @@ it("Given Chat reads the Session execution naming an unconfirmed command, When t
 it("Given Chat reads the Session execution after missing a turn's outcome, When the Computer reports the last turn, Then the Relay returns the outcome", async () => {
     const runtime = await connectComputerDaemon("last-turn");
     try {
-        const response = runtime.readSessionExecution();
+        const signal = new AbortController().signal;
+        const encryption = await endpointEncryption(runtime.computerId, signal);
+        const encoded = await nativeSessionRequestCodec.encode(
+            {
+                kind: "native.session.request",
+                requestId: "last-turn-read",
+                action: "active-turn",
+                target: runtime.sessionTarget,
+            },
+            encryption.client,
+            signal,
+        );
+        const request = new Request(
+            `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/active-turn`,
+            { method: "GET", headers: credentialHeaders(runtime.credential), signal },
+        );
+        const response = requestBrowserOperation((input) => ownerRequest(input), request, encoded);
         const first = await Promise.race([
             runtime.daemonMessages.next().then((message) => ({ kind: "command" as const, message })),
             response.then((answered) => ({ kind: "response" as const, response: answered })),
@@ -1152,30 +1253,35 @@ it("Given Chat reads the Session execution after missing a turn's outcome, When 
                 `Expected a daemon request, received ${first.response.status}: ${await first.response.text()}`,
             );
         }
-        const query = decodeServiceToDaemonMessage(first.message);
+        const query = await decodeEncryptedDaemonInboundMessage(first.message, encryption.computer, signal);
         if (query.kind !== "native.session.request" || query.action !== "active-turn") {
             throw new Error("Expected the Session execution read to reach the daemon");
         }
         expect(query).not.toHaveProperty("deliveryCommandId");
         runtime.daemon.send(
-            encodeNativeSessionResult({
-                kind: "native.session.result",
-                action: "active-turn",
-                requestId: query.requestId,
-                target: runtime.sessionTarget,
-                turn: null,
-                queued: [],
-                executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
-                interactionState: null,
-                lastTurn: {
-                    code: "model_unavailable",
-                    commandId: "failed-command",
-                    message: "The local Agent could not complete the request",
-                    state: "failed",
+            await nativeSessionResultCodec.encode(
+                {
+                    kind: "native.session.result",
+                    action: "active-turn",
+                    requestId: query.requestId,
+                    target: runtime.sessionTarget,
+                    turn: null,
+                    queued: [],
+                    executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
+                    interactionState: null,
+                    lastTurn: {
+                        code: "model_unavailable",
+                        commandId: "failed-command",
+                        message: "The local Agent could not complete the request",
+                        state: "failed",
+                    },
                 },
-            }),
+                encryption.computer,
+                signal,
+            ),
         );
-        expect(await responseJson(await response, 200)).toMatchObject({
+        const routed = await responseJson(await response, 200);
+        expect(await nativeSessionResultCodec.decode(JSON.stringify(routed), encryption.client, signal)).toMatchObject({
             interactionState: null,
             lastTurn: { commandId: "failed-command", state: "failed", code: "model_unavailable" },
         });
@@ -1190,12 +1296,30 @@ describe.sequential("Relay Turn submission", () => {
         async (access) => {
             const runtime = await connectComputerDaemon(`legacy-queue-cancel-${access.replace(" ", "-")}`);
             try {
+                const signal = new AbortController().signal;
+                const encryption = await endpointEncryption(runtime.computerId, signal);
                 for (const stopReason of ["cancelled", "end_turn"] as const) {
                     const turnId = `legacy-${stopReason}`;
-                    const body = {};
-                    const path = `/turns/${turnId}/cancel`;
-                    const response = runtime.sessionControlRequest(path, body);
-                    const cancellation = decodeServiceToDaemonMessage(await runtime.daemonMessages.next());
+                    const encoded = await sessionCancelCommandCodec.encode(
+                        {
+                            kind: "session.cancel",
+                            requestId: `cancel-${stopReason}`,
+                            commandId: turnId,
+                            target: runtime.sessionTarget,
+                        },
+                        encryption.client,
+                        signal,
+                    );
+                    const request = new Request(
+                        `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/turns/${turnId}/cancel`,
+                        { method: "POST", headers: credentialHeaders(runtime.credential), body: encoded, signal },
+                    );
+                    const response = requestBrowserOperation((input) => ownerRequest(input), request);
+                    const cancellation = await decodeEncryptedDaemonInboundMessage(
+                        await runtime.daemonMessages.next(),
+                        encryption.computer,
+                        signal,
+                    );
                     expect(cancellation).toEqual({
                         commandId: turnId,
                         kind: "session.cancel",
@@ -1206,15 +1330,22 @@ describe.sequential("Relay Turn submission", () => {
                         throw new Error("Expected a cancellation");
                     }
                     runtime.daemon.send(
-                        encodeSessionTurnStoppedEvent({
-                            commandId: turnId,
-                            kind: "session.turn.stopped",
-                            requestId: cancellation.requestId,
-                            target: runtime.sessionTarget,
-                            stopReason,
-                        }),
+                        await sessionTurnStoppedEventCodec.encode(
+                            {
+                                commandId: turnId,
+                                kind: "session.turn.stopped",
+                                requestId: cancellation.requestId,
+                                target: runtime.sessionTarget,
+                                stopReason,
+                            },
+                            encryption.computer,
+                            signal,
+                        ),
                     );
-                    expect(await responseJson(await response, 200)).toEqual({ turnId, stopReason });
+                    const routed = await responseJson(await response, 200);
+                    expect(
+                        await sessionTurnStoppedEventCodec.decode(JSON.stringify(routed), encryption.client, signal),
+                    ).toMatchObject({ commandId: turnId, stopReason });
                 }
             } finally {
                 runtime.daemon.close(1000, "Test complete");
@@ -1227,10 +1358,28 @@ describe.sequential("Relay Turn submission", () => {
         async (access) => {
             const runtime = await connectComputerDaemon(`conditional-queue-cancel-${access}`);
             try {
-                const body = {};
-                const path = "/turns/queued-command/cancel-before-start";
-                const response = runtime.sessionControlRequest(path, body);
-                const withdrawal = decodeServiceToDaemonMessage(await runtime.daemonMessages.next());
+                const signal = new AbortController().signal;
+                const encryption = await endpointEncryption(runtime.computerId, signal);
+                const encoded = await sessionCancelBeforeStartCommandCodec.encode(
+                    {
+                        kind: "session.cancel-before-start",
+                        requestId: "withdraw-request",
+                        commandId: "queued-command",
+                        target: runtime.sessionTarget,
+                    },
+                    encryption.client,
+                    signal,
+                );
+                const request = new Request(
+                    `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/turns/queued-command/cancel-before-start`,
+                    { method: "POST", headers: credentialHeaders(runtime.credential), body: encoded, signal },
+                );
+                const response = requestBrowserOperation((input) => ownerRequest(input), request);
+                const withdrawal = await decodeEncryptedDaemonInboundMessage(
+                    await runtime.daemonMessages.next(),
+                    encryption.computer,
+                    signal,
+                );
                 expect(withdrawal).toEqual({
                     commandId: "queued-command",
                     kind: "session.cancel-before-start",
@@ -1241,17 +1390,22 @@ describe.sequential("Relay Turn submission", () => {
                     throw new Error("Expected a withdrawal");
                 }
                 runtime.daemon.send(
-                    encodeSessionOperationFailedEvent({
-                        kind: "session.operation.failed",
-                        requestId: withdrawal.requestId,
-                        target: runtime.sessionTarget,
-                        code: "turn_already_started",
-                        message: "The message already started and could not be withdrawn",
-                    }),
+                    await sessionOperationFailedEventCodec.encode(
+                        {
+                            kind: "session.operation.failed",
+                            requestId: withdrawal.requestId,
+                            target: runtime.sessionTarget,
+                            code: "turn_already_started",
+                            message: "The message already started and could not be withdrawn",
+                        },
+                        encryption.computer,
+                        signal,
+                    ),
                 );
-                expect(await responseJson(await response, 409)).toMatchObject({
-                    error: { code: "turn_already_started" },
-                });
+                const routed = await responseJson(await response, 200);
+                expect(
+                    await sessionOperationFailedEventCodec.decode(JSON.stringify(routed), encryption.client, signal),
+                ).toMatchObject({ code: "turn_already_started" });
             } finally {
                 runtime.daemon.close(1000, "Test complete");
             }
@@ -1318,21 +1472,39 @@ describe.sequential("Relay Turn submission", () => {
     ] as const)("Session access $label", async (operation) => {
         const runtime = await connectComputerDaemon(`app-control-${operation.command.kind.replaceAll(".", "-")}`);
         try {
-            const response = runtime.appSessionRequest(operation.path, operation);
+            const signal = new AbortController().signal;
+            const encryption = await endpointEncryption(runtime.computerId, signal);
+            const encoded = await encodeEncryptedDaemonInboundMessage(
+                { ...operation.command, requestId: "app-control", target: runtime.sessionTarget },
+                encryption.client,
+                signal,
+            );
+            const request = new Request(
+                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}${operation.path}`,
+                { method: operation.method, headers: credentialHeaders(runtime.credential), body: encoded, signal },
+            );
+            const response = requestBrowserOperation((input) => ownerRequest(input), request);
             const first = await Promise.race([
                 runtime.daemonMessages.next().then((message) => ({ kind: "command", message })),
                 response.then((result) => ({ kind: "response", message: String(result.status) })),
             ]);
             expect(first).toMatchObject({ kind: "command" });
-            const command = decodeServiceToDaemonMessage(first.message);
+            const command = await decodeEncryptedDaemonInboundMessage(first.message, encryption.computer, signal);
             expect(command).toMatchObject({ ...operation.command, target: runtime.sessionTarget });
             if (!("requestId" in command)) {
                 throw new Error("Expected the command to name its own request");
             }
             runtime.daemon.send(
-                JSON.stringify({ ...operation.reply, requestId: command.requestId, target: runtime.sessionTarget }),
+                await encodeEncryptedDaemonMessage(
+                    { ...operation.reply, requestId: command.requestId, target: runtime.sessionTarget },
+                    encryption.computer,
+                    signal,
+                ),
             );
-            expect(await responseJson(await response, 200)).toMatchObject(operation.expected);
+            const routed = await responseJson(await response, 200);
+            expect(await decodeEncryptedDaemonMessage(JSON.stringify(routed), encryption.client, signal)).toMatchObject(
+                operation.reply,
+            );
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
@@ -1343,16 +1515,30 @@ describe.sequential("Relay Turn submission", () => {
         const runtime = await connectComputerDaemon("app-history");
         try {
             const readOnly = await runtime.issueComputerCredential(runtime.computerId);
-            const response = runtime.appSessionRequest("/events?limit=2&cursor=previous-event", {
-                method: "GET",
-                credential: readOnly,
-            });
+            const signal = new AbortController().signal;
+            const encryption = await endpointEncryption(runtime.computerId, signal);
+            const encoded = await sessionHistoryPageLoadCodec.encode(
+                {
+                    kind: "session.live-history.v2.page.load",
+                    requestId: "history-read",
+                    target: runtime.sessionTarget,
+                    eventLimit: 2,
+                    cursor: "previous-event",
+                },
+                encryption.client,
+                signal,
+            );
+            const request = new Request(
+                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/events?limit=2&cursor=previous-event`,
+                { method: "GET", headers: credentialHeaders(readOnly), signal },
+            );
+            const response = requestBrowserOperation((input) => ownerRequest(input), request, encoded);
             const first = await Promise.race([
                 runtime.daemonMessages.next().then((message) => ({ kind: "command", message })),
                 response.then((result) => ({ kind: "response", message: String(result.status) })),
             ]);
             expect(first).toMatchObject({ kind: "command" });
-            const command = decodeServiceToDaemonMessage(first.message);
+            const command = await decodeEncryptedDaemonInboundMessage(first.message, encryption.computer, signal);
             expect(command).toMatchObject({
                 kind: "session.live-history.v2.page.load",
                 target: runtime.sessionTarget,
@@ -1372,14 +1558,24 @@ describe.sequential("Relay Turn submission", () => {
                 version: 2 as const,
             };
             runtime.daemon.send(
-                encodeSessionHistoryPageLoaded({
-                    kind: "session.live-history.v2.page.loaded",
-                    requestId: command.requestId,
-                    target: runtime.sessionTarget,
-                    events: { events: page, queuedPromptRequests: [] },
-                }),
+                await sessionHistoryPageLoadedCodec.encode(
+                    {
+                        kind: "session.live-history.v2.page.loaded",
+                        requestId: command.requestId,
+                        target: runtime.sessionTarget,
+                        events: { events: page, queuedPromptRequests: [] },
+                    },
+                    encryption.computer,
+                    signal,
+                ),
             );
-            expect(await responseJson(await response, 200)).toEqual(page);
+            const routed = await responseJson(await response, 200);
+            const result = await sessionHistoryPageLoadedCodec.decode(
+                JSON.stringify(routed),
+                encryption.client,
+                signal,
+            );
+            expect(result.events.events).toEqual(page);
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
@@ -1389,13 +1585,24 @@ describe.sequential("Relay Turn submission", () => {
         const runtime = await connectComputerDaemon("app-configuration-read");
         try {
             const readOnly = await runtime.issueComputerCredential(runtime.computerId);
-            const response = runtime.appSessionRequest("/configuration", { method: "GET", credential: readOnly });
+            const signal = new AbortController().signal;
+            const encryption = await endpointEncryption(runtime.computerId, signal);
+            const encoded = await sessionConfigReadCommandCodec.encode(
+                { kind: "session.config.read", requestId: "config-read", target: runtime.sessionTarget },
+                encryption.client,
+                signal,
+            );
+            const request = new Request(
+                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/configuration`,
+                { method: "GET", headers: credentialHeaders(readOnly), signal },
+            );
+            const response = requestBrowserOperation((input) => ownerRequest(input), request, encoded);
             const first = await Promise.race([
                 runtime.daemonMessages.next().then((message) => ({ kind: "command", message })),
                 response.then((result) => ({ kind: "response", message: String(result.status) })),
             ]);
             expect(first).toMatchObject({ kind: "command" });
-            const command = decodeServiceToDaemonMessage(first.message);
+            const command = await decodeEncryptedDaemonInboundMessage(first.message, encryption.computer, signal);
             expect(command).toMatchObject({ kind: "session.config.read", target: runtime.sessionTarget });
             if (command.kind !== "session.config.read") {
                 throw new Error("Expected a configuration request");
@@ -1407,8 +1614,11 @@ describe.sequential("Relay Turn submission", () => {
                 configurationRevision: "revision-1",
                 configOptions: [],
             };
-            runtime.daemon.send(encodeSessionConfigReadResult(result));
-            expect(await responseJson(await response, 200)).toEqual(result);
+            runtime.daemon.send(await sessionConfigReadResultCodec.encode(result, encryption.computer, signal));
+            const routed = await responseJson(await response, 200);
+            expect(
+                await sessionConfigReadResultCodec.decode(JSON.stringify(routed), encryption.client, signal),
+            ).toEqual(result);
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
@@ -1446,9 +1656,11 @@ describe.sequential("Relay Turn submission", () => {
         }
     });
 
-    it("Session access uploads raw attachment chunks before submitting a reference-only Turn", async () => {
+    it("Session access uploads encrypted attachment chunks before submitting a reference-only Turn", async () => {
         const runtime = await connectComputerDaemon("app-binary-attachment");
         try {
+            const signal = new AbortController().signal;
+            const encryption = await endpointEncryption(runtime.computerId, signal);
             const bytes = new Uint8Array(400 * 1024).map((_value, index) => index % 251);
             const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
             const contentKey = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -1458,31 +1670,88 @@ describe.sequential("Relay Turn submission", () => {
                 name: "screenshot.png",
                 uri: "attachment:///screenshot.png",
             };
-            const upload = runtime.uploadContent(contentKey, bytes, metadata);
-            const write = decodeServiceToDaemonMessage(await runtime.daemonMessages.next());
-            expect(write).toMatchObject({
+            const requestId = "upload-attachment";
+            const write = await contentWriteCommandCodec.encode(
+                {
+                    kind: "content.write",
+                    requestId,
+                    target: runtime.sessionTarget,
+                    byteLength: bytes.byteLength,
+                    contentKey,
+                    contentKind: metadata.kind,
+                    mediaType: metadata.mediaType,
+                    name: metadata.name,
+                },
+                encryption.client,
+                signal,
+            );
+            const records = [encodeFileStreamRecord({ kind: "message", encoded: write })];
+            for (
+                let offset = 0, sequence = 0;
+                offset < bytes.byteLength;
+                offset += CONTENT_CHUNK_MAX_BYTES, sequence += 1
+            ) {
+                const chunk = await contentChunkCodec.encode(
+                    { requestId, sequence, bytes: bytes.subarray(offset, offset + CONTENT_CHUNK_MAX_BYTES) },
+                    encryption.client,
+                    signal,
+                );
+                records.push(encodeFileStreamRecord({ kind: "chunk", encoded: chunk }));
+            }
+            const commit = await contentCommitCommandCodec.encode(
+                { kind: "content.commit", requestId, target: runtime.sessionTarget },
+                encryption.client,
+                signal,
+            );
+            records.push(encodeFileStreamRecord({ kind: "message", encoded: commit }));
+            const wire = new Uint8Array(records.reduce((total, record) => total + record.byteLength, 0));
+            let position = 0;
+            for (const record of records) {
+                wire.set(record, position);
+                position += record.byteLength;
+            }
+            const uploadRequest = new Request(
+                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/content/${contentKey}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        authorization: `Bearer ${runtime.credential}`,
+                        "content-type": FILE_STREAM_CONTENT_TYPE,
+                        "x-morty-byte-length": String(wire.byteLength),
+                    },
+                    body: wire,
+                    signal,
+                },
+            );
+            const upload = requestBrowserOperation((input) => ownerRequest(input), uploadRequest);
+            const receivedWrite = await decodeEncryptedDaemonInboundMessage(
+                await runtime.daemonMessages.next(),
+                encryption.computer,
+                signal,
+            );
+            expect(receivedWrite).toMatchObject({
                 byteLength: bytes.byteLength,
                 contentKey,
                 contentKind: "image",
                 kind: "content.write",
                 target: runtime.sessionTarget,
             });
-            if (write.kind !== "content.write") {
+            if (receivedWrite.kind !== "content.write") {
                 throw new Error("Expected a content write command");
             }
             runtime.daemon.send(
-                encodeContentReadyEvent({
-                    kind: "content.ready",
-                    requestId: write.requestId,
-                    target: runtime.sessionTarget,
-                }),
+                await contentReadyEventCodec.encode(
+                    { kind: "content.ready", requestId, target: runtime.sessionTarget },
+                    encryption.computer,
+                    signal,
+                ),
             );
             const chunks: Uint8Array[] = [];
             for (;;) {
                 const frame = await runtime.daemonMessages.nextFrame();
                 if (typeof frame === "string") {
-                    const command = decodeServiceToDaemonMessage(frame);
-                    if (command.kind === "content.commit" && command.requestId === write.requestId) {
+                    const command = await decodeEncryptedDaemonInboundMessage(frame, encryption.computer, signal);
+                    if (command.kind === "content.commit" && command.requestId === requestId) {
                         break;
                     }
                     continue;
@@ -1490,8 +1759,8 @@ describe.sequential("Relay Turn submission", () => {
                 const arrayBuffer =
                     typeof frame === "object" && frame !== null ? Reflect.get(frame, "arrayBuffer") : undefined;
                 const binary = typeof arrayBuffer === "function" ? await Reflect.apply(arrayBuffer, frame, []) : frame;
-                const chunk = decodeContentChunkFrame(binary);
-                expect(chunk.requestId).toBe(write.requestId);
+                const chunk = await contentChunkCodec.decode(binary, encryption.computer, signal);
+                expect(chunk.requestId).toBe(requestId);
                 expect(chunk.sequence).toBe(chunks.length);
                 chunks.push(chunk.bytes);
             }
@@ -1504,50 +1773,75 @@ describe.sequential("Relay Turn submission", () => {
             expect(uploadedBytes).toEqual(bytes);
             expect(chunks.length).toBeGreaterThan(1);
             runtime.daemon.send(
-                encodeContentAvailableEvent({
-                    byteLength: bytes.byteLength,
-                    contentKey,
-                    kind: "content.available",
-                    requestId: write.requestId,
-                    target: runtime.sessionTarget,
-                }),
+                await contentAvailableEventCodec.encode(
+                    {
+                        kind: "content.available",
+                        requestId,
+                        target: runtime.sessionTarget,
+                        contentKey,
+                        byteLength: bytes.byteLength,
+                    },
+                    encryption.computer,
+                    signal,
+                ),
             );
-            const attachment = await responseJson(await upload, 200);
-            const attachmentMetadata = {
+            const routedAvailable = await responseJson(await upload, 200);
+            const available = await contentAvailableEventCodec.decode(
+                JSON.stringify(routedAvailable),
+                encryption.client,
+                signal,
+            );
+            expect(available).toMatchObject({ byteLength: bytes.byteLength, contentKey });
+            const attachment = {
+                byteLength: bytes.byteLength,
+                contentKey,
                 kind: metadata.kind,
                 mimeType: metadata.mediaType,
                 name: metadata.name,
                 uri: metadata.uri,
             };
-            expect(attachment).toEqual({ byteLength: bytes.byteLength, contentKey, ...attachmentMetadata });
-
             const idempotencyKey = "binary-attachment-turn";
-            const response = runtime.appSessionRequest("/turns", {
-                method: "POST",
-                body: {
-                    content: "Describe the pasted screenshot.",
-                    disposition: "append",
-                    idempotencyKey,
+            const prompt = await sessionPromptCommandCodec.encode(
+                {
+                    kind: "session.prompt",
+                    requestId: "binary-attachment-request",
+                    commandId: idempotencyKey,
+                    target: runtime.sessionTarget,
+                    prompt: "Describe the pasted screenshot.",
                     attachments: [attachment],
+                    disposition: "append",
                     sessionConfigurations: [],
                 },
-            });
-            const first = await Promise.race([
-                runtime.daemonMessages.next().then((message) => ({ kind: "command", message })),
-                response.then((result) => ({ kind: "response", message: String(result.status) })),
-            ]);
-            expect(first).toMatchObject({ kind: "command" });
-            const encodedPrompt = first.message;
+                encryption.client,
+                signal,
+            );
+            const promptRequest = new Request(
+                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/turns`,
+                { method: "POST", headers: credentialHeaders(runtime.credential), body: prompt, signal },
+            );
+            const response = requestBrowserOperation((input) => ownerRequest(input), promptRequest);
+            const encodedPrompt = await runtime.daemonMessages.next();
             expect(encodedPrompt).not.toContain("base64");
             expect(encodedPrompt).not.toContain(String(bytes.slice(0, 32)));
-            expect(decodeServiceToDaemonMessage(encodedPrompt)).toMatchObject({
-                attachments: [{ byteLength: bytes.byteLength, contentKey, ...attachmentMetadata }],
-                kind: "session.prompt",
-                commandId: idempotencyKey,
-                requestId: idempotencyKey,
-            });
-            runtime.startTurn(idempotencyKey, "1");
-            expect(await responseJson(await response, 200)).toMatchObject({ turnId: idempotencyKey });
+            expect(await decodeEncryptedDaemonInboundMessage(encodedPrompt, encryption.computer, signal)).toMatchObject(
+                { attachments: [attachment], kind: "session.prompt", commandId: idempotencyKey },
+            );
+            runtime.daemon.send(
+                await sessionPromptAcceptedEventCodec.encode(
+                    {
+                        kind: "session.prompt.accepted",
+                        requestId: "binary-attachment-request",
+                        target: runtime.sessionTarget,
+                        state: "running",
+                    },
+                    encryption.computer,
+                    signal,
+                ),
+            );
+            const routed = await responseJson(await response, 200);
+            expect(
+                await sessionPromptAcceptedEventCodec.decode(JSON.stringify(routed), encryption.client, signal),
+            ).toMatchObject({ requestId: "binary-attachment-request", state: "running" });
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
@@ -1556,51 +1850,86 @@ describe.sequential("Relay Turn submission", () => {
     it("Given a cancelled file response, When a late chunk arrives, Then the shared daemon remains available", async () => {
         const runtime = await connectComputerDaemon("cancelled-file-chunk");
         try {
+            const signal = new AbortController().signal;
+            const { computer: daemonEncryption, client: clientEncryption } = await endpointEncryption(
+                runtime.computerId,
+                signal,
+            );
             const pending = runtime.readFile("/workspace/image.png");
-            const read = decodeServiceToDaemonMessage(await runtime.daemonMessages.next());
-            if (read.kind !== "file.read") {
-                throw new Error("Expected a file read command");
-            }
+            const read = decodeFileReadCommand(await runtime.daemonMessages.next());
             runtime.daemon.send(
-                encodeFileBeginEvent({
-                    byteLength: 2,
-                    kind: "file.begin",
-                    mediaType: "image/png",
-                    modifiedAt: "2026-09-18T00:00:00.000Z",
-                    name: "image.png",
-                    requestId: read.requestId,
-                    target: runtime.sessionTarget,
-                }),
+                await fileBeginEventCodec.encode(
+                    {
+                        byteLength: 2,
+                        kind: "file.begin",
+                        mediaType: "image/png",
+                        modifiedAt: "2026-09-18T00:00:00.000Z",
+                        name: "image.png",
+                        requestId: read.requestId,
+                        target: runtime.sessionTarget,
+                    },
+                    daemonEncryption,
+                    signal,
+                ),
             );
             const response = await pending;
             await response.body?.cancel();
 
             runtime.daemon.send(
-                encodeContentChunkFrame({
-                    bytes: new Uint8Array([1, 2]),
-                    requestId: read.requestId,
-                    sequence: 0,
-                }),
+                await contentChunkCodec.encode(
+                    {
+                        bytes: new Uint8Array([1, 2]),
+                        requestId: read.requestId,
+                        sequence: 0,
+                    },
+                    daemonEncryption,
+                    signal,
+                ),
             );
 
-            const query = runtime.queryActiveTurn(new AbortController().signal);
-            const command = decodeServiceToDaemonMessage(await runtime.daemonMessages.next());
+            const encoded = await nativeSessionRequestCodec.encode(
+                {
+                    kind: "native.session.request",
+                    requestId: "after-late-file",
+                    action: "active-turn",
+                    target: runtime.sessionTarget,
+                },
+                clientEncryption,
+                signal,
+            );
+            const request = new Request(
+                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/active-turn`,
+                { method: "GET", headers: credentialHeaders(runtime.credential), signal },
+            );
+            const query = requestBrowserOperation((input) => ownerRequest(input), request, encoded);
+            const command = await decodeEncryptedDaemonInboundMessage(
+                await runtime.daemonMessages.next(),
+                daemonEncryption,
+                signal,
+            );
             if (command.kind !== "native.session.request") {
                 throw new Error("Expected an unrelated native query to reach the daemon");
             }
             runtime.daemon.send(
-                encodeNativeSessionResult({
-                    action: "active-turn",
-                    kind: "native.session.result",
-                    queued: [],
-                    executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
-                    interactionState: null,
-                    requestId: command.requestId,
-                    target: runtime.sessionTarget,
-                    turn: null,
-                }),
+                await nativeSessionResultCodec.encode(
+                    {
+                        action: "active-turn",
+                        kind: "native.session.result",
+                        queued: [],
+                        executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
+                        interactionState: null,
+                        requestId: command.requestId,
+                        target: runtime.sessionTarget,
+                        turn: null,
+                    },
+                    daemonEncryption,
+                    signal,
+                ),
             );
-            expect(await responseJson(await query, 200)).toMatchObject({ action: "active-turn", turn: null });
+            const routed = await responseJson(await query, 200);
+            expect(
+                await nativeSessionResultCodec.decode(JSON.stringify(routed), clientEncryption, signal),
+            ).toMatchObject({ action: "active-turn", turn: null });
             expect(runtime.daemon.readyState).toBe(WebSocket.OPEN);
         } finally {
             runtime.daemon.close(1000, "Test complete");
@@ -1614,7 +1943,26 @@ describe.sequential("Relay Turn submission", () => {
             const runtime = await connectComputerDaemon(`clock-skew-${skew}`);
             try {
                 vi.setSystemTime(Date.now() - skew);
-                const submitted = runtime.submitComputerTurn("skewed-command");
+                const signal = new AbortController().signal;
+                const encryption = await endpointEncryption(runtime.computerId, signal);
+                const encoded = await sessionPromptCommandCodec.encode(
+                    {
+                        kind: "session.prompt",
+                        requestId: "skewed-request",
+                        commandId: "skewed-command",
+                        target: runtime.sessionTarget,
+                        prompt: "Direct execution",
+                        disposition: "append",
+                        attachments: [],
+                    },
+                    encryption.client,
+                    signal,
+                );
+                const request = new Request(
+                    `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/turns`,
+                    { method: "POST", headers: credentialHeaders(runtime.credential), body: encoded, signal },
+                );
+                const submitted = requestBrowserOperation((input) => ownerRequest(input), request);
                 const first = await Promise.race([
                     runtime.daemonMessages.next().then((message) => ({ kind: "command" as const, message })),
                     submitted.then((response) => ({ kind: "response" as const, response })),
@@ -1624,16 +1972,29 @@ describe.sequential("Relay Turn submission", () => {
                         `Expected a daemon command, received ${first.response.status}: ${await first.response.text()}`,
                     );
                 }
-                expect(decodeServiceToDaemonMessage(first.message)).toMatchObject({
+                expect(
+                    await decodeEncryptedDaemonInboundMessage(first.message, encryption.computer, signal),
+                ).toMatchObject({
                     kind: "session.prompt",
                     commandId: "skewed-command",
                     requestId: "skewed-command",
                 });
-                runtime.startTurn("skewed-command", "1");
-                expect(await responseJson(await submitted, 200)).toMatchObject({
-                    idempotencyKey: "skewed-command",
-                    state: { kind: "running" },
-                });
+                runtime.daemon.send(
+                    await sessionPromptAcceptedEventCodec.encode(
+                        {
+                            kind: "session.prompt.accepted",
+                            requestId: "skewed-request",
+                            target: runtime.sessionTarget,
+                            state: "running",
+                        },
+                        encryption.computer,
+                        signal,
+                    ),
+                );
+                const routed = await responseJson(await submitted, 200);
+                expect(
+                    await sessionPromptAcceptedEventCodec.decode(JSON.stringify(routed), encryption.client, signal),
+                ).toMatchObject({ requestId: "skewed-request", state: "running" });
             } finally {
                 runtime.daemon.close(1000, "Test complete");
             }
@@ -1687,17 +2048,39 @@ describe.sequential("Relay Turn submission", () => {
         const runtime = await connectComputerDaemon("direct-cancellation");
         const controller = new AbortController();
         try {
-            const pending = runtime.queryActiveTurn(controller.signal).then(
+            const { computer: daemonEncryption, client: clientEncryption } = await endpointEncryption(
+                runtime.computerId,
+                controller.signal,
+            );
+            const encoded = await nativeSessionRequestCodec.encode(
+                {
+                    kind: "native.session.request",
+                    requestId: "cancel-native-request",
+                    action: "active-turn",
+                    target: runtime.sessionTarget,
+                },
+                clientEncryption,
+                controller.signal,
+            );
+            const request = new Request(
+                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/active-turn`,
+                { method: "GET", headers: credentialHeaders(runtime.credential), signal: controller.signal },
+            );
+            const pending = requestBrowserOperation((input) => ownerRequest(input), request, encoded).then(
                 (response) => response.status,
                 (cause: unknown) => cause,
             );
-            const command = decodeServiceToDaemonMessage(await runtime.daemonMessages.next());
+            const command = await decodeEncryptedDaemonInboundMessage(
+                await runtime.daemonMessages.next(),
+                daemonEncryption,
+                controller.signal,
+            );
             if (command.kind !== "native.session.request") {
                 throw new Error("Expected a native query");
             }
             controller.abort(new DOMException("Caller left", "AbortError"));
-            expect(decodeServiceToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
-                kind: "native.session.cancel",
+            expect(decodeWorkerToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+                kind: "worker.request.cancel",
                 requestId: command.requestId,
             });
             expect(await pending).toBeInstanceOf(DOMException);
@@ -1799,7 +2182,7 @@ describe.sequential("Relay Turn submission", () => {
                 submitted.then((response) => ({ kind: "response", message: String(response.status) })),
             ]);
             expect(first.kind).toBe("command");
-            expect(decodeServiceToDaemonMessage(first.message)).toMatchObject({
+            expect(decodeDaemonInboundMessage(first.message)).toMatchObject({
                 kind: "session.prompt",
                 commandId: "direct-command",
                 requestId: "direct-command",
@@ -1855,7 +2238,7 @@ describe.sequential("Relay Turn submission", () => {
         const daemonMessages = new SocketMessages(daemon);
         daemon.accept();
         try {
-            expect(decodeServiceToDaemonMessage(await daemonMessages.next()).kind).toBe("computer.liveness.ready");
+            expect(decodeWorkerToDaemonMessage(await daemonMessages.next()).kind).toBe("computer.liveness.ready");
             const sessionAccess = await issueSession(computerId, nativeTarget(sessionId));
             const sessionRequest = (request: Request) =>
                 requestBrowserOperation((operation) => worker.fetch(operation, environment), request);
@@ -1879,7 +2262,7 @@ describe.sequential("Relay Turn submission", () => {
             const longPrompt = `${"instruction ".repeat(2_000)}\n\nsummarize the workspace`;
             expect(longPrompt.length).toBeGreaterThan(20_000);
             const longTurn = submitTurn("long-first-turn", longPrompt, []);
-            const delivered = decodeServiceToDaemonMessage(await daemonMessages.next());
+            const delivered = decodeDaemonInboundMessage(await daemonMessages.next());
             if (delivered.kind !== "session.prompt") {
                 throw new Error("Expected the long Turn to reach the Computer");
             }
@@ -1910,7 +2293,7 @@ describe.sequential("Relay Turn submission", () => {
                     },
                 ),
             );
-            const cancellation = decodeServiceToDaemonMessage(await daemonMessages.next());
+            const cancellation = decodeDaemonInboundMessage(await daemonMessages.next());
             if (cancellation.kind !== "session.cancel") {
                 throw new Error("Expected the cancellation to reach the Computer");
             }
@@ -1973,7 +2356,7 @@ describe.sequential("Relay Turn submission", () => {
                     },
                 ),
             );
-            expect(decodeServiceToDaemonMessage(await daemonMessages.next()).kind).toBe("session.prompt");
+            expect(decodeDaemonInboundMessage(await daemonMessages.next()).kind).toBe("session.prompt");
             daemon.send(
                 encodeSessionPromptAcceptedEvent({
                     kind: "session.prompt.accepted",
@@ -2108,7 +2491,7 @@ describe.sequential("Relay Turn submission", () => {
         const daemonMessages = new SocketMessages(daemon);
         daemon.accept();
         try {
-            expect(decodeServiceToDaemonMessage(await daemonMessages.next()).kind).toBe("computer.liveness.ready");
+            expect(decodeWorkerToDaemonMessage(await daemonMessages.next()).kind).toBe("computer.liveness.ready");
             const steer = requestBrowserOperation(
                 (operation) => worker.fetch(operation, environment),
                 new Request(
@@ -2120,7 +2503,7 @@ describe.sequential("Relay Turn submission", () => {
                     },
                 ),
             );
-            const forwarded = decodeServiceToDaemonMessage(await daemonMessages.next());
+            const forwarded = decodeDaemonInboundMessage(await daemonMessages.next());
             expect(forwarded).toMatchObject({ kind: "session.prompt.disposition", target: nativeTarget(sessionId) });
             if (forwarded.kind !== "session.prompt.disposition") {
                 throw new Error("Expected the steer to reach the Computer");
@@ -2152,7 +2535,7 @@ describe.sequential("Relay Turn submission", () => {
                     },
                 ),
             );
-            const renameCommand = decodeServiceToDaemonMessage(await daemonMessages.next());
+            const renameCommand = decodeDaemonInboundMessage(await daemonMessages.next());
             expect(renameCommand).toMatchObject({ kind: "session.rename", target: nativeTarget(sessionId) });
             daemon.send(
                 encodeSessionRenamedEvent({
@@ -2230,7 +2613,7 @@ describe.sequential("Relay Turn submission", () => {
         try {
             vi.setSystemTime(heartbeatAt + 20_000);
             const delivered = runtime.submitTurn("heartbeating-turn");
-            expect(decodeServiceToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+            expect(decodeDaemonInboundMessage(await runtime.daemonMessages.next())).toMatchObject({
                 commandId: "heartbeating-turn",
                 requestId: "heartbeating-turn",
                 kind: "session.prompt",
@@ -2241,7 +2624,7 @@ describe.sequential("Relay Turn submission", () => {
             // A Turn sent before the deadline still reaches the connection, which never answers it.
             vi.setSystemTime(heartbeatAt + 30_000);
             const stranded = runtime.submitTurn("stranded-turn");
-            expect(decodeServiceToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+            expect(decodeDaemonInboundMessage(await runtime.daemonMessages.next())).toMatchObject({
                 commandId: "stranded-turn",
                 requestId: "stranded-turn",
                 kind: "session.prompt",
@@ -2275,10 +2658,39 @@ describe.sequential("Relay Turn submission", () => {
             const heartbeatAt = Date.now();
             try {
                 vi.setSystemTime(heartbeatAt + 36_000);
-                const answer = await runtime.appSessionRequest("/interactions/offline-interaction/responses", {
-                    method: "POST",
-                    body,
-                });
+                const signal = new AbortController().signal;
+                const encryption = await endpointEncryption(runtime.computerId, signal);
+                const encoded =
+                    body.kind === "permission"
+                        ? await sessionPermissionRespondCommandCodec.encode(
+                              {
+                                  kind: "session.permission.respond",
+                                  requestId: "offline-answer",
+                                  interactionId: "offline-interaction",
+                                  target: runtime.sessionTarget,
+                                  outcome: body.outcome,
+                                  optionId: body.optionId,
+                              },
+                              encryption.client,
+                              signal,
+                          )
+                        : await sessionElicitationRespondCommandCodec.encode(
+                              {
+                                  kind: "session.elicitation.respond",
+                                  requestId: "offline-answer",
+                                  interactionId: "offline-interaction",
+                                  target: runtime.sessionTarget,
+                                  action: body.action,
+                                  content: body.content,
+                              },
+                              encryption.client,
+                              signal,
+                          );
+                const request = new Request(
+                    `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/interactions/offline-interaction/responses`,
+                    { method: "POST", headers: credentialHeaders(runtime.credential), body: encoded, signal },
+                );
+                const answer = await requestBrowserOperation((input) => ownerRequest(input), request);
                 expect(await responseJson(answer, 503)).toMatchObject({ error: { code: "computer_offline" } });
                 expect(await runtime.daemonClosed).toMatchObject({
                     code: 4001,
@@ -2519,7 +2931,7 @@ it("Given an anonymous browser knows a Computer, When it declares a full-budget 
             }),
         );
         browser.send(encodeContentChunkFrame({ requestId: "authorized", sequence: 0, bytes: new Uint8Array([120]) }));
-        const command = decodeServiceToDaemonMessage(await runtime.daemonMessages.next());
+        const command = decodeDaemonInboundMessage(await runtime.daemonMessages.next());
         expect(command.kind).toBe("content.write");
         if (command.kind !== "content.write") {
             throw new Error("Expected authorized upload");
@@ -2535,7 +2947,7 @@ it("Given an anonymous browser knows a Computer, When it declares a full-budget 
         const arrayBuffer = typeof frame === "object" && frame !== null ? Reflect.get(frame, "arrayBuffer") : undefined;
         const binary = typeof arrayBuffer === "function" ? await Reflect.apply(arrayBuffer, frame, []) : frame;
         expect(decodeContentChunkFrame(binary).bytes).toEqual(new Uint8Array([120]));
-        expect(decodeServiceToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+        expect(decodeDaemonInboundMessage(await runtime.daemonMessages.next())).toMatchObject({
             kind: "content.commit",
             requestId: command.requestId,
         });
@@ -2582,74 +2994,123 @@ describe("Computer prompt acknowledgements", () => {
         const runtime = await connectComputerDaemon("named-queue-change");
         try {
             const credential = await runtime.issueComputerCredential(runtime.computerId);
-            const queue = (idempotencyKey: string) =>
-                requestBrowserOperation(
+            const signal = new AbortController().signal;
+            const encryption = await endpointEncryption(runtime.computerId, signal);
+            const queue = async (idempotencyKey: string) => {
+                const encoded = await sessionPromptCommandCodec.encode(
+                    {
+                        kind: "session.prompt",
+                        requestId: idempotencyKey,
+                        commandId: idempotencyKey,
+                        target: runtime.sessionTarget,
+                        attachments: [],
+                        prompt: `queued ${idempotencyKey}`,
+                        disposition: "append",
+                    },
+                    encryption.client,
+                    signal,
+                );
+                return await requestBrowserOperation(
                     (request) => env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)).fetch(request),
                     new Request(
                         `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/turns`,
                         {
                             method: "POST",
                             headers: credentialHeaders(credential),
-                            body: JSON.stringify({
-                                attachments: [],
-                                content: `queued ${idempotencyKey}`,
-                                idempotencyKey,
-                            }),
+                            body: encoded,
                         },
                     ),
                 );
+            };
 
             const rejected = queue("rejected-command");
-            expect(decodeServiceToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+            expect(
+                await decodeEncryptedDaemonInboundMessage(
+                    await runtime.daemonMessages.next(),
+                    encryption.computer,
+                    signal,
+                ),
+            ).toMatchObject({
                 commandId: "rejected-command",
             });
             // Another request's answer, or this command's own lifecycle, does not answer this submission; the
             // Computer's reply naming it does.
             runtime.daemon.send(
-                encodeSessionPromptAcceptedEvent({
-                    kind: "session.prompt.accepted",
-                    requestId: "other-command",
-                    target: runtime.sessionTarget,
-                    state: "queued",
-                }),
+                await sessionPromptAcceptedEventCodec.encode(
+                    {
+                        kind: "session.prompt.accepted",
+                        requestId: "other-command",
+                        target: runtime.sessionTarget,
+                        state: "queued",
+                    },
+                    encryption.computer,
+                    signal,
+                ),
             );
             runtime.daemon.send(
-                lifecycleFrame(runtime.sessionTarget, "rejected-failed", "1", {
-                    code: "agent_unavailable",
-                    commandId: "rejected-command",
-                    kind: "prompt.failed-before-start",
-                    message: "The Agent is unavailable",
-                }),
+                await sessionEventEnvelopeCodec.encode(
+                    JSON.parse(
+                        lifecycleFrame(runtime.sessionTarget, "rejected-failed", "1", {
+                            code: "agent_unavailable",
+                            commandId: "rejected-command",
+                            kind: "prompt.failed-before-start",
+                            message: "The Agent is unavailable",
+                        }),
+                    ),
+                    encryption.computer,
+                    signal,
+                ),
             );
             runtime.daemon.send(
-                encodeSessionOperationFailedEvent({
-                    code: "agent_unavailable",
-                    kind: "session.operation.failed",
-                    message: "The Agent is unavailable",
-                    requestId: "rejected-command",
-                    target: runtime.sessionTarget,
-                }),
+                await sessionOperationFailedEventCodec.encode(
+                    {
+                        code: "agent_unavailable",
+                        kind: "session.operation.failed",
+                        message: "The Agent is unavailable",
+                        requestId: "rejected-command",
+                        target: runtime.sessionTarget,
+                    },
+                    encryption.computer,
+                    signal,
+                ),
             );
             const failure = await rejected;
-            expect(failure.status).not.toBe(200);
-            expect(await failure.json()).toMatchObject({ error: { code: "agent_unavailable" } });
+            expect(failure.status).toBe(200);
+            const failedRouting: unknown = await failure.json();
+            expect(
+                await sessionOperationFailedEventCodec.decode(JSON.stringify(failedRouting), encryption.client, signal),
+            ).toMatchObject({ code: "agent_unavailable" });
 
             const admitted = queue("admitted-command");
-            expect(decodeServiceToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+            expect(
+                await decodeEncryptedDaemonInboundMessage(
+                    await runtime.daemonMessages.next(),
+                    encryption.computer,
+                    signal,
+                ),
+            ).toMatchObject({
                 commandId: "admitted-command",
             });
             runtime.daemon.send(
-                encodeSessionPromptAcceptedEvent({
-                    kind: "session.prompt.accepted",
-                    requestId: "admitted-command",
-                    target: runtime.sessionTarget,
-                    state: "queued",
-                }),
+                await sessionPromptAcceptedEventCodec.encode(
+                    {
+                        kind: "session.prompt.accepted",
+                        requestId: "admitted-command",
+                        target: runtime.sessionTarget,
+                        state: "queued",
+                    },
+                    encryption.computer,
+                    signal,
+                ),
             );
-            expect(await responseJson(await admitted, 200)).toMatchObject({
-                state: { kind: "queued" },
-                turnId: "admitted-command",
-            });
+            const admittedRouting = await responseJson(await admitted, 200);
+            expect(
+                await sessionPromptAcceptedEventCodec.decode(
+                    JSON.stringify(admittedRouting),
+                    encryption.client,
+                    signal,
+                ),
+            ).toMatchObject({ state: "queued", requestId: "admitted-command" });
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
@@ -2659,7 +3120,7 @@ describe("Computer prompt acknowledgements", () => {
         const runtime = await connectComputerDaemon("retried-prompt");
         try {
             const first = runtime.submitComputerTurn("retried-command");
-            expect(decodeServiceToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+            expect(decodeDaemonInboundMessage(await runtime.daemonMessages.next())).toMatchObject({
                 commandId: "retried-command",
                 requestId: "retried-command",
                 kind: "session.prompt",
@@ -2675,7 +3136,7 @@ describe("Computer prompt acknowledgements", () => {
             );
 
             const retry = runtime.submitComputerTurn("retried-command");
-            expect(decodeServiceToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+            expect(decodeDaemonInboundMessage(await runtime.daemonMessages.next())).toMatchObject({
                 commandId: "retried-command",
                 requestId: "retried-command",
                 kind: "session.prompt",
@@ -2698,7 +3159,7 @@ describe("Computer prompt acknowledgements", () => {
         const runtime = await connectComputerDaemon("settled-retry");
         try {
             const retry = runtime.submitComputerTurn("settled-command");
-            expect(decodeServiceToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+            expect(decodeDaemonInboundMessage(await runtime.daemonMessages.next())).toMatchObject({
                 commandId: "settled-command",
                 requestId: "settled-command",
                 kind: "session.prompt",
@@ -2726,13 +3187,13 @@ describe("Computer prompt acknowledgements", () => {
         const runtime = await connectComputerDaemon("cancelled-before-start");
         try {
             const submission = runtime.submitTurn("preparing-command");
-            expect(decodeServiceToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+            expect(decodeDaemonInboundMessage(await runtime.daemonMessages.next())).toMatchObject({
                 commandId: "preparing-command",
                 requestId: "preparing-command",
                 kind: "session.prompt",
             });
             const cancel = runtime.sessionControlRequest("/turns/preparing-command/cancel", {});
-            const cancellation = decodeServiceToDaemonMessage(await runtime.daemonMessages.next());
+            const cancellation = decodeDaemonInboundMessage(await runtime.daemonMessages.next());
             if (cancellation.kind !== "session.cancel") {
                 throw new Error("Expected the cancellation to reach the Computer");
             }

@@ -87,6 +87,7 @@ for (const harness of ["codex", "claude", "pi"] as const) {
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
                         target: sessionTarget,
+                        requestId: commandId,
                         commandId,
                         requestId: commandId,
                         prompt: "Reply with the requested answer.",

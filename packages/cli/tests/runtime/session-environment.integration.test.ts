@@ -6,8 +6,9 @@ import { join } from "node:path";
 import {
     COMPUTER_HEARTBEAT_ACK_MESSAGE,
     COMPUTER_HEARTBEAT_MESSAGE,
-    decodeDaemonToServiceMessage,
+    decodeMessageKind,
     decodeNativeSessionResult,
+    decodeSessionOperationFailedEvent,
     decodeSessionReadyEvent,
     encodeNativeSessionCancel,
     encodeNativeSessionCommand,
@@ -27,6 +28,13 @@ import { ControlledAcpConnection } from "../support/agents/controlled-acp-connec
 import { createControlledAgent } from "../support/agents/controlled-agent-definition.ts";
 import { memoryComputerCredentials } from "../support/computer-credentials.ts";
 import { createControlledRuntimeConfig } from "../support/controlled-runtime-config.ts";
+import { createEncryptedDaemonFrames } from "../support/encrypted-daemon-frames.ts";
+
+function decodeNativeReply(encoded: string) {
+    return decodeMessageKind(encoded) === "native.session.result"
+        ? decodeNativeSessionResult(encoded)
+        : decodeSessionOperationFailedEvent(encoded);
+}
 
 // @no-uc: Technical regression; a failed shared reader must not block the next native-browser request.
 test("Given a shared native reader crashes while listing, When a fresh conversation and the original conversation browse again, Then both see saved history without restarting", async ({
@@ -43,9 +51,7 @@ test("Given a shared native reader crashes while listing, When a fresh conversat
                 cursor: null,
             }),
         );
-        return decodeDaemonToServiceMessage(
-            await peer.next(requestId, ["native.session.result", "session.operation.failed"]),
-        );
+        return decodeNativeReply(await peer.next(requestId, ["native.session.result", "session.operation.failed"]));
     };
     try {
         const seed = await peer.create();
@@ -121,7 +127,7 @@ test.for(["import", "fork"] as const)(
                         }),
                     );
                     const frame = await peer.next(requestId, ["native.session.result", "session.operation.failed"]);
-                    return { harness, result: decodeDaemonToServiceMessage(frame) };
+                    return { harness, result: decodeNativeReply(frame) };
                 }),
             );
             expect(outcomes.filter(({ result }) => result.kind === "native.session.result")).toHaveLength(2);
@@ -188,7 +194,7 @@ test.for(["complete", "cancel"] as const)(
             if (original.action !== "list" || original.entries[0] === undefined) {
                 throw new Error("Expected the first browser's native history");
             }
-            expect(decodeDaemonToServiceMessage(await second)).toMatchObject(
+            expect(decodeNativeReply(await second)).toMatchObject(
                 outcome === "cancel"
                     ? { kind: "session.operation.failed", code: "native_session_cancelled", requestId: "second-list" }
                     : {
@@ -258,6 +264,12 @@ await import(${JSON.stringify(agentPeer)});
     const frames: string[] = [];
     const listeners = new Set<(frame: string) => void>();
     let socket: WebSocket | undefined;
+    let encryption = await createEncryptedDaemonFrames(join(directory, "computer"), "environment", signal);
+    const subscriptions = new Map<string, NativeSessionTarget>();
+    const failure = Promise.withResolvers<never>();
+    void failure.promise.catch(() => undefined);
+    let outgoing: Promise<void> = Promise.resolve();
+    let incoming: Promise<void> = Promise.resolve();
     server.on("connection", (connected) => {
         socket = connected;
         connected.on("message", (value) => {
@@ -265,10 +277,19 @@ await import(${JSON.stringify(agentPeer)});
             if (frame === COMPUTER_HEARTBEAT_MESSAGE) {
                 connected.send(COMPUTER_HEARTBEAT_ACK_MESSAGE);
             } else {
-                frames.push(frame);
-                for (const listener of listeners) {
-                    listener(frame);
-                }
+                const current = encryption;
+                incoming = incoming
+                    .then(async () => {
+                        const decoded = await current.decode(frame);
+                        if (typeof decoded !== "string") {
+                            throw new Error("Expected a text daemon response");
+                        }
+                        frames.push(decoded);
+                        for (const listener of listeners) {
+                            listener(decoded);
+                        }
+                    })
+                    .catch((error: unknown) => failure.reject(error));
             }
         });
         connected.send(JSON.stringify({ kind: "computer.liveness.ready" }));
@@ -297,7 +318,8 @@ await import(${JSON.stringify(agentPeer)});
     await connected;
     const abort = () => cancellation.abort();
     signal.addEventListener("abort", abort, { once: true });
-    const next = (requestId: string, kinds: readonly string[]): Promise<string> => {
+    const next = async (requestId: string, kinds: readonly string[]): Promise<string> => {
+        await outgoing;
         const matches = (frame: string): boolean => {
             const value: unknown = JSON.parse(frame);
             if (typeof value !== "object" || value === null || !("kind" in value) || typeof value.kind !== "string") {
@@ -321,37 +343,48 @@ await import(${JSON.stringify(agentPeer)});
         signal.throwIfAborted();
         const existing = frames.find(matches);
         if (existing !== undefined) {
-            return Promise.resolve(existing);
+            return existing;
         }
-        return new Promise<string>((resolve, reject) => {
-            const cleanup = () => {
-                listeners.delete(receive);
-                signal.removeEventListener("abort", cancelled);
-            };
-            const cancelled = () => {
-                cleanup();
-                reject(signal.reason);
-            };
-            const receive = (frame: string) => {
-                try {
-                    if (matches(frame)) {
-                        cleanup();
-                        resolve(frame);
-                    }
-                } catch (error) {
+        return await Promise.race([
+            failure.promise,
+            new Promise<string>((resolve, reject) => {
+                const cleanup = () => {
+                    listeners.delete(receive);
+                    signal.removeEventListener("abort", cancelled);
+                };
+                const cancelled = () => {
                     cleanup();
-                    reject(error);
-                }
-            };
-            listeners.add(receive);
-            signal.addEventListener("abort", cancelled, { once: true });
-        });
+                    reject(signal.reason);
+                };
+                const receive = (frame: string) => {
+                    try {
+                        if (matches(frame)) {
+                            cleanup();
+                            resolve(frame);
+                        }
+                    } catch (error) {
+                        cleanup();
+                        reject(error);
+                    }
+                };
+                listeners.add(receive);
+                signal.addEventListener("abort", cancelled, { once: true });
+            }),
+        ]);
     };
     const send = (frame: string) => {
         if (socket === undefined) {
             throw new Error("The Computer has not connected");
         }
-        socket.send(frame);
+        const connection = socket;
+        const current = encryption;
+        outgoing = outgoing.then(async () => connection.send(await current.encode(frame)));
+        void outgoing.catch((error: unknown) => failure.reject(error));
+    };
+    const subscribe = async (target: NativeSessionTarget): Promise<void> => {
+        subscriptions.set(JSON.stringify([target.harness, target.sessionId]), target);
+        send(JSON.stringify({ kind: "session.events.subscribe", subscriptionId: crypto.randomUUID(), target }));
+        await outgoing;
     };
     const binding = (harness = "codex") => ({
         harness,
@@ -391,16 +424,20 @@ await import(${JSON.stringify(agentPeer)});
                     configurations: [],
                 }),
             );
-            return decodeSessionReadyEvent(await next(requestId, ["session.ready"])).target;
+            const target = decodeSessionReadyEvent(await next(requestId, ["session.ready"])).target;
+            await subscribe(target);
+            return target;
         },
         launches: () => readContexts(launches),
         crashNextNativeList: () => writeFile(join(harnessState, "crash-next-list"), ""),
         nativeRequests: () => readContexts(nativeRequests),
         prompt: async (target: NativeSessionTarget, commandId: string) => {
+            await subscribe(target);
             send(
                 encodeSessionPromptCommand({
                     target,
                     kind: "session.prompt",
+                    requestId: commandId,
                     commandId,
                     requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
@@ -411,8 +448,12 @@ await import(${JSON.stringify(agentPeer)});
             await next(commandId, ["prompt.completed"]);
         },
         restart: async (stateName: string) => {
+            await outgoing;
             cancellation.abort();
             await execution;
+            await incoming;
+            encryption.close();
+            encryption = await createEncryptedDaemonFrames(join(directory, stateName), "environment", signal);
             cancellation = new AbortController();
             const connected = once(server, "connection", { signal });
             execution = runRuntime(
@@ -420,11 +461,16 @@ await import(${JSON.stringify(agentPeer)});
                 cancellation.signal,
             );
             await connected;
+            for (const target of subscriptions.values()) {
+                await subscribe(target);
+            }
         },
         close: async () => {
             signal.removeEventListener("abort", abort);
             cancellation.abort();
             await execution;
+            await incoming;
+            encryption.close();
             for (const connection of server.clients) {
                 connection.terminate();
             }

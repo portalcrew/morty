@@ -1,4 +1,10 @@
-import { AGENT_SETTINGS_DISCOVERY_FAILED_KIND, type AgentSettingsDiscoverCommand } from "@morty-build/client/protocol";
+import type { PayloadEncryptionConnection } from "@morty-build/client";
+import {
+    AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
+    type AgentSettingsDiscoverCommand,
+    agentSettingsDiscoveredEventCodec,
+    agentSettingsDiscoveryFailedEventCodec,
+} from "@morty-build/client/protocol";
 import { WebSocket } from "undici";
 import { OperationError, operationErrorCode, operationErrorMessage } from "../../infra/operation-error.ts";
 import type { ResolveAgent } from "../../session/api/session-api.ts";
@@ -16,12 +22,34 @@ interface SettingsDiscoveryDependencies {
     readonly sessions: SessionManager;
     readonly diagnostics: RelayConnectionDiagnostics;
     readonly socket: WebSocket;
+    readonly payloadEncryption: PayloadEncryptionConnection;
     readonly signal: AbortSignal;
     readonly timer: Timer;
 }
 
 export function createAgentSettingsDiscoveryHandler(dependencies: SettingsDiscoveryDependencies) {
-    const { directories, sessions, diagnostics, socket, signal, timer } = dependencies;
+    const { directories, sessions, diagnostics, socket, signal, timer, payloadEncryption } = dependencies;
+    const replies = new Set<Promise<void>>();
+    const fail = (requestId: string, code: string, message: string): void => {
+        const reply = (async () => {
+            const encoded = await agentSettingsDiscoveryFailedEventCodec.encode(
+                { code, kind: AGENT_SETTINGS_DISCOVERY_FAILED_KIND, message, requestId },
+                payloadEncryption,
+                signal,
+            );
+            if (socket.readyState === WebSocket.OPEN) {
+                send(socket, encoded);
+            }
+        })();
+        replies.add(reply);
+        void reply
+            .catch((error: unknown) => {
+                if (!signal.aborted) {
+                    console.error("Could not send Agent settings failure", error);
+                }
+            })
+            .finally(() => replies.delete(reply));
+    };
     const agentSettingsDiscoveries = new Map<
         string,
         {
@@ -44,12 +72,11 @@ export function createAgentSettingsDiscoveryHandler(dependencies: SettingsDiscov
         );
         if ([...agentSettingsDiscoveries.values()].some((request) => request.requestIds.has(command.requestId))) {
             if (socket.readyState === WebSocket.OPEN) {
-                send(socket, {
-                    code: "agent_settings_discovery_busy",
-                    kind: AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
-                    message: "This settings discovery request is already running",
-                    requestId: command.requestId,
-                });
+                fail(
+                    command.requestId,
+                    "agent_settings_discovery_busy",
+                    "This settings discovery request is already running",
+                );
             }
             return;
         }
@@ -59,23 +86,21 @@ export function createAgentSettingsDiscoveryHandler(dependencies: SettingsDiscov
         }
         if (existing !== undefined) {
             if (socket.readyState === WebSocket.OPEN) {
-                send(socket, {
-                    code: "agent_settings_discovery_busy",
-                    kind: AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
-                    message: "Another settings discovery is already running for this Agent",
-                    requestId: command.requestId,
-                });
+                fail(
+                    command.requestId,
+                    "agent_settings_discovery_busy",
+                    "Another settings discovery is already running for this Agent",
+                );
             }
             return;
         }
         if (agentSettingsDiscoveries.size >= 4) {
             if (socket.readyState === WebSocket.OPEN) {
-                send(socket, {
-                    code: "agent_settings_discovery_busy",
-                    kind: AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
-                    message: "Too many Agent settings discoveries are running",
-                    requestId: command.requestId,
-                });
+                fail(
+                    command.requestId,
+                    "agent_settings_discovery_busy",
+                    "Too many Agent settings discoveries are running",
+                );
             }
             return;
         }
@@ -107,7 +132,14 @@ export function createAgentSettingsDiscoveryHandler(dependencies: SettingsDiscov
                 }
                 for (const requestId of requestIds) {
                     if (socket.readyState === WebSocket.OPEN) {
-                        send(socket, { ...result.event, requestId });
+                        const encoded = await agentSettingsDiscoveredEventCodec.encode(
+                            { ...result.event, requestId },
+                            payloadEncryption,
+                            operationSignal,
+                        );
+                        if (socket.readyState === WebSocket.OPEN) {
+                            send(socket, encoded);
+                        }
                     }
                 }
             } catch (error) {
@@ -124,12 +156,7 @@ export function createAgentSettingsDiscoveryHandler(dependencies: SettingsDiscov
                 }
                 if (socket.readyState === WebSocket.OPEN) {
                     for (const requestId of requestIds) {
-                        send(socket, {
-                            code: operationErrorCode(failure),
-                            kind: AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
-                            message: operationErrorMessage(failure),
-                            requestId,
-                        });
+                        fail(requestId, operationErrorCode(failure), operationErrorMessage(failure));
                     }
                 }
             } finally {
@@ -149,6 +176,7 @@ export function createAgentSettingsDiscoveryHandler(dependencies: SettingsDiscov
     };
     const settle = async (): Promise<void> => {
         await Promise.all([...agentSettingsDiscoveries.values()].map((request) => request.completion));
+        await Promise.allSettled([...replies]);
     };
     return { handle, settle };
 }

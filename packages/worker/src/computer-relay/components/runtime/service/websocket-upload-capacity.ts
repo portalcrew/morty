@@ -1,6 +1,7 @@
+import { CONTENT_UPLOAD_MAX_ENCODED_BYTES } from "@morty-build/client/protocol";
 import type { HttpError } from "../../../../contracts/http-error.ts";
 
-const MAX_PENDING_BYTES = 12_582_912;
+const MAX_PENDING_BYTES = CONTENT_UPLOAD_MAX_ENCODED_BYTES;
 const MAX_PENDING_UPLOADS = 16;
 
 class UploadAdmissionError extends Error implements HttpError {

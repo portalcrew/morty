@@ -1,10 +1,16 @@
 import { z } from "zod";
-import { identifierStringSchema as IDENTIFIER } from "../../shared/identifier.ts";
+import { encryptedMessageCodec } from "../../shared/encrypted-message.ts";
+import {
+    identifierStringSchema as IDENTIFIER,
+    identifierStringSchema as routingIdentifier,
+} from "../../shared/identifier.ts";
 import {
     assertKind,
+    decodeZodMessage as decodeRoutingZodMessage,
     decodeZodMessage,
     decodeZodValue,
     encodeZodMessage,
+    encryptedFieldSchema,
     ProtocolMessageError,
     parseJson,
     readIdentifier,
@@ -12,7 +18,11 @@ import {
 } from "../../shared/message-codec.ts";
 import type { SessionConfigurationSelection } from "../configuration/index.ts";
 import { decodeSessionConfigurationSelections } from "../configuration/index.ts";
-import { type NativeSessionTarget, nativeSessionTargetSchema } from "../shared/native-session-target.ts";
+import {
+    type NativeSessionTarget,
+    nativeSessionTargetSchema,
+    nativeSessionTargetSchema as routingTarget,
+} from "../shared/native-session-target.ts";
 
 export const SESSION_PROMPT_KIND = "session.prompt";
 export const SESSION_PROMPT_DISPOSITION_KIND = "session.prompt.disposition";
@@ -51,9 +61,8 @@ export type SessionPromptCommand = {
 } & SessionPromptPlacement;
 
 /*
- * A prompt is its own request: its `requestId` equals `commandId`, naming the Turn and its reply, so a retry of
- * the same command is the same request. Every other request names the Turn it acts on in `commandId` and its own reply
- * address in `requestId`, so its answer can never be mistaken for the answer to the prompt or to another request.
+ * The command identifier names the Turn and remains its idempotency identity. The request identifier addresses the
+ * response, independently of the command identifier.
  */
 
 /** Stops the Turn; answered by `session.turn.stopped` once the Turn has ended, with the reason it ended. */
@@ -140,9 +149,6 @@ export function decodeSessionPromptCommand(encoded: string): SessionPromptComman
 
     const commandId = readIdentifier(value, "commandId");
     const requestId = readIdentifier(value, "requestId");
-    if (requestId !== commandId) {
-        throw new ProtocolMessageError("Prompt requestId must equal commandId");
-    }
 
     const prompt = readText(value, "prompt", MAX_PROMPT_LENGTH);
     const attachments = decodePromptAttachmentsValue(value["attachments"]);
@@ -250,3 +256,136 @@ export const decodeSessionTurnWithdrawnEvent = (encoded: string): SessionTurnWit
     decodeZodMessage(encoded, sessionTurnWithdrawnEventSchema);
 export const encodeSessionTurnWithdrawnEvent = (message: SessionTurnWithdrawnEvent): string =>
     encodeZodMessage(message, sessionTurnWithdrawnEventSchema);
+
+const sessionCancelBeforeStartCommandPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_CANCEL_BEFORE_START_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+    commandId: routingIdentifier,
+});
+const sessionCancelBeforeStartCommandRoutingSchema = sessionCancelBeforeStartCommandPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionCancelBeforeStartCommandRouting = z.infer<typeof sessionCancelBeforeStartCommandRoutingSchema>;
+const decodeSessionCancelBeforeStartCommandRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionCancelBeforeStartCommandRoutingSchema);
+export const sessionCancelBeforeStartCommandCodec = encryptedMessageCodec({
+    kind: SESSION_CANCEL_BEFORE_START_KIND,
+    decode: decodeSessionCancelBeforeStartCommand,
+    decodeRouting: decodeSessionCancelBeforeStartCommandRouting,
+    publicRoutingSchema: sessionCancelBeforeStartCommandPublicRoutingSchema,
+});
+
+const sessionCancelCommandPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_CANCEL_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+    commandId: routingIdentifier,
+});
+const sessionCancelCommandRoutingSchema = sessionCancelCommandPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionCancelCommandRouting = z.infer<typeof sessionCancelCommandRoutingSchema>;
+const decodeSessionCancelCommandRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionCancelCommandRoutingSchema);
+export const sessionCancelCommandCodec = encryptedMessageCodec({
+    kind: SESSION_CANCEL_KIND,
+    decode: decodeSessionCancelCommand,
+    decodeRouting: decodeSessionCancelCommandRouting,
+    publicRoutingSchema: sessionCancelCommandPublicRoutingSchema,
+});
+
+const sessionPromptCommandPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_PROMPT_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+    commandId: routingIdentifier,
+});
+const sessionPromptCommandRoutingSchema = sessionPromptCommandPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionPromptCommandRouting = z.infer<typeof sessionPromptCommandRoutingSchema>;
+const decodeSessionPromptCommandRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionPromptCommandRoutingSchema);
+export const sessionPromptCommandCodec = encryptedMessageCodec({
+    kind: SESSION_PROMPT_KIND,
+    decode: decodeSessionPromptCommand,
+    decodeRouting: decodeSessionPromptCommandRouting,
+    publicRoutingSchema: sessionPromptCommandPublicRoutingSchema,
+});
+
+const sessionPromptDispositionCommandPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_PROMPT_DISPOSITION_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+    commandId: routingIdentifier,
+});
+const sessionPromptDispositionCommandRoutingSchema = sessionPromptDispositionCommandPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionPromptDispositionCommandRouting = z.infer<typeof sessionPromptDispositionCommandRoutingSchema>;
+const decodeSessionPromptDispositionCommandRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionPromptDispositionCommandRoutingSchema);
+export const sessionPromptDispositionCommandCodec = encryptedMessageCodec({
+    kind: SESSION_PROMPT_DISPOSITION_KIND,
+    decode: decodeSessionPromptDispositionCommand,
+    decodeRouting: decodeSessionPromptDispositionCommandRouting,
+    publicRoutingSchema: sessionPromptDispositionCommandPublicRoutingSchema,
+});
+
+const sessionPromptSteeredEventPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_PROMPT_STEERED_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+    commandId: routingIdentifier,
+});
+const sessionPromptSteeredEventRoutingSchema = sessionPromptSteeredEventPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionPromptSteeredEventRouting = z.infer<typeof sessionPromptSteeredEventRoutingSchema>;
+const decodeSessionPromptSteeredEventRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionPromptSteeredEventRoutingSchema);
+export const sessionPromptSteeredEventCodec = encryptedMessageCodec({
+    kind: SESSION_PROMPT_STEERED_KIND,
+    decode: decodeSessionPromptSteeredEvent,
+    decodeRouting: decodeSessionPromptSteeredEventRouting,
+    publicRoutingSchema: sessionPromptSteeredEventPublicRoutingSchema,
+});
+
+const sessionTurnStoppedEventPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_TURN_STOPPED_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+    commandId: routingIdentifier,
+});
+const sessionTurnStoppedEventRoutingSchema = sessionTurnStoppedEventPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionTurnStoppedEventRouting = z.infer<typeof sessionTurnStoppedEventRoutingSchema>;
+const decodeSessionTurnStoppedEventRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionTurnStoppedEventRoutingSchema);
+export const sessionTurnStoppedEventCodec = encryptedMessageCodec({
+    kind: SESSION_TURN_STOPPED_KIND,
+    decode: decodeSessionTurnStoppedEvent,
+    decodeRouting: decodeSessionTurnStoppedEventRouting,
+    publicRoutingSchema: sessionTurnStoppedEventPublicRoutingSchema,
+});
+
+const sessionTurnWithdrawnEventPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_TURN_WITHDRAWN_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+    commandId: routingIdentifier,
+});
+const sessionTurnWithdrawnEventRoutingSchema = sessionTurnWithdrawnEventPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionTurnWithdrawnEventRouting = z.infer<typeof sessionTurnWithdrawnEventRoutingSchema>;
+const decodeSessionTurnWithdrawnEventRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionTurnWithdrawnEventRoutingSchema);
+export const sessionTurnWithdrawnEventCodec = encryptedMessageCodec({
+    kind: SESSION_TURN_WITHDRAWN_KIND,
+    decode: decodeSessionTurnWithdrawnEvent,
+    decodeRouting: decodeSessionTurnWithdrawnEventRouting,
+    publicRoutingSchema: sessionTurnWithdrawnEventPublicRoutingSchema,
+});

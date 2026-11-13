@@ -104,10 +104,14 @@ export async function createTestApp(
         if (page.kind === "continue") {
             transfer.searchParams.set("harness", page.harness);
             transfer.searchParams.set("sessionId", page.sessionId);
-            transfer.searchParams.set("workspace", page.workspace ?? (await realpath(tmpdir())));
+            const fragment = new URLSearchParams(transfer.hash.slice(1));
+            fragment.set("workspace", page.workspace ?? (await realpath(tmpdir())));
+            transfer.hash = fragment.toString();
         }
         if (page.code !== undefined) {
-            transfer.hash = `code=${page.code(current)}`;
+            const fragment = new URLSearchParams(transfer.hash.slice(1));
+            fragment.set("code", page.code(current));
+            transfer.hash = fragment.toString();
         }
         window.location.href = transfer.href;
     } else if (page.kind === "url") {

@@ -39,6 +39,7 @@ test("Given a real Codex model that asks the user a question while it keeps work
         peer.send(
             encodeSessionPromptCommand({
                 kind: "session.prompt",
+                requestId: commandId,
                 commandId,
                 requestId: commandId,
                 target: peer.target,

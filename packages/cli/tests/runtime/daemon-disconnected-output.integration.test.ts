@@ -347,6 +347,7 @@ async function startRuntime() {
             const sessionTarget = decodeSessionReadyEvent(created).target;
             peer.socket.send(
                 encodeSessionPromptCommand({
+                    requestId: `command-${label}`,
                     commandId: `command-${label}`,
                     requestId: `command-${label}`,
                     disposition: "append",

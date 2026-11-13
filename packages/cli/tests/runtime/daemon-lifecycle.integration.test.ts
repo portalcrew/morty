@@ -6,7 +6,7 @@ import { createConnection, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { decodeDaemonToServiceMessage } from "@morty-build/client/protocol";
+import { decodeMessageKind } from "@morty-build/client/protocol";
 import { listen, port } from "@morty-build/relay-test-support/websocket";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
@@ -137,8 +137,7 @@ async function _startRelay(ready = true): Promise<{ readonly origin: URL; readon
     const sockets = new WebSocketServer({ server });
     sockets.on("connection", (socket) => {
         socket.on("message", (bytes) => {
-            const message = decodeDaemonToServiceMessage(bytes.toString());
-            if (message.kind === "computer.heartbeat") {
+            if (decodeMessageKind(bytes.toString()) === "computer.heartbeat") {
                 socket.send(JSON.stringify({ kind: "computer.heartbeat.ack" }));
             }
         });

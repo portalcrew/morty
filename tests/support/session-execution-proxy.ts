@@ -1,9 +1,25 @@
 import { createServer, type IncomingMessage, request } from "node:http";
-import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER, decodeNativeSessionResult } from "@morty-build/client/protocol";
-import { WebSocket, WebSocketServer } from "ws";
+import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER } from "@morty-build/client/protocol";
+import { type RawData, WebSocket, WebSocketServer } from "ws";
 
 /** Forwards real traffic unchanged, with controllable ordering at the Relay transport boundary. */
 export async function createSessionExecutionProxy(upstream: string) {
+    const lifetime = new AbortController();
+    const observers = new Map<
+        string,
+        {
+            readonly execution: (
+                encoded: string,
+                signal: AbortSignal,
+            ) => Promise<{
+                readonly turn: string | null;
+                readonly lastTurn: string | null;
+                readonly lastTurnState: string | null;
+                readonly interactionPosition: string | null;
+            } | null>;
+            readonly terminal: (encoded: string, signal: AbortSignal) => Promise<boolean>;
+        }
+    >();
     const responseHolds = new Map<string, (release: () => void) => void>();
     const takeResponseHold = (path: string) => {
         const suffix = [...responseHolds.keys()].find((candidate) => path.endsWith(candidate));
@@ -20,6 +36,7 @@ export async function createSessionExecutionProxy(upstream: string) {
     let heldEvents: (() => void)[] | null = null;
     let heldTerminalEvents: Map<WebSocket, (() => void)[]> | null = null;
     let terminalObserved: (() => void) | null = null;
+    let terminalFailed: ((cause: unknown) => void) | null = null;
     const executionReads: {
         readonly turn: string | null;
         readonly lastTurn: string | null;
@@ -66,6 +83,7 @@ export async function createSessionExecutionProxy(upstream: string) {
         const target = new URL(upstream);
         target.pathname = requested.pathname;
         target.search = requested.search;
+        const computerId = /^\/morty\/api\/v1\/computers\/([^/]+)\/transport$/u.exec(target.pathname)?.[1];
         target.protocol = "ws:";
         const remote = new WebSocket(target, {
             ...(incoming.headers.origin === undefined ? {} : { origin: incoming.headers.origin }),
@@ -170,7 +188,8 @@ export async function createSessionExecutionProxy(upstream: string) {
                 send();
             }
         });
-        remote.on("message", (data, binary) => {
+        let delivery = Promise.resolve();
+        const receive = async (data: RawData, binary: boolean) => {
             const frame: unknown = binary ? null : jsonFrame(data.toString());
             if (
                 typeof frame === "object" &&
@@ -185,14 +204,13 @@ export async function createSessionExecutionProxy(upstream: string) {
                 "body" in frame &&
                 typeof frame.body === "string"
             ) {
-                const snapshot = decodeNativeSessionResult(frame.body);
-                if (snapshot.action === "active-turn") {
-                    executionReads.push({
-                        turn: snapshot.turn?.commandId ?? null,
-                        lastTurn: snapshot.lastTurn?.commandId ?? null,
-                        lastTurnState: snapshot.lastTurn?.state ?? null,
-                        interactionPosition: snapshot.interactionState?.throughPosition ?? null,
-                    });
+                const observer = computerId === undefined ? undefined : observers.get(decodeURIComponent(computerId));
+                if (observer === undefined) {
+                    throw new Error("An authorized Computer observer is required");
+                }
+                const snapshot = await observer.execution(frame.body, lifetime.signal);
+                if (snapshot !== null) {
+                    executionReads.push(snapshot);
                 }
             }
             const send = () => {
@@ -224,21 +242,11 @@ export async function createSessionExecutionProxy(upstream: string) {
                 "data" in frame &&
                 typeof frame.data === "string"
             ) {
-                const batch: unknown = JSON.parse(frame.data);
-                const terminal =
-                    Array.isArray(batch) &&
-                    batch.some(
-                        (event: unknown) =>
-                            typeof event === "object" &&
-                            event !== null &&
-                            "type" in event &&
-                            event.type === "lifecycle-metadata" &&
-                            "payload" in event &&
-                            typeof event.payload === "object" &&
-                            event.payload !== null &&
-                            "kind" in event.payload &&
-                            (event.payload.kind === "prompt.completed" || event.payload.kind === "prompt.failed"),
-                    );
+                const observer = computerId === undefined ? undefined : observers.get(decodeURIComponent(computerId));
+                if (observer === undefined) {
+                    throw new Error("An authorized Computer observer is required");
+                }
+                const terminal = await observer.terminal(frame.data, lifetime.signal);
                 const pending = heldTerminalEvents.get(client);
                 if (pending !== undefined || terminal) {
                     const queue = pending ?? [];
@@ -270,6 +278,17 @@ export async function createSessionExecutionProxy(upstream: string) {
                 responses.get(frame.requestId)?.(frame);
                 responses.delete(frame.requestId);
             }
+        };
+        remote.on("message", (data, binary) => {
+            delivery = delivery
+                .then(() => receive(data, binary))
+                .catch((cause: unknown) => {
+                    if (!lifetime.signal.aborted) {
+                        terminalFailed?.(cause);
+                    }
+                    client.terminate();
+                    remote.terminate();
+                });
         });
         for (const [socket, peer] of [
             [client, remote],
@@ -289,6 +308,9 @@ export async function createSessionExecutionProxy(upstream: string) {
     }
     return {
         origin: `http://127.0.0.1:${address.port}`,
+        observeComputer: (computerId: string, observer: NonNullable<ReturnType<typeof observers.get>>) => {
+            observers.set(computerId, observer);
+        },
         /** Holds one real HTTP or WebSocket response after the upstream has completed it, without changing it. */
         holdNextResponse: (suffix: string) =>
             new Promise<() => void>((resolve) => {
@@ -309,11 +331,13 @@ export async function createSessionExecutionProxy(upstream: string) {
             const observed = Promise.withResolvers<void>();
             heldTerminalEvents = pending;
             terminalObserved = observed.resolve;
+            terminalFailed = observed.reject;
             return {
                 observed: observed.promise,
                 release: () => {
                     heldTerminalEvents = null;
                     terminalObserved = null;
+                    terminalFailed = null;
                     for (const queue of pending.values()) {
                         for (const send of queue) {
                             send();
@@ -353,6 +377,8 @@ export async function createSessionExecutionProxy(upstream: string) {
             };
         },
         close: async () => {
+            lifetime.abort();
+            observers.clear();
             for (const socket of sockets) {
                 socket.terminate();
             }

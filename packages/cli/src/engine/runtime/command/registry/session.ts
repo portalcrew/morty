@@ -19,9 +19,14 @@ import {
     type SESSION_RENAME_KIND,
     type SESSION_RESTORE_KIND,
     sessionConfigurationSelection,
+    sessionConfigReadResultCodec,
+    sessionConfigUpdatedEventCodec,
+    sessionReadyEventCodec,
+    sessionRenamedEventCodec,
+    sessionRestoredEventCodec,
     type WORKSPACE_LIST_KIND,
+    workspaceEntriesEventCodec,
 } from "@morty-build/client/protocol";
-import type { WebSocket } from "undici";
 import { operationErrorCode } from "../../../infra/operation-error.ts";
 import { AccumulatingOperationMetrics } from "../../../infra/operation-metrics.ts";
 import type { PreparedSession, ResolveAgent, SessionRecovery } from "../../../session/api/session-api.ts";
@@ -119,11 +124,12 @@ async function prepareSession(
 }
 
 async function executeWorkspaceList(
-    socket: WebSocket,
+    context: CommandContext,
     command: WorkspaceListCommand,
     directories: WorkspaceDirectoryService,
     signal: AbortSignal,
 ): Promise<void> {
+    const { socket, payloadEncryption } = context;
     try {
         const listing =
             command.view === "metadata"
@@ -134,21 +140,28 @@ async function executeWorkspaceList(
                       parentDirectory: directory.parentDirectory,
                   }))
                 : await directories.list(command.directory, signal);
-        send(socket, {
-            directory: listing.directory,
-            directoryLabel: listing.directoryLabel,
-            entries: listing.entries,
-            kind: "workspace.entries",
-            parentDirectory: listing.parentDirectory,
-            requestId: command.requestId,
-        });
+        send(
+            socket,
+            await workspaceEntriesEventCodec.encode(
+                {
+                    directory: listing.directory,
+                    directoryLabel: listing.directoryLabel,
+                    entries: listing.entries,
+                    kind: "workspace.entries",
+                    parentDirectory: listing.parentDirectory,
+                    requestId: command.requestId,
+                },
+                payloadEncryption,
+                signal,
+            ),
+        );
     } catch (error) {
-        reportOperationFailure(socket, command.requestId, undefined, error);
+        await reportOperationFailure(context, command.requestId, undefined, error);
     }
 }
 
 async function executeSessionPrepare(
-    socket: WebSocket,
+    context: CommandContext,
     command: SessionPrepareCommand,
     resolveAgent: ResolveAgent,
     directories: WorkspaceDirectoryService,
@@ -156,6 +169,7 @@ async function executeSessionPrepare(
     diagnostics: RelayConnectionDiagnostics,
     signal: AbortSignal,
 ): Promise<void> {
+    const { socket, payloadEncryption } = context;
     const metrics = new AccumulatingOperationMetrics();
     try {
         const readyEvent = await prepareSession(
@@ -165,10 +179,17 @@ async function executeSessionPrepare(
             sessions,
             metrics,
         );
-        send(socket, {
-            ...readyEvent,
-            runtimeTimings: metrics.snapshot(),
-        });
+        send(
+            socket,
+            await sessionReadyEventCodec.encode(
+                {
+                    ...readyEvent,
+                    runtimeTimings: metrics.snapshot(),
+                },
+                payloadEncryption,
+                signal,
+            ),
+        );
     } catch (error) {
         diagnostics.daemonDiagnostic(
             "session_prepare_failed",
@@ -180,12 +201,12 @@ async function executeSessionPrepare(
             },
             error,
         );
-        reportOperationFailure(socket, command.requestId, command.target, error, metrics.snapshot());
+        await reportOperationFailure(context, command.requestId, command.target, error, metrics.snapshot());
     }
 }
 
 async function executeSessionRestore(
-    socket: WebSocket,
+    context: CommandContext,
     command: SessionRestoreCommand,
     resolveAgent: ResolveAgent,
     directories: WorkspaceDirectoryService,
@@ -194,6 +215,7 @@ async function executeSessionRestore(
     diagnostics: RelayConnectionDiagnostics,
     signal: AbortSignal,
 ): Promise<void> {
+    const { socket, payloadEncryption } = context;
     const metrics = new AccumulatingOperationMetrics();
     try {
         const entry = await metrics.measure("session-lookup", async () => {
@@ -211,13 +233,20 @@ async function executeSessionRestore(
             sessions,
             metrics,
         );
-        send(socket, {
-            entry,
-            target: command.target,
-            kind: "session.restored",
-            ready: { ...ready, runtimeTimings: metrics.snapshot() },
-            requestId: command.requestId,
-        });
+        send(
+            socket,
+            await sessionRestoredEventCodec.encode(
+                {
+                    entry,
+                    target: command.target,
+                    kind: "session.restored",
+                    ready: { ...ready, runtimeTimings: metrics.snapshot() },
+                    requestId: command.requestId,
+                },
+                payloadEncryption,
+                signal,
+            ),
+        );
     } catch (error) {
         diagnostics.daemonDiagnostic(
             "session_restore_failed",
@@ -229,12 +258,12 @@ async function executeSessionRestore(
             },
             error,
         );
-        reportOperationFailure(socket, command.requestId, undefined, error, metrics.snapshot());
+        await reportOperationFailure(context, command.requestId, undefined, error, metrics.snapshot());
     }
 }
 
 async function executeSessionRename(
-    socket: WebSocket,
+    context: CommandContext,
     command: SessionRenameCommand,
     resolveAgent: ResolveAgent,
     directories: WorkspaceDirectoryService,
@@ -242,6 +271,7 @@ async function executeSessionRename(
     nativeSessions: NativeSessionService,
     signal: AbortSignal,
 ): Promise<void> {
+    const { socket, payloadEncryption } = context;
     try {
         const [entry] = await nativeSessions.querySessions([command.target], signal);
         if (entry === undefined) {
@@ -257,29 +287,37 @@ async function executeSessionRename(
             },
             command.title,
         );
-        send(socket, {
-            kind: "session.renamed",
-            requestId: command.requestId,
-            target: command.target,
-            title: renamed.title,
-            updatedAt: renamed.updatedAt,
-        });
+        send(
+            socket,
+            await sessionRenamedEventCodec.encode(
+                {
+                    kind: "session.renamed",
+                    requestId: command.requestId,
+                    target: command.target,
+                    title: renamed.title,
+                    updatedAt: renamed.updatedAt,
+                },
+                payloadEncryption,
+                signal,
+            ),
+        );
     } catch (error) {
         if (signal.aborted) {
             signal.throwIfAborted();
         }
-        reportOperationFailure(socket, command.requestId, command.target, error);
+        await reportOperationFailure(context, command.requestId, command.target, error);
     }
 }
 
 async function executeSessionConfigure(
-    socket: WebSocket,
+    context: CommandContext,
     command: SessionConfigureCommand,
     resolveAgent: ResolveAgent,
     directories: WorkspaceDirectoryService,
     sessions: SessionManager,
     signal: AbortSignal,
 ): Promise<void> {
+    const { socket, payloadEncryption } = context;
     try {
         const session = await resolveHeldSession(sessions, resolveAgent, directories, command.target, signal);
         const snapshot = await sessions.configureSession({
@@ -288,27 +326,34 @@ async function executeSessionConfigure(
             expectedConfigurationRevision: command.expectedConfigurationRevision,
             requestId: command.requestId,
         });
-        send(socket, {
-            ...snapshot,
-            kind: "session.config.updated",
-            requestId: command.requestId,
-            target: command.target,
-        });
+        send(
+            socket,
+            await sessionConfigUpdatedEventCodec.encode(
+                {
+                    ...snapshot,
+                    kind: "session.config.updated",
+                    requestId: command.requestId,
+                    target: command.target,
+                },
+                payloadEncryption,
+                signal,
+            ),
+        );
     } catch (error) {
         if (signal.aborted) {
             signal.throwIfAborted();
         }
-        reportOperationFailure(socket, command.requestId, command.target, error);
+        await reportOperationFailure(context, command.requestId, command.target, error);
     }
 }
 
-export const handleWorkspaceList: CommandHandler<typeof WORKSPACE_LIST_KIND> = (context, message): void => {
-    void executeWorkspaceList(context.socket, message, context.directories, context.signal);
+export const handleWorkspaceList: CommandHandler<typeof WORKSPACE_LIST_KIND> = (context, message): Promise<void> => {
+    return executeWorkspaceList(context, message, context.directories, context.signal);
 };
 
-export const handleSessionPrepare: CommandHandler<typeof SESSION_PREPARE_KIND> = (context, message): void => {
-    void executeSessionPrepare(
-        context.socket,
+export const handleSessionPrepare: CommandHandler<typeof SESSION_PREPARE_KIND> = (context, message): Promise<void> => {
+    return executeSessionPrepare(
+        context,
         message,
         context.resolveAgent,
         context.directories,
@@ -375,7 +420,14 @@ async function executeSessionCreate(context: CommandContext, command: SessionCre
             operationId: command.operationId,
             sessionId: ready.target.sessionId,
         });
-        send(context.socket, { ...ready, requestId: command.requestId });
+        send(
+            context.socket,
+            await sessionReadyEventCodec.encode(
+                { ...ready, requestId: command.requestId },
+                context.payloadEncryption,
+                signal,
+            ),
+        );
     } catch (cause) {
         context.signal.throwIfAborted();
         const failure = timeout.signal.aborted
@@ -387,14 +439,14 @@ async function executeSessionCreate(context: CommandContext, command: SessionCre
             { harness: command.harness, operationId: command.operationId, code: operationErrorCode(failure) },
             failure,
         );
-        reportOperationFailure(context.socket, command.requestId, undefined, failure);
+        await reportOperationFailure(context, command.requestId, undefined, failure);
     } finally {
         deadline.cancel();
     }
 }
 
-export const handleSessionCreate: CommandHandler<typeof SESSION_CREATE_KIND> = (context, message): void => {
-    void executeSessionCreate(context, message).catch((cause: unknown) => {
+export const handleSessionCreate: CommandHandler<typeof SESSION_CREATE_KIND> = (context, message): Promise<void> => {
+    return executeSessionCreate(context, message).catch((cause: unknown) => {
         if (!context.signal.aborted) {
             context.diagnostics.daemonDiagnostic(
                 "session_create_failed",
@@ -410,9 +462,12 @@ export const handleSessionCreate: CommandHandler<typeof SESSION_CREATE_KIND> = (
     });
 };
 
-export const handleSessionConfigure: CommandHandler<typeof SESSION_CONFIGURE_KIND> = (context, message): void => {
-    void executeSessionConfigure(
-        context.socket,
+export const handleSessionConfigure: CommandHandler<typeof SESSION_CONFIGURE_KIND> = (
+    context,
+    message,
+): Promise<void> => {
+    return executeSessionConfigure(
+        context,
         message,
         context.resolveAgent,
         context.directories,
@@ -421,9 +476,9 @@ export const handleSessionConfigure: CommandHandler<typeof SESSION_CONFIGURE_KIN
     );
 };
 
-export const handleSessionRestore: CommandHandler<typeof SESSION_RESTORE_KIND> = (context, message): void => {
-    void executeSessionRestore(
-        context.socket,
+export const handleSessionRestore: CommandHandler<typeof SESSION_RESTORE_KIND> = (context, message): Promise<void> => {
+    return executeSessionRestore(
+        context,
         message,
         context.resolveAgent,
         context.directories,
@@ -434,9 +489,9 @@ export const handleSessionRestore: CommandHandler<typeof SESSION_RESTORE_KIND> =
     );
 };
 
-export const handleSessionRename: CommandHandler<typeof SESSION_RENAME_KIND> = (context, message): void => {
-    void executeSessionRename(
-        context.socket,
+export const handleSessionRename: CommandHandler<typeof SESSION_RENAME_KIND> = (context, message): Promise<void> => {
+    return executeSessionRename(
+        context,
         message,
         context.resolveAgent,
         context.directories,
@@ -447,7 +502,7 @@ export const handleSessionRename: CommandHandler<typeof SESSION_RENAME_KIND> = (
 };
 
 async function executeSessionConfigRead(
-    socket: WebSocket,
+    context: CommandContext,
     command: SessionConfigReadCommand,
     resolveAgent: ResolveAgent,
     directories: WorkspaceDirectoryService,
@@ -456,6 +511,7 @@ async function executeSessionConfigRead(
     diagnostics: RelayConnectionDiagnostics,
     signal: AbortSignal,
 ): Promise<void> {
+    const { socket, payloadEncryption } = context;
     const metrics = new AccumulatingOperationMetrics();
     try {
         const entry = await metrics.measure("session-lookup", async () => {
@@ -475,13 +531,20 @@ async function executeSessionConfigRead(
             sessions,
             metrics,
         );
-        send(socket, {
-            configOptions: ready.configOptions,
-            configurationRevision: ready.configurationRevision,
-            kind: SESSION_CONFIG_READ_RESULT_KIND,
-            requestId: command.requestId,
-            target: command.target,
-        });
+        send(
+            socket,
+            await sessionConfigReadResultCodec.encode(
+                {
+                    configOptions: ready.configOptions,
+                    configurationRevision: ready.configurationRevision,
+                    kind: SESSION_CONFIG_READ_RESULT_KIND,
+                    requestId: command.requestId,
+                    target: command.target,
+                },
+                payloadEncryption,
+                signal,
+            ),
+        );
     } catch (error) {
         diagnostics.daemonDiagnostic(
             "session_config_read_failed",
@@ -492,13 +555,16 @@ async function executeSessionConfigRead(
             },
             error,
         );
-        reportOperationFailure(socket, command.requestId, command.target, error, metrics.snapshot());
+        await reportOperationFailure(context, command.requestId, command.target, error, metrics.snapshot());
     }
 }
 
-export const handleSessionConfigRead: CommandHandler<typeof SESSION_CONFIG_READ_KIND> = (context, message): void => {
-    void executeSessionConfigRead(
-        context.socket,
+export const handleSessionConfigRead: CommandHandler<typeof SESSION_CONFIG_READ_KIND> = (
+    context,
+    message,
+): Promise<void> => {
+    return executeSessionConfigRead(
+        context,
         message,
         context.resolveAgent,
         context.directories,

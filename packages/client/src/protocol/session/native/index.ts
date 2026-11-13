@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { DIRECTORY_PATH as directory, MAX_WORKSPACE_PATH_LENGTH } from "../../shared/directory.ts";
-import { identifierStringSchema as identifier } from "../../shared/identifier.ts";
-import { ProtocolMessageError } from "../../shared/message-codec.ts";
+import { encryptedMessageCodec } from "../../shared/encrypted-message.ts";
+import {
+    identifierStringSchema as identifier,
+    identifierStringSchema as routingIdentifier,
+} from "../../shared/identifier.ts";
+import {
+    decodeZodMessage as decodeRoutingZodMessage,
+    encryptedFieldSchema,
+    ProtocolMessageError,
+} from "../../shared/message-codec.ts";
 import {
     sessionElicitationRequestedEventSchema,
     sessionPermissionRequestedEventSchema,
@@ -274,3 +282,245 @@ export const decodeNativeSessionCancel = (encoded: string): NativeSessionCancel 
     decode(nativeSessionCancelSchema, encoded);
 export const encodeNativeSessionCancel = (value: NativeSessionCancel): string =>
     JSON.stringify(nativeSessionCancelSchema.parse(value));
+
+const nativeSessionCancelPublicRoutingSchema = z.object({
+    kind: z.literal(NATIVE_SESSION_CANCEL_KIND),
+    requestId: routingIdentifier,
+});
+const nativeSessionCancelRoutingSchema = nativeSessionCancelPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type NativeSessionCancelRouting = z.infer<typeof nativeSessionCancelRoutingSchema>;
+const decodeNativeSessionCancelRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, nativeSessionCancelRoutingSchema);
+export const nativeSessionCancelCodec = encryptedMessageCodec({
+    kind: NATIVE_SESSION_CANCEL_KIND,
+    decode: decodeNativeSessionCancel,
+    decodeRouting: decodeNativeSessionCancelRouting,
+    publicRoutingSchema: nativeSessionCancelPublicRoutingSchema,
+});
+
+const nativeSessionCommandPublicRoutingSchema = z.object({
+    kind: z.literal(NATIVE_SESSION_REQUEST_KIND),
+    requestId: routingIdentifier,
+});
+const nativeActiveTurnPublicRoutingSchema = nativeSessionCommandPublicRoutingSchema.extend({
+    action: z.literal("active-turn"),
+    target: nativeSessionTargetSchema,
+});
+const nativeListPublicRoutingSchema = nativeSessionCommandPublicRoutingSchema.extend({
+    action: z.literal("list"),
+    harness: routingIdentifier,
+});
+const nativeTargetedPublicRoutingSchema = nativeSessionCommandPublicRoutingSchema.extend({
+    action: z.enum(["find", "import", "fork"]),
+    target: nativeSessionTargetSchema,
+});
+const nativeActiveTurnRoutingSchema = nativeActiveTurnPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+const nativeListRoutingSchema = nativeListPublicRoutingSchema.extend({ encrypted: encryptedFieldSchema }).strict();
+const nativeTargetedRoutingSchema = nativeTargetedPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+const nativeSessionCommandRoutingSchema = z.discriminatedUnion("action", [
+    nativeActiveTurnRoutingSchema,
+    nativeListRoutingSchema,
+    nativeTargetedRoutingSchema.extend({ action: z.literal("find") }),
+    nativeTargetedRoutingSchema.extend({ action: z.literal("import") }),
+    nativeTargetedRoutingSchema.extend({ action: z.literal("fork") }),
+]);
+export type NativeSessionCommandRouting = z.infer<typeof nativeSessionCommandRoutingSchema>;
+const decodeNativeSessionCommandRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, nativeSessionCommandRoutingSchema);
+
+function decodeActiveTurnCommand(encoded: string) {
+    const message = decodeNativeSessionCommand(encoded);
+    if (message.action !== "active-turn") {
+        throw new ProtocolMessageError("Native session request does not match its route");
+    }
+    return message;
+}
+
+function decodeNativeListCommand(encoded: string) {
+    const message = decodeNativeSessionCommand(encoded);
+    if (message.action !== "list") {
+        throw new ProtocolMessageError("Native session request does not match its route");
+    }
+    return message;
+}
+
+function decodeTargetedNativeSessionCommand(encoded: string) {
+    const message = decodeNativeSessionCommand(encoded);
+    if (message.action === "active-turn" || message.action === "list") {
+        throw new ProtocolMessageError("Native session request does not match its route");
+    }
+    const { target } = decodeRoutingZodMessage(encoded, nativeTargetedPublicRoutingSchema);
+    if (message.harness !== target.harness || message.sessionId !== target.sessionId) {
+        throw new ProtocolMessageError("Native session request target does not match its route");
+    }
+    return { ...message, target };
+}
+
+const nativeActiveTurnCodec = encryptedMessageCodec({
+    kind: NATIVE_SESSION_REQUEST_KIND,
+    decode: decodeActiveTurnCommand,
+    decodeRouting: (encoded: string) => decodeRoutingZodMessage(encoded, nativeActiveTurnRoutingSchema),
+    publicRoutingSchema: nativeActiveTurnPublicRoutingSchema,
+});
+const nativeListCommandCodec = encryptedMessageCodec({
+    kind: NATIVE_SESSION_REQUEST_KIND,
+    decode: decodeNativeListCommand,
+    decodeRouting: (encoded: string) => decodeRoutingZodMessage(encoded, nativeListRoutingSchema),
+    publicRoutingSchema: nativeListPublicRoutingSchema,
+});
+const nativeTargetedCommandCodec = encryptedMessageCodec({
+    kind: NATIVE_SESSION_REQUEST_KIND,
+    decode: decodeTargetedNativeSessionCommand,
+    decodeRouting: (encoded: string) => decodeRoutingZodMessage(encoded, nativeTargetedRoutingSchema),
+    publicRoutingSchema: nativeTargetedPublicRoutingSchema,
+});
+export const nativeSessionCommandCodec = Object.freeze({
+    kind: NATIVE_SESSION_REQUEST_KIND,
+    decodeRouting: decodeNativeSessionCommandRouting,
+    encodeRouting: (message: NativeSessionCommandRouting): string =>
+        JSON.stringify(decodeNativeSessionCommandRouting(JSON.stringify(message))),
+    encode: async (
+        value: unknown,
+        encryptor: Parameters<typeof nativeActiveTurnCodec.encode>[1],
+        signal: AbortSignal,
+    ): Promise<string> => {
+        const message = decodeNativeSessionCommand(JSON.stringify(value));
+        switch (message.action) {
+            case "active-turn":
+                return nativeActiveTurnCodec.encode(message, encryptor, signal);
+            case "list":
+                return nativeListCommandCodec.encode(message, encryptor, signal);
+            case "find":
+            case "import":
+            case "fork":
+                return nativeTargetedCommandCodec.encode(
+                    { ...message, target: { harness: message.harness, sessionId: message.sessionId } },
+                    encryptor,
+                    signal,
+                );
+        }
+    },
+    decode: async (
+        encoded: string,
+        decryptor: Parameters<typeof nativeActiveTurnCodec.decode>[1],
+        signal: AbortSignal,
+    ): Promise<NativeSessionCommand> => {
+        const routing = decodeNativeSessionCommandRouting(encoded);
+        switch (routing.action) {
+            case "active-turn":
+                return nativeActiveTurnCodec.decode(encoded, decryptor, signal);
+            case "list":
+                return nativeListCommandCodec.decode(encoded, decryptor, signal);
+            case "find":
+            case "import":
+            case "fork": {
+                const { target: _target, ...message } = await nativeTargetedCommandCodec.decode(
+                    encoded,
+                    decryptor,
+                    signal,
+                );
+                return message;
+            }
+        }
+    },
+});
+export const nativeSessionRequestCodec = nativeSessionCommandCodec;
+
+const nativeSessionResultPublicRoutingSchema = z.object({
+    kind: z.literal(NATIVE_SESSION_RESULT_KIND),
+    requestId: routingIdentifier,
+});
+const nativeTargetedResultPublicRoutingSchema = nativeSessionResultPublicRoutingSchema.extend({
+    action: z.enum(["active-turn", "import", "fork"]),
+    target: nativeSessionTargetSchema,
+});
+const nativeBrowseResultPublicRoutingSchema = nativeSessionResultPublicRoutingSchema.extend({
+    action: z.enum(["find", "list"]),
+});
+const nativeTargetedResultRoutingSchema = nativeTargetedResultPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+const nativeBrowseResultRoutingSchema = nativeBrowseResultPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+const nativeSessionResultRoutingSchema = z.discriminatedUnion("action", [
+    nativeTargetedResultRoutingSchema.extend({ action: z.literal("active-turn") }),
+    nativeTargetedResultRoutingSchema.extend({ action: z.literal("import") }),
+    nativeTargetedResultRoutingSchema.extend({ action: z.literal("fork") }),
+    nativeBrowseResultRoutingSchema.extend({ action: z.literal("find") }),
+    nativeBrowseResultRoutingSchema.extend({ action: z.literal("list") }),
+]);
+export type NativeSessionResultRouting = z.infer<typeof nativeSessionResultRoutingSchema>;
+const decodeNativeSessionResultRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, nativeSessionResultRoutingSchema);
+
+function decodeTargetedNativeSessionResult(encoded: string) {
+    const message = decodeNativeSessionResult(encoded);
+    if (message.action === "find" || message.action === "list") {
+        throw new ProtocolMessageError("Native session result does not match its route");
+    }
+    return message;
+}
+function decodeBrowseNativeSessionResult(encoded: string) {
+    const message = decodeNativeSessionResult(encoded);
+    if (message.action !== "find" && message.action !== "list") {
+        throw new ProtocolMessageError("Native session result does not match its route");
+    }
+    return message;
+}
+const nativeTargetedResultCodec = encryptedMessageCodec({
+    kind: NATIVE_SESSION_RESULT_KIND,
+    decode: decodeTargetedNativeSessionResult,
+    decodeRouting: (encoded: string) => decodeRoutingZodMessage(encoded, nativeTargetedResultRoutingSchema),
+    publicRoutingSchema: nativeTargetedResultPublicRoutingSchema,
+});
+const nativeBrowseResultCodec = encryptedMessageCodec({
+    kind: NATIVE_SESSION_RESULT_KIND,
+    decode: decodeBrowseNativeSessionResult,
+    decodeRouting: (encoded: string) => decodeRoutingZodMessage(encoded, nativeBrowseResultRoutingSchema),
+    publicRoutingSchema: nativeBrowseResultPublicRoutingSchema,
+});
+export const nativeSessionResultCodec = Object.freeze({
+    kind: NATIVE_SESSION_RESULT_KIND,
+    decodeRouting: decodeNativeSessionResultRouting,
+    encodeRouting: (message: NativeSessionResultRouting): string =>
+        JSON.stringify(decodeNativeSessionResultRouting(JSON.stringify(message))),
+    encode: async (
+        value: unknown,
+        encryptor: Parameters<typeof nativeTargetedResultCodec.encode>[1],
+        signal: AbortSignal,
+    ): Promise<string> => {
+        const message = decodeNativeSessionResult(JSON.stringify(value));
+        switch (message.action) {
+            case "active-turn":
+            case "import":
+            case "fork":
+                return nativeTargetedResultCodec.encode(message, encryptor, signal);
+            case "find":
+            case "list":
+                return nativeBrowseResultCodec.encode(message, encryptor, signal);
+        }
+    },
+    decode: async (
+        encoded: string,
+        decryptor: Parameters<typeof nativeTargetedResultCodec.decode>[1],
+        signal: AbortSignal,
+    ): Promise<NativeSessionResult> => {
+        const routing = decodeNativeSessionResultRouting(encoded);
+        switch (routing.action) {
+            case "active-turn":
+            case "import":
+            case "fork":
+                return nativeTargetedResultCodec.decode(encoded, decryptor, signal);
+            case "find":
+            case "list":
+                return nativeBrowseResultCodec.decode(encoded, decryptor, signal);
+        }
+    },
+});

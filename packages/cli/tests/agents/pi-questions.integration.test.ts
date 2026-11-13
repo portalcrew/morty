@@ -64,6 +64,7 @@ test.each(["new", "imported"] as const)(
             const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
+                    requestId: commandId,
                     commandId,
                     requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
@@ -219,6 +220,7 @@ function sendQuestionPrompt(peer: RealDaemonPeer, sessionTarget: RealDaemonPeer[
     const commandId = randomUUID();
     peer.send(
         encodeSessionPromptCommand({
+            requestId: commandId,
             commandId,
             requestId: commandId,
             disposition: SessionPromptDisposition.Append,

@@ -1,5 +1,18 @@
-import { CONTENT_CHUNK_MAX_BYTES, encodeContentChunkFrame, MORTY_API_PREFIX } from "@morty-build/client/protocol";
+import {
+    CONTENT_CHUNK_MAX_BYTES,
+    encodeContentChunkFrame,
+    isIdentifier,
+    MORTY_API_PREFIX,
+} from "@morty-build/client/protocol";
 import type { MortyTransportCall } from "../calls/call.ts";
+import { computerEncryptionAccessCodec } from "../calls/encryption.ts";
+import {
+    type ComputerEncryptionAccess,
+    createClientPayloadEncryption,
+    type PayloadDecryptor,
+    type PayloadEncryptionConnection,
+    type PayloadEncryptor,
+} from "../encryption.ts";
 import { MortyApiError, MortyConnectionError, MortyProtocolError, MortyValidationError } from "../errors.ts";
 
 const CONNECTION_TIMEOUT_MILLISECONDS = 15_000;
@@ -20,6 +33,15 @@ export interface WsTransportOptions {
     /** Opens the WebSocket; the browser's own WebSocket unless a test supplies a stateful socket. */
     readonly connector?: MortyWebSocketConnector;
 }
+
+type PayloadConnectionState =
+    | { readonly kind: "idle" }
+    | {
+          readonly kind: "opening";
+          readonly operation: Promise<PayloadEncryptionConnection>;
+          readonly controller: AbortController;
+      }
+    | { readonly kind: "open"; readonly connection: PayloadEncryptionConnection };
 
 type WsTransportState =
     | { readonly kind: "closed" }
@@ -153,6 +175,8 @@ export class WsTransport {
     readonly #subscriptions = new Map<string, LiveEventSubscription>();
     #endpoint: string | null = null;
     #state: WsTransportState = { kind: "disconnected" };
+    #access: ComputerEncryptionAccess | null = null;
+    #payload: PayloadConnectionState = { kind: "idle" };
     #heartbeat:
         | { readonly kind: "inactive" }
         | { readonly kind: "waiting" | "awaiting"; readonly timer: ReturnType<typeof globalThis.setTimeout> } = {
@@ -162,6 +186,121 @@ export class WsTransport {
     constructor(options: WsTransportOptions = {}) {
         this.#connector = options.connector ?? new RelayMortyWebSocketConnector();
     }
+
+    readonly payloadEncryption: PayloadEncryptor & PayloadDecryptor = {
+        encrypt: async (plaintext, associatedData, signal) => {
+            const access = this.#access;
+            if (access === null) {
+                throw new MortyValidationError("Encrypted Computer access is required");
+            }
+            const connection = await this.#payloadConnection(access.computerId, signal);
+            return await connection.encrypt(plaintext, associatedData, signal);
+        },
+        decrypt: async (ciphertext, associatedData, signal) => {
+            const access = this.#access;
+            if (access === null) {
+                throw new MortyValidationError("Encrypted Computer access is required");
+            }
+            const connection = await this.#payloadConnection(access.computerId, signal);
+            return await connection.decrypt(ciphertext, associatedData, signal);
+        },
+    };
+
+    readonly configureEncryption = (value: ComputerEncryptionAccess): void => {
+        const access = computerEncryptionAccessCodec.decode(computerEncryptionAccessCodec.encode(value));
+        if (this.#state.kind === "closed") {
+            throw new MortyConnectionError("The Morty WebSocket transport is closed");
+        }
+        if (this.#access !== null) {
+            if (
+                this.#access.computerId !== access.computerId ||
+                this.#access.computerE2EPublicKey !== access.computerE2EPublicKey ||
+                this.#access.computerE2EAccessSecret !== access.computerE2EAccessSecret
+            ) {
+                throw new MortyValidationError("A Computer connection cannot change encryption identity");
+            }
+            return;
+        }
+        this.#access = access;
+    };
+
+    readonly #payloadConnection = async (
+        computerId: string,
+        signal: AbortSignal,
+    ): Promise<PayloadEncryptionConnection> => {
+        signal.throwIfAborted();
+        const access = this.#access;
+        if (access === null || access.computerId !== computerId) {
+            throw new MortyValidationError("Encrypted access to this Computer is required");
+        }
+        if (this.#payload.kind === "open") {
+            return this.#payload.connection;
+        }
+        if (this.#payload.kind === "idle") {
+            const controller = new AbortController();
+            const operation = this.#openPayloadConnection(access, controller);
+            this.#payload = { kind: "opening", operation, controller };
+        }
+        const operation = this.#payload.operation;
+        return await new Promise<PayloadEncryptionConnection>((resolve, reject) => {
+            const abort = (): void => reject(signal.reason);
+            signal.addEventListener("abort", abort, { once: true });
+            operation.then(
+                (connection) => {
+                    signal.removeEventListener("abort", abort);
+                    if (signal.aborted) {
+                        reject(signal.reason);
+                    } else {
+                        resolve(connection);
+                    }
+                },
+                (cause: unknown) => {
+                    signal.removeEventListener("abort", abort);
+                    reject(cause);
+                },
+            );
+            if (signal.aborted) {
+                abort();
+            }
+        });
+    };
+
+    readonly #openPayloadConnection = async (
+        access: ComputerEncryptionAccess,
+        controller: AbortController,
+    ): Promise<PayloadEncryptionConnection> => {
+        const timeout = globalThis.setTimeout(
+            () => controller.abort(new MortyConnectionError("Computer encryption initialization timed out")),
+            CONNECTION_TIMEOUT_MILLISECONDS,
+        );
+        try {
+            const connection = await createClientPayloadEncryption(access, controller.signal);
+            if (controller.signal.aborted || this.#state.kind === "closed") {
+                connection.close();
+                controller.signal.throwIfAborted();
+                throw new MortyConnectionError("The Morty WebSocket transport is closed");
+            }
+            this.#payload = { kind: "open", connection };
+            return connection;
+        } catch (cause) {
+            if (this.#payload.kind === "opening" && this.#payload.controller === controller) {
+                this.#payload = { kind: "idle" };
+            }
+            throw cause;
+        } finally {
+            globalThis.clearTimeout(timeout);
+        }
+    };
+
+    readonly #closePayloadConnection = (): void => {
+        const payload = this.#payload;
+        this.#payload = { kind: "idle" };
+        if (payload.kind === "open") {
+            payload.connection.close();
+        } else if (payload.kind === "opening") {
+            payload.controller.abort(new MortyConnectionError("The Computer connection closed"));
+        }
+    };
 
     readonly #cancelRequest = (socket: WebSocket, requestId: string): void => {
         if (socket.readyState !== WebSocket.OPEN) {
@@ -249,12 +388,16 @@ export class WsTransport {
 
     readonly openSessionLiveEvents = async (
         request: MortyTransportCall,
+        subscriptionId: string,
     ): Promise<ReadableStream<MortyTransportSessionEvent>> => {
         request.signal.throwIfAborted();
         const requestUrl = new URL(request.endpoint.path, request.origin);
         const socket = await this.#socket(request);
         request.signal.throwIfAborted();
-        const id = crypto.randomUUID();
+        const id = subscriptionId;
+        if (!isIdentifier(id) || this.#subscriptions.has(id)) {
+            throw new MortyValidationError("The Session subscription identifier is invalid or already in use");
+        }
         const abort = (): void => {
             const subscription = this.#subscriptions.get(id);
             this.#subscriptions.delete(id);
@@ -274,6 +417,7 @@ export class WsTransport {
         try {
             socket.send(
                 JSON.stringify({
+                    body: typeof request.body === "string" ? request.body : "",
                     headers: Object.entries(request.headers),
                     kind: EVENT_SUBSCRIBE_KIND,
                     path: `${requestUrl.pathname}${requestUrl.search}`,
@@ -289,6 +433,7 @@ export class WsTransport {
     };
 
     readonly close = (): void => {
+        this.#closePayloadConnection();
         this.#stopHeartbeat();
         const state = this.#state;
         this.#state = { kind: "closed" };

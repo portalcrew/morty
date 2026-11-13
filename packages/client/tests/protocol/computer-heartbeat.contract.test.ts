@@ -5,12 +5,12 @@ import {
     decodeComputerHeartbeatAckEvent,
     decodeComputerHeartbeatEvent,
     decodeDaemonToRelayMessage,
-    decodeServiceToDaemonMessage,
+    decodeRelayToDaemonMessage,
 } from "../../src/protocol/index.ts";
 
 it("Given fixed-text Computer heartbeats, When either peer decodes them, Then the heartbeat and acknowledgement remain supported", () => {
     expect(decodeDaemonToRelayMessage(COMPUTER_HEARTBEAT_MESSAGE)).toEqual({ kind: "computer.heartbeat" });
-    expect(decodeServiceToDaemonMessage(COMPUTER_HEARTBEAT_ACK_MESSAGE)).toEqual({ kind: "computer.heartbeat.ack" });
+    expect(decodeRelayToDaemonMessage(COMPUTER_HEARTBEAT_ACK_MESSAGE)).toEqual({ kind: "computer.heartbeat.ack" });
 });
 
 it.each(["computer.heartbeat", "computer.heartbeat.ack"])(
@@ -22,7 +22,7 @@ it.each(["computer.heartbeat", "computer.heartbeat.ack"])(
         if (kind === "computer.heartbeat") {
             expect(decodeDaemonToRelayMessage(encoded)).toEqual({ kind });
         } else {
-            expect(decodeServiceToDaemonMessage(encoded)).toEqual({ kind });
+            expect(decodeRelayToDaemonMessage(encoded)).toEqual({ kind });
         }
     },
 );

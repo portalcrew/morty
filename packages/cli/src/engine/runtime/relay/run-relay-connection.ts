@@ -1,8 +1,10 @@
+import type { PayloadEncryptionConnection } from "@morty-build/client";
 import {
     COMPUTER_HEARTBEAT_ACK_KIND,
+    COMPUTER_HEARTBEAT_MESSAGE,
     COMPUTER_LIVENESS_READY_KIND,
-    decodeKnownServiceToDaemonMessage,
-    readUndecodedRequestAddress,
+    decodeMessageKind,
+    decodeWorkerToDaemonMessage,
 } from "@morty-build/client/protocol";
 import { type MessageEvent, WebSocket } from "undici";
 import type { ResolveAgent } from "../../session/api/session-api.ts";
@@ -16,8 +18,8 @@ import type { SessionTurns } from "../../session/turn/session-turns.ts";
 import type { WorkspaceDirectoryService } from "../../session/workspace/workspace-directory.ts";
 import type { Timer } from "../../util/timer.ts";
 import { createCommandRegistry } from "../command/registry/index.ts";
-import { send } from "../command/transport.ts";
-import { replyFailure } from "../command/turn-replies.ts";
+import { createSessionSubscriptions } from "../command/registry/subscriptions.ts";
+import { receive, send } from "../command/transport.ts";
 import type { RuntimeConfig } from "../config.ts";
 import { ComputerRelayRevokedError, isComputerRelayRevocation } from "./computer-revocation.ts";
 import { connectRelay } from "./connect.ts";
@@ -28,6 +30,8 @@ import type { RuntimeSessionEventPublisher } from "./session-event-publisher.ts"
 
 /** A bounded local write of the credential the Relay accepted. */
 const CREDENTIAL_SAVE_TIMEOUT_MILLISECONDS = 10_000;
+const MAX_QUEUED_INCOMING_BYTES = 32 * 1024 * 1024;
+const MAX_QUEUED_INCOMING_MESSAGES = 1024;
 
 function closeRelaySocket(socket: WebSocket, code: number, reason: string): void {
     try {
@@ -51,6 +55,7 @@ export interface RelayConnectionOptions {
     readonly nativeSessions: NativeSessionService;
     readonly operations: ExecutionReceipts;
     readonly publisher: RuntimeSessionEventPublisher;
+    readonly payloadEncryption: PayloadEncryptionConnection;
     readonly eventProjection: PromptLifecycle;
     readonly externalContent: ExternalContentStore;
     readonly sessionTurns: SessionTurns;
@@ -70,6 +75,7 @@ export async function runRelayConnection({
     nativeSessions,
     operations,
     publisher,
+    payloadEncryption,
     eventProjection,
     externalContent,
     sessions,
@@ -90,6 +96,11 @@ export async function runRelayConnection({
     let rotationSaved: Promise<void> = Promise.resolve();
     diagnostics.connectionOpened(connectionEpoch);
     const connectionController = new AbortController();
+    const subscriptions = createSessionSubscriptions(publisher.subscriptionsChanged);
+    const pendingCommands = new Set<Promise<void>>();
+    let incoming: Promise<void> = Promise.resolve();
+    let queuedMessages = 0;
+    let queuedBytes = 0;
     const commands = createCommandRegistry({
         resolveAgent,
         config,
@@ -103,6 +114,8 @@ export async function runRelayConnection({
         sessionCreations,
         diagnostics,
         socket,
+        payloadEncryption,
+        subscriptions,
         signal: connectionController.signal,
         timer,
     });
@@ -120,6 +133,7 @@ export async function runRelayConnection({
                 socket.removeEventListener("message", handleMessage);
                 publisher.disconnect(socket);
                 connectionController.abort();
+                subscriptions.close();
             };
 
             const resolveConnection = (): void => {
@@ -142,10 +156,12 @@ export async function runRelayConnection({
 
             const stop = (): void => {
                 // A planned upgrade can follow the last completion before the batch timer fires.
-                publisher.flush();
-                diagnostics.connectionClosed(connectionEpoch, 1000, "Daemon stopped", "daemon_stop");
-                closeRelaySocket(socket, 1000, "Daemon stopped");
-                resolveConnection();
+                const finish = (): void => {
+                    diagnostics.connectionClosed(connectionEpoch, 1000, "Daemon stopped", "daemon_stop");
+                    closeRelaySocket(socket, 1000, "Daemon stopped");
+                    resolveConnection();
+                };
+                void publisher.flush().then(finish, finish);
             };
 
             const failAndClose = (failure: Error, code: number, reason: string, source: string): void => {
@@ -156,12 +172,12 @@ export async function runRelayConnection({
             };
 
             const connectionLiveness = new RelayConnectionLiveness(timer, {
-                send: (message) => {
+                send: () => {
                     if (socket.readyState !== WebSocket.OPEN) {
                         return false;
                     }
                     try {
-                        send(socket, message);
+                        send(socket, COMPUTER_HEARTBEAT_MESSAGE);
                         return true;
                     } catch (error) {
                         if (socket.readyState !== WebSocket.OPEN) {
@@ -206,28 +222,96 @@ export async function runRelayConnection({
             const handleMessage = (event: MessageEvent<unknown>): void => {
                 const encoded: unknown = event.data;
                 if (typeof encoded !== "string") {
-                    try {
-                        commands.dispatchChunk(encoded);
-                    } catch (error) {
+                    const size =
+                        encoded instanceof ArrayBuffer
+                            ? encoded.byteLength
+                            : ArrayBuffer.isView(encoded)
+                              ? encoded.byteLength
+                              : 0;
+                    if (
+                        size === 0 ||
+                        queuedMessages >= MAX_QUEUED_INCOMING_MESSAGES ||
+                        queuedBytes + size > MAX_QUEUED_INCOMING_BYTES
+                    ) {
                         failAndClose(
-                            new Error("Relay sent an invalid content chunk", { cause: error }),
+                            new Error("Encrypted receive queue full or invalid frame"),
                             4008,
                             "Invalid content chunk",
                             "protocol",
                         );
+                        return;
                     }
+                    queuedMessages += 1;
+                    queuedBytes += size;
+                    incoming = incoming
+                        .then(
+                            async () =>
+                                await commands.dispatchChunk(
+                                    encoded,
+                                    AbortSignal.any([connectionController.signal, AbortSignal.timeout(10_000)]),
+                                ),
+                        )
+                        .catch((error: unknown) => {
+                            if (!connectionController.signal.aborted) {
+                                failAndClose(
+                                    new Error("Relay sent an invalid content chunk", { cause: error }),
+                                    4008,
+                                    "Invalid content chunk",
+                                    "protocol",
+                                );
+                            }
+                        })
+                        .finally(() => {
+                            queuedMessages -= 1;
+                            queuedBytes -= size;
+                        });
                     return;
                 }
 
                 try {
-                    const message = decodeKnownServiceToDaemonMessage(encoded);
-                    if (message === null) {
-                        diagnostics.daemonDiagnostic("protocol_message_discarded", "unknown", {
-                            reason: "unsupported_message",
-                        });
-                        refuseUnsupportedRequest(socket, encoded);
+                    const wireKind = decodeMessageKind(encoded);
+                    if (wireKind !== COMPUTER_LIVENESS_READY_KIND && wireKind !== COMPUTER_HEARTBEAT_ACK_KIND) {
+                        const size = Buffer.byteLength(encoded, "utf8");
+                        if (
+                            queuedMessages >= MAX_QUEUED_INCOMING_MESSAGES ||
+                            queuedBytes + size > MAX_QUEUED_INCOMING_BYTES
+                        ) {
+                            throw new Error("Encrypted receive queue full");
+                        }
+                        queuedMessages += 1;
+                        queuedBytes += size;
+                        incoming = incoming
+                            .then(async () => {
+                                const message = await receive(
+                                    encoded,
+                                    payloadEncryption,
+                                    AbortSignal.any([connectionController.signal, AbortSignal.timeout(10_000)]),
+                                );
+                                const result = commands.dispatch(message);
+                                if (result !== undefined) {
+                                    const operation = result.catch((error: unknown) => {
+                                        if (!connectionController.signal.aborted) {
+                                            diagnostics.daemonDiagnostic("command_failed", "unknown", {}, error);
+                                        }
+                                    });
+                                    pendingCommands.add(operation);
+                                    void operation.finally(() => pendingCommands.delete(operation));
+                                }
+                            })
+                            .catch(() => {
+                                if (!connectionController.signal.aborted) {
+                                    diagnostics.daemonDiagnostic("protocol_message_discarded", "unknown", {
+                                        reason: "encrypted_message_invalid",
+                                    });
+                                }
+                            })
+                            .finally(() => {
+                                queuedMessages -= 1;
+                                queuedBytes -= size;
+                            });
                         return;
                     }
+                    const message = decodeWorkerToDaemonMessage(encoded);
                     const kind = message.kind;
                     if (kind === COMPUTER_LIVENESS_READY_KIND) {
                         if (ready) {
@@ -251,7 +335,7 @@ export async function runRelayConnection({
                                 "credential",
                             );
                         });
-                        publisher.connect(socket);
+                        publisher.connect(socket, subscriptions.isSubscribed);
                         connectionLiveness.start();
                         onConnected();
                         return;
@@ -260,7 +344,7 @@ export async function runRelayConnection({
                         connectionLiveness.acknowledge();
                         return;
                     }
-                    commands.dispatch(message);
+                    throw new Error("Unexpected relay control");
                 } catch (error) {
                     console.error("Morty daemon rejected a message", error);
                     failAndClose(
@@ -281,27 +365,11 @@ export async function runRelayConnection({
         });
     } finally {
         connectionController.abort();
+        await incoming;
+        await Promise.allSettled([...pendingCommands]);
         await commands.settle();
         // The next connection presents what this one saved.
         await rotationSaved.catch(() => undefined);
         relay.release(new Error("Relay connection released"));
     }
-}
-
-/**
- * Answers a request this Computer cannot run, as sent, so its sender learns at once that nothing was executed instead of
- * waiting out its deadline. Only a message naming its own `requestId` can be answered.
- */
-function refuseUnsupportedRequest(socket: WebSocket, encoded: string): void {
-    const request = readUndecodedRequestAddress(encoded);
-    if (request === null) {
-        return;
-    }
-    replyFailure(
-        socket,
-        request.requestId,
-        request.target,
-        "unsupported_operation",
-        "This Morty Computer does not support the requested operation.",
-    );
 }

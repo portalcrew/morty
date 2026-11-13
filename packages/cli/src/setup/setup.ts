@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { decodeIdentifier } from "@morty-build/client/protocol";
+import { type ComputerEncryptionAccess, createClientPayloadEncryption } from "@morty-build/client";
+import {
+    agentSettingsDiscoverCommandCodec,
+    agentSettingsDiscoveredEventCodec,
+    agentSettingsDiscoveryFailedEventCodec,
+    decodeIdentifier,
+    decodeMessageKind,
+} from "@morty-build/client/protocol";
 import jsQrImport from "jsqr";
 import { PNG } from "pngjs";
 import QRCode from "qrcode";
@@ -43,6 +50,12 @@ export interface SetupAgentReport {
 
 /** The Morty installation in a state directory, as setup drives it. */
 export interface SetupRuntime {
+    /** Reads local Computer encryption access. Its secret must never be sent to the Worker. */
+    readonly encryptionAccess: (
+        directory: string,
+        computerId: string,
+        signal: AbortSignal,
+    ) => Promise<ComputerEncryptionAccess>;
     /** The Computers the installation keeps a connection for. */
     /** The Computer this computer's saved pairing serves, if any. */
     readonly computer: (directory: string, signal: AbortSignal) => Promise<string | null>;
@@ -631,13 +644,19 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         };
     }
 
-    async function send(base: string, path: string, headers: Readonly<Record<string, string>>, body?: unknown) {
+    async function send(
+        base: string,
+        path: string,
+        headers: Readonly<Record<string, string>>,
+        body?: unknown,
+        requestSignal: AbortSignal = signal,
+    ) {
         const response = await fetch(new URL(`/morty/api/v1${path}`, base), {
             method: body === undefined ? "GET" : "POST",
             headers: { "content-type": "application/json", ...headers },
             redirect: "error",
             ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-            signal: AbortSignal.any([signal, deadline(45000)]),
+            signal: AbortSignal.any([signal, requestSignal, deadline(45000)]),
         });
         const value = object(await response.json());
         if (!response.ok) {
@@ -647,13 +666,13 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
     }
 
     /** Sends a request as the saved identity, to its Computer unless the route names one. */
-    async function request(context: Context, route: string, body?: unknown) {
+    async function request(context: Context, route: string, body?: unknown, requestSignal: AbortSignal = signal) {
         const headers: Record<string, string> = { authorization: `Bearer ${context.identity.computerToken}` };
         if (route === "/replacement") {
             headers["x-morty-setup-run-id"] = runId;
         }
         const path = route.startsWith("/computers/") ? route : `/computers/${context.identity.computerId}${route}`;
-        return await send(context.base, path, headers, body);
+        return await send(context.base, path, headers, body, requestSignal);
     }
 
     function remoteFailure(value: Readonly<Record<string, unknown>>, status: number): never {
@@ -1194,10 +1213,54 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
     async function bindAgent(context: Context, harness: string) {
         progress("binding", `Connecting the Computer to ${harness} in the default working directory.`);
         try {
-            await request(context, `/computers/${context.identity.computerId}/setup`, { harness });
+            const bindingSignal = AbortSignal.any([signal, deadline(45_000)]);
+            const access = await host.runtime.encryptionAccess(
+                context.directory,
+                context.identity.computerId,
+                bindingSignal,
+            );
+            if (access.computerId !== context.identity.computerId) {
+                fail("INVALID_RESPONSE");
+            }
+            const encryption = await createClientPayloadEncryption(access, bindingSignal);
+            try {
+                const requestId = crypto.randomUUID();
+                const encoded = await agentSettingsDiscoverCommandCodec.encode(
+                    { kind: "agent.settings.discover", requestId, harness },
+                    encryption,
+                    bindingSignal,
+                );
+                const response = await request(
+                    context,
+                    `/computers/${context.identity.computerId}/setup`,
+                    object(JSON.parse(encoded)),
+                    bindingSignal,
+                );
+                const reply = JSON.stringify(response);
+                if (decodeMessageKind(reply) === "agent.settings.discovery.failed") {
+                    const failure = await agentSettingsDiscoveryFailedEventCodec.decode(
+                        reply,
+                        encryption,
+                        bindingSignal,
+                    );
+                    if (failure.requestId !== requestId) {
+                        fail("INVALID_RESPONSE");
+                    }
+                    throw new AgentBindingError(failure.code, harness, new RemoteError(failure.message));
+                }
+                const discovered = await agentSettingsDiscoveredEventCodec.decode(reply, encryption, bindingSignal);
+                if (discovered.requestId !== requestId || discovered.harness !== harness) {
+                    fail("INVALID_RESPONSE");
+                }
+            } finally {
+                encryption.close();
+            }
         } catch (cause) {
             // Cancellation and the setup budget keep their own codes.
             if (signal.aborted || !(cause instanceof Error)) {
+                throw cause;
+            }
+            if (cause instanceof AgentBindingError) {
                 throw cause;
             }
             if (cause.name === "TimeoutError") {
@@ -1282,9 +1345,16 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         ) {
             fail("INVALID_HANDOFF");
         }
+        const encryption = await host.runtime.encryptionAccess(context.directory, context.identity.computerId, signal);
+        if (encryption.computerId !== context.identity.computerId) {
+            fail("INVALID_ENCRYPTION_HANDOFF");
+        }
+        const fragment = new URLSearchParams(url.hash.slice(1));
+        fragment.set("e2e", Buffer.from(JSON.stringify(encryption), "utf8").toString("base64url"));
+        fragment.set("workspace", workingDirectory);
+        url.hash = fragment.toString();
         url.searchParams.set("harness", options.harness);
         url.searchParams.set("sessionId", options.sessionId);
-        url.searchParams.set("workspace", workingDirectory);
         const handoffUrl = url.toString();
         // QR is an auxiliary representation: its capacity and decoding limits must
         // not prevent delivery of an otherwise valid handoff link.

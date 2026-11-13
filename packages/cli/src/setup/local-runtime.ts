@@ -1,7 +1,9 @@
+import { E2EError } from "@morty-build/client";
 import { readLocalAgentInventory } from "../daemon/agents/local-agent-inventory.ts";
 import { pairThisComputer, serveCurrentPairing } from "../daemon/lifecycle/serve-pairing.ts";
 import { openMortyInstallation } from "../daemon/pairing/pair-local-computer.ts";
 import { UnsupportedAgentVersion } from "../engine/agent/discovery/agent-discovery.ts";
+import { ComputerEncryptionStore } from "../engine/runtime/connection/computer-encryption-store.ts";
 import type { SetupRuntime } from "./setup.ts";
 
 /**
@@ -14,6 +16,14 @@ export function localSetupRuntime(entry: string): SetupRuntime {
         MORTY_STATE_DIRECTORY: directory,
     });
     return {
+        encryptionAccess: async (directory, computerId, signal) => {
+            const installation = await openMortyInstallation(signal, environment(directory));
+            if ((await installation.currentConnection(signal))?.computerId !== computerId) {
+                throw new E2EError("e2e_invalid_access");
+            }
+            const encryption = await ComputerEncryptionStore.open(installation.stateDirectory, computerId, signal);
+            return await encryption.access(signal);
+        },
         computer: async (directory, signal) => {
             const installation = await openMortyInstallation(signal, environment(directory));
             return (await installation.currentConnection(signal))?.computerId ?? null;

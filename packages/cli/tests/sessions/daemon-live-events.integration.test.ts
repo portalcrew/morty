@@ -384,6 +384,7 @@ async function uploadTextAttachment(fixture: Fixture, text: string): Promise<Pro
 
 function prompt(fixture: Fixture, text: string): SessionPromptCommand {
     return {
+        requestId: "test-turn",
         commandId: "test-turn",
         requestId: "test-turn",
         disposition: SessionPromptDisposition.Append,

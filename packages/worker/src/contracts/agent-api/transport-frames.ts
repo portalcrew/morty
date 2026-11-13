@@ -60,7 +60,7 @@ export const transportFrames = {
             body: v.pipe(
                 v.string(),
                 v.maxLength(MAX_BODY_BYTES),
-                v.description('The JSON-encoded request body; "" for GET.'),
+                v.description("The JSON-encoded encrypted protocol request, including for GET Session operations."),
             ),
         }),
     },

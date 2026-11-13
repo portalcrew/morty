@@ -30,6 +30,7 @@ async function journey(peer: RealDaemonPeer, harness: string, reply: string): Pr
         peer.send(
             encodeSessionPromptCommand({
                 kind: "session.prompt",
+                requestId: commandId,
                 commandId,
                 requestId: commandId,
                 target: sessionTarget,
@@ -174,6 +175,7 @@ async function interruptedJourney(
             peer.send(
                 encodeSessionPromptCommand({
                     kind: "session.prompt",
+                    requestId: id,
                     commandId: id,
                     requestId: id,
                     target: sessionTarget,

@@ -38,16 +38,10 @@ test("Given a Fork completes before Morty loses its response, When the user retr
         expect(await lost).toBe(200);
         await app.waitForView(() => getByRole(dialog, "alert"));
         const managed = async (): Promise<unknown> => {
-            const response = await app.transport.request(
-                new Request(`${app.origin}/morty/api/v1/computers/${app.identity.computerId}/managed-sessions`, {
-                    method: "POST",
-                    headers: {
-                        authorization: `Bearer ${await app.identity.getToken(new AbortController().signal)}`,
-                    },
-                }),
-            );
-            expect(response.status).toBe(200);
-            return await response.json();
+            if (app.daemon === null) {
+                throw new Error("Expected the connected Computer");
+            }
+            return { sessions: await app.daemon.readManagedSessions(AbortSignal.timeout(30_000)) };
         };
         // The Computer holds the Fork it completed, so it is listed before the retry.
         const forked = { sessions: [{ title: "Native fork-recovery-source (Fork #1)" }] };

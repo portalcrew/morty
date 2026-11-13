@@ -153,6 +153,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         const submittedAt = Date.now();
         socket.send(
             encodeSessionPromptCommand({
+                requestId: "interaction_turn",
                 commandId: "interaction_turn",
                 requestId: "interaction_turn",
                 disposition: SessionPromptDisposition.Append,
@@ -337,6 +338,7 @@ test("Given an Agent announced a tool call with its input, When it requests perm
         const sessionTarget = decodeSessionReadyEvent(await messages.nextKind(SESSION_READY_KIND)).target;
         socket.send(
             encodeSessionPromptCommand({
+                requestId: "announced_turn",
                 commandId: "announced_turn",
                 requestId: "announced_turn",
                 disposition: SessionPromptDisposition.Append,
@@ -441,6 +443,7 @@ test("Given an Agent announced a tool call and then sent a rawInput null update,
         const sessionTarget = decodeSessionReadyEvent(await messages.nextKind(SESSION_READY_KIND)).target;
         socket.send(
             encodeSessionPromptCommand({
+                requestId: "null_input_turn",
                 commandId: "null_input_turn",
                 requestId: "null_input_turn",
                 disposition: SessionPromptDisposition.Append,
@@ -545,6 +548,7 @@ test("Given an Agent's first recorded form of a tool call is an update, When it 
         const sessionTarget = decodeSessionReadyEvent(await messages.nextKind(SESSION_READY_KIND)).target;
         socket.send(
             encodeSessionPromptCommand({
+                requestId: "orphan_update_turn",
                 commandId: "orphan_update_turn",
                 requestId: "orphan_update_turn",
                 disposition: SessionPromptDisposition.Append,
@@ -744,6 +748,7 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
             sessionTarget = decodeSessionReadyEvent(await messages.nextKind(SESSION_READY_KIND)).target;
             initial.socket.send(
                 encodeSessionPromptCommand({
+                    requestId: "initial_turn",
                     commandId: "initial_turn",
                     requestId: "initial_turn",
                     disposition: SessionPromptDisposition.Append,
@@ -893,6 +898,7 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
         const sessionTarget = decodeSessionReadyEvent(await messages.nextKind(SESSION_READY_KIND)).target;
         socket.send(
             encodeSessionPromptCommand({
+                requestId: "running_turn",
                 commandId: "running_turn",
                 requestId: "running_turn",
                 disposition: SessionPromptDisposition.Append,
@@ -915,6 +921,7 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
         };
         socket.send(
             encodeSessionPromptCommand({
+                requestId: "own_queued_turn",
                 commandId: "own_queued_turn",
                 requestId: "own_queued_turn",
                 disposition: SessionPromptDisposition.Append,

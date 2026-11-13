@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { type Identifier, isIdentifier } from "../shared/identifier.ts";
+import { encryptedMessageCodec } from "../shared/encrypted-message.ts";
+import { type Identifier, isIdentifier, identifierStringSchema as routingIdentifier } from "../shared/identifier.ts";
+import { decodeZodMessage as decodeRoutingZodMessage, encryptedFieldSchema } from "../shared/message-codec.ts";
 
 const identifier = z.custom<Identifier>(isIdentifier);
 const computerDiagnosticsRequestSchema = z.object({
@@ -28,3 +30,37 @@ export const encodeComputerDiagnosticsRequest = (value: ComputerDiagnosticsReque
     JSON.stringify(computerDiagnosticsRequestSchema.parse(value));
 export const encodeComputerDiagnosticsResult = (value: ComputerDiagnosticsResult): string =>
     JSON.stringify(computerDiagnosticsResultSchema.parse(value));
+
+const computerDiagnosticsRequestPublicRoutingSchema = z.object({
+    kind: z.literal("computer.diagnostics.read"),
+    requestId: routingIdentifier,
+});
+const computerDiagnosticsRequestRoutingSchema = computerDiagnosticsRequestPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type ComputerDiagnosticsRequestRouting = z.infer<typeof computerDiagnosticsRequestRoutingSchema>;
+const decodeComputerDiagnosticsRequestRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, computerDiagnosticsRequestRoutingSchema);
+export const computerDiagnosticsRequestCodec = encryptedMessageCodec({
+    kind: "computer.diagnostics.read",
+    decode: decodeComputerDiagnosticsRequest,
+    decodeRouting: decodeComputerDiagnosticsRequestRouting,
+    publicRoutingSchema: computerDiagnosticsRequestPublicRoutingSchema,
+});
+
+const computerDiagnosticsResultPublicRoutingSchema = z.object({
+    kind: z.literal("computer.diagnostics.result"),
+    requestId: routingIdentifier,
+});
+const computerDiagnosticsResultRoutingSchema = computerDiagnosticsResultPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type ComputerDiagnosticsResultRouting = z.infer<typeof computerDiagnosticsResultRoutingSchema>;
+const decodeComputerDiagnosticsResultRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, computerDiagnosticsResultRoutingSchema);
+export const computerDiagnosticsResultCodec = encryptedMessageCodec({
+    kind: "computer.diagnostics.result",
+    decode: decodeComputerDiagnosticsResult,
+    decodeRouting: decodeComputerDiagnosticsResultRouting,
+    publicRoutingSchema: computerDiagnosticsResultPublicRoutingSchema,
+});

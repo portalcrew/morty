@@ -1,6 +1,7 @@
-import { MortyValidationError, WsTransport } from "@morty-build/client";
+import { type ComputerEncryptionAccess, MortyValidationError, WsTransport } from "@morty-build/client";
 import { isIdentifier } from "@morty-build/client/protocol";
 import { recordBrowserDiagnostic } from "../diagnostics/browser-diagnostics.ts";
+import { storedComputerEncryption } from "../identity/remembered-computers.ts";
 import { systemClock } from "../time/clock.ts";
 import type { ApiResponseSnapshot } from "./api-transport.ts";
 import type { ApiCall } from "./calls/call.ts";
@@ -14,8 +15,13 @@ export class WorkerApiTransport {
     readonly #origin: string;
     readonly #baselines = new Map<string, string>();
     readonly #lifetime = new AbortController();
-    constructor(origin: string) {
+    readonly #encryptionAccess: (computerId: string) => ComputerEncryptionAccess | null;
+    constructor(
+        origin: string,
+        encryptionAccess: (computerId: string) => ComputerEncryptionAccess | null = storedComputerEncryption,
+    ) {
         this.#origin = origin;
+        this.#encryptionAccess = encryptionAccess;
     }
     readonly dispose = (reason?: Error) => {
         this.#lifetime.abort(reason);
@@ -33,6 +39,10 @@ export class WorkerApiTransport {
         if (transport === undefined) {
             transport = new WsTransport();
             this.#computers.set(computerId, transport);
+        }
+        const access = this.#encryptionAccess(computerId);
+        if (access !== null) {
+            transport.configureEncryption(access);
         }
         return transport;
     };

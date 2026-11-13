@@ -1,8 +1,7 @@
 import {
     decodeContentChunkFrame,
-    decodeSessionCloseNoticeEvent,
     MORTY_API_PREFIX,
-    SESSION_CLOSED_ERROR_CODE,
+    sessionEventsSubscribeCommandCodec,
 } from "@morty-build/client/protocol";
 import {
     CANCEL_KIND,
@@ -305,7 +304,7 @@ function requestFromMessage(
     browserOrigin: string | null,
     signal: AbortSignal,
     binaryBody?: Uint8Array,
-): { readonly request: Request; readonly requestId: string } {
+): { readonly request: Request; readonly requestId: string; readonly body: string } {
     const path = string(value, "path", 8_192);
     if (!path.startsWith(`${MORTY_API_PREFIX}/`) || path.startsWith(`${MORTY_API_PREFIX}/v1/transport`)) {
         throw transportError("invalid_target");
@@ -318,10 +317,8 @@ function requestFromMessage(
     if (!REQUEST_METHODS.some((allowed) => allowed === method)) {
         throw transportError("invalid_method");
     }
-    const body = binaryBody ?? requestBody(value);
-    if (method === "GET" && body.length > 0) {
-        throw transportError("invalid_message");
-    }
+    const textBody = requestBody(value);
+    const body = binaryBody ?? textBody;
     const requestHeaders = headers(value["headers"]);
     if (browserOrigin !== null) {
         requestHeaders.set("origin", browserOrigin);
@@ -334,6 +331,7 @@ function requestFromMessage(
             signal,
         }),
         requestId,
+        body: textBody,
     };
 }
 
@@ -509,10 +507,20 @@ export function acceptWebSocketHttpTransport({
                         throw transportError("invalid_message");
                     }
                     requestId = subscriptionId;
+                    const encoded = requestBody(message);
+                    try {
+                        if (
+                            sessionEventsSubscribeCommandCodec.decodeRouting(encoded).subscriptionId !== subscriptionId
+                        ) {
+                            throw transportError("invalid_message");
+                        }
+                    } catch {
+                        throw transportError("invalid_message");
+                    }
                     const subscriptionController = new AbortController();
                     const converted = requestFromMessage(
                         {
-                            body: "",
+                            body: encoded,
                             headers: message["headers"],
                             kind: REQUEST_KIND,
                             method: "GET",
@@ -530,6 +538,7 @@ export function acceptWebSocketHttpTransport({
                     const response = await dispatch({
                         kind: "request",
                         request: new Request(converted.request, { headers: subscriptionHeaders }),
+                        body: converted.body,
                         enableCancellation: () => subscriptionController.signal,
                     }).catch((cause: unknown) => {
                         const pending = subscriptions.get(subscriptionId);
@@ -616,22 +625,6 @@ export function acceptWebSocketHttpTransport({
                             server.readyState === WebSocket.OPEN &&
                             subscriptions.get(subscriptionId)?.kind === "open"
                         ) {
-                            // Live event batches are arrays. A close notice ends only this subscription.
-                            if (subscriptionEvent.data.startsWith("{")) {
-                                const notice = decodeSessionCloseNoticeEvent(subscriptionEvent.data);
-                                subscriptions.delete(subscriptionId);
-                                server.send(
-                                    JSON.stringify({
-                                        kind: "session.events.error",
-                                        code: SESSION_CLOSED_ERROR_CODE,
-                                        status: 409,
-                                        message: notice.reason,
-                                        subscriptionId,
-                                    }),
-                                );
-                                subscription.close(1000, "Session closed");
-                                return;
-                            }
                             lastMessageAt = Date.now();
                             server.send(
                                 JSON.stringify({
@@ -745,6 +738,7 @@ export function acceptWebSocketHttpTransport({
                 const response = await dispatch({
                     kind: "request",
                     request: converted.request,
+                    body: converted.body,
                     enableCancellation: operation.enableCancellation,
                 });
                 operation.throwIfAborted();

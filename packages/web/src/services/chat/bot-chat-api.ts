@@ -1,22 +1,51 @@
-import type { ForkMortyNativeSessionRequest } from "@morty-build/client";
+import type { ComputerEncryptionAccess, ForkMortyNativeSessionRequest } from "@morty-build/client";
 import { MortyClient, type WsTransport } from "@morty-build/client";
 import { sameNativeSession } from "@morty-build/client/native-session";
 import type { NativeSessionRequest } from "@morty-build/client/protocol";
 import {
     type AgentSetting,
-    decodeAgentSettingsDiscoveredEvent,
-    decodeComputerDiagnosticsResult,
+    agentSettingsDiscoverCommandCodec,
+    agentSettingsDiscoveredEventCodec,
+    agentSettingsDiscoveryFailedEventCodec,
+    computerDiagnosticsRequestCodec,
+    computerDiagnosticsResultCodec,
+    computerPingCommandCodec,
+    computerPongEventCodec,
+    decodeAgentSettingsDiscoverCommand,
+    decodeComputerDiagnosticsRequest,
     decodeNativeSessionEvents,
-    decodeNativeSessionResult,
+    decodeNativeSessionRequest,
     decodeSessionAccessCredential,
+    decodeSessionArchiveCommand,
+    decodeSessionCreateCommand,
+    decodeSessionListCommand,
+    decodeSessionPrepareCommand,
+    decodeSessionPreviewHistoryPageLoad,
     decodeSessionReadyEvent,
-    decodeWorkspaceEntriesEvent,
+    decodeSessionRestoreCommand,
+    decodeWorkspaceListCommand,
     type Identifier,
     isDirectoryPath,
     isIdentifier,
     type NativeSessionTarget,
+    nativeSessionCommandCodec,
+    nativeSessionResultCodec,
     type SessionConfigOption,
     type SessionConfigurationSelection,
+    sessionArchiveCommandCodec,
+    sessionArchivedEventCodec,
+    sessionCreateCommandCodec,
+    sessionListCommandCodec,
+    sessionOperationFailedEventCodec,
+    sessionPrepareCommandCodec,
+    sessionPreviewHistoryPageLoadCodec,
+    sessionPreviewHistoryPageLoadedCodec,
+    sessionReadyEventCodec,
+    sessionRestoreCommandCodec,
+    sessionRestoredEventCodec,
+    sessionsListedEventCodec,
+    workspaceEntriesEventCodec,
+    workspaceListCommandCodec,
 } from "@morty-build/client/protocol";
 import * as v from "valibot";
 import type { ApiResponseSnapshot, ApiTransport } from "../api/api-transport.ts";
@@ -25,6 +54,7 @@ import { chatCalls } from "../api/calls/chat.ts";
 import { managementCalls } from "../api/calls/management.ts";
 import { recordBrowserDiagnostic } from "../diagnostics/browser-diagnostics.ts";
 import type { AgentModelCatalog } from "../diagnostics/model-catalog.ts";
+import { storedComputerEncryption } from "../identity/remembered-computers.ts";
 import { CloudApiError, ManagementApi } from "../management/management-api.ts";
 
 const identifier = v.custom<Identifier>(isIdentifier);
@@ -134,24 +164,6 @@ const sessionAccessSchema = v.object({
     credential: sessionCredentialSchema,
     expiresAt: v.pipe(v.string(), v.isoTimestamp()),
 });
-const localSessionEntrySchema = v.object({
-    sessionId: identifier,
-    title: v.string(),
-    directory: v.string(),
-    directoryLabel: v.string(),
-    updatedAt: v.nullable(v.string()),
-});
-const managedSdkSessionSchema = v.object({
-    harness: identifier,
-    ready: v.unknown(),
-    entry: localSessionEntrySchema,
-});
-const localSessionSchema = v.object({
-    harness: identifier,
-    result: v.unknown(),
-    entry: localSessionEntrySchema,
-});
-
 /** The draft's option for an Agent's setting: a boolean holds its default flag, a select its default value when offered. */
 function optionFromSetting(setting: AgentSetting): SessionConfigOption {
     const { category, description, id, name } = setting;
@@ -170,15 +182,6 @@ function optionFromSetting(setting: AgentSetting): SessionConfigOption {
     };
 }
 
-function continuedSession(value: unknown) {
-    const stored = v.parse(localSessionSchema, value);
-    const result = decodeNativeSessionResult(JSON.stringify(stored.result));
-    if (result.action !== "import") {
-        throw new CloudApiError("INVALID_SESSION", "The continued Chat session is invalid.");
-    }
-    return { ...stored, result };
-}
-
 export class BotChatApi {
     readonly #fetchRequest: ApiTransport["fetch"];
     readonly #origin: string;
@@ -188,6 +191,7 @@ export class BotChatApi {
     readonly #credentialRejected: (() => void) | undefined;
     readonly #sessionClients = new Set<MortyClient>();
     readonly #sessionTransport: () => WsTransport;
+    readonly #encryptionAccess: () => ComputerEncryptionAccess | null;
     readonly #lifetime = new AbortController();
     readonly #waitForChange: ApiTransport["waitForChange"];
     readonly readComputerPairing: ManagementApi["readComputerPairing"];
@@ -195,6 +199,7 @@ export class BotChatApi {
         readonly fetchRequest: ApiTransport["fetch"];
         /** Borrow the application's Computer connection; this API owns only its Session clients. */
         readonly sessionTransport: () => WsTransport;
+        readonly encryptionAccess?: () => ComputerEncryptionAccess | null;
         readonly origin: string;
         readonly computerId: string;
         readonly getToken: (signal: AbortSignal) => Promise<string | null>;
@@ -211,6 +216,7 @@ export class BotChatApi {
         this.#computerId = v.parse(identifier, options.computerId);
         this.#fetchRequest = options.fetchRequest;
         this.#sessionTransport = options.sessionTransport;
+        this.#encryptionAccess = options.encryptionAccess ?? (() => storedComputerEncryption(this.#computerId));
         this.#getToken = options.getToken;
         this.#replacedToken = options.replacedToken;
         this.#credentialRejected = options.credentialRejected;
@@ -225,44 +231,113 @@ export class BotChatApi {
         }
         this.#sessionClients.clear();
     };
-    readonly daemonDiagnostics = async (signal: AbortSignal) =>
-        decodeComputerDiagnosticsResult(
-            JSON.stringify(
-                await this.#request(
-                    chatCalls.daemonDiagnostics({ origin: this.#origin, computerId: this.#computerId }),
-                    signal,
-                ),
-            ),
+    readonly daemonDiagnostics = async (signal: AbortSignal) => {
+        const request = chatCalls.daemonDiagnostics({ origin: this.#origin, computerId: this.#computerId });
+        const command = decodeComputerDiagnosticsRequest(request.body ?? "");
+        const encryption = this.#sessionTransport().payloadEncryption;
+        const body = await computerDiagnosticsRequestCodec.encode(command, encryption, signal);
+        const value = await this.#request({ ...request, body }, signal);
+        const result = await computerDiagnosticsResultCodec.decode(JSON.stringify(value), encryption, signal);
+        if (result.requestId !== command.requestId) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid diagnostics response.");
+        }
+        return result;
+    };
+    readonly networkDiagnostic = async (signal: AbortSignal) => {
+        const request = chatCalls.networkDiagnostic({ origin: this.#origin, computerId: this.#computerId });
+        const command = v.parse(
+            v.object({ kind: v.literal("computer.ping"), requestId: identifier }),
+            JSON.parse(request.body ?? ""),
         );
-    readonly networkDiagnostic = async (signal: AbortSignal) =>
-        v.parse(
-            networkDiagnosticSchema,
-            await this.#request(
-                chatCalls.networkDiagnostic({ origin: this.#origin, computerId: this.#computerId }),
-                signal,
-            ),
+        const encryption = this.#sessionTransport().payloadEncryption;
+        const body = await computerPingCommandCodec.encode(command, encryption, signal);
+        const result = v.parse(
+            v.object({ computerLatencyMs: v.pipe(v.number(), v.safeInteger(), v.minValue(0)), reply: v.unknown() }),
+            await this.#request({ ...request, body }, signal),
         );
+        const pong = await computerPongEventCodec.decode(JSON.stringify(result.reply), encryption, signal);
+        if (pong.requestId !== command.requestId) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid network response.");
+        }
+        return v.parse(networkDiagnosticSchema, { computerLatencyMs: result.computerLatencyMs });
+    };
+    readonly verifyAgent = async (harness: string, signal: AbortSignal): Promise<void> => {
+        await this.#discoverAgentSettings(
+            chatCalls.verifyAgent({ origin: this.#origin, computerId: this.#computerId, harness }),
+            harness,
+            signal,
+        );
+    };
+    readonly #discoverAgentSettings = async (request: ApiRequest, harness: string, signal: AbortSignal) => {
+        const command = decodeAgentSettingsDiscoverCommand(request.body ?? "");
+        const encryption = this.#sessionTransport().payloadEncryption;
+        const body = await agentSettingsDiscoverCommandCodec.encode(command, encryption, signal);
+        const value = await this.#request({ ...request, body }, signal);
+        const kind = v.parse(v.object({ kind: v.string() }), value).kind;
+        const encoded = JSON.stringify(value);
+        if (kind === "agent.settings.discovery.failed") {
+            const failure = await agentSettingsDiscoveryFailedEventCodec.decode(encoded, encryption, signal);
+            if (failure.requestId !== command.requestId) {
+                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Agent response.");
+            }
+            throw new CloudApiError(failure.code, failure.message);
+        }
+        const discovered = await agentSettingsDiscoveredEventCodec.decode(encoded, encryption, signal);
+        if (discovered.requestId !== command.requestId || discovered.harness !== harness) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Agent response.");
+        }
+        return discovered;
+    };
     readonly createConversation = async (
         conversationKey: string,
         settings: ChatDraftConfiguration,
         signal: AbortSignal,
-    ): Promise<ChatAccess> =>
-        v.parse(
-            accessSchema,
-            await this.#request(
-                chatCalls.createConversation({
-                    origin: this.#origin,
-                    computerId: this.#computerId,
-                    input: {
-                        harness: settings.harness,
-                        configurations: settings.configurations,
-                        conversationKey,
-                        workspaceRef: settings.workspaceRef,
-                    },
-                }),
-                signal,
-            ),
+    ): Promise<ChatAccess> => {
+        const digest = await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(JSON.stringify([this.#computerId, "create", conversationKey])),
         );
+        signal.throwIfAborted();
+        const operationId = `create_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+        const request = chatCalls.createConversation({
+            origin: this.#origin,
+            computerId: this.#computerId,
+            input: {
+                harness: settings.harness,
+                configurations: settings.configurations,
+                operationId,
+                workspaceRef: settings.workspaceRef,
+            },
+        });
+        const command = decodeSessionCreateCommand(request.body ?? "");
+        const encryption = this.#sessionTransport().payloadEncryption;
+        const body = await sessionCreateCommandCodec.encode(command, encryption, signal);
+        const result = await this.#request({ ...request, body }, signal);
+        const encoded = JSON.stringify(result);
+        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), result).success) {
+            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
+            if (failure.requestId !== command.requestId) {
+                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
+            }
+            throw new CloudApiError(failure.code, failure.message);
+        }
+        const access = v.parse(accessSchema, {
+            ...v.parse(v.looseObject({ ready: v.unknown() }), result),
+            workspaceRef: settings.workspaceRef,
+        });
+        const ready = await sessionReadyEventCodec.decode(JSON.stringify(access.ready), encryption, signal);
+        if (
+            ready.requestId !== command.requestId ||
+            ready.harness !== settings.harness ||
+            ready.target.harness !== settings.harness ||
+            access.harness !== ready.harness ||
+            access.computerId !== this.#computerId ||
+            !sameNativeSession(access.target, ready.target)
+        ) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
+        }
+        return { ...access, ready };
+    };
     readonly conversationSession = (
         access: ChatAccess,
         activeTurn: ConversationActiveTurn,
@@ -285,47 +360,111 @@ export class BotChatApi {
             updatedAt: null,
         },
     });
-    readonly managedSessions = async (signal: AbortSignal) =>
-        v.parse(
-            v.object({ sessions: v.array(managedSessionSchema) }),
-            await this.#request(
-                chatCalls.managedSessions({ origin: this.#origin, computerId: this.#computerId }),
-                signal,
-            ),
-        ).sessions;
-    /** Resolves once the Computer no longer holds the Session; otherwise rejects with the Computer's failure. */
-    readonly archiveManagedSession = async (target: NativeSessionTarget, signal: AbortSignal): Promise<void> => {
-        v.parse(
-            v.object({ target: nativeSessionTargetSchema }),
-            await this.#request(
-                chatCalls.archiveManagedSession({
-                    origin: this.#origin,
-                    computerId: this.#computerId,
-                    target: v.parse(nativeSessionTargetSchema, target),
-                }),
-                signal,
-            ),
+    readonly managedSessions = async (signal: AbortSignal) => {
+        const request = chatCalls.managedSessions({ origin: this.#origin, computerId: this.#computerId });
+        const command = decodeSessionListCommand(request.body ?? "");
+        const encryption = this.#sessionTransport().payloadEncryption;
+        const body = await sessionListCommandCodec.encode(command, encryption, signal);
+        const value = await this.#request({ ...request, body }, signal);
+        const encoded = JSON.stringify(value);
+        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
+            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
+            if (failure.requestId !== command.requestId) {
+                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
+            }
+            throw new CloudApiError(failure.code, failure.message);
+        }
+        const listed = await sessionsListedEventCodec.decode(encoded, encryption, signal);
+        if (listed.requestId !== command.requestId) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
+        }
+        return v.parse(
+            v.array(managedSessionSchema),
+            listed.entries.map(({ directory, directoryLabel, prompted, target, status, title, updatedAt }) => ({
+                directory,
+                directoryLabel,
+                prompted,
+                target,
+                status,
+                title,
+                updatedAt,
+            })),
         );
     };
+    /** Resolves once the Computer no longer holds the Session; otherwise rejects with the Computer's failure. */
+    readonly archiveManagedSession = async (target: NativeSessionTarget, signal: AbortSignal): Promise<void> => {
+        const request = chatCalls.archiveManagedSession({
+            origin: this.#origin,
+            computerId: this.#computerId,
+            target: v.parse(nativeSessionTargetSchema, target),
+        });
+        const command = decodeSessionArchiveCommand(request.body ?? "");
+        const encryption = this.#sessionTransport().payloadEncryption;
+        const body = await sessionArchiveCommandCodec.encode(command, encryption, signal);
+        const value = await this.#request({ ...request, body }, signal);
+        const encoded = JSON.stringify(value);
+        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
+            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
+            if (
+                failure.requestId !== command.requestId ||
+                (failure.target !== undefined && !sameNativeSession(failure.target, target))
+            ) {
+                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
+            }
+            throw new CloudApiError(failure.code, failure.message);
+        }
+        const archived = await sessionArchivedEventCodec.decode(encoded, encryption, signal);
+        if (archived.requestId !== command.requestId || !sameNativeSession(archived.target, target)) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
+        }
+    };
     readonly managedSession = async (target: NativeSessionTarget, signal: AbortSignal) => {
-        const stored = v.parse(
-            managedSdkSessionSchema,
-            await this.#request(
-                chatCalls.managedSession({
-                    origin: this.#origin,
-                    computerId: this.#computerId,
-                    target: v.parse(nativeSessionTargetSchema, target),
-                }),
-                signal,
-            ),
-        );
-        const ready = decodeSessionReadyEvent(JSON.stringify(stored.ready));
-        if (ready.harness !== target.harness || stored.entry.sessionId !== target.sessionId) {
+        const request = chatCalls.managedSession({
+            origin: this.#origin,
+            computerId: this.#computerId,
+            target: v.parse(nativeSessionTargetSchema, target),
+        });
+        const command = decodeSessionRestoreCommand(request.body ?? "");
+        const encryption = this.#sessionTransport().payloadEncryption;
+        const body = await sessionRestoreCommandCodec.encode(command, encryption, signal);
+        const value = await this.#request({ ...request, body }, signal);
+        const encoded = JSON.stringify(value);
+        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
+            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
+            if (
+                failure.requestId !== command.requestId ||
+                (failure.target !== undefined && !sameNativeSession(failure.target, target))
+            ) {
+                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
+            }
+            if (failure.code === "session_not_found") {
+                throw new CloudApiError(
+                    "NOT_FOUND",
+                    'This session is not in Morty Recent sessions. If you closed it in Morty, use "Open Session" to import or fork it again.',
+                );
+            }
+            throw new CloudApiError(failure.code, failure.message);
+        }
+        const restored = await sessionRestoredEventCodec.decode(encoded, encryption, signal);
+        const ready = restored.ready;
+        if (
+            restored.requestId !== command.requestId ||
+            !sameNativeSession(restored.target, target) ||
+            !sameNativeSession(ready.target, target) ||
+            ready.harness !== target.harness ||
+            restored.entry.sessionId !== target.sessionId
+        ) {
             throw new CloudApiError("INVALID_SESSION", "The saved Chat session is invalid.");
         }
         return {
-            harness: stored.harness,
-            entry: stored.entry,
+            harness: restored.entry.harness,
+            entry: {
+                sessionId: restored.entry.sessionId,
+                title: restored.entry.title,
+                directory: ready.directory,
+                directoryLabel: ready.directoryLabel,
+                updatedAt: restored.entry.updatedAt,
+            },
             result: {
                 action: "managed" as const,
                 target: ready.target,
@@ -334,18 +473,37 @@ export class BotChatApi {
         };
     };
     /** Imports the native session a setup handoff names into the caller's Computer. */
-    readonly continueNativeSession = async (harness: string, sessionId: string, signal: AbortSignal) =>
-        continuedSession(
-            await this.#request(
-                chatCalls.continueNativeSession({
-                    origin: this.#origin,
-                    computerId: this.#computerId,
-                    harness,
-                    sessionId,
-                }),
-                signal,
-            ),
+    readonly continueNativeSession = async (harness: string, sessionId: string, signal: AbortSignal) => {
+        const find = await this.#nativeSessionResult(
+            chatCalls.continueNativeSession({
+                origin: this.#origin,
+                computerId: this.#computerId,
+                harness,
+                sessionId,
+                action: "find",
+                directory: ".",
+            }),
+            signal,
         );
+        if (find.action !== "find" || find.entry.sessionId !== sessionId) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session lookup.");
+        }
+        const result = await this.#nativeSessionResult(
+            chatCalls.continueNativeSession({
+                origin: this.#origin,
+                computerId: this.#computerId,
+                harness,
+                sessionId,
+                action: "import",
+                directory: find.entry.directory,
+            }),
+            signal,
+        );
+        if (result.action !== "import" || result.target.harness !== harness || result.target.sessionId !== sessionId) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session import.");
+        }
+        return { harness, result, entry: find.entry };
+    };
     /** The settings a new Session of the Agent starts with in the directory. */
     readonly agentSettings = async (
         harness: string,
@@ -354,19 +512,16 @@ export class BotChatApi {
     ): Promise<AgentSettingsResult> => {
         signal.throwIfAborted();
         const requestedHarness = v.parse(identifier, harness);
-        const result = v.parse(
-            v.object({ settings: v.unknown() }),
-            await this.#request(
-                chatCalls.agentSettings({
-                    origin: this.#origin,
-                    computerId: this.#computerId,
-                    harness: requestedHarness,
-                    workspaceRef,
-                }),
-                signal,
-            ),
+        const discovered = await this.#discoverAgentSettings(
+            chatCalls.agentSettings({
+                origin: this.#origin,
+                computerId: this.#computerId,
+                harness: requestedHarness,
+                workspaceRef,
+            }),
+            requestedHarness,
+            signal,
         );
-        const discovered = decodeAgentSettingsDiscoveredEvent(JSON.stringify(result.settings));
         const settings = {
             catalog: {
                 harness: discovered.harness,
@@ -392,15 +547,26 @@ export class BotChatApi {
                 parent,
             ),
         );
-    readonly directory = async (directory: string, signal: AbortSignal) =>
-        decodeWorkspaceEntriesEvent(
-            JSON.stringify(
-                await this.#request(
-                    chatCalls.directory({ origin: this.#origin, computerId: this.#computerId, directory }),
-                    signal,
-                ),
-            ),
-        );
+    readonly directory = async (directory: string, signal: AbortSignal) => {
+        const request = chatCalls.directory({ origin: this.#origin, computerId: this.#computerId, directory });
+        const command = decodeWorkspaceListCommand(request.body ?? "");
+        const encryption = this.#sessionTransport().payloadEncryption;
+        const body = await workspaceListCommandCodec.encode(command, encryption, signal);
+        const value = await this.#request({ ...request, body }, signal);
+        const encoded = JSON.stringify(value);
+        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
+            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
+            if (failure.requestId !== command.requestId) {
+                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid directory response.");
+            }
+            throw new CloudApiError(failure.code, failure.message);
+        }
+        const entries = await workspaceEntriesEventCodec.decode(encoded, encryption, signal);
+        if (entries.requestId !== command.requestId) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid directory response.");
+        }
+        return entries;
+    };
     /** Resolves once the watched resource differs from the snapshot this client last read, or from its first sample. */
     readonly #waitForResourceChange = async (
         request: ApiRequest,
@@ -439,18 +605,21 @@ export class BotChatApi {
         input: ForkMortyNativeSessionRequest,
         signal: AbortSignal,
     ) => {
-        const result = decodeNativeSessionResult(
-            JSON.stringify(
-                await this.#request(
-                    chatCalls.forkNativeSession({
-                        origin: this.#origin,
-                        computerId: this.#computerId,
-                        operationId,
-                        input,
-                    }),
-                    signal,
-                ),
-            ),
+        const digest = await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(`${this.#computerId}\u0000fork\u0000${operationId}`),
+        );
+        signal.throwIfAborted();
+        const requestId = `chat_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+        const result = await this.#nativeSessionResult(
+            chatCalls.forkNativeSession({
+                origin: this.#origin,
+                computerId: this.#computerId,
+                operationId,
+                requestId,
+                input,
+            }),
+            signal,
         );
         if (
             result.action !== "fork" ||
@@ -473,14 +642,14 @@ export class BotChatApi {
         signal: AbortSignal,
     ) => {
         if (input.action === "list") {
-            return decodeNativeSessionResult(
-                JSON.stringify(
-                    await this.#request(
-                        chatCalls.nativeSessions({ origin: this.#origin, computerId: this.#computerId, input }),
-                        signal,
-                    ),
-                ),
+            const result = await this.#nativeSessionResult(
+                chatCalls.nativeSessions({ origin: this.#origin, computerId: this.#computerId, input }),
+                signal,
             );
+            if (result.action !== "list") {
+                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session directory.");
+            }
+            return result;
         }
         if (input.action !== "import") {
             throw new CloudApiError(
@@ -489,19 +658,42 @@ export class BotChatApi {
             );
         }
         const { sessionId, ...identity } = input;
-        return decodeNativeSessionResult(
-            JSON.stringify(
-                await this.#request(
-                    chatCalls.importNativeSession({
-                        origin: this.#origin,
-                        computerId: this.#computerId,
-                        sessionId: v.parse(identifier, sessionId),
-                        identity,
-                    }),
-                    signal,
-                ),
-            ),
+        const result = await this.#nativeSessionResult(
+            chatCalls.importNativeSession({
+                origin: this.#origin,
+                computerId: this.#computerId,
+                sessionId: v.parse(identifier, sessionId),
+                identity,
+            }),
+            signal,
         );
+        if (
+            result.action !== "import" ||
+            result.target.harness !== identity.harness ||
+            result.target.sessionId !== sessionId
+        ) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session import.");
+        }
+        return result;
+    };
+    readonly #nativeSessionResult = async (request: ApiRequest, signal: AbortSignal) => {
+        const command = decodeNativeSessionRequest(request.body ?? "");
+        const encryption = this.#sessionTransport().payloadEncryption;
+        const body = await nativeSessionCommandCodec.encode(command, encryption, signal);
+        const value = await this.#request({ ...request, body }, signal);
+        const encoded = JSON.stringify(value);
+        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
+            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
+            if (failure.requestId !== command.requestId) {
+                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
+            }
+            throw new CloudApiError(failure.code, failure.message);
+        }
+        const result = await nativeSessionResultCodec.decode(encoded, encryption, signal);
+        if (result.requestId !== command.requestId) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
+        }
+        return result;
     };
     readonly nativeSession = async (
         input: {
@@ -512,17 +704,32 @@ export class BotChatApi {
         signal: AbortSignal,
     ) => {
         const { sessionId, ...identity } = input;
-        return decodeNativeSessionEvents(
-            await this.#request(
-                chatCalls.nativeSession({
-                    origin: this.#origin,
-                    computerId: this.#computerId,
-                    sessionId: v.parse(identifier, sessionId),
-                    identity,
-                }),
-                signal,
-            ),
-        );
+        const request = chatCalls.nativeSession({
+            origin: this.#origin,
+            computerId: this.#computerId,
+            sessionId: v.parse(identifier, sessionId),
+            identity,
+        });
+        const command = decodeSessionPreviewHistoryPageLoad(request.body ?? "");
+        const encryption = this.#sessionTransport().payloadEncryption;
+        const body = await sessionPreviewHistoryPageLoadCodec.encode(command, encryption, signal);
+        const value = await this.#request({ ...request, body }, signal);
+        const encoded = JSON.stringify(value);
+        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
+            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
+            if (
+                failure.requestId !== command.requestId ||
+                (failure.target !== undefined && !sameNativeSession(failure.target, command.target))
+            ) {
+                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session preview.");
+            }
+            throw new CloudApiError(failure.code, failure.message);
+        }
+        const result = await sessionPreviewHistoryPageLoadedCodec.decode(encoded, encryption, signal);
+        if (result.requestId !== command.requestId || !sameNativeSession(result.target, command.target)) {
+            throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session preview.");
+        }
+        return decodeNativeSessionEvents(result.events);
     };
 
     readonly connectSession = async (
@@ -535,17 +742,33 @@ export class BotChatApi {
         const readAccess = async (parent: AbortSignal) => {
             for (let attempt = 0; attempt < 2; attempt += 1) {
                 try {
-                    return v.parse(
-                        sessionAccessSchema,
-                        await this.#request(
-                            chatCalls.sessionAccess({
-                                origin: this.#origin,
-                                computerId: this.#computerId,
-                                target: v.parse(nativeSessionTargetSchema, target),
-                            }),
+                    const request = chatCalls.sessionAccess({
+                        origin: this.#origin,
+                        computerId: this.#computerId,
+                        target: v.parse(nativeSessionTargetSchema, target),
+                    });
+                    const command = decodeSessionPrepareCommand(request.body ?? "");
+                    const encryption = this.#sessionTransport().payloadEncryption;
+                    const body = await sessionPrepareCommandCodec.encode(command, encryption, parent);
+                    const value = await this.#request({ ...request, body }, parent);
+                    if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
+                        const failure = await sessionOperationFailedEventCodec.decode(
+                            JSON.stringify(value),
+                            encryption,
                             parent,
-                        ),
-                    );
+                        );
+                        if (
+                            failure.requestId !== command.requestId ||
+                            (failure.target !== undefined && !sameNativeSession(failure.target, target))
+                        ) {
+                            throw new CloudApiError(
+                                "INVALID_SESSION_ACCESS",
+                                "The selected Session could not be verified.",
+                            );
+                        }
+                        throw new CloudApiError(failure.code, failure.message);
+                    }
+                    return v.parse(sessionAccessSchema, value);
                 } catch (cause) {
                     parent.throwIfAborted();
                     if (!(cause instanceof CloudApiError) || cause.code !== "CHAT_UNAVAILABLE" || attempt === 1) {
@@ -561,10 +784,15 @@ export class BotChatApi {
             throw new CloudApiError("INVALID_SESSION_ACCESS", "The selected Session could not be verified.");
         }
         signal.throwIfAborted();
+        const encryptionAccess = this.#encryptionAccess();
+        if (encryptionAccess === null || encryptionAccess.computerId !== computerId) {
+            throw new CloudApiError("INVALID_SESSION_ACCESS", "Encrypted Computer access is unavailable.");
+        }
         const client = new MortyClient({
             endpoint: this.#origin,
             computerId,
             transport: this.#sessionTransport(),
+            encryption: { access: encryptionAccess },
             operationTimeoutMilliseconds: 120000,
             onClose: () => {
                 this.#sessionClients.delete(client);

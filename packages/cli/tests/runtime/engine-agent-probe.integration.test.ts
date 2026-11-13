@@ -5,12 +5,19 @@ import { createServer, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { decodeDaemonToServiceMessage } from "@morty-build/client/protocol";
+import {
+    COMPUTER_HEARTBEAT_MESSAGE,
+    decodeComputerDiagnosticsResult,
+    decodeMessageKind,
+    decodeSessionOperationFailedEvent,
+    decodeSessionReadyEvent,
+} from "@morty-build/client/protocol";
 import { listen, port } from "@morty-build/relay-test-support/websocket";
 import { expect, test, vi } from "vitest";
 import { type WebSocket, WebSocketServer } from "ws";
 import { RuntimeInstallationStore } from "../../src/engine/runtime/connection/runtime-installation-store.ts";
 import { TestComputerHost } from "../support/computer-host.ts";
+import { createEncryptedDaemonFrames } from "../support/encrypted-daemon-frames.ts";
 
 interface ProbeOptions {
     readonly scenario:
@@ -138,6 +145,7 @@ async function createProbeEngine(options: ProbeOptions, signal: AbortSignal) {
         },
         signal,
     );
+    const encryption = await createEncryptedDaemonFrames(join(directory, "computer"), "output-drain", signal);
     const execution = engine.runLoop({
         pairingGeneration: saved.pairingGeneration,
         signal: loopSignal,
@@ -173,7 +181,7 @@ async function createProbeEngine(options: ProbeOptions, signal: AbortSignal) {
             );
             return stdout;
         },
-        online: async () => (await Promise.all([connected.promise, online.promise]))[0],
+        online: async () => ({ socket: (await Promise.all([connected.promise, online.promise]))[0], encryption }),
         nextWriter: async (): Promise<VersionWriter> => {
             const writer = pendingWriters.shift();
             if (writer !== undefined) {
@@ -199,6 +207,7 @@ async function createProbeEngine(options: ProbeOptions, signal: AbortSignal) {
         close: async () => {
             shutdown.abort();
             await execution.catch(() => undefined);
+            encryption.close();
             for (const socket of relay.clients) {
                 socket.terminate();
             }
@@ -214,16 +223,34 @@ async function createProbeEngine(options: ProbeOptions, signal: AbortSignal) {
 }
 
 async function request(
-    socket: WebSocket,
+    {
+        socket,
+        encryption,
+    }: { readonly socket: WebSocket; readonly encryption: Awaited<ReturnType<typeof createEncryptedDaemonFrames>> },
     message: Readonly<Record<string, unknown>> & { readonly requestId: string },
     signal: AbortSignal,
 ) {
     const messages = on(socket, "message", { signal });
     try {
-        socket.send(JSON.stringify(message));
+        socket.send(await encryption.encode(JSON.stringify(message)));
         for await (const [encoded] of messages) {
-            const decoded = decodeDaemonToServiceMessage(String(encoded));
-            if ("requestId" in decoded && decoded.requestId === message.requestId) {
+            const raw = String(encoded);
+            if (raw === COMPUTER_HEARTBEAT_MESSAGE) continue;
+            const decodedFrame = await encryption.decode(raw);
+            if (typeof decodedFrame !== "string") {
+                throw new Error("Expected a text daemon response");
+            }
+            const text = decodedFrame;
+            const kind = decodeMessageKind(text);
+            const decoded =
+                kind === "computer.diagnostics.result"
+                    ? decodeComputerDiagnosticsResult(text)
+                    : kind === "session.ready"
+                      ? decodeSessionReadyEvent(text)
+                      : kind === "session.operation.failed"
+                        ? decodeSessionOperationFailedEvent(text)
+                        : null;
+            if (decoded !== null && decoded.requestId === message.requestId) {
                 return decoded;
             }
         }
@@ -233,8 +260,14 @@ async function request(
     }
 }
 
-async function diagnostics(socket: WebSocket, signal: AbortSignal) {
-    const result = await request(socket, { kind: "computer.diagnostics.read", requestId: "probe-report" }, signal);
+async function diagnostics(
+    connection: {
+        readonly socket: WebSocket;
+        readonly encryption: Awaited<ReturnType<typeof createEncryptedDaemonFrames>>;
+    },
+    signal: AbortSignal,
+) {
+    const result = await request(connection, { kind: "computer.diagnostics.read", requestId: "probe-report" }, signal);
     if (result.kind !== "computer.diagnostics.result") {
         throw new Error("Expected a Runtime diagnostic report");
     }

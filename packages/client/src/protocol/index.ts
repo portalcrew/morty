@@ -5,17 +5,26 @@ export {
 } from "./computer/credential.ts";
 export type {
     ComputerDiagnosticsRequest,
+    ComputerDiagnosticsRequestRouting,
     ComputerDiagnosticsResult,
+    ComputerDiagnosticsResultRouting,
 } from "./computer/diagnostics.ts";
 export {
+    computerDiagnosticsRequestCodec,
+    computerDiagnosticsResultCodec,
     decodeComputerDiagnosticsRequest,
     decodeComputerDiagnosticsResult,
 } from "./computer/diagnostics.ts";
 export type {
+    ComputerHeartbeatAckEventRouting,
     ComputerHeartbeatEvent,
+    ComputerHeartbeatEventRouting,
     ComputerLivenessReadyEvent,
+    ComputerLivenessReadyEventRouting,
     ComputerPingCommand,
+    ComputerPingCommandRouting,
     ComputerPongEvent,
+    ComputerPongEventRouting,
 } from "./computer/liveness.ts";
 export {
     COMPUTER_HEARTBEAT_ACK_KIND,
@@ -26,6 +35,11 @@ export {
     COMPUTER_PING_KIND,
     COMPUTER_PONG_KIND,
     COMPUTER_STATUS_KIND,
+    computerHeartbeatAckEventCodec,
+    computerHeartbeatEventCodec,
+    computerLivenessReadyEventCodec,
+    computerPingCommandCodec,
+    computerPongEventCodec,
     decodeComputerHeartbeatAckEvent,
     decodeComputerHeartbeatEvent,
     decodeComputerPongEvent,
@@ -37,27 +51,39 @@ export {
     MORTY_API_PREFIX,
     mortyApiUrl,
 } from "./relay/morty-api.ts";
-
+export type { WorkerRequestCancel } from "./relay/request-cancellation.ts";
+export {
+    decodeWorkerRequestCancel,
+    encodeWorkerRequestCancel,
+    WORKER_REQUEST_CANCEL_KIND,
+    workerRequestCancelCodec,
+} from "./relay/request-cancellation.ts";
+export type { WorkerRequestRejected } from "./relay/request-rejection.ts";
+export {
+    decodeWorkerRequestRejected,
+    encodeWorkerRequestRejected,
+    WORKER_REQUEST_REJECTED_KIND,
+    workerRequestRejectedCodec,
+} from "./relay/request-rejection.ts";
 export type {
     SessionAccessClaims,
     SessionAccessGrant,
     SessionAccessHolder,
 } from "./session/access/index.ts";
-
 export {
     decodeSessionAccessCredential,
     decodeSessionAccessGrant,
 } from "./session/access/index.ts";
-
 export { MAX_LOCAL_AGENT_DIRECTORY_ENTRIES } from "./session/agent/directory.ts";
-
 export type {
     AgentModelEffort,
     AgentSetting,
     AgentSettingsDiscoverCommand,
+    AgentSettingsDiscoverCommandRouting,
     AgentSettingsDiscoveredEvent,
+    AgentSettingsDiscoveredEventRouting,
+    AgentSettingsDiscoveryFailedEventRouting,
 } from "./session/agent/settings.ts";
-
 export {
     AGENT_MODEL_EFFORT_RESOLUTION_COMPLETE,
     AGENT_MODEL_EFFORT_RESOLUTION_ON_MODEL_SELECTION,
@@ -65,22 +91,27 @@ export {
     AGENT_SETTINGS_DISCOVER_KIND,
     AGENT_SETTINGS_DISCOVERED_KIND,
     AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
+    agentSettingsDiscoverCommandCodec,
+    agentSettingsDiscoveredEventCodec,
+    agentSettingsDiscoveryFailedEventCodec,
     decodeAgentSettingsDiscoverCommand,
     decodeAgentSettingsDiscoveredEvent,
     decodeAgentSettingsDiscoveryFailedEvent,
     encodeAgentSettingsDiscoverCommand,
     encodeAgentSettingsDiscoveryFailedEvent,
 } from "./session/agent/settings.ts";
-
 export type {
     SessionConfigOption,
     SessionConfigReadCommand,
+    SessionConfigReadCommandRouting,
     SessionConfigReadResult,
+    SessionConfigReadResultRouting,
     SessionConfigUpdatedEvent,
+    SessionConfigUpdatedEventRouting,
     SessionConfigurationSelection,
     SessionConfigureCommand,
+    SessionConfigureCommandRouting,
 } from "./session/configuration/index.ts";
-
 export {
     decodeSessionConfigReadCommand,
     decodeSessionConfigReadResult,
@@ -92,22 +123,27 @@ export {
     SESSION_CONFIG_READ_KIND,
     SESSION_CONFIG_READ_RESULT_KIND,
     SESSION_CONFIGURE_KIND,
+    sessionConfigReadCommandCodec,
+    sessionConfigReadResultCodec,
+    sessionConfigUpdatedEventCodec,
     sessionConfigurationSelection,
+    sessionConfigureCommandCodec,
 } from "./session/configuration/index.ts";
-
 export type {
     SessionRenameCommand,
+    SessionRenameCommandRouting,
     SessionRenamedEvent,
+    SessionRenamedEventRouting,
 } from "./session/configuration/title.ts";
-
 export {
     decodeSessionRenameCommand,
     decodeSessionRenamedEvent,
     encodeSessionRenameCommand,
     encodeSessionRenamedEvent,
     SESSION_RENAME_KIND,
+    sessionRenameCommandCodec,
+    sessionRenamedEventCodec,
 } from "./session/configuration/title.ts";
-
 export type {
     AcpSessionUpdate,
     AgentQuestion,
@@ -123,13 +159,18 @@ export type {
     PromptTerminalLifecycle,
     QueuedPromptRequestEventLog,
     SessionEvent,
+    SessionEventEnvelope,
+    SessionEventEnvelopeRouting,
     SessionEventLogPage,
     SessionEventPayload,
+    SessionEventsSubscribeCommand,
+    SessionEventsSubscribeCommandRouting,
+    SessionEventsUnsubscribe,
+    SessionEventsUnsubscribeControl,
     SessionLiveEvent,
     SessionLiveEventBatch,
     SessionWireEnvelope,
 } from "./session/events/index.ts";
-
 export {
     decodeAcpSessionUpdate,
     decodeKnownSessionEventLogPage,
@@ -138,28 +179,52 @@ export {
     decodeNativeSessionEvents,
     decodeSessionEvent,
     decodeSessionEventEnvelope,
+    decodeSessionEventsSubscribeCommand,
+    decodeSessionEventsUnsubscribe,
     decodeSessionLiveEvent,
     encodeSessionEventEnvelope,
+    encodeSessionEventsSubscribeCommand,
+    encodeSessionEventsUnsubscribe,
     isPromptTerminal,
     promptCompletion,
     SESSION_EVENT_BATCH_MAX_SIZE,
     SESSION_EVENT_KIND,
+    SESSION_EVENTS_SUBSCRIBE_KIND,
+    SESSION_EVENTS_UNSUBSCRIBE_KIND,
+    sessionEventEnvelopeCodec,
+    sessionEventsSubscribeCommandCodec,
 } from "./session/events/index.ts";
-
 export type {
     ContentAvailableEvent,
+    ContentAvailableEventRouting,
     ContentChunkFrame,
+    ContentChunkRouting,
+    ContentCommitCommandRouting,
+    ContentReadyEventRouting,
     ContentWriteCommand,
+    ContentWriteCommandRouting,
+    FileBeginEventRouting,
+    FileEndEventRouting,
+    FileFailedEventRouting,
     FileReadCommand,
+    FileReadCommandRouting,
+    FileStreamRecord,
+    FileStreamRecordDecode,
 } from "./session/files/index.ts";
-
 export {
     CONTENT_AVAILABLE_KIND,
+    CONTENT_CHUNK_ENCRYPTED_MAX_BYTES,
     CONTENT_CHUNK_MAX_BYTES,
     CONTENT_COMMIT_KIND,
     CONTENT_READY_KIND,
+    CONTENT_UPLOAD_MAX_ENCODED_BYTES,
     CONTENT_WRITE_KIND,
     CONTENT_WRITE_MAX_BYTES,
+    contentAvailableEventCodec,
+    contentChunkCodec,
+    contentCommitCommandCodec,
+    contentReadyEventCodec,
+    contentWriteCommandCodec,
     decodeContentAvailableEvent,
     decodeContentChunkFrame,
     decodeContentReadyEvent,
@@ -168,6 +233,7 @@ export {
     decodeFileEndEvent,
     decodeFileFailedEvent,
     decodeFileReadCommand,
+    decodeFileStreamRecord,
     encodeContentAvailableEvent,
     encodeContentChunkFrame,
     encodeContentCommitCommand,
@@ -175,13 +241,20 @@ export {
     encodeContentWriteCommand,
     encodeFileBeginEvent,
     encodeFileReadCommand,
+    encodeFileStreamRecord,
     FILE_BEGIN_KIND,
     FILE_END_KIND,
     FILE_FAILED_KIND,
     FILE_READ_KIND,
+    FILE_STREAM_CONTENT_TYPE,
+    FILE_STREAM_MAX_CHUNK_BYTES,
+    FILE_STREAM_MAX_MESSAGE_BYTES,
+    fileBeginEventCodec,
+    fileEndEventCodec,
+    fileFailedEventCodec,
+    fileReadCommandCodec,
     PROMPT_IMAGE_MAX_BYTES,
 } from "./session/files/index.ts";
-
 export type {
     InteractionAccepted,
     SessionElicitationField,
@@ -189,13 +262,15 @@ export type {
     SessionElicitationRequestedEvent,
     SessionElicitationResolvedEvent,
     SessionElicitationRespondCommand,
+    SessionElicitationRespondCommandRouting,
     SessionInteractionAnsweredEvent,
+    SessionInteractionAnsweredEventRouting,
     SessionPermissionOption,
     SessionPermissionRequestedEvent,
     SessionPermissionResolvedEvent,
     SessionPermissionRespondCommand,
+    SessionPermissionRespondCommandRouting,
 } from "./session/interactions/index.ts";
-
 export {
     decodeInteractionAccepted,
     decodeSessionElicitationRequestedEvent,
@@ -212,26 +287,41 @@ export {
     SESSION_PERMISSION_REQUESTED_KIND,
     SESSION_PERMISSION_RESOLVED_KIND,
     SESSION_PERMISSION_RESPOND_KIND,
+    sessionElicitationRespondCommandCodec,
+    sessionInteractionAnsweredEventCodec,
+    sessionPermissionRespondCommandCodec,
 } from "./session/interactions/index.ts";
-
 export type {
     SessionArchiveCommand,
+    SessionArchiveCommandRouting,
     SessionArchivedEvent,
+    SessionArchivedEventRouting,
     SessionCloseNoticeEvent,
+    SessionCloseNoticeEventRouting,
     SessionCreateCommand,
+    SessionCreateCommandRouting,
     SessionListCommand,
+    SessionListCommandRouting,
     SessionMetadata,
     SessionOperationFailedEvent,
+    SessionOperationFailedEventRouting,
     SessionPrepareCommand,
+    SessionPrepareCommandRouting,
     SessionPromptAcceptedEvent,
+    SessionPromptAcceptedEventRouting,
     SessionQueryCommand,
+    SessionQueryCommandRouting,
     SessionReadyEvent,
+    SessionReadyEventRouting,
     SessionRestoreCommand,
+    SessionRestoreCommandRouting,
     SessionRestoredEvent,
+    SessionRestoredEventRouting,
     SessionsListedEvent,
+    SessionsListedEventRouting,
     SessionsQueriedEvent,
+    SessionsQueriedEventRouting,
 } from "./session/lifecycle/index.ts";
-
 export {
     decodeSessionArchiveCommand,
     decodeSessionArchivedEvent,
@@ -269,20 +359,35 @@ export {
     SESSION_READY_KIND,
     SESSION_RESTORE_KIND,
     SESSION_RESTORED_KIND,
+    sessionArchiveCommandCodec,
+    sessionArchivedEventCodec,
+    sessionCloseNoticeEventCodec,
+    sessionCreateCommandCodec,
+    sessionListCommandCodec,
+    sessionOperationFailedEventCodec,
+    sessionPrepareCommandCodec,
+    sessionPromptAcceptedEventCodec,
+    sessionQueryCommandCodec,
+    sessionReadyEventCodec,
+    sessionRestoreCommandCodec,
+    sessionRestoredEventCodec,
+    sessionsListedEventCodec,
+    sessionsQueriedEventCodec,
 } from "./session/lifecycle/index.ts";
-
 export type {
     CommandDelivery,
     LastTurnOutcome,
     NativeSessionCancel,
+    NativeSessionCancelRouting,
     NativeSessionCommand,
+    NativeSessionCommandRouting,
     NativeSessionEntry,
     NativeSessionRequest,
     NativeSessionResult,
+    NativeSessionResultRouting,
     SessionExecution,
     SessionInteractionSnapshot,
 } from "./session/native/index.ts";
-
 export {
     decodeNativeSessionCancel,
     decodeNativeSessionRequest,
@@ -293,15 +398,21 @@ export {
     encodeNativeSessionResult,
     NATIVE_SESSION_REQUEST_KIND,
     NATIVE_SESSION_RESULT_KIND,
+    nativeSessionCancelCodec,
+    nativeSessionCommandCodec,
+    nativeSessionRequestCodec,
+    nativeSessionResultCodec,
 } from "./session/native/index.ts";
-
 export type {
     SessionHistoryPageLoad,
+    SessionHistoryPageLoadedRouting,
+    SessionHistoryPageLoadRouting,
     SessionHistoryWirePageLoaded,
     SessionPreviewHistoryPageLoad,
+    SessionPreviewHistoryPageLoadedRouting,
+    SessionPreviewHistoryPageLoadRouting,
     SessionPreviewHistoryWirePageLoaded,
 } from "./session/observability/history.ts";
-
 export {
     decodeSessionHistoryPageLoad,
     decodeSessionHistoryPageLoaded,
@@ -316,19 +427,28 @@ export {
     SESSION_HISTORY_PAGE_LOADED_KIND,
     SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND,
     SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND,
+    sessionHistoryPageLoadCodec,
+    sessionHistoryPageLoadedCodec,
+    sessionPreviewHistoryPageLoadCodec,
+    sessionPreviewHistoryPageLoadedCodec,
 } from "./session/observability/history.ts";
-
 export type {
     PromptAttachment,
     SessionCancelBeforeStartCommand,
+    SessionCancelBeforeStartCommandRouting,
     SessionCancelCommand,
+    SessionCancelCommandRouting,
     SessionPromptCommand,
+    SessionPromptCommandRouting,
     SessionPromptDispositionCommand,
+    SessionPromptDispositionCommandRouting,
     SessionPromptSteeredEvent,
+    SessionPromptSteeredEventRouting,
     SessionTurnStoppedEvent,
+    SessionTurnStoppedEventRouting,
     SessionTurnWithdrawnEvent,
+    SessionTurnWithdrawnEventRouting,
 } from "./session/prompt/commands.ts";
-
 export {
     decodePromptAttachment,
     decodeSessionCancelBeforeStartCommand,
@@ -351,16 +471,20 @@ export {
     SESSION_TURN_STOPPED_KIND,
     SESSION_TURN_WITHDRAWN_KIND,
     SessionPromptDisposition,
+    sessionCancelBeforeStartCommandCodec,
+    sessionCancelCommandCodec,
+    sessionPromptCommandCodec,
+    sessionPromptDispositionCommandCodec,
+    sessionPromptSteeredEventCodec,
+    sessionTurnStoppedEventCodec,
+    sessionTurnWithdrawnEventCodec,
 } from "./session/prompt/commands.ts";
-
 export type {
     AgentPromptResponse,
     PromptMetadata,
     PromptUsage,
 } from "./session/prompt/usage.ts";
-
 export { decodeAgentPromptResponse } from "./session/prompt/usage.ts";
-
 export type {
     SessionCapabilities,
     SessionCommand,
@@ -374,27 +498,27 @@ export {
     type NativeSessionTarget,
     readNativeSessionTarget,
 } from "./session/shared/native-session-target.ts";
-
 export type {
     Turn,
     TurnCancellation,
     TurnReference,
     TurnState,
 } from "./session/turn/index.ts";
-
 export { decodeTurn, decodeTurnCancellation, decodeTurnReference } from "./session/turn/index.ts";
-
 export type {
     WorkspaceEntriesEvent,
+    WorkspaceEntriesEventRouting,
     WorkspaceListCommand,
+    WorkspaceListCommandRouting,
 } from "./session/workspace/index.ts";
-
 export {
     decodeWorkspaceEntriesEvent,
     decodeWorkspaceListCommand,
     encodeWorkspaceListCommand,
     WORKSPACE_ENTRIES_KIND,
     WORKSPACE_LIST_KIND,
+    workspaceEntriesEventCodec,
+    workspaceListCommandCodec,
 } from "./session/workspace/index.ts";
 export { sessionResultJsonSchemas } from "./session-api-json-schema.ts";
 export {
@@ -413,18 +537,29 @@ export {
 } from "./shared/message-codec.ts";
 export { isBoundedJson } from "./shared/tool-input.ts";
 export type {
+    ClientCommand,
+    ClientRequest,
+    ClientToRelayMessage,
+    DaemonInboundMessage,
+    DaemonMessage,
     DaemonToRelayMessage,
-    DaemonToServiceMessage,
-    ServiceToDaemonMessage,
-    ServiceToDaemonRequest,
+    RelayToDaemonMessage,
+    WorkerToDaemonMessage,
 } from "./transport/daemon-transport.ts";
 export {
+    clientToRelayDecoders,
+    daemonEventSignatures,
+    daemonInboundSignatures,
+    daemonToRelayDecoders,
+    decodeClientToRelayMessage,
     decodeDaemonToRelayMessage,
-    decodeDaemonToServiceMessage,
-    decodeKnownServiceToDaemonMessage,
-    decodeServiceToDaemonMessage,
-    encodeDaemonToServiceMessage,
-    encodeServiceToDaemonMessage,
+    decodeEncryptedDaemonInboundMessage,
+    decodeEncryptedDaemonMessage,
+    decodeRelayToDaemonMessage,
+    decodeWorkerToDaemonMessage,
+    encodeClientToRelayMessage,
+    encodeEncryptedDaemonInboundMessage,
+    encodeEncryptedDaemonMessage,
     readUndecodedRequestAddress,
     requestReplyAddress,
 } from "./transport/daemon-transport.ts";

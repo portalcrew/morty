@@ -28,6 +28,10 @@ const attachmentSchema = v.union([
         }),
         computerId: v.string(),
         sessionFilter: targetSchema,
+        subscriptionId: v.pipe(
+            v.string(),
+            v.check((value: string) => isIdentifier(value)),
+        ),
     }),
     v.object({
         role: v.picklist(["daemon", "replaced-daemon"]),

@@ -1,5 +1,11 @@
 # Morty agent API
 
+IMPORTANT: The operation examples below describe the earlier plaintext protocol and
+do not work with an encrypted Computer. Do not send the `e2e` fragment, its access
+secret, or plaintext Agent requests to the Worker. The encrypted remote-Agent
+workflow and its machine-readable operation schemas have not yet been documented
+here; use the Morty browser application until they are available.
+
 A Morty user shared their Computer with you through a continue link. Morty relays
 your requests to coding Agent sessions (Codex, Claude Code, Pi) running on that
 Computer. This is not `setup.md`: setup connects an Agent on its own computer to

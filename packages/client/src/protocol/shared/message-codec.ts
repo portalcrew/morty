@@ -1,5 +1,10 @@
-import type { z } from "zod";
+import { z } from "zod";
 import { decodeIdentifier, type Identifier } from "./identifier.ts";
+
+export const encryptedFieldSchema = z
+    .string()
+    .min(1)
+    .max(12 * 1024 * 1024);
 
 export class ProtocolMessageError extends Error {
     readonly code = "invalid_protocol_message";

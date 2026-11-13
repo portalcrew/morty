@@ -92,6 +92,7 @@ async function readDelivery(peer: RealDaemonPeer, commandId: string) {
 const promptCommand = (peer: RealDaemonPeer, commandId: string, prompt: string) =>
     encodeSessionPromptCommand({
         attachments: [],
+        requestId: commandId,
         commandId,
         requestId: commandId,
         disposition: "append",
@@ -183,6 +184,7 @@ for (const admission of ["before-admission", "queued"] as const) {
                     const prompt = (id: string, text: string) =>
                         encodeSessionPromptCommand({
                             attachments: [],
+                            requestId: id,
                             commandId: id,
                             requestId: id,
                             disposition: "append",

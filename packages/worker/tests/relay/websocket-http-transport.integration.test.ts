@@ -1,5 +1,10 @@
 import { SELF } from "cloudflare:test";
-import { CONTENT_CHUNK_MAX_BYTES, encodeContentChunkFrame } from "@morty-build/client/protocol";
+import { createClientPayloadEncryption, exportE2EPublicKey, generateE2EIdentity } from "@morty-build/client";
+import {
+    CONTENT_CHUNK_MAX_BYTES,
+    encodeContentChunkFrame,
+    sessionEventsSubscribeCommandCodec,
+} from "@morty-build/client/protocol";
 import { expect, it, vi } from "vitest";
 import { acceptWebSocketHttpTransport } from "../../src/computer-relay/components/runtime/http/websocket-http-transport.ts";
 import { SessionRuntimeError } from "../../src/contracts/relay/session.ts";
@@ -34,6 +39,28 @@ function nextMessage(socket: WebSocket): Promise<string> {
             { once: true },
         );
     });
+}
+
+async function subscriptionBody(subscriptionId: string, sessionId = "session"): Promise<string> {
+    const computer = await generateE2EIdentity();
+    const signal = new AbortController().signal;
+    const sender = await createClientPayloadEncryption(
+        {
+            computerId: "computer-1",
+            computerE2EPublicKey: await exportE2EPublicKey(computer.publicKey),
+            computerE2EAccessSecret: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        },
+        signal,
+    );
+    try {
+        return await sessionEventsSubscribeCommandCodec.encode(
+            { kind: "session.events.subscribe", subscriptionId, target: { harness: "claude", sessionId } },
+            sender,
+            signal,
+        );
+    } finally {
+        sender.close();
+    }
 }
 
 it("Given a browser connection, When it requests a retired private Computer API, Then the transport rejects the target rather than routing it as a supported operation", async () => {
@@ -319,7 +346,11 @@ it.each([
                 kind: "session.events.subscribe",
                 subscriptionId: "unauthorized-subscription",
                 path: "/morty/api/v1/computers/prj_wn_01_ABCDEFGHIJKLMNOPQRSTUVWX/harnesses/claude/sessions/session-unauthorized/events",
-                headers: authorization === null ? [] : [["authorization", authorization]],
+                body: await subscriptionBody("unauthorized-subscription", "session-unauthorized"),
+                headers: [
+                    ["content-type", "application/json"],
+                    ...(authorization === null ? [] : [["authorization", authorization]]),
+                ],
             });
             for (let attempt = 0; attempt < 2; attempt += 1) {
                 const rejected = nextMessage(socket);
@@ -379,7 +410,8 @@ it("Given two quiet subscriptions, When multiple heartbeat intervals pass, Then 
                     kind: "session.events.subscribe",
                     subscriptionId,
                     path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
-                    headers: [],
+                    body: await subscriptionBody(subscriptionId),
+                    headers: [["content-type", "application/json"]],
                 }),
             );
             expect(JSON.parse(await ready)).toEqual({
@@ -735,7 +767,8 @@ it("Given an established event subscription, When the browser transport closes, 
     const ready = nextMessage(socket);
     socket.send(
         JSON.stringify({
-            headers: [],
+            body: await subscriptionBody("subscription-1"),
+            headers: [["content-type", "application/json"]],
             kind: "session.events.subscribe",
             path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
             subscriptionId: "subscription-1",
@@ -777,7 +810,8 @@ it("Given two live subscriptions, When each receives event batches, Then deliver
         const ready = nextMessage(socket);
         socket.send(
             JSON.stringify({
-                headers: [],
+                body: await subscriptionBody(subscriptionId, subscriptionId),
+                headers: [["content-type", "application/json"]],
                 kind: "session.events.subscribe",
                 path: `/morty/api/v1/computers/computer/harnesses/claude/sessions/${subscriptionId}/events`,
                 subscriptionId,
@@ -840,7 +874,8 @@ it("Given an established event subscription is quiet, When the transport idle de
         const ready = nextMessage(socket);
         socket.send(
             JSON.stringify({
-                headers: [],
+                body: await subscriptionBody("subscription-1"),
+                headers: [["content-type", "application/json"]],
                 kind: "session.events.subscribe",
                 path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
                 subscriptionId: "subscription-1",

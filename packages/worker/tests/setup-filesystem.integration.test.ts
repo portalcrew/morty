@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { createServer, request } from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -537,7 +538,37 @@ for (const segments of [4, 8]) {
                 if (typeof link !== "string") {
                     throw new Error("Missing setup link");
                 }
-                expect(new URL(link).searchParams.get("workspace")).toBe(workspace);
+                const handoff = new URL(link);
+                expect(handoff.searchParams.has("workspace")).toBe(false);
+                expect(new URLSearchParams(handoff.hash.slice(1)).get("workspace")).toBe(workspace);
+                const documentRequest = Promise.withResolvers<string>();
+                const proxy = createServer((incoming, outgoing) => {
+                    documentRequest.resolve(incoming.url ?? "");
+                    const forwarded = request(new URL(incoming.url ?? "/", fixture.origin), (response) => {
+                        outgoing.writeHead(response.statusCode ?? 502, response.headers);
+                        response.pipe(outgoing);
+                    });
+                    forwarded.on("error", (cause) => outgoing.destroy(cause));
+                    incoming.pipe(forwarded);
+                });
+                await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+                try {
+                    const address = proxy.address();
+                    if (address === null || typeof address === "string") {
+                        throw new Error("Expected a listening document proxy");
+                    }
+                    const documentUrl = new URL(link);
+                    documentUrl.host = `127.0.0.1:${address.port}`;
+                    const response = await fetch(documentUrl, { signal: AbortSignal.timeout(10_000) });
+                    await response.arrayBuffer();
+                    const target = await documentRequest.promise;
+                    expect(new URL(target, fixture.origin).searchParams.has("workspace")).toBe(false);
+                    expect(target).not.toContain(encodeURIComponent(workspace));
+                } finally {
+                    await new Promise<void>((resolve, reject) =>
+                        proxy.close((error) => (error === undefined ? resolve() : reject(error))),
+                    );
+                }
                 if (segments === 8) {
                     expect(ready).toMatchObject({ qrPath: null });
                     expect(events).toContainEqual(

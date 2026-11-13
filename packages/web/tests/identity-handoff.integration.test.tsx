@@ -162,6 +162,7 @@ test("Given shared Morty access, When the user continues on another device, Then
 }, async () => {
     const app = await createTestApp({ page: { kind: "bootstrap", identity: true } });
     await app.user.click(await app.queryElementByTestId(dataTestId.closeDialog));
+    await app.connectAgent();
     await app.user.click(await app.queryElementByTestId(dataTestId.shareIdentity));
 
     const dialog = getByRole(document.body, "dialog", { name: "Continue on another device" });

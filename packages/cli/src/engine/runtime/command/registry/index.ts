@@ -1,6 +1,7 @@
-import { decodeContentChunkFrame, type ServiceToDaemonRequest } from "@morty-build/client/protocol";
+import { contentChunkCodec } from "@morty-build/client/protocol";
 import { createAgentSettingsDiscoveryHandler } from "../agent-settings-discovery.ts";
 import type { CommandContext } from "../context.ts";
+import type { DaemonCommand } from "../definition.ts";
 import { createNativeSessionRequestHandler } from "../native-session-requests.ts";
 import { handleComputerDiagnostics, handleComputerPing } from "./computer.ts";
 import { createContentWriteCommands } from "./content-write/index.ts";
@@ -27,105 +28,87 @@ import {
 } from "./session.ts";
 
 export function createCommandRegistry(context: CommandContext): {
-    readonly dispatch: (message: ServiceToDaemonRequest) => void;
-    readonly dispatchChunk: (message: unknown) => void;
+    readonly dispatch: (message: DaemonCommand) => void | Promise<void>;
+    readonly dispatchChunk: (message: unknown, signal: AbortSignal) => Promise<void>;
     readonly settle: () => Promise<void>;
 } {
     const contentWrites = createContentWriteCommands(context);
     const nativeRequests = createNativeSessionRequestHandler(context);
     const agentSettings = createAgentSettingsDiscoveryHandler(context);
     return {
-        dispatch: (message): void => {
+        dispatch: (message): void | Promise<void> => {
             switch (message.kind) {
+                case "session.events.subscribe":
+                    return context.subscriptions.subscribe(message);
+                case "session.events.unsubscribe":
+                    return context.subscriptions.unsubscribe(message);
                 case "computer.diagnostics.read":
-                    handleComputerDiagnostics(context, message);
-                    return;
+                    return handleComputerDiagnostics(context, message);
                 case "computer.ping":
-                    handleComputerPing(context, message);
-                    return;
+                    return handleComputerPing(context, message);
                 case "session.live-history.v2.page.load":
-                    handleSessionHistoryPageLoad(context, message);
-                    return;
+                    return handleSessionHistoryPageLoad(context, message);
                 case "session.preview-history.page.load":
-                    handlePreviewHistoryPageLoad(context, message);
-                    return;
+                    return handlePreviewHistoryPageLoad(context, message);
                 case "native.session.cancel":
-                    nativeRequests.cancel(message);
+                case "worker.request.cancel":
+                    nativeRequests.cancel(message.requestId);
                     return;
                 case "native.session.request":
-                    nativeRequests.handle(message);
-                    return;
+                    return nativeRequests.handle(message);
                 case "session.list":
-                    handleSessionList(context, message);
-                    return;
+                    return handleSessionList(context, message);
                 case "session.query":
-                    handleSessionQuery(context, message);
-                    return;
+                    return handleSessionQuery(context, message);
                 case "agent.settings.discover":
                     agentSettings.handle(message);
                     return;
                 case "content.write":
-                    contentWrites.write(message);
-                    return;
+                    return contentWrites.write(message);
                 case "content.commit":
-                    contentWrites.commit(message);
-                    return;
+                    return contentWrites.commit(message);
                 case "file.read":
-                    handleFileRead(context, message);
-                    return;
+                    return handleFileRead(context, message);
                 case "session.cancel-before-start":
-                    handleSessionCancelBeforeStart(context, message);
-                    return;
+                    return handleSessionCancelBeforeStart(context, message);
                 case "session.cancel":
-                    handleSessionCancel(context, message);
-                    return;
+                    return handleSessionCancel(context, message);
                 case "session.archive":
-                    handleSessionArchive(context, message);
-                    return;
+                    return handleSessionArchive(context, message);
                 case "session.prompt.disposition":
-                    handlePromptDisposition(context, message);
-                    return;
+                    return handlePromptDisposition(context, message);
                 case "workspace.list":
-                    handleWorkspaceList(context, message);
-                    return;
+                    return handleWorkspaceList(context, message);
                 case "session.prepare":
-                    handleSessionPrepare(context, message);
-                    return;
+                    return handleSessionPrepare(context, message);
                 case "session.create":
-                    handleSessionCreate(context, message);
-                    return;
+                    return handleSessionCreate(context, message);
                 case "session.configure":
-                    handleSessionConfigure(context, message);
-                    return;
+                    return handleSessionConfigure(context, message);
                 case "session.config.read":
-                    handleSessionConfigRead(context, message);
-                    return;
+                    return handleSessionConfigRead(context, message);
                 case "session.rename":
-                    handleSessionRename(context, message);
-                    return;
+                    return handleSessionRename(context, message);
                 case "session.restore":
-                    handleSessionRestore(context, message);
-                    return;
+                    return handleSessionRestore(context, message);
                 case "session.permission.respond":
-                    handlePermissionRespond(context, message);
-                    return;
+                    return handlePermissionRespond(context, message);
                 case "session.elicitation.respond":
-                    handleElicitationRespond(context, message);
-                    return;
+                    return handleElicitationRespond(context, message);
                 case "session.prompt":
-                    handleSessionPrompt(context, message);
-                    return;
+                    return handleSessionPrompt(context, message);
                 default:
                     message satisfies never;
             }
         },
-        dispatchChunk: (message): void => {
+        dispatchChunk: async (message, signal): Promise<void> => {
             // A future binary format must not disconnect unrelated Sessions.
             // Validate the whole frame before passing any bytes to an upload.
-            const frame = (() => {
+            const frame = await (async () => {
                 try {
-                    return decodeContentChunkFrame(message);
+                    return await contentChunkCodec.decode(message, context.payloadEncryption, signal);
                 } catch {
+                    signal.throwIfAborted();
                     context.diagnostics.daemonDiagnostic("content_frame_discarded", "unknown", {
                         reason: "unsupported_frame",
                     });
@@ -133,7 +116,7 @@ export function createCommandRegistry(context: CommandContext): {
                 }
             })();
             if (frame !== null) {
-                contentWrites.receiveChunk(frame);
+                await contentWrites.receiveChunk(frame);
             }
         },
         settle: async (): Promise<void> => {

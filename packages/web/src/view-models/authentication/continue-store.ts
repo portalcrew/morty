@@ -1,4 +1,6 @@
+import { computerEncryptionAccessCodec, E2EError, importE2EPublicKey } from "@morty-build/client";
 import { isIdentifier, MAX_WORKSPACE_PATH_LENGTH } from "@morty-build/client/protocol";
+import { base64urlnopad } from "@scure/base";
 import { createStore } from "zustand/vanilla";
 import type { ApiTransport } from "@/services/api/api-transport";
 import { BotChatApi } from "@/services/chat/bot-chat-api";
@@ -11,7 +13,13 @@ import {
     transferCodeComputer,
 } from "@/services/identity/anonymous-identity-api";
 import { encodeIdentityScope, hasIdentityScope, readIdentityScope } from "@/services/identity/identity-scope-url";
-import { computerKey, rememberedComputers, replacedToken, storedToken } from "@/services/identity/remembered-computers";
+import {
+    computerKey,
+    rememberComputerEncryption,
+    rememberedComputers,
+    replacedToken,
+    storedToken,
+} from "@/services/identity/remembered-computers";
 import { centralSessionStorage, sessionWelcomeEntry } from "@/services/session-storage/central-session-storage";
 import { formatError } from "@/view-models/format-error";
 
@@ -67,11 +75,12 @@ export interface ContinueStore {
 }
 
 function initialState(): ContinueState {
-    const code = new URLSearchParams(window.location.hash.slice(1)).get("code");
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const code = fragment.get("code");
     const query = new URLSearchParams(window.location.search);
     const harness = query.get("harness");
     const sessionId = query.get("sessionId");
-    const workspace = query.get("workspace");
+    const workspace = fragment.get("workspace");
     if (code === null || code.length === 0) {
         return { kind: "invalid" };
     }
@@ -108,6 +117,26 @@ function identityDestination(path: "/" | "/chat", identity: AnonymousIdentity): 
  * the access this browser still holds for the same Computer.
  */
 export const createContinueStore = (transport: ApiTransport) => {
+    // Snapshot the fragment locally. It is never included in the redemption request or any relay call.
+    const encryptionFragment = new URLSearchParams(window.location.hash.slice(1));
+    const retainEncryption = async (identity: AnonymousIdentity, signal: AbortSignal): Promise<void> => {
+        const encoded = encryptionFragment.get("e2e");
+        if (encoded === null) {
+            return;
+        }
+        if (encoded.length > 1024 || !/^[A-Za-z0-9_-]+$/u.test(encoded)) {
+            throw new E2EError("e2e_invalid_access");
+        }
+        const access = computerEncryptionAccessCodec.decode(
+            new TextDecoder("utf-8", { fatal: true }).decode(base64urlnopad.decode(encoded)),
+        );
+        if (access.computerId !== identity.computerId) {
+            throw new E2EError("e2e_invalid_access");
+        }
+        await importE2EPublicKey(access.computerE2EPublicKey);
+        signal.throwIfAborted();
+        rememberComputerEncryption(access);
+    };
     const fetchRequest = transport.fetch;
     let attempt: AbortController | null = null;
     const store = createStore<ContinueStore>()((set, get) => {
@@ -252,6 +281,7 @@ export const createContinueStore = (transport: ApiTransport) => {
                 try {
                     identity = await api.redeemTransfer(state.code, signal);
                     signal.throwIfAborted();
+                    await retainEncryption(identity, signal);
                 } catch (cause) {
                     if (signal.aborted) {
                         return;
@@ -282,6 +312,7 @@ export const createContinueStore = (transport: ApiTransport) => {
                                 if (retained === null) {
                                     continue;
                                 }
+                                await retainEncryption(retained, signal);
                                 if (state.kind === "identity-redeeming") {
                                     window.location.replace(identityDestination("/", retained));
                                 } else {

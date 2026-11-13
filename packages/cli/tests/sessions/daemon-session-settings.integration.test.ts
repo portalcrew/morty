@@ -859,6 +859,7 @@ describe("daemon session configuration boundary", () => {
             const sessionTarget = await createSession(socket, frames, agent.harness);
             const runningCommandId = "running_configured_turn";
             const runningPrompt: SessionPromptCommand = {
+                requestId: runningCommandId,
                 commandId: runningCommandId,
                 requestId: runningCommandId,
                 disposition: SessionPromptDisposition.Append,
@@ -985,6 +986,7 @@ describe("daemon session configuration boundary", () => {
             const sessionTarget = await createSession(socket, frames, agent.harness);
             const runningCommandId = "running_drifted_settings_turn";
             const runningPrompt: SessionPromptCommand = {
+                requestId: runningCommandId,
                 commandId: runningCommandId,
                 requestId: runningCommandId,
                 disposition: SessionPromptDisposition.Append,

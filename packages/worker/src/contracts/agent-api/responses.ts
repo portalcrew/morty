@@ -1,6 +1,5 @@
 import { IDENTIFIER_PATTERN } from "@morty-build/client/protocol";
 import * as v from "valibot";
-import { nativeDirectory } from "./chat-requests.ts";
 
 // The response bodies of the Identity and Chat operations an AI agent uses. The routes pass each body through
 // `documented`, so the compiler rejects a body that no longer matches the schema the agent API description is
@@ -66,8 +65,7 @@ export const sessionAccessResponse = v.object(sessionCredential);
 export const chatAccessResponse = v.object({
     ...sessionCredential,
     harness: v.string(),
-    workspaceRef: nativeDirectory,
-    ready: v.pipe(v.unknown(), v.description("The Session's readiness as the Computer reports it.")),
+    ready: v.pipe(v.unknown(), v.description("The Computer's opaque encrypted Session readiness reply.")),
 });
 
 /** The native Session a continuation imported into Morty Recent. */

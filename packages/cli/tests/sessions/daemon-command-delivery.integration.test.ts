@@ -22,6 +22,7 @@ const submit = (peer: RealDaemonPeer, commandId: string, prompt: string): void =
     peer.send(
         encodeSessionPromptCommand({
             attachments: [],
+            requestId: commandId,
             commandId,
             requestId: commandId,
             disposition: SessionPromptDisposition.Append,
@@ -139,6 +140,7 @@ test("Given a running turn and a later queued command, When the clock moves back
                 peer.send(
                     encodeSessionPromptCommand({
                         attachments: [],
+                        requestId: queued,
                         commandId: queued,
                         requestId: queued,
                         disposition: SessionPromptDisposition.Append,
@@ -308,6 +310,7 @@ test.each([
                     peer.send(
                         encodeSessionPromptCommand({
                             attachments: [],
+                            requestId: steering,
                             commandId: steering,
                             requestId: steering,
                             disposition: SessionPromptDisposition.Append,

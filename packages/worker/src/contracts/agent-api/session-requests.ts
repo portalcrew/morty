@@ -1,4 +1,19 @@
-import { type Identifier, isIdentifier } from "@morty-build/client/protocol";
+import {
+    type Identifier,
+    isIdentifier,
+    nativeSessionCommandCodec,
+    sessionCancelBeforeStartCommandCodec,
+    sessionCancelCommandCodec,
+    sessionConfigReadCommandCodec,
+    sessionConfigureCommandCodec,
+    sessionElicitationRespondCommandCodec,
+    sessionEventsSubscribeCommandCodec,
+    sessionHistoryPageLoadCodec,
+    sessionPermissionRespondCommandCodec,
+    sessionPromptCommandCodec,
+    sessionPromptDispositionCommandCodec,
+    sessionRenameCommandCodec,
+} from "@morty-build/client/protocol";
 import * as v from "valibot";
 import { PairingDirectoryError } from "../relay/pairing.ts";
 
@@ -7,6 +22,114 @@ import { PairingDirectoryError } from "../relay/pairing.ts";
 // limits mirror the Computer protocol's, so a request the Computer would refuse fails before any Computer round trip.
 
 const identifier = v.custom<Identifier>(isIdentifier);
+export const sessionIdentifier = identifier;
+
+export const promptInput = v.custom<ReturnType<typeof sessionPromptCommandCodec.decodeRouting>>((value) => {
+    try {
+        sessionPromptCommandCodec.decodeRouting(JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+});
+export const cancelInput = v.custom<ReturnType<typeof sessionCancelCommandCodec.decodeRouting>>((value) => {
+    try {
+        sessionCancelCommandCodec.decodeRouting(JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+});
+export const withdrawInput = v.custom<ReturnType<typeof sessionCancelBeforeStartCommandCodec.decodeRouting>>(
+    (value) => {
+        try {
+            sessionCancelBeforeStartCommandCodec.decodeRouting(JSON.stringify(value));
+            return true;
+        } catch {
+            return false;
+        }
+    },
+);
+export const dispositionInput = v.custom<ReturnType<typeof sessionPromptDispositionCommandCodec.decodeRouting>>(
+    (value) => {
+        try {
+            sessionPromptDispositionCommandCodec.decodeRouting(JSON.stringify(value));
+            return true;
+        } catch {
+            return false;
+        }
+    },
+);
+export const configureInput = v.custom<ReturnType<typeof sessionConfigureCommandCodec.decodeRouting>>((value) => {
+    try {
+        sessionConfigureCommandCodec.decodeRouting(JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+});
+export const renameInput = v.custom<ReturnType<typeof sessionRenameCommandCodec.decodeRouting>>((value) => {
+    try {
+        sessionRenameCommandCodec.decodeRouting(JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+});
+export const configReadInput = v.custom<ReturnType<typeof sessionConfigReadCommandCodec.decodeRouting>>((value) => {
+    try {
+        sessionConfigReadCommandCodec.decodeRouting(JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+});
+export const historyInput = v.custom<ReturnType<typeof sessionHistoryPageLoadCodec.decodeRouting>>((value) => {
+    try {
+        sessionHistoryPageLoadCodec.decodeRouting(JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+});
+export const subscribeInput = v.custom<ReturnType<typeof sessionEventsSubscribeCommandCodec.decodeRouting>>((value) => {
+    try {
+        sessionEventsSubscribeCommandCodec.decodeRouting(JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+});
+export const eventsInput = v.union([historyInput, subscribeInput]);
+export const activeTurnInput = v.custom<ReturnType<typeof nativeSessionCommandCodec.decodeRouting>>((value) => {
+    try {
+        nativeSessionCommandCodec.decodeRouting(JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+});
+export const elicitationResponseInput = v.custom<
+    ReturnType<typeof sessionElicitationRespondCommandCodec.decodeRouting>
+>((value) => {
+    try {
+        sessionElicitationRespondCommandCodec.decodeRouting(JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+});
+export const permissionResponseInput = v.custom<ReturnType<typeof sessionPermissionRespondCommandCodec.decodeRouting>>(
+    (value) => {
+        try {
+            sessionPermissionRespondCommandCodec.decodeRouting(JSON.stringify(value));
+            return true;
+        } catch {
+            return false;
+        }
+    },
+);
+export const encryptedInteractionResponseInput = v.union([elicitationResponseInput, permissionResponseInput]);
 
 /** A Turn submission apart from its attachments, which an API may state in more than one representation. */
 const turnSubmissionEntries = {

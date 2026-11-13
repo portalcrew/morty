@@ -29,6 +29,7 @@ async function promptRealSession(
     peer.send(
         encodeSessionPromptCommand({
             kind: "session.prompt",
+            requestId: commandId,
             commandId,
             requestId: commandId,
             target: sessionTarget,

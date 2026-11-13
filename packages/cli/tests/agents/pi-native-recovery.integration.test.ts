@@ -57,6 +57,7 @@ test.each(["responsive", "stalled", "launcher-stalled"])(
                     peer.send(
                         encodeSessionPromptCommand({
                             kind: "session.prompt",
+                            requestId: commandId,
                             commandId,
                             requestId: commandId,
                             target: nativeId,
@@ -174,6 +175,7 @@ test("Given a real Pi native Session was previewed, When the user imports it, Th
         peer.send(
             encodeSessionPromptCommand({
                 kind: "session.prompt",
+                requestId: commandId,
                 commandId,
                 requestId: commandId,
                 target: sourceSessionId,
@@ -293,6 +295,7 @@ test("Given a saved real Pi native Session, When the user forks it, Then its his
         peer.send(
             encodeSessionPromptCommand({
                 kind: "session.prompt",
+                requestId: sourceCommandId,
                 commandId: sourceCommandId,
                 requestId: sourceCommandId,
                 target: sourceSessionId,
@@ -418,6 +421,7 @@ test("Given a saved real Pi native Session, When the user forks it, Then its his
         peer.send(
             encodeSessionPromptCommand({
                 kind: "session.prompt",
+                requestId: forkedCommandId,
                 commandId: forkedCommandId,
                 requestId: forkedCommandId,
                 target: forkedSessionTarget,

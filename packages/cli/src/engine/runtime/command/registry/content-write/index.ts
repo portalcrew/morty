@@ -7,7 +7,10 @@ import {
     type CONTENT_WRITE_KIND,
     type ContentChunkFrame,
     type ContentWriteCommand,
+    contentAvailableEventCodec,
+    contentReadyEventCodec,
     FILE_FAILED_KIND,
+    fileFailedEventCodec,
 } from "@morty-build/client/protocol";
 import type { CommandContext } from "../../context.ts";
 import type { CommandMessage } from "../../definition.ts";
@@ -22,9 +25,9 @@ interface PendingWrite {
 }
 
 export interface ContentWriteCommands {
-    readonly write: (message: CommandMessage<typeof CONTENT_WRITE_KIND>) => void;
-    readonly commit: (message: CommandMessage<typeof CONTENT_COMMIT_KIND>) => void;
-    readonly receiveChunk: (frame: ContentChunkFrame) => void;
+    readonly write: (message: CommandMessage<typeof CONTENT_WRITE_KIND>) => Promise<void>;
+    readonly commit: (message: CommandMessage<typeof CONTENT_COMMIT_KIND>) => void | Promise<void>;
+    readonly receiveChunk: (frame: ContentChunkFrame) => Promise<void>;
     readonly settle: () => Promise<void>;
 }
 
@@ -32,22 +35,29 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
     const pending = new Map<string, PendingWrite>();
     const operations = new Set<Promise<void>>();
 
-    const fail = (command: Pick<ContentWriteCommand, "requestId" | "target">, error: unknown): void => {
+    const fail = async (command: Pick<ContentWriteCommand, "requestId" | "target">, error: unknown): Promise<void> => {
         pending.delete(command.requestId);
-        send(context.socket, {
-            code: "content_write_failed",
-            kind: FILE_FAILED_KIND,
-            message: error instanceof Error ? error.message : "The content could not be stored",
-            requestId: command.requestId,
-            target: command.target,
-        });
+        send(
+            context.socket,
+            await fileFailedEventCodec.encode(
+                {
+                    code: "content_write_failed",
+                    kind: FILE_FAILED_KIND,
+                    message: error instanceof Error ? error.message : "The content could not be stored",
+                    requestId: command.requestId,
+                    target: command.target,
+                },
+                context.payloadEncryption,
+                context.signal,
+            ),
+        );
     };
 
-    const write = (message: CommandMessage<typeof CONTENT_WRITE_KIND>): void => {
+    const write = async (message: CommandMessage<typeof CONTENT_WRITE_KIND>): Promise<void> => {
         const existing = pending.get(message.requestId);
         if (existing !== undefined) {
             if (JSON.stringify(existing.command) !== JSON.stringify(message)) {
-                fail(message, new Error("The content request identifier is already in use"));
+                await fail(message, new Error("The content request identifier is already in use"));
                 return;
             }
         } else {
@@ -59,18 +69,24 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
                 sequence: 0,
             });
         }
-        send(context.socket, {
-            kind: CONTENT_READY_KIND,
-            requestId: message.requestId,
-            target: message.target,
-        });
+        send(
+            context.socket,
+            await contentReadyEventCodec.encode(
+                {
+                    kind: CONTENT_READY_KIND,
+                    requestId: message.requestId,
+                    target: message.target,
+                },
+                context.payloadEncryption,
+                context.signal,
+            ),
+        );
     };
 
-    const commit = (message: CommandMessage<typeof CONTENT_COMMIT_KIND>): void => {
+    const commit = (message: CommandMessage<typeof CONTENT_COMMIT_KIND>): void | Promise<void> => {
         const state = pending.get(message.requestId);
         if (state === undefined || !sameNativeSession(state.command.target, message.target)) {
-            fail(message, new Error("The content upload is unavailable"));
-            return;
+            return fail(message, new Error("The content upload is unavailable"));
         }
         pending.delete(message.requestId);
         const operation = (async () => {
@@ -92,27 +108,38 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
                 if (stored.key !== state.command.contentKey || stored.byteLength !== state.command.byteLength) {
                     throw new Error("Stored content did not match the upload");
                 }
-                send(context.socket, {
-                    byteLength: stored.byteLength,
-                    contentKey: stored.key,
-                    kind: CONTENT_AVAILABLE_KIND,
-                    requestId: message.requestId,
-                    target: message.target,
-                });
+                send(
+                    context.socket,
+                    await contentAvailableEventCodec.encode(
+                        {
+                            byteLength: stored.byteLength,
+                            contentKey: stored.key,
+                            kind: CONTENT_AVAILABLE_KIND,
+                            requestId: message.requestId,
+                            target: message.target,
+                        },
+                        context.payloadEncryption,
+                        context.signal,
+                    ),
+                );
             } catch (error) {
                 if (!context.signal.aborted) {
-                    fail(message, error);
+                    await fail(message, error);
                 }
             }
         })();
         operations.add(operation);
-        void operation.finally(() => operations.delete(operation));
+        void operation.then(
+            () => operations.delete(operation),
+            () => operations.delete(operation),
+        );
+        return operation;
     };
 
     return {
         write,
         commit,
-        receiveChunk: (frame) => {
+        receiveChunk: async (frame) => {
             const state = pending.get(frame.requestId);
             if (state === undefined) {
                 context.diagnostics.daemonDiagnostic("content_chunk_discarded", frame.requestId, {
@@ -125,7 +152,7 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
                 frame.sequence !== state.sequence ||
                 state.receivedBytes + frame.bytes.byteLength > state.command.byteLength
             ) {
-                fail(state.command, new Error("The content upload contains invalid chunks"));
+                await fail(state.command, new Error("The content upload contains invalid chunks"));
                 return;
             }
             state.bytes.set(frame.bytes, state.receivedBytes);

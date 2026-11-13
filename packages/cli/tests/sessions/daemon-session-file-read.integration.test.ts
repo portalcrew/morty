@@ -49,6 +49,7 @@ test("Given a persisted native conversation, When a client prompts after restart
                         encodeSessionPromptCommand({
                             kind: "session.prompt",
                             target: peer.target,
+                            requestId: commandId,
                             commandId,
                             requestId: commandId,
                             disposition: SessionPromptDisposition.Append,

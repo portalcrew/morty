@@ -1,9 +1,22 @@
 import { z } from "zod";
-import { identifierStringSchema as IDENTIFIER } from "../../shared/identifier.ts";
-import { decodeZodMessage as decode, decodeZodValue, encodeZodMessage as encode } from "../../shared/message-codec.ts";
+import { encryptedMessageCodec } from "../../shared/encrypted-message.ts";
+import {
+    identifierStringSchema as IDENTIFIER,
+    identifierStringSchema as routingIdentifier,
+} from "../../shared/identifier.ts";
+import {
+    decodeZodMessage as decode,
+    decodeZodMessage as decodeRoutingZodMessage,
+    decodeZodValue,
+    encodeZodMessage as encode,
+    encryptedFieldSchema,
+} from "../../shared/message-codec.ts";
 import { boundedJsonSchema, toolCallLocationSchema } from "../../shared/tool-input.ts";
 import { SHORT_TEXT } from "../shared/index.ts";
-import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
+import {
+    nativeSessionTargetSchema,
+    nativeSessionTargetSchema as routingTarget,
+} from "../shared/native-session-target.ts";
 
 export const SESSION_PERMISSION_REQUESTED_KIND = "session.permission.requested";
 export const SESSION_PERMISSION_RESPOND_KIND = "session.permission.respond";
@@ -186,3 +199,58 @@ export type InteractionAccepted = z.infer<typeof interactionAcceptedSchema>;
 
 export const decodeInteractionAccepted = (value: unknown): InteractionAccepted =>
     decodeZodValue(value, interactionAcceptedSchema);
+const sessionElicitationRespondCommandPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_ELICITATION_RESPOND_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+    interactionId: routingIdentifier,
+});
+const sessionElicitationRespondCommandRoutingSchema = sessionElicitationRespondCommandPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionElicitationRespondCommandRouting = z.infer<typeof sessionElicitationRespondCommandRoutingSchema>;
+const decodeSessionElicitationRespondCommandRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionElicitationRespondCommandRoutingSchema);
+export const sessionElicitationRespondCommandCodec = encryptedMessageCodec({
+    kind: SESSION_ELICITATION_RESPOND_KIND,
+    decode: decodeSessionElicitationRespondCommand,
+    decodeRouting: decodeSessionElicitationRespondCommandRouting,
+    publicRoutingSchema: sessionElicitationRespondCommandPublicRoutingSchema,
+});
+
+const sessionPermissionRespondCommandPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_PERMISSION_RESPOND_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+    interactionId: routingIdentifier,
+});
+const sessionPermissionRespondCommandRoutingSchema = sessionPermissionRespondCommandPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionPermissionRespondCommandRouting = z.infer<typeof sessionPermissionRespondCommandRoutingSchema>;
+const decodeSessionPermissionRespondCommandRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionPermissionRespondCommandRoutingSchema);
+export const sessionPermissionRespondCommandCodec = encryptedMessageCodec({
+    kind: SESSION_PERMISSION_RESPOND_KIND,
+    decode: decodeSessionPermissionRespondCommand,
+    decodeRouting: decodeSessionPermissionRespondCommandRouting,
+    publicRoutingSchema: sessionPermissionRespondCommandPublicRoutingSchema,
+});
+
+const sessionInteractionAnsweredEventPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_INTERACTION_ANSWERED_KIND),
+    requestId: routingIdentifier,
+    target: routingTarget,
+});
+const sessionInteractionAnsweredEventRoutingSchema = sessionInteractionAnsweredEventPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export type SessionInteractionAnsweredEventRouting = z.infer<typeof sessionInteractionAnsweredEventRoutingSchema>;
+const decodeSessionInteractionAnsweredEventRouting = (encoded: string) =>
+    decodeRoutingZodMessage(encoded, sessionInteractionAnsweredEventRoutingSchema);
+export const sessionInteractionAnsweredEventCodec = encryptedMessageCodec({
+    kind: SESSION_INTERACTION_ANSWERED_KIND,
+    decode: decodeSessionInteractionAnsweredEvent,
+    decodeRouting: decodeSessionInteractionAnsweredEventRouting,
+    publicRoutingSchema: sessionInteractionAnsweredEventPublicRoutingSchema,
+});

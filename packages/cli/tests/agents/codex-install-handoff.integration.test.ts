@@ -105,6 +105,7 @@ test("Given setup runs in a real Codex exec conversation, When its native sessio
         peer.send(
             encodeSessionPromptCommand({
                 kind: "session.prompt",
+                requestId: commandId,
                 commandId,
                 requestId: commandId,
                 target: imported.target,

@@ -40,6 +40,15 @@ export class ControlledSetupRuntime implements SetupRuntime {
         return Array.from(this.#saved.values(), ({ computer_id }) => computer_id).at(-1) ?? null;
     };
 
+    readonly encryptionAccess: SetupRuntime["encryptionAccess"] = async (_directory, computerId, signal) => {
+        const connection = Array.from(this.#saved.values()).find((entry) => entry.computer_id === computerId);
+        const daemon = connection === undefined ? undefined : this.#active.get(connection.pairingGeneration);
+        if (daemon === undefined) {
+            throw new Error("The requested computer has no local Runtime");
+        }
+        return await daemon.encryptionAccess(signal);
+    };
+
     readonly agents: SetupRuntime["agents"] = async (_directory, signal) => {
         signal.throwIfAborted();
         return createMortyFakeDaemon(this.#options).catalog.map(({ harness, label }) => ({

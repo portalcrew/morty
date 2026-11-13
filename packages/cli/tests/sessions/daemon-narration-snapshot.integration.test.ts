@@ -196,6 +196,7 @@ describe("daemon narration delivery", () => {
                 created = await frames.next();
             }
             const prompt: SessionPromptCommand = {
+                requestId: "narration_turn",
                 commandId: "narration_turn",
                 requestId: "narration_turn",
                 disposition: SessionPromptDisposition.Append,

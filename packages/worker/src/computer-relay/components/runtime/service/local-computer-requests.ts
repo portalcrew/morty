@@ -1,7 +1,8 @@
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionCommandRouting, NativeSessionTarget } from "@morty-build/client/protocol";
+import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import { logger } from "../../../../infra/logger.ts";
 import type { ComputerReplyConnection } from "./computer-control-request.ts";
-import type { ComputerOperationSocket, HistoryRequestKind, RelayPeers } from "./computer-relay-actor.ts";
+import type { ComputerOperationSocket, HistoryRequestKind, RelayPeers, RelaySocket } from "./computer-relay-actor.ts";
 
 class LocalComputerRequest extends EventTarget implements ComputerReplyConnection {
     #state: number = WebSocket.OPEN;
@@ -14,8 +15,20 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
         this.#dispatch = dispatch;
         this.#release = release;
         let history: { readonly kind: HistoryRequestKind; readonly requestId: string } | null = null;
+        let request:
+            | { readonly kind: "not-forwarded" }
+            | {
+                  readonly kind: "forwarded";
+                  readonly daemon: RelaySocket;
+                  readonly action: NativeSessionCommandRouting["action"];
+              } = { kind: "not-forwarded" };
         const discoveries = new Map<string, string>();
         this.server = {
+            recordRequestDaemon: (daemon, action) => {
+                request = { kind: "forwarded", daemon, action };
+            },
+            requestDaemon: () => (request.kind === "forwarded" ? request.daemon : null),
+            requestAction: () => (request.kind === "forwarded" ? request.action : null),
             close: (code, reason) => this.close(code, reason),
             send: (message) => {
                 if (this.isOpen()) {
@@ -86,6 +99,14 @@ export class LocalComputerRequests {
         target: NativeSessionTarget | undefined,
         dispatch: (socket: ComputerOperationSocket, message: unknown) => Promise<void>,
     ) => {
+        for (const route of this.#routes) {
+            if (route.requestId === requestId) {
+                throw new SessionRuntimeError(
+                    "session_busy",
+                    "An operation with this request ID is already in progress",
+                );
+            }
+        }
         const connection = new LocalComputerRequest(dispatch, () => this.#routes.delete(route));
         const route = { socket: connection.server, requestId, target };
         this.#routes.add(route);

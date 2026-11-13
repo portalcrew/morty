@@ -20,6 +20,30 @@ const documentSchema = v.object({
     ),
 });
 
+test("Given the agent transport description, when a remote agent reads the request body instructions, then it is told that GET requests carry encrypted bodies", async () => {
+    await using bindings = await createBindings();
+    await bindings.configure({ APP_ORIGIN: bindings.origin });
+    const response = await bindings.request(new Request(`${bindings.origin}/agent-api/asyncapi.json`));
+    expect(response.status).toBe(200);
+    const document = v.parse(
+        v.object({
+            channels: v.object({
+                transport: v.object({
+                    messages: v.object({
+                        httpRequest: v.object({
+                            payload: v.object({ properties: v.object({ body: v.object({ description: v.string() }) }) }),
+                        }),
+                    }),
+                }),
+            }),
+        }),
+        await response.json(),
+    );
+    expect(document.channels.transport.messages.httpRequest.payload.properties.body.description).toContain("GET");
+    expect(document.channels.transport.messages.httpRequest.payload.properties.body.description).toContain("encrypted");
+    expect(document.channels.transport.messages.httpRequest.payload.properties.body.description).not.toContain('"" for GET');
+});
+
 test("Given the generated agent API description, When a peer sends every documented operation as described, Then HTTP operations reach their Worker routes and WebSocket operations reach the Session routes", async () => {
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });

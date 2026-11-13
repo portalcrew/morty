@@ -1,38 +1,76 @@
 import { sameNativeSession } from "@morty-build/client/native-session";
 import {
-    AGENT_SETTINGS_DISCOVER_KIND,
-    AGENT_SETTINGS_DISCOVERED_KIND,
-    AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
-    type AgentSettingsDiscoverCommand,
-    COMPUTER_HEARTBEAT_ACK_KIND,
-    COMPUTER_LIVENESS_READY_KIND,
+    type AGENT_SETTINGS_DISCOVER_KIND,
+    type ClientToRelayMessage,
     COMPUTER_STATUS_KIND,
+    contentChunkCodec,
     type DaemonToRelayMessage,
-    decodeContentChunkFrame,
-    decodeKnownServiceToDaemonMessage,
-    encodeAgentSettingsDiscoveryFailedEvent,
+    decodeClientToRelayMessage,
     encodeComputerStatusEvent,
-    encodeServiceToDaemonMessage,
-    encodeSessionOperationFailedEvent,
-    NATIVE_SESSION_RESULT_KIND,
+    encodeSessionEventsUnsubscribe,
+    encodeWorkerRequestCancel,
+    encodeWorkerRequestRejected,
+    type NativeSessionCommandRouting,
     type NativeSessionTarget,
     ProtocolMessageError,
-    readNativeSessionTarget,
-    requestReplyAddress,
-    SESSION_CLOSE_NOTICE_KIND,
-    SESSION_EVENT_KIND,
-    SESSION_HISTORY_PAGE_LOAD_KIND,
-    SESSION_HISTORY_PAGE_LOADED_KIND,
-    SESSION_OPERATION_FAILED_KIND,
-    SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND,
-    SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND,
-    SESSION_PROMPT_ACCEPTED_KIND,
-    type ServiceToDaemonMessage,
-    type ServiceToDaemonRequest,
+    SESSION_EVENTS_SUBSCRIBE_KIND,
+    type SESSION_HISTORY_PAGE_LOAD_KIND,
+    type SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND,
+    type SessionEventsSubscribeCommandRouting,
+    sessionEventsSubscribeCommandCodec,
+    WORKER_REQUEST_REJECTED_KIND,
 } from "@morty-build/client/protocol";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import { logger } from "../../../../infra/logger.ts";
 import { SessionLiveEventRelay } from "./session-live-event-relay.ts";
+
+type OperationRouting = Exclude<ClientToRelayMessage, { readonly kind: typeof SESSION_EVENTS_SUBSCRIBE_KIND }>;
+
+function operationAddress(command: OperationRouting): string {
+    return command.requestId;
+}
+
+function daemonHandler<K extends DaemonToRelayMessage["kind"]>(
+    kind: K,
+    handle: (message: Extract<DaemonToRelayMessage, { readonly kind: K }>, encoded: string) => void,
+): (message: DaemonToRelayMessage, encoded: string) => void {
+    return (message, encoded) => {
+        if (!isDaemonKind(message, kind)) {
+            throw new ProtocolMessageError("Daemon message does not match its handler");
+        }
+        handle(message, encoded);
+    };
+}
+
+function isDaemonKind<K extends DaemonToRelayMessage["kind"]>(
+    message: DaemonToRelayMessage,
+    kind: K,
+): message is Extract<DaemonToRelayMessage, { readonly kind: K }> {
+    return message.kind === kind;
+}
+
+function clientHandler<K extends ClientToRelayMessage["kind"]>(
+    kind: K,
+    handle: (
+        socket: ComputerOperationSocket,
+        message: Extract<ClientToRelayMessage, { readonly kind: K }>,
+        encoded: string,
+    ) => void,
+): (socket: ComputerOperationSocket, message: ClientToRelayMessage, encoded: string) => void {
+    return (socket, message, encoded) => {
+        if (!isClientKind(message, kind)) {
+            throw new ProtocolMessageError("Client message does not match its handler");
+        }
+        handle(socket, message, encoded);
+    };
+}
+
+function isClientKind<K extends ClientToRelayMessage["kind"]>(
+    message: ClientToRelayMessage,
+    kind: K,
+): message is Extract<ClientToRelayMessage, { readonly kind: K }> {
+    return message.kind === kind;
+}
 
 function sessionErrorCloseCode(error: SessionRuntimeError): 1008 | 1013 {
     if (error.code === "session_busy") {
@@ -56,7 +94,7 @@ function copyBinaryFrame(value: unknown): ArrayBuffer {
 
 function knownChunk(value: unknown, skipped: () => void) {
     try {
-        return decodeContentChunkFrame(value);
+        return contentChunkCodec.decodeRouting(value);
     } catch {
         skipped();
         return null;
@@ -73,6 +111,9 @@ export interface RelaySocket {
 }
 
 export interface ComputerOperationSocket extends RelaySocket {
+    readonly recordRequestDaemon: (daemon: RelaySocket, action: NativeSessionCommandRouting["action"]) => void;
+    readonly requestDaemon: () => RelaySocket | null;
+    readonly requestAction: () => NativeSessionCommandRouting["action"] | null;
     readonly consumeAgentSettingsDiscovery: (requestId: string, harness: string) => boolean;
     readonly consumeAgentSettingsDiscoveryFailure: (requestId: string) => boolean;
     readonly takeAgentSettingsDiscoveries: () => readonly string[];
@@ -121,6 +162,126 @@ export class ComputerRelayActor {
     readonly #computerId: string;
     readonly #liveEvents: SessionLiveEventRelay;
 
+    private readonly clientOperation = <K extends OperationRouting["kind"]>(kind: K) =>
+        clientHandler(kind, (socket, command, encoded) => this.forwardControl(socket, command, encoded));
+
+    readonly #clientHandlers = {
+        "agent.settings.discover": clientHandler("agent.settings.discover", (socket, command, encoded) =>
+            this.forwardAgentSettingsDiscovery(socket, command, encoded),
+        ),
+        "session.live-history.v2.page.load": clientHandler(
+            "session.live-history.v2.page.load",
+            (socket, command, encoded) => this.forwardHistoryPage(socket, "live", command, encoded),
+        ),
+        "session.preview-history.page.load": clientHandler(
+            "session.preview-history.page.load",
+            (socket, command, encoded) => this.forwardHistoryPage(socket, "preview", command, encoded),
+        ),
+        "session.events.subscribe": clientHandler("session.events.subscribe", () => {
+            throw new ProtocolMessageError("Subscription requires an authorized viewer");
+        }),
+        "file.read": this.clientOperation("file.read"),
+        "content.write": this.clientOperation("content.write"),
+        "content.commit": this.clientOperation("content.commit"),
+        "session.list": this.clientOperation("session.list"),
+        "session.query": this.clientOperation("session.query"),
+        "session.restore": this.clientOperation("session.restore"),
+        "session.archive": this.clientOperation("session.archive"),
+        "native.session.cancel": this.clientOperation("native.session.cancel"),
+        "native.session.request": clientHandler("native.session.request", (socket, command, encoded) =>
+            this.forwardNativeRequest(socket, command, encoded),
+        ),
+        "computer.diagnostics.read": this.clientOperation("computer.diagnostics.read"),
+        "computer.ping": this.clientOperation("computer.ping"),
+        "session.cancel-before-start": this.clientOperation("session.cancel-before-start"),
+        "session.cancel": this.clientOperation("session.cancel"),
+        "session.configure": this.clientOperation("session.configure"),
+        "session.config.read": this.clientOperation("session.config.read"),
+        "session.rename": this.clientOperation("session.rename"),
+        "session.elicitation.respond": this.clientOperation("session.elicitation.respond"),
+        "session.permission.respond": this.clientOperation("session.permission.respond"),
+        "session.create": this.clientOperation("session.create"),
+        "session.prepare": this.clientOperation("session.prepare"),
+        "session.prompt": this.clientOperation("session.prompt"),
+        "session.prompt.disposition": this.clientOperation("session.prompt.disposition"),
+        "workspace.list": this.clientOperation("workspace.list"),
+    } satisfies {
+        readonly [K in ClientToRelayMessage["kind"]]: (
+            socket: ComputerOperationSocket,
+            message: ClientToRelayMessage,
+            encoded: string,
+        ) => void;
+    };
+
+    private readonly addressedDaemon = <
+        K extends Extract<DaemonToRelayMessage, { readonly requestId: string }>["kind"],
+    >(
+        kind: K,
+    ) => daemonHandler(kind, (message, encoded) => this.returnAddressed(message, encoded));
+
+    readonly #daemonHandlers = {
+        "session.event.v2": daemonHandler("session.event.v2", (message, encoded) =>
+            this.#liveEvents.receive(message, encoded),
+        ),
+        "session.close.notice": daemonHandler("session.close.notice", (message, encoded) => {
+            this.broadcast(
+                this.#peers
+                    .viewers()
+                    .filter(
+                        (viewer) => viewer.expiresAt > Date.now() && sameNativeSession(viewer.target, message.target),
+                    )
+                    .map((viewer) => viewer.socket),
+                encoded,
+            );
+        }),
+        "agent.settings.discovered": daemonHandler("agent.settings.discovered", (message, encoded) =>
+            this.returnAgentSettingsDiscoveryResult(message.requestId, message.harness, encoded),
+        ),
+        "agent.settings.discovery.failed": daemonHandler("agent.settings.discovery.failed", (message, encoded) =>
+            this.returnAgentSettingsDiscoveryFailure(message.requestId, encoded),
+        ),
+        "session.live-history.v2.page.loaded": daemonHandler(
+            "session.live-history.v2.page.loaded",
+            (message, encoded) => this.returnHistoryPage("live", message.requestId, message.target, encoded),
+        ),
+        "session.preview-history.page.loaded": daemonHandler(
+            "session.preview-history.page.loaded",
+            (message, encoded) => this.returnHistoryPage("preview", message.requestId, message.target, encoded),
+        ),
+        "computer.heartbeat": daemonHandler("computer.heartbeat", () => {}),
+        "session.archived": this.addressedDaemon("session.archived"),
+        "session.config.updated": this.addressedDaemon("session.config.updated"),
+        "session.config.read.result": this.addressedDaemon("session.config.read.result"),
+        "session.renamed": this.addressedDaemon("session.renamed"),
+        "file.begin": this.addressedDaemon("file.begin"),
+        "file.end": this.addressedDaemon("file.end"),
+        "file.failed": this.addressedDaemon("file.failed"),
+        "content.ready": this.addressedDaemon("content.ready"),
+        "content.available": this.addressedDaemon("content.available"),
+        "session.listed": this.addressedDaemon("session.listed"),
+        "session.queried": this.addressedDaemon("session.queried"),
+        "session.restored": this.addressedDaemon("session.restored"),
+        "native.session.result": daemonHandler("native.session.result", (message, encoded) => {
+            if (message.action === "fork") {
+                this.returnForkResult(message.requestId, message.target, encoded);
+            } else {
+                this.returnAddressed(message, encoded);
+            }
+        }),
+        "computer.diagnostics.result": this.addressedDaemon("computer.diagnostics.result"),
+        "computer.pong": this.addressedDaemon("computer.pong"),
+        "session.operation.failed": this.addressedDaemon("session.operation.failed"),
+        "session.prompt.accepted": this.addressedDaemon("session.prompt.accepted"),
+        "session.prompt.steered": this.addressedDaemon("session.prompt.steered"),
+        "session.turn.stopped": this.addressedDaemon("session.turn.stopped"),
+        "session.turn.withdrawn": this.addressedDaemon("session.turn.withdrawn"),
+        "session.interaction.answered": this.addressedDaemon("session.interaction.answered"),
+        "session.ready": this.addressedDaemon("session.ready"),
+        "workspace.entries": this.addressedDaemon("workspace.entries"),
+    } satisfies {
+        readonly [K in DaemonToRelayMessage["kind"]]: (message: DaemonToRelayMessage, encoded: string) => void;
+    };
+
     constructor(cx: {
         readonly config: { readonly computerId: string };
         readonly gateways: {
@@ -152,6 +313,25 @@ export class ComputerRelayActor {
         this.broadcastComputerStatus(false);
     };
 
+    readonly forwardSessionSubscription = (
+        daemon: RelaySocket,
+        routing: SessionEventsSubscribeCommandRouting,
+    ): void => {
+        daemon.send(sessionEventsSubscribeCommandCodec.encodeRouting(routing));
+    };
+
+    readonly forwardSessionUnsubscribe = (
+        daemon: RelaySocket,
+        subscriptionId: string,
+        target: NativeSessionTarget,
+    ): void => {
+        daemon.send(encodeSessionEventsUnsubscribe({ kind: "session.events.unsubscribe", subscriptionId, target }));
+    };
+
+    readonly forwardNativeCancellation = (daemon: RelaySocket, requestId: string): void => {
+        daemon.send(encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId }));
+    };
+
     readonly receiveDaemonMessage = async (
         socket: RelaySocket,
         message: DaemonToRelayMessage | null,
@@ -160,105 +340,14 @@ export class ComputerRelayActor {
     ): Promise<void> => {
         try {
             if (message === null) {
-                if (encoded === undefined) {
-                    this.recordSkipped("missing_daemon_payload");
-                    return;
-                }
-                let value: unknown;
-                try {
-                    value = JSON.parse(encoded);
-                } catch {
-                    this.recordSkipped("invalid_daemon_json");
-                    return;
-                }
-                if (typeof value !== "object" || value === null || Array.isArray(value)) {
-                    this.recordSkipped("unsupported_daemon_envelope");
-                    return;
-                }
-                const parsed = readNativeSessionTarget(Reflect.get(value, "target"));
-                const kind: unknown = Reflect.get(value, "kind");
-                if (typeof kind !== "string" || kind.length === 0 || kind.length > 64 || parsed === null) {
-                    this.recordSkipped("unroutable_daemon_message");
-                    return;
-                }
-                // The authenticated daemon owns its output. Unknown payloads can
-                // reach only the pending operation for their explicit Session.
-                const requestId: unknown = Reflect.get(value, "requestId");
-                this.broadcast(
-                    [
-                        ...this.#peers
-                            .operations()
-                            .filter(
-                                (route) =>
-                                    route.requestId === requestId &&
-                                    route.target !== undefined &&
-                                    sameNativeSession(route.target, parsed),
-                            )
-                            .map((route) => route.socket),
-                    ],
-                    encoded,
-                );
+                this.recordSkipped("unsupported_daemon_message");
                 return;
             }
-            const wire = encoded ?? JSON.stringify(message);
-            const kind = message.kind;
-            if (kind === SESSION_EVENT_KIND) {
-                this.#liveEvents.receive(message);
+            if (encoded === undefined) {
+                this.recordSkipped("missing_daemon_payload");
                 return;
             }
-            if (kind === SESSION_CLOSE_NOTICE_KIND) {
-                this.broadcast(
-                    this.#peers
-                        .viewers()
-                        .filter(
-                            (viewer) =>
-                                viewer.expiresAt > Date.now() && sameNativeSession(viewer.target, message.target),
-                        )
-                        .map((viewer) => viewer.socket),
-                    wire,
-                );
-            }
-            if (
-                kind === NATIVE_SESSION_RESULT_KIND ||
-                kind === SESSION_OPERATION_FAILED_KIND ||
-                kind === SESSION_PROMPT_ACCEPTED_KIND
-            ) {
-                this.broadcast(
-                    [
-                        ...this.#peers
-                            .operations()
-                            .filter((route) => route.requestId === message.requestId)
-                            .map(({ socket }) => socket),
-                    ],
-                    wire,
-                );
-                return;
-            }
-            if (kind === AGENT_SETTINGS_DISCOVERED_KIND) {
-                this.returnAgentSettingsDiscoveryResult(message.requestId, message.harness, wire);
-                return;
-            }
-            if (kind === AGENT_SETTINGS_DISCOVERY_FAILED_KIND) {
-                this.returnAgentSettingsDiscoveryFailure(message.requestId, wire);
-                return;
-            }
-            if (kind === SESSION_HISTORY_PAGE_LOADED_KIND) {
-                this.returnHistoryPage("live", message);
-                return;
-            }
-            if (kind === SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND) {
-                this.returnHistoryPage("preview", message);
-                return;
-            }
-            if ("requestId" in message) {
-                this.broadcast(
-                    this.#peers
-                        .operations()
-                        .filter((route) => route.requestId === message.requestId)
-                        .map(({ socket }) => socket),
-                    wire,
-                );
-            }
+            this.#daemonHandlers[message.kind](message, encoded);
         } catch (error) {
             if (signal.aborted) {
                 throw error;
@@ -320,29 +409,24 @@ export class ComputerRelayActor {
             return;
         }
         try {
-            const command = decodeKnownServiceToDaemonMessage(message);
-            if (command === null) {
-                this.recordSkipped("unsupported_operation_message");
-                return;
+            const command = decodeClientToRelayMessage(message);
+            if (command.kind !== SESSION_EVENTS_SUBSCRIBE_KIND) {
+                const requestId = operationAddress(command);
+                const ownsOperation = this.#peers
+                    .operations()
+                    .some(
+                        (route) =>
+                            route.socket.isSame(socket) &&
+                            route.requestId === requestId &&
+                            (route.target === undefined ||
+                                command.kind === "native.session.cancel" ||
+                                ("target" in command && sameNativeSession(route.target, command.target))),
+                    );
+                if (!ownsOperation) {
+                    throw new ProtocolMessageError("The command does not belong to this operation");
+                }
             }
-            switch (command.kind) {
-                case AGENT_SETTINGS_DISCOVER_KIND:
-                    this.forwardAgentSettingsDiscovery(socket, command, message);
-                    return;
-                case SESSION_HISTORY_PAGE_LOAD_KIND:
-                    this.forwardHistoryPage(socket, "live", command, message);
-                    return;
-                case SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND:
-                    this.forwardHistoryPage(socket, "preview", command, message);
-                    return;
-                case COMPUTER_HEARTBEAT_ACK_KIND:
-                case COMPUTER_LIVENESS_READY_KIND:
-                    // Liveness belongs to the daemon's own connection, not to an operation.
-                    return;
-                default:
-                    this.forwardControl(socket, command, message);
-                    return;
-            }
+            this.#clientHandlers[command.kind](socket, command, message);
         } catch (error) {
             if (signal.aborted) {
                 throw error;
@@ -356,61 +440,113 @@ export class ComputerRelayActor {
     };
 
     /** Sends one authorized operation to the daemon. */
-    private readonly forwardControl = (socket: RelaySocket, command: ServiceToDaemonRequest, encoded: string): void => {
-        if (!this.sendToDaemon(command, encoded)) {
-            this.refuseOffline(socket, command);
-            return;
+    private readonly forwardControl = (
+        socket: ComputerOperationSocket,
+        command: OperationRouting,
+        encoded: string,
+    ): void => {
+        if (this.sendToDaemon(encoded) === null) {
+            this.refuseOffline(socket, operationAddress(command));
         }
     };
 
-    /** Answers a request the daemon cannot receive at the address every answer to that request carries. */
-    private readonly refuseOffline = (socket: RelaySocket, command: ServiceToDaemonRequest): void => {
-        const target = "target" in command ? command.target : undefined;
+    private readonly forwardNativeRequest = (
+        socket: ComputerOperationSocket,
+        command: Extract<ClientToRelayMessage, { readonly kind: "native.session.request" }>,
+        encoded: string,
+    ): void => {
+        const daemon = this.sendToDaemon(encoded);
+        if (daemon === null) {
+            this.refuseOffline(socket, command.requestId);
+            return;
+        }
+        socket.recordRequestDaemon(daemon, command.action);
+    };
+
+    /** Refuses only this request; other operations on the connection remain usable. */
+    private readonly refuseOffline = (socket: RelaySocket, requestId: string): void => {
         socket.send(
-            encodeSessionOperationFailedEvent({
+            encodeWorkerRequestRejected({
                 code: "computer_offline",
-                kind: SESSION_OPERATION_FAILED_KIND,
+                kind: WORKER_REQUEST_REJECTED_KIND,
                 message: "The local computer is offline",
-                requestId: requestReplyAddress(command),
-                ...(target === undefined ? {} : { target }),
+                requestId,
             }),
         );
     };
 
     private readonly forwardAgentSettingsDiscovery = (
         socket: ComputerOperationSocket,
-        command: AgentSettingsDiscoverCommand,
+        command: Extract<ClientToRelayMessage, { readonly kind: typeof AGENT_SETTINGS_DISCOVER_KIND }>,
         encoded: string,
     ): void => {
         const { harness } = command;
-        const requestId = requestReplyAddress(command);
+        const requestId = command.requestId;
         const route = socket.trackAgentSettingsDiscovery(requestId, harness);
         if (route === "duplicate") {
             return;
         }
         if (route === "busy") {
             socket.send(
-                encodeAgentSettingsDiscoveryFailedEvent({
+                encodeWorkerRequestRejected({
                     code: "agent_settings_discovery_busy",
-                    kind: AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
+                    kind: WORKER_REQUEST_REJECTED_KIND,
                     message: "This connection already has pending settings discovery requests",
                     requestId,
                 }),
             );
             return;
         }
-        if (!this.sendToDaemon(command, encoded)) {
+        if (this.sendToDaemon(encoded) === null) {
             socket.consumeAgentSettingsDiscoveryFailure(requestId);
             socket.send(
-                encodeAgentSettingsDiscoveryFailedEvent({
+                encodeWorkerRequestRejected({
                     code: "computer_offline",
-                    kind: AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
+                    kind: WORKER_REQUEST_REJECTED_KIND,
                     message: "The local computer is offline",
                     requestId,
                 }),
             );
             return;
         }
+    };
+
+    private readonly returnAddressed = (
+        message: Extract<DaemonToRelayMessage, { readonly requestId: string }>,
+        encoded: string,
+    ): void => {
+        this.broadcast(
+            this.#peers
+                .operations()
+                .filter(
+                    (route) =>
+                        route.requestId === message.requestId &&
+                        (!("target" in message) ||
+                            message.target === undefined ||
+                            route.target === undefined ||
+                            sameNativeSession(route.target, message.target)),
+                )
+                .map((route) => route.socket),
+            encoded,
+        );
+    };
+
+    private readonly returnForkResult = (requestId: string, target: NativeSessionTarget, encoded: string): void => {
+        // A Fork answers with a new Session, not the authorized source Session.
+        this.broadcast(
+            this.#peers
+                .operations()
+                .filter(
+                    (route) =>
+                        route.requestId === requestId &&
+                        route.socket.requestAction() === "fork" &&
+                        route.target !== undefined &&
+                        route.target.harness === target.harness &&
+                        !sameNativeSession(route.target, target),
+                )
+                .map((route) => route.socket),
+            encoded,
+        );
     };
 
     private readonly returnAgentSettingsDiscoveryResult = (
@@ -439,28 +575,27 @@ export class ComputerRelayActor {
 
     private readonly returnHistoryPage = (
         kind: HistoryRequestKind,
-        message: Extract<
-            DaemonToRelayMessage,
-            {
-                readonly kind:
-                    | typeof SESSION_HISTORY_PAGE_LOADED_KIND
-                    | typeof SESSION_PREVIEW_HISTORY_PAGE_LOADED_KIND;
-            }
-        >,
+        requestId: string,
+        target: NativeSessionTarget,
+        encoded: string,
     ): void => {
         const recipient = this.#peers
             .operations()
-            .map(({ socket }) => socket)
-            .find((socket) => socket.isOpen() && socket.matchesHistoryRequest(kind, message.requestId));
+            .find(
+                (route) =>
+                    route.socket.isOpen() &&
+                    route.socket.matchesHistoryRequest(kind, requestId) &&
+                    (route.target === undefined || sameNativeSession(route.target, target)),
+            )?.socket;
         // A caller can close or time out independently of the authenticated daemon.
-        recipient?.send(JSON.stringify(message));
+        recipient?.send(encoded);
     };
 
     private readonly forwardHistoryPage = (
         socket: ComputerOperationSocket,
         kind: HistoryRequestKind,
         command: Extract<
-            ServiceToDaemonMessage,
+            ClientToRelayMessage,
             {
                 readonly kind: typeof SESSION_HISTORY_PAGE_LOAD_KIND | typeof SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND;
             }
@@ -468,8 +603,8 @@ export class ComputerRelayActor {
         encoded: string,
     ): void => {
         // A local history route belongs to one operation and ends with that caller.
-        socket.bindHistoryRequest(kind, requestReplyAddress(command));
-        if (!this.sendToDaemon(command, encoded)) {
+        socket.bindHistoryRequest(kind, command.requestId);
+        if (this.sendToDaemon(encoded) === null) {
             socket.close(1013, "Computer offline");
         }
     };
@@ -479,9 +614,9 @@ export class ComputerRelayActor {
             for (const requestId of socket.takeAgentSettingsDiscoveries()) {
                 if (socket.isOpen()) {
                     socket.send(
-                        encodeAgentSettingsDiscoveryFailedEvent({
+                        encodeWorkerRequestRejected({
                             code: "computer_offline",
-                            kind: AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
+                            kind: WORKER_REQUEST_REJECTED_KIND,
                             message: "The local computer is offline",
                             requestId,
                         }),
@@ -491,16 +626,16 @@ export class ComputerRelayActor {
         }
     };
 
-    private readonly sendToDaemon = (message: ServiceToDaemonMessage, encoded?: string): boolean => {
+    private readonly sendToDaemon = (encoded: string): RelaySocket | null => {
         const daemon = this.#peers.daemons().find((socket) => socket.isOpen());
         if (daemon === undefined) {
-            return false;
+            return null;
         }
         try {
-            daemon.send(encoded ?? encodeServiceToDaemonMessage(message));
-            return true;
+            daemon.send(encoded);
+            return daemon;
         } catch {
-            return false;
+            return null;
         }
     };
 

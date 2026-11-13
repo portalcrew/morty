@@ -27,6 +27,7 @@ test("Given real Codex saved more than 32 MiB of answers, When a user forks thro
             peer.send(
                 encodeSessionPromptCommand({
                     kind: "session.prompt",
+                    requestId: commandId,
                     commandId,
                     requestId: commandId,
                     target: sourceSessionId,
@@ -143,6 +144,7 @@ test("Given real Codex saved more than 32 MiB of answers, When a user forks thro
             encodeSessionPromptCommand({
                 kind: "session.prompt",
                 target: forked.target,
+                requestId: continuedId,
                 commandId: continuedId,
                 requestId: continuedId,
                 prompt: "Continue this fork without using tools",

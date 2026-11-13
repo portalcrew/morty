@@ -1,7 +1,9 @@
+import type { ComputerEncryptionAccess } from "@morty-build/client";
 import {
     browserAccessEntry,
     type ComputerDestination,
     centralLocalStorage,
+    computerEncryptionEntry,
     computerPreferenceEntry,
     MAX_REMEMBERED_COMPUTERS,
     type RememberedComputer,
@@ -13,6 +15,17 @@ import { encodeIdentityScope, type IdentityScope } from "./identity-scope-url.ts
 export type { ComputerDestination, RememberedComputer };
 
 export const computerKey = (scope: IdentityScope): string => encodeIdentityScope(scope);
+
+export function storedComputerEncryption(computerId: string): ComputerEncryptionAccess | null {
+    const access = centralLocalStorage.read(computerEncryptionEntry(computerId));
+    return access?.computerId === computerId ? access : null;
+}
+
+export function rememberComputerEncryption(access: ComputerEncryptionAccess): void {
+    if (!centralLocalStorage.write(computerEncryptionEntry(access.computerId), access)) {
+        throw new BrowserAccessStorageError("The browser could not save encrypted Computer access.");
+    }
+}
 
 /**
  * The computers this browser can open, most recently used first. Each remembered Computer keeps its own access token.
@@ -85,6 +98,7 @@ function forgetComputerAccess(scope: IdentityScope, token: string): boolean {
 }
 
 function forgetComputer(scope: IdentityScope): void {
+    centralLocalStorage.remove(computerEncryptionEntry(scope.computerId));
     updateComputers(rememberedComputers().filter((computer) => computerKey(computer.scope) !== computerKey(scope)));
 }
 

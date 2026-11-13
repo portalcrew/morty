@@ -1,13 +1,11 @@
 import {
+    CONTENT_CHUNK_MAX_BYTES,
+    CONTENT_UPLOAD_MAX_ENCODED_BYTES,
     CONTENT_WRITE_MAX_BYTES,
-    decodeInteractionAccepted,
     decodeKnownSessionEventLogPage,
     decodeKnownSessionLiveEventBatch,
-    decodeNativeSessionResult,
+    decodeMessageKind,
     decodePromptAttachment,
-    decodeSessionConfigReadResult,
-    decodeSessionConfigUpdatedEvent,
-    decodeSessionRenamedEvent,
     decodeTurn,
     decodeTurnCancellation,
     decodeTurnReference,
@@ -17,16 +15,20 @@ import {
     MORTY_API_PREFIX,
     type NativeSessionTarget,
     type PromptAttachment,
+    ProtocolMessageError,
+    SESSION_CLOSED_ERROR_CODE,
     type SessionConfigurationSelection,
     type SessionEventLogPage,
     type SessionExecution,
     type SessionLiveEventBatch,
+    type SessionOperationFailedEvent,
     SessionPromptDisposition,
     type Turn,
     type TurnReference,
 } from "@morty-build/client/protocol";
 import type { MortyEndpointCall } from "./calls/call.ts";
 import { sessionEndpoints } from "./calls/session.ts";
+import type { ComputerEncryptionAccess, PayloadDecryptor } from "./encryption.ts";
 import {
     MortyApiError,
     MortyCancellationError,
@@ -37,6 +39,54 @@ import {
     MortyValidationError,
 } from "./errors.ts";
 import { sameNativeSession } from "./native-session.ts";
+import {
+    sessionConfigReadCommandCodec,
+    sessionConfigReadResultCodec,
+    sessionConfigUpdatedEventCodec,
+    sessionConfigureCommandCodec,
+} from "./protocol/session/configuration/index.ts";
+import { sessionRenameCommandCodec, sessionRenamedEventCodec } from "./protocol/session/configuration/title.ts";
+import { sessionEventEnvelopeCodec, sessionEventsSubscribeCommandCodec } from "./protocol/session/events/index.ts";
+import {
+    contentAvailableEventCodec,
+    contentChunkCodec,
+    contentCommitCommandCodec,
+    contentWriteCommandCodec,
+    decodeFileStreamRecord,
+    encodeFileStreamRecord,
+    FILE_STREAM_CONTENT_TYPE,
+    FILE_STREAM_MAX_CHUNK_BYTES,
+    FILE_STREAM_MAX_MESSAGE_BYTES,
+    type FileBeginEvent,
+    type FileStreamRecord,
+    fileBeginEventCodec,
+    fileEndEventCodec,
+    fileFailedEventCodec,
+} from "./protocol/session/files/index.ts";
+import {
+    sessionElicitationRespondCommandCodec,
+    sessionInteractionAnsweredEventCodec,
+    sessionPermissionRespondCommandCodec,
+} from "./protocol/session/interactions/index.ts";
+import {
+    sessionCloseNoticeEventCodec,
+    sessionOperationFailedEventCodec,
+    sessionPromptAcceptedEventCodec,
+} from "./protocol/session/lifecycle/index.ts";
+import { nativeSessionRequestCodec, nativeSessionResultCodec } from "./protocol/session/native/index.ts";
+import {
+    sessionHistoryPageLoadCodec,
+    sessionHistoryPageLoadedCodec,
+} from "./protocol/session/observability/history.ts";
+import {
+    sessionCancelBeforeStartCommandCodec,
+    sessionCancelCommandCodec,
+    sessionPromptCommandCodec,
+    sessionPromptDispositionCommandCodec,
+    sessionPromptSteeredEventCodec,
+    sessionTurnStoppedEventCodec,
+    sessionTurnWithdrawnEventCodec,
+} from "./protocol/session/prompt/commands.ts";
 import type {
     MortyInteractionResponseRequest,
     MortyPageRequest,
@@ -144,6 +194,7 @@ export interface MortyClientOptions extends MortyEndpointOptions {
     readonly computerId: string;
     /** Owned by the Computer; closing this client does not close its transport. */
     readonly transport: WsTransport;
+    readonly encryption: { readonly access: ComputerEncryptionAccess };
     /** Releases the owner's registration after this client's resources close. */
     readonly onClose?: () => void;
 }
@@ -190,6 +241,20 @@ function record(value: unknown): Readonly<Record<string, unknown>> {
         throw new MortyProtocolError("The service returned an invalid error response");
     }
     return value;
+}
+
+function throwNativeFailure(
+    failure: SessionOperationFailedEvent,
+    requestId: string,
+    target: NativeSessionTarget,
+): never {
+    if (
+        failure.requestId !== requestId ||
+        (failure.target !== undefined && !sameNativeSession(failure.target, target))
+    ) {
+        throw new MortyProtocolError("The Computer returned a failure for another request");
+    }
+    throw new MortyError(failure.code, failure.message, { cause: failure });
 }
 
 async function responseValue(response: Response): Promise<unknown> {
@@ -265,6 +330,150 @@ class RequestDeadline {
     };
 }
 
+type FileDownloadState =
+    | { readonly kind: "begin" }
+    | {
+          readonly kind: "chunks";
+          readonly begin: FileBeginEvent;
+          readonly bytes: Uint8Array;
+          readonly offset: number;
+          readonly sequence: number;
+      }
+    | { readonly kind: "end"; readonly begin: FileBeginEvent; readonly bytes: Uint8Array };
+
+async function consumeFileRecord(
+    record: FileStreamRecord,
+    state: FileDownloadState,
+    target: NativeSessionTarget,
+    maximumBytes: number,
+    decryptor: PayloadDecryptor,
+    signal: AbortSignal,
+): Promise<FileDownloadState> {
+    if (state.kind === "end") {
+        throw new MortyProtocolError("The encrypted file contains trailing records");
+    }
+    if (record.kind === "chunk") {
+        if (state.kind !== "chunks") {
+            throw new MortyProtocolError("The encrypted file chunk precedes its metadata");
+        }
+        const chunk = await contentChunkCodec.decode(record.encoded, decryptor, signal);
+        if (
+            chunk.requestId !== state.begin.requestId ||
+            chunk.sequence !== state.sequence ||
+            state.offset + chunk.bytes.byteLength > state.bytes.byteLength
+        ) {
+            throw new MortyProtocolError("The encrypted file contains invalid chunks");
+        }
+        state.bytes.set(chunk.bytes, state.offset);
+        return { ...state, offset: state.offset + chunk.bytes.byteLength, sequence: state.sequence + 1 };
+    }
+    const kind = decodeMessageKind(record.encoded);
+    if (kind === "file.failed") {
+        const failure = await fileFailedEventCodec.decode(record.encoded, decryptor, signal);
+        if (
+            !sameNativeSession(failure.target, target) ||
+            (state.kind === "chunks" && failure.requestId !== state.begin.requestId)
+        ) {
+            throw new MortyProtocolError("The Computer returned a file failure for another request");
+        }
+        throw new MortyError(failure.code, failure.message, { cause: failure });
+    }
+    if (kind === "file.begin" && state.kind === "begin") {
+        const begin = await fileBeginEventCodec.decode(record.encoded, decryptor, signal);
+        if (!sameNativeSession(begin.target, target) || begin.byteLength > maximumBytes) {
+            throw new MortyProtocolError("The Computer returned invalid file metadata");
+        }
+        return { kind: "chunks", begin, bytes: new Uint8Array(begin.byteLength), offset: 0, sequence: 0 };
+    }
+    if (kind === "file.end" && state.kind === "chunks") {
+        const end = await fileEndEventCodec.decode(record.encoded, decryptor, signal);
+        if (
+            end.requestId !== state.begin.requestId ||
+            !sameNativeSession(end.target, target) ||
+            state.offset !== state.bytes.byteLength
+        ) {
+            throw new MortyProtocolError("The encrypted file ended before it was complete");
+        }
+        return { kind: "end", begin: state.begin, bytes: state.bytes };
+    }
+    throw new MortyProtocolError("The encrypted file contains an unexpected message");
+}
+
+async function readEncryptedFile(
+    response: Response,
+    target: NativeSessionTarget,
+    maximumBytes: number,
+    decryptor: PayloadDecryptor,
+    signal: AbortSignal,
+): Promise<{
+    readonly bytes: Uint8Array;
+    readonly mediaType: string;
+    readonly modifiedAt: string;
+    readonly name: string;
+}> {
+    const reader = response.body?.getReader();
+    if (reader === undefined) {
+        throw new MortyProtocolError("The service returned no encrypted file content");
+    }
+    let state: FileDownloadState = { kind: "begin" };
+    let buffer = new Uint8Array(5);
+    let used = 0;
+    let completed = false;
+    try {
+        while (true) {
+            signal.throwIfAborted();
+            const part = await reader.read();
+            signal.throwIfAborted();
+            if (part.done) {
+                break;
+            }
+            let offset = 0;
+            while (offset < part.value.byteLength) {
+                if (state.kind === "end") {
+                    throw new MortyProtocolError("The encrypted file contains trailing data");
+                }
+                const count = Math.min(buffer.byteLength - used, part.value.byteLength - offset);
+                buffer.set(part.value.subarray(offset, offset + count), used);
+                used += count;
+                offset += count;
+                if (used < buffer.byteLength) {
+                    continue;
+                }
+                if (buffer.byteLength === 5) {
+                    decodeFileStreamRecord(buffer);
+                    const length = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength).getUint32(1);
+                    const next = new Uint8Array(5 + length);
+                    next.set(buffer);
+                    buffer = next;
+                    continue;
+                }
+                const decoded = decodeFileStreamRecord(buffer);
+                if (decoded.kind !== "record" || decoded.byteLength !== buffer.byteLength) {
+                    throw new MortyProtocolError("The encrypted file record is incomplete");
+                }
+                state = await consumeFileRecord(decoded.record, state, target, maximumBytes, decryptor, signal);
+                buffer = new Uint8Array(5);
+                used = 0;
+            }
+        }
+        if (used !== 0 || state.kind !== "end") {
+            throw new MortyProtocolError("The encrypted file is incomplete");
+        }
+        completed = true;
+        return {
+            bytes: state.bytes,
+            mediaType: state.begin.mediaType,
+            modifiedAt: state.begin.modifiedAt,
+            name: state.begin.name,
+        };
+    } finally {
+        if (!completed) {
+            await reader.cancel().catch(() => undefined);
+        }
+        reader.releaseLock();
+    }
+}
+
 class LiveEventConnection {
     readonly events: ReadableStream<MortyTransportSessionEvent>;
     readonly #controller: AbortController;
@@ -308,11 +517,16 @@ export class MortyRequestExecutor {
 
     readonly close = (): void => this.#lifetime.abort(new MortyConnectionError("The Morty client is closed"));
 
-    readonly get = async (endpoint: MortyEndpointCall, signal: AbortSignal): Promise<unknown> =>
-        await this.request(endpoint, "", false, signal);
+    get payloadEncryption() {
+        return this.#transport.payloadEncryption;
+    }
+
+    readonly get = async (endpoint: MortyEndpointCall, body: string, signal: AbortSignal): Promise<string> =>
+        await this.request(endpoint, body, "application/json", signal);
 
     readonly getFile = async (
         endpoint: MortyEndpointCall,
+        target: NativeSessionTarget,
         maximumBytes: number,
         signal: AbortSignal,
     ): Promise<{
@@ -331,47 +545,32 @@ export class MortyRequestExecutor {
                 endpoint,
                 origin: this.#endpoint,
                 body: null,
-                headers: this.authenticationHeaders(credential, "application/octet-stream"),
+                headers: this.authenticationHeaders(credential, "application/vnd.morty.encrypted-file"),
                 signal: deadline.signal,
             });
-            this.#observeResponse?.({
-                serverTiming: response.headers.get("server-timing"),
-                status: response.status,
-            });
+            this.#observeResponse?.({ serverTiming: response.headers.get("server-timing"), status: response.status });
             if (!response.ok) {
                 await throwApiError(response);
             }
-            const mediaType = response.headers.get("content-type") ?? "";
-            const modifiedAt = response.headers.get("last-modified") ?? "";
-            const encodedName = response.headers.get("x-morty-file-name") ?? "";
-            const encodedLength = response.headers.get("x-morty-byte-length") ?? "";
             if (
-                mediaType.length === 0 ||
-                mediaType.length > 255 ||
-                modifiedAt.length === 0 ||
-                !/^\d+$/.test(encodedLength)
+                response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !==
+                "application/vnd.morty.encrypted-file"
             ) {
-                throw new MortyProtocolError("The service returned invalid file metadata");
+                throw new MortyProtocolError("The Computer returned an invalid encrypted file response");
             }
-            const byteLength = Number(encodedLength);
-            if (!Number.isSafeInteger(byteLength) || byteLength < 1 || byteLength > maximumBytes) {
-                throw new MortyProtocolError("The service returned an invalid file size");
-            }
-            let name: string;
-            try {
-                name = decodeURIComponent(encodedName);
-            } catch (cause) {
-                throw new MortyProtocolError("The service returned an invalid file name", { cause });
-            }
-            return {
-                bytes: await readExactResponseBytes(response, byteLength, deadline.signal),
-                mediaType,
-                modifiedAt,
-                name,
-            };
+            return await readEncryptedFile(
+                response,
+                target,
+                maximumBytes,
+                this.#transport.payloadEncryption,
+                deadline.signal,
+            );
         } catch (cause) {
             if (!signal.aborted) {
                 this.#lifetime.signal.throwIfAborted();
+            }
+            if (cause instanceof ProtocolMessageError) {
+                throw new MortyProtocolError("The Computer returned an invalid encrypted file", { cause });
             }
             return deadline.translate(cause);
         } finally {
@@ -379,68 +578,23 @@ export class MortyRequestExecutor {
         }
     };
 
-    readonly post = async (endpoint: MortyEndpointCall, body: unknown, signal: AbortSignal): Promise<unknown> => {
-        const encoded = JSON.stringify(body);
-        if (typeof encoded !== "string") {
-            throw new MortyValidationError("The Morty request body is invalid");
-        }
-        return await this.request(endpoint, encoded, true, signal);
-    };
+    readonly post = async (endpoint: MortyEndpointCall, body: string, signal: AbortSignal): Promise<string> =>
+        await this.request(endpoint, body, "application/json", signal);
 
-    readonly put = async (endpoint: MortyEndpointCall, body: unknown, signal: AbortSignal): Promise<unknown> => {
-        const encoded = JSON.stringify(body);
-        if (typeof encoded !== "string") {
-            throw new MortyValidationError("The Morty request body is invalid");
-        }
-        return await this.request(endpoint, encoded, true, signal);
-    };
+    readonly put = async (endpoint: MortyEndpointCall, body: string, signal: AbortSignal): Promise<string> =>
+        await this.request(endpoint, body, "application/json", signal);
 
-    readonly putContent = async (
+    readonly putBinary = async (
         endpoint: MortyEndpointCall,
-        bytes: Uint8Array,
-        metadata: { readonly contentKind: "image" | "resource"; readonly mediaType: string; readonly name: string },
+        body: Uint8Array,
+        contentType: string,
         signal: AbortSignal,
-    ): Promise<unknown> => {
-        const deadline = new RequestDeadline(
-            AbortSignal.any([signal, this.#lifetime.signal]),
-            this.#operationTimeoutMilliseconds ?? endpoint.timeoutMilliseconds,
-        );
-        try {
-            const credential = validateCredential(await this.#credentialProvider.credential(deadline.signal));
-            const headers = {
-                ...this.authenticationHeaders(credential, "application/json"),
-                "content-type": metadata.mediaType,
-                "x-morty-byte-length": bytes.byteLength.toString(),
-                "x-morty-content-kind": metadata.contentKind,
-                "x-morty-file-name": encodeURIComponent(metadata.name),
-            };
-            const response = await this.#transport.fetch({
-                endpoint,
-                origin: this.#endpoint,
-                body: bytes.slice(),
-                headers,
-                signal: deadline.signal,
-            });
-            this.#observeResponse?.({
-                serverTiming: response.headers.get("server-timing"),
-                status: response.status,
-            });
-            if (!response.ok) {
-                await throwApiError(response);
-            }
-            return await responseValue(response);
-        } catch (cause) {
-            if (!signal.aborted) {
-                this.#lifetime.signal.throwIfAborted();
-            }
-            return deadline.translate(cause);
-        } finally {
-            deadline.finish();
-        }
-    };
+    ): Promise<string> => await this.request(endpoint, body, contentType, signal);
 
     readonly openLiveEventStream = async (
         endpoint: MortyEndpointCall,
+        body: string,
+        subscriptionId: string,
         signal: AbortSignal,
     ): Promise<LiveEventConnection> => {
         signal = AbortSignal.any([signal, this.#lifetime.signal]);
@@ -458,13 +612,19 @@ export class MortyRequestExecutor {
         };
         try {
             const credential = validateCredential(await this.#credentialProvider.credential(controller.signal));
-            const events = await this.#transport.openSessionLiveEvents({
-                endpoint,
-                origin: this.#endpoint,
-                body: null,
-                headers: this.authenticationHeaders(credential, "application/json"),
-                signal: controller.signal,
-            });
+            const events = await this.#transport.openSessionLiveEvents(
+                {
+                    endpoint,
+                    origin: this.#endpoint,
+                    body,
+                    headers: {
+                        ...this.authenticationHeaders(credential, "application/json"),
+                        "content-type": "application/json",
+                    },
+                    signal: controller.signal,
+                },
+                subscriptionId,
+            );
             globalThis.clearTimeout(timeoutId);
             return new LiveEventConnection(events, controller, release);
         } catch (cause) {
@@ -481,10 +641,10 @@ export class MortyRequestExecutor {
 
     private readonly request = async (
         endpoint: MortyEndpointCall,
-        body: string,
-        hasBody: boolean,
+        body: string | Uint8Array,
+        contentType: string,
         signal: AbortSignal,
-    ): Promise<unknown> => {
+    ): Promise<string> => {
         const deadline = new RequestDeadline(
             AbortSignal.any([signal, this.#lifetime.signal]),
             this.#operationTimeoutMilliseconds ?? endpoint.timeoutMilliseconds,
@@ -493,12 +653,12 @@ export class MortyRequestExecutor {
             const credential = validateCredential(await this.#credentialProvider.credential(deadline.signal));
             const headers = {
                 ...this.authenticationHeaders(credential, "application/json"),
-                ...(hasBody ? { "content-type": "application/json" } : {}),
+                "content-type": contentType,
             };
             const response = await this.#transport.fetch({
                 endpoint,
                 origin: this.#endpoint,
-                body: hasBody ? body : null,
+                body,
                 headers,
                 signal: deadline.signal,
             });
@@ -509,7 +669,7 @@ export class MortyRequestExecutor {
             if (!response.ok) {
                 await throwApiError(response);
             }
-            return await responseValue(response);
+            return await response.text();
         } catch (cause) {
             if (!signal.aborted) {
                 this.#lifetime.signal.throwIfAborted();
@@ -526,54 +686,6 @@ export class MortyRequestExecutor {
     ): Readonly<Record<string, string>> => ({ accept, authorization: `Bearer ${credential}` });
 }
 
-async function readExactResponseBytes(
-    response: Response,
-    expectedByteLength: number,
-    signal: AbortSignal,
-): Promise<Uint8Array> {
-    const declaredLength = response.headers.get("content-length");
-    if (
-        declaredLength !== null &&
-        (!/^(0|[1-9][0-9]*)$/.test(declaredLength) || Number(declaredLength) !== expectedByteLength)
-    ) {
-        throw new MortyProtocolError("The service returned an invalid artifact length");
-    }
-    const reader = response.body?.getReader();
-    if (reader === undefined) {
-        throw new MortyProtocolError("The service returned no artifact content");
-    }
-    const chunks: Uint8Array[] = [];
-    let byteLength = 0;
-    try {
-        while (true) {
-            signal.throwIfAborted();
-            const chunk = await reader.read();
-            signal.throwIfAborted();
-            if (chunk.done) {
-                break;
-            }
-            byteLength += chunk.value.byteLength;
-            if (byteLength > expectedByteLength) {
-                await reader.cancel("Artifact response exceeded its metadata");
-                throw new MortyProtocolError("The service returned an oversized artifact");
-            }
-            chunks.push(chunk.value);
-        }
-    } finally {
-        reader.releaseLock();
-    }
-    if (byteLength !== expectedByteLength) {
-        throw new MortyProtocolError("The service returned an incomplete artifact");
-    }
-    const bytes = new Uint8Array(byteLength);
-    let offset = 0;
-    for (const chunk of chunks) {
-        bytes.set(chunk, offset);
-        offset += chunk.byteLength;
-    }
-    return bytes;
-}
-
 export class MortySessionResources {
     readonly #executor: MortyRequestExecutor;
     readonly #computerId: string;
@@ -587,37 +699,80 @@ export class MortySessionResources {
         target: NativeSessionTarget,
         request: UpdateMortySessionConfigurationRequest,
         signal: AbortSignal,
-    ) =>
-        decodeSessionConfigUpdatedEvent(
-            JSON.stringify(
-                await this.#executor.post(
-                    sessionEndpoints.updateConfiguration({ computerId: this.#computerId, target }),
-                    request,
-                    signal,
-                ),
+    ) => {
+        const requestId = crypto.randomUUID();
+        const result = await this.#executor.post(
+            sessionEndpoints.updateConfiguration({ computerId: this.#computerId, target }),
+            await sessionConfigureCommandCodec.encode(
+                { ...request, kind: "session.configure", requestId, target },
+                this.#executor.payloadEncryption,
+                signal,
             ),
+            signal,
         );
+        if (decodeMessageKind(result) === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(result, this.#executor.payloadEncryption, signal),
+                requestId,
+                target,
+            );
+        }
+        const decoded = await sessionConfigUpdatedEventCodec.decode(result, this.#executor.payloadEncryption, signal);
+        if (decoded.requestId !== requestId || !sameNativeSession(decoded.target, target)) {
+            throw new MortyProtocolError("The Computer returned a response for another request");
+        }
+        return decoded;
+    };
 
-    readonly readConfiguration = async (target: NativeSessionTarget, signal: AbortSignal) =>
-        decodeSessionConfigReadResult(
-            JSON.stringify(
-                await this.#executor.get(
-                    sessionEndpoints.readConfiguration({ computerId: this.#computerId, target }),
-                    signal,
-                ),
+    readonly readConfiguration = async (target: NativeSessionTarget, signal: AbortSignal) => {
+        const requestId = crypto.randomUUID();
+        const result = await this.#executor.get(
+            sessionEndpoints.readConfiguration({ computerId: this.#computerId, target }),
+            await sessionConfigReadCommandCodec.encode(
+                { kind: "session.config.read", requestId, target },
+                this.#executor.payloadEncryption,
+                signal,
             ),
+            signal,
         );
+        if (decodeMessageKind(result) === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(result, this.#executor.payloadEncryption, signal),
+                requestId,
+                target,
+            );
+        }
+        const decoded = await sessionConfigReadResultCodec.decode(result, this.#executor.payloadEncryption, signal);
+        if (decoded.requestId !== requestId || !sameNativeSession(decoded.target, target)) {
+            throw new MortyProtocolError("The Computer returned a response for another request");
+        }
+        return decoded;
+    };
 
-    readonly rename = async (target: NativeSessionTarget, title: string, signal: AbortSignal) =>
-        decodeSessionRenamedEvent(
-            JSON.stringify(
-                await this.#executor.post(
-                    sessionEndpoints.rename({ computerId: this.#computerId, target }),
-                    { title },
-                    signal,
-                ),
+    readonly rename = async (target: NativeSessionTarget, title: string, signal: AbortSignal) => {
+        const requestId = crypto.randomUUID();
+        const result = await this.#executor.post(
+            sessionEndpoints.rename({ computerId: this.#computerId, target }),
+            await sessionRenameCommandCodec.encode(
+                { kind: "session.rename", requestId, target, title },
+                this.#executor.payloadEncryption,
+                signal,
             ),
+            signal,
         );
+        if (decodeMessageKind(result) === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(result, this.#executor.payloadEncryption, signal),
+                requestId,
+                target,
+            );
+        }
+        const decoded = await sessionRenamedEventCodec.decode(result, this.#executor.payloadEncryption, signal);
+        if (decoded.requestId !== requestId || !sameNativeSession(decoded.target, target)) {
+            throw new MortyProtocolError("The Computer returned a response for another request");
+        }
+        return decoded;
+    };
 
     readonly uploadContent = async (
         sessionTarget: NativeSessionTarget,
@@ -637,19 +792,103 @@ export class MortySessionResources {
         if (input.bytes.byteLength < 1 || input.bytes.byteLength > CONTENT_WRITE_MAX_BYTES) {
             throw new MortyValidationError("The content size is invalid");
         }
-        return decodePromptAttachment(
-            await this.#executor.putContent(
-                sessionEndpoints.uploadContent({
-                    computerId: this.#computerId,
-                    target: sessionTarget,
-                    key: input.contentKey,
-                    uri: input.uri,
-                }),
-                input.bytes,
-                { contentKind: input.kind, mediaType: input.mediaType, name: input.name },
-                signal,
-            ),
+        const attachment = decodePromptAttachment({
+            byteLength: input.bytes.byteLength,
+            contentKey: input.contentKey,
+            kind: input.kind,
+            mimeType: input.mediaType,
+            name: input.name,
+            uri: input.uri,
+        });
+        const bytes = input.bytes.slice();
+        const requestId = crypto.randomUUID();
+        const write = await contentWriteCommandCodec.encode(
+            {
+                kind: "content.write",
+                requestId,
+                target: sessionTarget,
+                byteLength: bytes.byteLength,
+                contentKey: input.contentKey,
+                contentKind: input.kind,
+                mediaType: input.mediaType,
+                name: input.name,
+            },
+            this.#executor.payloadEncryption,
+            signal,
         );
+        const records: Uint8Array[] = [encodeFileStreamRecord({ kind: "message", encoded: write })];
+        for (
+            let offset = 0, sequence = 0;
+            offset < bytes.byteLength;
+            offset += CONTENT_CHUNK_MAX_BYTES, sequence += 1
+        ) {
+            signal.throwIfAborted();
+            const chunk = await contentChunkCodec.encode(
+                { requestId, sequence, bytes: bytes.subarray(offset, offset + CONTENT_CHUNK_MAX_BYTES) },
+                this.#executor.payloadEncryption,
+                signal,
+            );
+            records.push(encodeFileStreamRecord({ kind: "chunk", encoded: chunk }));
+        }
+        const commit = await contentCommitCommandCodec.encode(
+            { kind: "content.commit", requestId, target: sessionTarget },
+            this.#executor.payloadEncryption,
+            signal,
+        );
+        records.push(encodeFileStreamRecord({ kind: "message", encoded: commit }));
+        const encodedBytes = records.reduce((total, record) => total + record.byteLength, 0);
+        const maximumEncodedBytes =
+            2 * (FILE_STREAM_MAX_MESSAGE_BYTES + 5) +
+            Math.ceil(bytes.byteLength / CONTENT_CHUNK_MAX_BYTES) * (FILE_STREAM_MAX_CHUNK_BYTES + 5);
+        if (
+            !Number.isSafeInteger(encodedBytes) ||
+            encodedBytes > maximumEncodedBytes ||
+            encodedBytes > CONTENT_UPLOAD_MAX_ENCODED_BYTES
+        ) {
+            throw new MortyProtocolError("The encrypted attachment exceeds its framing limit");
+        }
+        const wire = new Uint8Array(encodedBytes);
+        let offset = 0;
+        for (const record of records) {
+            wire.set(record, offset);
+            offset += record.byteLength;
+        }
+        const result = await this.#executor.putBinary(
+            sessionEndpoints.uploadContent({
+                computerId: this.#computerId,
+                target: sessionTarget,
+                key: input.contentKey,
+                uri: input.uri,
+            }),
+            wire,
+            FILE_STREAM_CONTENT_TYPE,
+            signal,
+        );
+        const kind = decodeMessageKind(result);
+        if (kind === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(result, this.#executor.payloadEncryption, signal),
+                requestId,
+                sessionTarget,
+            );
+        }
+        if (kind === "file.failed") {
+            const failure = await fileFailedEventCodec.decode(result, this.#executor.payloadEncryption, signal);
+            if (failure.requestId !== requestId || !sameNativeSession(failure.target, sessionTarget)) {
+                throw new MortyProtocolError("The Computer returned a failure for another upload");
+            }
+            throw new MortyError(failure.code, failure.message, { cause: failure });
+        }
+        const available = await contentAvailableEventCodec.decode(result, this.#executor.payloadEncryption, signal);
+        if (
+            available.requestId !== requestId ||
+            !sameNativeSession(available.target, sessionTarget) ||
+            available.contentKey !== input.contentKey ||
+            available.byteLength !== bytes.byteLength
+        ) {
+            throw new MortyProtocolError("The Computer returned an invalid uploaded attachment");
+        }
+        return attachment;
     };
 
     readonly readFile = async (
@@ -671,6 +910,7 @@ export class MortySessionResources {
         }
         return await this.#executor.getFile(
             sessionEndpoints.readFile({ computerId: this.#computerId, target: sessionTarget, path, maximumBytes }),
+            sessionTarget,
             maximumBytes,
             signal,
         );
@@ -686,19 +926,39 @@ export class MortySessionResources {
         signal: AbortSignal,
         commandId?: string,
     ): Promise<SessionExecution> => {
-        const result = decodeNativeSessionResult(
-            JSON.stringify(
-                await this.#executor.get(
-                    sessionEndpoints.readExecution({
-                        computerId: this.#computerId,
-                        target: sessionTarget,
-                        ...(commandId === undefined ? {} : { commandId }),
-                    }),
-                    signal,
-                ),
+        const requestId = crypto.randomUUID();
+        const encoded = await this.#executor.get(
+            sessionEndpoints.readExecution({
+                computerId: this.#computerId,
+                target: sessionTarget,
+                ...(commandId === undefined ? {} : { commandId }),
+            }),
+            await nativeSessionRequestCodec.encode(
+                {
+                    kind: "native.session.request",
+                    action: "active-turn",
+                    requestId,
+                    target: sessionTarget,
+                    ...(commandId === undefined ? {} : { deliveryCommandId: commandId }),
+                },
+                this.#executor.payloadEncryption,
+                signal,
             ),
+            signal,
         );
-        if (result.action !== "active-turn" || !sameNativeSession(result.target, sessionTarget)) {
+        if (decodeMessageKind(encoded) === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
+                requestId,
+                sessionTarget,
+            );
+        }
+        const result = await nativeSessionResultCodec.decode(encoded, this.#executor.payloadEncryption, signal);
+        if (
+            result.requestId !== requestId ||
+            result.action !== "active-turn" ||
+            !sameNativeSession(result.target, sessionTarget)
+        ) {
             throw new MortyProtocolError("The service returned an invalid active Turn");
         }
         const { action: _action, kind: _kind, requestId: _requestId, target: _target, ...execution } = result;
@@ -720,13 +980,60 @@ export class MortyTurnResources {
         request: SubmitMortyTurnRequest,
         signal: AbortSignal,
     ): Promise<Turn> => {
-        const turn = decodeTurn(
-            await this.#executor.post(
-                sessionEndpoints.submitTurn({ computerId: this.#computerId, target: sessionTarget }),
-                request,
+        const commandId = request.idempotencyKey;
+        const requestId = commandId;
+        const result = await this.#executor.post(
+            sessionEndpoints.submitTurn({ computerId: this.#computerId, target: sessionTarget }),
+            await sessionPromptCommandCodec.encode(
+                {
+                    kind: "session.prompt",
+                    requestId,
+                    commandId,
+                    target: sessionTarget,
+                    prompt: request.content,
+                    attachments: request.attachments,
+                    disposition: request.disposition ?? "append",
+                    sessionConfigurations: request.sessionConfigurations ?? [],
+                    ...(request.disposition === "steer" ? { targetCommandId: request.targetCommandId } : {}),
+                },
+                this.#executor.payloadEncryption,
                 signal,
             ),
+            signal,
         );
+        if (decodeMessageKind(result) === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(result, this.#executor.payloadEncryption, signal),
+                requestId,
+                sessionTarget,
+            );
+        }
+        const accepted = await sessionPromptAcceptedEventCodec.decode(result, this.#executor.payloadEncryption, signal);
+        if (accepted.requestId !== requestId || !sameNativeSession(accepted.target, sessionTarget)) {
+            throw new MortyProtocolError("The Computer returned an invalid Turn");
+        }
+        const acceptedAt = new Date().toISOString();
+        const state =
+            accepted.state === "running"
+                ? { kind: "running", startedAt: acceptedAt }
+                : accepted.state === "queued"
+                  ? { kind: "queued" }
+                  : {
+                        kind: "indeterminate",
+                        reconciliation: { detectedAt: acceptedAt, reason: "dispatch_indeterminate" },
+                    };
+        const turn = decodeTurn({
+            acceptedAt,
+            idempotencyKey: commandId,
+            turnId: commandId,
+            target: sessionTarget,
+            request: {
+                kind: "prompt",
+                content: request.content,
+                sessionConfigurations: request.sessionConfigurations ?? [],
+            },
+            state,
+        });
         if (turn === null) {
             throw new MortyProtocolError("The service returned an invalid Turn");
         }
@@ -737,17 +1044,37 @@ export class MortyTurnResources {
         sessionTarget: NativeSessionTarget,
         turnId: string,
         signal: AbortSignal,
-    ): Promise<MortyTurnCancellation> =>
-        this.#answeredFor(
-            turnId,
-            "Turn cancellation",
-            decodeTurnCancellation,
-            await this.#executor.post(
-                sessionEndpoints.cancelTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
-                {},
+    ): Promise<MortyTurnCancellation> => {
+        const requestId = crypto.randomUUID();
+        const encoded = await this.#executor.post(
+            sessionEndpoints.cancelTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
+            await sessionCancelCommandCodec.encode(
+                { kind: "session.cancel", requestId, target: sessionTarget, commandId: turnId },
+                this.#executor.payloadEncryption,
                 signal,
             ),
+            signal,
         );
+        if (decodeMessageKind(encoded) === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
+                requestId,
+                sessionTarget,
+            );
+        }
+        const result = await sessionTurnStoppedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal);
+        if (
+            result.requestId !== requestId ||
+            !sameNativeSession(result.target, sessionTarget) ||
+            result.commandId !== turnId
+        ) {
+            throw new MortyProtocolError("The Computer returned an invalid Turn cancellation");
+        }
+        return this.#answeredFor(turnId, "Turn cancellation", decodeTurnCancellation, {
+            turnId: result.commandId,
+            stopReason: result.stopReason,
+        });
+    };
 
     /** The Relay's answer, decoded by its protocol schema, and checked to be about the Turn the call named. */
     readonly #answeredFor = <Answer extends TurnReference>(
@@ -774,16 +1101,32 @@ export class MortyTurnResources {
         turnId: string,
         signal: AbortSignal,
     ): Promise<void> => {
-        this.#answeredFor(
-            turnId,
-            "queued cancellation",
-            decodeTurnReference,
-            await this.#executor.post(
-                sessionEndpoints.cancelQueuedTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
-                {},
+        const requestId = crypto.randomUUID();
+        const encoded = await this.#executor.post(
+            sessionEndpoints.cancelQueuedTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
+            await sessionCancelBeforeStartCommandCodec.encode(
+                { kind: "session.cancel-before-start", requestId, target: sessionTarget, commandId: turnId },
+                this.#executor.payloadEncryption,
                 signal,
             ),
+            signal,
         );
+        if (decodeMessageKind(encoded) === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
+                requestId,
+                sessionTarget,
+            );
+        }
+        const result = await sessionTurnWithdrawnEventCodec.decode(encoded, this.#executor.payloadEncryption, signal);
+        if (
+            result.requestId !== requestId ||
+            !sameNativeSession(result.target, sessionTarget) ||
+            result.commandId !== turnId
+        ) {
+            throw new MortyProtocolError("The service returned an invalid queued cancellation");
+        }
+        this.#answeredFor(turnId, "queued cancellation", decodeTurnReference, { turnId: result.commandId });
     };
 
     readonly steer = async (
@@ -791,16 +1134,38 @@ export class MortyTurnResources {
         turnId: string,
         signal: AbortSignal,
     ): Promise<{ readonly turnId: string }> => {
-        return this.#answeredFor(
-            turnId,
-            "steered Turn",
-            decodeTurnReference,
-            await this.#executor.put(
-                sessionEndpoints.steerTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
-                { disposition: SessionPromptDisposition.Steer },
+        const requestId = crypto.randomUUID();
+        const encoded = await this.#executor.put(
+            sessionEndpoints.steerTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
+            await sessionPromptDispositionCommandCodec.encode(
+                {
+                    kind: "session.prompt.disposition",
+                    requestId,
+                    target: sessionTarget,
+                    commandId: turnId,
+                    disposition: SessionPromptDisposition.Steer,
+                },
+                this.#executor.payloadEncryption,
                 signal,
             ),
+            signal,
         );
+        if (decodeMessageKind(encoded) === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
+                requestId,
+                sessionTarget,
+            );
+        }
+        const result = await sessionPromptSteeredEventCodec.decode(encoded, this.#executor.payloadEncryption, signal);
+        if (
+            result.requestId !== requestId ||
+            !sameNativeSession(result.target, sessionTarget) ||
+            result.commandId !== turnId
+        ) {
+            throw new MortyProtocolError("The service returned an invalid steered Turn");
+        }
+        return this.#answeredFor(turnId, "steered Turn", decodeTurnReference, { turnId: result.commandId });
     };
 }
 
@@ -821,15 +1186,54 @@ export class MortyInteractionResources {
         request: MortyInteractionResponseRequest,
         signal: AbortSignal,
     ): Promise<void> => {
-        const result = await this.#executor.post(
+        const requestId = crypto.randomUUID();
+        const encoded = await this.#executor.post(
             sessionEndpoints.respond({ computerId: this.#computerId, target: sessionTarget, interactionId }),
-            request,
+            request.kind === "permission"
+                ? await sessionPermissionRespondCommandCodec.encode(
+                      {
+                          kind: "session.permission.respond",
+                          requestId,
+                          target: sessionTarget,
+                          interactionId,
+                          optionId: request.optionId,
+                          outcome: request.outcome,
+                      },
+                      this.#executor.payloadEncryption,
+                      signal,
+                  )
+                : await sessionElicitationRespondCommandCodec.encode(
+                      {
+                          kind: "session.elicitation.respond",
+                          requestId,
+                          target: sessionTarget,
+                          interactionId,
+                          action: request.action,
+                          content: request.content,
+                      },
+                      this.#executor.payloadEncryption,
+                      signal,
+                  ),
             signal,
         );
-        try {
-            decodeInteractionAccepted(result);
-        } catch (cause) {
-            throw new MortyProtocolError("The service returned an invalid Interaction response", { cause });
+        if (decodeMessageKind(encoded) === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
+                requestId,
+                sessionTarget,
+            );
+        }
+        const result = await sessionInteractionAnsweredEventCodec.decode(
+            encoded,
+            this.#executor.payloadEncryption,
+            signal,
+        );
+        if (
+            result.requestId !== requestId ||
+            !sameNativeSession(result.target, sessionTarget) ||
+            result.interactionId !== interactionId
+        ) {
+            throw new MortyProtocolError("The service returned an invalid Interaction response");
         }
     };
 }
@@ -846,6 +1250,7 @@ export class MortyLiveEventSubscription {
     readonly #executor: MortyRequestExecutor;
     readonly #observer: MortySessionEventObserver;
     readonly #endpoint: MortyEndpointCall;
+    readonly #target: NativeSessionTarget;
     #closed = false;
     readonly connected: Promise<void>;
     readonly completed: Promise<void>;
@@ -855,10 +1260,12 @@ export class MortyLiveEventSubscription {
         endpoint: MortyEndpointCall,
         observer: MortySessionEventObserver,
         signal: AbortSignal,
+        target: NativeSessionTarget,
     ) {
         this.#executor = executor;
         this.#observer = observer;
         this.#endpoint = endpoint;
+        this.#target = target;
         const abort = (): void => this.#controller.abort(signal.reason);
         if (signal.aborted) {
             abort();
@@ -887,7 +1294,21 @@ export class MortyLiveEventSubscription {
         let connected = false;
         let connection: LiveEventConnection | null = null;
         try {
-            connection = await this.#executor.openLiveEventStream(this.#endpoint, this.#controller.signal);
+            const subscriptionId = crypto.randomUUID();
+            connection = await this.#executor.openLiveEventStream(
+                this.#endpoint,
+                await sessionEventsSubscribeCommandCodec.encode(
+                    {
+                        kind: "session.events.subscribe",
+                        subscriptionId,
+                        target: this.#target,
+                    },
+                    this.#executor.payloadEncryption,
+                    this.#controller.signal,
+                ),
+                subscriptionId,
+                this.#controller.signal,
+            );
             await this.#observer.reconcile();
             connected = true;
             resolveConnected();
@@ -898,15 +1319,30 @@ export class MortyLiveEventSubscription {
                     if (result.done) {
                         throw new MortyConnectionError("The live session event stream disconnected");
                     }
-                    let value: unknown;
-                    try {
-                        value = JSON.parse(result.value.data);
-                    } catch (cause) {
-                        throw new MortyProtocolError("The live session event stream contains invalid JSON", {
-                            cause,
-                        });
+                    const kind = decodeMessageKind(result.value.data);
+                    if (kind === "session.close.notice") {
+                        const notice = await sessionCloseNoticeEventCodec.decode(
+                            result.value.data,
+                            this.#executor.payloadEncryption,
+                            this.#controller.signal,
+                        );
+                        if (!sameNativeSession(notice.target, this.#target)) {
+                            throw new MortyProtocolError("The live Session close notice is invalid");
+                        }
+                        throw new MortyError(SESSION_CLOSED_ERROR_CODE, notice.reason, { cause: notice });
                     }
-                    const events = decodeKnownSessionLiveEventBatch(value);
+                    if (kind !== "session.event.v2") {
+                        throw new MortyProtocolError("The live Session event stream contains an unexpected message");
+                    }
+                    const message = await sessionEventEnvelopeCodec.decode(
+                        result.value.data,
+                        this.#executor.payloadEncryption,
+                        this.#controller.signal,
+                    );
+                    const events = decodeKnownSessionLiveEventBatch(message.events);
+                    if (events.some((event) => !sameNativeSession(event.target, this.#target))) {
+                        throw new MortyProtocolError("The live Session event stream contains another Session");
+                    }
                     if (events.length === 0) {
                         continue;
                     }
@@ -974,6 +1410,7 @@ export class MortyEventResources {
             sessionEndpoints.liveEvents({ computerId: this.#computerId, target: sessionTarget }),
             observer,
             signal,
+            sessionTarget,
         );
         this.#liveSubscriptions.add(subscription);
         void subscription.completed.finally(() => this.#liveSubscriptions.delete(subscription)).catch(() => undefined);
@@ -986,17 +1423,39 @@ export class MortyEventResources {
         page: MortyPageRequest,
         signal: AbortSignal,
     ): Promise<SessionEventLogPage> => {
-        return decodeKnownSessionEventLogPage(
-            await this.#executor.get(
-                sessionEndpoints.listEvents({
-                    computerId: this.#computerId,
+        const requestId = crypto.randomUUID();
+        const encoded = await this.#executor.get(
+            sessionEndpoints.listEvents({
+                computerId: this.#computerId,
+                target: sessionTarget,
+                limit: page.limit,
+                cursor: page.cursor,
+            }),
+            await sessionHistoryPageLoadCodec.encode(
+                {
+                    kind: "session.live-history.v2.page.load",
+                    requestId,
                     target: sessionTarget,
-                    limit: page.limit,
-                    cursor: page.cursor,
-                }),
+                    eventLimit: page.limit,
+                    cursor: page.cursor.length === 0 ? null : page.cursor,
+                },
+                this.#executor.payloadEncryption,
                 signal,
             ),
+            signal,
         );
+        if (decodeMessageKind(encoded) === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
+                requestId,
+                sessionTarget,
+            );
+        }
+        const result = await sessionHistoryPageLoadedCodec.decode(encoded, this.#executor.payloadEncryption, signal);
+        if (result.requestId !== requestId || !sameNativeSession(result.target, sessionTarget)) {
+            throw new MortyProtocolError("The Computer returned a response for another request");
+        }
+        return decodeKnownSessionEventLogPage(result.events.events);
     };
 
     readonly close = (): void => {
@@ -1017,6 +1476,10 @@ export class MortyClient {
     readonly turns: MortyTurnResources;
 
     constructor(options: MortyClientOptions) {
+        if (options.encryption.access.computerId !== options.computerId) {
+            throw new MortyValidationError("Encrypted access does not match the selected Computer");
+        }
+        options.transport.configureEncryption(options.encryption.access);
         const executor = new MortyRequestExecutor(options, options.transport);
         this.#executor = executor;
         this.#onClose = options.onClose;

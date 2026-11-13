@@ -34,6 +34,7 @@ test("Given an existing real Codex conversation, When the process exits or its t
                     peer.send(
                         encodeSessionPromptCommand({
                             kind: "session.prompt",
+                            requestId: commandId,
                             commandId,
                             requestId: commandId,
                             target: peer.target,
@@ -112,6 +113,7 @@ test("Given a real Codex conversation in Plan mode, When its process recovers be
                     peer.send(
                         encodeSessionPromptCommand({
                             kind: "session.prompt",
+                            requestId: commandId,
                             commandId,
                             requestId: commandId,
                             target: peer.target,

@@ -1,70 +1,109 @@
 import {
+    decodeSessionPromptCommand,
     encodeSessionPromptCommand,
     type SESSION_PROMPT_KIND,
     SessionPromptDisposition,
+    sessionOperationFailedEventCodec,
+    sessionPromptAcceptedEventCodec,
 } from "@morty-build/client/protocol";
+import { WebSocket } from "undici";
 import { executePrompt } from "../../../session/prompt/execute-prompt.ts";
 import type { CommandHandler } from "../definition.ts";
 import { send } from "../transport.ts";
 import { reply, replySettledFailure, settledCommand } from "../turn-replies.ts";
 
-export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = (context, message): void => {
+export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = async (
+    context,
+    message,
+): Promise<void> => {
     // A prompt names only its Session; it runs with the Agent and directory of the Session this Runtime holds.
     const session = context.sessions.findSessions([message.target])[0];
     if (session === undefined) {
-        send(context.socket, {
-            code: "session_not_found",
-            requestId: message.commandId,
-            kind: "session.operation.failed",
-            message: "The Session was not found",
-            target: message.target,
-        });
+        send(
+            context.socket,
+            await sessionOperationFailedEventCodec.encode(
+                {
+                    code: "session_not_found",
+                    requestId: message.requestId,
+                    kind: "session.operation.failed",
+                    message: "The Session was not found",
+                    target: message.target,
+                },
+                context.payloadEncryption,
+                context.signal,
+            ),
+        );
         return;
     }
     // A steer joins a running turn, so the Session admits it only while the Agent runs the turn it names. An
     // appended prompt is always admitted: the Session runs or queues it.
+    // The Turn's durable intent predates request addresses; retries may use a new requestId.
+    const { requestId: _requestId, ...intent } = decodeSessionPromptCommand(encodeSessionPromptCommand(message));
     const receipt = context.operations.claimExecution(
         message.commandId,
         message.target,
-        encodeSessionPromptCommand(message),
+        JSON.stringify(intent),
         () =>
             message.disposition === SessionPromptDisposition.Append ||
             context.sessions.acceptsSteering(message.target, message.targetCommandId),
     );
     if (receipt.kind === "refused") {
-        send(context.socket, {
-            code: "steering_target_unavailable",
-            requestId: message.commandId,
-            kind: "session.operation.failed",
-            message: "The turn to steer is not running.",
-            target: message.target,
-        });
+        send(
+            context.socket,
+            await sessionOperationFailedEventCodec.encode(
+                {
+                    code: "steering_target_unavailable",
+                    requestId: message.requestId,
+                    kind: "session.operation.failed",
+                    message: "The turn to steer is not running.",
+                    target: message.target,
+                },
+                context.payloadEncryption,
+                context.signal,
+            ),
+        );
         return;
     }
     if (receipt.kind === "conflict") {
-        send(context.socket, {
-            code: "command_identity_conflict",
-            requestId: message.commandId,
-            kind: "session.operation.failed",
-            message: "This command identifier was already used for a different request.",
-            target: message.target,
-        });
+        send(
+            context.socket,
+            await sessionOperationFailedEventCodec.encode(
+                {
+                    code: "command_identity_conflict",
+                    requestId: message.requestId,
+                    kind: "session.operation.failed",
+                    message: "This command identifier was already used for a different request.",
+                    target: message.target,
+                },
+                context.payloadEncryption,
+                context.signal,
+            ),
+        );
         return;
     }
     if (receipt.kind === "duplicate") {
         // A retry is answered with where the original command stands, as its receipt records it. A settled outcome
         // is also restated for clients that missed it.
-        reply(context.socket, {
-            kind: "session.prompt.accepted",
-            requestId: message.commandId,
-            target: message.target,
-            state:
-                receipt.state === "settled"
-                    ? "settled"
-                    : context.sessionTurns.get(message.commandId, message.target)?.isQueued() === true
-                      ? "queued"
-                      : "running",
-        });
+        if (context.socket.readyState === WebSocket.OPEN) {
+            reply(
+                context.socket,
+                await sessionPromptAcceptedEventCodec.encode(
+                    {
+                        kind: "session.prompt.accepted",
+                        requestId: message.requestId,
+                        target: message.target,
+                        state:
+                            receipt.state === "settled"
+                                ? "settled"
+                                : context.sessionTurns.get(message.commandId, message.target)?.isQueued() === true
+                                  ? "queued"
+                                  : "running",
+                    },
+                    context.payloadEncryption,
+                    context.signal,
+                ),
+            );
+        }
         const outcome = receipt.state === "settled" ? context.operations.restatedOutcome(message.commandId) : undefined;
         if (outcome !== undefined) {
             context.eventProjection.restateOutcome(message.target, outcome);
@@ -72,24 +111,46 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = (
         return;
     }
     if (receipt.kind === "expired") {
-        send(context.socket, {
-            code: "command_result_expired",
-            requestId: message.commandId,
-            kind: "session.operation.failed",
-            message:
-                "This command already started. Its execution result is no longer available; it will not run again.",
-            target: message.target,
-        });
+        send(
+            context.socket,
+            await sessionOperationFailedEventCodec.encode(
+                {
+                    code: "command_result_expired",
+                    requestId: message.requestId,
+                    kind: "session.operation.failed",
+                    message:
+                        "This command already started. Its execution result is no longer available; it will not run again.",
+                    target: message.target,
+                },
+                context.payloadEncryption,
+                context.signal,
+            ),
+        );
         return;
     }
     context.eventProjection.requested(message, { harness: session.harness, directory: session.cwd });
-    const { commandId, target } = message;
+    const { commandId, requestId, target } = message;
     // A prompt is answered once, at the first of: it entered the queue, it started, or it ended without starting.
     let answered = false;
+    let answer: Promise<void> = Promise.resolve();
     const accepted = (state: "queued" | "running" | "settled"): void => {
         if (!answered) {
             answered = true;
-            reply(context.socket, { kind: "session.prompt.accepted", requestId: commandId, target, state });
+            if (context.socket.readyState === WebSocket.OPEN) {
+                answer = sessionPromptAcceptedEventCodec
+                    .encode(
+                        { kind: "session.prompt.accepted", requestId, target, state },
+                        context.payloadEncryption,
+                        context.signal,
+                    )
+                    .then((encoded) => reply(context.socket, encoded))
+                    .catch((error: unknown) => {
+                        if (!context.signal.aborted) {
+                            console.error("Morty daemon could not send prompt acceptance", error);
+                            context.socket.close(4008, "Prompt acceptance failed");
+                        }
+                    });
+            }
         }
     };
     const queueChanged = (): void => {
@@ -102,7 +163,7 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = (
         queueChanged();
         accepted("queued");
     });
-    const ended = (): void => {
+    const ended = async (): Promise<void> => {
         if (answered) {
             return;
         }
@@ -112,7 +173,7 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = (
             return;
         }
         answered = true;
-        replySettledFailure(context.socket, commandId, target, settled);
+        await replySettledFailure(context, requestId, target, settled);
     };
     const waiting = new AbortController();
     context.operations
@@ -123,6 +184,7 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = (
             }
         })
         .catch(() => undefined);
+    // The active Session owns the Turn across relay reconnects; admission must not wait for its completion.
     void executePrompt({
         eventProjection: context.eventProjection,
         command: message,
@@ -150,14 +212,21 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = (
         .catch((error: unknown) => {
             console.error("Morty daemon turn failed", error);
         })
-        .finally(() => {
+        .then(async () => {
             waiting.abort();
-            ended();
-            context.sessionTurns.finish(turn);
-            context.eventProjection.publishTerminal(message.target, message.commandId);
-            // Only a prompt that entered the queue changes it by leaving.
-            if (turn.enteredQueue()) {
-                queueChanged();
+            try {
+                await ended();
+                await answer;
+            } finally {
+                context.sessionTurns.finish(turn);
+                context.eventProjection.publishTerminal(message.target, message.commandId);
+                // Only a prompt that entered the queue changes it by leaving.
+                if (turn.enteredQueue()) {
+                    queueChanged();
+                }
             }
+        })
+        .catch((error: unknown) => {
+            console.error("Morty daemon could not finish the turn", error);
         });
 };

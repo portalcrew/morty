@@ -129,6 +129,7 @@ test("Given Claude's Stop hook outlasts the result watchdog, When I send the nex
             const send = (commandId: string, prompt: string) =>
                 peer.send(
                     encodeSessionPromptCommand({
+                        requestId: commandId,
                         commandId,
                         requestId: commandId,
                         disposition: SessionPromptDisposition.Append,

@@ -220,6 +220,7 @@ test.each(["http", "websocket"] as const)(
         const transport = new WsTransport();
         const client = new MortyClient({
             transport,
+            encryption: { access: await _runtime.encryptionAccess(signal) },
             endpoint: bindings.origin,
             computerId: owner.computerId,
             credentialProvider: { credential: async () => access.credential },
