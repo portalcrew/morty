@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/morty-repository-logo.svg" width="240" height="240" alt="Morty logo" />
+
 # Morty
 
 **English** · [简体中文](README.zh-CN.md)
