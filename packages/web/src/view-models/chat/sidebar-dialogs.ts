@@ -155,7 +155,7 @@ export function createSidebarDialogs(options: {
             if (get().sharing !== null) {
                 return;
             }
-            const sharing = createIdentitySharingStore(createTransfer);
+            const sharing = createIdentitySharingStore(createTransfer, clock);
             set({ sharing });
             sharing.getState().start(options.signal());
         },

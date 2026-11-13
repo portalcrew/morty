@@ -54,7 +54,7 @@ function SessionWelcome({
                 }
                 tone="info"
             >
-                Your original session is open.
+                <span className="font-semibold">Your original session is open.</span>
             </MortyAlert>
             <Button
                 aria-label="Dismiss getting started tip"

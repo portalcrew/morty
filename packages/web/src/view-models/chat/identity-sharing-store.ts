@@ -6,6 +6,7 @@ import {
     type IdentityTransfer,
     type SharingTerms,
 } from "@/services/identity/anonymous-identity-api";
+import type { Clock } from "@/services/time/clock";
 
 type IdentitySharingState =
     | { readonly kind: "initial" }
@@ -28,6 +29,7 @@ export type SharingRecipient = "person" | "agent";
 export interface IdentitySharingStore {
     readonly state: IdentitySharingState;
     readonly recipient: SharingRecipient;
+    readonly recipientTransitioning: boolean;
     readonly chooseRecipient: (recipient: SharingRecipient) => void;
     readonly start: (signal: AbortSignal) => void;
     readonly choose: (duration: DeviceAccessDuration) => void;
@@ -42,9 +44,11 @@ function linkCode(transfer: IdentityTransfer): string {
 /** The dialog owns one replacement chain. A newer choice waits for the current issuance to be confirmed. */
 export const createIdentitySharingStore = (
     createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>,
+    clock: Clock,
 ) => {
     const lifetime = new AbortController();
     let signal = lifetime.signal;
+    let recipientTransition: AbortController | null = null;
     const store = createStore<IdentitySharingStore>(() => ({
         start: (parent) => {
             if (store.getState().state.kind !== "initial" || lifetime.signal.aborted) {
@@ -87,10 +91,31 @@ export const createIdentitySharingStore = (
                 issue(state.request, state.duration);
             }
         },
-        dispose: () => lifetime.abort(new Error("Identity sharing closed.")),
+        dispose: () => {
+            recipientTransition?.abort();
+            lifetime.abort(new Error("Identity sharing closed."));
+        },
         // The recipient changes only how the same link is presented, so choosing one never issues another link.
-        chooseRecipient: (recipient) => store.setState({ recipient }),
+        chooseRecipient: (recipient) => {
+            if (lifetime.signal.aborted || store.getState().recipient === recipient) {
+                return;
+            }
+            recipientTransition?.abort();
+            const transition = new AbortController();
+            recipientTransition = transition;
+            store.setState({ recipient, recipientTransitioning: true });
+            void clock.sleep(250, AbortSignal.any([lifetime.signal, transition.signal])).then(
+                () => {
+                    if (recipientTransition === transition) {
+                        recipientTransition = null;
+                        store.setState({ recipientTransitioning: false });
+                    }
+                },
+                () => undefined,
+            );
+        },
         recipient: "person",
+        recipientTransitioning: false,
         state: { kind: "initial" },
     }));
     const issue = (request: SharingTerms, duration: DeviceAccessDuration | null) => {
