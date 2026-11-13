@@ -783,26 +783,32 @@ export class SessionManager {
         }
         const release = (async (): Promise<void> => {
             try {
-                const execution = this.#executions.status(options.target);
-                if (execution.kind === "working") {
-                    // Closing deliberately stops this turn. Record that intent through the cancellation owner
-                    // before releasing the Agent, so its teardown cannot become a retained turn failure.
-                    await this.cancelPrompt(options.target, execution.commandId);
+                try {
+                    const execution = this.#executions.status(options.target);
+                    if (execution.kind === "working") {
+                        // Closing deliberately stops this turn. Record that intent through the cancellation owner
+                        // before releasing the Agent, so its teardown cannot become a retained turn failure.
+                        await this.cancelPrompt(options.target, execution.commandId);
+                    }
+                } finally {
+                    // A failed Agent cancellation must still release the closed Session's resources.
+                    const retiring = this.#sessionRetirements.get(options.target);
+                    if (retiring !== undefined) {
+                        await retiring;
+                    }
+                    const pending = this.#executionProcesses.pending(options.target);
+                    const runtime =
+                        pending === undefined ? this.#executionProcesses.get(options.target) : await pending;
+                    if (runtime !== undefined) {
+                        await this.#stopSessionProcess(options.target, runtime);
+                    }
                 }
             } finally {
-                // A failed Agent cancellation must still release the closed Session's resources.
-                const retiring = this.#sessionRetirements.get(options.target);
-                if (retiring !== undefined) {
-                    await retiring;
-                }
-                const pending = this.#executionProcesses.pending(options.target);
-                const runtime = pending === undefined ? this.#executionProcesses.get(options.target) : await pending;
-                if (runtime !== undefined) {
-                    await this.#stopSessionProcess(options.target, runtime);
-                }
+                // Clients were told the Session is archived, so whatever failed above, the Runtime forgets it: its
+                // record leaves the Session list, and archiving it again finds it already archived. Forgotten before
+                // the closing settles, so no operation waiting on it finds the record.
+                this.#store.remove(options.target);
             }
-            // Forgotten before the closing settles, so no operation waiting on it finds the record.
-            this.#store.remove(options.target);
         })();
         const deadline = Promise.withResolvers<void>();
         const timeout = this.#timer.schedule(

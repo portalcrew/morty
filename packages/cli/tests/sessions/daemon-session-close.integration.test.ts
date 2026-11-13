@@ -14,6 +14,7 @@ import {
     decodeSessionArchivedEvent,
     decodeSessionCloseNoticeEvent,
     decodeSessionOperationFailedEvent,
+    decodeSessionsListedEvent,
     encodeServiceToDaemonMessage,
     encodeSessionPromptCommand,
     SessionPromptDisposition,
@@ -32,13 +33,15 @@ class ControlledCloseEndpoint implements ControlledAcpPeer {
     readonly #app: AgentApp;
     readonly #closeGate: Promise<void>;
     readonly #closeStarted: (() => void) | null;
+    readonly #closeFailure: Error | null;
     #connection: AgentConnection | null = null;
     readonly #termination = Promise.withResolvers<AgentTermination>();
     readonly terminated = this.#termination.promise;
 
-    constructor(closeGate: Promise<void>, closeStarted: (() => void) | null) {
+    constructor(closeGate: Promise<void>, closeStarted: (() => void) | null, closeFailure: Error | null = null) {
         this.#closeGate = closeGate;
         this.#closeStarted = closeStarted;
+        this.#closeFailure = closeFailure;
         this.#app = createAgentApp({ name: "controlled-close-agent" })
             .onConnect((connection) => {
                 this.#connection = connection;
@@ -62,6 +65,9 @@ class ControlledCloseEndpoint implements ControlledAcpPeer {
     readonly close = async (): Promise<void> => {
         this.#closeStarted?.();
         await this.#closeGate;
+        if (this.#closeFailure !== null) {
+            throw this.#closeFailure;
+        }
         this.#connection?.close();
         this.#termination.resolve({ kind: "closed" });
     };
@@ -92,6 +98,37 @@ class ControlledCloseAgentSpecification extends ControlledReadinessSpecification
 
     readonly releaseClose = (): void => this.#closeGate.resolve();
 }
+
+/** An Agent whose teardown fails once the Computer holds its Session. */
+class FailingCloseAgentSpecification extends ControlledCloseAgentSpecification {
+    #createdEndpoints = 0;
+    override readonly createEndpoint = (): ControlledAcpPeer => {
+        this.#createdEndpoints += 1;
+        // The first endpoint probes the Agent; the next holds the Computer's Session.
+        return new ControlledCloseEndpoint(
+            Promise.resolve(),
+            null,
+            this.#createdEndpoints > 1 ? new Error("Controlled Agent teardown failure") : null,
+        );
+    };
+}
+
+test("Given the Agent's teardown fails, When the Session is archived, Then clients are told it failed and the Runtime no longer holds the Session", async () => {
+    const agent = new FailingCloseAgentSpecification();
+    await withRealDaemon(agent, { MORTY_TEST_CONTROLLED_CLOSE_PATH: process.execPath }, async (peer) => {
+        const requestId = crypto.randomUUID();
+        peer.send(encodeServiceToDaemonMessage({ kind: "session.archive", requestId, target: peer.target }));
+        expect(decodeSessionCloseNoticeEvent(await peer.nextMessage())).toMatchObject({ target: peer.target });
+        expect(decodeSessionOperationFailedEvent(await peer.nextMessage())).toMatchObject({ requestId });
+
+        const listRequestId = crypto.randomUUID();
+        peer.send(encodeServiceToDaemonMessage({ kind: "session.list", limit: 500, requestId: listRequestId }));
+        expect(decodeSessionsListedEvent(await peer.nextMessage())).toMatchObject({
+            entries: [],
+            requestId: listRequestId,
+        });
+    });
+});
 
 test("Given retained Agent teardown does not finish, When the Session archive deadline elapses, Then the daemon reports a typed timeout", async () => {
     const agent = new ControlledCloseAgentSpecification();
