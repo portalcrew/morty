@@ -667,7 +667,6 @@ test("Given a real daemon prepared a Session, When Relay queries its metadata, T
         expect(decodeSessionsQueriedEvent(await messages.nextKind(SESSION_QUERIED_KIND))).toMatchObject({
             entries: [
                 {
-                    harness: "codex",
                     prompted: false,
                     target: sessionTarget,
                     status: { kind: "idle" },
@@ -786,28 +785,21 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
                 encodeSessionRestoreCommand({
                     kind: "session.restore",
                     requestId: "restore_request",
-                    target: { harness: entry.harness, sessionId: entry.sessionId },
+                    target: entry.target,
                 }),
             );
 
             const restoredEvent = decodeSessionRestoredEvent(await messages.nextKind(SESSION_RESTORED_KIND));
             expect(restoredEvent).toMatchObject({
                 entry: {
-                    harness: "codex",
                     prompted: true,
-                    target: sessionTarget,
                     status: { kind: "idle" },
                     title: "Persist this Session",
                 },
                 kind: SESSION_RESTORED_KIND,
-                ready: {
-                    harness: "codex",
-                    kind: SESSION_READY_KIND,
-                    requestId: "restore_request",
-                    restored: true,
-                    target: sessionTarget,
-                },
+                ready: { restored: true },
                 requestId: "restore_request",
+                target: sessionTarget,
             });
             expect(restoredEvent.ready.runtimeTimings?.map((timing) => timing.name)).toContain("session-load");
             expect(restoredEvent.ready.runtimeTimings?.map((timing) => timing.name)).not.toContain("session-resume");

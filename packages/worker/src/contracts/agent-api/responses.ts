@@ -38,7 +38,6 @@ export const sessionAccessResponse = v.object(sessionCredential);
 /** An opened Session and its Session credential. */
 export const chatAccessResponse = v.object({
     ...sessionCredential,
-    harness: v.string(),
     ready: v.pipe(v.unknown(), v.description("The Computer's opaque encrypted Session readiness reply.")),
 });
 

@@ -281,7 +281,7 @@ export const createBotChatHomeStore = (
             const selection = get().selection;
             onSelectionTargeted(selectedConversationTarget(selection));
             if (selection.kind === "ready") {
-                titles.getState().remember(selection.session.result.ready.target);
+                titles.getState().remember(selection.session.target);
                 onSelectionReady(selection);
             }
         };
@@ -294,7 +294,7 @@ export const createBotChatHomeStore = (
             if (selection === previous) {
                 return;
             }
-            titles.getState().sessionLoaded(event.session.result.ready.target, event.session.entry.title, startedWith);
+            titles.getState().sessionLoaded(event.session.target, event.session.entry.title, startedWith);
             set({ selection });
             announceSelection();
         };
@@ -924,10 +924,7 @@ export const createBotChatHomeStore = (
                         }));
                         return false;
                     }
-                    options.navigation.showManaged({
-                        harness: access.harness,
-                        sessionId: session.entry.sessionId,
-                    });
+                    options.navigation.showManaged(session.target);
                 }
                 // The Session takes the message and its durable copy in one step, so a reload always finds one.
                 options.onFirstMessage(conversationId, {

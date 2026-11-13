@@ -40,22 +40,19 @@ export const SESSION_CLOSED_ERROR_CODE = "session_closed";
 export const SESSION_OPERATION_FAILED_KIND = "session.operation.failed";
 export const SESSION_PROMPT_ACCEPTED_KIND = "session.prompt.accepted";
 
-const sessionMetadataSchema = z
-    .object({
-        harness: IDENTIFIER,
-        directory: DIRECTORY_PATH,
-        directoryLabel: z.string().min(1).max(MAX_WORKSPACE_PATH_LENGTH),
-        prompted: z.boolean(),
-        sessionId: IDENTIFIER,
-        target: nativeSessionTargetSchema,
-        status: sessionStatusSchema,
-        title: z.string().max(500),
-        updatedAt: z.iso.datetime({ offset: true }),
-    })
-    .refine((entry) => entry.harness === entry.target.harness && entry.sessionId === entry.target.sessionId, {
-        message: "Session metadata must describe its native pair",
-    })
-    .readonly();
+/** What the Computer records of a Session, apart from which Session it is. */
+const sessionRecordFields = {
+    directory: DIRECTORY_PATH,
+    directoryLabel: z.string().min(1).max(MAX_WORKSPACE_PATH_LENGTH),
+    prompted: z.boolean(),
+    status: sessionStatusSchema,
+    title: z.string().max(500),
+    updatedAt: z.iso.datetime({ offset: true }),
+};
+const sessionRecordSchema = z.object(sessionRecordFields).readonly();
+export type SessionRecord = z.infer<typeof sessionRecordSchema>;
+
+const sessionMetadataSchema = z.object({ ...sessionRecordFields, target: nativeSessionTargetSchema }).readonly();
 
 export type SessionMetadata = z.infer<typeof sessionMetadataSchema>;
 
@@ -165,21 +162,27 @@ const runtimeTimingsSchema = z
     .max(16)
     .readonly();
 
-export const sessionReadyEventSchema = z
+/** What a Session's preparation tells a client, apart from which Session and which request it answers. */
+const sessionReadyFields = {
+    agentName: z.string().max(255),
+    agentVersion: z.string().max(128),
+    capabilities: sessionCapabilitiesSchema,
+    commands: z.array(sessionCommandSchema).max(500).readonly(),
+    configOptions: sessionConfigOptionsSchema,
+    configurationRevision: IDENTIFIER,
+    directory: DIRECTORY_PATH,
+    directoryLabel: z.string().min(1).max(MAX_WORKSPACE_PATH_LENGTH),
+    restored: z.boolean(),
+    runtimeTimings: runtimeTimingsSchema.optional(),
+};
+export const sessionReadyBodySchema = z.object(sessionReadyFields).readonly();
+export type SessionReadyBody = z.infer<typeof sessionReadyBodySchema>;
+
+const sessionReadyEventSchema = z
     .object({
-        harness: IDENTIFIER,
-        agentName: z.string().max(255),
-        agentVersion: z.string().max(128),
-        capabilities: sessionCapabilitiesSchema,
-        commands: z.array(sessionCommandSchema).max(500).readonly(),
-        configOptions: sessionConfigOptionsSchema,
-        configurationRevision: IDENTIFIER,
-        directory: DIRECTORY_PATH,
-        directoryLabel: z.string().min(1).max(MAX_WORKSPACE_PATH_LENGTH),
+        ...sessionReadyFields,
         kind: z.literal(SESSION_READY_KIND),
         requestId: IDENTIFIER,
-        restored: z.boolean(),
-        runtimeTimings: runtimeTimingsSchema.optional(),
         target: nativeSessionTargetSchema,
     })
     .readonly();
@@ -188,10 +191,10 @@ export type SessionReadyEvent = z.infer<typeof sessionReadyEventSchema>;
 
 const sessionRestoredEventSchema = z
     .object({
-        entry: sessionMetadataSchema,
+        entry: sessionRecordSchema,
         target: nativeSessionTargetSchema,
         kind: z.literal(SESSION_RESTORED_KIND),
-        ready: sessionReadyEventSchema,
+        ready: sessionReadyBodySchema,
         requestId: IDENTIFIER,
     })
     .readonly();
@@ -525,7 +528,6 @@ const sessionReadyEventPublicRoutingSchema = z.object({
     kind: z.literal(SESSION_READY_KIND),
     requestId: routingIdentifier,
     target: routingTarget,
-    harness: routingIdentifier,
 });
 const sessionReadyEventRoutingSchema = sessionReadyEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })

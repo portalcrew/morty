@@ -27,7 +27,7 @@ describe("native session identity", () => {
                 {
                     agent: f.agent,
                     cwd: f.workspace,
-                    target: first.ready.target,
+                    target: first.target,
                     signal,
                 },
                 10_000,
@@ -46,14 +46,14 @@ describe("native session identity", () => {
 
             expect(repeated).toMatchObject({
                 action: "import",
-                ready: { target: first.ready.target },
+                target: first.target,
             });
             await expect(
                 f.sessions.loadSessionEvents(
                     {
                         agent: f.agent,
                         cwd: f.workspace,
-                        target: first.ready.target,
+                        target: first.target,
                         signal,
                     },
                     10_000,
@@ -102,7 +102,6 @@ describe("native session identity", () => {
                     null,
                 );
 
-                expect(result.ready.target).toEqual(result.target);
                 expect(replayed.events.map(({ payload }) => payload)).toEqual(
                     source.events.map(({ payload }) => payload),
                 );
@@ -128,7 +127,7 @@ describe("native session identity", () => {
             if (first.action !== "import") {
                 throw new Error("Expected a native import");
             }
-            await f.sessions.archiveSession(first.ready.target, signal);
+            await f.sessions.archiveSession(first.target, signal);
 
             const repeated = await f.service.execute(
                 {
@@ -140,7 +139,7 @@ describe("native session identity", () => {
                 signal,
             );
 
-            expect(repeated).toMatchObject({ action: "import", ready: { target: first.ready.target } });
+            expect(repeated).toMatchObject({ action: "import", target: first.target });
         } finally {
             await f.close();
         }
@@ -166,7 +165,7 @@ describe("native session identity", () => {
             const turn = f.sessions.runPrompt({
                 agent: f.agent,
                 cwd: f.workspace,
-                target: first.ready.target,
+                target: first.target,
                 commandId: crypto.randomUUID(),
                 prompt: "interleave progress and hold",
                 images: [],
@@ -199,7 +198,7 @@ describe("native session identity", () => {
                 signal,
             );
 
-            expect(joined).toMatchObject({ action: "import", ready: { target: first.ready.target } });
+            expect(joined).toMatchObject({ action: "import", target: first.target });
             expect(turnSettled).toBe(false);
             turnCancellation.abort();
             await expect(turn).rejects.toBeDefined();

@@ -77,7 +77,6 @@ const accessSchema = v.pipe(
         credential: sessionCredentialSchema,
         expiresAt: v.pipe(v.string(), v.isoTimestamp()),
         ready: v.unknown(),
-        harness: identifier,
         workspaceRef: v.custom<string>(isDirectoryPath),
     }),
     v.readonly(),
@@ -332,9 +331,7 @@ export class BotChatApi {
         const ready = await sessionReadyEventCodec.decode(JSON.stringify(access.ready), encryption, signal);
         if (
             ready.requestId !== command.requestId ||
-            ready.harness !== settings.harness ||
             ready.target.harness !== settings.harness ||
-            access.harness !== ready.harness ||
             access.computerId !== this.#computerId ||
             !sameNativeSession(access.target, ready.target)
         ) {
@@ -347,23 +344,27 @@ export class BotChatApi {
         activeTurn: ConversationActiveTurn,
         directoryLabel = access.workspaceRef,
         title = "Untitled session",
-    ) => ({
-        harness: access.harness,
-        result: {
-            action: "conversation" as const,
-            access,
-            activeTurn,
+    ) => {
+        // The Session is named once, by its access; what it was opened with is the rest of its readiness reply.
+        const {
+            kind: _kind,
+            requestId,
+            target: _target,
+            ...ready
+        } = decodeSessionReadyEvent(JSON.stringify(access.ready));
+        return {
             target: access.target,
-            ready: decodeSessionReadyEvent(JSON.stringify(access.ready)),
-        },
-        entry: {
-            sessionId: access.target.sessionId,
-            title,
-            directory: access.workspaceRef,
-            directoryLabel,
-            updatedAt: null,
-        },
-    });
+            requestId,
+            ready,
+            origin: { kind: "created" as const, access, activeTurn },
+            entry: {
+                title,
+                directory: access.workspaceRef,
+                directoryLabel,
+                updatedAt: null,
+            },
+        };
+    };
     readonly managedSessions = async (signal: AbortSignal) => {
         const request = chatCalls.managedSessions({ origin: this.#origin, computerId: this.#computerId });
         const command = decodeSessionListCommand(request.body ?? "");
@@ -451,28 +452,19 @@ export class BotChatApi {
         }
         const restored = await sessionRestoredEventCodec.decode(encoded, encryption, signal);
         const ready = restored.ready;
-        if (
-            restored.requestId !== command.requestId ||
-            !sameNativeSession(restored.target, target) ||
-            !sameNativeSession(ready.target, target) ||
-            ready.harness !== target.harness ||
-            restored.entry.sessionId !== target.sessionId
-        ) {
+        if (restored.requestId !== command.requestId || !sameNativeSession(restored.target, target)) {
             throw new CloudApiError("INVALID_SESSION", "The saved Chat session is invalid.");
         }
         return {
-            harness: restored.entry.harness,
+            target,
+            requestId: restored.requestId,
+            ready,
+            origin: { kind: "opened" as const },
             entry: {
-                sessionId: restored.entry.sessionId,
                 title: restored.entry.title,
                 directory: ready.directory,
                 directoryLabel: ready.directoryLabel,
                 updatedAt: restored.entry.updatedAt,
-            },
-            result: {
-                action: "managed" as const,
-                target: ready.target,
-                ready,
             },
         };
     };
@@ -506,7 +498,14 @@ export class BotChatApi {
         if (result.action !== "import" || result.target.harness !== harness || result.target.sessionId !== sessionId) {
             throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session import.");
         }
-        return { harness, result, entry: find.entry };
+        const { sessionId: _sessionId, ...entry } = find.entry;
+        return {
+            target: result.target,
+            requestId: result.requestId,
+            ready: result.ready,
+            origin: { kind: "opened" as const },
+            entry,
+        };
     };
     /** The settings a new Session of the Agent starts with in the directory. */
     readonly agentSettings = async (
@@ -627,7 +626,6 @@ export class BotChatApi {
         );
         if (
             result.action !== "fork" ||
-            !sameNativeSession(result.ready.target, result.target) ||
             result.target.harness !== input.harness ||
             result.target.sessionId === input.sessionId
         ) {

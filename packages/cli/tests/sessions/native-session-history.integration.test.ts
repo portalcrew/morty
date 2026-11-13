@@ -449,7 +449,7 @@ describe("native session history", () => {
             }
             expect(fork).toMatchObject({
                 action: "fork",
-                ready: { target: fork.target },
+                target: fork.target,
             });
             expect((await f.list()).entries).toHaveLength(2);
             expect(await readFile(join(f.native, source), "utf8")).toBe(original);
@@ -510,7 +510,7 @@ describe("native session history", () => {
                 }
                 expect(result).toMatchObject({
                     action,
-                    ready: { target: result.target },
+                    target: result.target,
                 });
                 expect("history" in result).toBe(false);
                 expect(await readdir(f.native)).not.toContain("load-paused");

@@ -53,10 +53,10 @@ function sessionHarnessIdentity(
     session: SelectedMortySession,
     configuration: BotComputerConfiguration | null,
 ): { readonly harness: string; readonly agent: string } {
-    const agent = configuration?.computer.agents.find((candidate) => candidate.harness === session.harness);
+    const agent = configuration?.computer.agents.find((candidate) => candidate.harness === session.target.harness);
     return {
-        harness: session.harness,
-        agent: agent?.label.trim() || session.result.ready.agentName.trim() || "Unknown",
+        harness: session.target.harness,
+        agent: agent?.label.trim() || session.ready.agentName.trim() || "Unknown",
     };
 }
 
@@ -87,7 +87,7 @@ export function sessionExecutionContext(
         harness: identity.harness,
         computer: configuration?.computer.computerName.trim() || "Unknown",
         agent: identity.agent,
-        directory: session.result.ready.directoryLabel,
+        directory: session.ready.directoryLabel,
         directoryPlaceholder: "Unknown",
     };
 }

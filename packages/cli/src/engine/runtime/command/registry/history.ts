@@ -135,10 +135,10 @@ async function executeSessionHistoryPageLoad(
         if (entry === undefined) {
             throw new SessionError("session_not_found", "The Session was not found");
         }
-        harness = entry.harness;
+        harness = entry.target.harness;
         const resolved = await resolveSessionDirectory(directories, entry.directory, signal);
         const loadOptions = {
-            ...(await resolveAgent(entry.harness, signal)),
+            ...(await resolveAgent(entry.target.harness, signal)),
             cwd: resolved.cwd,
             target: command.target,
             signal,

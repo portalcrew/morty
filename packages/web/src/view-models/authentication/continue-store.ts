@@ -205,14 +205,11 @@ export const createContinueStore = (transport: ApiTransport) => {
                     (computer) => computerKey(computer.scope) === computerKey(identity) && computer.lastUsedAt > 0,
                 );
                 if (!visited) {
-                    centralSessionStorage.write(
-                        sessionWelcomeEntry(identity.computerId, session.result.ready.target),
-                        "pending",
-                    );
+                    centralSessionStorage.write(sessionWelcomeEntry(identity.computerId, session.target), "pending");
                 }
                 const destination = identityDestination("/chat", identity);
-                destination.searchParams.set("harness", session.result.ready.harness);
-                destination.searchParams.set("sessionId", session.entry.sessionId);
+                destination.searchParams.set("harness", session.target.harness);
+                destination.searchParams.set("sessionId", session.target.sessionId);
                 window.location.replace(destination);
             } catch (cause) {
                 if (signal.aborted) {

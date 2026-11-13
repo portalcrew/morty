@@ -123,14 +123,12 @@ test("Given a paired computer, When its owner selects and creates with harness, 
         },
         signal,
     );
-    expect(access).toMatchObject({ harness: "codex", target: { harness: "codex" } });
+    expect(access).toMatchObject({ target: { harness: "codex" } });
+    expect(access).not.toHaveProperty("harness");
     expect(access).not.toHaveProperty("agentRef");
     expect(access).not.toHaveProperty("agentId");
     const { target } = v.parse(v.object({ target: targetSchema }), access);
-    expect(await fixture.runtime.api.managedSession(target, signal)).toMatchObject({
-        harness: "codex",
-        result: { target },
-    });
+    expect(await fixture.runtime.api.managedSession(target, signal)).toMatchObject({ target });
 });
 
 test("Given a computer addressed by its identity, When its owner requests access to a Session the Computer does not hold, Then Chat refuses to mint a credential while held Sessions remain usable", async ({
@@ -506,7 +504,7 @@ test("Given a Bot connected through one Agent, When a Session uses another Agent
         },
         signal,
     );
-    expect(access.harness).toBe("pi");
+    expect(access.target.harness).toBe("pi");
 
     const restored = await fixture.runtime.api.managedSession(
         {
@@ -515,7 +513,7 @@ test("Given a Bot connected through one Agent, When a Session uses another Agent
         },
         signal,
     );
-    expect(restored).toMatchObject({ harness: "pi" });
+    expect(restored).toMatchObject({ target: { harness: "pi", sessionId: access.target.sessionId } });
 });
 
 test("Given an imported native session, When its owner closes and explicitly imports it again, Then Chat reopens the canonical session without creating a duplicate", async ({
@@ -546,13 +544,13 @@ test("Given an imported native session, When its owner closes and explicitly imp
     if (first.action !== "import") {
         throw new Error("Expected imported Session");
     }
-    await fixture.runtime.api.archiveManagedSession(first.ready.target, signal);
+    await fixture.runtime.api.archiveManagedSession(first.target, signal);
     expect(await fixture.runtime.api.managedSessions(signal)).toEqual([]);
     const second = await fixture.runtime.api.nativeSessions(input, signal);
-    expect(second).toMatchObject({ ready: { target: first.ready.target } });
+    expect(second).toMatchObject({ target: first.target });
     const handoff = await fixture.runtime.api.continueNativeSession("codex", nativeId, signal);
-    expect(handoff).toMatchObject({ result: { ready: { target: first.ready.target } } });
-    expect(await fixture.runtime.api.managedSessions(signal)).toMatchObject([{ target: first.ready.target }]);
+    expect(handoff).toMatchObject({ target: first.target });
+    expect(await fixture.runtime.api.managedSessions(signal)).toMatchObject([{ target: first.target }]);
 });
 
 test("Given a Session the Computer holds with a running turn, When its owner archives it, Then it leaves the list, the Computer no longer holds it and archiving again succeeds", async ({
@@ -622,7 +620,7 @@ test("Given an archived native Session, When its owner opens it again from the A
         if (result.action !== "import") {
             throw new Error("Expected imported Session");
         }
-        return result.ready.target;
+        return result.target;
     };
     const target = await open();
     await fixture.runtime.api.archiveManagedSession(target, signal);

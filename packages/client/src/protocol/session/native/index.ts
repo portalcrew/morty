@@ -15,7 +15,7 @@ import {
     sessionElicitationRequestedEventSchema,
     sessionPermissionRequestedEventSchema,
 } from "../interactions/index.ts";
-import { sessionReadyEventSchema } from "../lifecycle/index.ts";
+import { sessionReadyBodySchema } from "../lifecycle/index.ts";
 import { promptAttachmentSchema } from "../prompt/commands.ts";
 import { sessionCapabilitiesSchema } from "../shared/index.ts";
 import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
@@ -244,7 +244,7 @@ const nativeSessionResultSchema = z.union([
             ...resultEnvelope,
             action: z.enum(["import", "fork"]),
             target: nativeSessionTargetSchema,
-            ready: sessionReadyEventSchema,
+            ready: sessionReadyBodySchema,
             title: z.string().max(500),
         })
         .readonly(),

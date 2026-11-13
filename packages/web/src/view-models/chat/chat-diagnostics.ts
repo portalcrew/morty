@@ -43,7 +43,7 @@ export function chatDiagnostics(workspace: ChatWorkspace): ChatDiagnostics {
     if (home.selection.kind !== "ready" || pane === null) {
         return { kind: "unavailable", code: `session_${home.selection.kind}` };
     }
-    const ready = home.selection.session.result.ready;
+    const { ready, requestId, target } = home.selection.session;
     const settings = pane.settings.getState();
     const original = modelSelections(ready.configOptions);
     const visible = modelSelections(settings.options);
@@ -52,12 +52,12 @@ export function chatDiagnostics(workspace: ChatWorkspace): ChatDiagnostics {
         view: "session",
         computerId: computer?.computerId ?? null,
         computerOnline: computer?.online ?? false,
-        agent: { harness: diagnosticAgent(ready.harness), version: diagnosticVersion(ready.agentVersion) },
+        agent: { harness: diagnosticAgent(target.harness), version: diagnosticVersion(ready.agentVersion) },
         catalog: {
             source: "session-ready",
             observedAt: settings.openedAt,
             revision: ready.configurationRevision,
-            requestId: ready.requestId,
+            requestId,
             models: project(original),
             omittedGroups: Math.max(0, original.length - 8),
         },

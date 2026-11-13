@@ -268,10 +268,7 @@ export function createChatWorkspace(options: {
                 return options.createTransfer(terms, signal);
             },
             onOpenSession: (session) => {
-                home.getState().openManaged({
-                    harness: session.result.ready.harness,
-                    sessionId: session.entry.sessionId,
-                });
+                home.getState().openManaged(session.target);
             },
             onOpenedSession: () => startDirectoryLoad(),
         }),
@@ -427,7 +424,7 @@ export function createChatWorkspace(options: {
         // projection with its older-history pagination instead of whatever
         // the previous pane accumulated.
         closePane();
-        const sessionTarget = selection.session.result.ready.target;
+        const sessionTarget = selection.session.target;
         if (
             options.rememberedIdentity !== undefined &&
             (rememberedSessionTarget === null || !sameNativeSession(rememberedSessionTarget, sessionTarget))
@@ -437,10 +434,9 @@ export function createChatWorkspace(options: {
                 options.clock.now(),
                 {
                     kind: "session",
-                    harness: selection.session.result.ready.harness,
-                    sessionId: selection.session.entry.sessionId,
+                    ...selection.session.target,
                 },
-                selection.session.result.ready.directoryLabel,
+                selection.session.ready.directoryLabel,
             );
             rememberedSessionTarget = sessionTarget;
         }
@@ -506,8 +502,7 @@ export function createChatWorkspace(options: {
                     selection.kind === "ready"
                         ? {
                               kind: "session" as const,
-                              harness: selection.session.result.ready.harness,
-                              sessionId: selection.session.entry.sessionId,
+                              ...selection.session.target,
                           }
                         : selection.kind === "draft"
                           ? { kind: "home" as const }
@@ -516,7 +511,7 @@ export function createChatWorkspace(options: {
                     options.rememberedIdentity,
                     options.clock.now(),
                     destination,
-                    selection.kind === "ready" ? selection.session.result.ready.directoryLabel : undefined,
+                    selection.kind === "ready" ? selection.session.ready.directoryLabel : undefined,
                 );
             }
         },

@@ -158,11 +158,7 @@ export class LocalComputerService {
             if (ready.kind === "session.operation.failed") {
                 return ready;
             }
-            if (
-                ready.kind !== "session.ready" ||
-                ready.harness !== command.harness ||
-                ready.target.harness !== command.harness
-            ) {
+            if (ready.kind !== "session.ready" || ready.target.harness !== command.harness) {
                 throw new ComputerManagementError(
                     "RELAY_INVALID_RESPONSE",
                     "The Computer returned an invalid Session route.",
@@ -173,7 +169,6 @@ export class LocalComputerService {
                 ...(await computer.issueSessionAccess(ready.target, lifetime, holder, signal)),
                 computerId,
                 target: ready.target,
-                harness: ready.harness,
                 ready,
             };
         });
