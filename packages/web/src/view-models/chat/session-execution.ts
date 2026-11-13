@@ -128,8 +128,11 @@ interface RuntimeCommand {
 
 /** How far the state reflects the Session's execution log. */
 type ExecutionCoverage =
-    /** No read since the pane started following the Session; the read that follows covers the live facts before it. */
-    | { readonly kind: "unread" }
+    /**
+     * No read since the pane started following the Session. The first read is the baseline, and the live facts that
+     * arrive meanwhile wait: it covers only those up to its position.
+     */
+    | { readonly kind: "unread"; readonly held: readonly LiveExecutionFact[] }
     | { readonly kind: "covered"; readonly position: LogPosition }
     /**
      * A live fact came from another generation of the log than `position`. The read it asked for decides on it and
@@ -161,7 +164,7 @@ interface SessionExecutionTransition {
 }
 
 const initialSessionExecution: SessionExecutionState = {
-    coverage: { kind: "unread" },
+    coverage: { kind: "unread", held: [] },
     turn: idleTurn,
     queued: [],
     listing: null,
@@ -354,8 +357,6 @@ function applyLive(state: SessionExecutionState, fact: LiveExecutionFact): Sessi
     const { coverage } = state;
     switch (coverage.kind) {
         case "unread":
-            // Nothing orders live facts before the first read; the read that follows covers them.
-            return applyLiveChange(state, fact.change);
         case "awaiting-read":
             return settled({ ...state, coverage: { ...coverage, held: [...coverage.held, fact] } });
         case "covered":
@@ -398,7 +399,7 @@ function applyRead(
     const { snapshot, basis, deliveryCommandId, readAt } = fact;
     const { coverage } = state;
     const position = snapshot.executionPosition;
-    const held = coverage.kind === "awaiting-read" ? coverage.held : [];
+    const held = coverage.kind === "covered" ? [] : coverage.held;
     if (
         coverage.kind !== "unread" &&
         coverage.position.sessionGenerationId === position.sessionGenerationId &&
@@ -474,7 +475,7 @@ function applyExecutionFact(state: SessionExecutionState, fact: SessionExecution
         case "opened": {
             const opened: SessionExecutionState = {
                 ...state,
-                coverage: { kind: "unread" },
+                coverage: { kind: "unread", held: [] },
                 queued: [],
                 listing: null,
                 interactions: [],
