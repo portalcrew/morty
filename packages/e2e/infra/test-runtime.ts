@@ -64,7 +64,10 @@ export async function createTestRuntime(
                         window.localStorage.setItem(
                             key,
                             JSON.stringify({
-                                credentials: { ...stored.credentials, [scope.computerId]: token },
+                                credentials: {
+                                    ...stored.credentials,
+                                    [scope.computerId]: stored.credentials[scope.computerId] ?? token,
+                                },
                                 computers: [
                                     ...stored.computers.filter(
                                         (computer: { scope: { computerId: string } }) =>
@@ -111,7 +114,7 @@ export async function createTestRuntime(
                     additionalRuntimes.push(computer);
                     void computer.failure.catch(additionalFailure.reject);
                 }
-                await openChat();
+                const { computerId } = await openChat();
                 const pairing = await chat.createPairing();
                 await computer.pair(
                     journey.workDirectory,
@@ -124,9 +127,10 @@ export async function createTestRuntime(
                     journey.signal,
                 );
                 await chat.readPairedAgent(harness);
-                await chat.bindAgent(harness);
+                const access = await computer.encryptionAccess(journey.workDirectory, computerId, journey.signal);
+                await chat.bindAgent(harness, access);
                 await chat.readBinding(harness);
-                await page.reload();
+                await page.goto(await chat.browserHandoff(access));
             },
             disconnectRuntime: async () => await runtime.disconnect(),
             restartRuntime: async () => await runtime.restart(),

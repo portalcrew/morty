@@ -80,7 +80,7 @@ test("Given the agent OpenAPI document, when a peer reads encrypted Session oper
 test("Given the served transport contract, when an Agent constructs a live subscription, then its frame requires an encrypted body with the caller's subscription identity", async () => {
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });
-    const response = await bindings.request(new Request(`${bindings.origin}/agent-api/asyncapi.json`));
+    const response = await bindings.request(new Request(`${bindings.origin}/doc/agent-api/asyncapi.json`));
     expect(response.status).toBe(200);
     const document = v.parse(
         v.object({
