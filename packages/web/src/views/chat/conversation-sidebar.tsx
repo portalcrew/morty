@@ -253,7 +253,7 @@ function ManagedSessionDirectoryList({
                 ))}
             {directory.kind === "setup-required" && (
                 <div className="flex flex-col items-center rounded-xl border border-border/70 bg-white/55 px-4 py-5 text-center shadow-[0_1px_3px_rgba(17,24,20,0.04)]">
-                    <span className="mb-2 flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <span className="mb-2 flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
                         <MessageSquare aria-hidden="true" className="size-4" />
                     </span>
                     <p className="text-sm font-medium text-foreground">No sessions yet</p>
