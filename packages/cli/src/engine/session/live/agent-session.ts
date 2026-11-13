@@ -118,6 +118,11 @@ export class AgentSession {
     readonly #scope: AdapterSessionScope;
     readonly #subscriber: NativeSessionSubscriber;
     #identity: NativeIdentity;
+    /**
+     * Whether the Runtime holds this Session: its record exists, so it is listed and its target can be used. A Session
+     * being created is not held until its creation completes, so one that fails midway leaves no record behind.
+     */
+    #holding: "held" | "unheld" = "held";
     readonly #adapter: Adapter;
     readonly #harness: string;
     readonly #cwd: string;
@@ -315,13 +320,13 @@ export class AgentSession {
             execution,
             store,
             async (runtime) => {
+                runtime.#holding = "unheld";
                 const opened = await runtime.#writeNativeHistory(
                     async () => await runtime.#adapter.createSession(runtime.#sessionParams(options.signal)),
                 );
                 runtime.#adoptNativeSession(opened.sessionId);
                 runtime.#applySessionOpened(opened);
                 options.signal.throwIfAborted();
-                runtime.writeStoredSession(new Date().toISOString());
             },
             metrics,
             options.adapter,
@@ -378,7 +383,16 @@ export class AgentSession {
     readonly usesEnvironment = (environment: Readonly<Record<string, string>>): boolean =>
         recordsEqual(this.#environment, environment);
 
+    /** The Runtime now holds this Session: its record is written, and every later change updates it. */
+    readonly hold = (): void => {
+        this.#holding = "held";
+        this.writeStoredSession(new Date().toISOString());
+    };
+
     readonly writeStoredSession = (updatedAt: string): void => {
+        if (this.#holding === "unheld") {
+            return;
+        }
         this.#store.write(
             new StoredSession(
                 this.target,

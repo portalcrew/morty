@@ -69,8 +69,8 @@ test("Given a slow Session creation, When I send text and an attachment and writ
     expect(app.elementsByTestId(dataTestId.userMessage)[0]?.textContent).not.toContain("next.json");
 });
 
-test.each(["refused", "unknown"] as const)(
-    "Given Session creation is %s after I write another draft, When I retry, Then only a definite refusal can send the original snapshot and the next draft is preserved",
+test.each(["refused", "failed"] as const)(
+    "Given Session creation %s after I write another draft, When I retry, Then the original snapshot is sent once and the next draft is preserved",
     {
         timeout: 30_000,
     },
@@ -109,19 +109,12 @@ test.each(["refused", "unknown"] as const)(
         gate.reject(
             outcome === "refused"
                 ? RequestError.invalidParams("The controlled Agent refused Session creation before admission")
-                : new Error("The Agent failed without establishing whether creation completed"),
+                : new Error("The Agent failed while the Session was being created"),
         );
         const retry = await app.waitForView(() => getByRole(document.body, "button", { name: "Retry message" }));
         expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "Keep my new draft");
         expect(app.elementsByTestId(dataTestId.userMessage)).toHaveLength(1);
         await app.user.click(retry);
-        if (outcome === "unknown") {
-            await app.waitForView(() => getByRole(document.body, "button", { name: "Retry message" }));
-            expect(app.elementsByTestId(dataTestId.agentResponse)).toHaveLength(0);
-            expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "Keep my new draft");
-            expect(app.elementsByTestId(dataTestId.userMessage)).toHaveLength(1);
-            return;
-        }
         await app.waitForView(() =>
             expect(
                 app

@@ -7,10 +7,11 @@ const receiptSchema = z
     .object({
         operationId: z.string(),
         requestHash: z.string(),
-        resultJson: z.string().nullable(),
+        resultJson: z.string(),
     })
     .readonly();
 
+/** The receipts of finished creations, which answer a retry of the same operation. */
 export class SessionCreationTable {
     readonly #database: LocalSqliteDatabase;
 
@@ -18,28 +19,21 @@ export class SessionCreationTable {
         this.#database = database;
     }
 
+    /** A row without a result is left by a Runtime that recorded a creation before it finished: no creation finished. */
     readonly read = (operationId: string): z.infer<typeof receiptSchema> | undefined => {
-        const row: unknown = this.#database.orm
+        const row = this.#database.orm
             .select()
             .from(sessionCreation)
             .where(eq(sessionCreation.operationId, operationId))
             .get();
-        return row === undefined ? undefined : receiptSchema.parse(row);
+        return row === undefined || row.resultJson === null ? undefined : receiptSchema.parse(row);
     };
 
-    readonly start = (operationId: string, requestHash: string): void => {
-        this.#database.orm.insert(sessionCreation).values({ operationId, requestHash }).run();
-    };
-
-    readonly complete = (operationId: string, resultJson: string): void => {
+    readonly record = (operationId: string, requestHash: string, resultJson: string): void => {
         this.#database.orm
-            .update(sessionCreation)
-            .set({ resultJson })
-            .where(eq(sessionCreation.operationId, operationId))
+            .insert(sessionCreation)
+            .values({ operationId, requestHash, resultJson })
+            .onConflictDoUpdate({ target: sessionCreation.operationId, set: { requestHash, resultJson } })
             .run();
-    };
-
-    readonly remove = (operationId: string): void => {
-        this.#database.orm.delete(sessionCreation).where(eq(sessionCreation.operationId, operationId)).run();
     };
 }

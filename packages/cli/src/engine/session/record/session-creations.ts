@@ -33,18 +33,15 @@ export class SessionCreations {
             return this.#wait(running.result, signal);
         }
         if (prior !== undefined) {
-            if (prior.resultJson === null) {
-                throw new AcpExecutionError(
-                    "Session creation may have completed. Check local sessions before starting another conversation.",
-                    {},
-                    "session_creation_outcome_unknown",
-                );
-            }
             return Promise.resolve(decodeSessionReadyEvent(prior.resultJson));
         }
         return null;
     };
 
+    /**
+     * Runs a creation once per operation. The receipt is written when the Session is held, so a creation that did not
+     * finish has no receipt and a retry creates the Session again: nothing was held, and no client was told of one.
+     */
     readonly run = async (
         operationId: string,
         input: unknown,
@@ -56,22 +53,11 @@ export class SessionCreations {
             return await recovered;
         }
         const hash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
-        this.#table.start(operationId, hash);
         const result = Promise.resolve().then(async () => {
             try {
                 const ready = await create();
-                this.#table.complete(operationId, JSON.stringify(ready));
+                this.#table.record(operationId, hash, JSON.stringify(ready));
                 return ready;
-            } catch (cause) {
-                // Definite pre-admission refusals can repeat; generic Agent errors and transport loss cannot.
-                if (
-                    !signal.aborted &&
-                    cause instanceof AcpExecutionError &&
-                    (cause.code === "session_configuration_conflict" || cause.code === "session_creation_refused")
-                ) {
-                    this.#table.remove(operationId);
-                }
-                throw cause;
             } finally {
                 this.#running.delete(operationId);
             }

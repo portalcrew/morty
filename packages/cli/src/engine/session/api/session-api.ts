@@ -36,6 +36,12 @@ export interface SessionPrepareOptions extends SessionCreationOptions {
     readonly recovery?: SessionRecovery;
 }
 
+/** A Session the Runtime created and holds, with the snapshot of its configured Agent. */
+export interface CreatedSession {
+    readonly target: NativeSessionTarget;
+    readonly prepared: PreparedSession;
+}
+
 export type SessionRecovery = { readonly kind: "history-required" } | { readonly kind: "interactive-only" };
 
 export interface AgentSettingsInspectionOptions {
