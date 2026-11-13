@@ -634,7 +634,9 @@ test("Given a handoff requests a missing directory, When it opens, Then the Comp
         },
     });
     const alert = await app.waitForView(() => getByRole(document.body, "alert"));
-    expect(alert.textContent).toContain("This directory is missing or unavailable");
+    expect(alert.textContent).toContain(
+        "does not exist. Choose an existing directory or create it locally before retrying.",
+    );
     expect(getByRole(document.body, "button", { name: "Try again" })).toBeInstanceOf(HTMLButtonElement);
     expect(window.location.pathname).toBe("/continue");
 });
