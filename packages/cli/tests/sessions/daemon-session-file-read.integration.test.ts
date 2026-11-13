@@ -119,12 +119,13 @@ async function readSessionFile(
     sessionTarget: Parameters<Parameters<typeof withRealDaemon>[2]>[0]["target"],
     path: string,
 ): Promise<FileReadResult> {
+    const requestId = `read-${path.replaceAll(/[^a-zA-Z0-9]/gu, "-")}`;
     peer.send(
         encodeFileReadCommand({
             kind: "file.read",
             maxBytes: 65_536,
             path,
-            requestId: `read-${path.replaceAll(/[^a-zA-Z0-9]/gu, "-")}`,
+            requestId,
             target: sessionTarget,
         }),
     );
@@ -145,7 +146,9 @@ async function readSessionFile(
             };
         }
         if (kind === "file.begin") {
-            expect(decodeFileBeginEvent(message).target).toEqual(sessionTarget);
+            const begin = decodeFileBeginEvent(message);
+            expect(begin.target).toEqual(sessionTarget);
+            expect(begin.requestId).toBe(requestId);
         } else if (kind === "file.end") {
             return { bytes: Buffer.concat(chunks), kind: "streamed", mediaType: "", message: "" };
         }
@@ -241,6 +244,71 @@ if (process.argv.includes("--version")) {
                 // the working-directory interpretation is not a substitute.
                 const absentUrlRead = await readSessionFile(peer, peer.target, pathToFileURL(absentTarget).href);
                 expect(absentUrlRead.kind).toBe("failed");
+            },
+            "embedded",
+            workspace,
+        );
+    } finally {
+        await rm(directory, { force: true, recursive: true });
+    }
+});
+
+test("Given a session with a file, When a file read arrives without the Computer's encryption access, Then the daemon streams nothing for it and still serves the read that has it", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "morty-unsealed-file-read-"));
+    const executableDirectory = join(directory, "bin");
+    const executable = join(executableDirectory, "controlled-acp");
+    await mkdir(executableDirectory);
+    await writeFile(
+        executable,
+        executableSource(`
+if (process.argv.includes("--version")) {
+  process.stdout.write("1.0.0\\n");
+} else {
+  process.argv.push(
+    "--agent-name", "Controlled ACP",
+    "--agent-version", "1.0.0",
+    "--no-delete-session",
+    "--no-fork-session",
+    "--no-embedded-context",
+  );
+  await import(${JSON.stringify(new URL(`file://${fakeAgentPath}`).toString())});
+}
+`),
+        { mode: 0o700 },
+    );
+    const workspace = join(directory, "workspace");
+    await mkdir(workspace, { recursive: true });
+    await writeFile(join(workspace, "index.html"), "<!doctype html>\n<title>Todo</title>\n");
+    try {
+        await withRealDaemon(
+            new ControlledAcpAgentSpecification(),
+            { PATH: executableDirectory },
+            async (peer) => {
+                peer.send(
+                    encodeSessionPrepareCommand({
+                        kind: "session.prepare",
+                        requestId: "prepare-unsealed-file-read-session",
+                        target: peer.target,
+                    }),
+                );
+                for (;;) {
+                    if (decodeMessageKind(await peer.nextMessage()) === "session.ready") {
+                        break;
+                    }
+                }
+                // The daemon handles messages in arrival order: an answer to this one would reach the next read first.
+                peer.sendUnsealed(
+                    JSON.stringify({
+                        kind: "file.read",
+                        maxBytes: 65_536,
+                        path: join(workspace, "index.html"),
+                        requestId: "unsealed-file-read",
+                        target: peer.target,
+                    }),
+                );
+                const sealed = await readSessionFile(peer, peer.target, "/index.html");
+                expect(sealed.kind).toBe("streamed");
+                expect(sealed.bytes.toString("utf8")).toContain("<title>Todo</title>");
             },
             "embedded",
             workspace,

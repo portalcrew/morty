@@ -58,6 +58,8 @@ export interface DaemonConnectionPeer {
     readonly restart: (mode?: "crash", restoreFiles?: () => Promise<void>) => Promise<void>;
     readonly stateDirectory: string;
     readonly send: (message: string | Uint8Array) => void;
+    /** Delivers a text message exactly as written, as a relay without the Computer's encryption access would. */
+    readonly sendUnsealed: (message: string) => void;
     readonly subscribe: (target: NativeSessionTarget) => Promise<void>;
     readonly workspace: string;
 
@@ -215,6 +217,17 @@ async function withDaemonConnection(
             connection.send(
                 typeof message === "string" ? await encryption.encode(message) : await contentFrames.encode(message),
             );
+        });
+        void sendTail.catch((error: unknown) => waiter?.reject(error));
+    };
+    const sendUnsealed = (message: string): void => {
+        const connection = socket;
+        if (connection === undefined) {
+            throw new Error("Daemon is not connected");
+        }
+        sendTail = sendTail.then(() => {
+            signal.throwIfAborted();
+            connection.send(message);
         });
         void sendTail.catch((error: unknown) => waiter?.reject(error));
     };
@@ -400,6 +413,7 @@ async function withDaemonConnection(
             signal,
             workspace,
             send,
+            sendUnsealed,
             subscribe,
             nextMessage,
             nextFrame,

@@ -62,7 +62,7 @@ function createComputerForwardingRoutes() {
             .put("/morty/api/v1/computers/:computerId/catalog", computerFromPath, forward)
             .get("/morty/api/v1/computers/:computerId/transport", computerFromPath, forward)
             .on(
-                ["GET", "OPTIONS"],
+                ["POST", "OPTIONS"],
                 "/morty/api/v1/computers/:computerId/harnesses/:harness/sessions/:sessionId/files/content",
                 computerFromPath,
                 forward,

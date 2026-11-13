@@ -235,6 +235,13 @@ export async function connectControlledAgentRuntime(options: {
         await rm(directory, { force: true, recursive: true });
         throw cause;
     });
+    // The Computer's encryption access is fixed for its life. Read it once, before any client traffic can hold the
+    // store: a later read would race the daemon's replay claims for the store's non-blocking lock.
+    const encryptionAccess = await ComputerEncryptionStore.open(
+        directory,
+        options.connection.computerId,
+        options.signal,
+    ).then(async (store) => await store.access(options.signal));
     let state:
         | { readonly kind: "running"; readonly runtime: typeof initial }
         | { readonly kind: "disconnected" }
@@ -249,8 +256,10 @@ export async function connectControlledAgentRuntime(options: {
     };
     return {
         continueReply: (...reply: Parameters<typeof harness.continueReply>) => harness.continueReply(...reply),
-        encryptionAccess: async (signal: AbortSignal) =>
-            await (await ComputerEncryptionStore.open(directory, options.connection.computerId, signal)).access(signal),
+        encryptionAccess: async (signal: AbortSignal) => {
+            signal.throwIfAborted();
+            return encryptionAccess;
+        },
         writeFiles: async (files: NonNullable<ControlledAgentBehavior["files"]>): Promise<void> =>
             await writeWorkspaceFiles(files, workspace, options.signal),
         disconnect,

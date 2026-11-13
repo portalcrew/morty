@@ -461,7 +461,10 @@ test("Given a locally paired encrypted client, when it submits a prompt and read
     await using runtime = await createControlledAgentRuntime({
         behavior: {
             files: new Map([
-                ["/workspace/private.txt", { content: "secret file e2e-acceptance", mediaType: "text/plain" }],
+                [
+                    "/workspace/secret-path-e2e-acceptance.txt",
+                    { content: "secret file e2e-acceptance", mediaType: "text/plain" },
+                ],
             ]),
             harness: "codex",
             agentName: "Controlled Codex",
@@ -538,7 +541,7 @@ test("Given a locally paired encrypted client, when it submits a prompt and read
             expect(output.join("")).toBe("secret answer e2e-acceptance");
             const page = await client.events.list(ready.target, new MortyPageRequest(100, ""), signal);
             expect(JSON.stringify(page)).toContain("secret answer e2e-acceptance");
-            const file = await client.sessions.readFile(ready.target, "private.txt", signal);
+            const file = await client.sessions.readFile(ready.target, "secret-path-e2e-acceptance.txt", signal);
             expect(new TextDecoder().decode(file.bytes)).toBe("secret file e2e-acceptance");
             const uploadedBytes = new TextEncoder().encode("secret upload e2e-acceptance");
             const contentKey = Array.from(
@@ -599,6 +602,8 @@ test("Given a locally paired encrypted client, when it submits a prompt and read
             expect(data).not.toContain("secret prompt e2e-acceptance");
             expect(data).not.toContain("secret answer e2e-acceptance");
             expect(data).not.toContain("secret file e2e-acceptance");
+            // The relay forwards a file read without learning which file it is.
+            expect(data).not.toContain("secret-path-e2e-acceptance");
             expect(data).not.toContain("secret upload e2e-acceptance");
         }
         for (const direction of ["client-to-relay", "relay-to-daemon", "daemon-to-relay", "relay-to-client"]) {

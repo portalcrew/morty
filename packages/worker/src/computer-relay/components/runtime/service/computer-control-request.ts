@@ -25,7 +25,7 @@ import {
     FILE_FAILED_KIND,
     FILE_STREAM_CONTENT_TYPE,
     FILE_STREAM_MAX_CHUNK_BYTES,
-    type FileReadCommand,
+    type FileReadCommandRouting,
     fileBeginEventCodec,
     fileEndEventCodec,
     fileFailedEventCodec,
@@ -380,7 +380,7 @@ export async function requestComputerContentWrite(
 
 export async function requestComputerFile(
     socket: ComputerReplyConnection,
-    command: FileReadCommand,
+    command: FileReadCommandRouting,
     signal: AbortSignal,
 ): Promise<ComputerFileStream> {
     const timeout = new AbortController();

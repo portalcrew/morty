@@ -1,10 +1,14 @@
-import { decodeFileReadCommand, MORTY_API_PREFIX } from "@morty-build/client/protocol";
+import {
+    type FileReadCommandRouting,
+    fileReadCommandCodec,
+    MORTY_API_PREFIX,
+    type NativeSessionTarget,
+} from "@morty-build/client/protocol";
 import { Hono, type MiddlewareHandler } from "hono";
-import * as v from "valibot";
-import { decodeSessionRequest } from "../../contracts/agent-api/session-requests.ts";
+import { bodyLimit } from "hono/body-limit";
 import { ComputerManagementError } from "../../contracts/computer-management.ts";
 import { COMPUTER_INTERNAL_PREFIX } from "../../contracts/computer-relay-http.ts";
-import { validateIdentifier } from "../../contracts/relay/pairing.ts";
+import { PairingDirectoryError, validateIdentifier } from "../../contracts/relay/pairing.ts";
 import { relayAuthenticationFromEnvironment } from "../../contracts/relay-authentication-environment.ts";
 import type { WebSocketHttpDispatch } from "../../contracts/websocket-http-dispatch.ts";
 import { computerFromPath } from "../../http/computer-target.ts";
@@ -26,7 +30,18 @@ export function createComputerHttpRoutes(
 ) {
     const filePath = `${MORTY_API_PREFIX}/v1/computers/:computerId/harnesses/:harness/sessions/:sessionId/files/content`;
     const timeout = requestTimeoutMiddleware<ComputerRouteHttpEnvironment>(30_000);
-    const cors = createBrowserCors(relayAuthenticationFromEnvironment(ctx.bindings), ["GET"], ["authorization"]);
+    const cors = createBrowserCors(
+        relayAuthenticationFromEnvironment(ctx.bindings),
+        ["POST"],
+        ["authorization", "content-type"],
+    );
+    // An encrypted file read holds one path of at most 4,096 characters beside its routing.
+    const fileReadLimit = bodyLimit({
+        maxSize: 16 * 1024,
+        onError: () => {
+            throw new PairingDirectoryError("invalid_request", "The Session request is invalid");
+        },
+    });
     const authorizeTarget: MiddlewareHandler<ComputerRouteHttpEnvironment> = async (context, next) => {
         if (!ctx.ownsComputer(context.var.computerId)) {
             throw new ComputerManagementError("computer_id_mismatch", "The computer is unavailable", 421);
@@ -65,7 +80,7 @@ export function createComputerHttpRoutes(
             },
         )
         .options(filePath, timeout, computerFromPath, authorizeTarget, cors)
-        .get(filePath, timeout, computerFromPath, authorizeTarget, cors, async (context) => {
+        .post(filePath, timeout, computerFromPath, authorizeTarget, cors, fileReadLimit, async (context) => {
             const services = ctx.services.sessions(context.var.computerId);
             const target = {
                 kind: "session",
@@ -83,27 +98,22 @@ export function createComputerHttpRoutes(
                 );
             }
             const access = await services.sessions.authorizeLiveEvents(target, credential, context.req.raw.signal);
-            const path = decodeSessionRequest(
-                v.pipe(v.string(), v.minLength(1), v.maxLength(4096)),
-                context.req.query("path"),
-            );
-            const maxBytes = decodeSessionRequest(
-                v.pipe(v.number(), v.safeInteger(), v.minValue(1), v.maxValue(128 * 1024 * 1024)),
-                Number(context.req.query("maxBytes") ?? String(32 * 1024 * 1024)),
-            );
-            return services.operations.readSessionFile(
-                access.computerId,
-                decodeFileReadCommand(
-                    JSON.stringify({
-                        kind: "file.read",
-                        maxBytes,
-                        path,
-                        requestId: crypto.randomUUID(),
-                        target: target.target,
-                    }),
-                ),
-                context.req.raw.signal,
-            );
+            const command = decodeFileRead(await context.req.text(), target.target);
+            return services.operations.readSessionFile(access.computerId, command, context.req.raw.signal);
         })
         .all("/morty/api/*", (context) => dispatchHttpRequest(context.req.raw));
+}
+
+/** The read is encrypted for the Computer; the Relay checks only that it addresses the Session the URL authorized. */
+function decodeFileRead(encoded: string, authorized: NativeSessionTarget): FileReadCommandRouting {
+    let command: FileReadCommandRouting;
+    try {
+        command = fileReadCommandCodec.decodeRouting(encoded);
+    } catch (cause) {
+        throw new PairingDirectoryError("invalid_request", "The Session request is invalid", { cause });
+    }
+    if (command.target.harness !== authorized.harness || command.target.sessionId !== authorized.sessionId) {
+        throw new PairingDirectoryError("invalid_request", "The Session request is invalid");
+    }
+    return command;
 }

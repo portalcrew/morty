@@ -50,6 +50,8 @@ export async function recordingRelay(upstreamOrigin: string) {
                 }
             }
             const body = Buffer.concat(chunks);
+            // The request line is part of what the relay observes: a path or query in it is visible to the relay.
+            record({ direction: "client-to-relay", data: `${incoming.method ?? "GET"} ${incoming.url ?? "/"}` });
             if (body.byteLength > 0) {
                 record({ direction: "client-to-relay", data: body.toString() });
             }
@@ -65,7 +67,7 @@ export async function recordingRelay(upstreamOrigin: string) {
             responseHeaders.delete("content-encoding");
             responseHeaders.delete("content-length");
             outgoing.writeHead(response.status, Object.fromEntries(responseHeaders));
-            const gate = incoming.url?.includes("/files/content?") ? downloadGate : null;
+            const gate = incoming.url?.includes("/files/content") ? downloadGate : null;
             if (gate !== null) {
                 downloadGate = null;
                 activeGates.add(gate.release);
