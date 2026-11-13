@@ -88,7 +88,10 @@ test.each(["allow_once", "reject_once"] as const)(
                         if (snapshot.requestId !== requestId) {
                             continue;
                         }
-                        expect(snapshot).toMatchObject({ action: "active-turn", turn: { interaction: permission } });
+                        expect(snapshot).toMatchObject({
+                            action: "active-turn",
+                            interactionState: { interactions: [permission] },
+                        });
                         break;
                     }
                     const option = permission.options.find((entry) => entry.kind === decision);
@@ -198,7 +201,7 @@ test.each(["allow_once", "reject_once"] as const)(
                             }
                             expect(snapshot).toMatchObject({
                                 action: "active-turn",
-                                turn: { interaction: permission },
+                                interactionState: { interactions: [permission] },
                             });
                             break;
                         }

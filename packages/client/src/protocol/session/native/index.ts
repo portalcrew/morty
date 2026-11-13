@@ -46,10 +46,6 @@ const activeTurnSnapshotSchema = z
     .object({
         commandId: identifier,
         epoch: identifier,
-        interaction: z
-            .discriminatedUnion("kind", [sessionPermissionRequestedEventSchema, sessionElicitationRequestedEventSchema])
-            .nullable(),
-        sequence: z.number().int().nonnegative(),
         // When the Computer recorded the start of this running turn.
         startedAt: z.iso.datetime({ offset: true }),
         state: z.literal("running"),

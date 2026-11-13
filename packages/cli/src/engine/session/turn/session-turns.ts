@@ -1,11 +1,6 @@
 import { NativeSessionMap } from "@morty-build/client/native-session";
-import type {
-    NativeSessionResult,
-    NativeSessionTarget,
-    SessionLiveEvent,
-    SessionPromptCommand,
-} from "@morty-build/client/protocol";
-import type { ActiveRuntimeTurn, PromptDispatch, RecordedSessionEvent } from "./active-turn.ts";
+import type { NativeSessionResult, NativeSessionTarget, SessionPromptCommand } from "@morty-build/client/protocol";
+import type { ActiveRuntimeTurn, PromptDispatch } from "./active-turn.ts";
 import type { ExecutionReceipts } from "./execution-receipts.ts";
 import { type SessionExecutes, SessionExecutionState } from "./session-execution.ts";
 
@@ -41,21 +36,6 @@ export class SessionTurns {
     readonly finish = (turn: ActiveRuntimeTurn): void => {
         this.#bySessionTarget.get(turn.command.target)?.finish(turn);
         this.sweep();
-    };
-
-    readonly recordEvent = (event: RecordedSessionEvent): RecordedSessionEvent =>
-        "target" in event ? (this.#bySessionTarget.get(event.target)?.recordEvent(event) ?? event) : event;
-
-    readonly recordSessionEvent = (event: SessionLiveEvent): void => {
-        if (
-            event.type === "lifecycle-metadata" &&
-            (event.payload.kind === "session.permission.requested" ||
-                event.payload.kind === "session.permission.resolved" ||
-                event.payload.kind === "session.elicitation.requested" ||
-                event.payload.kind === "session.elicitation.resolved")
-        ) {
-            this.recordEvent(event.payload.event);
-        }
     };
 
     /** The Session's running turn and the commands waiting behind it, as one synchronous read. */

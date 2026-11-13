@@ -180,7 +180,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         const running = await snapshot("permission_snapshot");
         expect(running).toMatchObject({
             action: "active-turn",
-            turn: { interaction: permission },
+            interactionState: { interactions: [permission] },
         });
         // The turn is dated by the Computer's start, not by whoever reads it.
         const startedAt = running.action === "active-turn" ? Date.parse(running.turn?.startedAt ?? "") : Number.NaN;
@@ -199,7 +199,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         await messages.nextKind(SESSION_PERMISSION_RESOLVED_KIND);
         expect(await snapshot("resolved_permission_snapshot")).toMatchObject({
             action: "active-turn",
-            turn: { interaction: null },
+            interactionState: { interactions: [] },
         });
         // A caller that lost the first reply can repeat its answer, but cannot overwrite it.
         const repeatedAnswer = {
@@ -240,7 +240,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         );
         expect(await snapshot("elicitation_snapshot")).toMatchObject({
             action: "active-turn",
-            turn: { interaction: elicitation },
+            interactionState: { interactions: [elicitation] },
         });
         await socket.send(
             encodeSessionElicitationRespondCommand({
@@ -255,7 +255,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         await messages.nextKind(SESSION_ELICITATION_RESOLVED_KIND);
         expect(await snapshot("resolved_elicitation_snapshot")).toMatchObject({
             action: "active-turn",
-            turn: { interaction: null },
+            interactionState: { interactions: [] },
         });
         await writeFile(join(stateDirectory, "agent", "resume-after-elicitation"), "");
         await messages.nextKind("prompt.completed");
