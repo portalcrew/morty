@@ -1,5 +1,6 @@
 import {
     CONTENT_WRITE_MAX_BYTES,
+    decodeInteractionAccepted,
     decodeKnownSessionEventLogPage,
     decodeKnownSessionLiveEventBatch,
     decodeNativeSessionResult,
@@ -8,6 +9,8 @@ import {
     decodeSessionConfigUpdatedEvent,
     decodeSessionRenamedEvent,
     decodeTurn,
+    decodeTurnCancellation,
+    decodeTurnReference,
     type ExternalAudioContentBlock,
     type ExternalImageContentBlock,
     type ExternalResourceContentBlock,
@@ -20,6 +23,7 @@ import {
     type SessionLiveEventBatch,
     SessionPromptDisposition,
     type Turn,
+    type TurnReference,
 } from "@morty-build/client/protocol";
 import type { MortyEndpointCall } from "./calls/call.ts";
 import { sessionEndpoints } from "./calls/session.ts";
@@ -175,18 +179,6 @@ function normalizeEndpoint(value: string): URL {
         endpoint.pathname = `${endpoint.pathname}/`;
     }
     return endpoint;
-}
-
-function decodeTurnCancellation(value: unknown, turnId: string): MortyTurnCancellation {
-    if (
-        typeof value !== "object" ||
-        value === null ||
-        Reflect.get(value, "turnId") !== turnId ||
-        typeof Reflect.get(value, "stopReason") !== "string"
-    ) {
-        throw new MortyProtocolError("The service returned an invalid Turn cancellation");
-    }
-    return { turnId, stopReason: Reflect.get(value, "stopReason") };
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -758,14 +750,35 @@ export class MortyTurnResources {
         turnId: string,
         signal: AbortSignal,
     ): Promise<MortyTurnCancellation> =>
-        decodeTurnCancellation(
+        this.#answeredFor(
+            turnId,
+            "Turn cancellation",
+            decodeTurnCancellation,
             await this.#executor.post(
                 sessionEndpoints.cancelTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
                 {},
                 signal,
             ),
-            turnId,
         );
+
+    /** The Relay's answer, decoded by its protocol schema, and checked to be about the Turn the call named. */
+    readonly #answeredFor = <Answer extends TurnReference>(
+        turnId: string,
+        what: string,
+        decode: (value: unknown) => Answer,
+        value: unknown,
+    ): Answer => {
+        let answer: Answer;
+        try {
+            answer = decode(value);
+        } catch (cause) {
+            throw new MortyProtocolError(`The service returned an invalid ${what}`, { cause });
+        }
+        if (answer.turnId !== turnId) {
+            throw new MortyProtocolError(`The service returned an invalid ${what}`);
+        }
+        return answer;
+    };
 
     /** Withdraws a queued prompt only when the Computer confirms it did not execute. */
     readonly cancelQueued = async (
@@ -773,14 +786,16 @@ export class MortyTurnResources {
         turnId: string,
         signal: AbortSignal,
     ): Promise<void> => {
-        const result = await this.#executor.post(
-            sessionEndpoints.cancelQueuedTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
-            {},
-            signal,
+        this.#answeredFor(
+            turnId,
+            "queued cancellation",
+            decodeTurnReference,
+            await this.#executor.post(
+                sessionEndpoints.cancelQueuedTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
+                {},
+                signal,
+            ),
         );
-        if (typeof result !== "object" || result === null || Reflect.get(result, "turnId") !== turnId) {
-            throw new MortyProtocolError("The service returned an invalid queued cancellation");
-        }
     };
 
     readonly steer = async (
@@ -788,15 +803,16 @@ export class MortyTurnResources {
         turnId: string,
         signal: AbortSignal,
     ): Promise<{ readonly turnId: string }> => {
-        const result = await this.#executor.put(
-            sessionEndpoints.steerTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
-            { disposition: SessionPromptDisposition.Steer },
-            signal,
+        return this.#answeredFor(
+            turnId,
+            "steered Turn",
+            decodeTurnReference,
+            await this.#executor.put(
+                sessionEndpoints.steerTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
+                { disposition: SessionPromptDisposition.Steer },
+                signal,
+            ),
         );
-        if (typeof result !== "object" || result === null || Reflect.get(result, "turnId") !== turnId) {
-            throw new MortyProtocolError("The service returned an invalid steered Turn");
-        }
-        return { turnId };
     };
 }
 
@@ -822,13 +838,10 @@ export class MortyInteractionResources {
             request,
             signal,
         );
-        if (
-            typeof result !== "object" ||
-            result === null ||
-            !("accepted" in result) ||
-            Reflect.get(result, "accepted") !== true
-        ) {
-            throw new MortyProtocolError("The service returned an invalid Interaction response");
+        try {
+            decodeInteractionAccepted(result);
+        } catch (cause) {
+            throw new MortyProtocolError("The service returned an invalid Interaction response", { cause });
         }
     };
 }
