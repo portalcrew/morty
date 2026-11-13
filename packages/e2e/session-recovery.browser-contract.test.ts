@@ -278,6 +278,10 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
             "Keep this conversation available.",
         );
         await composer.fill("Preserve my unsent draft.");
+        if (recovery === "manual") {
+            // Keep automatic timers still once the user-visible retry action becomes available.
+            await runtime.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+        }
         const socketsClosed = Promise.all(
             [...activeSockets].map((socket) => new Promise<void>((resolve) => socket.once("close", () => resolve()))),
         );
@@ -286,7 +290,19 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
         await expect(composer).toBeEnabled();
         await expect(page.getByTestId(dataTestId.sendMessage)).toBeDisabled();
         await runtime.clock.runFor(12000);
-        if (recovery !== "automatic") {
+        if (recovery === "manual") {
+            const retry = page.getByRole("button", { name: "Retry now", exact: true });
+            let advanced = 0;
+            await expect(async () => {
+                if (advanced < 300_000) {
+                    await runtime.clock.runFor(1000);
+                    advanced += 1000;
+                }
+                expect(await retry.isVisible()).toBe(true);
+            }).toPass({ intervals: [0], timeout: test.info().project.use.actionTimeout ?? 30_000 });
+            // Restoring during an in-flight automatic attempt can recover before the click and remove Retry now.
+            // The visible action and paused clock put the user in control of the next Session attempt.
+        } else if (recovery === "online") {
             // Spend the bounded reconnect retry budget before an explicit wakeup.
             await runtime.clock.runFor(300000);
             // Hold time while the network returns, so only the wakeup reconnects: an automatic retry still scheduled
