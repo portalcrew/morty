@@ -1,6 +1,12 @@
 import { createServer, request } from "node:http";
+import { WsTransport } from "@morty-build/client";
+import {
+    nativeSessionCommandCodec,
+    nativeSessionResultCodec,
+    sessionOperationFailedEventCodec,
+} from "@morty-build/client/protocol";
 import { listen, port } from "@morty-build/relay-test-support/websocket";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, onTestFinished, test, vi } from "vitest";
 import { startTestRelay } from "../support/relay.ts";
 import { createFakeAgentHarnessRuntime } from "../support/relay-agent-harness.ts";
 import { createForkLossProxy } from "./fixtures/fork-loss-proxy.ts";
@@ -92,11 +98,23 @@ test("Given a Fork succeeds but its response is lost, When the same operation is
         undefined,
         new Set(["recovery-native-source", "another-native-source"]),
     );
-    const body = JSON.stringify({
+    const transport = new WsTransport();
+    onTestFinished(() => transport.close());
+    transport.configureEncryption(await runtime.encryptionAccess(signal));
+    const operationId = crypto.randomUUID();
+    const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(`${owner.computerId}\u0000fork\u0000${operationId}`),
+    );
+    const requestId = `chat_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+    const command = {
+        kind: "native.session.request" as const,
+        action: "fork" as const,
+        requestId,
         harness: "claude",
         directory: ".",
         sessionId: "recovery-native-source",
-    });
+    };
     let loseNextResponse = true;
     let lostStatus: number | undefined;
     const proxy = createServer((incoming, outgoing) => {
@@ -125,12 +143,12 @@ test("Given a Fork succeeds but its response is lost, When the same operation is
     });
     await listen(proxy);
     try {
-        const url = `http://127.0.0.1:${port(proxy)}/morty/api/v1/computers/${owner.computerId}/native-sessions/forks/${crypto.randomUUID()}`;
-        const send = () =>
+        const url = `http://127.0.0.1:${port(proxy)}/morty/api/v1/computers/${owner.computerId}/native-sessions/forks/${operationId}`;
+        const send = async (input = command) =>
             fetch(url, {
                 method: "POST",
                 headers: { authorization: `Bearer ${owner.token}`, "content-type": "application/json" },
-                body,
+                body: await nativeSessionCommandCodec.encode(input, transport.payloadEncryption, signal),
                 signal,
             });
         const initial = await Promise.allSettled([send(), send()]);
@@ -143,24 +161,39 @@ test("Given a Fork succeeds but its response is lost, When the same operation is
         expect(lostStatus).toBe(200);
         const retried = await send();
         expect(retried.status).toBe(200);
-        const result: unknown = await retried.json();
-        const concurrent = await Promise.all([send(), send()]);
+        const result = await nativeSessionResultCodec.decode(await retried.text(), transport.payloadEncryption, signal);
+        const [concurrent, conflicting] = await Promise.all([
+            Promise.all([send(), send()]),
+            send({ ...command, sessionId: "another-native-source" }),
+        ]);
         for (const replay of concurrent) {
             expect(replay.status).toBe(200);
-            expect(await replay.json()).toEqual(result);
+            expect(
+                await nativeSessionResultCodec.decode(await replay.text(), transport.payloadEncryption, signal),
+            ).toEqual(result);
         }
+        expect(conflicting.status).toBe(200);
+        expect(
+            await sessionOperationFailedEventCodec.decode(
+                await conflicting.text(),
+                transport.payloadEncryption,
+                signal,
+            ),
+        ).toMatchObject({ code: "idempotency_conflict", requestId });
         const conflict = await fetch(url, {
             method: "POST",
             headers: { authorization: `Bearer ${owner.token}`, "content-type": "application/json" },
-            body: JSON.stringify({
-                harness: "claude",
-                directory: ".",
-                sessionId: "another-native-source",
-            }),
+            body: await nativeSessionCommandCodec.encode(
+                { ...command, sessionId: "another-native-source" },
+                transport.payloadEncryption,
+                signal,
+            ),
             signal,
         });
-        expect(conflict.status).toBe(409);
-        expect(await conflict.json()).toMatchObject({ error: { code: "idempotency_conflict" } });
+        expect(conflict.status).toBe(200);
+        expect(
+            await sessionOperationFailedEventCodec.decode(await conflict.text(), transport.payloadEncryption, signal),
+        ).toMatchObject({ code: "idempotency_conflict", requestId });
         const after = await runtime.api.managedSessions(signal);
         expect(after).toHaveLength(1); // One tracked fork for the user's one intent; the native source was never imported.
     } finally {

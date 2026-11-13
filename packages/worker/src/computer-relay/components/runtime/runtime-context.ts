@@ -21,7 +21,7 @@ export function createRuntimeContext(cx: {
         readonly waitUntil: (operation: Promise<void>) => void;
     };
 }) {
-    const requests = new LocalComputerRequests();
+    const requests = new LocalComputerRequests(cx.utilities.waitUntil);
     const source = cx.gateways.peers;
     const peers: ComputerPeers = {
         accept: source.accept,

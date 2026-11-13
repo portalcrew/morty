@@ -167,6 +167,7 @@ export async function requestClientControl(
     socket: ComputerReplyConnection,
     command: ClientControlCommand,
     signal: AbortSignal,
+    callerCancellation?: AbortSignal,
 ): Promise<ClientControlReply> {
     const encoded = encodeClientToRelayMessage(command);
     const requestId = computerControlAddress(command);
@@ -207,15 +208,30 @@ export async function requestClientControl(
         [successKind]: (message) => accept(computerControlReplyDecoders[successKind](message)),
         [failureKind]: (message) => accept(computerControlReplyDecoders[failureKind](message)),
     };
-    return await awaitComputerReply(socket, requestId, signal, {
-        send: () => socket.send(encoded),
-        receive: (message, kind) => handlers[kind]?.(message) ?? { kind: "ignore" },
-        abandoned: () => {
-            if (command.kind === "native.session.request" && socket.readyState === WebSocket.OPEN) {
-                socket.send(encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId }));
-            }
-        },
-    });
+    const cancel = (): void => {
+        if (command.kind === "native.session.request" && socket.readyState === WebSocket.OPEN) {
+            socket.send(encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId }));
+        }
+    };
+    callerCancellation?.addEventListener("abort", cancel, { once: true });
+    try {
+        return await awaitComputerReply(socket, requestId, signal, {
+            send: () => {
+                callerCancellation?.throwIfAborted();
+                socket.send(encoded);
+            },
+            receive: (message, kind) => handlers[kind]?.(message) ?? { kind: "ignore" },
+            abandoned: () => {
+                if (command.kind === "native.session.request" && command.action === "fork") {
+                    socket.close(1011, "Fork reply was not drained");
+                } else {
+                    cancel();
+                }
+            },
+        });
+    } finally {
+        callerCancellation?.removeEventListener("abort", cancel);
+    }
 }
 
 export async function requestComputerContentWrite(

@@ -948,7 +948,7 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
                     },
                 ),
             ),
-        forkNative: (operationId: string, encoded: string) =>
+        forkNative: (operationId: string, encoded: string, signal?: AbortSignal) =>
             ownerRequest(
                 new Request(
                     `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${computerId}/native-sessions/forks/${operationId}`,
@@ -956,6 +956,7 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
                         method: "POST",
                         headers: credentialHeaders(appCredential),
                         body: encoded,
+                        signal: signal ?? null,
                     },
                 ),
             ),
@@ -1172,6 +1173,11 @@ it("Given an encrypted live subscription, When a still-connected daemon is repla
         expect(JSON.parse(await original.messages.next())).toMatchObject({
             kind: "session.events.end",
             subscriptionId: original.admission["subscriptionId"],
+        });
+        expect(decodeWorkerToDaemonMessage(await replacementMessages.next())).toMatchObject({
+            kind: "session.events.unsubscribe",
+            subscriptionId: original.admission["subscriptionId"],
+            target: runtime.sessionTarget,
         });
 
         const fresh = await runtime.subscribe();
@@ -2284,7 +2290,7 @@ describe.sequential("Relay Turn submission", () => {
                 ).toMatchObject({
                     kind: "session.prompt",
                     commandId: "skewed-command",
-                    requestId: "skewed-command",
+                    requestId: "skewed-request",
                 });
                 runtime.daemon.send(
                     await sessionPromptAcceptedEventCodec.encode(
@@ -3297,13 +3303,9 @@ it("Given a Fork in flight, When it is requested again concurrently and after Re
             directory: ".",
         });
         expect(fork).not.toHaveProperty("targetSessionId");
-        expect(await responseJson(await runtime.forkNative(operationId, encoded), 409)).toMatchObject({
-            error: { code: "session_busy" },
-        });
+        const concurrent = runtime.forkNative(operationId, await makeFork(input));
         const different = await makeFork({ ...input, sessionId: "another-source" });
-        expect(await responseJson(await runtime.forkNative(operationId, different), 409)).toMatchObject({
-            error: { code: "session_busy" },
-        });
+        const conflicting = runtime.forkNative(operationId, different);
         const forkTarget = nativeTarget("harness-fork-destination");
         runtime.daemon.send(
             await nativeSessionResultCodec.encode(forkResult(requestId, forkTarget), encryption.computer, signal),
@@ -3314,6 +3316,42 @@ it("Given a Fork in flight, When it is requested again concurrently and after Re
         expect(
             await nativeSessionResultCodec.decode(JSON.stringify(original), encryption.client, signal),
         ).toMatchObject({ action: "fork", target: forkTarget });
+
+        expect(
+            await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),
+        ).toEqual(fork);
+        runtime.daemon.send(
+            await nativeSessionResultCodec.encode(forkResult(requestId, forkTarget), encryption.computer, signal),
+        );
+        expect(
+            await nativeSessionResultCodec.decode(
+                JSON.stringify(await responseJson(await concurrent, 200)),
+                encryption.client,
+                signal,
+            ),
+        ).toMatchObject({ action: "fork", target: forkTarget });
+        expect(
+            await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),
+        ).toMatchObject({ action: "fork", requestId, sessionId: "another-source" });
+        runtime.daemon.send(
+            await sessionOperationFailedEventCodec.encode(
+                {
+                    kind: "session.operation.failed",
+                    requestId,
+                    code: "idempotency_conflict",
+                    message: "The fork intent differs",
+                },
+                encryption.computer,
+                signal,
+            ),
+        );
+        expect(
+            await sessionOperationFailedEventCodec.decode(
+                JSON.stringify(await responseJson(await conflicting, 200)),
+                encryption.client,
+                signal,
+            ),
+        ).toMatchObject({ requestId, code: "idempotency_conflict" });
 
         await evictDurableObject(env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)), {
             webSockets: "hibernate",
@@ -3332,6 +3370,179 @@ it("Given a Fork in flight, When it is requested again concurrently and after Re
         ).toMatchObject({ action: "fork", target: forkTarget });
     } finally {
         runtime.daemon.close(1000, "Fork recovery scenario completed");
+    }
+});
+
+it("Given a cancelled fork caller whose successful daemon reply is delayed, When invalid ciphertext reuses the operation, Then the old success cannot complete the unauthenticated attempt", async () => {
+    const runtime = await connectComputerDaemon("fork-cancelled-reply");
+    const original = new AbortController();
+    const retry = new AbortController();
+    const signal = new AbortController().signal;
+    try {
+        const encryption = await endpointEncryption(runtime.computerId, signal);
+        const operationId = "cancelled-fork-operation";
+        const requestId = await forkRequestId(runtime.computerId, operationId);
+        const command = {
+            kind: "native.session.request" as const,
+            action: "fork" as const,
+            requestId,
+            harness: "codex",
+            directory: ".",
+            sessionId: "native-source",
+        };
+        const first = runtime
+            .forkNative(
+                operationId,
+                await nativeSessionCommandCodec.encode(command, encryption.client, signal),
+                original.signal,
+            )
+            .then(
+                (response) => response,
+                (cause: unknown) => cause,
+            );
+        expect(
+            await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),
+        ).toMatchObject(command);
+        // The Computer has finished; its genuine encrypted success has not reached the Worker yet.
+        const delayed = await nativeSessionResultCodec.encode(
+            forkResult(requestId, nativeTarget("cancelled-first-fork")),
+            encryption.computer,
+            signal,
+        );
+        original.abort(new DOMException("Caller left", "AbortError"));
+        expect(decodeWorkerToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+            kind: "worker.request.cancel",
+            requestId,
+        });
+        expect(await first).toBeInstanceOf(DOMException);
+        const fresh = nativeSessionCommandCodec.decodeRouting(
+            await nativeSessionCommandCodec.encode(command, encryption.client, signal),
+        );
+        const invalid = JSON.stringify({
+            ...fresh,
+            encrypted: `${fresh.encrypted[0] === "A" ? "B" : "A"}${fresh.encrypted.slice(1)}`,
+        });
+        const second = runtime.forkNative(operationId, invalid, retry.signal).then(
+            (response) => response,
+            (cause: unknown) => cause,
+        );
+        const barrierId = "fork-cancellation-barrier";
+        const barrierRequestId = await forkRequestId(runtime.computerId, barrierId);
+        const barrier = runtime.forkNative(
+            barrierId,
+            await nativeSessionCommandCodec.encode(
+                { ...command, requestId: barrierRequestId },
+                encryption.client,
+                signal,
+            ),
+        );
+        const received = [await runtime.daemonMessages.next()];
+        runtime.daemon.send(delayed);
+        received.push(await runtime.daemonMessages.next());
+        const invalidForwarded = received.find(
+            (message) => nativeSessionCommandCodec.decodeRouting(message).requestId === requestId,
+        );
+        expect(invalidForwarded).toBe(invalid);
+        await expect(decodeEncryptedDaemonInboundMessage(invalid, encryption.computer, signal)).rejects.toMatchObject({
+            code: "e2e_invalid_frame",
+        });
+        runtime.daemon.send(
+            await nativeSessionResultCodec.encode(
+                forkResult(barrierRequestId, nativeTarget("barrier-fork")),
+                encryption.computer,
+                signal,
+            ),
+        );
+        expect((await barrier).status).toBe(200);
+        retry.abort(new DOMException("Unauthenticated retry left", "AbortError"));
+        expect(await second).toBeInstanceOf(DOMException);
+        expect(decodeWorkerToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+            kind: "worker.request.cancel",
+            requestId,
+        });
+        const recovered = runtime.forkNative(
+            operationId,
+            await nativeSessionCommandCodec.encode(command, encryption.client, signal),
+        );
+        runtime.daemon.send(
+            await sessionOperationFailedEventCodec.encode(
+                {
+                    kind: "session.operation.failed",
+                    requestId,
+                    code: "native_session_cancelled",
+                    message: "The attempt was cancelled",
+                },
+                encryption.computer,
+                signal,
+            ),
+        );
+        expect(
+            await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),
+        ).toMatchObject(command);
+        runtime.daemon.send(
+            await nativeSessionResultCodec.encode(
+                forkResult(requestId, nativeTarget("cancelled-first-fork")),
+                encryption.computer,
+                signal,
+            ),
+        );
+        expect((await recovered).status).toBe(200);
+    } finally {
+        original.abort();
+        retry.abort();
+        runtime.daemon.close(1000, "Fork cancellation scenario completed");
+    }
+});
+
+it("Given a cancelled fork has no terminal daemon reply, When its drain deadline expires, Then its original daemon transport is fenced before the address can be reused", async () => {
+    const runtime = await connectComputerDaemon("fork-drain-timeout");
+    const original = new AbortController();
+    const signal = new AbortController().signal;
+    try {
+        const encryption = await endpointEncryption(runtime.computerId, signal);
+        const operationId = "fork-without-terminal-reply";
+        const requestId = await forkRequestId(runtime.computerId, operationId);
+        vi.useFakeTimers({ now: new Date("2026-09-18T00:00:00.000Z"), toFake: ["Date", "setTimeout", "clearTimeout"] });
+        const first = runtime
+            .forkNative(
+                operationId,
+                await nativeSessionCommandCodec.encode(
+                    {
+                        kind: "native.session.request",
+                        action: "fork",
+                        requestId,
+                        harness: "codex",
+                        directory: ".",
+                        sessionId: "native-source",
+                    },
+                    encryption.client,
+                    signal,
+                ),
+                original.signal,
+            )
+            .then(
+                (response) => response,
+                (cause: unknown) => cause,
+            );
+        expect(
+            await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),
+        ).toMatchObject({ requestId, action: "fork" });
+        const closed = Promise.withResolvers<CloseEvent>();
+        runtime.daemon.addEventListener("close", (event) => closed.resolve(event), { once: true });
+        original.abort(new DOMException("Caller left", "AbortError"));
+        expect(decodeWorkerToDaemonMessage(await runtime.daemonMessages.next())).toMatchObject({
+            kind: "worker.request.cancel",
+            requestId,
+        });
+        expect(await first).toBeInstanceOf(DOMException);
+        await runInDurableObject(
+            env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)),
+            async () => await vi.advanceTimersByTimeAsync(120_000),
+        );
+        expect(await closed.promise).toMatchObject({ code: 1011, reason: "Fork reply was not drained" });
+    } finally {
+        original.abort();
+        runtime.daemon.close(1000, "Drain timeout scenario completed");
     }
 });
 

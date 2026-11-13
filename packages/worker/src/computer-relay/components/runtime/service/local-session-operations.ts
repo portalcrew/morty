@@ -83,7 +83,19 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
             checkTarget(requestedComputerId);
             const requestId = command.requestId;
             const target = "target" in command ? command.target : undefined;
-            return await requestClientControl(await connect(requestId, target, signal), command, signal);
+            const execute = async (operationSignal: AbortSignal) => {
+                checkTarget(requestedComputerId);
+                return await requestClientControl(
+                    await connect(requestId, target, operationSignal),
+                    command,
+                    operationSignal,
+                    command.kind === "native.session.request" && command.action === "fork" ? signal : undefined,
+                );
+            };
+            if (command.kind === "native.session.request" && command.action === "fork") {
+                return await cx.gateways.requests.runRecoverableFork(requestId, signal, execute);
+            }
+            return await execute(signal);
         },
         requestAgentSettings: async (
             requestedComputerId: string,
