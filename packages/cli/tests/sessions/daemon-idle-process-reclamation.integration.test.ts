@@ -273,14 +273,13 @@ test("Given a client read a conversation's settings before its idle process exit
         const configureId = crypto.randomUUID();
         peer.send(
             encodeSessionConfigureCommand({
-                booleanValue: false,
                 configId: "model",
                 expectedConfigurationRevision: read.configurationRevision,
                 kind: "session.configure",
                 requestId: configureId,
                 target: sessionTarget,
                 value: other,
-                valueType: "select",
+                type: "select",
             }),
         );
         for (;;) {

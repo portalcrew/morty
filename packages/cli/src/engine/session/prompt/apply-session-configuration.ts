@@ -18,19 +18,10 @@ function validateSessionConfigurationSelection(
     option: SessionConfigOption,
     selection: SessionConfigurationSelection,
 ): void {
-    if (option.type !== selection.valueType) {
+    if (option.type !== selection.type) {
         throw invalidSessionConfiguration(`The Agent setting ${selection.configId} changed type`);
     }
-    if (option.type === "boolean") {
-        if (selection.value.length > 0) {
-            throw invalidSessionConfiguration(`The Agent setting ${selection.configId} has an invalid value`);
-        }
-        return;
-    }
-    if (selection.booleanValue) {
-        throw invalidSessionConfiguration(`The Agent setting ${selection.configId} has an invalid value`);
-    }
-    if (!option.values.some((value) => value.value === selection.value)) {
+    if (selection.type === "select" && !option.values.some((value) => value.value === selection.value)) {
         throw invalidSessionConfiguration(`The Agent setting ${selection.configId} has an unavailable value`);
     }
 }
@@ -39,18 +30,15 @@ function sessionConfigurationSelectionIsAvailable(
     option: SessionConfigOption,
     selection: SessionConfigurationSelection,
 ): boolean {
-    if (option.type !== selection.valueType) {
+    if (option.type !== selection.type) {
         return false;
     }
-    if (option.type === "boolean") {
-        return selection.value.length === 0;
-    }
-    return !selection.booleanValue && option.values.some((value) => value.value === selection.value);
+    return selection.type === "boolean" || option.values.some((value) => value.value === selection.value);
 }
 
 function sessionConfigurationMatches(option: SessionConfigOption, selection: SessionConfigurationSelection): boolean {
     validateSessionConfigurationSelection(option, selection);
-    return option.type === "boolean"
+    return selection.type === "boolean"
         ? option.booleanValue === selection.booleanValue
         : option.currentValue === selection.value;
 }
@@ -101,20 +89,14 @@ function unavailableSessionConfigurationCategory(selection: SessionConfiguration
 function unavailableReason(
     option: SessionConfigOption | undefined,
     selection: SessionConfigurationSelection,
-): "setting_unavailable" | "setting_schema_mismatch" | "selection_schema_mismatch" | "value_unavailable" | null {
+): "setting_unavailable" | "setting_schema_mismatch" | "value_unavailable" | null {
     if (option === undefined) {
         return "setting_unavailable";
     }
-    if (option.type !== selection.valueType) {
+    if (option.type !== selection.type) {
         return "setting_schema_mismatch";
     }
-    if (
-        (option.type === "boolean" && selection.value.length > 0) ||
-        (option.type === "select" && selection.booleanValue)
-    ) {
-        return "selection_schema_mismatch";
-    }
-    if (option.type === "select" && !option.values.some((value) => value.value === selection.value)) {
+    if (selection.type === "select" && !option.values.some((value) => value.value === selection.value)) {
         return "value_unavailable";
     }
     return null;
@@ -157,15 +139,12 @@ async function applySessionConfigurationSelection(
     return (
         await sessions.applySessionConfiguration({
             adapter,
+            ...selection,
             agent,
-            booleanValue: selection.booleanValue,
-            configId: selection.configId,
             cwd,
             requestId: `cfg_${randomUUID()}`,
             target: sessionTarget,
             signal,
-            value: selection.value,
-            valueType: selection.valueType,
         })
     ).configOptions;
 }
@@ -218,7 +197,7 @@ function warnIgnoredSetting(
         category,
         configId: selection.configId,
         reason,
-        requestedValue: selection.value,
+        requestedValue: selection.type === "boolean" ? String(selection.booleanValue) : selection.value,
     };
     process.stderr.write(`Morty daemon warning ${JSON.stringify({ commandId, event, sessionTarget, ...details })}\n`);
 }

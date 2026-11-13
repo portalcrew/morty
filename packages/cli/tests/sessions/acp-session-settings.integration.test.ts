@@ -78,11 +78,10 @@ describe("Agent setting capabilities", () => {
             ]);
             const configured = await manager.applySessionConfiguration({
                 ...session,
-                booleanValue: false,
                 configId: "reasoning_effort",
                 requestId: "provider-default-to-high",
                 value: "high",
-                valueType: "select",
+                type: "select",
             });
             expect(configured.configOptions).toEqual(
                 expect.arrayContaining([
@@ -144,11 +143,10 @@ describe("Agent setting capabilities", () => {
             await expect(
                 manager.applySessionConfiguration({
                     ...session,
-                    booleanValue: false,
                     configId: "reasoning_effort",
                     requestId: "unavailable-effort",
                     value: "high",
-                    valueType: "select",
+                    type: "select",
                 }),
             ).rejects.toMatchObject({ code: "invalid_session_configuration" });
         } finally {
@@ -263,11 +261,10 @@ describe("Agent setting capabilities", () => {
             await expect(
                 manager.applySessionConfiguration({
                     ...session,
-                    booleanValue: false,
                     configId: "model",
                     requestId: "ignored-model-update",
                     value: "test-large",
-                    valueType: "select",
+                    type: "select",
                 }),
             ).rejects.toMatchObject({ code: "invalid_session_configuration" });
         } finally {
@@ -312,8 +309,7 @@ it("Given ACP exposes select and boolean settings, When a user configures the co
             ...session.request,
             configId,
             value,
-            booleanValue: false,
-            valueType: "select",
+            type: "select",
             requestId: `configure-${configId}`,
         });
         expect(configured.configOptions).toEqual(
@@ -323,9 +319,8 @@ it("Given ACP exposes select and boolean settings, When a user configures the co
     await session.manager.applySessionConfiguration({
         ...session.request,
         configId: "fast_mode",
-        value: "",
         booleanValue: true,
-        valueType: "boolean",
+        type: "boolean",
         requestId: "configure-fast-mode",
     });
 

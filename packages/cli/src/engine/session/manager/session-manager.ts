@@ -285,11 +285,8 @@ export class SessionManager {
                     async (desired) => {
                         await runtime.applyConfiguration({
                             ...options,
-                            booleanValue: desired.type === "boolean" && desired.booleanValue,
-                            configId: desired.configId,
+                            ...desired,
                             requestId: `execution-prepare-${desired.configId}`,
-                            value: desired.type === "select" ? desired.value : "",
-                            valueType: desired.type,
                         });
                     },
                     options.signal,
@@ -485,12 +482,11 @@ export class SessionManager {
                             : (
                                   await runtime.applyConfiguration({
                                       ...options,
-                                      booleanValue: false,
                                       configId: modelOption?.id ?? "model",
                                       requestId: "agent-settings-model",
                                       target: runtime.target,
+                                      type: "select",
                                       value: model,
-                                      valueType: "select",
                                   })
                               ).configOptions;
                     return new AgentSettingsSnapshot(

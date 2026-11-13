@@ -18,6 +18,9 @@ import { AgentProcessPool } from "../../src/engine/session/process/agent-process
 export type TestSessionPrepareOptions = Omit<SessionPrepareOptions, "adapter">;
 
 /** Composes real session resources for direct session scenarios, with Computer owning the adapters. */
+/** `Omit` that keeps each variant of a union apart. */
+type WithoutAdapter<Options> = Options extends unknown ? Omit<Options, "adapter"> : never;
+
 export class SessionRuntimeFixture {
     readonly sessions: SessionManager;
     readonly adapters: AdapterRegistry;
@@ -67,10 +70,10 @@ export class SessionRuntimeFixture {
     readonly inspectAgentSettings = (options: Omit<AgentSettingsInspectionOptions, "adapter">) =>
         this.sessions.inspectAgentSettings({ ...options, adapter: this.adapters.resolve(options.agent) });
 
-    readonly configureSession = (options: Omit<SessionConfigureOptions, "adapter">) =>
+    readonly configureSession = (options: WithoutAdapter<SessionConfigureOptions>) =>
         this.sessions.configureSession({ ...options, adapter: this.adapters.resolve(options.agent) });
 
-    readonly applySessionConfiguration = (options: Omit<SessionConfigurationChange, "adapter">) =>
+    readonly applySessionConfiguration = (options: WithoutAdapter<SessionConfigurationChange>) =>
         this.sessions.applySessionConfiguration({ ...options, adapter: this.adapters.resolve(options.agent) });
 
     readonly runPrompt = (options: Omit<SessionTurnOptions, "adapter">) =>

@@ -18,6 +18,7 @@ import {
     type SESSION_PREPARE_KIND,
     type SESSION_RENAME_KIND,
     type SESSION_RESTORE_KIND,
+    sessionConfigurationSelection,
     type WORKSPACE_LIST_KIND,
 } from "@morty-build/client/protocol";
 import type { WebSocket } from "undici";
@@ -283,12 +284,9 @@ async function executeSessionConfigure(
         const session = await resolveHeldSession(sessions, resolveAgent, directories, command.target, signal);
         const snapshot = await sessions.configureSession({
             ...session.options,
-            booleanValue: command.booleanValue,
-            configId: command.configId,
+            ...sessionConfigurationSelection(command),
             expectedConfigurationRevision: command.expectedConfigurationRevision,
             requestId: command.requestId,
-            value: command.value,
-            valueType: command.valueType,
         });
         send(socket, {
             ...snapshot,

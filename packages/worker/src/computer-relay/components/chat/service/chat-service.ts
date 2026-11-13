@@ -1,5 +1,9 @@
 import { nativeSessionKey, sameNativeSession } from "@morty-build/client/native-session";
-import type { NativeSessionTarget, SessionAccessHolder } from "@morty-build/client/protocol";
+import type {
+    NativeSessionTarget,
+    SessionAccessHolder,
+    SessionConfigurationSelection,
+} from "@morty-build/client/protocol";
 import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
 import { computerRevoked } from "../../../../contracts/computer-pairing.ts";
 import type { SessionOperationQueue } from "../../../../contracts/session-operation-queue.ts";
@@ -48,12 +52,7 @@ type NativePreviewInput = Omit<NativeEntryInput, never> & { readonly sessionId: 
 type NewChatInput = {
     readonly harness: string;
     readonly conversationKey: string;
-    readonly configurations: readonly {
-        readonly booleanValue: boolean;
-        readonly configId: string;
-        readonly value: string;
-        readonly valueType: "select" | "boolean";
-    }[];
+    readonly configurations: readonly SessionConfigurationSelection[];
     readonly workspaceRef: string;
 };
 type OpenChatInput = NativeSessionTarget | NewChatInput;

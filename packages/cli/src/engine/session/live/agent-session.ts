@@ -7,6 +7,7 @@ import {
     type SessionCapabilities,
     type SessionCommand,
     type SessionConfigOption,
+    type SessionConfigurationSelection,
     type SessionEventPayload,
     type SessionInteractionSnapshot,
 } from "@morty-build/client/protocol";
@@ -26,7 +27,6 @@ import type {
 } from "../../acp/native-history/preview-contract.ts";
 import type { NativeSessionOrigin } from "../../acp/protocol/native-session.ts";
 import { unsupportedSessionCapabilities } from "../../acp/protocol/session-capabilities.ts";
-import type { SessionConfigurationSelection } from "../../acp/protocol/session-configuration.ts";
 import type { OperationMetrics } from "../../infra/operation-metrics.ts";
 import { SerialTaskQueue } from "../../util/serial-task-queue.ts";
 import { recordsEqual, truncate } from "../../util/value-utils.ts";
@@ -735,7 +735,7 @@ export class AgentSession {
         signal: AbortSignal,
     ): Promise<SessionConfigurationSnapshot> => {
         await this.#applyConfiguration(
-            change.valueType === "boolean"
+            change.type === "boolean"
                 ? { type: "boolean", configId: change.configId, booleanValue: change.booleanValue }
                 : { type: "select", configId: change.configId, value: change.value },
             signal,

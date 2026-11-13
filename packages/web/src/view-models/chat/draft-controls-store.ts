@@ -1,4 +1,8 @@
-import type { SessionConfigOption, WorkspaceEntriesEvent } from "@morty-build/client/protocol";
+import type {
+    SessionConfigOption,
+    SessionConfigurationSelection,
+    WorkspaceEntriesEvent,
+} from "@morty-build/client/protocol";
 import { createStore } from "zustand/vanilla";
 import {
     type BotChatApi,
@@ -94,12 +98,12 @@ export function draftConfiguration(settings: DraftSettingsState): ChatDraftConfi
         workspaceLabel: settings.cwd.directoryLabel,
         configurations: settings.options
             .filter((option) => option.category === "model" || settings.changedOptionIds.has(option.id))
-            .map((option) => ({
-                booleanValue: option.type === "boolean" ? option.booleanValue : false,
-                configId: option.id,
-                value: option.type === "select" ? option.currentValue : "",
-                valueType: option.type,
-            })),
+            .map(
+                (option): SessionConfigurationSelection =>
+                    option.type === "boolean"
+                        ? { booleanValue: option.booleanValue, configId: option.id, type: "boolean" }
+                        : { configId: option.id, type: "select", value: option.currentValue },
+            ),
     };
 }
 
