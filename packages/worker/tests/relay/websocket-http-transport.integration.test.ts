@@ -486,6 +486,7 @@ it("Given a Unicode JSON request and response, When the relay carries them over 
             headers: { Upgrade: "websocket" },
         }),
         dispatch: daemon.fetch,
+        subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
     const socket = response.webSocket;
     if (socket === null) {
@@ -521,6 +522,7 @@ it("Given an invalid binary declaration, When the request ID is reused for a val
     const response = acceptWebSocketHttpTransport({
         request: new Request("https://relay.test/morty/api/v1/transport", { headers: { Upgrade: "websocket" } }),
         dispatch: daemon.fetch,
+        subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
     const socket = response.webSocket;
     if (socket === null) {
@@ -571,6 +573,7 @@ it("Given a binary upload sends an invalid chunk, When it retries the same reque
     const response = acceptWebSocketHttpTransport({
         request: new Request("https://relay.test/morty/api/v1/transport", { headers: { Upgrade: "websocket" } }),
         dispatch: daemon.fetch,
+        subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
     const socket = response.webSocket;
     if (socket === null) {
@@ -611,6 +614,7 @@ it("Given an incomplete upload consumes the aggregate byte budget, When its dead
                 headers: { Upgrade: "websocket" },
             }),
             dispatch: daemon.fetch,
+            subscribe: new SubscriptionDaemonBoundary().subscribe,
         });
         const socket = response.webSocket;
         if (socket === null) {
@@ -733,6 +737,7 @@ it("Given many incomplete binary uploads, When their count reaches the pending l
     const response = acceptWebSocketHttpTransport({
         request: new Request("https://relay.test/morty/api/v1/transport", { headers: { Upgrade: "websocket" } }),
         dispatch: daemon.fetch,
+        subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
     const socket = response.webSocket;
     if (socket === null) {
@@ -779,6 +784,7 @@ it("Given a daemon request fails with a 5XX error, When the WebSocket transport 
             headers: { Upgrade: "websocket" },
         }),
         dispatch: daemon.fetch,
+        subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
     const socket = response.webSocket;
     if (socket === null) {
@@ -963,6 +969,7 @@ it("Given a finite request is in flight, When the browser transport closes, Then
             headers: { Upgrade: "websocket" },
         }),
         dispatch: daemon.fetch,
+        subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
     const socket = response.webSocket;
     if (socket === null) {

@@ -10,6 +10,8 @@ import { createSessionWebSocketRoutes } from "../../src/computer-relay/component
 import { createRelayDurableObjectContext } from "../../src/computer-relay/composition/relay-durable-object-context.ts";
 import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-object-database.ts";
 import { computerObjectName } from "../../src/contracts/computer-id.ts";
+import type { SubscribeSessionEvents } from "../../src/contracts/session-event-subscription.ts";
+import { WebSocketDispatchError } from "../../src/contracts/websocket-http-dispatch.ts";
 import { RequestDeadline } from "../../src/http/request-deadline.ts";
 import { createOwner, ownerOrigin } from "./owner-fixture.ts";
 import { computerAccess } from "./registered-computer.ts";
@@ -18,6 +20,9 @@ import { computerAccess } from "./registered-computer.ts";
 class PendingComputerApiBoundary {
     readonly requested = Promise.withResolvers<void>();
     readonly response = Promise.withResolvers<Response>();
+    readonly subscribe: SubscribeSessionEvents = async () => {
+        throw new WebSocketDispatchError();
+    };
 
     readonly fetch = async (request: Request): Promise<Response> => {
         using deadline = new RequestDeadline(request.signal, 120_000);
@@ -63,6 +68,7 @@ it("Given a Computer API with a 120-second deadline mounted beside Session route
                         headers: { Upgrade: "websocket" },
                     }),
                     dispatch: async (operation) => await router.fetch(operation.request, { operation }),
+                    subscribe: api.subscribe,
                 });
                 const socket = response.webSocket;
                 if (socket === null) {

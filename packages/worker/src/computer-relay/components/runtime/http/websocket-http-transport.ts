@@ -375,7 +375,7 @@ export function acceptWebSocketHttpTransport({
 }: {
     readonly request: Request;
     readonly dispatch: WebSocketHttpDispatch;
-    readonly subscribe?: SubscribeSessionEvents;
+    readonly subscribe: SubscribeSessionEvents;
 }): Response {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
         return Response.json(
@@ -635,9 +635,6 @@ export function acceptWebSocketHttpTransport({
                         }
                     };
                     try {
-                        if (subscribe === undefined) {
-                            throw new WebSocketDispatchError();
-                        }
                         await subscribe(converted.request, subscription, {
                             message: messageReceived,
                             close: finish,
