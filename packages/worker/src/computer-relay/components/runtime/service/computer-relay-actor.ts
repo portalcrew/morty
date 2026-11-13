@@ -23,6 +23,7 @@ import {
     WORKER_REQUEST_REJECTED_KIND,
 } from "@morty-build/client/protocol";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
+import type { SessionViewer } from "../../../../contracts/session-event-subscription.ts";
 import { logger } from "../../../../infra/logger.ts";
 import { SessionLiveEventRelay } from "./session-live-event-relay.ts";
 
@@ -127,11 +128,7 @@ export interface ComputerOperationSocket extends RelaySocket {
 }
 
 export interface RelayPeers {
-    readonly viewers: () => readonly {
-        readonly socket: RelaySocket;
-        readonly target: NativeSessionTarget;
-        readonly expiresAt: number;
-    }[];
+    readonly viewers: () => readonly SessionViewer[];
     readonly operations: () => readonly {
         readonly socket: ComputerOperationSocket;
         readonly requestId: string;
@@ -695,8 +692,8 @@ export class ComputerRelayActor {
 
     private readonly broadcastComputerStatus = (online: boolean): void => {
         if (!online) {
-            for (const { socket } of this.#peers.viewers()) {
-                socket.close(1000, "Computer offline");
+            for (const viewer of this.#peers.viewers()) {
+                viewer.close(1000, "Computer offline");
             }
         }
         this.broadcast(

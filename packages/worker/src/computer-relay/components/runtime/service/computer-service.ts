@@ -8,13 +8,11 @@ import {
     ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     encodeComputerLivenessReadyEvent,
     encodeComputerStatusEvent,
-    type NativeSessionTarget,
     SESSION_EVENT_KIND,
-    type SessionAccessGrant,
-    type SessionEventsSubscribeCommandRouting,
 } from "@morty-build/client/protocol";
 import { ComputerStatus } from "../../../../contracts/relay/computer-status.ts";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
+import type { SessionViewerIdentity } from "../../../../contracts/session-event-subscription.ts";
 import { logger } from "../../../../infra/logger.ts";
 import type { ComputerConnectionIdentity } from "../entity/computer-connection.ts";
 import type { ComputerCredentialService } from "./computer-credential-service.ts";
@@ -35,19 +33,7 @@ const DAEMON_HEARTBEAT_SILENCE_LIMIT_MILLISECONDS = 35_000;
 export type DaemonHeartbeat = { readonly kind: "none" } | { readonly kind: "received"; readonly at: number };
 
 export type ComputerSocketIdentity =
-    | {
-          readonly role: "viewer";
-          readonly expiresAt: number;
-          /** The verified Session credential's authority, signing generation and the access it carries. */
-          readonly credential: {
-              readonly signingKeyId: string;
-              readonly grant: SessionAccessGrant;
-          };
-          readonly computerId: string;
-
-          readonly sessionFilter: NativeSessionTarget;
-          readonly subscriptionId: string;
-      }
+    | SessionViewerIdentity
     | {
           readonly role: "daemon" | "replaced-daemon";
           readonly connectionEpoch: number;
@@ -175,6 +161,9 @@ export class ComputerService {
         const latest = this.#cx.services.connections.latest();
         // The connections opened during an earlier generation belong to the Computer that generation paired.
         if (latest !== null && latest.generation !== generation) {
+            for (const viewer of this.#cx.gateways.peers.viewers()) {
+                viewer.close(1000, "Previous daemon disconnected");
+            }
             for (const { socket } of this.#cx.gateways.peers.sockets()) {
                 socket.close(1000, "Previous daemon disconnected");
             }
@@ -276,8 +265,11 @@ export class ComputerService {
             }
             if (identity.role === "daemon") {
                 socket.close(1008, "Computer revoked");
-            } else if (identity.role === "viewer") {
-                socket.close(1008, "Computer revoked");
+            }
+        }
+        for (const viewer of this.#cx.gateways.peers.viewers()) {
+            if (viewer.identity.computerId === computerId) {
+                viewer.close(1008, "Computer revoked");
             }
         }
         if (connected) {
@@ -290,12 +282,9 @@ export class ComputerService {
      * to the computer ends, and periodically while views remain connected.
      */
     readonly reauthorizeConnections = async (signal: AbortSignal): Promise<void> => {
-        for (const { identity, socket } of this.#cx.gateways.peers.sockets()) {
-            if (
-                identity.role === "viewer" &&
-                (await this.#cx.services.credentials.authorizeViewer(identity, signal)) === "revoked"
-            ) {
-                socket.close(1008, "Session access revoked");
+        for (const viewer of this.#cx.gateways.peers.viewers()) {
+            if ((await this.#cx.services.credentials.authorizeViewer(viewer.identity, signal)) === "revoked") {
+                viewer.close(1008, "Session access revoked");
             }
         }
     };

@@ -93,12 +93,12 @@ export class CloudflareRelayPeers implements Omit<ComputerPeers, "operations"> {
 
     readonly viewers = () =>
         this.sockets().flatMap(({ socket, identity }) =>
-            identity.role === "viewer"
+            identity.role === "viewer" && socket.isOpen()
                 ? [
                       {
-                          socket,
-                          target: identity.sessionFilter,
-                          expiresAt: identity.expiresAt,
+                          identity,
+                          message: socket.send,
+                          close: socket.close,
                       },
                   ]
                 : [],

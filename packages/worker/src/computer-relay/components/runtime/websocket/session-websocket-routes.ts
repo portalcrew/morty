@@ -292,31 +292,8 @@ export function createSessionWebSocketRoutes(ctx: {
             bodyParser<SessionWebSocketEnvironment, typeof eventsInput>(eventsInput, readTransportJson),
             async (context) => {
                 const request = context.req.raw;
-                const access = context.var.access;
-                await access.authorize(request.signal);
+                await context.var.access.authorize(request.signal);
                 const command = context.req.valid("json");
-                if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
-                    if (
-                        command.kind !== "session.events.subscribe" ||
-                        !sameNativeSession(command.target, context.var.target)
-                    ) {
-                        throw new PairingDirectoryError(
-                            "invalid_request",
-                            "The subscription does not match its Session",
-                        );
-                    }
-                    return ctx.services.forComputer(context.var.computerId).operations.openPublicSessionEvents(
-                        context.var.computerId,
-                        context.var.target,
-                        command,
-                        {
-                            signingKeyId: access.signingKeyId,
-                            grant: access.grant,
-                            expiresAt: access.expiresAtEpochMilliseconds,
-                        },
-                        request.signal,
-                    );
-                }
                 if (
                     command.kind !== "session.live-history.v2.page.load" ||
                     !sameNativeSession(command.target, context.var.target)

@@ -14,6 +14,7 @@ import type { ManagementHttpEnvironment } from "../components/management/http/ma
 import type { ManagementRouteContext } from "../components/management/http/route-context.ts";
 import { sessionContentUploadRequired } from "../components/runtime/http/session-content-upload.ts";
 import { WebSocketUploadCapacity } from "../components/runtime/service/websocket-upload-capacity.ts";
+import { createSessionEventSubscriptions } from "../components/runtime/websocket/session-event-subscriptions.ts";
 import { createSessionWebSocketRoutes } from "../components/runtime/websocket/session-websocket-routes.ts";
 import type { ComputerRouteContext } from "./computer-route-context.ts";
 
@@ -50,7 +51,7 @@ export function createComputerHttpApplication(ctx: ComputerRouteContext): (reque
 }
 
 /** Compose once for the owning Computer, not once for each connecting client. */
-export function createComputerWebSocketApplication(ctx: ComputerRouteContext): WebSocketHttpDispatch {
+export function createComputerWebSocketApplication(ctx: ComputerRouteContext) {
     const managementContext = managementRouteContext(ctx);
     const uploads = new WebSocketUploadCapacity();
     const prepareApplicationRequest: MiddlewareHandler<WebSocketApplicationEnvironment> = async (context, next) => {
@@ -91,7 +92,7 @@ export function createComputerWebSocketApplication(ctx: ComputerRouteContext): W
             throw new WebSocketDispatchError();
         });
 
-    return async (operation) => {
+    const dispatch: WebSocketHttpDispatch = async (operation) => {
         const response = await websocket.fetch(operation.request, { ...ctx.bindings, operation });
         if (operation.kind === "upload-admission" && response.ok) {
             uploads.reserve({
@@ -104,9 +105,14 @@ export function createComputerWebSocketApplication(ctx: ComputerRouteContext): W
                 signal: operation.request.signal,
             });
         }
-        if (response.status === 101) {
-            await ctx.utilities.connectionOpened();
-        }
         return response;
+    };
+    return {
+        dispatch,
+        subscribe: createSessionEventSubscriptions({
+            ownsComputer: ctx.ownsComputer,
+            services: { forComputer: ctx.services.sessions },
+            connectionOpened: ctx.utilities.connectionOpened,
+        }),
     };
 }

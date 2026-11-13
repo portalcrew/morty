@@ -10,6 +10,7 @@ import { ComputerManagementError } from "../../contracts/computer-management.ts"
 import { COMPUTER_INTERNAL_PREFIX } from "../../contracts/computer-relay-http.ts";
 import { PairingDirectoryError, validateIdentifier } from "../../contracts/relay/pairing.ts";
 import { relayAuthenticationFromEnvironment } from "../../contracts/relay-authentication-environment.ts";
+import type { SubscribeSessionEvents } from "../../contracts/session-event-subscription.ts";
 import type { WebSocketHttpDispatch } from "../../contracts/websocket-http-dispatch.ts";
 import { computerFromPath } from "../../http/computer-target.ts";
 import { errorMiddleware } from "../../http/error-middleware.ts";
@@ -26,7 +27,7 @@ import type { ComputerRouteHttpEnvironment } from "./environment.ts";
 export function createComputerHttpRoutes(
     ctx: ComputerRouteContext,
     dispatchHttpRequest: (request: Request) => Promise<Response>,
-    dispatchWebSocket: WebSocketHttpDispatch,
+    websocket: { readonly dispatch: WebSocketHttpDispatch; readonly subscribe: SubscribeSessionEvents },
 ) {
     const filePath = `${MORTY_API_PREFIX}/v1/computers/:computerId/harnesses/:harness/sessions/:sessionId/files/content`;
     const timeout = requestTimeoutMiddleware<ComputerRouteHttpEnvironment>(30_000);
@@ -75,7 +76,8 @@ export function createComputerHttpRoutes(
             (context) => {
                 return acceptWebSocketHttpTransport({
                     request: context.req.raw,
-                    dispatch: dispatchWebSocket,
+                    dispatch: websocket.dispatch,
+                    subscribe: websocket.subscribe,
                 });
             },
         )

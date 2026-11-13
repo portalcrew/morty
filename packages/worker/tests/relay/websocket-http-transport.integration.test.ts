@@ -10,6 +10,7 @@ import {
 import { expect, it, vi } from "vitest";
 import { acceptWebSocketHttpTransport } from "../../src/computer-relay/components/runtime/http/websocket-http-transport.ts";
 import { SessionRuntimeError } from "../../src/contracts/relay/session.ts";
+import type { SessionEventObserver, SubscribeSessionEvents } from "../../src/contracts/session-event-subscription.ts";
 import type { WebSocketHttpOperation } from "../../src/contracts/websocket-http-dispatch.ts";
 import { createOwner, issueSession, ownerOrigin, ownerRequest, pairComputer } from "./owner-fixture.ts";
 
@@ -367,25 +368,31 @@ it.each([
 
 class SubscriptionDaemonBoundary {
     requestSignal: AbortSignal | null = null;
-    downstream: WebSocket | null = null;
+    readonly closed = Promise.withResolvers<void>();
 
-    readonly fetch = (operation: WebSocketHttpOperation): Promise<Response> => {
-        this.requestSignal = operation.request.signal;
-        const pair = new WebSocketPair();
-        this.downstream = pair[1];
-        pair[1].accept();
-        return Promise.resolve(new Response(null, { status: 101, webSocket: pair[0] }));
+    readonly fetch = (_operation: WebSocketHttpOperation): Promise<Response> => {
+        throw new Error("Subscriptions must not be dispatched as HTTP requests");
+    };
+    readonly subscribe: SubscribeSessionEvents = async (request) => {
+        this.requestSignal = request.signal;
+        request.signal.addEventListener("abort", () => this.closed.resolve(), { once: true });
     };
 }
 
 class MultipleSubscriptionDaemonBoundary {
-    readonly downstreams: WebSocket[] = [];
+    readonly downstreams: { readonly send: (data: string) => void }[] = [];
 
     readonly fetch = (_operation: WebSocketHttpOperation): Promise<Response> => {
-        const pair = new WebSocketPair();
-        pair[1].accept();
-        this.downstreams.push(pair[1]);
-        return Promise.resolve(new Response(null, { status: 101, webSocket: pair[0] }));
+        throw new Error("Subscriptions must not be dispatched as HTTP requests");
+    };
+    readonly subscribe = async (request: Request, observer: SessionEventObserver): Promise<void> => {
+        this.downstreams.push({
+            send: (data) => {
+                if (!request.signal.aborted) {
+                    observer.message(data);
+                }
+            },
+        });
     };
 }
 
@@ -398,6 +405,7 @@ it("Given two quiet subscriptions, When multiple heartbeat intervals pass, Then 
             headers: { Upgrade: "websocket" },
         }),
         dispatch: daemon.fetch,
+        subscribe: daemon.subscribe,
     });
     const socket = response.webSocket;
     if (socket === null) {
@@ -801,13 +809,14 @@ it("Given a daemon request fails with a 5XX error, When the WebSocket transport 
     socket.close();
 });
 
-it("Given an established event subscription, When the browser transport closes, Then the downstream socket closes without aborting its upgraded request", async () => {
+it("Given an established event subscription, When the browser transport closes, Then its subscription is cancelled without an internal HTTP upgrade", async () => {
     const daemon = new SubscriptionDaemonBoundary();
     const response = acceptWebSocketHttpTransport({
         request: new Request("https://relay.test/morty/api/v1/transport", {
             headers: { Upgrade: "websocket" },
         }),
         dispatch: daemon.fetch,
+        subscribe: daemon.subscribe,
     });
     const socket = response.webSocket;
     if (socket === null) {
@@ -828,19 +837,15 @@ it("Given an established event subscription, When the browser transport closes, 
         kind: "session.events.ready",
         subscriptionId: "subscription-1",
     });
-    const downstream = daemon.downstream;
     const requestSignal = daemon.requestSignal;
-    if (downstream === null || requestSignal === null) {
+    if (requestSignal === null) {
         throw new Error("Expected an established downstream subscription");
     }
-    const closed = new Promise<void>((resolve) =>
-        downstream.addEventListener("close", () => resolve(), { once: true }),
-    );
 
     socket.close(1000, "Browser transport closed");
 
-    await closed;
-    expect(requestSignal.aborted).toBe(false);
+    await daemon.closed.promise;
+    expect(requestSignal.aborted).toBe(true);
 });
 
 it("Given two live subscriptions, When each receives event batches, Then delivery sequence IDs start at one and advance per subscription", async () => {
@@ -850,6 +855,7 @@ it("Given two live subscriptions, When each receives event batches, Then deliver
             headers: { Upgrade: "websocket" },
         }),
         dispatch: daemon.fetch,
+        subscribe: daemon.subscribe,
     });
     const socket = response.webSocket;
     if (socket === null) {
@@ -915,6 +921,7 @@ it("Given an established event subscription is quiet, When the transport idle de
                 headers: { Upgrade: "websocket" },
             }),
             dispatch: daemon.fetch,
+            subscribe: daemon.subscribe,
         });
         const socket = response.webSocket;
         if (socket === null) {

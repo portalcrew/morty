@@ -216,10 +216,8 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
      * viewers. A pending check that is earlier is kept, so new connections never postpone it.
      */
     readonly #scheduleConnectionChecks = async (): Promise<void> => {
-        const viewers = this.#connectionsForComputer.context.gateways.peers
-            .viewers()
-            .filter(({ socket }) => socket.isOpen());
-        const checks = viewers.map(({ expiresAt }) => expiresAt);
+        const viewers = this.#connectionsForComputer.context.gateways.peers.viewers();
+        const checks = viewers.map(({ identity }) => identity.expiresAt);
         if (viewers.length > 0) {
             checks.push(Date.now() + REAUTHORIZATION_INTERVAL_MILLISECONDS);
         }
@@ -235,14 +233,12 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
 
     override async alarm(): Promise<void> {
         const signingKeyId = await new SessionAccessSigner(this.env.MORTY_SESSION_SIGNING_SECRET).keyId();
-        for (const { socket, identity } of this.#connectionsForComputer.context.gateways.peers.sockets()) {
-            if (identity.role !== "viewer") {
-                continue;
-            }
+        for (const viewer of this.#connectionsForComputer.context.gateways.peers.viewers()) {
+            const { identity } = viewer;
             if (identity.credential?.signingKeyId !== signingKeyId) {
-                socket.close(1008, "Session signing key rotated");
+                viewer.close(1008, "Session signing key rotated");
             } else if (identity.expiresAt <= Date.now()) {
-                socket.close(1000, "Session access expired");
+                viewer.close(1000, "Session access expired");
             }
         }
         try {
