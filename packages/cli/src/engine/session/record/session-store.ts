@@ -110,9 +110,10 @@ export class SqliteSessionStore implements SessionStore {
         return row === undefined ? undefined : decodeStoredSession(row);
     };
 
+    /** The record is the Session's existence, so it goes last: a failed removal leaves a Session that is removed again. */
     readonly remove = (target: NativeSessionTarget): void => {
-        this.#table.remove(target);
         this.events.remove(target);
+        this.#table.remove(target);
     };
 
     readonly write = (session: StoredSession): void => {
