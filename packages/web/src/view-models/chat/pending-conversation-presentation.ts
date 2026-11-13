@@ -1,16 +1,17 @@
-import { type BotChatHomeStore, botConnectionStatus } from "./bot-chat-home-store.ts";
+import { botConnectionStatus, type ComputerStatusStore } from "./computer-status-store.ts";
+import type { ConversationSelectionState } from "./conversation-selection-machine.ts";
 import { selectedConversationTarget } from "./conversation-selection-machine.ts";
 import { type SessionTitles, sessionTitle } from "./session-titles-store.ts";
 
 /** A selected conversation is never presented as a new draft while its remote read is pending. */
 export function pendingConversationPresentation(
-    home: BotChatHomeStore,
+    selection: ConversationSelectionState,
+    computer: ComputerStatusStore,
     titles: SessionTitles,
 ): {
     readonly title: string;
     readonly recovery: { readonly title: string; readonly description: string } | null;
 } {
-    const selection = home.selection;
     const sessionTarget = selectedConversationTarget(selection);
     const title = selection.kind === "draft" ? "New session" : sessionTitle(titles, sessionTarget, "Existing session");
     if (
@@ -20,11 +21,11 @@ export function pendingConversationPresentation(
     ) {
         return { title, recovery: null };
     }
-    const recoveryTitle = !home.networkAvailable
+    const recoveryTitle = !computer.networkAvailable
         ? "No network connection"
-        : botConnectionStatus(home).kind === "disconnected"
+        : botConnectionStatus(computer).kind === "disconnected"
           ? "Computer is offline"
-          : home.configurationWatch.kind === "unavailable" || selection.kind === "failed"
+          : computer.configurationWatch.kind === "unavailable" || selection.kind === "failed"
             ? "Connection interrupted"
             : null;
     return {

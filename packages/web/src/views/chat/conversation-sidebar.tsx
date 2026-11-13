@@ -44,10 +44,10 @@ import { ScrollEdgeFade } from "../../components/utils/scroll-edge-fade.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
 import type { BotChatApi, ManagedChatSession } from "../../services/chat/bot-chat-api.ts";
-import type { BotConnectionStatus } from "../../view-models/chat/bot-chat-home-store.ts";
 import { chatDiagnostics } from "../../view-models/chat/chat-diagnostics.ts";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { computerLocationLabel } from "../../view-models/chat/computer-location-label.ts";
+import type { BotConnectionStatus } from "../../view-models/chat/computer-status-store.ts";
 import {
     type ConversationDirectoryStore,
     conversationDirectorySessions,
@@ -452,6 +452,7 @@ export function ConversationSidebar({
     // stores outside React; the view only subscribes.
     const dialogs = workspace.sidebar.dialogs;
     const home = useStore(workspace.home);
+    const status = useStore(workspace.computer);
     const draftSettings = useStore(workspace.draftControls, (state) => state.settings);
     const pane = workspace.sessionPane();
     const paneConnection = useStore(pane?.store ?? noSessionPane, (state) => state.connection);
@@ -459,9 +460,9 @@ export function ConversationSidebar({
     const paneExecution = useStore(pane?.execution ?? noSessionExecution, (state) => state.state);
     const executionContext =
         home.selection.kind === "ready" && pane !== null
-            ? sessionExecutionContext(pane.session, home, paneConnection)
-            : pendingExecutionContext(home, draftSettings);
-    const computer = home.computerConfiguration?.computer ?? null;
+            ? sessionExecutionContext(pane.session, home, status, paneConnection)
+            : pendingExecutionContext(home, status, draftSettings);
+    const computer = status.computerConfiguration?.computer ?? null;
     const computerName = computer?.computerName ?? "";
     const nativeAgents = computer === null ? [] : nativeSessionAgentTabs(computer);
     const directory = useStore(workspace.directory, (state) => state.state);

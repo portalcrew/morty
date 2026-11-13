@@ -11,6 +11,7 @@ import { reportApplicationError } from "../report-error.ts";
 import { type AccessExpiryStore, createAccessExpiryStore } from "./access-expiry-store.ts";
 import { type BotChatHomeStoreApi, createBotChatHomeStore, homeWaitsForComputer } from "./bot-chat-home-store.ts";
 import { createComputerRecovery } from "./computer-recovery.ts";
+import { type ComputerStatusStoreApi, createComputerStatusStore } from "./computer-status-store.ts";
 import type { ComputerSwitcherModel } from "./computer-switcher-store.ts";
 import { connectionPresentation } from "./connection-presentation.ts";
 import { type ConversationDirectoryStore, createConversationDirectoryStore } from "./conversation-directory-store.ts";
@@ -55,6 +56,8 @@ export interface ChatWorkspace {
     readonly bugReportDialog: BugReportDialogStore;
     /** The authenticated computer; scopes browser persistence and diagnostics. */
     readonly computerId: string;
+    /** What the page knows of its Computer: pairing, its configuration, and the network. */
+    readonly computer: ComputerStatusStoreApi;
     readonly home: BotChatHomeStoreApi;
     readonly titles: SessionTitlesStore;
     readonly directory: StoreApi<ConversationDirectoryStore>;
@@ -152,11 +155,14 @@ export function createChatWorkspace(options: {
     const titles: SessionTitlesStore = createSessionTitlesStore(
         options.rememberedIdentity === undefined ? null : encodeIdentityScope(options.rememberedIdentity),
     );
+    const computer = createComputerStatusStore(navigator.onLine);
     const home: BotChatHomeStoreApi = createBotChatHomeStore(requests, {
         computerId,
+        computer,
         titles,
         draftConfiguration: () => draftConfiguration(draftControls.getState().settings),
-        connectionAvailable: () => connectionPresentation(home.getState(), null).available,
+        connectionAvailable: () =>
+            connectionPresentation(computer.getState(), home.getState().selection, null).available,
         clock: options.clock,
         onWaitingForComputer: () => computerRecovery.failed(),
         createId: () => crypto.randomUUID(),
@@ -238,7 +244,7 @@ export function createChatWorkspace(options: {
     const draftControls = createDraftControlsStore(
         computerId,
         requests,
-        () => home.getState().computerConfiguration,
+        () => computer.getState().computerConfiguration,
         () => computerRecovery.failed(),
     );
     // Sidebar stores live with the workspace, outside React: dialogs (native
@@ -249,7 +255,7 @@ export function createChatWorkspace(options: {
             clock: options.clock,
             signal: () => operationsLifetime.signal,
             requests,
-            computer: () => home.getState().computerConfiguration?.computer ?? null,
+            computer: () => computer.getState().computerConfiguration?.computer ?? null,
             createTransfer: (terms, signal) => {
                 if (options.createTransfer === undefined) {
                     return Promise.reject(new Error("Identity sharing is unavailable."));
@@ -439,7 +445,8 @@ export function createChatWorkspace(options: {
             requests,
             onReleased: (activity) => statuses.getState().paneReleased(sessionTarget, activity),
             titles,
-            connectionAvailable: (connection) => connectionPresentation(home.getState(), connection).available,
+            connectionAvailable: (connection) =>
+                connectionPresentation(computer.getState(), home.getState().selection, connection).available,
             onConnected: () => computerRecovery.working(),
             onWaitingForComputer: () => computerRecovery.failed(),
         });
@@ -519,6 +526,7 @@ export function createChatWorkspace(options: {
         computerId,
         bugReportDialog: options.bugReportDialog,
         directory,
+        computer,
         home,
         titles,
         statuses,

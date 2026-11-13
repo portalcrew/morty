@@ -11,7 +11,7 @@ import type { ChatWorkspace } from "./chat-workspace.ts";
 export function chatDiagnostics(workspace: ChatWorkspace): ChatDiagnostics {
     const home = workspace.home.getState();
     const project = modelDiagnosticProjection();
-    const computer = home.computerConfiguration?.computer;
+    const computer = workspace.computer.getState().computerConfiguration?.computer;
     if (home.selection.kind === "draft") {
         const settings = workspace.draftControls.getState().settings;
         if (settings.kind !== "ready") {

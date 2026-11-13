@@ -20,6 +20,7 @@ import { formatError } from "../format-error.ts";
 import { type ComposerAttachmentStore, createComposerAttachmentStore } from "./composer-attachment-store.ts";
 import { returnToComposer } from "./composer-return.ts";
 import type { ComputerObservation } from "./computer-recovery.ts";
+import { botConnectionStatus, type ComputerStatusStore, type ComputerStatusStoreApi } from "./computer-status-store.ts";
 import {
     type ConversationCreationState,
     failedDraftMessage,
@@ -35,7 +36,6 @@ import {
 import { type DraftControlsStore, draftConfiguration } from "./draft-controls-store.ts";
 import { canRetryFirstMessage, canSendFirstMessage, type NewConversationFacts } from "./new-conversation-rules.ts";
 import type { OpenMortySession } from "./open-session.ts";
-import { createPairingDialogStore } from "./pairing-dialog-store.ts";
 import { startRecoveryNotice } from "./recovery-notice.ts";
 import { prependToDraft, type SubmittedMessage } from "./session-delivery-store.ts";
 import type { SessionTitles, SessionTitlesStore } from "./session-titles-store.ts";
@@ -56,48 +56,6 @@ type HomeInitialization =
           readonly failure: "computer" | "agent-required" | "unavailable";
           readonly message: string;
       };
-
-/**
- * Whether the Computer is paired. `revoked`: a copy of its connection key was used,
- * and the owner must run setup on the Computer to pair it again.
- */
-type BotPairing =
-    | { readonly kind: "checking" }
-    | { readonly kind: "paired" }
-    | { readonly kind: "unpaired" }
-    | { readonly kind: "revoked" };
-
-export type BotConnectionStatus =
-    | { readonly kind: "connecting"; readonly label: "Connecting" }
-    | { readonly kind: "connected"; readonly label: "Connected" }
-    | { readonly kind: "unavailable"; readonly label: "Unavailable" }
-    | { readonly kind: "unpaired"; readonly label: "Disconnected" }
-    | { readonly kind: "revoked"; readonly label: "Disconnected" }
-    | { readonly kind: "disconnected"; readonly label: "Disconnected" };
-
-/**
- * The Computer's connection as the page shows it everywhere. It is derived from the Computer configuration the page
- * follows, so no failure path can leave one part of the page saying offline while another says online.
- */
-export function botConnectionStatus(
-    home: Pick<BotChatHomeStore, "computerConfiguration" | "pairing" | "configurationWatch" | "networkAvailable">,
-): BotConnectionStatus {
-    if (home.pairing.kind === "unpaired") {
-        return { kind: "unpaired", label: "Disconnected" };
-    }
-    if (home.pairing.kind === "revoked") {
-        return { kind: "revoked", label: "Disconnected" };
-    }
-    if (!home.networkAvailable || home.configurationWatch.kind === "unavailable") {
-        return { kind: "unavailable", label: "Unavailable" };
-    }
-    if (home.computerConfiguration !== null) {
-        return home.computerConfiguration.computer.online
-            ? { kind: "connected", label: "Connected" }
-            : { kind: "disconnected", label: "Disconnected" };
-    }
-    return { kind: "connecting", label: "Connecting" };
-}
 
 /**
  * Whether the home view failed only because the Computer was unreachable, so the workspace retries it once the Computer
@@ -128,24 +86,11 @@ export interface BotChatHomeStore {
         readonly attachments: ReturnType<typeof createComposerAttachmentStore>;
     } | null;
     readonly initialization: HomeInitialization;
-    readonly pairing: BotPairing;
-    readonly computerConfiguration: BotComputerConfiguration | null;
-    readonly configurationWatch:
-        | { readonly kind: "checking" }
-        | { readonly kind: "current"; readonly checkedAt: number }
-        | {
-              readonly kind: "unavailable";
-              readonly lastCheckedAt: number | null;
-              readonly notice: "quiet" | "visible";
-          };
-    readonly networkAvailable: boolean;
-    readonly setNetworkAvailable: (available: boolean) => void;
     readonly selection: ConversationSelectionState;
     readonly creation: ConversationCreationState;
     readonly draft: string;
     /** Bumped whenever the message list should re-arm following the latest message. */
     readonly scrollFollowRevision: number;
-    readonly pairingDialog: ReturnType<typeof createPairingDialogStore>;
     readonly load: (signal: AbortSignal) => Promise<void>;
     readonly newConversation: () => void;
     readonly openManaged: (target: NativeSessionTarget) => void;
@@ -171,11 +116,11 @@ function initialSelection(urlValue: string, createId: () => string): Conversatio
 }
 
 /** Setup is a projection of its owning workflows, not a second stored configuration snapshot. */
-function homeSetupReason(home: BotChatHomeStore): SetupReason | null {
-    if (home.pairing.kind === "unpaired") {
+function homeSetupReason(home: BotChatHomeStore, computer: ComputerStatusStore): SetupReason | null {
+    if (computer.pairing.kind === "unpaired") {
         return "unconfigured";
     }
-    if (home.pairing.kind === "revoked") {
+    if (computer.pairing.kind === "revoked") {
         return "computer-revoked";
     }
     if (
@@ -184,10 +129,10 @@ function homeSetupReason(home: BotChatHomeStore): SetupReason | null {
     ) {
         return "agent-required";
     }
-    if (home.selection.kind !== "draft" || home.computerConfiguration === null) {
+    if (home.selection.kind !== "draft" || computer.computerConfiguration === null) {
         return null;
     }
-    switch (computerAgentAvailability(home.computerConfiguration.computer)) {
+    switch (computerAgentAvailability(computer.computerConfiguration.computer)) {
         case "no-agent":
             return "agent-missing";
         case "offline":
@@ -197,23 +142,24 @@ function homeSetupReason(home: BotChatHomeStore): SetupReason | null {
     }
 }
 
-export function homeCanStartConversation(home: BotChatHomeStore): boolean {
+export function homeCanStartConversation(home: BotChatHomeStore, computer: ComputerStatusStore): boolean {
     return (
         home.initialization.kind === "ready" &&
-        home.pairing.kind === "paired" &&
-        home.computerConfiguration !== null &&
-        homeSetupReason(home) === null
+        computer.pairing.kind === "paired" &&
+        computer.computerConfiguration !== null &&
+        homeSetupReason(home, computer) === null
     );
 }
 
 function newConversationFacts(
     home: BotChatHomeStore,
+    computer: ComputerStatusStore,
     settingsReady: boolean,
     connectionAvailable: boolean,
 ): NewConversationFacts {
     return {
         connectionAvailable,
-        startable: homeCanStartConversation(home),
+        startable: homeCanStartConversation(home, computer),
         draftSelected: home.selection.kind === "draft",
         settingsReady,
         creation: home.creation.kind,
@@ -234,11 +180,12 @@ function composerMessage(
 /** What the New Session page offers now: the composer's send control and a failed first message's Retry. */
 export function newConversationPresentation(
     home: BotChatHomeStore,
+    computer: ComputerStatusStore,
     attachments: Pick<ComposerAttachmentStore, "attachments" | "state">,
     settings: DraftControlsStore["settings"],
     connectionAvailable: boolean,
 ) {
-    const facts = newConversationFacts(home, draftConfiguration(settings) !== null, connectionAvailable);
+    const facts = newConversationFacts(home, computer, draftConfiguration(settings) !== null, connectionAvailable);
     return {
         submitDisabled: !canSendFirstMessage(facts, composerMessage(home, attachments)),
         retryDisabled: !canRetryFirstMessage(facts),
@@ -262,6 +209,8 @@ export const createBotChatHomeStore = (
     >,
     options: {
         readonly computerId: string;
+        /** What the page knows of the Computer, which this store reads and never writes except through its transitions. */
+        readonly computer: ComputerStatusStoreApi;
         readonly titles: SessionTitlesStore;
         readonly draftConfiguration: () => ChatDraftConfiguration | null;
         /** Whether the connection header reports the New Session page's connection available, network and Computer included. */
@@ -304,6 +253,7 @@ export const createBotChatHomeStore = (
     },
 ) => {
     const computerId = options.computerId;
+    const computer = options.computer;
     const titles = options.titles;
     const selection = initialSelection(options.url, options.createId);
     let restoredTarget = options.entry === "restore" && selection.kind === "pending" ? selection.target.identity : null;
@@ -371,18 +321,10 @@ export const createBotChatHomeStore = (
             composerAttachments: createComposerAttachmentStore(),
             draftHandoff: null,
             initialization: { kind: "loading" },
-            pairing: { kind: "checking" },
-            computerConfiguration: null,
-            configurationWatch: { kind: "checking" },
-            networkAvailable: navigator.onLine,
-            setNetworkAvailable: (available) => {
-                set({ networkAvailable: available });
-            },
             selection,
             creation: { kind: "draft" },
             draft: "",
             scrollFollowRevision: 0,
-            pairingDialog: createPairingDialogStore(),
             load: async (signal) => {
                 signal.throwIfAborted();
                 let recoveryNotice: AbortController | null = null;
@@ -391,37 +333,17 @@ export const createBotChatHomeStore = (
                     recoveryNotice = null;
                 };
                 const configurationUnavailable = (): void => {
-                    const watch = get().configurationWatch;
                     // Repeated failures belong to one interruption, so they cannot postpone its notice.
                     if (recoveryNotice !== null) {
                         return;
                     }
-                    const notice =
-                        watch.kind === "current" ? "quiet" : watch.kind === "unavailable" ? watch.notice : "visible";
-                    set({
-                        configurationWatch: {
-                            kind: "unavailable",
-                            lastCheckedAt:
-                                watch.kind === "current"
-                                    ? watch.checkedAt
-                                    : watch.kind === "unavailable"
-                                      ? watch.lastCheckedAt
-                                      : null,
-                            notice,
-                        },
-                    });
-                    if (notice === "visible") {
+                    if (computer.getState().watchInterrupted() === "visible") {
                         return;
                     }
                     recoveryNotice = startRecoveryNotice({
                         clock: options.clock,
                         signal,
-                        onNotice: (notice) => {
-                            const current = get().configurationWatch;
-                            if (current.kind === "unavailable") {
-                                set({ configurationWatch: { ...current, notice } });
-                            }
-                        },
+                        onNotice: (notice) => computer.getState().interruptionNoticed(notice),
                     });
                 };
                 titles.getState().restore();
@@ -526,10 +448,7 @@ export const createBotChatHomeStore = (
                     observation: ComputerObservation,
                 ): void => {
                     clearRecoveryNotice();
-                    set({
-                        computerConfiguration: configuration,
-                        configurationWatch: { kind: "current", checkedAt: options.clock.now() },
-                    });
+                    computer.getState().configurationObserved(configuration, options.clock.now());
                     options.onComputerConfiguration(configuration, observation);
                 };
                 /**
@@ -537,8 +456,8 @@ export const createBotChatHomeStore = (
                  * again: every Session connection it opened belongs to the revoked pairing.
                  */
                 const awaitComputerReplacement = async (message: string, watchSignal: AbortSignal): Promise<void> => {
+                    computer.getState().pairingRevoked();
                     set((current) => ({
-                        pairing: { kind: "revoked" },
                         initialization: { kind: "ready" },
                         selection:
                             current.selection.kind === "pending" || current.selection.kind === "loading"
@@ -568,7 +487,7 @@ export const createBotChatHomeStore = (
                                     await awaitComputerReplacement(COMPUTER_REVOKED_MESSAGE, watchSignal);
                                     return;
                                 }
-                                set({ pairing: { kind: pairing } });
+                                computer.getState().pairingRead(pairing);
                                 if (pairing === "unpaired") {
                                     // An unpaired Computer waits for the pairing
                                     // it just read to change; the pairing flow
@@ -611,8 +530,8 @@ export const createBotChatHomeStore = (
                 try {
                     const current = get();
                     if (
-                        homeCanStartConversation(current) &&
-                        botConnectionStatus(current).kind === "connected" &&
+                        homeCanStartConversation(current, computer.getState()) &&
+                        botConnectionStatus(computer.getState()).kind === "connected" &&
                         (current.selection.kind === "pending" || current.selection.kind === "loading") &&
                         current.selection.target.kind === "session"
                     ) {
@@ -635,9 +554,9 @@ export const createBotChatHomeStore = (
                         await awaitComputerReplacement(COMPUTER_REVOKED_MESSAGE, signal);
                         return;
                     }
-                    set({ pairing: { kind: pairing } });
+                    computer.getState().pairingRead(pairing);
                     if (pairing === "unpaired") {
-                        get().pairingDialog.getState().show();
+                        computer.getState().pairingDialog.getState().show();
                         set((current) => ({
                             selection:
                                 current.selection.kind === "pending" || current.selection.kind === "loading"
@@ -670,7 +589,7 @@ export const createBotChatHomeStore = (
                     observeConfiguration(configuration, { kind: "read" });
                     const currentSelection = get().selection;
                     if (currentSelection.kind === "ready") {
-                        get().pairingDialog.getState().dismiss();
+                        computer.getState().pairingDialog.getState().dismiss();
                         await watchComputerConfigurationChanges();
                         return;
                     }
@@ -684,7 +603,7 @@ export const createBotChatHomeStore = (
                         return;
                     }
                     if (currentTarget === null) {
-                        get().pairingDialog.getState().dismiss();
+                        computer.getState().pairingDialog.getState().dismiss();
                         await watchComputerConfigurationChanges();
                         return;
                     }
@@ -778,9 +697,8 @@ export const createBotChatHomeStore = (
                 } finally {
                     // Quiet feedback is owned by an active recovery. Once this load exits,
                     // an unavailable watch needs the manual retry entry point immediately.
-                    const watch = get().configurationWatch;
-                    if (!signal.aborted && watch.kind === "unavailable") {
-                        set({ configurationWatch: { ...watch, notice: "visible" } });
+                    if (!signal.aborted) {
+                        computer.getState().interruptionUnattended();
                     }
                     clearRecoveryNotice();
                 }
@@ -795,7 +713,7 @@ export const createBotChatHomeStore = (
                 centralSessionStorage.remove(newConversationDraftEntry(computerId));
                 // Leaving a pending selection releases its request, even when entry configuration is already ready.
                 const restart =
-                    !homeCanStartConversation(current) ||
+                    !homeCanStartConversation(current, computer.getState()) ||
                     current.selection.kind === "pending" ||
                     current.selection.kind === "loading" ||
                     current.selection.kind === "failed";
@@ -862,7 +780,12 @@ export const createBotChatHomeStore = (
                 const { attachments } = composer;
                 const draft = current.draft;
                 const settings = options.draftConfiguration();
-                const facts = newConversationFacts(current, settings !== null, options.connectionAvailable());
+                const facts = newConversationFacts(
+                    current,
+                    computer.getState(),
+                    settings !== null,
+                    options.connectionAvailable(),
+                );
                 const allowed =
                     current.creation.kind === "draft"
                         ? canSendFirstMessage(facts, composerMessage(current, composer))
