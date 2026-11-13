@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import type { RelayProtocolEnvironment as RelayHttpEnvironment } from "../computer-relay/http/environment.ts";
+import type { RelayProtocolEnvironment as RelayHttpEnvironment } from "../computer-relay/route/http/environment.ts";
 import { PairingDirectoryError } from "../contracts/relay/pairing.ts";
 import { requestTimeoutMiddleware } from "./request-timeout-middleware.ts";
 

@@ -12,20 +12,20 @@ module.exports = {
             to: {
                 reachable: true,
                 path: [
-                    "^packages/worker/src/(?:(?:worker|computer-relay)/)?(service|http|composition|gateway)/",
-                    "^packages/worker/src/(?:worker|computer-relay)/components/[^/]+/(service|http|composition|gateway)/",
+                    "^packages/worker/src/(?:(?:worker|computer-relay)/)?(service|http|route|composition|gateway)/",
+                    "^packages/worker/src/(?:worker|computer-relay)/components/[^/]+/(service|http|route|composition|gateway)/",
                 ],
             },
         },
         {
-            name: "http-uses-services-not-storage",
+            name: "routes-use-services-not-storage",
             severity: "error",
             comment:
-                "Routes translate requests and call services; persistence belongs to storage behind a service (http -> service -> storage).",
+                "Routes translate requests and call services; persistence belongs to storage behind a service (route -> service -> storage).",
             from: {
                 path: [
-                    "^packages/worker/src/(?:worker|computer-relay)/components/[^/]+/http/",
-                    "^packages/worker/src/(?:worker|computer-relay)/http/",
+                    "^packages/worker/src/(?:worker|computer-relay)/components/[^/]+/(http|route)/",
+                    "^packages/worker/src/(?:worker|computer-relay)/(http|route)/",
                 ],
             },
             to: {

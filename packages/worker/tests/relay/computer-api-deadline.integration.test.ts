@@ -3,13 +3,14 @@ import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { afterAll, expect, it, vi } from "vitest";
 import { SessionAccessSigner } from "../../src/computer-relay/components/runtime/entity/session-access-credential.ts";
-import { acceptWebSocketHttpTransport } from "../../src/computer-relay/components/runtime/http/websocket-http-transport.ts";
+import { createSessionWebSocketRoutes } from "../../src/computer-relay/components/runtime/route/ws/session-websocket-routes.ts";
 import { createLocalSessionOperations } from "../../src/computer-relay/components/runtime/service/local-session-operations.ts";
 import { SessionAccessService } from "../../src/computer-relay/components/runtime/service/session-access-service.ts";
-import { createSessionWebSocketRoutes } from "../../src/computer-relay/components/runtime/websocket/session-websocket-routes.ts";
+import { acceptWebSocketHttpTransport } from "../../src/computer-relay/components/runtime/service/websocket-http-transport.ts";
 import { createRelayDurableObjectContext } from "../../src/computer-relay/composition/relay-durable-object-context.ts";
 import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-object-database.ts";
 import { computerObjectName } from "../../src/contracts/computer-id.ts";
+import type { WebSocketHttpOperation } from "../../src/contracts/websocket-http-dispatch.ts";
 import { RequestDeadline } from "../../src/http/request-deadline.ts";
 import { createOwner, ownerOrigin } from "./owner-fixture.ts";
 import { computerAccess } from "./registered-computer.ts";
@@ -41,7 +42,7 @@ it("Given a Computer API with a 120-second deadline mounted beside Session route
                     access: () => access,
                 });
                 const api = new PendingComputerApiBoundary();
-                const router = createSessionWebSocketRoutes({
+                const sessions = createSessionWebSocketRoutes({
                     ownsComputer: (computerId) => computerId === owner.computerId,
                     services: {
                         forComputer: (computerId) => ({
@@ -52,12 +53,15 @@ it("Given a Computer API with a 120-second deadline mounted beside Session route
                             operations: createLocalSessionOperations(runtime, computerId),
                         }),
                     },
-                }).route(
-                    "/",
-                    new Hono().post("/morty/api/v1/computers/:computerId/agent-settings", (context) =>
-                        api.fetch(context.req.raw),
-                    ),
-                );
+                });
+                const router = new Hono<{ readonly Bindings: { readonly operation: WebSocketHttpOperation } }>()
+                    .route("/morty/api/v1/computers/:computerId/harnesses", sessions)
+                    .route(
+                        "/",
+                        new Hono().post("/morty/api/v1/computers/:computerId/agent-settings", (context) =>
+                            api.fetch(context.req.raw),
+                        ),
+                    );
                 const response = acceptWebSocketHttpTransport({
                     request: new Request(`${ownerOrigin}/morty/api/v1/computers/${owner.computerId}/transport`, {
                         headers: { Upgrade: "websocket" },

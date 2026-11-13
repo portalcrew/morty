@@ -1,7 +1,7 @@
-import { diagnosticText } from "../../../infra/log-diagnostics.ts";
-import { logger } from "../../../infra/logger.ts";
-import { CloudflareRelaySocket } from "./gateway/cloudflare-relay-peers.ts";
-import type { RuntimeContext as DurableObjectContext } from "./runtime-context.ts";
+import { diagnosticText } from "../../../../infra/log-diagnostics.ts";
+import { logger } from "../../../../infra/logger.ts";
+import { CloudflareRelaySocket } from "../gateway/cloudflare-relay-peers.ts";
+import type { RuntimeContext as DurableObjectContext } from "../runtime-context.ts";
 
 function socketLogContext(webSocket: WebSocket) {
     try {
@@ -19,7 +19,7 @@ function socketLogContext(webSocket: WebSocket) {
 }
 
 /** DO-owned daemon/relay peer messages and lifecycle, with no HTTP fetch entrypoint. */
-export class DaemonWebSocketRoutes {
+export class DaemonWebSocketService {
     readonly #dependencies: DurableObjectContext;
     readonly #logger: typeof logger;
 

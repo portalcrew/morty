@@ -1,6 +1,8 @@
 import type { NativeSessionTarget } from "@morty-build/client/protocol";
 import { toHttpError } from "../../../../contracts/http-error.ts";
-import type { SessionAccessService } from "../service/session-access-service.ts";
+import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
+import type { LocalSessionOperations } from "./local-session-operations.ts";
+import type { SessionAccessService } from "./session-access-service.ts";
 
 export type SessionContentUploadTarget = {
     readonly computerId: string;
@@ -46,4 +48,31 @@ export async function authorizeSessionContentUpload(
         const error = toHttpError(cause);
         return Response.json(error.body, { status: error.status });
     }
+}
+
+export async function uploadSessionContent(
+    request: Request,
+    dependencies: {
+        readonly sessions: SessionAccessService;
+        readonly operations: LocalSessionOperations;
+    },
+    location: SessionContentUploadTarget,
+): Promise<Response> {
+    const authorized = await authorizeSessionContentUpload(request, dependencies.sessions, location);
+    if (authorized instanceof Response) {
+        return authorized;
+    }
+    const { access, target } = authorized;
+    if (request.body === null) {
+        throw new PairingDirectoryError("invalid_request", "The content body is required");
+    }
+    const available = await dependencies.operations.writeSessionContent(
+        access.computerId,
+        target,
+        request.body,
+        request.signal,
+    );
+    return new Response(available, {
+        headers: { "cache-control": "no-store", "content-type": "application/json" },
+    });
 }

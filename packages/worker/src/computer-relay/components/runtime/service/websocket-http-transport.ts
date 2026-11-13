@@ -334,7 +334,7 @@ function requestFromMessage(
     binaryBody?: Uint8Array,
 ): { readonly request: Request; readonly requestId: string; readonly body: string } {
     const path = string(value, "path", 8_192);
-    if (!path.startsWith(`${MORTY_API_PREFIX}/`) || path.startsWith(`${MORTY_API_PREFIX}/v1/transport`)) {
+    if (!path.startsWith(`${MORTY_API_PREFIX}/`)) {
         throw transportError("invalid_target");
     }
     const endpoint = new URL(path, origin);
