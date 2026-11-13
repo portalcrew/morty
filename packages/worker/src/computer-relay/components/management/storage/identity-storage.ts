@@ -9,6 +9,8 @@ import {
     browserCredential,
     browserDevice,
     continueLink,
+    linkSharedByDevice,
+    linkSharedByOwner,
     ownerCredential,
 } from "../../../schema/computer-relay-do/index.ts";
 import { type AnonymousIdentity, digest, requireIdentityDatabase } from "./identity-storage-common.ts";
@@ -93,19 +95,21 @@ function deviceAccessHeldUntil(
     return sql<number | null>`(CASE WHEN ${device.endedAt} IS NULL AND ${term} > ${now} THEN ${term} END)`;
 }
 
-/** The browser credential's device holds access; replacing the credential keeps the device and its access. */
-function browserAccessHeld(database: IdentityDatabase, now: number) {
+/** The browser device `deviceId` holds access: it did not end and its term has not passed. */
+function deviceAccessHeld(database: IdentityDatabase, deviceId: SQLiteColumn, now: number) {
     return exists(
         database
             .select({ id: heldDevice.id })
             .from(heldDevice)
             .where(
-                and(
-                    eq(heldDevice.id, browserCredential.deviceId),
-                    sql`${deviceAccessHeldUntil(database, heldDevice, now)} IS NOT NULL`,
-                ),
+                and(eq(heldDevice.id, deviceId), sql`${deviceAccessHeldUntil(database, heldDevice, now)} IS NOT NULL`),
             ),
     );
+}
+
+/** The browser credential's device holds access; replacing the credential keeps the device and its access. */
+function browserAccessHeld(database: IdentityDatabase, now: number) {
+    return deviceAccessHeld(database, browserCredential.deviceId, now);
 }
 
 /** A browser credential that authenticates now: no newer credential of its device replaced it, and the device holds. */
@@ -116,6 +120,36 @@ function browserCredentialInForce(database: IdentityDatabase, now: number) {
 /** The one rule for the computer's own credential: it holds its own access until it is revoked. */
 function ownerAccessHeld(credential: { readonly revokedAt: SQLiteColumn } = ownerCredential) {
     return isNull(credential.revokedAt);
+}
+
+const sharerOwnerCredential = alias(ownerCredential, "sharer_owner_credential");
+
+/**
+ * The access that shared the link still holds: the device's, which opening another link never ends, or the computer's
+ * own credential's. A link adds no device once it does not, so ending that access needs no separate write to void the
+ * link.
+ */
+function linkSharerHolds(database: IdentityDatabase, linkId: SQLiteColumn, now: number) {
+    return or(
+        exists(
+            database
+                .select({ id: linkSharedByOwner.linkId })
+                .from(linkSharedByOwner)
+                .innerJoin(sharerOwnerCredential, eq(sharerOwnerCredential.id, linkSharedByOwner.ownerCredentialId))
+                .where(and(eq(linkSharedByOwner.linkId, linkId), ownerAccessHeld(sharerOwnerCredential))),
+        ),
+        exists(
+            database
+                .select({ id: linkSharedByDevice.linkId })
+                .from(linkSharedByDevice)
+                .where(
+                    and(
+                        eq(linkSharedByDevice.linkId, linkId),
+                        deviceAccessHeld(database, linkSharedByDevice.deviceId, now),
+                    ),
+                ),
+        ),
+    );
 }
 
 /** Ends the access of the matching browser devices whose access has not ended yet; ended access stays ended. */
@@ -304,9 +338,8 @@ export class IdentityStorage {
     readonly linkedDevices = async (now: number, signal: AbortSignal) => {
         signal.throwIfAborted();
         const database = requireIdentityDatabase(this.#database);
-        const joinedThrough = alias(continueLink, "joined_through_link");
-        const sharerOwner = alias(ownerCredential, "sharer_owner_credential");
-        const sharerBrowser = alias(browserCredential, "sharer_browser_credential");
+        const sharedByOwner = alias(linkSharedByOwner, "joined_through_shared_by_owner");
+        const sharedByDevice = alias(linkSharedByDevice, "joined_through_shared_by_device");
         const sharerDevice = alias(browserDevice, "sharer_device");
         const accessHeldUntil = deviceAccessHeldUntil(database, browserDevice, now);
         const rows = await database
@@ -320,16 +353,15 @@ export class IdentityStorage {
                 accessHeldUntil: accessHeldUntil.as("access_held_until"),
                 sharerKind: sql<
                     Credential["kind"] | null
-                >`CASE WHEN ${sharerOwner.id} IS NOT NULL THEN 'local' WHEN ${sharerBrowser.id} IS NOT NULL THEN 'browser' END`.as(
+                >`CASE WHEN ${sharedByOwner.linkId} IS NOT NULL THEN 'local' WHEN ${sharedByDevice.linkId} IS NOT NULL THEN 'browser' END`.as(
                     "sharer_kind",
                 ),
                 sharerLabel: sql<string | null>`${sharerDevice.label}`.as("sharer_label"),
             })
             .from(browserDevice)
-            .leftJoin(joinedThrough, eq(joinedThrough.id, browserDevice.joinedThroughTransferId))
-            .leftJoin(sharerOwner, eq(sharerOwner.id, joinedThrough.createdByCredentialId))
-            .leftJoin(sharerBrowser, eq(sharerBrowser.id, joinedThrough.createdByCredentialId))
-            .leftJoin(sharerDevice, eq(sharerDevice.id, sharerBrowser.deviceId))
+            .leftJoin(sharedByOwner, eq(sharedByOwner.linkId, browserDevice.joinedThroughTransferId))
+            .leftJoin(sharedByDevice, eq(sharedByDevice.linkId, browserDevice.joinedThroughTransferId))
+            .leftJoin(sharerDevice, eq(sharerDevice.id, sharedByDevice.deviceId))
             // Ended access never resumes; reading only the devices that hold access keeps the list short.
             .where(sql`${accessHeldUntil} IS NOT NULL`)
             .all();
@@ -495,15 +527,43 @@ export class IdentityStorage {
             eq(browserCredential.tokenHash, parentTokenHash),
             browserCredentialInForce(database, now),
         );
-        const createdByIssuer = (createdBy: SQLiteColumn) =>
+        // The link the issuer's access shared: by the computer's own credential the token names, or by the device the
+        // token's browser credential belongs to, so a renewed credential still stands for the device that shared it.
+        const sharedByIssuer = (linkId: SQLiteColumn) =>
             or(
-                inArray(
-                    createdBy,
-                    database.select({ id: ownerCredential.id }).from(ownerCredential).where(ownerIssuer),
+                exists(
+                    database
+                        .select({ id: linkSharedByOwner.linkId })
+                        .from(linkSharedByOwner)
+                        .where(
+                            and(
+                                eq(linkSharedByOwner.linkId, linkId),
+                                inArray(
+                                    linkSharedByOwner.ownerCredentialId,
+                                    database
+                                        .select({ id: ownerCredential.id })
+                                        .from(ownerCredential)
+                                        .where(ownerIssuer),
+                                ),
+                            ),
+                        ),
                 ),
-                inArray(
-                    createdBy,
-                    database.select({ id: browserCredential.id }).from(browserCredential).where(browserIssuer),
+                exists(
+                    database
+                        .select({ id: linkSharedByDevice.linkId })
+                        .from(linkSharedByDevice)
+                        .where(
+                            and(
+                                eq(linkSharedByDevice.linkId, linkId),
+                                inArray(
+                                    linkSharedByDevice.deviceId,
+                                    database
+                                        .select({ id: browserCredential.deviceId })
+                                        .from(browserCredential)
+                                        .where(browserIssuer),
+                                ),
+                            ),
+                        ),
                 ),
             );
         // The unused link the issuer shared before and this one replaces; replacing it is recorded on this link alone.
@@ -511,45 +571,68 @@ export class IdentityStorage {
             eq(predecessorLink.codeHash, replacesHash ?? ""),
             linkInForce(database, now, predecessorLink),
             unusedLink(database, predecessorLink.id),
-            createdByIssuer(predecessorLink.createdByCredentialId),
+            sharedByIssuer(predecessorLink.id),
         );
         const predecessorId = database.select({ id: predecessorLink.id }).from(predecessorLink).where(predecessor);
         const predecessorOpen = replacesHash === null ? undefined : exists(predecessorId);
-        // The link's columns in table order, issued by `issuer`.
-        const issuedBy = (issuer: { readonly id: SQLiteColumn }) => ({
+        // The link's columns in table order.
+        const linkColumns = {
             id: sql<string>`${`transfer_${crypto.randomUUID()}`}`.as("id"),
             codeHash: sql<string>`${codeHash}`.as("code_hash"),
             requestHash: sql<string>`${operation.requestHash}`.as("request_hash"),
             expiresAt: sql<number>`${terms.expiresAt}`.as("expires_at"),
             accessExpiresAt: sql<number>`${terms.accessExpiresAt}`.as("access_expires_at"),
             createdAt: sql<number>`${now}`.as("created_at"),
-            createdByCredentialId: issuer.id,
             replacesTransferId: (replacesHash === null ? sql<null>`null` : sql<string>`(${predecessorId})`).as(
                 "replaces_transfer_id",
             ),
             cancelledAt: sql<null>`null`.as("cancelled_at"),
-        });
+        };
         // The token names one credential, of one kind, so at most one of these issues the link.
         const issueByOwner = database
             .insert(continueLink)
-            .select(
-                database
-                    .select(issuedBy(ownerCredential))
-                    .from(ownerCredential)
-                    .where(and(ownerIssuer, predecessorOpen)),
-            )
+            .select(database.select(linkColumns).from(ownerCredential).where(and(ownerIssuer, predecessorOpen)))
             .onConflictDoNothing({ target: continueLink.codeHash });
         const issueByBrowser = database
             .insert(continueLink)
+            .select(database.select(linkColumns).from(browserCredential).where(and(browserIssuer, predecessorOpen)))
+            .onConflictDoNothing({ target: continueLink.codeHash });
+        // The access that shared the link is recorded in the same transaction; a link that already existed has its.
+        const unshared = and(
+            eq(continueLink.codeHash, codeHash),
+            notExists(
+                database
+                    .select({ id: linkSharedByOwner.linkId })
+                    .from(linkSharedByOwner)
+                    .where(eq(linkSharedByOwner.linkId, continueLink.id)),
+            ),
+            notExists(
+                database
+                    .select({ id: linkSharedByDevice.linkId })
+                    .from(linkSharedByDevice)
+                    .where(eq(linkSharedByDevice.linkId, continueLink.id)),
+            ),
+        );
+        const recordOwnerSharer = database
+            .insert(linkSharedByOwner)
             .select(
                 database
-                    .select(issuedBy(browserCredential))
-                    .from(browserCredential)
-                    .where(and(browserIssuer, predecessorOpen)),
-            )
-            .onConflictDoNothing({ target: continueLink.codeHash });
+                    .select({ linkId: continueLink.id, ownerCredentialId: ownerCredential.id })
+                    .from(continueLink)
+                    .innerJoin(ownerCredential, ownerIssuer)
+                    .where(unshared),
+            );
+        const recordDeviceSharer = database
+            .insert(linkSharedByDevice)
+            .select(
+                database
+                    .select({ linkId: continueLink.id, deviceId: browserCredential.deviceId })
+                    .from(continueLink)
+                    .innerJoin(browserCredential, browserIssuer)
+                    .where(unshared),
+            );
         signal.throwIfAborted();
-        this.#database.batch([issueByOwner, issueByBrowser], signal);
+        this.#database.batch([issueByOwner, issueByBrowser, recordOwnerSharer, recordDeviceSharer], signal);
         const issued = await database
             .select({
                 createdAt: continueLink.createdAt,
@@ -562,7 +645,7 @@ export class IdentityStorage {
                     eq(continueLink.codeHash, codeHash),
                     eq(continueLink.requestHash, operation.requestHash),
                     linkInForce(database, now),
-                    createdByIssuer(continueLink.createdByCredentialId),
+                    sharedByIssuer(continueLink.id),
                 ),
             )
             .get();
@@ -606,25 +689,7 @@ export class IdentityStorage {
             // A link adds no device once the access that shared it ended; checking it in the issuing write means ending
             // that access needs no separate write to void the link. Renewal replaces a credential without ending its
             // access, so invitations survive it.
-            or(
-                exists(
-                    database
-                        .select({ id: ownerCredential.id })
-                        .from(ownerCredential)
-                        .where(and(eq(ownerCredential.id, continueLink.createdByCredentialId), ownerAccessHeld())),
-                ),
-                exists(
-                    database
-                        .select({ id: browserCredential.id })
-                        .from(browserCredential)
-                        .where(
-                            and(
-                                eq(browserCredential.id, continueLink.createdByCredentialId),
-                                browserAccessHeld(database, now),
-                            ),
-                        ),
-                ),
-            ),
+            linkSharerHolds(database, continueLink.id, now),
         );
         const replacedHash = replaces === null ? null : await digest(replaces);
         const tokenHash = await digest(token);

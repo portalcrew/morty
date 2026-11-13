@@ -273,6 +273,54 @@ test("Given a device that shared links before and after renewing its credential,
     expect((await redeem(unusedAfterRenewal)).status).toBe(410);
 });
 
+test("Given a device that shared a link and then renewed its credential, When its sharing dialog replaces that link, Then the new link is issued and the replaced one adds no device", async () => {
+    const environment = fixture.environment();
+    const owner = await fixture.createAnonymousUser();
+    const request = (path: string, token: string, body: object) =>
+        worker.fetch(
+            new Request(`${APP_ORIGIN}/morty/api/v1/computers/${owner.computerId}${path}`, {
+                method: "POST",
+                headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+                body: JSON.stringify(body),
+            }),
+            environment,
+        );
+    const share = async (token: string, replaces?: string) => {
+        const response = await request("/identity/transfers", token, {
+            operationId: crypto.randomUUID(),
+            ...(replaces === undefined ? {} : { replaces }),
+        });
+        expect(response.status).toBe(201);
+        return new URL(v.parse(v.object({ url: v.string() }), await response.json()).url).hash.slice(6);
+    };
+    const redeem = (code: string, replaces?: string) =>
+        worker.fetch(
+            new Request(`${APP_ORIGIN}/morty/api/v1/identity/transfers/redeem`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    code,
+                    redemptionKey: anonymousCreationKey(),
+                    ...(replaces === undefined ? {} : { replaces }),
+                }),
+            }),
+            environment,
+        );
+    const tokenOf = async (response: Response) => {
+        expect(response.status).toBe(200);
+        return v.parse(v.object({ computerToken: v.string() }), await response.json()).computerToken;
+    };
+    const original = await tokenOf(await redeem(await share(owner.token)));
+    const shared = await share(original);
+    // The device opens another link, so a newer credential replaces the one that shared `shared`.
+    const renewed = await tokenOf(await redeem(await share(owner.token), original));
+
+    const replacement = await share(renewed, shared);
+
+    expect((await redeem(shared)).status).toBe(410);
+    expect((await redeem(replacement)).status).toBe(200);
+});
+
 test("Given links shared by the computer's own credential, When that credential is revoked, Then its unused links add no device while redeemed links keep their device", async () => {
     const environment = fixture.environment();
     const owner = await fixture.createAnonymousUser();
