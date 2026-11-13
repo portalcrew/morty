@@ -141,7 +141,7 @@ async function readTurn(peer: RealDaemonPeer): Promise<string> {
             throw new Error(JSON.stringify(event));
         }
         if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
-            expect(event.payload.stopReason).toBe("end_turn");
+            expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
             return text;
         }
     }

@@ -485,8 +485,6 @@ describe.sequential("Relay Session-only boundary", () => {
                 eventId: rawEvent.eventId,
                 payload: rawEvent.payload,
                 recordedAt: rawEvent.recordedAt,
-                sessionGenerationId: rawEvent.sessionGenerationId,
-                target: rawEvent.target,
                 type: rawEvent.type,
             };
             const secondRawEvent = { ...rawEvent, eventId: "event-v2-2", position: "2" };
@@ -560,10 +558,7 @@ describe.sequential("Relay Session-only boundary", () => {
                         sessionGenerationId: "session-generation-1",
                         events: [futureEvent, historicalEvent],
                         nextCursor: null,
-                        tailCursor: rawEvent.eventId,
                         throughPosition: "1",
-                        truncated: false,
-                        version: 2,
                     },
                 },
             };
@@ -593,10 +588,7 @@ describe.sequential("Relay Session-only boundary", () => {
                         sessionGenerationId: "session-generation-1",
                         events: [futureEvent, historicalEvent],
                         nextCursor: null,
-                        tailCursor: rawEvent.eventId,
                         throughPosition: "1",
-                        truncated: false,
-                        version: 2,
                     },
                 },
             });
@@ -1059,7 +1051,6 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
                             payload: {
                                 attemptId: `${commandId}-attempt`,
                                 commandId,
-                                epoch: `${slug}-epoch`,
                                 kind: "prompt.started",
                             },
                         },
@@ -1843,10 +1834,7 @@ describe.sequential("Relay Turn submission", () => {
                 events: [],
                 nextCursor: "next-event",
                 sessionGenerationId: "session-generation-1",
-                tailCursor: "tail-event",
                 throughPosition: "3",
-                truncated: true,
-                version: 2 as const,
             };
             runtime.daemon.send(
                 await sessionHistoryPageLoadedCodec.encode(
@@ -2728,8 +2716,8 @@ describe.sequential("Relay Turn submission", () => {
                                 type: "lifecycle-metadata",
                                 payload: {
                                     commandId: "long-first-turn",
+                                    completion: { kind: "cancelled", started: true },
                                     kind: "prompt.completed",
-                                    stopReason: "cancelled",
                                 },
                             },
                         ],
@@ -3996,7 +3984,6 @@ describe("Computer prompt acknowledgements", () => {
                         lifecycleFrame(runtime.sessionTarget, "retried-started", "1", {
                             commandId: "retried-command",
                             attemptId: "retried-attempt",
-                            epoch: "retried-epoch",
                             kind: "prompt.started",
                         }),
                     ),
@@ -4022,8 +4009,8 @@ describe("Computer prompt acknowledgements", () => {
                     JSON.parse(
                         lifecycleFrame(runtime.sessionTarget, "retried-completed", "2", {
                             commandId: "retried-command",
+                            completion: { kind: "ended", stopReason: "end_turn" },
                             kind: "prompt.completed",
-                            stopReason: "end_turn",
                         }),
                     ),
                     encryption.computer,

@@ -1,6 +1,6 @@
 import type { NativeSessionTarget } from "@morty-build/client/protocol";
 import {
-    promptCompletion,
+    promptStopReason,
     type SESSION_ARCHIVE_KIND,
     SESSION_ARCHIVED_KIND,
     type SESSION_CANCEL_BEFORE_START_KIND,
@@ -47,7 +47,7 @@ async function replyStopped(
                         kind: SESSION_TURN_STOPPED_KIND,
                         requestId,
                         target,
-                        stopReason: settled.stopReason,
+                        stopReason: promptStopReason(settled.completion),
                     },
                     payloadEncryption,
                     signal,
@@ -127,7 +127,7 @@ export const handleSessionCancelBeforeStart: CommandHandler<typeof SESSION_CANCE
         if (
             outcome?.type === "lifecycle-metadata" &&
             outcome.payload.kind === "prompt.completed" &&
-            promptCompletion(outcome.payload).kind === "cancelled"
+            outcome.payload.completion.kind === "cancelled"
         ) {
             if (cancelled.kind === "restated") {
                 eventProjection.restateOutcome(target, cancelled.outcome);
@@ -169,7 +169,7 @@ export const handleSessionCancelBeforeStart: CommandHandler<typeof SESSION_CANCE
             const settled = settledCommand(operations, commandId);
             if (settled.kind !== "completed") {
                 await replySettledFailure(context, requestId, target, settled);
-            } else if (settled.cancelledBeforeStart) {
+            } else if (settled.completion.kind === "cancelled" && !settled.completion.started) {
                 await withdrawn();
             } else {
                 await alreadyStarted();
@@ -210,7 +210,7 @@ export const handlePromptDisposition: CommandHandler<typeof SESSION_PROMPT_DISPO
     if (
         outcome?.type === "lifecycle-metadata" &&
         outcome.payload.kind === "prompt.completed" &&
-        promptCompletion(outcome.payload).kind === "steered"
+        outcome.payload.completion.kind === "steered"
     ) {
         if (socket.readyState === WebSocket.OPEN) {
             reply(

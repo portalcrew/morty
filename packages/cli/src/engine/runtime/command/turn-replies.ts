@@ -1,6 +1,6 @@
 import {
     type NativeSessionTarget,
-    promptCompletion,
+    type PromptCompletion,
     sessionOperationFailedEventCodec,
 } from "@morty-build/client/protocol";
 import { WebSocket } from "undici";
@@ -10,7 +10,7 @@ import { send } from "./transport.ts";
 
 /** How a settled command ended, as the ledger's outcome records it. */
 export type SettledCommand =
-    | { readonly kind: "completed"; readonly stopReason: string; readonly cancelledBeforeStart: boolean }
+    | { readonly kind: "completed"; readonly completion: PromptCompletion }
     | { readonly kind: "failed"; readonly code: string; readonly message: string }
     | { readonly kind: "unavailable" };
 
@@ -22,11 +22,7 @@ export function settledCommand(operations: ExecutionReceipts, commandId: string)
     const payload = outcome.payload;
     switch (payload.kind) {
         case "prompt.completed":
-            return {
-                kind: "completed",
-                stopReason: payload.stopReason,
-                cancelledBeforeStart: promptCompletion(payload).kind === "cancelled",
-            };
+            return { kind: "completed", completion: payload.completion };
         case "prompt.failed":
         case "prompt.failed-before-start":
             return { kind: "failed", code: payload.code, message: payload.message };

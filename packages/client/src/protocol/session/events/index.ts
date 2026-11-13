@@ -334,6 +334,12 @@ const acpSessionUpdateSchema = z.discriminatedUnion("sessionUpdate", [
 export type AcpSessionUpdate = z.infer<typeof acpSessionUpdateSchema>;
 
 const lifecycleBase = { commandId: identifier };
+/** How an admitted prompt executes: as its own turn, or by steering the running turn of `targetCommandId`. */
+const promptDispatchSchema = z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("own") }).readonly(),
+    z.object({ kind: z.literal("steer"), targetCommandId: identifier }).readonly(),
+]);
+export type PromptDispatch = z.infer<typeof promptDispatchSchema>;
 // The user message the Agent recorded for the prompt, as its message identity. Agents that report none, and Computers
 // before it existed, omit it.
 const promptMessageId = z.string().min(1).max(2_048);
@@ -348,13 +354,23 @@ const promptExecutionContextSchema = z
     })
     .readonly() satisfies z.ZodType<PromptExecutionContext>;
 
+/**
+ * How a completed prompt ended: the Agent stopped it for `stopReason`, it was cancelled (`started` says whether its
+ * execution ever began, so a prompt withdrawn from the queue is told from one stopped mid-turn), or it was folded into
+ * the running turn it steered.
+ */
+const promptCompletionSchema = z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("ended"), stopReason: shortString }).readonly(),
+    z.object({ kind: z.literal("cancelled"), started: z.boolean() }).readonly(),
+    z.object({ kind: z.literal("steered") }).readonly(),
+]);
+export type PromptCompletion = z.infer<typeof promptCompletionSchema>;
 const promptCompletedSchema = z
     .object({
         ...lifecycleBase,
+        completion: promptCompletionSchema,
         kind: z.literal("prompt.completed"),
-        execution: z.literal("not-started").optional(),
         messageId: promptMessageId.optional(),
-        stopReason: shortString,
     })
     .readonly();
 const promptFailedSchema = z
@@ -387,15 +403,12 @@ const lifecycleMetadataSchema = z.discriminatedUnion("kind", [
         .object({
             ...lifecycleBase,
             content: z.array(contentBlockSchema).min(1).max(100).readonly(),
-            disposition: shortString.optional(),
+            dispatch: promptDispatchSchema,
             kind: z.literal("prompt.requested"),
             context: promptExecutionContextSchema.optional(),
-            targetCommandId: identifier.optional(),
         })
         .readonly(),
-    z
-        .object({ ...lifecycleBase, attemptId: identifier, epoch: identifier, kind: z.literal("prompt.started") })
-        .readonly(),
+    z.object({ ...lifecycleBase, attemptId: identifier, kind: z.literal("prompt.started") }).readonly(),
     // The Computer did not run this prompt itself: it handed it to the native session's owner, another client of the
     // Agent such as the Codex app, which runs queued input on its own terms. `queued`: the owner holds the prompt and
     // may keep holding it; Codex pauses its queue after an interrupted turn until its user continues. `started`: the
@@ -445,27 +458,17 @@ export const isPromptTerminal = (payload: LifecycleMetadata): payload is PromptT
     }
 };
 
-/**
- * How a completed prompt ended. Agents report a cancelled prompt with the ACP stop reason `cancelled`, the Computer
- * reports a prompt folded into another one as `steered`, and `execution` marks a prompt withdrawn before it started.
- * Readers classify a completion here instead of comparing stop reasons themselves.
- */
-export type PromptCompletion =
-    | { readonly kind: "cancelled"; readonly started: boolean }
-    | { readonly kind: "steered" }
-    | { readonly kind: "ended"; readonly stopReason: string };
-
-export const promptCompletion = (completed: {
-    readonly stopReason: string;
-    readonly execution?: "not-started" | undefined;
-}): PromptCompletion => {
-    switch (completed.stopReason) {
+/** The ACP stop reason a settled command's reply reports for how its prompt ended. */
+export const promptStopReason = (completion: PromptCompletion): string => {
+    switch (completion.kind) {
+        case "ended":
+            return completion.stopReason;
         case "cancelled":
-            return { kind: "cancelled", started: completed.execution !== "not-started" };
+            return "cancelled";
         case "steered":
-            return { kind: "steered" };
+            return "steered";
         default:
-            return { kind: "ended", stopReason: completed.stopReason };
+            return completion satisfies never;
     }
 };
 const sessionEventPayloadSchema = z.discriminatedUnion("type", [
@@ -487,10 +490,15 @@ const sharedSessionEventFields = {
     eventId: identifier,
     mortyMetadata: z.object(mortyMetadataFields).readonly().optional(),
     recordedAt: z.iso.datetime({ offset: true }),
+};
+// A live event is read on its own, so it names the Session generation and position it belongs to. A history page
+// states its Session and generation once, so its events do not repeat them.
+const sessionLiveEventFields = {
+    ...sharedSessionEventFields,
+    position: positionSchema,
     sessionGenerationId: identifier,
     target: nativeSessionTargetSchema,
 };
-const sessionLiveEventFields = { ...sharedSessionEventFields, position: positionSchema };
 /**
  * A Session history entry: the Agent's events, and the lifecycle of each turn the Computer ran, in the order they
  * happened. A history page is read in the same order as the live stream, so its reader needs no other record to tell
@@ -533,12 +541,9 @@ const sessionEventLogPageSchema = z
         events: z.array(sessionEventSchema).max(MAX_EVENT_COUNT).readonly(),
         nextCursor: z.string().min(1).max(512).nullable(),
         sessionGenerationId: identifier,
-        tailCursor: z.string().max(512),
         // The generation-scoped live position covered by this snapshot, including
         // coalesced and omitted events.
         throughPosition: positionSchema,
-        truncated: z.boolean(),
-        version: z.literal(2),
     })
     .readonly();
 export type SessionEventLogPage = z.infer<typeof sessionEventLogPageSchema>;

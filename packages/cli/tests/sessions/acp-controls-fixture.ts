@@ -78,7 +78,7 @@ export async function completeAcpControls(session: Awaited<ReturnType<typeof cre
         lifecycle: {
             attemptId: "controls-attempt",
             content: [{ text: "exercise ACP controls", type: "text" }],
-            epoch: "controls-epoch",
+            dispatch: { kind: "own" },
         },
         resources: [
             {

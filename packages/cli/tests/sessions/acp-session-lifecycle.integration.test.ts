@@ -593,6 +593,7 @@ describe("ACP conversation sessions", () => {
                 payload: {
                     commandId: "command-1",
                     content: [{ text: "cached prompt", type: "text" }],
+                    dispatch: { kind: "own" },
                     kind: "prompt.requested",
                 },
                 type: "lifecycle-metadata",
@@ -615,21 +616,12 @@ describe("ACP conversation sessions", () => {
             });
             const page = first.page(recordedTarget, 10, null);
             firstGeneration = page.sessionGenerationId;
-            expect(
-                page.events.map(
-                    ({
-                        eventId: _eventId,
-                        recordedAt: _recordedAt,
-                        sessionGenerationId: _generation,
-                        target: _target,
-                        ...event
-                    }) => event,
-                ),
-            ).toEqual([
+            expect(page.events.map(({ eventId: _eventId, recordedAt: _recordedAt, ...event }) => event)).toEqual([
                 {
                     payload: {
                         commandId: "command-1",
                         content: [{ text: "cached prompt", type: "text" }],
+                        dispatch: { kind: "own" },
                         kind: "prompt.requested",
                     },
                     type: "lifecycle-metadata",

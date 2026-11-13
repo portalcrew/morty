@@ -10,6 +10,7 @@ import {
     encodeSessionCancelCommand,
     encodeSessionElicitationRespondCommand,
     encodeSessionPromptCommand,
+    promptStopReason,
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
 import { expect, test, vi } from "vitest";
@@ -119,7 +120,7 @@ test.each(["new", "imported"] as const)(
                     }
                     if (event.payload.kind === "prompt.completed") {
                         expect(event.payload.commandId).toBe(commandId);
-                        expect(event.payload.stopReason).toBe("end_turn");
+                        expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                         break;
                     }
                 } else if (event.type === "acp") {
@@ -327,7 +328,9 @@ for (const ending of ["stop", "timeout"] as const) {
                             throw new Error(JSON.stringify(event));
                         }
                         if (event.payload.kind === "prompt.completed" && event.payload.commandId === commandId) {
-                            expect(event.payload.stopReason).toBe(ending === "stop" ? "cancelled" : "end_turn");
+                            expect(promptStopReason(event.payload.completion)).toBe(
+                                ending === "stop" ? "cancelled" : "end_turn",
+                            );
                             break;
                         }
                     }
@@ -731,7 +734,9 @@ test.each(["answer", "stop"] as const)(
                         throw new Error(JSON.stringify(event));
                     }
                     if (event.payload.kind === "prompt.completed") {
-                        expect(event.payload.stopReason).toBe(outcome === "stop" ? "cancelled" : "end_turn");
+                        expect(promptStopReason(event.payload.completion)).toBe(
+                            outcome === "stop" ? "cancelled" : "end_turn",
+                        );
                         break;
                     }
                 } else if (event.payload.sessionUpdate === "compaction_update") {

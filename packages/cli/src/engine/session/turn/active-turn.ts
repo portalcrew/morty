@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { sameNativeSession } from "@morty-build/client/native-session";
 import {
     decodeIdentifier,
     type NativeSessionResult,
+    type PromptDispatch,
     type SessionPromptCommand,
     SessionPromptDisposition,
     type SessionPromptDispositionCommand,
@@ -14,7 +14,7 @@ type ActiveTurnSnapshot = Extract<NativeSessionResult, { readonly action: "activ
  * How an admitted prompt executes: as its own turn, or by steering the running turn of `targetCommandId`. An appended
  * prompt promoted out of the queue steers the turn it waited behind, which admission names when it admits it.
  */
-export type PromptDispatch = { readonly kind: "own" } | { readonly kind: "steer"; readonly targetCommandId: string };
+export type { PromptDispatch };
 
 /**
  * Where a prompt stands in its Session's admission. Whether it started belongs to its execution receipt: the turn
@@ -49,7 +49,6 @@ export const isWithdrawn = (signal: AbortSignal): boolean =>
 
 export class ActiveRuntimeTurn {
     readonly command: SessionPromptCommand;
-    readonly epoch = decodeIdentifier(randomUUID());
     readonly #controller: AbortController;
     readonly #finished = Promise.withResolvers<void>();
     readonly #started: () => boolean;
@@ -174,9 +173,7 @@ export class ActiveRuntimeTurn {
         }
         return {
             commandId: decodeIdentifier(this.command.commandId),
-            epoch: this.epoch,
             startedAt,
-            state: "running",
         };
     };
 

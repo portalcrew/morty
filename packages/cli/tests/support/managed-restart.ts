@@ -56,7 +56,7 @@ async function journey(peer: RealDaemonPeer, harness: string, reply: string): Pr
                 event.payload.kind === "prompt.completed" &&
                 event.payload.commandId === commandId
             ) {
-                expect(event.payload.stopReason).toBe("end_turn");
+                expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                 expect(output).toContain(reply);
                 return;
             }
@@ -269,7 +269,7 @@ async function interruptedJourney(
                 event.payload.kind === "prompt.completed" &&
                 event.payload.commandId === continuation
             ) {
-                expect(event.payload.stopReason).toBe("end_turn");
+                expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                 return;
             }
         }

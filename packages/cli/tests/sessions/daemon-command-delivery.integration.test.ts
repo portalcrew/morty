@@ -97,7 +97,7 @@ test("Given commands the Computer finished, failed, is running or never received
                 });
                 expect((await readExecution(peer, running)).result).toMatchObject({
                     command: { state: "accepted" },
-                    turn: { commandId: running, state: "running" },
+                    turn: { commandId: running },
                 });
                 expect((await readExecution(peer, neverReceived)).result).toMatchObject({
                     command: { state: "unknown" },
@@ -247,7 +247,7 @@ test("Given turns that complete, fail, run or are interrupted by a restart, When
                 submit(peer, interrupted, "hold after first delta");
                 await waitForLifecycle(peer, interrupted, "prompt.started");
                 const running = await readExecution(peer);
-                expect(running.result).toMatchObject({ turn: { commandId: interrupted, state: "running" } });
+                expect(running.result).toMatchObject({ turn: { commandId: interrupted } });
                 expect(running.raw).not.toHaveProperty("lastTurn");
 
                 await peer.restart();

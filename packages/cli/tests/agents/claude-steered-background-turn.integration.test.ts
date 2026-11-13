@@ -5,6 +5,7 @@ import {
     decodeSessionEventEnvelope,
     encodeNativeSessionCommand,
     encodeSessionPromptCommand,
+    promptStopReason,
 } from "@morty-build/client/protocol";
 import { expect, test } from "vitest";
 import { ClaudeCodeAgentSpecification } from "../../src/engine/agent/specification/vendors/claude-code-agent.ts";
@@ -92,7 +93,7 @@ test("Given Claude awaits a background subagent, When the user steers and the su
                             throw new Error(JSON.stringify(event.payload));
                         }
                         if (event.payload.kind === "prompt.completed") {
-                            completed.set(event.payload.commandId, event.payload.stopReason);
+                            completed.set(event.payload.commandId, promptStopReason(event.payload.completion));
                         }
                         if (event.payload.kind === "session.permission.requested") {
                             const request = event.payload.event;
@@ -147,7 +148,7 @@ test("Given Claude awaits a background subagent, When the user steers and the su
                     if (commandId === null) {
                         expect(result.turn).toBeNull();
                     } else {
-                        expect(result.turn).toMatchObject({ commandId, state: "running" });
+                        expect(result.turn).toMatchObject({ commandId });
                     }
                     break;
                 }

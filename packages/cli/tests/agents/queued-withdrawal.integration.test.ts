@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { decodeSessionLiveEvent, encodeSessionPromptCommand } from "@morty-build/client/protocol";
+import { decodeSessionLiveEvent, encodeSessionPromptCommand, promptStopReason } from "@morty-build/client/protocol";
 import { expect, test, vi } from "vitest";
 import { ClaudeCodeAgentSpecification } from "../../src/engine/agent/specification/vendors/claude-code-agent.ts";
 import { CodexAgentSpecification } from "../../src/engine/agent/specification/vendors/codex-agent.ts";
@@ -61,7 +61,7 @@ test.each(["pi", "claude", "codex"] as const)(
                         started.push(event.payload.commandId);
                     }
                     if (event.payload.kind === "prompt.completed") {
-                        completed.set(event.payload.commandId, event.payload.stopReason);
+                        completed.set(event.payload.commandId, promptStopReason(event.payload.completion));
                     }
                     if (event.payload.kind === "session.permission.requested") {
                         const request = event.payload.event;

@@ -17,6 +17,7 @@ import {
     encodeSessionPromptCommand,
     MORTY_API_PREFIX,
     type NativeSessionTarget,
+    promptStopReason,
     SESSION_EVENT_KIND,
     type SessionLiveEvent,
     type SessionPromptCommand,
@@ -136,7 +137,7 @@ async function readTerminalSessionResult(
             }
             if (payload.kind === "prompt.completed") {
                 bufferedSessionEvents.set(frames, [...deferredEvents, ...events.slice(index + 1)]);
-                return new TerminalSessionResult("completed", text, "", payload.stopReason);
+                return new TerminalSessionResult("completed", text, "", promptStopReason(payload.completion));
             }
             if (payload.kind === "prompt.failed" || payload.kind === "prompt.failed-before-start") {
                 bufferedSessionEvents.set(frames, [...deferredEvents, ...events.slice(index + 1)]);

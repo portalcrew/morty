@@ -258,7 +258,7 @@ async function finish(peer: RealDaemonPeer, decision: "allow_once" | "reject_onc
         ) {
             text += event.payload.content.text;
         } else if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
-            expect(event.payload.stopReason).toBe("end_turn");
+            expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
             expect(text).toContain("FORK_PERMISSION_DONE");
             return approvals;
         }

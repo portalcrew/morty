@@ -53,7 +53,7 @@ async function promptRealSession(
         if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
             expect(event.payload.commandId).toBe(commandId);
             expect(event.target).toEqual(sessionTarget);
-            expect(event.payload.stopReason).toBe("end_turn");
+            expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
             expect(output).toContain("RESTORED_REPLY");
             return;
         }

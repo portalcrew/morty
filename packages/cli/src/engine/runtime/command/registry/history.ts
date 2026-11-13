@@ -1,11 +1,9 @@
-import { sameNativeSession } from "@morty-build/client/native-session";
 import {
     type decodeSessionHistoryPageLoad,
     type decodeSessionPreviewHistoryPageLoad,
     ENCRYPTED_MESSAGE_MAX_PLAINTEXT_BYTES,
     ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     type NativeSessionEvents,
-    type NativeSessionTarget,
     type SESSION_HISTORY_PAGE_LOAD_KIND,
     SESSION_HISTORY_PAGE_LOADED_KIND,
     type SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND,
@@ -39,7 +37,6 @@ const fitsHistoryFrame = (privateBytes: number): boolean =>
         ENCRYPTED_MESSAGE_MAX_WIRE_BYTES;
 
 async function loadHistoryPage(
-    target: NativeSessionTarget,
     eventLimit: number,
     initialCursor: string | null,
     load: (eventLimit: number, cursor: string | null) => Promise<SessionEventPage>,
@@ -55,18 +52,6 @@ async function loadHistoryPage(
         throughPosition ??= replay.throughPosition;
         if (sessionGenerationId !== null && replay.sessionGenerationId !== sessionGenerationId) {
             throw new SessionError("session_reloaded", "The Session reloaded while history was loading");
-        }
-        if (
-            replay.events.some(
-                (event) =>
-                    !sameNativeSession(event.target, target) ||
-                    event.sessionGenerationId !== replay.sessionGenerationId,
-            )
-        ) {
-            throw new SessionError(
-                "session_history_unavailable",
-                "The Session history contains events from another Session",
-            );
         }
         sessionGenerationId = replay.sessionGenerationId;
         const events = replay.events.map((event, index) => {
@@ -85,7 +70,6 @@ async function loadHistoryPage(
         throw new SessionError("session_history_unavailable", "The Session history is unavailable");
     }
     const candidates = loaded.slice(-eventLimit);
-    const tailCursor = candidates.at(-1)?.event.eventId ?? "";
     // The encrypted private JSON contains the page and queue. Reserve space for the
     // routing JSON, a 512-character cursor, the AES-GCM packet and base64 framing.
     const empty = {
@@ -93,10 +77,7 @@ async function loadHistoryPage(
             events: [],
             nextCursor: null,
             sessionGenerationId,
-            tailCursor,
             throughPosition,
-            truncated: false,
-            version: 2,
         },
     };
     let privateBytes = Buffer.byteLength(JSON.stringify({ events: empty }));
@@ -132,10 +113,7 @@ async function loadHistoryPage(
             events: orderedEvents.map(({ event }) => event),
             nextCursor,
             sessionGenerationId,
-            tailCursor,
             throughPosition,
-            truncated: nextCursor !== null,
-            version: 2,
         },
     };
 }
@@ -166,7 +144,6 @@ async function executeSessionHistoryPageLoad(
             signal,
         };
         const events = await loadHistoryPage(
-            command.target,
             command.eventLimit,
             command.cursor,
             async (eventLimit, cursor) => await sessions.loadSessionEvents(loadOptions, eventLimit, cursor),
@@ -225,7 +202,6 @@ async function executeSessionPreviewHistoryPageLoad(
             signal,
         };
         const events = await loadHistoryPage(
-            command.target,
             command.eventLimit,
             command.cursor,
             async (eventLimit, cursor) =>

@@ -359,7 +359,7 @@ async function cancel(fixture: Fixture, command: SessionPromptCommand): Promise<
     for (;;) {
         const event = await nextLive(fixture);
         if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
-            expect(event.payload.stopReason).toBe("cancelled");
+            expect(event.payload.completion).toMatchObject({ kind: "cancelled" });
             return;
         }
     }
@@ -1033,7 +1033,6 @@ describe("daemon V2 live delivery", () => {
                 ),
             ).toHaveLength(1);
             const active = await activeTurn(fixture, command);
-            expect(active?.state).toBe("running");
             expect(active?.commandId).toBe(command.commandId);
             await cancel(fixture, command);
         } finally {
@@ -1091,7 +1090,7 @@ describe("daemon V2 live delivery", () => {
                     text += event.payload.content.text;
                 }
                 if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
-                    expect(event.payload.stopReason).toBe("end_turn");
+                    expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                     break;
                 }
             }
@@ -1148,7 +1147,7 @@ describe("daemon V2 live delivery", () => {
             // The running Agent can emit metadata after its last text chunk.
             // The snapshot must cover every observed event, including that text.
             expect(BigInt(page.throughPosition ?? "0")).toBeGreaterThanOrEqual(BigInt(lastPosition));
-            expect(page.truncated).toBe(false);
+            expect(page.nextCursor).toBeNull();
             const recovered = page.events
                 .flatMap((event) =>
                     event.type === "acp" &&

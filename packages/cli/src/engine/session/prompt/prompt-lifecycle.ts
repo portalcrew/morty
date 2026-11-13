@@ -2,16 +2,17 @@ import { NativeSessionMap, sameNativeSession } from "@morty-build/client/native-
 import type {
     ContentBlock,
     NativeSessionTarget,
+    PromptDispatch,
     PromptExecutionContext,
     SessionCancelCommand,
     SessionEventPayload,
     SessionLiveEvent,
     SessionPromptCommand,
 } from "@morty-build/client/protocol";
-import { isPromptTerminal, SessionPromptDisposition } from "@morty-build/client/protocol";
+import { isPromptTerminal } from "@morty-build/client/protocol";
+import { type PromptEnd, promptCompletion } from "../api/prompt-end.ts";
 import type { SessionEventSink } from "../api/session-api.ts";
 import { SessionError } from "../api/session-error.ts";
-import type { PromptDispatch } from "../turn/active-turn.ts";
 import type { ExecutionReceipts, RestatedOutcome } from "../turn/execution-receipts.ts";
 import { isTextPromptResourceMediaType } from "./prompt-artifacts.ts";
 
@@ -48,25 +49,14 @@ export function promptLifecycle(
     command: SessionPromptCommand,
     context: PromptExecutionContext,
     attemptId: string,
-    epoch: string,
     dispatch: PromptDispatch,
 ): {
     readonly attemptId: string;
     readonly content: readonly ContentBlock[];
-    readonly disposition: string;
-    readonly epoch: string;
+    readonly dispatch: PromptDispatch;
     readonly context: PromptExecutionContext;
-    readonly targetCommandId?: string;
 } {
-    return {
-        attemptId,
-        content: promptContent(command),
-        epoch,
-        context,
-        ...(dispatch.kind === "steer"
-            ? { disposition: SessionPromptDisposition.Steer, targetCommandId: dispatch.targetCommandId }
-            : { disposition: SessionPromptDisposition.Append }),
-    };
+    return { attemptId, content: promptContent(command), context, dispatch };
 }
 
 /** Whether a command started or settled, as its execution receipt records it. */
@@ -184,7 +174,7 @@ export class PromptLifecycle {
     readonly completed = async (
         sessionTarget: NativeSessionTarget,
         commandId: string,
-        stopReason: string,
+        end: PromptEnd,
     ): Promise<void> => {
         if (this.#executions.isTerminalExecution(commandId, sessionTarget)) {
             return;
@@ -194,8 +184,7 @@ export class PromptLifecycle {
             payload: {
                 kind: "prompt.completed",
                 commandId,
-                stopReason,
-                ...(this.#executions.hasStarted(commandId, sessionTarget) ? {} : { execution: "not-started" as const }),
+                completion: promptCompletion(end, this.#executions.hasStarted(commandId, sessionTarget)),
             },
         });
     };

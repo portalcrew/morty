@@ -205,7 +205,7 @@ it.each([
                 }),
             ]),
         );
-        expect(preview.truncated).toBe(false);
+        expect(preview.nextCursor).toBeNull();
     },
 );
 

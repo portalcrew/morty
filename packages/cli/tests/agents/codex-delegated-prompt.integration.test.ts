@@ -7,6 +7,7 @@ import {
     encodeNativeSessionCommand,
     encodeSessionCancelCommand,
     encodeSessionPromptCommand,
+    promptStopReason,
     type SessionLiveEvent,
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
@@ -98,7 +99,7 @@ test("Given the Codex app owns a thread whose last turn it interrupted, When a m
                     event.type === "lifecycle-metadata" &&
                     event.payload.kind === "prompt.completed" &&
                     event.payload.commandId === withdrawn &&
-                    event.payload.stopReason === "cancelled",
+                    promptStopReason(event.payload.completion) === "cancelled",
             );
             expect(
                 queue.parse(await owner.request("thread/queue/list", { threadId: thread.id }, peer.signal)).data,
@@ -122,7 +123,7 @@ test("Given the Codex app owns a thread whose last turn it interrupted, When a m
                     event.type === "lifecycle-metadata" &&
                     event.payload.kind === "prompt.completed" &&
                     event.payload.commandId === delegated &&
-                    event.payload.stopReason === "end_turn",
+                    promptStopReason(event.payload.completion) === "end_turn",
             );
         } finally {
             owner.detach();

@@ -3,6 +3,7 @@ import {
     decodeSessionLiveEvent,
     encodeSessionPermissionRespondCommand,
     encodeSessionPromptCommand,
+    promptStopReason,
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
 import { expect, test } from "vitest";
@@ -107,7 +108,7 @@ async function observeTurn(peer: RealDaemonPeer, commandId: string): Promise<Obs
                 throw new Error(JSON.stringify(event));
             } else if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
                 expect(event.payload.commandId).toBe(commandId);
-                completion = { stopReason: event.payload.stopReason };
+                completion = { stopReason: promptStopReason(event.payload.completion) };
                 break;
             }
             continue;

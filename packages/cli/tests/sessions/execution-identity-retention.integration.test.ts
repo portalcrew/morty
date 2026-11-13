@@ -49,7 +49,7 @@ async function observe(peer: RealDaemonPeer, commandIds: readonly string[]) {
                     (event.mortyMetadata?.restated === true ? restatedCommandIds : completedCommandIds).push(
                         payload.commandId,
                     );
-                    if (payload.execution === "not-started") {
+                    if (payload.completion.kind === "cancelled" && !payload.completion.started) {
                         unstartedCommandIds.push(payload.commandId);
                     }
                     if (pending.delete(payload.commandId)) {

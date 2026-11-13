@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
     decodeSessionLiveEvent,
     encodeSessionPromptCommand,
+    promptStopReason,
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
 import { expect, test } from "vitest";
@@ -161,7 +162,7 @@ test("Given Claude's Stop hook outlasts the result watchdog, When I send the nex
                 for (;;) {
                     const lifecycle = await next();
                     if (lifecycle?.kind === "prompt.completed" && lifecycle.commandId === commandId) {
-                        return { stopReason: lifecycle.stopReason, answers };
+                        return { stopReason: promptStopReason(lifecycle.completion), answers };
                     }
                 }
             };

@@ -304,7 +304,7 @@ test("Given real Codex advances between repeated prompts, When V2 recovery pagin
                     event.payload.kind === "prompt.completed" &&
                     event.payload.commandId === queued
                 ) {
-                    expect(event.payload.stopReason).toBe("end_turn");
+                    expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                     break;
                 }
             }
@@ -377,7 +377,7 @@ test("Given real Codex with an active turn, When three follow-ups are accepted a
                 const event = decodeSessionLiveEvent(JSON.parse(await peer.nextEvent()));
                 if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
                     expect(event.payload.commandId).toBe(cancelled);
-                    expect(event.payload.stopReason).toBe("cancelled");
+                    expect(event.payload.completion).toMatchObject({ kind: "cancelled" });
                     break;
                 }
             }
@@ -409,7 +409,7 @@ test("Given real Codex with an active turn, When three follow-ups are accepted a
                         replies.set(current, `${replies.get(current) ?? ""}${event.payload.content.text}`);
                     }
                     if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
-                        expect(event.payload.stopReason).toBe("end_turn");
+                        expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                         completed.push(event.payload.commandId);
                     }
                 }
@@ -441,7 +441,7 @@ test("Given real Codex with an active turn, When three follow-ups are accepted a
                 );
                 if (completion?.type === "lifecycle-metadata" && completion.payload.kind === "prompt.completed") {
                     expect(completion.payload.commandId).toBe(late);
-                    expect(completion.payload.stopReason).toBe("end_turn");
+                    expect(completion.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                     break;
                 }
             }

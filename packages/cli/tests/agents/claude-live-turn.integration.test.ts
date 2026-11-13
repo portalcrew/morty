@@ -100,7 +100,7 @@ test("Given native Claude is installed outside PATH, When two prompts execute th
                     throw new Error(JSON.stringify(event));
                 } else if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
                     expect(event.payload.commandId).toBe(commandId);
-                    expect(event.payload.stopReason).toBe("end_turn");
+                    expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
                     break;
                 }
             }

@@ -284,7 +284,7 @@ export const createNativeSessionStore = (
                         entry,
                         content: {
                             messages: sessionEventLogPresentation(events).messages,
-                            truncated: content.events.truncated,
+                            truncated: content.events.nextCursor !== null,
                         },
                     },
                 });

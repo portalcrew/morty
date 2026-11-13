@@ -206,7 +206,7 @@ it("Given an open Codex conversation with fifteen turns, When history is read wh
             throw new Error("Missing native conversation");
         }
         const history = await previewCodexHistory(f.agent, f.workspace, id);
-        expect(history.truncated).toBe(false);
+        expect(history.nextCursor).toBeNull();
         expect(
             history.events.flatMap((event) =>
                 event.type === "acp" &&
@@ -238,7 +238,7 @@ it("Given Codex saved tools and a large reply, When history is previewed, Then t
     try {
         const id = await f.seed(fakeProviderPrompts.twoTools);
         const history = await previewCodexHistory(f.agent, f.workspace, id);
-        expect(history.truncated).toBe(false);
+        expect(history.nextCursor).toBeNull();
         const updates = history.events.flatMap((event) => (event.type === "acp" ? [event.payload] : []));
         const tools = updates.filter((update) => update.sessionUpdate === "tool_call");
         expect(tools.length).toBeGreaterThanOrEqual(2);

@@ -1,9 +1,8 @@
-import {
-    type AcpSessionUpdate,
-    type NativeSessionTarget,
-    promptCompletion,
-    type SessionEventPayload,
-    type SessionLiveEvent,
+import type {
+    AcpSessionUpdate,
+    NativeSessionTarget,
+    SessionEventPayload,
+    SessionLiveEvent,
 } from "@morty-build/client/protocol";
 import type { SettledTurn } from "../turn/execution-receipts.ts";
 import type { SessionEventPage, SessionEventStore } from "./session-event-store.ts";
@@ -26,10 +25,10 @@ function turnStart(turn: SettledTurn, content: AcpSessionUpdate, steers: string 
                   commandId,
                   content: [content.content],
                   kind: "prompt.requested",
-                  ...(steers === null ? { disposition: "append" } : { disposition: "steer", targetCommandId: steers }),
+                  dispatch: steers === null ? { kind: "own" } : { kind: "steer", targetCommandId: steers },
               })
             : null;
-    const started = lifecycle({ attemptId: turn.attemptId, commandId, epoch: turn.attemptId, kind: "prompt.started" });
+    const started = lifecycle({ attemptId: turn.attemptId, commandId, kind: "prompt.started" });
     return [
         ...(requested === null ? [] : [{ event: requested, recordedAt: turn.startedAt }]),
         { event: started, recordedAt: turn.startedAt },
@@ -68,7 +67,7 @@ class ReplayedTurns {
         }
         this.#userMessage = { messageId };
         const turn = this.#byMessage.get(messageId);
-        const steered = turn?.outcome.kind === "prompt.completed" && promptCompletion(turn.outcome).kind === "steered";
+        const steered = turn?.outcome.kind === "prompt.completed" && turn.outcome.completion.kind === "steered";
         const open = this.#open;
         if (turn !== undefined && steered && open !== null) {
             return [...turnStart(turn, update, open.outcome.commandId), turnEnd(turn)];

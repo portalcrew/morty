@@ -175,7 +175,6 @@ export interface SessionEventPage {
     readonly events: readonly SessionEvent[];
     readonly nextCursor: string | null;
     readonly sessionGenerationId: string;
-    readonly truncated: boolean;
 }
 
 export interface SessionEventStore {
@@ -241,7 +240,6 @@ function eventPage(
         throughPosition: session.throughPosition,
         nextCursor: startIndex === 0 ? null : session.cursorAt(startIndex),
         sessionGenerationId,
-        truncated: startIndex > 0,
     };
 }
 

@@ -107,7 +107,7 @@ async function promptFromMorty(
             throw new Error(JSON.stringify(event));
         }
         if (event.payload.kind === "prompt.completed") {
-            expect(event.payload.stopReason).toBe("end_turn");
+            expect(event.payload.completion).toEqual({ kind: "ended", stopReason: "end_turn" });
             return;
         }
     }
