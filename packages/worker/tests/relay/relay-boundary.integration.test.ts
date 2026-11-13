@@ -1727,7 +1727,7 @@ describe.sequential("Relay Turn submission", () => {
             label: "answers a pending permission request",
             path: "/interactions/app-interaction/responses",
             method: "POST",
-            body: { kind: "permission", responderId: "member-1", outcome: "selected", optionId: "allow_once" },
+            body: { kind: "permission", answer: { outcome: "selected", optionId: "allow_once" } },
             command: {
                 interactionId: "app-interaction",
                 kind: "session.permission.respond",
@@ -1741,12 +1741,12 @@ describe.sequential("Relay Turn submission", () => {
             label: "answers a pending elicitation request",
             path: "/interactions/app-interaction/responses",
             method: "POST",
-            body: { kind: "elicitation", responderId: "member-1", action: "accept", content: '{"answer":"continue"}' },
+            body: { kind: "elicitation", answer: { action: "accept", content: { answer: "continue" } } },
             command: {
                 interactionId: "app-interaction",
                 kind: "session.elicitation.respond",
                 action: "accept",
-                content: '{"answer":"continue"}',
+                content: { answer: "continue" },
             },
             reply: { interactionId: "app-interaction", kind: "session.interaction.answered" },
             expected: { accepted: true },
@@ -1914,13 +1914,13 @@ describe.sequential("Relay Turn submission", () => {
             label: "invalid permission decision",
             path: "/interactions/app-interaction/responses",
             method: "POST",
-            body: { kind: "permission", responderId: "member-1", outcome: "unknown", optionId: "allow_once" },
+            body: { kind: "permission", answer: { outcome: "unknown", optionId: "allow_once" } },
         },
         {
             label: "invalid elicitation decision",
             path: "/interactions/app-interaction/responses",
             method: "POST",
-            body: { kind: "elicitation", responderId: "member-1", action: "unknown", content: "" },
+            body: { kind: "elicitation", answer: { action: "unknown" } },
         },
         { label: "empty event page", path: "/events?limit=0", method: "GET" },
         { label: "empty event cursor", path: "/events?cursor=", method: "GET" },
@@ -3134,8 +3134,8 @@ describe.sequential("Relay Turn submission", () => {
     });
 
     it.each([
-        { kind: "permission", responderId: "member-1", outcome: "selected", optionId: "allow_once" },
-        { kind: "elicitation", responderId: "member-1", action: "accept", content: '{"answer":"continue"}' },
+        { kind: "permission", answer: { outcome: "selected", optionId: "allow_once" } },
+        { kind: "elicitation", answer: { action: "accept", content: { answer: "continue" } } },
     ] as const)(
         "Given a daemon whose heartbeats stopped, When an app answers a pending $kind request, Then the answer is refused at once as computer_offline",
         async (body) => {
@@ -3152,24 +3152,22 @@ describe.sequential("Relay Turn submission", () => {
                     body.kind === "permission"
                         ? await sessionPermissionRespondCommandCodec.encode(
                               {
+                                  ...body.answer,
                                   kind: "session.permission.respond",
                                   requestId: "offline-answer",
                                   interactionId: "offline-interaction",
                                   target: runtime.sessionTarget,
-                                  outcome: body.outcome,
-                                  optionId: body.optionId,
                               },
                               encryption.client,
                               signal,
                           )
                         : await sessionElicitationRespondCommandCodec.encode(
                               {
+                                  ...body.answer,
                                   kind: "session.elicitation.respond",
                                   requestId: "offline-answer",
                                   interactionId: "offline-interaction",
                                   target: runtime.sessionTarget,
-                                  action: body.action,
-                                  content: body.content,
                               },
                               encryption.client,
                               signal,

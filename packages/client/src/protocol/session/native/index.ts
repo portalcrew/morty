@@ -11,6 +11,7 @@ import {
     ProtocolMessageError,
 } from "../../shared/message-codec.ts";
 import {
+    sessionElicitationAwaitingCompletionEventSchema,
     sessionElicitationRequestedEventSchema,
     sessionPermissionRequestedEventSchema,
 } from "../interactions/index.ts";
@@ -35,6 +36,7 @@ const sessionInteractionSnapshotSchema = z
                 z.discriminatedUnion("kind", [
                     sessionPermissionRequestedEventSchema,
                     sessionElicitationRequestedEventSchema,
+                    sessionElicitationAwaitingCompletionEventSchema,
                 ]),
             )
             .readonly(),

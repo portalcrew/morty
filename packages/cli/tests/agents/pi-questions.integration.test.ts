@@ -87,6 +87,9 @@ test.each(["new", "imported"] as const)(
                     }
                     if (event.payload.kind === "session.elicitation.requested") {
                         const request = event.payload.event;
+                        if (request.mode !== "form") {
+                            throw new Error("Pi questions are forms");
+                        }
                         expect(request.commandId).toBe(commandId);
                         expect(interactionIds.has(request.interactionId)).toBe(false);
                         interactionIds.add(request.interactionId);
@@ -96,17 +99,21 @@ test.each(["new", "imported"] as const)(
                             throw new Error("Missing question field");
                         }
                         if (requests === 0) {
-                            expect(field.type).toBe("select");
+                            if (field.type !== "select") {
+                                throw new Error("Expected a select question");
+                            }
                             expect(field.options.map((option) => option.value)).toEqual(["Ocean", forest, "Sunset"]);
                         }
                         if (requests === 5) {
-                            expect(field.defaultStringValue).toBe(prefill);
-                            expect(field.multiline).toBe(true);
+                            expect(field).toMatchObject({ default: prefill, multiline: true, type: "string" });
                         }
+                        const answer =
+                            requests >= 7
+                                ? { action: requests === 8 ? ("decline" as const) : ("cancel" as const) }
+                                : { action: "accept" as const, content: { [field.name]: answers[requests] ?? "" } };
                         peer.send(
                             encodeSessionElicitationRespondCommand({
-                                action: requests === 8 ? "decline" : requests >= 7 ? "cancel" : "accept",
-                                content: requests >= 7 ? "" : JSON.stringify({ [field.name]: answers[requests] }),
+                                ...answer,
                                 interactionId: request.interactionId,
                                 kind: "session.elicitation.respond",
                                 requestId: crypto.randomUUID(),
@@ -345,7 +352,7 @@ for (const ending of ["stop", "timeout"] as const) {
                     peer.send(
                         encodeSessionElicitationRespondCommand({
                             action: "accept",
-                            content: '{"value":"STALE_ANSWER"}',
+                            content: { value: "STALE_ANSWER" },
                             interactionId,
                             kind: "session.elicitation.respond",
                             requestId: crypto.randomUUID(),
@@ -465,7 +472,7 @@ test("Given real Pi asks a question before a daemon disconnect, When the daemon 
         peer.send(
             encodeSessionElicitationRespondCommand({
                 action: "accept",
-                content: '{"value":"STALE_ANSWER"}',
+                content: { value: "STALE_ANSWER" },
                 interactionId,
                 kind: "session.elicitation.respond",
                 requestId: crypto.randomUUID(),
@@ -636,7 +643,7 @@ test("Given real Pi asks dialogs with empty titles or confirmation bodies, When 
                     peer.send(
                         encodeSessionElicitationRespondCommand({
                             action: "accept",
-                            content: JSON.stringify({ value: answers[requests] }),
+                            content: { value: answers[requests] ?? "" },
                             interactionId: request.interactionId,
                             kind: "session.elicitation.respond",
                             requestId: crypto.randomUUID(),
@@ -715,7 +722,7 @@ test.each(["answer", "stop"] as const)(
                             peer.send(
                                 encodeSessionElicitationRespondCommand({
                                     action: "accept",
-                                    content: JSON.stringify({ value: requests === 0 ? "yes" : "Detailed" }),
+                                    content: { value: requests === 0 ? "yes" : "Detailed" },
                                     interactionId: request.interactionId,
                                     kind: "session.elicitation.respond",
                                     requestId: crypto.randomUUID(),
@@ -758,7 +765,7 @@ test.each(["answer", "stop"] as const)(
                 peer.send(
                     encodeSessionElicitationRespondCommand({
                         action: "accept",
-                        content: '{"value":"yes"}',
+                        content: { value: "yes" },
                         interactionId,
                         kind: "session.elicitation.respond",
                         requestId: crypto.randomUUID(),

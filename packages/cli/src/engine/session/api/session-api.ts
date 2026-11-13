@@ -10,9 +10,9 @@ import type {
     SessionCommand,
     SessionConfigOption,
     SessionConfigurationSelection,
-    SessionElicitationResolvedEvent,
+    SessionElicitationRespondCommand,
     SessionLiveEvent,
-    SessionPermissionResolvedEvent,
+    SessionPermissionRespondCommand,
 } from "@morty-build/client/protocol";
 import type { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
 import type { BackgroundActivity } from "../../acp/agent/agent-lifecycle.ts";
@@ -83,19 +83,12 @@ export interface SessionSteerOptions extends SessionPrepareOptions, PromptConten
     readonly targetCommandId: string;
 }
 
-export interface PermissionResponseOptions {
-    readonly interactionId: string;
-    readonly optionId: string;
-    readonly outcome: SessionPermissionResolvedEvent["outcome"];
-    readonly target: NativeSessionTarget;
-}
+/** A command without the fields that only identify its request, kept distributive over a union's variants. */
+type AnswerOf<Command> = Command extends unknown ? Omit<Command, "kind" | "requestId"> : never;
 
-export interface ElicitationResponseOptions {
-    readonly action: SessionElicitationResolvedEvent["action"];
-    readonly content: string;
-    readonly interactionId: string;
-    readonly target: NativeSessionTarget;
-}
+export type PermissionResponseOptions = AnswerOf<SessionPermissionRespondCommand>;
+
+export type ElicitationResponseOptions = AnswerOf<SessionElicitationRespondCommand>;
 
 export type PromptResult = AgentPromptResponse;
 

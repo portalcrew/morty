@@ -103,7 +103,7 @@ export async function completeAcpControls(session: Awaited<ReturnType<typeof cre
     const elicitation = await Promise.race([session.observer.elicitationArrived.promise, finishedBeforeInteraction]);
     await session.manager.respondElicitation({
         action: "accept",
-        content: JSON.stringify({ branch: "main" }),
+        content: { branch: "main" },
         interactionId: elicitation.interactionId,
         target: session.request.target,
     });

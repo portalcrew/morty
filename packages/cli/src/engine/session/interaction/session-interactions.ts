@@ -7,10 +7,12 @@ import type {
 } from "@agentclientprotocol/sdk/unstable";
 import {
     type NativeSessionTarget,
+    SESSION_ELICITATION_AWAITING_COMPLETION_KIND,
     SESSION_ELICITATION_REQUESTED_KIND,
     SESSION_ELICITATION_RESOLVED_KIND,
     SESSION_PERMISSION_REQUESTED_KIND,
     SESSION_PERMISSION_RESOLVED_KIND,
+    type SessionElicitationAwaitingCompletionEvent,
     type SessionElicitationRequestedEvent,
     type SessionElicitationResolvedEvent,
     type SessionEventPayload,
@@ -26,10 +28,12 @@ import { readString, truncate } from "../../util/value-utils.ts";
 import type { ElicitationResponseOptions, PermissionResponseOptions } from "../api/session-api.ts";
 import { PendingElicitation, PendingPermission } from "./pending-interactions.ts";
 
+/** What the user answered, as the Session records it to recognize a repeat of the same answer. */
 type ElicitationAnswer =
-    | { readonly action: "accept"; readonly mode: "form"; readonly schema: unknown; readonly content: string }
-    | { readonly action: "accept"; readonly mode: "url" }
-    | { readonly action: "decline" | "cancel" | "complete" };
+    | { readonly action: "accept"; readonly schema: unknown; readonly content: string }
+    | { readonly action: "accept-url" }
+    | { readonly action: "decline" }
+    | { readonly action: "cancel" };
 
 // Form fields are scalar values or arrays. Field order and JSON whitespace do not change an answer.
 function formAnswer(content: ReturnType<typeof validateElicitationContent>): string {
@@ -57,10 +61,14 @@ export class SessionInteractions {
     readonly #elicitationAnswers = new Map<string, ElicitationAnswer>();
     readonly #pendingPermissions = new Map<string, PendingPermission>();
     readonly #pendingElicitations = new Map<string, PendingElicitation>();
-    readonly #acceptedUrlElicitations = new Map<string, SessionElicitationRequestedEvent>();
+    readonly #acceptedUrlElicitations = new Map<string, SessionElicitationAwaitingCompletionEvent>();
     readonly #context: SessionInteractionContext;
 
-    readonly snapshot = (): readonly (SessionPermissionRequestedEvent | SessionElicitationRequestedEvent)[] => [
+    readonly snapshot = (): readonly (
+        | SessionPermissionRequestedEvent
+        | SessionElicitationRequestedEvent
+        | SessionElicitationAwaitingCompletionEvent
+    )[] => [
         ...[...this.#pendingPermissions.values()].map((pending) => pending.request),
         ...[...this.#pendingElicitations.values()].map((pending) => pending.request),
         ...this.#acceptedUrlElicitations.values(),
@@ -95,10 +103,11 @@ export class SessionInteractions {
     readonly respondPermission = async (options: PermissionResponseOptions): Promise<void> => {
         const answered = this.#permissionAnswers.get(options.interactionId);
         if (answered !== undefined) {
-            if (
-                answered.outcome === options.outcome &&
-                (options.outcome !== "selected" || answered.optionId === options.optionId)
-            ) {
+            const repeated =
+                answered.outcome === "cancelled"
+                    ? options.outcome === "cancelled"
+                    : options.outcome === "selected" && options.optionId === answered.optionId;
+            if (repeated) {
                 return;
             }
             throw new AcpExecutionError(
@@ -131,13 +140,21 @@ export class SessionInteractions {
             );
         }
         this.#pendingPermissions.delete(options.interactionId);
-        const answer: SessionPermissionResolvedEvent = {
-            interactionId: options.interactionId,
-            kind: SESSION_PERMISSION_RESOLVED_KIND,
-            optionId: options.outcome === "selected" ? options.optionId : "",
-            outcome: options.outcome,
-            target: this.#context.target(),
-        };
+        const answer: SessionPermissionResolvedEvent =
+            options.outcome === "selected"
+                ? {
+                      interactionId: options.interactionId,
+                      kind: SESSION_PERMISSION_RESOLVED_KIND,
+                      optionId: options.optionId,
+                      outcome: "selected",
+                      target: this.#context.target(),
+                  }
+                : {
+                      interactionId: options.interactionId,
+                      kind: SESSION_PERMISSION_RESOLVED_KIND,
+                      outcome: "cancelled",
+                      target: this.#context.target(),
+                  };
         this.#permissionAnswers.set(options.interactionId, answer);
         if (this.#permissionAnswers.size > 256) {
             const oldest = this.#permissionAnswers.keys().next().value;
@@ -151,12 +168,7 @@ export class SessionInteractions {
     readonly respondElicitation = async (options: ElicitationResponseOptions): Promise<void> => {
         const answered = this.#elicitationAnswers.get(options.interactionId);
         if (answered !== undefined) {
-            if (
-                answered.action === options.action &&
-                (answered.action !== "accept" ||
-                    answered.mode === "url" ||
-                    answered.content === formAnswer(validateElicitationContent(options.content, answered.schema)))
-            ) {
+            if (this.#repeatsAnswer(answered, options)) {
                 return;
             }
             throw new AcpExecutionError(
@@ -173,31 +185,56 @@ export class SessionInteractions {
                 "elicitation_request_not_found",
             );
         }
+        const request = pending.request;
         let resolved = false;
         let answer: ElicitationAnswer;
-        if (options.action === "accept") {
-            if (pending.elicitationId.length > 0) {
-                answer = { action: "accept", mode: "url" };
+        switch (options.action) {
+            case "accept": {
+                if (request.mode !== "form") {
+                    throw new AcpExecutionError(
+                        "A URL elicitation is accepted by going to its URL",
+                        {},
+                        "invalid_elicitation_response",
+                    );
+                }
+                const content = validateElicitationContent(options.content, pending.requestedSchema);
+                answer = { action: "accept", schema: pending.requestedSchema, content: formAnswer(content) };
+                resolved = pending.accept(content);
+                break;
+            }
+            case "accept-url": {
+                if (request.mode !== "url") {
+                    throw new AcpExecutionError(
+                        "A form elicitation is accepted with its content",
+                        {},
+                        "invalid_elicitation_response",
+                    );
+                }
+                answer = { action: "accept-url" };
                 resolved = pending.accept({});
                 if (resolved) {
-                    this.#acceptedUrlElicitations.set(pending.elicitationId, { ...pending.request, accepted: true });
+                    this.#acceptedUrlElicitations.set(request.elicitationId, {
+                        commandId: request.commandId,
+                        elicitationId: request.elicitationId,
+                        interactionId: request.interactionId,
+                        kind: SESSION_ELICITATION_AWAITING_COMPLETION_KIND,
+                        message: request.message,
+                        target: request.target,
+                        url: request.url,
+                    });
                 }
-            } else {
-                const content = validateElicitationContent(options.content, pending.requestedSchema);
-                answer = {
-                    action: "accept",
-                    mode: "form",
-                    schema: pending.requestedSchema,
-                    content: formAnswer(content),
-                };
-                resolved = pending.accept(content);
+                break;
             }
-        } else if (options.action === "decline") {
-            answer = { action: "decline" };
-            resolved = pending.decline();
-        } else {
-            answer = { action: options.action };
-            resolved = pending.cancel();
+            case "decline":
+                answer = { action: "decline" };
+                resolved = pending.decline();
+                break;
+            case "cancel":
+                answer = { action: "cancel" };
+                resolved = pending.cancel();
+                break;
+            default:
+                return options satisfies never;
         }
         if (!resolved) {
             throw new AcpExecutionError(
@@ -215,11 +252,28 @@ export class SessionInteractions {
             }
         }
         await this.#notifyElicitationResolved({
-            action: options.action,
+            action: options.action === "accept-url" ? "accept" : options.action,
             interactionId: options.interactionId,
             kind: SESSION_ELICITATION_RESOLVED_KIND,
             target: this.#context.target(),
         });
+    };
+
+    /** Whether `options` repeats the recorded answer; field order and JSON whitespace do not change an answer. */
+    readonly #repeatsAnswer = (answered: ElicitationAnswer, options: ElicitationResponseOptions): boolean => {
+        switch (answered.action) {
+            case "accept":
+                return (
+                    options.action === "accept" &&
+                    answered.content === formAnswer(validateElicitationContent(options.content, answered.schema))
+                );
+            case "accept-url":
+            case "decline":
+            case "cancel":
+                return options.action === answered.action;
+            default:
+                return answered satisfies never;
+        }
     };
 
     readonly onPermission = async (
@@ -299,26 +353,40 @@ export class SessionInteractions {
             );
         }
         const interactionId = `elicitation-${crypto.randomUUID()}`;
-        const schemaValue = Reflect.get(request, "requestedSchema");
-        const requestedSchema = request.mode === "form" ? schemaValue : {};
-        const elicitationIdValue = Reflect.get(request, "elicitationId");
-        const elicitationId =
-            request.mode === "url" && typeof elicitationIdValue === "string" ? truncate(elicitationIdValue, 255) : "";
-        const event: SessionElicitationRequestedEvent = {
-            accepted: false,
+        const base = {
             commandId: this.#context.commandId(),
-            elicitationId,
-            fields: normalizeElicitationFields(requestedSchema),
             interactionId,
             kind: SESSION_ELICITATION_REQUESTED_KIND,
             message: truncate(request.message, 2_000),
-            mode: request.mode,
             target: this.#context.target(),
-            url:
-                request.mode === "url" && typeof Reflect.get(request, "url") === "string"
-                    ? truncate(readString(Reflect.get(request, "url")), 4_096)
-                    : "",
-        };
+        } as const;
+        let event: SessionElicitationRequestedEvent;
+        let requestedSchema: unknown = {};
+        if (request.mode === "form") {
+            requestedSchema = Reflect.get(request, "requestedSchema");
+            event = { ...base, fields: normalizeElicitationFields(requestedSchema), mode: "form" };
+        } else {
+            const elicitationId = Reflect.get(request, "elicitationId");
+            const url = Reflect.get(request, "url");
+            if (
+                typeof elicitationId !== "string" ||
+                elicitationId.length === 0 ||
+                typeof url !== "string" ||
+                url.length === 0
+            ) {
+                throw new AcpExecutionError(
+                    "The ACP agent requested a URL elicitation without its identifier and URL",
+                    {},
+                    "invalid_agent_elicitation_request",
+                );
+            }
+            event = {
+                ...base,
+                elicitationId: truncate(elicitationId, 255),
+                mode: "url",
+                url: truncate(readString(url), 4_096),
+            };
+        }
         const pending = new PendingElicitation(event, requestedSchema);
         this.#pendingElicitations.set(interactionId, pending);
         const abort = (): void => {
@@ -335,11 +403,13 @@ export class SessionInteractions {
     };
 
     readonly onElicitationComplete = async (notification: CompleteElicitationNotification): Promise<void> => {
-        const accepted = this.#acceptedUrlElicitations.get(notification.elicitationId);
+        // Requests name the identifier at the length the protocol keeps it.
+        const elicitationId = truncate(notification.elicitationId, 255);
+        const accepted = this.#acceptedUrlElicitations.get(elicitationId);
         if (accepted === undefined) {
             return;
         }
-        this.#acceptedUrlElicitations.delete(notification.elicitationId);
+        this.#acceptedUrlElicitations.delete(elicitationId);
         await this.#notifyElicitationResolved({
             action: "complete",
             interactionId: accepted.interactionId,
@@ -357,7 +427,6 @@ export class SessionInteractions {
         await this.#notifyPermissionResolved({
             interactionId,
             kind: SESSION_PERMISSION_RESOLVED_KIND,
-            optionId: "",
             outcome: "cancelled",
             target: this.#context.target(),
         });

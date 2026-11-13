@@ -42,14 +42,13 @@ export class PendingPermission {
 export class PendingElicitation {
     readonly completion: PromiseWithResolvers<CreateElicitationResponse> =
         Promise.withResolvers<CreateElicitationResponse>();
-    readonly elicitationId: string;
     readonly request: SessionElicitationRequestedEvent;
+    /** The form the Agent asked for; a URL request has none. */
     readonly requestedSchema: unknown;
     #settled = false;
 
     constructor(request: SessionElicitationRequestedEvent, requestedSchema: unknown) {
         this.request = request;
-        this.elicitationId = request.elicitationId;
         this.requestedSchema = requestedSchema;
     }
 

@@ -1,6 +1,7 @@
 import type {
     PromptAttachment,
     SessionConfigurationSelection,
+    SessionElicitationFormContent,
     SessionPromptDisposition,
     TurnCancellation,
 } from "@morty-build/client/protocol";
@@ -29,19 +30,21 @@ export type SubmitMortyTurnRequest = SubmitMortyTurnContent &
 /** How a cancelled Turn ended: `cancelled`, or the Agent's stop reason when the Turn finished first. */
 export type MortyTurnCancellation = TurnCancellation;
 
+/** The user's answer to an Agent's permission request. */
+export type MortyPermissionAnswer =
+    | { readonly outcome: "selected"; readonly optionId: string }
+    | { readonly outcome: "cancelled" };
+
+/** The user's answer to an Agent's elicitation: a form's content, a URL visited, or a refusal. */
+export type MortyElicitationAnswer =
+    | { readonly action: "accept"; readonly content: SessionElicitationFormContent }
+    | { readonly action: "accept-url" }
+    | { readonly action: "decline" }
+    | { readonly action: "cancel" };
+
 export type MortyInteractionResponseRequest =
-    | {
-          readonly kind: "permission";
-          readonly responderId: string;
-          readonly optionId: string;
-          readonly outcome: string;
-      }
-    | {
-          readonly kind: "elicitation";
-          readonly responderId: string;
-          readonly action: string;
-          readonly content: string;
-      };
+    | { readonly kind: "permission"; readonly answer: MortyPermissionAnswer }
+    | { readonly kind: "elicitation"; readonly answer: MortyElicitationAnswer };
 
 export class MortyPageRequest {
     readonly cursor: string;

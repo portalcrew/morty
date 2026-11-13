@@ -1,4 +1,4 @@
-import type { SessionElicitationField } from "@morty-build/client/protocol";
+import type { SessionElicitationField, SessionElicitationFormContent } from "@morty-build/client/protocol";
 
 /** What a field holds while it is answered: its text as typed, yes or no, or the options chosen. */
 export type ElicitationFieldValue = string | boolean | readonly string[];
@@ -7,14 +7,19 @@ export type ElicitationFieldValue = string | boolean | readonly string[];
 function initialElicitationFieldValue(field: SessionElicitationField): ElicitationFieldValue {
     switch (field.type) {
         case "boolean":
-            return field.hasDefaultValue && field.defaultBooleanValue;
-        case "multiselect":
-            return readMultiselectDefaults(field);
+            return field.default === true;
+        case "multiselect": {
+            const allowed = new Set(field.options.map((option) => option.value));
+            return (field.default ?? []).filter((value) => allowed.has(value));
+        }
         case "integer":
         case "number":
-            return field.hasDefaultValue ? String(field.defaultNumberValue) : "";
+            return field.default === undefined ? "" : String(field.default);
+        case "select":
+        case "string":
+            return field.default ?? "";
         default:
-            return field.hasDefaultValue ? field.defaultStringValue : "";
+            return field satisfies never;
     }
 }
 
@@ -30,8 +35,8 @@ export function elicitationFieldValue(
 export function encodeElicitationAnswers(
     fields: readonly SessionElicitationField[],
     answers: Readonly<Record<string, ElicitationFieldValue>>,
-): string {
-    const values: Record<string, unknown> = {};
+): SessionElicitationFormContent {
+    const values: Record<string, SessionElicitationFormContent[string]> = {};
     for (const field of fields) {
         const value = elicitationFieldValue(field, answers);
         if (field.type === "boolean") {
@@ -50,22 +55,5 @@ export function encodeElicitationAnswers(
         }
         values[field.name] = field.type === "integer" || field.type === "number" ? Number(value) : value;
     }
-    return JSON.stringify(values);
-}
-
-function readMultiselectDefaults(field: SessionElicitationField): readonly string[] {
-    if (!field.hasDefaultValue || field.defaultStringValue.length === 0) {
-        return [];
-    }
-    let decoded: unknown;
-    try {
-        decoded = JSON.parse(field.defaultStringValue);
-    } catch {
-        return [];
-    }
-    if (!Array.isArray(decoded)) {
-        return [];
-    }
-    const allowed = new Set(field.options.map((option) => option.value));
-    return decoded.filter((value) => typeof value === "string" && allowed.has(value));
+    return values;
 }

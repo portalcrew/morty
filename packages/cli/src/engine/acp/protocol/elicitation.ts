@@ -1,9 +1,15 @@
 import type { ElicitationContentValue } from "@agentclientprotocol/sdk/unstable";
-import type { SessionElicitationField, SessionElicitationOption } from "@morty-build/client/protocol";
+import type {
+    SessionElicitationField,
+    SessionElicitationFormContent,
+    SessionElicitationOption,
+} from "@morty-build/client/protocol";
 import { isRecord, readString, truncate } from "../../util/value-utils.ts";
 import { AcpExecutionError } from "../acp-error.ts";
 
-function elicitationFieldType(value: unknown): SessionElicitationField["type"] {
+type ElicitationFieldType = SessionElicitationField["type"];
+
+function elicitationFieldType(value: unknown): Exclude<ElicitationFieldType, "select"> {
     if (value === "boolean") {
         return "boolean";
     }
@@ -54,8 +60,96 @@ function normalizeElicitationOptions(schema: Readonly<Record<string, unknown>>):
     return normalizeElicitationOptions({ enum: items["enum"] });
 }
 
-function numericString(value: unknown): string {
-    return typeof value === "number" && Number.isFinite(value) ? value.toString() : "";
+function finiteNumber(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function nonNegativeInteger(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+function nonEmpty(value: string, maximum: number): string | undefined {
+    const text = truncate(value, maximum);
+    return text.length === 0 ? undefined : text;
+}
+
+function normalizeElicitationField(
+    name: string,
+    property: Readonly<Record<string, unknown>>,
+    required: boolean,
+): SessionElicitationField {
+    const common = {
+        description: truncate(readString(property["description"]), 500),
+        name: truncate(name, 128),
+        required,
+        title: truncate(readString(property["title"], name), 255),
+    };
+    const type = elicitationFieldType(property["type"]);
+    const options = normalizeElicitationOptions(property);
+    const defaultValue = property["default"];
+    switch (type) {
+        case "boolean":
+            return { ...common, type, ...(typeof defaultValue === "boolean" ? { default: defaultValue } : {}) };
+        case "integer":
+        case "number": {
+            const initial = finiteNumber(defaultValue);
+            const maximum = finiteNumber(property["maximum"]);
+            const minimum = finiteNumber(property["minimum"]);
+            return {
+                ...common,
+                type,
+                ...(initial === undefined ? {} : { default: initial }),
+                ...(maximum === undefined ? {} : { maximum }),
+                ...(minimum === undefined ? {} : { minimum }),
+            };
+        }
+        case "multiselect": {
+            const maximumSelections = nonNegativeInteger(property["maxItems"]);
+            const minimumSelections = nonNegativeInteger(property["minItems"]);
+            return {
+                ...common,
+                type,
+                ...(Array.isArray(defaultValue)
+                    ? {
+                          default: defaultValue
+                              .filter((entry): entry is string => typeof entry === "string")
+                              .slice(0, 200)
+                              .map((entry) => truncate(entry, 500)),
+                      }
+                    : {}),
+                ...(maximumSelections === undefined ? {} : { maximumSelections }),
+                ...(minimumSelections === undefined ? {} : { minimumSelections }),
+                options,
+            };
+        }
+        case "string": {
+            if (options.length > 0) {
+                return {
+                    ...common,
+                    type: "select",
+                    ...(typeof defaultValue === "string" ? { default: truncate(defaultValue, 500) } : {}),
+                    options,
+                };
+            }
+            const format = nonEmpty(readString(property["format"]), 64);
+            const maximumLength = nonNegativeInteger(property["maxLength"]);
+            const minimumLength = nonNegativeInteger(property["minLength"]);
+            const pattern = nonEmpty(readString(property["pattern"]), 500);
+            const metadata = property["_meta"];
+            return {
+                ...common,
+                type,
+                ...(typeof defaultValue === "string" ? { default: truncate(defaultValue, 10_000) } : {}),
+                ...(format === undefined ? {} : { format }),
+                ...(maximumLength === undefined ? {} : { maximumLength }),
+                ...(minimumLength === undefined ? {} : { minimumLength }),
+                multiline: isRecord(metadata) && metadata["io.morty/multiline"] === true,
+                ...(pattern === undefined ? {} : { pattern }),
+            };
+        }
+        default:
+            return type satisfies never;
+    }
 }
 
 export function normalizeElicitationFields(requestedSchema: unknown): readonly SessionElicitationField[] {
@@ -69,40 +163,9 @@ export function normalizeElicitationFields(requestedSchema: unknown): readonly S
     );
     const normalized: SessionElicitationField[] = [];
     for (const [name, property] of Object.entries(properties)) {
-        if (!isRecord(property)) {
-            continue;
+        if (isRecord(property)) {
+            normalized.push(normalizeElicitationField(name, property, required.has(name)));
         }
-        const type = elicitationFieldType(property["type"]);
-        const options = normalizeElicitationOptions(property);
-        const normalizedType = type === "string" && options.length > 0 ? "select" : type;
-        const defaultValue = property["default"];
-        const metadata = property["_meta"];
-        normalized.push({
-            defaultBooleanValue: typeof defaultValue === "boolean" ? defaultValue : false,
-            defaultNumberValue: typeof defaultValue === "number" && Number.isFinite(defaultValue) ? defaultValue : 0,
-            defaultStringValue:
-                typeof defaultValue === "string"
-                    ? truncate(defaultValue, 10_000)
-                    : Array.isArray(defaultValue)
-                      ? truncate(JSON.stringify(defaultValue), 10_000)
-                      : "",
-            description: truncate(readString(property["description"]), 500),
-            format: truncate(readString(property["format"]), 64),
-            hasDefaultValue: defaultValue !== undefined && defaultValue !== null,
-            maximum: numericString(property["maximum"]),
-            maximumLength: numericString(property["maxLength"] ?? property["maxItems"]),
-            minimum: numericString(property["minimum"]),
-            minimumLength: numericString(property["minLength"] ?? property["minItems"]),
-            ...(normalizedType === "string" && isRecord(metadata) && metadata["io.morty/multiline"] === true
-                ? { multiline: true }
-                : {}),
-            name: truncate(name, 128),
-            options,
-            pattern: truncate(readString(property["pattern"]), 500),
-            required: required.has(name),
-            title: truncate(readString(property["title"], name), 255),
-            type: normalizedType,
-        });
     }
     return normalized.slice(0, 100);
 }
@@ -167,20 +230,10 @@ function validateNumericValue(
 }
 
 export function validateElicitationContent(
-    encoded: string,
+    decoded: SessionElicitationFormContent,
     requestedSchema: unknown,
 ): Readonly<Record<string, ElicitationContentValue>> {
-    let decoded: unknown;
-    try {
-        decoded = JSON.parse(encoded);
-    } catch (error) {
-        throw new AcpExecutionError(
-            "Elicitation response is not valid JSON",
-            { cause: error },
-            "invalid_elicitation_response",
-        );
-    }
-    if (!isRecord(decoded) || !isRecord(requestedSchema) || !isRecord(requestedSchema["properties"])) {
+    if (!isRecord(requestedSchema) || !isRecord(requestedSchema["properties"])) {
         throw new AcpExecutionError(
             "Elicitation response does not match the requested form",
             {},
