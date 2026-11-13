@@ -1,6 +1,7 @@
-import type { Stats } from "node:fs";
-import { lstat, readdir, readFile } from "node:fs/promises";
+import { constants, type Stats } from "node:fs";
+import { type FileHandle, lstat, open, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { isNodeError } from "../../engine/util/node-error.ts";
 
 const LOG_FILE_NAME_PATTERN = /^[\w.-]{1,128}\.log$/u;
 /** True when a path is legitimately absent, rather than present and unreadable. */
@@ -73,28 +74,40 @@ export type OwnedLogFileRead =
 
 /** Reads a log file this user owns. Absent files, links and other users' files are skipped. */
 export async function readOwnedLogFile(path: string, signal: AbortSignal): Promise<OwnedLogFileRead> {
-    let metadata: Stats;
+    signal.throwIfAborted();
+    let handle: FileHandle | undefined;
     try {
-        metadata = await lstat(path);
-    } catch (cause) {
-        return isAbsent(cause) ? { kind: "skipped" } : { kind: "unreadable" };
-    }
-    if (!metadata.isFile() || metadata.isSymbolicLink() || !ownedByCurrentUser(metadata)) {
-        return { kind: "skipped" };
-    }
-    try {
-        return { kind: "read", content: await readFile(path, { encoding: "utf8", signal }) };
+        // Pin the file before checking it. NONBLOCK also keeps a raced-in FIFO from hanging collection.
+        handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+        const metadata = await handle.stat({ bigint: true });
+        const current = await lstat(path, { bigint: true });
+        // The path check preserves link rejection on platforms without O_NOFOLLOW.
+        if (
+            !metadata.isFile() ||
+            !ownedByCurrentUser(metadata) ||
+            current.isSymbolicLink() ||
+            current.dev !== metadata.dev ||
+            current.ino !== metadata.ino
+        ) {
+            return { kind: "skipped" };
+        }
+        return { kind: "read", content: await handle.readFile({ encoding: "utf8", signal }) };
     } catch (cause) {
         // Cancellation is not evidence about the file: let it propagate so the
         // command fails as aborted rather than reporting a healthy log as broken.
         if (signal.aborted) {
             throw cause;
         }
+        if (isAbsent(cause) || isNodeError(cause, "ELOOP")) {
+            return { kind: "skipped" };
+        }
         return { kind: "unreadable" };
+    } finally {
+        await handle?.close();
     }
 }
 
-function ownedByCurrentUser(metadata: { readonly uid: number }): boolean {
+function ownedByCurrentUser(metadata: { readonly uid: number | bigint }): boolean {
     // Windows reports uid 0 for every file, so ownership is not a signal there.
-    return process.getuid === undefined || metadata.uid === process.getuid();
+    return process.getuid === undefined || BigInt(metadata.uid) === BigInt(process.getuid());
 }

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -73,6 +73,29 @@ describe("Morty logs command", () => {
         expect(result.stdout).not.toContain(stateDirectory);
         expect(result.stdout).toContain("computer/");
         expect(result.stdout).toContain("Review them before sharing");
+    }, 60_000);
+
+    it("Given a linked log beside an ordinary log, When the user exports diagnostics, Then only the ordinary log is included", async () => {
+        const directory = await mkdtemp(join(tmpdir(), "morty-logs-command-"));
+        temporaryDirectories.push(directory);
+        const stateDirectory = join(directory, "state");
+        await writeComputerLog(stateDirectory, "daemon.log", ["ordinary-log"]);
+        const outside = join(directory, "private.txt");
+        await writeFile(outside, "must-not-be-exported", { mode: 0o600 });
+        await symlink(outside, join(stateDirectory, "computer", "logs", "linked.log"));
+
+        const result = await runCli(
+            ["logs", "--json", "--state-directory", stateDirectory],
+            process.env,
+            AbortSignal.timeout(30_000),
+        );
+
+        expect(result.code).toBe(0);
+        expect(JSON.parse(result.stdout)).toEqual({
+            entries: [expect.objectContaining({ lines: ["ordinary-log"], omittedLines: 0 })],
+            unreadable: [],
+        });
+        expect(result.stdout).not.toContain("must-not-be-exported");
     }, 60_000);
 
     // @no-uc: Technical regression; bounded log tailing must report what it dropped rather than hide it.

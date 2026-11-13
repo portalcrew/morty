@@ -1,5 +1,5 @@
 import type { Dirent } from "node:fs";
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { environmentHome } from "./environment.js";
 
@@ -113,12 +113,12 @@ function readFirstLine(path: string): string | null {
 }
 
 function readTail(path: string, tailBytes = DEFAULT_TAIL_BYTES): string {
-    const st = statSync(path);
-    const start = Math.max(0, st.size - tailBytes);
-    const len = st.size - start;
-
     const fd = openSync(path, "r");
     try {
+        // Size and content must refer to the same file even if the path is replaced.
+        const st = fstatSync(fd);
+        const start = Math.max(0, st.size - tailBytes);
+        const len = st.size - start;
         const buf = Buffer.alloc(len);
         const n = readSync(fd, buf, 0, buf.length, start);
         return buf.subarray(0, n).toString("utf-8");

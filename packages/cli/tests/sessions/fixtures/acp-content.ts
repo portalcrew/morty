@@ -1,6 +1,3 @@
-import { writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import * as acp from "@agentclientprotocol/sdk/unstable";
 
 export async function publishContentScenario(
@@ -154,40 +151,18 @@ export async function publishContentScenario(
                               type: "content",
                           },
                       ]
-                    : prompt === "generate local image"
-                      ? (() => {
-                            const path = join(tmpdir(), `morty-fake-agent-${process.pid.toString()}.png`);
-                            writeFileSync(
-                                path,
-                                Buffer.from(
-                                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
-                                    "base64",
-                                ),
-                            );
-                            return [
-                                {
-                                    content: {
-                                        data: "",
-                                        mimeType: "image/png",
-                                        type: "image",
-                                        uri: path,
-                                    },
-                                    type: "content",
+                    : prompt === "generate inline image" || prompt === "generate inline image with reused tool id"
+                      ? [
+                            {
+                                content: {
+                                    data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+                                    mimeType: "image/png",
+                                    type: "image",
                                 },
-                            ];
-                        })()
-                      : prompt === "generate inline image" || prompt === "generate inline image with reused tool id"
-                        ? [
-                              {
-                                  content: {
-                                      data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
-                                      mimeType: "image/png",
-                                      type: "image",
-                                  },
-                                  type: "content",
-                              },
-                          ]
-                        : undefined,
+                                type: "content",
+                            },
+                        ]
+                      : undefined,
             rawOutput:
                 prompt === "return oversized tool output"
                     ? "x".repeat(500_001)
