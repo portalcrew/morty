@@ -1127,7 +1127,6 @@ it("Given Chat reads the Session execution naming an unconfirmed command, When t
                 turn: null,
                 queued: [],
                 command: { state: "completed", stopReason: "end_turn" },
-                queuedCancellation: "before-start",
                 executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
                 interactionState: null,
             }),
@@ -1166,7 +1165,6 @@ it("Given Chat reads the Session execution after missing a turn's outcome, When 
                 target: runtime.sessionTarget,
                 turn: null,
                 queued: [],
-                queuedCancellation: "before-start",
                 executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
                 interactionState: null,
                 lastTurn: {
@@ -1178,7 +1176,6 @@ it("Given Chat reads the Session execution after missing a turn's outcome, When 
             }),
         );
         expect(await responseJson(await response, 200)).toMatchObject({
-            queuedCancellation: "before-start",
             interactionState: null,
             lastTurn: { commandId: "failed-command", state: "failed", code: "model_unavailable" },
         });
@@ -1596,7 +1593,6 @@ describe.sequential("Relay Turn submission", () => {
                     action: "active-turn",
                     kind: "native.session.result",
                     queued: [],
-                    queuedCancellation: "before-start",
                     executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
                     interactionState: null,
                     requestId: command.requestId,
