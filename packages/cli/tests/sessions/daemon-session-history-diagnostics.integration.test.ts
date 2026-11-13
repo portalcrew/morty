@@ -72,7 +72,6 @@ if (process.argv.includes("--version")) {
                 }
                 peer.send(
                     encodeSessionPromptCommand({
-                        requestId: "external-image-seed-turn",
                         commandId: "external-image-seed-turn",
                         requestId: "external-image-seed-turn",
                         disposition: SessionPromptDisposition.Append,

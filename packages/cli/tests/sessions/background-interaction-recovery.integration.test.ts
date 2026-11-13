@@ -197,7 +197,6 @@ test("Given a completed foreground turn, When its Agent requests background perm
         );
         await send(
             encodeSessionPromptCommand({
-                requestId: "foreground",
                 commandId: "foreground",
                 requestId: "foreground",
                 target: sessionTarget,

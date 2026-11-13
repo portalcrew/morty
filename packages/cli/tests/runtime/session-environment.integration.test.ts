@@ -437,7 +437,6 @@ await import(${JSON.stringify(agentPeer)});
                 encodeSessionPromptCommand({
                     target,
                     kind: "session.prompt",
-                    requestId: commandId,
                     commandId,
                     requestId: commandId,
                     disposition: SessionPromptDisposition.Append,

@@ -213,7 +213,6 @@ test("Given Claude is running a background command, When two idle hours pass and
                     peer.send(
                         encodeSessionPromptCommand({
                             kind: "session.prompt",
-                            requestId: commandId,
                             commandId,
                             requestId: commandId,
                             target: sessionTarget,

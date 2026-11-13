@@ -66,7 +66,6 @@ test("Given unsupported attachments, When a prompt has text, Then the daemon del
                     peer.send(
                         encodeSessionPromptCommand({
                             attachments,
-                            requestId: commandId,
                             commandId,
                             requestId: commandId,
                             disposition: SessionPromptDisposition.Append,

@@ -51,7 +51,6 @@ test("Given native Claude is installed outside PATH, When two prompts execute th
             const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
-                    requestId: commandId,
                     commandId,
                     requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
@@ -124,7 +123,6 @@ test.skipIf(process.platform !== "darwin")(
             const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
-                    requestId: commandId,
                     commandId,
                     requestId: commandId,
                     disposition: SessionPromptDisposition.Append,

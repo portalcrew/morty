@@ -39,7 +39,6 @@ test("Given a real claude native Session, When the active prompt is cancelled wi
                 peer.send(
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
-                        requestId: commandId,
                         commandId,
                         requestId: commandId,
                         target: nativeId,
@@ -132,7 +131,6 @@ test("Given a completed real Claude Session, When it is forked, Then its history
         const sendPrompt = (sessionTarget: NativeSessionTarget, commandId: string): void =>
             peer.send(
                 encodeSessionPromptCommand({
-                    requestId: commandId,
                     commandId,
                     requestId: commandId,
                     disposition: SessionPromptDisposition.Append,

@@ -195,7 +195,6 @@ test("Given Claude is answering a background notification, When it absorbs a new
                 peer.send(
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
-                        requestId: commandId,
                         commandId,
                         requestId: commandId,
                         prompt,

@@ -128,7 +128,6 @@ test.each(["owned", "borrowed"])(
                 peer.send(
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
-                        requestId: commandId,
                         commandId,
                         requestId: commandId,
                         target: sessionTarget,

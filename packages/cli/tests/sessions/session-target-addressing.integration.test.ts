@@ -23,7 +23,6 @@ const prompt = (peer: DaemonConnectionPeer, target: NativeSessionTarget, command
     peer.send(
         encodeSessionPromptCommand({
             attachments: [],
-            requestId: commandId,
             commandId,
             requestId: commandId,
             disposition: SessionPromptDisposition.Append,

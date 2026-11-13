@@ -79,7 +79,6 @@ test("Given an executed command, When its receipt is evicted and the daemon rest
             async (peer) => {
                 const original: SessionPromptCommand = {
                     attachments: [],
-                    requestId: "a-original-execution",
                     commandId: "a-original-execution",
                     requestId: "a-original-execution",
                     disposition: SessionPromptDisposition.Append,

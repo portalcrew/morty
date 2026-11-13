@@ -22,7 +22,6 @@ test("Given a real Codex conversation, When the user sends slash-prefixed text o
             peer.send(
                 encodeSessionPromptCommand({
                     kind: "session.prompt",
-                    requestId: commandId,
                     commandId,
                     requestId: commandId,
                     target: peer.target,

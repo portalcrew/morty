@@ -25,7 +25,6 @@ test("Given real Claude has expired OAuth credentials, When I send a message and
             const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
-                    requestId: commandId,
                     commandId,
                     requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
@@ -123,7 +122,6 @@ test("Given a real Claude answer quotes login diagnostics, When it completes, Th
         const commandId = randomUUID();
         peer.send(
             encodeSessionPromptCommand({
-                requestId: commandId,
                 commandId,
                 requestId: commandId,
                 disposition: SessionPromptDisposition.Append,

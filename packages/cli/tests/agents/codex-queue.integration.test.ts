@@ -35,7 +35,6 @@ test("Given real Codex has accepted a steering prompt, When V2 recovery reloads 
             const steeringPrompt = "Use the recovered steering requirement";
             peer.send(
                 encodeSessionPromptCommand({
-                    requestId: activeCommandId,
                     commandId: activeCommandId,
                     requestId: activeCommandId,
                     disposition: SessionPromptDisposition.Append,
@@ -48,7 +47,6 @@ test("Given real Codex has accepted a steering prompt, When V2 recovery reloads 
             await activeEntered.promise;
             peer.send(
                 encodeSessionPromptCommand({
-                    requestId: steeringCommandId,
                     commandId: steeringCommandId,
                     requestId: steeringCommandId,
                     disposition: SessionPromptDisposition.Append,
@@ -194,7 +192,6 @@ test("Given real Codex advances between repeated prompts, When V2 recovery pagin
             const prompt = (commandId: string, text = `Reply to ${commandId}`): void =>
                 peer.send(
                     encodeSessionPromptCommand({
-                        requestId: commandId,
                         commandId,
                         requestId: commandId,
                         disposition: SessionPromptDisposition.Append,
@@ -339,7 +336,6 @@ test("Given real Codex with an active turn, When three follow-ups are accepted a
                 peer.send(
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
-                        requestId: commandId,
                         commandId,
                         requestId: commandId,
                         target: peer.target,
