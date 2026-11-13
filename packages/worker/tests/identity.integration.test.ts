@@ -104,7 +104,10 @@ test("Given no D1 binding, When a user creates Computers and later links saved C
     const stored = await namespace
         .get(namespace.idFromName(computerObjectName(first.computerId)))
         .fetch(new Request("https://computer.internal/stored-state"));
-    expect(await stored.json()).toMatchObject({ keys: expect.arrayContaining(["computer-account", "computer-id"]) });
+    // Which Computer an object holds is its name's, so the object keeps only that its account exists.
+    const { keys } = v.parse(v.object({ keys: v.array(v.string()) }), await stored.json());
+    expect(keys).toContain("computer-account");
+    expect(keys).not.toContain("computer-id");
 });
 
 test("Given saved Computer credentials, When linking omits proof or supplies another Computer, Then access is denied without changing the valid credentials", async () => {

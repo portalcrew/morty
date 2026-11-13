@@ -10,7 +10,7 @@ export interface ComputerRouteContext {
     readonly services: {
         readonly browser: ComputerServices;
         readonly relay: (computerId: string) => RelayContext;
-        readonly accounts: { readonly create: (computerId: string, signal: AbortSignal) => Promise<void> };
+        readonly accounts: { readonly create: (signal: AbortSignal) => Promise<void> };
         readonly sessions: (computerId: string) => SessionWebSocketServices;
     };
     readonly utilities: {

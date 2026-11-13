@@ -1,7 +1,7 @@
 import * as v from "valibot";
 import type { CloudBindings } from "../../contracts/cloud-bindings.ts";
 import { computerBootstrap } from "../../contracts/computer-bootstrap.ts";
-import { relayIdentifier } from "../../contracts/computer-management.ts";
+import { ComputerManagementError, relayIdentifier } from "../../contracts/computer-management.ts";
 import { ManagementError } from "../../contracts/management-error.ts";
 import { ManagedSessionOperations } from "../components/chat/infra/managed-session-operations.ts";
 import type { ComputerBackendService } from "../components/computer/service/computer-backend-service.ts";
@@ -41,31 +41,28 @@ export class ComputerServices {
 
     readonly #sessionOperations = new ManagedSessionOperations();
 
+    /** The computer this object holds; a request naming another is refused with the answer every boundary gives. */
+    readonly #own = (computerId: string): string => {
+        const validated = v.parse(relayIdentifier, computerId);
+        if (!this.#owns(validated)) {
+            throw new ComputerManagementError("computer_id_mismatch", "The computer is unavailable", 421);
+        }
+        return validated;
+    };
+
     readonly forComputer = async (
         computerId: string,
         env: CloudBindings,
         signal: AbortSignal,
     ): Promise<ApplicationContext> => {
         signal.throwIfAborted();
-        const validatedComputerId = v.parse(relayIdentifier, computerId);
-        const bound: unknown = await this.#storage.get("computer-id");
-        if (bound === undefined) {
-            throw new ManagementError("COMPUTER_NOT_FOUND", "The Morty computer does not exist.", 404);
-        }
-        if (!this.#owns(validatedComputerId) || bound !== validatedComputerId) {
-            throw new Error("Durable Object computer identity does not match the request.");
-        }
-        return await this.#application(validatedComputerId, env, signal);
+        return await this.#application(this.#own(computerId), env, signal);
     };
 
     readonly bootstrap = async (input: unknown, env: CloudBindings, signal: AbortSignal) => {
         signal.throwIfAborted();
         const parsed = v.parse(computerBootstrap, input);
-        if (!(await this.#account.isActive(parsed.computer.computerId, signal))) {
-            throw new ManagementError("COMPUTER_NOT_FOUND", "The Morty computer does not exist.", 404);
-        }
-        await this.#bindComputer(parsed.computer.computerId);
-        const dependencies = await this.#application(parsed.computer.computerId, env, signal);
+        const dependencies = await this.#application(this.#own(parsed.computer.computerId), env, signal);
         return await dependencies.services.management.initializeComputer(parsed.computer, signal, parsed.origin);
     };
 
@@ -95,26 +92,12 @@ export class ComputerServices {
         return result;
     };
 
-    readonly #bindComputer = async (computerId: string): Promise<void> => {
-        if (!this.#owns(computerId)) {
-            throw new Error("Computer ID does not match this relay");
-        }
-        const stored: unknown = await this.#storage.get("computer-id");
-        if (stored === undefined) {
-            await this.#storage.put("computer-id", computerId);
-            return;
-        }
-        if (stored !== computerId) {
-            throw new Error("Durable Object computer identity does not match the request.");
-        }
-    };
-
     readonly #application = async (
         computerId: string,
         env: CloudBindings,
         signal: AbortSignal,
     ): Promise<ApplicationContext> => {
-        if (!(await this.#account.isActive(computerId, signal))) {
+        if (!(await this.#account.isActive(signal))) {
             throw new ManagementError("COMPUTER_NOT_FOUND", "The Morty computer does not exist.", 404);
         }
         return createApplicationDependencies({
