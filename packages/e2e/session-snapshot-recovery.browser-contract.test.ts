@@ -1,5 +1,8 @@
 import { createServer, request } from "node:http";
+import { computerEncryptionAccessCodec, createClientPayloadEncryption } from "@morty-build/client";
 import { WebSocket, WebSocketServer } from "ws";
+import { sessionEventEnvelopeCodec } from "../client/src/protocol/session/events/index.ts";
+import { sessionHistoryPageLoadedCodec } from "../client/src/protocol/session/observability/history.ts";
 import { dataTestId } from "../web/src/data-testid.ts";
 import { test as base, conversationLoaded, expect } from "./infra/test.ts";
 
@@ -99,7 +102,7 @@ const test = base.extend<{ readonly network: Network }>({
                                 frame?.["kind"] === "http.request" &&
                                 frame["method"] === "GET" &&
                                 typeof frame["path"] === "string" &&
-                                frame["path"].includes("/events?");
+                                new URL(frame["path"], target).pathname.endsWith("/events");
                             if (history && typeof frame?.["requestId"] === "string") {
                                 requestIds.add(frame["requestId"]);
                             }
@@ -195,18 +198,18 @@ for (const schedule of ["before-snapshot", "after-snapshot", "after-recovery"] a
     test(`Given a streaming reply, when a real delta arrives ${schedule}, then recovery displays every delta exactly once`, async ({
         runtime,
         network,
+        stack,
     }, testInfo) => {
         testInfo.setTimeout(90000);
         const { page } = runtime;
         const wire: unknown[] = [];
         const observed = new Set<string>();
-        const waiters = new Map<string, () => void>();
-        const recoveredHistory = Promise.withResolvers<void>();
+        let recoveredHistory = false;
         let phase = "initial";
-        const capture = (value: unknown, kind: string): void => {
+        const capture = (value: unknown, kind: string, arrivalPhase: string): void => {
             if (Array.isArray(value)) {
                 for (const child of value) {
-                    capture(child, kind);
+                    capture(child, kind, arrivalPhase);
                 }
                 return;
             }
@@ -222,107 +225,151 @@ for (const schedule of ["before-snapshot", "after-snapshot", "after-recovery"] a
                 typeof content?.["text"] === "string"
             ) {
                 wire.push({
-                    phase,
+                    phase: arrivalPhase,
                     kind,
                     eventId: item["eventId"],
                     position: item["position"] ?? null,
                     generation: item["sessionGenerationId"],
                     text: content["text"],
                 });
-                if (phase === "recovery" && kind === "http.response") {
-                    recoveredHistory.resolve();
+                if (arrivalPhase === "recovery" && kind === "http.response") {
+                    recoveredHistory = true;
                 }
                 if (kind === "session.events.event") {
                     observed.add(content["text"]);
-                    waiters.get(content["text"])?.();
                 }
             }
             for (const child of Object.values(item)) {
-                capture(child, kind);
+                capture(child, kind, arrivalPhase);
             }
         };
+        await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
+        const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
+        const encodedAccess = new URLSearchParams(new URL(connected.url).hash.slice(1)).get("e2e");
+        if (encodedAccess === null) {
+            throw new Error("The browser handoff omitted encrypted Computer access");
+        }
+        const access = computerEncryptionAccessCodec.decode(Buffer.from(encodedAccess, "base64url").toString("utf8"));
+        const observation = new AbortController();
+        const signal = AbortSignal.any([observation.signal, stack.harness.signal]);
+        const observer = await createClientPayloadEncryption(access, signal);
+        let observations = Promise.resolve();
         page.on("websocket", (socket) => {
             if (!new URL(socket.url()).pathname.endsWith("/transport")) {
                 return;
             }
             socket.on("framereceived", ({ payload }) => {
                 const frame = parseFrame(payload);
-                if (frame?.["kind"] === "http.response" && typeof frame["body"] === "string") {
-                    try {
-                        capture(JSON.parse(frame["body"]), frame["kind"]);
-                    } catch {
-                        /* Not history. */
+                const arrivalPhase = phase;
+                observations = observations.then(async () => {
+                    if (signal.aborted) {
+                        return;
                     }
-                }
-                if (frame?.["kind"] === "session.events.event" && typeof frame["data"] === "string") {
-                    capture(JSON.parse(frame["data"]), frame["kind"]);
-                }
+                    if (frame?.["kind"] === "http.response" && typeof frame["body"] === "string") {
+                        const body = parseFrame(frame["body"]);
+                        if (body?.["kind"] === sessionHistoryPageLoadedCodec.kind) {
+                            capture(
+                                await sessionHistoryPageLoadedCodec.decode(frame["body"], observer, signal),
+                                frame["kind"],
+                                arrivalPhase,
+                            );
+                        }
+                    }
+                    if (frame?.["kind"] === "session.events.event" && typeof frame["data"] === "string") {
+                        capture(
+                            await sessionEventEnvelopeCodec.decode(frame["data"], observer, signal),
+                            frame["kind"],
+                            arrivalPhase,
+                        );
+                    }
+                });
+                // Retain rejection on the queue for the awaited readiness checks and final drain.
+                void observations.catch(() => undefined);
             });
         });
-        const waitForDelta = (text: string): Promise<void> =>
-            observed.has(text) ? Promise.resolve() : new Promise((resolve) => waiters.set(text, resolve));
-        await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
-        const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
-        await page.goto(connected.url);
-        const composer = page.getByRole("textbox", { name: "Message" });
-        const responses = page.getByRole("article", { name: "Agent response" });
-        await expect(composer).toBeEnabled();
-        await conversationLoaded(page);
-        await composer.fill("wait for steering");
-        await page.getByRole("button", { name: "Send message", exact: true }).click();
-        await expect(responses).toContainText("Waiting for steering");
-        const gate =
-            schedule === "after-recovery"
-                ? null
-                : network.gateHistory(schedule === "before-snapshot" ? "request" : "response");
-        phase = "recovery";
-        // Recovery runs quietly first: the page offers no manual retry while it reconnects on its own.
-        network.interrupt();
-        const resumed = runtime.clock.runFor(5000);
-        if (gate !== null) {
-            await gate.reached;
-            await runtime.continueReply("wait for steering", {
-                outcome: "hold",
-                output: [{ kind: "text", text: "|B|" }],
-            });
-            if (schedule === "before-snapshot") {
-                await waitForDelta("|B|");
+        const advanceUntil = async (ready: () => boolean): Promise<void> => {
+            let advanced = 0;
+            await expect(async () => {
+                await observations;
+                if (!ready() && advanced < 300_000) {
+                    await runtime.clock.runFor(1000);
+                    advanced += 1000;
+                }
+                expect(ready()).toBe(true);
+            }).toPass({ intervals: [0], timeout: testInfo.project.use.actionTimeout ?? 30_000 });
+        };
+        try {
+            await page.goto(connected.url);
+            const composer = page.getByRole("textbox", { name: "Message" });
+            const responses = page.getByRole("article", { name: "Agent response" });
+            await expect(composer).toBeEnabled();
+            await conversationLoaded(page);
+            await composer.fill("wait for steering");
+            await page.getByRole("button", { name: "Send message", exact: true }).click();
+            await expect(responses).toContainText("Waiting for steering");
+            const gate =
+                schedule === "after-recovery"
+                    ? null
+                    : network.gateHistory(schedule === "before-snapshot" ? "request" : "response");
+            phase = "recovery";
+            // Recovery runs quietly first: the page offers no manual retry while it reconnects on its own.
+            network.interrupt();
+            if (gate !== null) {
+                try {
+                    let reached = false;
+                    void gate.reached.then(() => {
+                        reached = true;
+                    });
+                    await advanceUntil(() => reached);
+                    await runtime.continueReply("wait for steering", {
+                        outcome: "hold",
+                        output: [{ kind: "text", text: "|B|" }],
+                    });
+                    if (schedule === "before-snapshot") {
+                        await advanceUntil(() => observed.has("|B|"));
+                    }
+                } finally {
+                    gate.release();
+                }
             }
-            gate.release();
-        }
-        await resumed;
-        await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
-        if (schedule === "after-recovery") {
-            // Recovery is initially quiet, so a hidden notice does not establish that
-            // the new connection has consumed its history snapshot.
-            await recoveredHistory.promise;
+            if (schedule === "after-recovery") {
+                // Recovery is initially quiet, so a hidden notice does not establish that
+                // the new connection has consumed its history snapshot.
+                await advanceUntil(() => recoveredHistory);
+                await runtime.continueReply("wait for steering", {
+                    outcome: "hold",
+                    output: [{ kind: "text", text: "|B|" }],
+                });
+            }
+            await advanceUntil(() => observed.has("|B|"));
+            await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
+            phase = "continued";
             await runtime.continueReply("wait for steering", {
-                outcome: "hold",
-                output: [{ kind: "text", text: "|B|" }],
+                outcome: "complete",
+                output: [{ kind: "text", text: "|C_END|" }],
             });
+            await expect(responses).toContainText("|C_END|");
+            await expect(page.getByRole("button", { name: "Stop agent output" })).toBeHidden();
+            const beforeReload = await responses.allTextContents();
+            await page.screenshot({ path: testInfo.outputPath("before-reload.png") });
+            expect.soft(beforeReload.join("").match(/\|B\|/g)?.length ?? 0).toBe(1);
+            phase = "reload";
+            await page.reload();
+            await expect(responses).toContainText("|C_END|");
+            const afterReload = await responses.allTextContents();
+            expect.soft(afterReload.join("").match(/\|B\|/g)?.length ?? 0).toBe(1);
+            expect.soft(beforeReload).toEqual(afterReload);
+            await page.screenshot({ path: testInfo.outputPath("after-reload.png") });
+            await testInfo.attach("snapshot-recovery", {
+                body: JSON.stringify({ schedule, beforeReload, afterReload, wire }),
+                contentType: "application/json",
+            });
+            await observations;
+        } finally {
+            observation.abort();
+            await observations.catch(() => undefined);
+            observer.close();
         }
-        await waitForDelta("|B|");
-        phase = "continued";
-        await runtime.continueReply("wait for steering", {
-            outcome: "complete",
-            output: [{ kind: "text", text: "|C_END|" }],
-        });
-        await expect(responses).toContainText("|C_END|");
-        await expect(page.getByRole("button", { name: "Stop agent output" })).toBeHidden();
-        const beforeReload = await responses.allTextContents();
-        await page.screenshot({ path: testInfo.outputPath("before-reload.png") });
-        expect.soft(beforeReload.join("").match(/\|B\|/g)?.length ?? 0).toBe(1);
-        phase = "reload";
-        await page.reload();
-        await expect(responses).toContainText("|C_END|");
-        const afterReload = await responses.allTextContents();
-        expect.soft(afterReload.join("").match(/\|B\|/g)?.length ?? 0).toBe(1);
-        expect.soft(beforeReload).toEqual(afterReload);
-        await page.screenshot({ path: testInfo.outputPath("after-reload.png") });
-        await testInfo.attach("snapshot-recovery", {
-            body: JSON.stringify({ schedule, beforeReload, afterReload, wire }),
-            contentType: "application/json",
-        });
     });
 }
 

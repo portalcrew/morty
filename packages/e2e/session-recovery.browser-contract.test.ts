@@ -299,7 +299,19 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
         } else if (recovery === "manual") {
             await page.getByRole("button", { name: "Retry now", exact: true }).click();
         }
-        await runtime.clock.runFor(6000);
+        const send = page.getByRole("button", { name: "Send message", exact: true });
+        // Spend the existing action wait budget in virtual time: a real network failure can schedule
+        // another retry after the preceding clock advance has returned.
+        const recoveryBudget = test.info().project.use.actionTimeout ?? 30_000;
+        let advanced = 0;
+        await expect(async () => {
+            // Retain the existing bounded retry window as an additional virtual-time safety limit.
+            if (advanced < 300_000) {
+                await runtime.clock.runFor(1000);
+                advanced += 1000;
+            }
+            expect(await send.isEnabled()).toBe(true);
+        }).toPass({ intervals: [0], timeout: recoveryBudget });
         await expect(composer).toBeEnabled();
         await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
         await expect(composer).toHaveValue("Preserve my unsent draft.");
