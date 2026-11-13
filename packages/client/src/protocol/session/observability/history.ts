@@ -203,6 +203,12 @@ const sessionHistoryPageLoadedPublicRoutingSchema = z.object({
 const sessionHistoryPageLoadedRoutingSchema = sessionHistoryPageLoadedPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
+export function historyWireJsonSchemas() {
+    return {
+        historyRequest: z.toJSONSchema(sessionHistoryPageLoadRoutingSchema),
+        historyReply: z.toJSONSchema(sessionHistoryPageLoadedRoutingSchema),
+    };
+}
 export type SessionHistoryPageLoadedRouting = z.infer<typeof sessionHistoryPageLoadedRoutingSchema>;
 const decodeSessionHistoryPageLoadedRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionHistoryPageLoadedRoutingSchema);

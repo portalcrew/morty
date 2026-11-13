@@ -86,9 +86,14 @@ function transportError(code: WebSocketTransportErrorCode): WebSocketTransportEr
 
 function isEncryptedContentUpload(request: Request): boolean {
     const path = new URL(request.url).pathname;
-    return request.method === "PUT" &&
+    return (
+        request.method === "PUT" &&
         request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() === FILE_STREAM_CONTENT_TYPE &&
-        new RegExp(`^${MORTY_API_PREFIX}/v1/computers/[^/]+/harnesses/[^/]+/sessions/[^/]+/content/[a-f0-9]{64}$`, "u").test(path);
+        new RegExp(
+            `^${MORTY_API_PREFIX}/v1/computers/[^/]+/harnesses/[^/]+/sessions/[^/]+/content/[a-f0-9]{64}$`,
+            "u",
+        ).test(path)
+    );
 }
 
 /** Bounds buffering on this connection while the application admits each upload. */
@@ -98,19 +103,25 @@ class ConnectionUploadBudget {
     #requests = 0;
 
     readonly reserve = (bytes: number, encryptedUpload: boolean): void => {
-        if (this.#bytes + bytes > MAX_PENDING_BINARY_BYTES ||
+        if (
+            this.#bytes + bytes > MAX_PENDING_BINARY_BYTES ||
             (!encryptedUpload && this.#ordinaryBytes + bytes > MAX_BODY_BYTES) ||
-            this.#requests >= MAX_PENDING_BINARY_REQUESTS) {
+            this.#requests >= MAX_PENDING_BINARY_REQUESTS
+        ) {
             throw transportError("request_capacity_exceeded");
         }
         this.#bytes += bytes;
-        if (!encryptedUpload) this.#ordinaryBytes += bytes;
+        if (!encryptedUpload) {
+            this.#ordinaryBytes += bytes;
+        }
         this.#requests += 1;
     };
 
     readonly release = (bytes: number, encryptedUpload: boolean): void => {
         this.#bytes -= bytes;
-        if (!encryptedUpload) this.#ordinaryBytes -= bytes;
+        if (!encryptedUpload) {
+            this.#ordinaryBytes -= bytes;
+        }
         this.#requests -= 1;
     };
 }

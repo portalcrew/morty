@@ -520,7 +520,7 @@ export {
     workspaceEntriesEventCodec,
     workspaceListCommandCodec,
 } from "./session/workspace/index.ts";
-export { sessionResultJsonSchemas } from "./session-api-json-schema.ts";
+export { sessionResultJsonSchemas, sessionWireJsonSchemas } from "./session-api-json-schema.ts";
 export {
     isDirectoryPath,
     MAX_WORKSPACE_PATH_LENGTH,

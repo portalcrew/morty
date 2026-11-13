@@ -20,10 +20,67 @@ const documentSchema = v.object({
     ),
 });
 
+test("Given the agent OpenAPI document, when a peer reads encrypted Session operations, then request and response schemas describe the wire envelopes", async () => {
+    await using bindings = await createBindings();
+    await bindings.configure({ APP_ORIGIN: bindings.origin });
+    const response = await bindings.request(new Request(`${bindings.origin}/doc/agent-api/openapi.json`));
+    expect(response.status).toBe(200);
+    const document = v.parse(
+        v.object({ paths: v.record(v.string(), v.record(v.string(), v.unknown())) }),
+        await response.json(),
+    );
+    const session = "/morty/api/v1/computers/{computerId}/harnesses/{harness}/sessions/{sessionId}";
+    const operation = (path: string, method: string) =>
+        v.parse(
+            v.object({
+                requestBody: v.object({
+                    required: v.literal(true),
+                    content: v.object({ "application/json": v.object({ schema: v.unknown() }) }),
+                }),
+                responses: v.object({
+                    "200": v.object({ content: v.object({ "application/json": v.object({ schema: v.unknown() }) }) }),
+                }),
+            }),
+            document.paths[path]?.[method],
+        );
+    for (const [path, method, requestKind, replyKind] of [
+        [`${session}/active-turn`, "get", "native.session.request", "native.session.result"],
+        [`${session}/events`, "get", "session.live-history.v2.page.load", "session.live-history.v2.page.loaded"],
+        [`${session}/configuration`, "get", "session.config.read", "session.config.read.result"],
+        [`${session}/turns`, "post", "session.prompt", "session.prompt.accepted"],
+        [`${session}/turns/{turnId}/cancel`, "post", "session.cancel", "session.turn.stopped"],
+    ] as const) {
+        const item = operation(path, method);
+        const request = JSON.stringify(item.requestBody.content["application/json"].schema);
+        const reply = JSON.stringify(item.responses["200"].content["application/json"].schema);
+        expect(request).toContain('"encrypted"');
+        expect(request).toContain('"requestId"');
+        expect(request).toContain(requestKind);
+        expect(request).not.toContain('"idempotencyKey"');
+        expect(reply).toContain('"encrypted"');
+        expect(reply).toContain(replyKind);
+        expect(reply).toContain("session.operation.failed");
+        expect(reply).not.toContain('"prompt"');
+    }
+    const chat = "/morty/api/v1/computers/{computerId}";
+    const continuation = operation(`${chat}/native-sessions/continue`, "post");
+    expect(JSON.stringify(continuation.requestBody)).toContain('"find"');
+    expect(JSON.stringify(continuation.requestBody)).toContain('"import"');
+    expect(JSON.stringify(continuation.responses)).toContain('"native.session.result"');
+    const opened = operation(`${chat}/managed-sessions/open`, "post");
+    expect(JSON.stringify(opened.responses)).toContain('"session.ready"');
+    expect(JSON.stringify(opened.responses)).toContain('"credential"');
+    expect(JSON.stringify(opened.responses)).toContain('"encrypted"');
+    const renewed = operation(`${chat}/native-sessions/access`, "post");
+    expect(JSON.stringify(renewed.requestBody)).toContain('"session.prepare"');
+    expect(JSON.stringify(renewed.responses)).toContain('"credential"');
+    expect(JSON.stringify(renewed.responses)).toContain('"session.operation.failed"');
+});
+
 test("Given the agent transport description, when a remote agent reads the request body instructions, then it is told that GET requests carry encrypted bodies", async () => {
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });
-    const response = await bindings.request(new Request(`${bindings.origin}/agent-api/asyncapi.json`));
+    const response = await bindings.request(new Request(`${bindings.origin}/doc/agent-api/asyncapi.json`));
     expect(response.status).toBe(200);
     const document = v.parse(
         v.object({
@@ -31,7 +88,9 @@ test("Given the agent transport description, when a remote agent reads the reque
                 transport: v.object({
                     messages: v.object({
                         httpRequest: v.object({
-                            payload: v.object({ properties: v.object({ body: v.object({ description: v.string() }) }) }),
+                            payload: v.object({
+                                properties: v.object({ body: v.object({ description: v.string() }) }),
+                            }),
                         }),
                     }),
                 }),
@@ -41,7 +100,9 @@ test("Given the agent transport description, when a remote agent reads the reque
     );
     expect(document.channels.transport.messages.httpRequest.payload.properties.body.description).toContain("GET");
     expect(document.channels.transport.messages.httpRequest.payload.properties.body.description).toContain("encrypted");
-    expect(document.channels.transport.messages.httpRequest.payload.properties.body.description).not.toContain('"" for GET');
+    expect(document.channels.transport.messages.httpRequest.payload.properties.body.description).not.toContain(
+        '"" for GET',
+    );
 });
 
 test("Given the generated agent API description, When a peer sends every documented operation as described, Then HTTP operations reach their Worker routes and WebSocket operations reach the Session routes", async () => {

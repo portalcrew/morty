@@ -231,11 +231,16 @@ async function liveEventPeer(liveness: "responsive" | "silent" = "responsive") {
                         },
                         new AbortController().signal,
                     );
-                    const command = await sessionEventsSubscribeCommandCodec.decode(
-                        wire,
-                        box,
-                        new AbortController().signal,
-                    );
+                    let command: Awaited<ReturnType<typeof sessionEventsSubscribeCommandCodec.decode>>;
+                    try {
+                        command = await sessionEventsSubscribeCommandCodec.decode(
+                            wire,
+                            box,
+                            new AbortController().signal,
+                        );
+                    } finally {
+                        box.close();
+                    }
                     expect(command).toEqual({
                         kind: "session.events.subscribe",
                         subscriptionId: value.subscriptionId,
@@ -245,6 +250,12 @@ async function liveEventPeer(liveness: "responsive" | "silent" = "responsive") {
                     connection.send(
                         JSON.stringify({ kind: "session.events.ready", subscriptionId: value.subscriptionId }),
                     );
+                } else if (
+                    value.kind === "session.events.unsubscribe" &&
+                    "subscriptionId" in value &&
+                    typeof value.subscriptionId === "string"
+                ) {
+                    activeSubscriptions.delete(value.subscriptionId);
                 }
             });
         });
@@ -282,6 +293,22 @@ async function liveEventPeer(liveness: "responsive" | "silent" = "responsive") {
                 );
             }
         },
+        subscriptionIds: (): readonly string[] => Array.from(activeSubscriptions),
+        publishTo: (subscriptionId: string, wire: string) => {
+            const socket = webSockets.clients.values().next().value;
+            if (socket === undefined || !activeSubscriptions.has(subscriptionId)) {
+                throw new Error("Expected an active live subscription");
+            }
+            socket.send(
+                JSON.stringify({
+                    kind: "session.events.event",
+                    subscriptionId,
+                    seqId: 1,
+                    eventId: "event-1",
+                    data: wire,
+                }),
+            );
+        },
         disconnect: async () => {
             const socket = webSockets.clients.values().next().value;
             if (socket === undefined) {
@@ -313,30 +340,57 @@ it("Given two live subscribers to one Session, when one encrypted event arrives,
         computerId: "computer-1",
     });
     const signal = new AbortController().signal;
-    const computer = await createComputerPayloadEncryption(peer.access, async () => undefined, signal);
+    const claims = new Set<string>();
+    const computer = await createComputerPayloadEncryption(
+        peer.access,
+        async (claim) => {
+            if (claims.has(claim.fingerprint)) {
+                throw new Error("Replayed payload");
+            }
+            claims.add(claim.fingerprint);
+        },
+        signal,
+    );
+    const otherClient = new MortyClient({
+        transport,
+        encryption: { access: peer.access },
+        credentialProvider: {
+            credential: async (credentialSignal) => {
+                credentialSignal.throwIfAborted();
+                return sessionCredential;
+            },
+        },
+        endpoint: peer.endpoint,
+        computerId: "computer-1",
+    });
     const target = { harness: "claude", sessionId: "session-1" };
-    const receivedA = Promise.withResolvers<void>();
-    const receivedB = Promise.withResolvers<void>();
+    const receivedA = Promise.withResolvers<readonly string[]>();
+    const receivedB = Promise.withResolvers<readonly string[]>();
+    const reconciled: string[] = [];
     try {
         const a = await client.events.subscribeLive(
             target,
             {
-                receive: async () => {
-                    receivedA.resolve();
+                receive: async (events) => {
+                    receivedA.resolve(events.map((event) => event.eventId));
                     return true;
                 },
-                reconcile: async () => undefined,
+                reconcile: async () => {
+                    reconciled.push("a");
+                },
             },
             signal,
         );
-        const b = await client.events.subscribeLive(
+        const b = await otherClient.events.subscribeLive(
             target,
             {
-                receive: async () => {
-                    receivedB.resolve();
+                receive: async (events) => {
+                    receivedB.resolve(events.map((event) => event.eventId));
                     return true;
                 },
-                reconcile: async () => undefined,
+                reconcile: async () => {
+                    reconciled.push("b");
+                },
             },
             signal,
         );
@@ -363,10 +417,115 @@ it("Given two live subscribers to one Session, when one encrypted event arrives,
             signal,
         );
         peer.publish(wire);
-        await Promise.all([receivedA.promise, Promise.race([receivedB.promise, b.completed])]);
+        expect(await Promise.race([receivedA.promise, a.completed])).toEqual(["event-1"]);
+        expect(await Promise.race([receivedB.promise, b.completed])).toEqual(["event-1"]);
+        expect(reconciled).toEqual(["a", "b"]);
         const failure = expect(a.completed).rejects.toMatchObject({ code: "e2e_invalid_frame" });
+        const otherFailure = expect(b.completed).rejects.toMatchObject({ code: "e2e_invalid_frame" });
         peer.publish(wire);
-        await failure;
+        await Promise.all([failure, otherFailure]);
+    } finally {
+        computer.close();
+        client.close();
+        otherClient.close();
+        transport.close();
+    }
+});
+
+it("Given an event still awaiting another subscriber, when the first subscriber receives a replay, then only that replay fails", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "clearTimeout", "setTimeout"] });
+    vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+    const peer = await liveEventPeer();
+    const transport = new WsTransport();
+    const client = new MortyClient({
+        transport,
+        encryption: { access: peer.access },
+        credentialProvider: {
+            credential: async (signal) => {
+                signal.throwIfAborted();
+                return sessionCredential;
+            },
+        },
+        endpoint: peer.endpoint,
+        computerId: "computer-1",
+    });
+    const signal = new AbortController().signal;
+    const claims = new Set<string>();
+    const computer = await createComputerPayloadEncryption(
+        peer.access,
+        async (claim) => {
+            if (claims.has(claim.fingerprint)) {
+                throw new Error("Replayed payload");
+            }
+            claims.add(claim.fingerprint);
+        },
+        signal,
+    );
+    const target = { harness: "claude", sessionId: "session-1" };
+    const firstDelivery = Promise.withResolvers<readonly string[]>();
+    const secondDelivery = Promise.withResolvers<readonly string[]>();
+    const reconciled = new Set<string>();
+    try {
+        const first = await client.events.subscribeLive(
+            target,
+            {
+                reconcile: async () => {
+                    reconciled.add("first");
+                },
+                receive: async (events) => {
+                    firstDelivery.resolve(events.map((event) => event.eventId));
+                    return true;
+                },
+            },
+            signal,
+        );
+        const second = await client.events.subscribeLive(
+            target,
+            {
+                reconcile: async () => {
+                    reconciled.add("second");
+                },
+                receive: async (events) => {
+                    secondDelivery.resolve(events.map((event) => event.eventId));
+                    return true;
+                },
+            },
+            signal,
+        );
+        const [firstId, secondId] = peer.subscriptionIds();
+        if (firstId === undefined || secondId === undefined) {
+            throw new Error("Expected two independently authorized subscriptions");
+        }
+        const wire = await sessionEventEnvelopeCodec.encode(
+            {
+                kind: "session.event.v2",
+                events: [
+                    {
+                        eventId: "event-1",
+                        sessionGenerationId: "generation-1",
+                        target,
+                        recordedAt: "2030-01-01T00:00:00Z",
+                        position: "1",
+                        type: "acp",
+                        payload: {
+                            sessionUpdate: "agent_message_chunk",
+                            messageId: "message-1",
+                            content: { type: "text", text: "answer" },
+                        },
+                    },
+                ],
+            },
+            computer,
+            signal,
+        );
+        peer.publishTo(firstId, wire);
+        expect(await Promise.race([firstDelivery.promise, first.completed])).toEqual(["event-1"]);
+        const replay = expect(first.completed).rejects.toMatchObject({ code: "e2e_invalid_frame" });
+        peer.publishTo(firstId, wire);
+        await replay;
+        peer.publishTo(secondId, wire);
+        expect(await Promise.race([secondDelivery.promise, second.completed])).toEqual(["event-1"]);
+        expect(Array.from(reconciled)).toEqual(["first", "second"]);
     } finally {
         computer.close();
         client.close();

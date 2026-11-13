@@ -11,6 +11,7 @@ import {
     contentReadyEventCodec,
     FILE_FAILED_KIND,
     fileFailedEventCodec,
+    type NativeSessionTarget,
 } from "@morty-build/client/protocol";
 import type { CommandContext } from "../../context.ts";
 import type { CommandMessage } from "../../definition.ts";
@@ -28,6 +29,7 @@ export interface ContentWriteCommands {
     readonly write: (message: CommandMessage<typeof CONTENT_WRITE_KIND>) => Promise<void>;
     readonly commit: (message: CommandMessage<typeof CONTENT_COMMIT_KIND>) => void | Promise<void>;
     readonly receiveChunk: (frame: ContentChunkFrame) => Promise<void>;
+    readonly rejectCapacity: (requestId: string, target: NativeSessionTarget | undefined) => Promise<boolean>;
     readonly settle: () => Promise<void>;
 }
 
@@ -51,6 +53,29 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
                 context.signal,
             ),
         );
+    };
+
+    const rejectCapacity = async (requestId: string, target: NativeSessionTarget | undefined): Promise<boolean> => {
+        const write = pending.get(requestId);
+        if (write === undefined || (target !== undefined && !sameNativeSession(write.command.target, target))) {
+            return false;
+        }
+        pending.delete(requestId);
+        send(
+            context.socket,
+            await fileFailedEventCodec.encode(
+                {
+                    kind: FILE_FAILED_KIND,
+                    requestId,
+                    target: write.command.target,
+                    code: "e2e_store_busy",
+                    message: "The Computer encryption store is busy",
+                },
+                context.payloadEncryption,
+                context.signal,
+            ),
+        );
+        return true;
     };
 
     const write = async (message: CommandMessage<typeof CONTENT_WRITE_KIND>): Promise<void> => {
@@ -139,6 +164,7 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
     return {
         write,
         commit,
+        rejectCapacity,
         receiveChunk: async (frame) => {
             const state = pending.get(frame.requestId);
             if (state === undefined) {

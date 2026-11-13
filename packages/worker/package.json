@@ -6,9 +6,10 @@
     "type": "module",
     "scripts": {
         "db:codegen": "node ../../scripts/generate-sql-modules.ts",
-        "pretest": "pnpm db:codegen && pnpm --filter @morty-build/cli build && pnpm --filter @morty-build/cli pack:test",
-        "pretypecheck": "pnpm db:codegen",
-        "pretypecheck:tests": "pnpm db:codegen",
+        "codegen": "pnpm db:codegen && pnpm --dir ../.. agent:codegen",
+        "pretest": "pnpm codegen && pnpm --filter @morty-build/cli build && pnpm --filter @morty-build/cli pack:test",
+        "pretypecheck": "pnpm codegen",
+        "pretypecheck:tests": "pnpm codegen",
         "typecheck": "tsc --project tsconfig.json",
         "typecheck:tests": "tsc --project tests/tsconfig.json && tsc --project tests/relay/tsconfig.json",
         "test:relay": "vitest run --config vitest.relay.config.ts --max-workers=1 --no-isolate",

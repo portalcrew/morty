@@ -108,6 +108,47 @@ async function endpoints() {
     };
 }
 
+it("Given a full replay window, when authenticated traffic and tampered traffic arrive, then only authenticated capacity exhaustion reports store busy", {
+    timeout: 120_000,
+}, async () => {
+    const hop = await opaqueHop();
+    const { client, computer } = await endpoints();
+    const signal = new AbortController().signal;
+    const body = new Uint8Array([1]);
+    const associatedData = new TextEncoder().encode("capacity-check");
+    let first: string | null = null;
+    try {
+        for (let index = 0; index < 65_536; index += 1) {
+            const encoded = await client.encrypt(body, associatedData, signal);
+            if (first === null) {
+                first = encoded;
+            }
+            await computer.decrypt(encoded, associatedData, signal);
+        }
+        if (first === null) {
+            throw new Error("Expected an authenticated packet");
+        }
+        await expect(computer.decrypt(await hop.transfer(first), associatedData, signal)).rejects.toMatchObject({
+            code: "e2e_invalid_frame",
+        });
+        const fresh = await client.encrypt(body, associatedData, signal);
+        const bytes = base64urlnopad.decode(fresh);
+        bytes[bytes.length - 1] = (bytes[bytes.length - 1] ?? 0) ^ 1;
+        await expect(
+            computer.decrypt(await hop.transfer(base64urlnopad.encode(bytes)), associatedData, signal),
+        ).rejects.toMatchObject({ code: "e2e_authentication_failed" });
+        await expect(computer.decrypt(await hop.transfer(fresh), associatedData, signal)).rejects.toMatchObject({
+            code: "e2e_store_busy",
+        });
+        vi.setSystemTime(new Date("2026-11-12T00:05:00Z"));
+        const afterExpiry = await client.encrypt(body, associatedData, signal);
+        expect(await computer.decrypt(await hop.transfer(afterExpiry), associatedData, signal)).toEqual(body);
+    } finally {
+        client.close();
+        computer.close();
+    }
+});
+
 it("Given a file read and a history request, when a client addresses them, then the existing HTTP file query is preserved and the history cursor stays private", () => {
     const target = { harness: "codex", sessionId: "session-1" };
     const file = sessionEndpoints.readFile({

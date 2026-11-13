@@ -132,7 +132,9 @@ test("Given a stored identity, When the user shares access with an AI agent, The
 
     const guide = await app.transport.request(new Request(new URL("/doc/agent-api.md", app.origin)));
     expect(guide.status).toBe(200);
-    expect(await guide.text()).toContain(`${app.origin}/doc/agent-api/openapi.json`);
+    const guideText = await guide.text();
+    expect(guideText).toContain(`${app.origin}/doc/agent-api/openapi.json`);
+    expect(guideText).toContain(`Morty origin: ${app.origin}`);
     const redeemed = await app.transport.request(
         new Request(new URL("/morty/api/v1/identity/transfers/redeem", app.origin), {
             method: "POST",

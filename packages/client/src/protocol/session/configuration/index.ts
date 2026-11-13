@@ -213,6 +213,14 @@ const sessionConfigReadResultPublicRoutingSchema = z.object({
 const sessionConfigReadResultRoutingSchema = sessionConfigReadResultPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
+export function configurationWireJsonSchemas() {
+    return {
+        configurationRequest: z.toJSONSchema(sessionConfigReadCommandRoutingSchema),
+        configureRequest: z.toJSONSchema(sessionConfigureCommandRoutingSchema),
+        configurationReply: z.toJSONSchema(sessionConfigReadResultRoutingSchema),
+        configuredReply: z.toJSONSchema(sessionConfigUpdatedEventRoutingSchema),
+    };
+}
 export type SessionConfigReadResultRouting = z.infer<typeof sessionConfigReadResultRoutingSchema>;
 const decodeSessionConfigReadResultRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionConfigReadResultRoutingSchema);

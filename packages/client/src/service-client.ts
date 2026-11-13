@@ -46,7 +46,11 @@ import {
     sessionConfigureCommandCodec,
 } from "./protocol/session/configuration/index.ts";
 import { sessionRenameCommandCodec, sessionRenamedEventCodec } from "./protocol/session/configuration/title.ts";
-import { sessionEventEnvelopeCodec, sessionEventsSubscribeCommandCodec } from "./protocol/session/events/index.ts";
+import {
+    decodeSessionEventEnvelope,
+    sessionEventEnvelopeCodec,
+    sessionEventsSubscribeCommandCodec,
+} from "./protocol/session/events/index.ts";
 import {
     contentAvailableEventCodec,
     contentChunkCodec,
@@ -69,6 +73,7 @@ import {
     sessionPermissionRespondCommandCodec,
 } from "./protocol/session/interactions/index.ts";
 import {
+    decodeSessionCloseNoticeEvent,
     sessionCloseNoticeEventCodec,
     sessionOperationFailedEventCodec,
     sessionPromptAcceptedEventCodec,
@@ -93,6 +98,7 @@ import type {
     MortyTurnCancellation,
     SubmitMortyTurnRequest,
 } from "./resources.ts";
+import { executeLiveDeliveryOnce } from "./transport/live-delivery.ts";
 import type { MortyTransportSessionEvent, WsTransport } from "./transport/ws-transport.ts";
 
 function sanitizedConnectionCauseMessage(value: string): string {
@@ -1319,13 +1325,38 @@ export class MortyLiveEventSubscription {
                     if (result.done) {
                         throw new MortyConnectionError("The live session event stream disconnected");
                     }
-                    const kind = decodeMessageKind(result.value.data);
+                    const plaintext = await executeLiveDeliveryOnce(
+                        result.value,
+                        async (signal) => {
+                            const kind = decodeMessageKind(result.value.data);
+                            if (kind === "session.close.notice") {
+                                return JSON.stringify(
+                                    await sessionCloseNoticeEventCodec.decode(
+                                        result.value.data,
+                                        this.#executor.payloadEncryption,
+                                        signal,
+                                    ),
+                                );
+                            }
+                            if (kind === "session.event.v2") {
+                                return JSON.stringify(
+                                    await sessionEventEnvelopeCodec.decode(
+                                        result.value.data,
+                                        this.#executor.payloadEncryption,
+                                        signal,
+                                    ),
+                                );
+                            }
+                            throw new MortyProtocolError(
+                                "The live Session event stream contains an unexpected message",
+                            );
+                        },
+                        this.#controller.signal,
+                    );
+                    this.#controller.signal.throwIfAborted();
+                    const kind = decodeMessageKind(plaintext);
                     if (kind === "session.close.notice") {
-                        const notice = await sessionCloseNoticeEventCodec.decode(
-                            result.value.data,
-                            this.#executor.payloadEncryption,
-                            this.#controller.signal,
-                        );
+                        const notice = decodeSessionCloseNoticeEvent(plaintext);
                         if (!sameNativeSession(notice.target, this.#target)) {
                             throw new MortyProtocolError("The live Session close notice is invalid");
                         }
@@ -1334,11 +1365,7 @@ export class MortyLiveEventSubscription {
                     if (kind !== "session.event.v2") {
                         throw new MortyProtocolError("The live Session event stream contains an unexpected message");
                     }
-                    const message = await sessionEventEnvelopeCodec.decode(
-                        result.value.data,
-                        this.#executor.payloadEncryption,
-                        this.#controller.signal,
-                    );
+                    const message = decodeSessionEventEnvelope(plaintext);
                     const events = decodeKnownSessionLiveEventBatch(message.events);
                     if (events.some((event) => !sameNativeSession(event.target, this.#target))) {
                         throw new MortyProtocolError("The live Session event stream contains another Session");

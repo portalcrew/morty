@@ -17,10 +17,10 @@ import { validateLocalPath } from "../../util/filesystem/private-path.ts";
 import { isNodeError } from "../../util/node-error.ts";
 
 const coordinate = z.string().regex(/^[A-Za-z0-9_-]{43}$/u);
-// One maximum-size upload already uses 171 encrypted chunks. Keep room for concurrent operations
-// while retaining every live claim; the separate file limit below bounds memory and disk use.
-const MAX_REPLAY_CLAIMS = 2_048;
-const MAX_ENCRYPTION_STATE_BYTES = 256 * 1024;
+// Match the client replay window's 65,536-packet admission bound. This permits hundreds of
+// maximum-size uploads per window while retaining every live claim; state remains disk-bounded.
+const MAX_REPLAY_CLAIMS = 65_536;
+const MAX_ENCRYPTION_STATE_BYTES = 8 * 1024 * 1024;
 const privateKeySchema = z
     .object({ kty: z.literal("EC"), crv: z.literal("P-256"), x: coordinate, y: coordinate, d: coordinate })
     .readonly();
@@ -137,8 +137,11 @@ export class ComputerEncryptionStore {
                 throw new E2EError("e2e_invalid_frame");
             }
             const claims = state.replayClaims.filter((prior) => prior.expiresAt > now);
-            if (claims.some((prior) => prior.fingerprint === claim.fingerprint) || claims.length >= MAX_REPLAY_CLAIMS) {
+            if (claims.some((prior) => prior.fingerprint === claim.fingerprint)) {
                 throw new E2EError("e2e_invalid_frame");
+            }
+            if (claims.length >= MAX_REPLAY_CLAIMS) {
+                throw new E2EError("e2e_store_busy");
             }
             await this.write(
                 {

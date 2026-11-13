@@ -245,6 +245,14 @@ const sessionInteractionAnsweredEventPublicRoutingSchema = z.object({
 const sessionInteractionAnsweredEventRoutingSchema = sessionInteractionAnsweredEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
+export function interactionWireJsonSchemas() {
+    return {
+        interactionRequest: z.toJSONSchema(
+            z.union([sessionElicitationRespondCommandRoutingSchema, sessionPermissionRespondCommandRoutingSchema]),
+        ),
+        interactionReply: z.toJSONSchema(sessionInteractionAnsweredEventRoutingSchema),
+    };
+}
 export type SessionInteractionAnsweredEventRouting = z.infer<typeof sessionInteractionAnsweredEventRoutingSchema>;
 const decodeSessionInteractionAnsweredEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionInteractionAnsweredEventRoutingSchema);

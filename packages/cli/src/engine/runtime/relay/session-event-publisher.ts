@@ -170,6 +170,28 @@ export class RuntimeSessionEventPublisher implements SessionEventSink {
             });
             return;
         }
+        // Disconnected output remains available for bounded replay. Once a viewer
+        // needs space, however, unviewed live output can be recovered from history
+        // and must not consume the entire shared budget.
+        const connection = this.#connection;
+        if (
+            connection.kind === "connected" &&
+            connection.socket.readyState === WebSocket.OPEN &&
+            connection.isSubscribed(event.target)
+        ) {
+            for (let index = 0; this.#pendingBytes + bytes + envelopeBytes > MAX_PENDING_BYTES; ) {
+                const candidate = this.#pending[index];
+                if (candidate === undefined) {
+                    break;
+                }
+                if (candidate !== this.#sendingBatch && !connection.isSubscribed(candidate.target)) {
+                    this.#pending.splice(index, 1);
+                    this.#pendingBytes -= candidate.bytes;
+                } else {
+                    index += 1;
+                }
+            }
+        }
         let batch = this.#pending.at(-1);
         const batchFull =
             batch !== undefined &&
@@ -211,7 +233,6 @@ export class RuntimeSessionEventPublisher implements SessionEventSink {
                 publishedAt: performance.now(),
             });
         }
-        const connection = this.#connection;
         if (connection.kind !== "connected" || connection.socket.readyState !== WebSocket.OPEN) {
             return;
         }
@@ -308,7 +329,7 @@ export class RuntimeSessionEventPublisher implements SessionEventSink {
                         break;
                     }
                     socket.send(encoded);
-                    this.#pending.splice(index, 1);
+                    this.#pending.splice(this.#pending.indexOf(batch), 1);
                     this.#pendingBytes -= batch.bytes;
                     this.#sendingBatch = null;
                     for (const answer of batch.firstAnswers) {

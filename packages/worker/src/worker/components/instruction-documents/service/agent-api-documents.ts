@@ -2,7 +2,7 @@ import {
     IDENTIFIER_PATTERN,
     isDirectoryPath,
     isIdentifier,
-    sessionResultJsonSchemas,
+    sessionWireJsonSchemas,
 } from "@morty-build/client/protocol";
 import { toJsonSchema } from "@valibot/to-json-schema";
 import type * as v from "valibot";
@@ -11,6 +11,7 @@ import {
     type AgentApiResponse,
     agentApiOperations,
 } from "../../../../contracts/agent-api/operations.ts";
+import { chatAccessResponse, sessionAccessResponse } from "../../../../contracts/agent-api/responses.ts";
 import { transportFrames } from "../../../../contracts/agent-api/transport-frames.ts";
 
 // The machine-readable agent API descriptions are generated from the schemas the Worker validates requests with, the
@@ -76,14 +77,42 @@ function protocolSchema(result: string, schema: object, components: Record<strin
 
 function responseSchema(
     response: AgentApiResponse,
-    protocol: ReturnType<typeof sessionResultJsonSchemas>,
+    protocol: ReturnType<typeof sessionWireJsonSchemas>,
     components: Record<string, unknown>,
 ): unknown {
     switch (response.kind) {
         case "schema":
             return jsonSchema(response.schema);
         case "protocol":
-            return protocolSchema(response.result, protocol[response.result], components);
+            return {
+                oneOf: [
+                    protocolSchema(response.result, protocol[response.result], components),
+                    protocolSchema("failureReply", protocol.failureReply, components),
+                ],
+            };
+        case "openSession":
+            return {
+                oneOf: [
+                    {
+                        allOf: [
+                            jsonSchema(chatAccessResponse),
+                            {
+                                type: "object",
+                                required: ["ready"],
+                                properties: { ready: protocolSchema("readyReply", protocol.readyReply, components) },
+                            },
+                        ],
+                    },
+                    protocolSchema("failureReply", protocol.failureReply, components),
+                ],
+            };
+        case "credential":
+            return {
+                oneOf: [
+                    jsonSchema(sessionAccessResponse),
+                    protocolSchema("failureReply", protocol.failureReply, components),
+                ],
+            };
         case "json":
             return response.schema;
     }
@@ -114,7 +143,7 @@ const errorResponse = {
 };
 
 export function agentOpenApiDocument(origin: string) {
-    const protocol = sessionResultJsonSchemas();
+    const protocol = sessionWireJsonSchemas();
     const websocket = `${origin.replace(/^http/u, "ws")}/morty/api/v1/computers/{computerId}/transport`;
     const paths: Record<string, Record<string, unknown>> = {};
     const schemas: Record<string, unknown> = {};
@@ -132,7 +161,18 @@ export function agentOpenApiDocument(origin: string) {
                 : {
                       requestBody: {
                           required: true,
-                          content: { "application/json": { schema: jsonSchema(operation.request) } },
+                          content: {
+                              "application/json": {
+                                  schema:
+                                      operation.request.kind === "schema"
+                                          ? jsonSchema(operation.request.schema)
+                                          : protocolSchema(
+                                                operation.request.schema,
+                                                protocol[operation.request.schema],
+                                                schemas,
+                                            ),
+                              },
+                          },
                       },
                   }),
             responses: {

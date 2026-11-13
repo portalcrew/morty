@@ -1,8 +1,28 @@
 import { z } from "zod";
-import { sessionConfigReadResultSchema, sessionConfigUpdatedEventSchema } from "./session/configuration/index.ts";
+import {
+    configurationWireJsonSchemas,
+    sessionConfigReadResultSchema,
+    sessionConfigUpdatedEventSchema,
+} from "./session/configuration/index.ts";
 import { sessionEventLogPageSchema } from "./session/events/index.ts";
-import { activeTurnResultSchema } from "./session/native/index.ts";
+import { interactionWireJsonSchemas } from "./session/interactions/index.ts";
+import { lifecycleWireJsonSchemas } from "./session/lifecycle/index.ts";
+import { activeTurnResultSchema, nativeWireJsonSchemas } from "./session/native/index.ts";
+import { historyWireJsonSchemas } from "./session/observability/history.ts";
+import { promptWireJsonSchemas } from "./session/prompt/commands.ts";
 import { turnSchema } from "./session/turn/index.ts";
+
+/** Routing envelopes accepted and returned at the Worker boundary. */
+export function sessionWireJsonSchemas() {
+    return {
+        ...lifecycleWireJsonSchemas(),
+        ...promptWireJsonSchemas(),
+        ...configurationWireJsonSchemas(),
+        ...interactionWireJsonSchemas(),
+        ...historyWireJsonSchemas(),
+        ...nativeWireJsonSchemas(),
+    };
+}
 
 /**
  * JSON Schemas of the Session results a client reads, generated from the protocol schemas that decode them, so the

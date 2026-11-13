@@ -195,7 +195,7 @@ export function agentHandoffInstructions(transfer: IdentityTransfer): string {
     const documentUrl = new URL("/doc/agent-api.md", transfer.url).toString();
     return [
         "Use Morty to work on my computer.",
-        `Read ${documentUrl} first. It explains the protocol and links the OpenAPI and AsyncAPI schemas.`,
+        `Read ${documentUrl} first. It provides the runnable encrypted Agent workflow and links the OpenAPI and AsyncAPI contracts.`,
         "Then redeem this one-time continue link as that document describes. Keep it secret: it can view and control every session on my computer.",
         transfer.url,
     ].join("\n");

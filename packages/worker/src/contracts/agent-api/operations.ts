@@ -1,23 +1,18 @@
+import type { sessionWireJsonSchemas } from "@morty-build/client/protocol";
 import type * as v from "valibot";
-import { accessInput, nativeContinuationInput, nativeSessionTargetInput } from "./chat-requests.ts";
 import { transferRedemptionInput } from "./identity-requests.ts";
-import {
-    chatAccessResponse,
-    identityResponse,
-    managedSessionsResponse,
-    nativeContinuationResponse,
-    sessionAccessResponse,
-    workspaceResponse,
-} from "./responses.ts";
-import { interactionResponseRequest, sessionConfigurationRequest, turnSubmissionRequest } from "./session-requests.ts";
+import { identityResponse, workspaceResponse } from "./responses.ts";
 
-/** A Session result the client protocol defines; its JSON Schema comes from that protocol schema. */
-type ProtocolResult = "activeTurn" | "configuration" | "configurationUpdated" | "eventPage" | "turn";
+type WireSchema = keyof ReturnType<typeof sessionWireJsonSchemas>;
+type ProtocolRequest = Extract<WireSchema, `${string}Request`>;
+type ProtocolResult = Extract<WireSchema, `${string}Reply`>;
 
 /** A response body: the schema the route checks it against, a Session result of the protocol, or a fixed shape. */
 export type AgentApiResponse =
     | { readonly kind: "schema"; readonly schema: v.GenericSchema }
     | { readonly kind: "protocol"; readonly result: ProtocolResult }
+    | { readonly kind: "openSession" }
+    | { readonly kind: "credential" }
     | { readonly kind: "json"; readonly schema: object };
 
 interface AgentApiParameter {
@@ -41,7 +36,9 @@ export interface AgentApiOperation {
     readonly tag: "Identity" | "Chat" | "Session";
     readonly summary: string;
     readonly parameters?: readonly AgentApiParameter[];
-    readonly request?: v.GenericSchema;
+    readonly request?:
+        | { readonly kind: "schema"; readonly schema: v.GenericSchema }
+        | { readonly kind: "protocol"; readonly schema: ProtocolRequest };
     readonly response: AgentApiResponse;
 }
 
@@ -64,7 +61,7 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         tag: "Identity",
         summary:
             "Redeem the one-time `code` from a continue link's URL fragment. Answers 410 TRANSFER_UNAVAILABLE when the link was used, expired, or revoked.",
-        request: transferRedemptionInput,
+        request: { kind: "schema", schema: transferRedemptionInput },
         response: { kind: "schema", schema: identityResponse },
     },
     {
@@ -84,8 +81,9 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         transport: "http",
         security: "computerToken",
         tag: "Chat",
-        summary: "The Sessions in Morty Recent.",
-        response: { kind: "schema", schema: managedSessionsResponse },
+        summary: "Request the encrypted list of Sessions in Morty Recent.",
+        request: { kind: "protocol", schema: "listRequest" },
+        response: { kind: "protocol", result: "listedReply" },
     },
     {
         operationId: "openSession",
@@ -95,9 +93,9 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         security: "computerToken",
         tag: "Chat",
         summary:
-            "Open a Session in Morty Recent, or start a new conversation in a working directory, and receive a Session credential. Repeating a `conversationKey` reopens the conversation it started.",
-        request: accessInput,
-        response: { kind: "schema", schema: chatAccessResponse },
+            "Open a Session using an encrypted creation command and receive a Session credential and encrypted readiness reply.",
+        request: { kind: "protocol", schema: "createRequest" },
+        response: { kind: "openSession" },
     },
     {
         operationId: "renewSessionCredential",
@@ -107,8 +105,8 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         security: "computerToken",
         tag: "Chat",
         summary: "Issue a fresh Session credential for a Session in Morty Recent; renew before `expiresAt`.",
-        request: nativeSessionTargetInput,
-        response: { kind: "schema", schema: sessionAccessResponse },
+        request: { kind: "protocol", schema: "prepareRequest" },
+        response: { kind: "credential" },
     },
     {
         operationId: "continueNativeSession",
@@ -117,9 +115,9 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         transport: "http",
         security: "computerToken",
         tag: "Chat",
-        summary: "Import a Session that exists on the Computer but is not in Morty Recent yet.",
-        request: nativeContinuationInput,
-        response: { kind: "schema", schema: nativeContinuationResponse },
+        summary: "Find or import a native Session using an encrypted command.",
+        request: { kind: "protocol", schema: "continuationRequest" },
+        response: { kind: "protocol", result: "continuationReply" },
     },
     {
         operationId: "readActiveTurn",
@@ -130,7 +128,8 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         tag: "Session",
         summary: "The running turn, queued prompts, and the outcome of the last turn.",
         parameters: [identifierParameter("commandId", "query", "Also report the delivery of this command.")],
-        response: { kind: "protocol", result: "activeTurn" },
+        request: { kind: "protocol", schema: "activeTurnRequest" },
+        response: { kind: "protocol", result: "activeTurnReply" },
     },
     {
         operationId: "submitTurn",
@@ -139,10 +138,9 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         transport: "websocket",
         security: "sessionCredential",
         tag: "Session",
-        summary:
-            "Submit a prompt. The answer means accepted, not finished. Resend the same body with the same `idempotencyKey` to retry the same turn.",
-        request: turnSubmissionRequest,
-        response: { kind: "protocol", result: "turn" },
+        summary: "Submit an encrypted prompt. The encrypted reply means accepted, not finished.",
+        request: { kind: "protocol", schema: "promptRequest" },
+        response: { kind: "protocol", result: "promptReply" },
     },
     {
         operationId: "cancelTurn",
@@ -153,14 +151,8 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         tag: "Session",
         summary: "Stop a running turn.",
         parameters: [identifierParameter("turnId", "path")],
-        response: {
-            kind: "json",
-            schema: {
-                type: "object",
-                required: ["turnId"],
-                properties: { turnId: { $ref: "#/components/schemas/Identifier" }, stopReason: { type: "string" } },
-            },
-        },
+        request: { kind: "protocol", schema: "cancelRequest" },
+        response: { kind: "protocol", result: "cancelReply" },
     },
     {
         operationId: "listSessionEvents",
@@ -169,12 +161,9 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         transport: "websocket",
         security: "sessionCredential",
         tag: "Session",
-        summary: "The latest page of Session events. Pass a page's `nextCursor` as `cursor` for the preceding page.",
-        parameters: [
-            { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 10_000, default: 50 } },
-            { name: "cursor", in: "query", schema: { type: "string", minLength: 1, maxLength: 512 } },
-        ],
-        response: { kind: "protocol", result: "eventPage" },
+        summary: "Request an encrypted page of Session history.",
+        request: { kind: "protocol", schema: "historyRequest" },
+        response: { kind: "protocol", result: "historyReply" },
     },
     {
         operationId: "readSessionConfiguration",
@@ -184,7 +173,8 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         security: "sessionCredential",
         tag: "Session",
         summary: "The Session's options, such as its model.",
-        response: { kind: "protocol", result: "configuration" },
+        request: { kind: "protocol", schema: "configurationRequest" },
+        response: { kind: "protocol", result: "configurationReply" },
     },
     {
         operationId: "updateSessionConfiguration",
@@ -194,8 +184,8 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         security: "sessionCredential",
         tag: "Session",
         summary: "Change one Session option, based on the `configurationRevision` last read.",
-        request: sessionConfigurationRequest,
-        response: { kind: "protocol", result: "configurationUpdated" },
+        request: { kind: "protocol", schema: "configureRequest" },
+        response: { kind: "protocol", result: "configuredReply" },
     },
     {
         operationId: "respondToInteraction",
@@ -206,10 +196,7 @@ export const agentApiOperations: readonly AgentApiOperation[] = [
         tag: "Session",
         summary: "Answer a permission request or question the Agent is waiting on.",
         parameters: [identifierParameter("interactionId", "path")],
-        request: interactionResponseRequest,
-        response: {
-            kind: "json",
-            schema: { type: "object", required: ["accepted"], properties: { accepted: { const: true } } },
-        },
+        request: { kind: "protocol", schema: "interactionRequest" },
+        response: { kind: "protocol", result: "interactionReply" },
     },
 ];

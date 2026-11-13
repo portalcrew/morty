@@ -456,6 +456,19 @@ const nativeSessionResultRoutingSchema = z.discriminatedUnion("action", [
     nativeBrowseResultRoutingSchema.extend({ action: z.literal("find") }),
     nativeBrowseResultRoutingSchema.extend({ action: z.literal("list") }),
 ]);
+export function nativeWireJsonSchemas() {
+    return {
+        activeTurnRequest: z.toJSONSchema(nativeActiveTurnRoutingSchema),
+        continuationRequest: z.toJSONSchema(nativeTargetedRoutingSchema.extend({ action: z.enum(["find", "import"]) })),
+        activeTurnReply: z.toJSONSchema(nativeTargetedResultRoutingSchema.extend({ action: z.literal("active-turn") })),
+        continuationReply: z.toJSONSchema(
+            z.discriminatedUnion("action", [
+                nativeBrowseResultRoutingSchema.extend({ action: z.literal("find") }),
+                nativeTargetedResultRoutingSchema.extend({ action: z.literal("import") }),
+            ]),
+        ),
+    };
+}
 export type NativeSessionResultRouting = z.infer<typeof nativeSessionResultRoutingSchema>;
 const decodeNativeSessionResultRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, nativeSessionResultRoutingSchema);

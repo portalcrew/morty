@@ -14,9 +14,7 @@ import {
     type PayloadEncryptor,
 } from "../encryption.ts";
 import { MortyApiError, MortyConnectionError, MortyProtocolError, MortyValidationError } from "../errors.ts";
-import { decodeMessageKind } from "../protocol/shared/message-codec.ts";
-import { sessionEventEnvelopeCodec } from "../protocol/session/events/index.ts";
-import { sessionCloseNoticeEventCodec } from "../protocol/session/lifecycle/index.ts";
+import { type LiveDeliveryExecution, registerLiveDelivery } from "./live-delivery.ts";
 
 const CONNECTION_TIMEOUT_MILLISECONDS = 15_000;
 const HEARTBEAT_INTERVAL_MILLISECONDS = 20_000;
@@ -43,7 +41,6 @@ type PayloadConnectionState =
     | { readonly kind: "idle" }
     | {
           readonly kind: "opening";
-          readonly scope: string;
           readonly operation: Promise<PayloadEncryptionConnection>;
           readonly controller: AbortController;
       }
@@ -66,6 +63,7 @@ type LiveEventSubscription =
     | {
           readonly cleanup: () => void;
           readonly kind: "opening";
+          readonly scope: string;
           readonly reject: (cause: unknown) => void;
           readonly resolve: (events: ReadableStream<MortyTransportSessionEvent>) => void;
       }
@@ -74,17 +72,11 @@ type LiveEventSubscription =
           readonly controller: ReadableStreamDefaultController<MortyTransportSessionEvent>;
           readonly kind: "open";
           readonly scope: string;
-       };
+      };
 
-type LiveMessage =
-    | Awaited<ReturnType<typeof sessionEventEnvelopeCodec.decode>>
-    | Awaited<ReturnType<typeof sessionCloseNoticeEventCodec.decode>>;
-interface LiveDecryption {
-    readonly read: () => Promise<LiveMessage>;
-}
 interface PendingLiveFanout {
     readonly remaining: Set<string>;
-    readonly decryption: LiveDecryption;
+    readonly execution: LiveDeliveryExecution;
     readonly bytes: number;
 }
 
@@ -192,7 +184,6 @@ export class WsTransport {
     readonly #connector: MortyWebSocketConnector;
     readonly #pending = new Map<string, PendingWsRequest>();
     readonly #subscriptions = new Map<string, LiveEventSubscription>();
-    readonly #liveDecryptions = new WeakMap<MortyTransportSessionEvent, LiveDecryption>();
     readonly #pendingLiveFanouts = new Map<string, Map<string, PendingLiveFanout>>();
     #pendingLiveFanoutCount = 0;
     #pendingLiveFanoutBytes = 0;
@@ -639,6 +630,11 @@ export class WsTransport {
     };
 
     readonly #failSubscriptions = (cause: unknown): void => {
+        this.#liveDecryptionController.abort(cause);
+        this.#liveDecryptionController = new AbortController();
+        this.#pendingLiveFanouts.clear();
+        this.#pendingLiveFanoutCount = 0;
+        this.#pendingLiveFanoutBytes = 0;
         const subscriptions = Array.from(this.#subscriptions.values());
         this.#subscriptions.clear();
         for (const subscription of subscriptions) {
@@ -649,6 +645,81 @@ export class WsTransport {
                 subscription.controller.error(cause);
             }
         }
+    };
+
+    readonly #removeLiveFanoutSubscriber = (id: string, scope: string): void => {
+        const pending = this.#pendingLiveFanouts.get(scope);
+        if (pending === undefined) {
+            return;
+        }
+        for (const [data, delivery] of pending) {
+            delivery.remaining.delete(id);
+            if (delivery.remaining.size === 0) {
+                pending.delete(data);
+                this.#pendingLiveFanoutCount -= 1;
+                this.#pendingLiveFanoutBytes -= delivery.bytes;
+            }
+        }
+        if (pending.size === 0) {
+            this.#pendingLiveFanouts.delete(scope);
+        }
+    };
+
+    readonly #liveDelivery = (id: string, scope: string, data: string): LiveDeliveryExecution => {
+        const pending = this.#pendingLiveFanouts.get(scope);
+        const existing = pending?.get(data);
+        if (existing?.remaining.delete(id)) {
+            if (existing.remaining.size === 0) {
+                pending?.delete(data);
+                this.#pendingLiveFanoutCount -= 1;
+                this.#pendingLiveFanoutBytes -= existing.bytes;
+                if (pending?.size === 0) {
+                    this.#pendingLiveFanouts.delete(scope);
+                }
+            }
+            return existing.execution;
+        }
+
+        const connectionSignal = this.#liveDecryptionController.signal;
+        let running: Promise<string> | null = null;
+        const execution: LiveDeliveryExecution = {
+            run: (operation) => {
+                running ??= Promise.resolve().then(() =>
+                    operation(AbortSignal.any([connectionSignal, AbortSignal.timeout(10_000)])),
+                );
+                return running;
+            },
+        };
+        // Every subscription opens independently at the Worker. Only copies expected by other already-open
+        // subscriptions for the same URL may share this one delivery's execution; nothing is reused outside
+        // that cohort. A repeat on the same subscription always reaches replay validation.
+        if (existing !== undefined) {
+            return execution;
+        }
+        const remaining = new Set<string>();
+        for (const [otherId, subscription] of this.#subscriptions) {
+            if (otherId !== id && subscription.kind === "open" && subscription.scope === scope) {
+                remaining.add(otherId);
+            }
+        }
+        if (remaining.size === 0) {
+            return execution;
+        }
+        const bytes = data.length * 2;
+        if (
+            this.#pendingLiveFanoutCount >= MAX_PENDING_LIVE_FANOUTS ||
+            this.#pendingLiveFanoutBytes + bytes > MAX_PENDING_LIVE_FANOUT_BYTES
+        ) {
+            throw new MortyProtocolError("The live Session event fanout exceeded its buffer limit");
+        }
+        const entries = pending ?? new Map<string, PendingLiveFanout>();
+        entries.set(data, { remaining, execution, bytes });
+        if (pending === undefined) {
+            this.#pendingLiveFanouts.set(scope, entries);
+        }
+        this.#pendingLiveFanoutCount += 1;
+        this.#pendingLiveFanoutBytes += bytes;
+        return execution;
     };
 
     readonly #receiveSubscription = (kind: string, message: Readonly<Record<string, unknown>>): void => {
@@ -669,13 +740,19 @@ export class WsTransport {
                 cancel: () => {
                     subscription.cleanup();
                     this.#subscriptions.delete(id);
+                    this.#removeLiveFanoutSubscriber(id, subscription.scope);
                     this.#sendUnsubscribe(id);
                 },
             });
             if (streamController === null) {
                 throw new MortyProtocolError("The live Session event subscription could not initialize");
             }
-            this.#subscriptions.set(id, { cleanup: subscription.cleanup, controller: streamController, kind: "open" });
+            this.#subscriptions.set(id, {
+                cleanup: subscription.cleanup,
+                controller: streamController,
+                kind: "open",
+                scope: subscription.scope,
+            });
             subscription.resolve(stream);
             return;
         }
@@ -691,6 +768,9 @@ export class WsTransport {
             );
             this.#subscriptions.delete(id);
             subscription.cleanup();
+            if (subscription.kind === "open") {
+                this.#removeLiveFanoutSubscriber(id, subscription.scope);
+            }
             if (subscription.kind === "opening") {
                 subscription.reject(cause);
             } else {
@@ -704,17 +784,20 @@ export class WsTransport {
         if (kind === "session.events.end") {
             this.#subscriptions.delete(id);
             subscription.cleanup();
+            this.#removeLiveFanoutSubscriber(id, subscription.scope);
             subscription.controller.close();
             return;
         }
         if (kind !== "session.events.event") {
             throw new MortyProtocolError("The live Session event subscription returned an unsupported message");
         }
-        subscription.controller.enqueue({
+        const delivery: MortyTransportSessionEvent = {
             data: wsString(message, "data", 8 * 1024 * 1024),
             eventId: wsString(message, "eventId", 512),
             seqId: wsPositiveInteger(message, "seqId"),
-        });
+        };
+        registerLiveDelivery(delivery, this.#liveDelivery(id, subscription.scope, delivery.data));
+        subscription.controller.enqueue(delivery);
     };
 
     readonly #sendUnsubscribe = (id: string): void => {

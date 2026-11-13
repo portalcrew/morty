@@ -47,6 +47,7 @@ import { systemTimer, type Timer } from "../../../src/engine/util/timer.ts";
 import { acpAdapters } from "../acp-adapters.ts";
 import { memoryComputerCredentials } from "../computer-credentials.ts";
 import { createEncryptedDaemonFrames } from "../encrypted-daemon-frames.ts";
+import { encryptedContentFrames } from "./encrypted-content-frames.ts";
 
 export interface DaemonConnectionPeer {
     /** Runs a `morty` command against this daemon's installation, as the user's terminal would. */
@@ -198,6 +199,7 @@ async function withDaemonConnection(
     const stateDirectory =
         launch === "managed" ? (await openMortyInstallation(signal, cliEnvironment)).stateDirectory : directory;
     const encryption = await createEncryptedDaemonFrames(stateDirectory, "real-agent", signal);
+    const contentFrames = encryptedContentFrames(encryption.encryption, signal);
     const subscriptions = new Map<string, NativeSessionTarget>();
     let sendTail: Promise<void> = Promise.resolve();
     const send = (message: string | Uint8Array): void => {
@@ -207,7 +209,9 @@ async function withDaemonConnection(
         }
         sendTail = sendTail.then(async () => {
             signal.throwIfAborted();
-            connection.send(await encryption.encode(message));
+            connection.send(
+                typeof message === "string" ? await encryption.encode(message) : await contentFrames.encode(message),
+            );
         });
         void sendTail.catch((error: unknown) => waiter?.reject(error));
     };
@@ -330,7 +334,8 @@ async function withDaemonConnection(
                 waiter = Promise.withResolvers<string | Buffer>();
                 message = await waiter.promise;
             }
-            const decoded = await encryption.decode(message);
+            const decoded =
+                typeof message === "string" ? await encryption.decode(message) : await contentFrames.decode(message);
             return typeof decoded === "string" ? decoded : Buffer.from(decoded);
         };
         const nextMessage = async (): Promise<string> => {

@@ -24,6 +24,7 @@ __pycache__/
 
 # Generated verbatim from immutable SQL migrations.
 packages/**/generated/*-migrations.ts
+packages/worker/src/worker/components/instruction-documents/generated/agent-client.ts
 
 .ci-artifacts/
 

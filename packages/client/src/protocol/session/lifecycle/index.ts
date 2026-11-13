@@ -544,6 +544,17 @@ const sessionReadyEventPublicRoutingSchema = z.object({
 const sessionReadyEventRoutingSchema = sessionReadyEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
+export function lifecycleWireJsonSchemas() {
+    return {
+        listRequest: z.toJSONSchema(sessionListCommandRoutingSchema),
+        createRequest: z.toJSONSchema(sessionCreateCommandRoutingSchema),
+        prepareRequest: z.toJSONSchema(sessionPrepareCommandRoutingSchema),
+        listedReply: z.toJSONSchema(sessionsListedEventRoutingSchema),
+        readyReply: z.toJSONSchema(sessionReadyEventRoutingSchema),
+        promptReply: z.toJSONSchema(sessionPromptAcceptedEventRoutingSchema),
+        failureReply: z.toJSONSchema(sessionOperationFailedEventRoutingSchema),
+    };
+}
 export type SessionReadyEventRouting = z.infer<typeof sessionReadyEventRoutingSchema>;
 const decodeSessionReadyEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionReadyEventRoutingSchema);

@@ -1,4 +1,4 @@
-import type { PayloadEncryptionConnection } from "@morty-build/client";
+import { E2EError, type PayloadEncryptionConnection } from "@morty-build/client";
 import {
     COMPUTER_HEARTBEAT_ACK_KIND,
     COMPUTER_HEARTBEAT_MESSAGE,
@@ -253,6 +253,10 @@ export async function runRelayConnection({
                         )
                         .catch((error: unknown) => {
                             if (!connectionController.signal.aborted) {
+                                if (error instanceof E2EError && error.code === "e2e_store_busy") {
+                                    failAndClose(error, 1011, "Encryption store busy", "encryption_capacity");
+                                    return;
+                                }
                                 failAndClose(
                                     new Error("Relay sent an invalid content chunk", { cause: error }),
                                     4008,
@@ -298,8 +302,28 @@ export async function runRelayConnection({
                                     void operation.finally(() => pendingCommands.delete(operation));
                                 }
                             })
-                            .catch(() => {
+                            .catch(async (error: unknown) => {
                                 if (!connectionController.signal.aborted) {
+                                    if (error instanceof E2EError && error.code === "e2e_store_busy") {
+                                        try {
+                                            if (await commands.reportCapacity(encoded)) {
+                                                return;
+                                            }
+                                        } catch (cause) {
+                                            if (connectionController.signal.aborted) {
+                                                return;
+                                            }
+                                            failAndClose(
+                                                new Error("Unable to report encryption capacity", { cause }),
+                                                1011,
+                                                "Encryption store busy",
+                                                "encryption_capacity",
+                                            );
+                                            return;
+                                        }
+                                        failAndClose(error, 1011, "Encryption store busy", "encryption_capacity");
+                                        return;
+                                    }
                                     diagnostics.daemonDiagnostic("protocol_message_discarded", "unknown", {
                                         reason: "encrypted_message_invalid",
                                     });

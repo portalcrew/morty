@@ -1,7 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
-import * as v from "valibot";
 import { expect, test } from "vitest";
 import worker from "../src/worker/application.ts";
 
@@ -142,17 +141,28 @@ test("Given the setup document, When an agent follows it, Then it neither passes
     expect(document.replaceAll("\n", " ")).not.toMatch(/ask the user for (it|the session)/u);
 });
 
-test("Given an AI agent receives a continue link, When it fetches the agent guide and API schemas, Then each names the serving origin and the documented API", async () => {
+test("Given the encrypted Agent workflow retains its public contracts, when an Agent requests either schema, then its machine-readable document is served", async () => {
+    for (const path of ["/doc/agent-api/openapi.json", "/doc/agent-api/asyncapi.json"]) {
+        const response = await worker.fetch(new Request(`https://preview.example${path}`), {
+            APP_ORIGIN: "https://chat.example",
+        });
+        expect(response.status).toBe(200);
+        expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    }
+});
+
+test("Given an AI agent receives a continue link, When it fetches the agent guide, Then it names the serving origin without exposing query credentials", async () => {
     const bindings = { APP_ORIGIN: "https://chat.example" };
     const guide = await worker.fetch(new Request("https://preview.example/doc/agent-api.md?token=ticket"), bindings);
     expect(guide.status).toBe(200);
     expect(guide.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
     const text = await guide.text();
-    expect(text).toMatch(/^# Morty agent API\n/);
+    expect(text).toMatch(/^# Use a shared Morty Computer\n/);
     expect(text).toContain("Morty origin: https://chat.example");
     expect(text).toContain("https://chat.example/doc/agent-api/openapi.json");
     expect(text).toContain("https://chat.example/doc/agent-api/asyncapi.json");
     expect(text).toContain("/morty/api/v1/identity/transfers/redeem");
+    expect(text).toContain("runSharedComputer");
     expect(text).not.toMatch(/\{\{.*\}\}|preview\.example|token=ticket/);
 
     const openApiResponse = await worker.fetch(

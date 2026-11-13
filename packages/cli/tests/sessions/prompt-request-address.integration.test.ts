@@ -105,7 +105,7 @@ test("Given a prompt with a separate reply address, when it is retried or confli
                             signal,
                         );
                         const response = await transport.fetch({
-                            origin: new URL("/morty/api/v1/", bindings.origin),
+                            origin: new URL("/morty/api/", bindings.origin),
                             endpoint: sessionEndpoints.submitTurn({ computerId: owner.computerId, target }),
                             headers: {
                                 authorization: `Bearer ${access.credential}`,

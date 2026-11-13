@@ -163,6 +163,7 @@ async function createPayloadEncryption(
     signal.throwIfAborted();
     const seen = new Map<string, number>();
     const pending = new Set<string>();
+    let capacityProbe = false;
     let replayClock = 0;
     let nextExpiry = Number.POSITIVE_INFINITY;
     let closed = false;
@@ -257,10 +258,18 @@ async function createPayloadEncryption(
                 }
             }
             const packetId = encodeBytes(header.subarray(9));
-            if (seen.has(packetId) || pending.has(packetId) || seen.size + pending.size >= MAX_SEEN_BOXES) {
+            if (seen.has(packetId) || pending.has(packetId)) {
                 throw new E2EError("e2e_invalid_frame");
             }
-            pending.add(packetId);
+            const atCapacity = seen.size + pending.size >= MAX_SEEN_BOXES;
+            if (atCapacity && capacityProbe) {
+                throw new E2EError("e2e_invalid_frame");
+            }
+            if (atCapacity) {
+                capacityProbe = true;
+            } else {
+                pending.add(packetId);
+            }
             try {
                 const authenticated = aad(header, role.kind === "client" ? "computer" : "client", associatedData);
                 const plaintext = new Uint8Array(
@@ -270,6 +279,13 @@ async function createPayloadEncryption(
                         packet.subarray(BOX_HEADER_BYTES),
                     ),
                 );
+                operationSignal.throwIfAborted();
+                if (closed) {
+                    throw new E2EError("e2e_channel_closed");
+                }
+                if (atCapacity) {
+                    throw new E2EError("e2e_store_busy");
+                }
                 if (role.kind === "computer") {
                     const fingerprint = encodeBytes(new Uint8Array(await crypto.subtle.digest("SHA-256", packet)));
                     await role.claim({ fingerprint, issuedAt, expiresAt }, operationSignal);
@@ -293,7 +309,11 @@ async function createPayloadEncryption(
                 }
                 throw new E2EError("e2e_authentication_failed", { cause });
             } finally {
-                pending.delete(packetId);
+                if (atCapacity) {
+                    capacityProbe = false;
+                } else {
+                    pending.delete(packetId);
+                }
             }
         },
     };

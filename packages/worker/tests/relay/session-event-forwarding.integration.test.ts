@@ -655,7 +655,7 @@ it("Given an authorized native Fork, When the Computer returns a new Session, Th
     );
     const response = ownerRequest(
         new Request(
-            `${ownerOrigin}/morty/api/chat/computers/${computer.computerId}/native-session-forks/${operationId}`,
+            `${ownerOrigin}/morty/api/v1/computers/${computer.computerId}/native-sessions/forks/${operationId}`,
             {
                 method: "POST",
                 headers: { authorization: `Bearer ${computer.ownerToken}`, "content-type": "application/json" },

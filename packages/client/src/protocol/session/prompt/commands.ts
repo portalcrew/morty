@@ -380,6 +380,13 @@ const sessionTurnWithdrawnEventPublicRoutingSchema = z.object({
 const sessionTurnWithdrawnEventRoutingSchema = sessionTurnWithdrawnEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
+export function promptWireJsonSchemas() {
+    return {
+        promptRequest: z.toJSONSchema(sessionPromptCommandRoutingSchema),
+        cancelRequest: z.toJSONSchema(sessionCancelCommandRoutingSchema),
+        cancelReply: z.toJSONSchema(sessionTurnStoppedEventRoutingSchema),
+    };
+}
 export type SessionTurnWithdrawnEventRouting = z.infer<typeof sessionTurnWithdrawnEventRoutingSchema>;
 const decodeSessionTurnWithdrawnEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionTurnWithdrawnEventRoutingSchema);

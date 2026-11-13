@@ -1,8 +1,10 @@
-import { contentChunkCodec } from "@morty-build/client/protocol";
+import { E2EError } from "@morty-build/client";
+import { contentChunkCodec, decodeRelayToDaemonMessage } from "@morty-build/client/protocol";
 import { createAgentSettingsDiscoveryHandler } from "../agent-settings-discovery.ts";
 import type { CommandContext } from "../context.ts";
 import type { DaemonCommand } from "../definition.ts";
 import { createNativeSessionRequestHandler } from "../native-session-requests.ts";
+import { reportAuthenticatedCapacity } from "./capacity.ts";
 import { handleComputerDiagnostics, handleComputerPing } from "./computer.ts";
 import { createContentWriteCommands } from "./content-write/index.ts";
 import { handleFileRead } from "./file-read/index.ts";
@@ -30,12 +32,23 @@ import {
 export function createCommandRegistry(context: CommandContext): {
     readonly dispatch: (message: DaemonCommand) => void | Promise<void>;
     readonly dispatchChunk: (message: unknown, signal: AbortSignal) => Promise<void>;
+    readonly reportCapacity: (encoded: string) => Promise<boolean>;
     readonly settle: () => Promise<void>;
 } {
     const contentWrites = createContentWriteCommands(context);
     const nativeRequests = createNativeSessionRequestHandler(context);
     const agentSettings = createAgentSettingsDiscoveryHandler(context);
     return {
+        reportCapacity: async (encoded) => {
+            const routing = decodeRelayToDaemonMessage(encoded);
+            if (
+                (routing.kind === "content.write" || routing.kind === "content.commit") &&
+                (await contentWrites.rejectCapacity(routing.requestId, routing.target))
+            ) {
+                return true;
+            }
+            return await reportAuthenticatedCapacity(context, encoded);
+        },
         dispatch: (message): void | Promise<void> => {
             switch (message.kind) {
                 case "session.events.subscribe":
@@ -107,8 +120,15 @@ export function createCommandRegistry(context: CommandContext): {
             const frame = await (async () => {
                 try {
                     return await contentChunkCodec.decode(message, context.payloadEncryption, signal);
-                } catch {
+                } catch (error) {
                     signal.throwIfAborted();
+                    if (error instanceof E2EError && error.code === "e2e_store_busy") {
+                        const routing = contentChunkCodec.decodeRouting(message);
+                        if (!(await contentWrites.rejectCapacity(routing.requestId, undefined))) {
+                            throw error;
+                        }
+                        return null;
+                    }
                     context.diagnostics.daemonDiagnostic("content_frame_discarded", "unknown", {
                         reason: "unsupported_frame",
                     });

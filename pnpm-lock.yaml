@@ -222,6 +222,9 @@ importers:
       drizzle-kit:
         specifier: 'catalog:'
         version: 0.31.8(@cloudflare/workers-types@5.20261028.1)(@opentelemetry/api@1.10.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.4.1)(supports-color@10.2.2)
+      esbuild:
+        specifier: 'catalog:'
+        version: 0.28.2
       happy-dom:
         specifier: 'catalog:'
         version: 21.0.4(bufferutil@4.1.0)(utf-8-validate@6.0.6)
