@@ -107,6 +107,6 @@ export function requestedInteraction(
 }
 
 /** What a permission was decided to be, whichever option was chosen. */
-export function permissionAnswer(event: SessionPermissionResolvedEvent): MortyPermissionAnswer {
+function permissionAnswer(event: SessionPermissionResolvedEvent): MortyPermissionAnswer {
     return event.outcome === "selected" ? { outcome: "selected", optionId: event.optionId } : { outcome: "cancelled" };
 }
