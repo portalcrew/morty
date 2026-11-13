@@ -190,6 +190,7 @@ export function createChatWorkspace(options: {
             startHomeLoad();
             startDirectoryLoad();
         },
+        onSelectionChanged: () => startHomeLoad(),
         onComputerReplaced: () => {
             // A Session belongs to the Computer that held it, so the page starts over on the Computer's new conversation.
             const url = new URL(window.location.href);
