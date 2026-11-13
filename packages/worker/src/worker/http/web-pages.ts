@@ -7,8 +7,7 @@ const assetBindingSchema = v.custom<Fetcher>(
     (value) => typeof value === "object" && value !== null && "fetch" in value && typeof value.fetch === "function",
 );
 
-// Keep the document entry points aligned with the application's three routers.
-// Unmatched paths must reach the public application's HTTP 404 handler.
+// Fallback for direct Worker callers; deployed browser navigations use the assets SPA router.
 const paths = ["/setup", "/chat", "/continue"].flatMap((path) => [path, `${path}/`]);
 
 export const webPages = new Hono<{ readonly Bindings: CloudBindings }>().on("GET", paths, async (context) => {

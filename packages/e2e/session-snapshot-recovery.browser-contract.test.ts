@@ -262,7 +262,7 @@ for (const schedule of ["before-snapshot", "after-snapshot", "after-recovery"] a
         const waitForDelta = (text: string): Promise<void> =>
             observed.has(text) ? Promise.resolve() : new Promise((resolve) => waiters.set(text, resolve));
         await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
-        const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+        const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
         await page.goto(connected.url);
         const composer = page.getByRole("textbox", { name: "Message" });
         const responses = page.getByRole("article", { name: "Agent response" });
@@ -332,7 +332,7 @@ test("Given a partial reply, when it finishes while the browser is disconnected,
 }) => {
     const { page } = runtime;
     await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
     const responses = page.getByRole("article", { name: "Agent response" });
@@ -365,7 +365,7 @@ test("Given the user has loaded older messages, when the connection recovers, th
 }) => {
     const { page } = runtime;
     await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();

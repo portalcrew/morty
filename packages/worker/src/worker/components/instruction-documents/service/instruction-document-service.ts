@@ -18,10 +18,10 @@ export type ApiSchemaDocument = keyof typeof schemas;
 
 /** The public paths of every origin-rendered document, which the edge caches per origin. */
 export const instructionDocumentPaths: ReadonlySet<string> = new Set([
-    "/setup.md",
-    "/agent-api.md",
-    "/agent-api/openapi.json",
-    "/agent-api/asyncapi.json",
+    "/doc/setup.md",
+    "/doc/agent-api.md",
+    "/doc/agent-api/openapi.json",
+    "/doc/agent-api/asyncapi.json",
 ]);
 
 export function instructionOrigin(value: unknown): string | null {

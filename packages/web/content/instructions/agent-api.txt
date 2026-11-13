@@ -11,11 +11,11 @@ Follow the steps below; they are complete on their own. Two machine-readable sch
 generated from the code that validates requests, give the exact shape of every request
 and response when you need it:
 
-- {{BASE_URL}}/agent-api/openapi.json (OpenAPI 3.1): every operation, request body,
+- {{BASE_URL}}/doc/agent-api/openapi.json (OpenAPI 3.1): every operation, request body,
   and response. Most are plain HTTPS requests. Session operations, marked
   `x-morty-transport: websocket`, use the same paths and bodies but are not served
   over plain HTTPS; send them through the WebSocket in step 3.
-- {{BASE_URL}}/agent-api/asyncapi.json (AsyncAPI 3.0): the JSON frames on that
+- {{BASE_URL}}/doc/agent-api/asyncapi.json (AsyncAPI 3.0): the JSON frames on that
   WebSocket, which wrap one request or response each.
 
 Do not scrape the browser application.

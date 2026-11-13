@@ -151,7 +151,7 @@ export const createIdentitySharingStore = (
  * document lives on the link's own origin, so the agent reads the description of the server that issued the link.
  */
 export function agentHandoffInstructions(transfer: IdentityTransfer): string {
-    const documentUrl = new URL("/agent-api.md", transfer.url).toString();
+    const documentUrl = new URL("/doc/agent-api.md", transfer.url).toString();
     return [
         "Use Morty to work on my computer.",
         `Read ${documentUrl} first. It explains the protocol and links the OpenAPI and AsyncAPI schemas.`,

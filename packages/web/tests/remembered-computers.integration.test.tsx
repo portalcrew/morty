@@ -260,7 +260,7 @@ test.each(["/setup", "/setup/"])(
         const setup = await app.reload();
         await setup.waitForView(() => getByRole(document.body, "heading", { name: "Connect another computer" }));
         await setup.user.click(getByRole(document.body, "button", { name: "Copy setup prompt" }));
-        expect(await navigator.clipboard.readText()).toContain(`${app.origin}/setup.md`);
+        expect(await navigator.clipboard.readText()).toContain(`${app.origin}/doc/setup.md`);
         const back = getByRole(document.body, "link", { name: "Back to your last computer" });
         window.location.href = new URL(back.getAttribute("href") ?? "", app.origin).href;
         const returned = await setup.reload();

@@ -34,7 +34,7 @@ for (const viewport of [
 
                 await copy.click();
                 const instruction = await page.evaluate(() => navigator.clipboard.readText());
-                expect(instruction).toContain(`${runtime.origin}/setup.md`);
+                expect(instruction).toContain(`${runtime.origin}/doc/setup.md`);
                 await expect(page.getByRole("status", { name: "Setup next step" })).toContainText(
                     "Paste into your agent, then open the link it returns.",
                 );
@@ -78,7 +78,7 @@ for (const viewport of [
 
             // The controlled Agent follows the served instructions through the
             // real setup, Chat, Relay and daemon, returning the user's link.
-            const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+            const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
             await page.goto(connected.url);
             await expect(page).toHaveURL((url) => url.pathname === "/chat" && url.searchParams.has("sessionId"));
             const sessionUrl = page.url();

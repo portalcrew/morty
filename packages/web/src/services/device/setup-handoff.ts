@@ -12,7 +12,7 @@ const touchFirstQuery = "(hover: none) and (pointer: coarse)";
 
 /** The instruction a person pastes into the agent on the computer that should run setup. */
 export function agentSetupPrompt(): string {
-    return `Fetch ${window.location.origin}/setup.md and complete the Morty setup for me. You may install missing prerequisites and pair this computer.`;
+    return `Fetch ${window.location.origin}/doc/setup.md and complete the Morty setup for me. You may install missing prerequisites and pair this computer.`;
 }
 
 export function browserSetupHandoff(): SetupHandoff {

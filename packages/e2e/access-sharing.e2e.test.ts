@@ -168,12 +168,12 @@ test("Given a recent session on mobile, When the user expands the session list, 
 test("Given one browser opened two setup links in two tabs, When the user ends current access in one tab, Then neither tab nor either link opens Morty any more", async ({
     runtime,
 }) => {
-    const first = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const first = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     const firstTab = runtime.page;
     await firstTab.goto(first.url);
     await expect(firstTab.getByRole("textbox", { name: "Message" })).toBeEnabled();
     // Running setup again hands off with a new link for the same Computer.
-    const second = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const second = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     expect(second.identity.computerId).toBe(first.identity.computerId);
     const secondTab = await firstTab.context().newPage();
     await secondTab.goto(second.url);
@@ -198,7 +198,7 @@ test("Given one browser opened two setup links in two tabs, When the user ends c
 test("Given the end-access confirmation is open in one tab, When another tab opens a new link and the user confirms, Then the browser's current access ends in both tabs", async ({
     runtime,
 }) => {
-    const first = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const first = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     const firstTab = runtime.page;
     await firstTab.goto(first.url);
     await expect(firstTab.getByRole("textbox", { name: "Message" })).toBeEnabled();
@@ -206,7 +206,7 @@ test("Given the end-access confirmation is open in one tab, When another tab ope
     const confirmation = firstTab.getByRole("dialog", { name: "End current access?" });
     await expect(confirmation).toBeVisible();
 
-    const second = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const second = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     const secondTab = await firstTab.context().newPage();
     await secondTab.goto(second.url);
     await expect(secondTab.getByRole("textbox", { name: "Message" })).toBeEnabled();
@@ -224,8 +224,8 @@ test("Given the end-access confirmation is open in one tab, When another tab ope
 test("Given a browser without Morty access opens two setup links in two tabs at once, When the user ends current access, Then neither link opens Morty any more", async ({
     runtime,
 }) => {
-    const first = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
-    const second = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const first = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
+    const second = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     const firstTab = runtime.page;
     const secondTab = await firstTab.context().newPage();
 

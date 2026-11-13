@@ -50,7 +50,7 @@ test.describe("Given an interactive card ending the log", () => {
         runtime,
     }, testInfo) => {
         const { page } = runtime;
-        const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+        const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
         await page.goto(connected.url);
         const tip = page.getByRole("region", { name: "Continue your work here" });
         await expect(tip).toBeVisible();

@@ -150,7 +150,7 @@ export function agentOpenApiDocument(origin: string) {
         info: {
             title: "Morty agent API",
             version: "1",
-            description: `How an AI agent operates a Computer shared with it through a continue link. Read ${origin}/agent-api.md first. Operations marked \`x-morty-transport: websocket\` are not served over plain HTTPS: send them as \`http.request\` frames on ${websocket}, described in ${origin}/agent-api/asyncapi.json.`,
+            description: `How an AI agent operates a Computer shared with it through a continue link. Read ${origin}/doc/agent-api.md first. Operations marked \`x-morty-transport: websocket\` are not served over plain HTTPS: send them as \`http.request\` frames on ${websocket}, described in ${origin}/doc/agent-api/asyncapi.json.`,
         },
         servers: [{ url: origin }],
         tags: [
@@ -215,7 +215,7 @@ export function agentAsyncApiDocument(origin: string) {
         info: {
             title: "Morty Computer transport",
             version: "1",
-            description: `JSON text frames that carry the Session operations of ${origin}/agent-api/openapi.json. Each http.request frame wraps one operation: its method, path with query, headers including the Session credential, and JSON body as a string. Read ${origin}/agent-api.md first.`,
+            description: `JSON text frames that carry the Session operations of ${origin}/doc/agent-api/openapi.json. Each http.request frame wraps one operation: its method, path with query, headers including the Session credential, and JSON body as a string. Read ${origin}/doc/agent-api.md first.`,
         },
         servers: {
             morty: {

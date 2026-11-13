@@ -36,7 +36,7 @@ function apiSchema(document: ApiSchemaDocument, requestUrl: string, configuredOr
 }
 
 export const instructionDocumentRoutes = new Hono<{ readonly Bindings: CloudBindings }>()
-    .get("/setup.md", (context) => instruction("setup", context.req.url, context.env.APP_ORIGIN))
-    .get("/agent-api.md", (context) => instruction("agentApi", context.req.url, context.env.APP_ORIGIN))
-    .get("/agent-api/openapi.json", (context) => apiSchema("openapi", context.req.url, context.env.APP_ORIGIN))
-    .get("/agent-api/asyncapi.json", (context) => apiSchema("asyncapi", context.req.url, context.env.APP_ORIGIN));
+    .get("/doc/setup.md", (context) => instruction("setup", context.req.url, context.env.APP_ORIGIN))
+    .get("/doc/agent-api.md", (context) => instruction("agentApi", context.req.url, context.env.APP_ORIGIN))
+    .get("/doc/agent-api/openapi.json", (context) => apiSchema("openapi", context.req.url, context.env.APP_ORIGIN))
+    .get("/doc/agent-api/asyncapi.json", (context) => apiSchema("asyncapi", context.req.url, context.env.APP_ORIGIN));
