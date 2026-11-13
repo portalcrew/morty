@@ -14,6 +14,7 @@ import {
     setupPrimaryButtonSize,
 } from "../setup/setup-card-shell.tsx";
 import { MortyChat } from "./morty-chat.tsx";
+import { NotFoundPage } from "./not-found-page.tsx";
 
 function RootRoute() {
     return <Outlet />;
@@ -74,6 +75,7 @@ export function createSignedInRouter(application: MortyApplication) {
         beforeLoad: async ({ abortController }) =>
             await application.anonymousSession.getState().authorize(abortController.signal),
         component: RootRoute,
+        notFoundComponent: NotFoundPage,
         errorComponent: (props) => <RouteFailure {...props} />,
     });
     function page(path: "/" | "/chat") {

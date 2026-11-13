@@ -83,6 +83,7 @@ export async function createTestApp(
             | { readonly kind: "share"; readonly code?: (application: Application) => string }
             | { readonly kind: "bootstrap"; readonly identity?: boolean }
             | { readonly kind: "reload" }
+            | { readonly kind: "url"; readonly path: string }
             | { readonly kind: "managed-session"; readonly harness: string; readonly sessionId: string }
             | { readonly kind: "morty" };
         readonly prepare?: (application: Application) => void | Promise<void>;
@@ -109,6 +110,8 @@ export async function createTestApp(
             transfer.hash = `code=${page.code(current)}`;
         }
         window.location.href = transfer.href;
+    } else if (page.kind === "url") {
+        window.location.href = new URL(page.path, current.origin).href;
     } else if (page.kind === "bootstrap") {
         const destination = new URL("/", current.origin);
         if (page.identity === true) {
