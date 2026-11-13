@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { computerEncryptionAccessCodec } from "@morty-build/client";
 import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
 import * as v from "valibot";
@@ -167,3 +169,89 @@ test.each([
     cancellation.abort();
     await rejected;
 });
+
+test.each(["short", "long"])(
+    "Given a shared Computer and a %s missing directory, When the remote Agent creates a conversation, Then its bounded error explains how to recover",
+    {
+        timeout: 60_000,
+    },
+    async (length) => {
+        vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-13T00:00:00Z") });
+        onTestFinished(() => {
+            vi.useRealTimers();
+        });
+        const createBindings = await prepareTestMortyRelayBindings();
+        await using bindings = await createBindings();
+        await bindings.configure({ APP_ORIGIN: bindings.origin });
+        const signal = AbortSignal.timeout(45_000);
+        const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
+            }),
+            signal,
+        });
+        const owner = v.parse(v.object({ computerId: v.string(), computerToken: v.string() }), await created.json());
+        await using runtime = await createControlledAgentRuntime({
+            behavior: {
+                harness: "codex",
+                agentName: "Controlled Codex",
+                reply: () => ({ outcome: "complete", output: [{ kind: "text", text: "remote answer" }] }),
+            },
+            credential: owner.computerToken,
+            computerId: owner.computerId,
+            origin: bindings.origin,
+            server: { request: async (input) => await fetch(input) },
+            signal,
+        });
+        const share = await fetch(
+            new URL(`/morty/api/v1/computers/${owner.computerId}/identity/transfers`, bindings.origin),
+            {
+                method: "POST",
+                headers: { authorization: `Bearer ${owner.computerToken}`, "content-type": "application/json" },
+                body: JSON.stringify({ operationId: crypto.randomUUID() }),
+                signal,
+            },
+        );
+        const link = new URL(v.parse(v.object({ url: v.string() }), await share.json()).url);
+        const fragment = new URLSearchParams(link.hash.slice(1));
+        fragment.set(
+            "e2e",
+            Buffer.from(computerEncryptionAccessCodec.encode(await runtime.encryptionAccess(signal))).toString(
+                "base64url",
+            ),
+        );
+        link.hash = fragment.toString();
+        const document = await fetch(new URL("/doc/agent-api.md", bindings.origin), { signal });
+        const bundle = /```js morty-remote-agent\n([\s\S]*?)\n```/u.exec(await document.text())?.[1];
+        if (bundle === undefined) {
+            throw new Error("Missing served helper");
+        }
+        const module: unknown = await import(`data:text/javascript;base64,${Buffer.from(bundle).toString("base64")}`);
+        const helper = v.parse(
+            v.object({ runSharedComputer: v.custom<typeof runSharedComputer>((value) => typeof value === "function") }),
+            module,
+        );
+        const directory = join(
+            tmpdir(),
+            `missing-remote-agent-${crypto.randomUUID()}`,
+            ...(length === "long" ? Array.from({ length: 8 }, () => "project-directory".repeat(4)) : []),
+        );
+        await expect(
+            helper.runSharedComputer({
+                link: link.href,
+                redemptionKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
+                conversationKey: "missing-directory-conversation",
+                turnId: "missing-directory-turn",
+                prompt: "Hello",
+                harness: "codex",
+                directory,
+                signal,
+            }),
+        ).rejects.toMatchObject({
+            code: "local_authorization_failed",
+            message: `${length === "short" ? `The directory ${JSON.stringify(directory)}` : "The selected directory"} does not exist. Choose an existing directory or create it locally before retrying.`,
+        });
+    },
+);

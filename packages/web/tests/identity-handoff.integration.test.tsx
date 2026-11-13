@@ -634,7 +634,9 @@ test("Given a handoff requests a missing directory, When it opens, Then the Comp
         },
     });
     const alert = await app.waitForView(() => getByRole(document.body, "alert"));
-    expect(alert.textContent).toContain("This directory is missing or unavailable");
+    expect(alert.textContent).toContain(
+        "does not exist. Choose an existing directory or create it locally before retrying.",
+    );
     expect(getByRole(document.body, "button", { name: "Try again" })).toBeInstanceOf(HTMLButtonElement);
     expect(window.location.pathname).toBe("/continue");
 });
@@ -651,7 +653,10 @@ for (const segment of ["a".repeat(220), "\u00e9".repeat(110)]) {
             page: { kind: "continue", harness: "codex", sessionId: "native-directory-session", workspace },
         });
         const alert = await app.waitForView(() => getByRole(document.body, "alert"));
-        expect(alert.textContent).toContain("This directory is missing or unavailable");
+        // Filesystems may reject the path length before checking whether its first missing segment exists.
+        expect(alert.textContent).toMatch(
+            /This directory is missing or unavailable|The selected directory does not exist/u,
+        );
     });
 }
 

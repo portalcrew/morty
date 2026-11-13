@@ -67,6 +67,16 @@ export class WorkspaceDirectoryService {
             if (cause instanceof LocalAuthorizationError) {
                 throw cause;
             }
+            if (cause instanceof Error && "code" in cause && cause.code === "ENOENT") {
+                // Return only the caller's selection, never raw filesystem diagnostics or resolved targets.
+                // Failure messages must fit the existing 500-character protocol limit on every platform.
+                const quoted = JSON.stringify(requested);
+                const selection = quoted.length <= 350 ? `The directory ${quoted}` : "The selected directory";
+                throw new LocalAuthorizationError(
+                    `${selection} does not exist. Choose an existing directory or create it locally before retrying.`,
+                    { cause },
+                );
+            }
             throw new LocalAuthorizationError("This directory is missing or unavailable to your user account", {
                 cause,
             });
