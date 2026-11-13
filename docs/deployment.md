@@ -34,10 +34,20 @@ cloud workflow must never automatically deploy a competing build. The Morty Clou
 workflow only recovers an accepted archived release.
 
 The `morty-production` deployment environment supplies `CLOUDFLARE_API_TOKEN` and
-`MORTY_SESSION_SIGNING_SECRET` individually. The signing secret authorizes short-lived
-Session credentials and never enters browser code or stored account records.
-Internal calls need no separate service credential. Secret values are assembled
-in a private short-lived file and removed after deployment.
+`SENTRY_AUTH_TOKEN` individually. Ordinary deployment preserves the existing
+`MORTY_SESSION_SIGNING_SECRET` binding in Cloudflare, including when the GitHub
+repository changes. Preflight must verify that the binding exists before any
+production write. A missing binding stops deployment; never generate a replacement
+implicitly. The signing secret authorizes short-lived Session credentials and
+never enters browser code or stored account records. Internal calls need no
+separate service credential.
+
+Explicit provisioning or an authorized signing-key rotation may supply
+`MORTY_SESSION_SIGNING_SECRET` through the protected environment. Supplied values
+must be validated and assembled in a private short-lived file removed after
+deployment. Verification checks the supplied key when present and always exercises
+issued Session access, forged-credential rejection and owner revocation through
+the public service boundaries.
 
 Use a Cloudflare Account API Token for CI/CD so deployment authority belongs to
 the Morty account independently of its creator's user membership. Limit it to the
@@ -68,9 +78,11 @@ Morty npm version exists with the accepted archive integrity. Upload immutable a
 A restore uses the archived bytes and source revision, validates current Durable
 Object migration history, and never rolls persistent data backwards.
 
-Wrangler updates supplied secrets additively. Cloudflare cannot return stored
-secret plaintext; obtain it from its owner or replace it with a new signing secret. Rotating the signing secret ends
-existing Session access; Runtime and owner credentials have separate lifetimes.
+Wrangler preserves existing secret bindings and updates supplied secrets additively.
+Cloudflare cannot return stored secret plaintext. A repository migration must
+preserve the existing signing key. Rotating it requires explicit authorization
+because it ends existing Session access; Runtime and owner credentials have
+separate lifetimes.
 
 ## Automatic release sequence
 
@@ -161,8 +173,10 @@ are not substitutes for a public provenance attestation. Making an old release's
 source repository public does not retroactively add provenance to that version.
 
 To inspect a release, open that exact version of `@morty-build/cli` on npm and
-follow its provenance details. Check that the repository is `moxt-ai/morty`, the
-workflow is `morty-cli.yml`, and the source revision matches the accepted release.
+follow its provenance details. For releases published after the organization
+transfer, check that the repository is `portalcrew/morty`, the workflow is
+`morty-cli.yml`, and the source revision matches the accepted release. Earlier
+releases retain their original `moxt-ai/morty` provenance; do not rewrite it.
 In an isolated directory, install the exact version with `npm install
 --ignore-scripts @morty-build/cli@<version>`, then run `npm audit signatures` with
 a current npm CLI to verify registry signatures and available attestations.
