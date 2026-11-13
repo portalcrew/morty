@@ -68,7 +68,7 @@ for (const viewport of [
                 await sendLink.click();
                 expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${runtime.origin}/`);
                 await details.click();
-                await expect(setupText).toHaveValue(new RegExp(`${runtime.origin}/setup\\.md`, "u"));
+                await expect(setupText).toHaveValue(new RegExp(`${runtime.origin}/doc/setup\\.md`, "u"));
                 await page.screenshot({
                     path: testInfo.outputPath(`07-setup-prompt-${viewport.name}.png`),
                     fullPage: true,
