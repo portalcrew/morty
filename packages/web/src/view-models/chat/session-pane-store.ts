@@ -87,7 +87,6 @@ import {
 } from "./session-presentation.ts";
 import {
     createSessionProjection,
-    observeSessionProjectionExecution,
     type SessionEventHistory,
     type SessionProjection,
     type SessionProjectionEffect,
@@ -257,7 +256,7 @@ export function sessionPanePresentation(
     connectionAvailable: boolean,
 ) {
     const facts = sessionOperationFacts(model, execution, delivery, tasks, settings, connectionAvailable);
-    const timeline = sessionProjectionTimeline(model.projection);
+    const timeline = sessionProjectionTimeline(model.projection, execution.observations);
     const olderHistory = sessionProjectionOlderHistory(model.projection);
     const activity = sessionActivity(execution, delivery.state);
     // Which turn runs is the current turn's; the stop control only adds whether the user asked to stop it.
@@ -510,7 +509,7 @@ export function createSessionPaneModel(options: {
         };
     /** The messages the timeline shows now. */
     const timelineMessages = (): readonly SessionExecutionMessage[] =>
-        sessionProjectionTimeline(store.getState().projection).messages;
+        sessionProjectionTimeline(store.getState().projection, execution.getState().state.observations).messages;
     const queuedMessage = (commandId: string): ChatQueuedMessage | null =>
         queuedMessages(
             execution.getState().state.queued,
@@ -585,34 +584,18 @@ export function createSessionPaneModel(options: {
             set({ projection });
             execution.getState().apply({
                 kind: "history",
-                shown: sessionUserCommandIds(sessionProjectionTimeline(projection).messages),
+                shown: sessionUserCommandIds(
+                    sessionProjectionTimeline(projection, execution.getState().state.observations).messages,
+                ),
                 recorded,
             });
         };
-        /**
-         * Applies a fact to the Session's execution and marks the timeline where the fact asks it to. Returns whether
-         * the fact asks for a fresh read of the execution.
-         */
-        const applyExecution = (fact: SessionExecutionFact): boolean => {
-            let read = false;
-            for (const effect of execution.getState().apply(fact)) {
-                switch (effect.kind) {
-                    case "mark-timeline": {
-                        const projection = observeSessionProjectionExecution(get().projection, effect);
-                        if (projection !== get().projection) {
-                            setProjection(projection);
-                        }
-                        break;
-                    }
-                    case "read":
-                        read = true;
-                        break;
-                    default:
-                        effect satisfies never;
-                }
-            }
-            return read;
-        };
+        /** Applies a fact to the Session's execution. Returns whether the fact asks for a fresh read of it. */
+        const applyExecution = (fact: SessionExecutionFact): boolean =>
+            execution
+                .getState()
+                .apply(fact)
+                .some((effect) => effect.kind === "read");
         /**
          * Moves the connection by `event` and performs the effects that settle or stop what runs. It returns the effects
          * the connect loop acts on by waiting.
@@ -1010,8 +993,8 @@ export function createSessionPaneModel(options: {
                         reconcile: async () => {
                             await dispatchProjection({ kind: "reconcile" }, connected, signal);
                             signal.throwIfAborted();
-                            // Confirm execution after history is adopted. An earlier idle snapshot
-                            // cannot settle work that started while those pages were loading.
+                            // Confirm execution once the history is adopted: the read reports what runs now, and answers
+                            // for a delivery whose outcome is unknown.
                             const submission = delivery.getState().state;
                             await readExecution(
                                 connected,

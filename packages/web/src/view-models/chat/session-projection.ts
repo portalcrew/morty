@@ -5,6 +5,7 @@ import {
     createSessionMessageReduction,
     prependSessionMessageEvents,
     type SessionExecutionMessage,
+    type SessionExecutionObservation,
     type SessionMessageReduction,
     sessionReductionExecutionOwner,
     sessionReductionMessages,
@@ -270,53 +271,27 @@ export function transitionSessionProjection(
     }
 }
 
-/**
- * Marks what the Computer reported running and queued at this point of the timeline. A running command owns the work
- * that follows; a confirmed idle Session settles only the history already observed; a command seen queued keeps its
- * cancellation hidden if it never starts, even after it leaves the queue. A projection without a baseline has no
- * timeline to mark.
- */
-export function observeSessionProjectionExecution(
-    state: SessionProjection,
-    observed: { readonly running: string | null; readonly queued: readonly string[] },
-): SessionProjection {
-    if (state.kind !== "established") {
-        return state;
-    }
-    const known = new Set(
-        state.reduction.entries.flatMap((entry) => (entry.kind === "queued-command" ? [entry.commandId] : [])),
-    );
-    return {
-        ...state,
-        reduction: {
-            entries: [
-                ...state.reduction.entries,
-                ...(observed.running === null
-                    ? // Native replay can retain unfinished tools without Morty lifecycle metadata.
-                      [{ kind: "execution-idle" as const }]
-                    : [
-                          {
-                              kind: "execution-owner" as const,
-                              commandId: observed.running,
-                              executionCommandId: observed.running,
-                              execution: "starts" as const,
-                          },
-                          { kind: "turn-started" as const, commandId: observed.running },
-                      ]),
-                ...observed.queued
-                    .filter((commandId) => !known.has(commandId))
-                    .map((commandId) => ({ kind: "queued-command" as const, commandId })),
-            ],
-        },
-    };
-}
-
 export function sessionProjectionExecutionOwner(state: SessionProjection, commandId: string): string | null {
     return state.kind === "established" ? sessionReductionExecutionOwner(state.reduction, commandId) : null;
 }
 
-function sessionProjectionMessages(state: SessionProjection): readonly SessionExecutionMessage[] {
-    return state.kind === "established" ? sessionReductionMessages(state.reduction) : [];
+function sessionProjectionMessages(
+    state: SessionProjection,
+    observations: readonly SessionExecutionObservation[],
+): readonly SessionExecutionMessage[] {
+    return state.kind === "established"
+        ? sessionReductionMessages(
+              state.reduction,
+              // A report describes the log generation it covers. One from before the history baseline says nothing the
+              // baseline does not hold, and no event of the baseline has a position to place it by.
+              observations.filter(
+                  (observation) =>
+                      observation.kind === "closed" ||
+                      (observation.generation === state.generation &&
+                          BigInt(observation.position) >= BigInt(state.throughPosition)),
+              ),
+          )
+        : [];
 }
 
 /** The page before the oldest message shown, when one exists and can be loaded now. */
@@ -337,25 +312,32 @@ export function sessionProjectionOlderHistory(state: SessionProjection): OlderHi
 }
 
 /**
- * The timeline a projection shows: its messages, whether older history exists, and its revision. Each projection is
- * immutable, so the timeline computed for one is reused for every reader of that same projection.
+ * The timeline a projection shows: its messages, whether older history exists, and its revision. The messages are the
+ * events' own, read against what the Computer reported of the execution. A projection and the reports are immutable, so
+ * the timeline computed for one pair is reused for every reader of it.
  */
 export interface SessionTimeline {
     readonly messages: readonly SessionExecutionMessage[];
     readonly hasOlderHistory: boolean;
     readonly revision: number;
 }
-const timelines = new WeakMap<SessionProjection, SessionTimeline>();
-export function sessionProjectionTimeline(state: SessionProjection): SessionTimeline {
+const timelines = new WeakMap<
+    SessionProjection,
+    { readonly observations: readonly SessionExecutionObservation[]; readonly timeline: SessionTimeline }
+>();
+export function sessionProjectionTimeline(
+    state: SessionProjection,
+    observations: readonly SessionExecutionObservation[],
+): SessionTimeline {
     const known = timelines.get(state);
-    if (known !== undefined) {
-        return known;
+    if (known !== undefined && known.observations === observations) {
+        return known.timeline;
     }
     const timeline: SessionTimeline = {
-        messages: sessionProjectionMessages(state),
+        messages: sessionProjectionMessages(state, observations),
         hasOlderHistory: state.kind === "established" && state.pending === null && state.pagination.nextCursor !== null,
         revision: state.revision,
     };
-    timelines.set(state, timeline);
+    timelines.set(state, { observations, timeline });
     return timeline;
 }
