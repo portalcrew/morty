@@ -74,6 +74,7 @@ test("Given a Codex turn whose subagent thread reports on the same connection, W
                 encodeSessionPromptCommand({
                     kind: "session.prompt",
                     commandId,
+                    requestId: commandId,
                     target: peer.target,
                     attachments: [],
                     prompt: "Delegate the work to a subagent",

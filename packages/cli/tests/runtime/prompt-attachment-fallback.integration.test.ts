@@ -67,6 +67,7 @@ test("Given unsupported attachments, When a prompt has text, Then the daemon del
                         encodeSessionPromptCommand({
                             attachments,
                             commandId,
+                            requestId: commandId,
                             disposition: SessionPromptDisposition.Append,
                             kind: "session.prompt",
                             prompt,

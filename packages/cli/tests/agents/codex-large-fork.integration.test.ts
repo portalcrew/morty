@@ -28,6 +28,7 @@ test("Given real Codex saved more than 32 MiB of answers, When a user forks thro
                 encodeSessionPromptCommand({
                     kind: "session.prompt",
                     commandId,
+                    requestId: commandId,
                     target: sourceSessionId,
                     attachments: [],
                     prompt: `Question ${turn}: answer without using tools`,
@@ -143,6 +144,7 @@ test("Given real Codex saved more than 32 MiB of answers, When a user forks thro
                 kind: "session.prompt",
                 target: forked.target,
                 commandId: continuedId,
+                requestId: continuedId,
                 prompt: "Continue this fork without using tools",
                 attachments: [],
                 disposition: SessionPromptDisposition.Append,

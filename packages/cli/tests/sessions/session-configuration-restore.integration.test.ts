@@ -89,10 +89,12 @@ test("Given a setting was chosen before the first prompt, When the daemon restar
 });
 
 async function prompt(peer: RealDaemonPeer, sessionTarget: RealDaemonPeer["target"]): Promise<void> {
+    const commandId = crypto.randomUUID();
     peer.send(
         encodeSessionPromptCommand({
             attachments: [],
-            commandId: crypto.randomUUID(),
+            commandId,
+            requestId: commandId,
             disposition: SessionPromptDisposition.Append,
             kind: "session.prompt",
             prompt: "Start the conversation",

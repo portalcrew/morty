@@ -200,6 +200,7 @@ test("Given saved Codex image generation, When the real daemon reopens it throug
             peer.send(
                 encodeSessionPromptCommand({
                     commandId,
+                    requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
                     attachments: [],
                     kind: "session.prompt",

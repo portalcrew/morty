@@ -42,6 +42,7 @@ type SessionPromptPlacement =
 /** A prompt for an existing Session. The Computer runs it with the Agent and directory of the Session it holds. */
 export type SessionPromptCommand = {
     readonly commandId: string;
+    readonly requestId: string;
     readonly attachments: readonly PromptAttachment[];
     readonly kind: typeof SESSION_PROMPT_KIND;
     readonly prompt: string;
@@ -50,7 +51,7 @@ export type SessionPromptCommand = {
 } & SessionPromptPlacement;
 
 /*
- * A prompt is its own request: its `commandId` names the Turn it creates and the reply that answers it, so a retry of
+ * A prompt is its own request: its `requestId` equals `commandId`, naming the Turn and its reply, so a retry of
  * the same command is the same request. Every other request names the Turn it acts on in `commandId` and its own reply
  * address in `requestId`, so its answer can never be mistaken for the answer to the prompt or to another request.
  */
@@ -137,6 +138,12 @@ export function decodeSessionPromptCommand(encoded: string): SessionPromptComman
     const hasSessionConfigurations = Object.hasOwn(value, "sessionConfigurations");
     assertKind(value, SESSION_PROMPT_KIND);
 
+    const commandId = readIdentifier(value, "commandId");
+    const requestId = readIdentifier(value, "requestId");
+    if (requestId !== commandId) {
+        throw new ProtocolMessageError("Prompt requestId must equal commandId");
+    }
+
     const prompt = readText(value, "prompt", MAX_PROMPT_LENGTH);
     const attachments = decodePromptAttachmentsValue(value["attachments"]);
     const attachmentBytes = attachments.reduce((total, attachment) => total + attachment.byteLength, 0);
@@ -157,7 +164,8 @@ export function decodeSessionPromptCommand(encoded: string): SessionPromptComman
     }
 
     return {
-        commandId: readIdentifier(value, "commandId"),
+        commandId,
+        requestId,
         attachments,
         kind: SESSION_PROMPT_KIND,
         prompt,

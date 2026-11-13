@@ -68,6 +68,7 @@ test("Given Claude awaits a background subagent, When the user steers and the su
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
                         commandId,
+                        requestId: commandId,
                         target: peer.target,
                         attachments: [],
                         ...(steering

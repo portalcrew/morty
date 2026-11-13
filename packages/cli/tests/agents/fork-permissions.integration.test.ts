@@ -68,12 +68,14 @@ test.each(["codex", "claude"] as const)(
                     harness,
                     directory: ".",
                 };
-                const prompt = (sessionTarget: RealDaemonPeer["target"], text: string, selectMode = false): void =>
+                const prompt = (sessionTarget: RealDaemonPeer["target"], text: string, selectMode = false): void => {
+                    const commandId = randomUUID();
                     peer.send(
                         encodeSessionPromptCommand({
                             kind: "session.prompt",
                             target: sessionTarget,
-                            commandId: randomUUID(),
+                            commandId,
+                            requestId: commandId,
                             disposition: SessionPromptDisposition.Append,
                             attachments: [],
                             prompt: text,
@@ -84,6 +86,7 @@ test.each(["codex", "claude"] as const)(
                                 : {}),
                         }),
                     );
+                };
                 const ready = async (sessionTarget: RealDaemonPeer["target"]): Promise<void> => {
                     const requestId = randomUUID();
                     peer.send(

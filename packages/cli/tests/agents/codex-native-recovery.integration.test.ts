@@ -79,6 +79,7 @@ test("Given a real Codex native Session, When the active prompt is cancelled wit
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
                         commandId,
+                        requestId: commandId,
                         target: nativeId,
                         attachments: [],
                         prompt: "Reply with a short greeting, without using tools",

@@ -402,6 +402,7 @@ await import(${JSON.stringify(agentPeer)});
                     target,
                     kind: "session.prompt",
                     commandId,
+                    requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
                     prompt: commandId,
                     attachments: [],

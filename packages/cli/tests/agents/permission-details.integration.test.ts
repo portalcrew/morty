@@ -36,9 +36,11 @@ test.each(["allow_once", "reject_once"] as const)(
         });
         await using agent = await CodexFixture.create(provider, { approvalPolicy: "on-request" });
         await withRealDaemon(new CodexAgentSpecification(), agent.environment, async (peer) => {
+            const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
-                    commandId: randomUUID(),
+                    commandId,
+                    requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
                     attachments: [],
                     kind: "session.prompt",
@@ -148,9 +150,11 @@ test.each(["allow_once", "reject_once"] as const)(
             });
             await using agent = await ClaudeFixture.create(provider);
             await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+                const commandId = randomUUID();
                 peer.send(
                     encodeSessionPromptCommand({
-                        commandId: randomUUID(),
+                        commandId,
+                        requestId: commandId,
                         disposition: SessionPromptDisposition.Append,
                         attachments: [],
                         kind: "session.prompt",

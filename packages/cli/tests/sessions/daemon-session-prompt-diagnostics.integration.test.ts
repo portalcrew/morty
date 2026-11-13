@@ -50,6 +50,7 @@ test("Given an Agent rejects a turn, When the turn fails, Then the failure event
                 peer.send(
                     encodeSessionPromptCommand({
                         commandId,
+                        requestId: commandId,
                         disposition: SessionPromptDisposition.Append,
                         attachments: [],
                         kind: "session.prompt",

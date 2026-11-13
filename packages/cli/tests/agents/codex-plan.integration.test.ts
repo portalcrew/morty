@@ -129,6 +129,7 @@ test.each(["owned", "borrowed"])(
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
                         commandId,
+                        requestId: commandId,
                         target: sessionTarget,
                         attachments: [],
                         prompt: "Stream a concise proposed plan",

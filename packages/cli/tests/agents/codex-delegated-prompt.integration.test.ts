@@ -137,6 +137,7 @@ function sendPrompt(peer: RealDaemonPeer, sessionTarget: RealDaemonPeer["target"
         encodeSessionPromptCommand({
             attachments: [],
             commandId,
+            requestId: commandId,
             disposition: SessionPromptDisposition.Append,
             kind: "session.prompt",
             prompt,

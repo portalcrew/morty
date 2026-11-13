@@ -399,11 +399,11 @@ export type ServiceToDaemonRequest = Exclude<
 
 /**
  * The address of a request: every answer to it, `session.operation.failed` included, carries this value as its
- * `requestId`. A prompt is its own request, addressed by the Turn it creates; every other request names its address
- * in `requestId`. Senders, the Relay and the Computer all address replies through this one rule.
+ * `requestId`. For a prompt this equals the Turn's `commandId`.
+ * Senders, the Relay and the Computer all address replies through this one rule.
  */
 export function requestReplyAddress(request: ServiceToDaemonRequest): string {
-    return request.kind === SESSION_PROMPT_KIND ? request.commandId : request.requestId;
+    return request.requestId;
 }
 
 /**
@@ -422,8 +422,7 @@ export function readUndecodedRequestAddress(
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
         return null;
     }
-    const kind: unknown = Reflect.get(value, "kind");
-    const requestId: unknown = Reflect.get(value, kind === SESSION_PROMPT_KIND ? "commandId" : "requestId");
+    const requestId: unknown = Reflect.get(value, "requestId");
     if (!isIdentifier(requestId)) {
         return null;
     }

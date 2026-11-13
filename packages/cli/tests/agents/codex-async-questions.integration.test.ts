@@ -40,6 +40,7 @@ test("Given a real Codex model that asks the user a question while it keeps work
             encodeSessionPromptCommand({
                 kind: "session.prompt",
                 commandId,
+                requestId: commandId,
                 target: peer.target,
                 attachments: [],
                 prompt,

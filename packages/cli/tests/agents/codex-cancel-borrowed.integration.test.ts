@@ -105,6 +105,7 @@ test("Given a borrowed Codex conversation with queued input, When the user stops
             peer.send(
                 encodeSessionPromptCommand({
                     commandId,
+                    requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
                     attachments: [],
                     kind: "session.prompt",

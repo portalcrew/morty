@@ -23,6 +23,7 @@ test("Given a real Codex conversation, When the user sends slash-prefixed text o
                 encodeSessionPromptCommand({
                     kind: "session.prompt",
                     commandId,
+                    requestId: commandId,
                     target: peer.target,
                     attachments: [],
                     prompt,
@@ -64,10 +65,12 @@ test("Given a real Codex conversation with content, When the user sends /compact
     await using codex = await CodexFixture.create(provider);
     await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
         const sendPrompt = (prompt: string): void => {
+            const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
                     kind: "session.prompt",
-                    commandId: randomUUID(),
+                    commandId,
+                    requestId: commandId,
                     target: peer.target,
                     attachments: [],
                     prompt,
@@ -146,10 +149,12 @@ test("Given a real Codex conversation with content, When the manual /compact's s
     await using codex = await CodexFixture.create(provider);
     await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
         const sendPrompt = (prompt: string): void => {
+            const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
                     kind: "session.prompt",
-                    commandId: randomUUID(),
+                    commandId,
+                    requestId: commandId,
                     target: peer.target,
                     attachments: [],
                     prompt,

@@ -35,6 +35,7 @@ test("Given an existing real Codex conversation, When the process exits or its t
                         encodeSessionPromptCommand({
                             kind: "session.prompt",
                             commandId,
+                            requestId: commandId,
                             target: peer.target,
                             attachments: [],
                             prompt: "Continue the conversation",
@@ -112,6 +113,7 @@ test("Given a real Codex conversation in Plan mode, When its process recovers be
                         encodeSessionPromptCommand({
                             kind: "session.prompt",
                             commandId,
+                            requestId: commandId,
                             target: peer.target,
                             attachments: [],
                             prompt: plan ? "Give me a plan" : "Go.",

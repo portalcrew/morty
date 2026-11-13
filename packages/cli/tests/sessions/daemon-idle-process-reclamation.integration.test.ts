@@ -112,9 +112,11 @@ async function expire(native: string, pid: string, timer: IdleTimeoutTimer): Pro
 }
 
 function sendPrompt(peer: RealDaemonPeer, sessionTarget: RealDaemonPeer["target"], prompt: string): void {
+    const commandId = crypto.randomUUID();
     peer.send(
         encodeSessionPromptCommand({
-            commandId: crypto.randomUUID(),
+            commandId,
+            requestId: commandId,
             disposition: SessionPromptDisposition.Append,
             attachments: [],
             kind: "session.prompt",

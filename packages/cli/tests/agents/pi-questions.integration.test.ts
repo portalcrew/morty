@@ -65,6 +65,7 @@ test.each(["new", "imported"] as const)(
             peer.send(
                 encodeSessionPromptCommand({
                     commandId,
+                    requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
                     attachments: [],
                     kind: "session.prompt",
@@ -219,6 +220,7 @@ function sendQuestionPrompt(peer: RealDaemonPeer, sessionTarget: RealDaemonPeer[
     peer.send(
         encodeSessionPromptCommand({
             commandId,
+            requestId: commandId,
             disposition: SessionPromptDisposition.Append,
             attachments: [],
             kind: "session.prompt",

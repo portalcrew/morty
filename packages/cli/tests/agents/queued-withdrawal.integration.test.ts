@@ -44,6 +44,7 @@ test.each(["pi", "claude", "codex"] as const)(
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
                         commandId,
+                        requestId: commandId,
                         target: peer.target,
                         attachments: [],
                         disposition: "append",

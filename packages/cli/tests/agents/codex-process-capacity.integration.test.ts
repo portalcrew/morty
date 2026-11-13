@@ -30,6 +30,7 @@ async function promptRealSession(
         encodeSessionPromptCommand({
             kind: "session.prompt",
             commandId,
+            requestId: commandId,
             target: sessionTarget,
             prompt: text,
             disposition: SessionPromptDisposition.Append,

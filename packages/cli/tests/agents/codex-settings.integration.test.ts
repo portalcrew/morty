@@ -114,10 +114,12 @@ test("Given Codex publishes complete model settings and defaults to Full access,
             expect(discovered.settings.find((setting) => setting.id === "mode")).toMatchObject({
                 defaultValue: "agent-full-access",
             });
+            const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
                     kind: "session.prompt",
-                    commandId: randomUUID(),
+                    commandId,
+                    requestId: commandId,
                     target: peer.target,
                     attachments: [],
                     prompt: fakeProviderPrompts.successfulTool,

@@ -62,6 +62,7 @@ test("Given a resumed conversation with a configuration edit awaiting the Agent,
                     encodeSessionPromptCommand({
                         kind: "session.prompt",
                         commandId,
+                        requestId: commandId,
                         disposition: SessionPromptDisposition.Append,
                         attachments: [],
                         prompt: "Persist this conversation",

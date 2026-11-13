@@ -50,6 +50,7 @@ test("Given a persisted native conversation, When a client prompts after restart
                             kind: "session.prompt",
                             target: peer.target,
                             commandId,
+                            requestId: commandId,
                             disposition: SessionPromptDisposition.Append,
                             attachments: [],
                             prompt: text,

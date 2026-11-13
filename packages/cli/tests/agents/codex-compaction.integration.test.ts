@@ -23,9 +23,11 @@ test("Given Codex auto-compacts a conversation, When the daemon relays the turns
             "Continue the conversation",
             "Continue once more",
         ]) {
+            const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
-                    commandId: randomUUID(),
+                    commandId,
+                    requestId: commandId,
                     disposition: SessionPromptDisposition.Append,
                     attachments: [],
                     kind: "session.prompt",

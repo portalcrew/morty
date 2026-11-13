@@ -36,6 +36,7 @@ test("Given running and queued prompts, When the daemon restarts, Then it report
                 const original = encodeSessionPromptCommand({
                     ...identity,
                     commandId: running,
+                    requestId: running,
                     disposition: SessionPromptDisposition.Append,
                     prompt: "hold after first delta",
                 });
@@ -53,6 +54,7 @@ test("Given running and queued prompts, When the daemon restarts, Then it report
                 const followup = encodeSessionPromptCommand({
                     ...identity,
                     commandId: queued,
+                    requestId: queued,
                     disposition: SessionPromptDisposition.Append,
                     prompt: "Finish the queued follow-up",
                 });
@@ -83,6 +85,7 @@ test("Given running and queued prompts, When the daemon restarts, Then it report
                     encodeSessionPromptCommand({
                         ...identity,
                         commandId: continuation,
+                        requestId: continuation,
                         disposition: SessionPromptDisposition.Append,
                         prompt: "Continue unfinished work",
                     }),

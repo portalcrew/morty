@@ -73,6 +73,7 @@ if (process.argv.includes("--version")) {
                 peer.send(
                     encodeSessionPromptCommand({
                         commandId: "external-image-seed-turn",
+                        requestId: "external-image-seed-turn",
                         disposition: SessionPromptDisposition.Append,
                         attachments: [],
                         kind: "session.prompt",

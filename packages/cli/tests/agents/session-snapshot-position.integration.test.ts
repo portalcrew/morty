@@ -88,6 +88,7 @@ for (const harness of ["codex", "claude", "pi"] as const) {
                         kind: "session.prompt",
                         target: sessionTarget,
                         commandId,
+                        requestId: commandId,
                         prompt: "Reply with the requested answer.",
                         attachments: [],
                         disposition: SessionPromptDisposition.Append,
