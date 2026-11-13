@@ -1,6 +1,14 @@
+import { mock } from "node:test";
 import type { WebSocketRoute } from "playwright-core";
 import { dataTestId } from "../web/src/data-testid.ts";
 import { expect, test } from "./infra/test.ts";
+
+test.beforeEach(() => {
+    mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-28T08:01:00Z") });
+});
+test.afterEach(() => {
+    mock.timers.reset();
+});
 
 test("Given a conversation recovering after suspension, when its history read times out, then it recovers automatically without cancelling or repeating the task", async ({
     runtime,
@@ -58,12 +66,15 @@ test("Given a conversation recovering after suspension, when its history read ti
     // ten-second heartbeat deadline, each ending once the ping is answered.
     const stayConnectedFor = async (milliseconds: number) => {
         for (let elapsed = 0; elapsed < milliseconds; elapsed += 5_000) {
-            await page.clock.runFor(Math.min(5_000, milliseconds - elapsed));
+            const step = Math.min(5_000, milliseconds - elapsed);
+            await page.clock.runFor(step);
+            mock.timers.tick(step);
             await heartbeat?.promise;
         }
     };
     await page.clock.install({ time: new Date("2026-10-28T08:00:00Z") });
     await page.clock.pauseAt(new Date("2026-10-28T08:01:00Z"));
+    // Browser and real daemon share virtual system time so encrypted payloads remain fresh during timer advances.
     await runtime.openPairedChat();
     const composer = page.getByRole("textbox", { name: "Message" });
     await composer.fill("hold after first delta");

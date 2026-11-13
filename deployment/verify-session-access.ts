@@ -3,9 +3,16 @@ import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import * as v from "valibot";
 import { memoryComputerCredentials } from "../packages/cli/tests/support/computer-credentials.ts";
-import { type MortyEndpointCall, sessionEndpoints, WsTransport } from "../packages/client/src/index.ts";
+import {
+    type ComputerEncryptionAccess,
+    MortyApiError,
+    MortyClient,
+    WsTransport,
+} from "../packages/client/src/index.ts";
+import type { NativeSessionTarget } from "../packages/client/src/protocol/index.ts";
 import { connectControlledAgentRuntime, createMortyFakeDaemon } from "../tests/support/fake-daemon/runtime.ts";
 import { mortyReply } from "../tests/support/fake-daemon/scenarios.ts";
+import { createOwnerApi } from "../tests/support/owner-api.ts";
 
 const targets = v.parse(
     v.object({ environments: v.object({ production: v.object({ morty_origin: v.string() }) }) }),
@@ -37,19 +44,37 @@ using sessionConnection = {
     },
 };
 
-async function requestSession(endpoint: MortyEndpointCall, status: number, token: string): Promise<unknown> {
-    const response = await sessionConnection.transport.fetch({
-        endpoint,
-        origin: new URL("/morty/api/", origin),
-        headers: { authorization: `Bearer ${token}` },
-        body: null,
-        signal,
+async function requestSession(
+    target: NativeSessionTarget,
+    status: number,
+    token: string,
+    encryptionAccess: ComputerEncryptionAccess,
+): Promise<void> {
+    const client = new MortyClient({
+        endpoint: origin.origin,
+        computerId: encryptionAccess.computerId,
+        transport: sessionConnection.transport,
+        encryption: { access: encryptionAccess },
+        credentialProvider: {
+            credential: async (signal) => {
+                signal.throwIfAborted();
+                return token;
+            },
+        },
     });
-    if (response.status !== status) {
-        await response.body?.cancel();
-        throw new Error(`Morty verification failed (${endpoint.path}, WS operation status ${response.status})`);
+    try {
+        await client.sessions.readConfiguration(target, signal);
+        if (status !== 200) {
+            throw new Error(`Morty verification failed (Session configuration, expected ${status}, received 200)`);
+        }
+    } catch (cause) {
+        signal.throwIfAborted();
+        if (!(cause instanceof MortyApiError) || status === 200 || cause.status !== status) {
+            throw cause;
+        }
+    } finally {
+        client.close();
     }
-    return await response.json();
 }
 
 async function request(path: string, status: number, token?: string, body?: object): Promise<unknown> {
@@ -93,7 +118,7 @@ const claim = v.parse(
         agents: harness.catalog,
     }),
 );
-await using _runtime = await connectControlledAgentRuntime({
+await using runtime = await connectControlledAgentRuntime({
     behavior,
     signal,
     connection: {
@@ -102,16 +127,24 @@ await using _runtime = await connectControlledAgentRuntime({
         credentials: memoryComputerCredentials(claim.computerCredential),
     },
 });
-const chat = `/morty/api/v1/computers/${owner.computerId}`;
-await request(`${chat}/setup`, 202, owner.computerToken, { harness: "codex" });
-const access = v.parse(
-    v.object({ credential: v.string(), target: v.object({ harness: v.string(), sessionId: v.string() }) }),
-    await request(`${chat}/managed-sessions/open`, 200, owner.computerToken, {
-        harness: "codex",
-        conversationKey: `verification-${randomBytes(16).toString("hex")}`,
-        workspaceRef: ".",
-        configurations: [],
+const encryptionAccess = await runtime.encryptionAccess(signal);
+using ownerApi = {
+    ...createOwnerApi({
+        origin: origin.origin,
+        computerId: owner.computerId,
+        credential: owner.computerToken,
+        request: (request) => fetch(request),
+        encryptionAccess,
     }),
+    [Symbol.dispose]() {
+        this.close();
+    },
+};
+await ownerApi.api.verifyAgent("codex", signal);
+const access = await ownerApi.api.createConversation(
+    `verification-${randomBytes(16).toString("hex")}`,
+    { harness: "codex", workspaceRef: ".", workspaceLabel: ".", configurations: [] },
+    signal,
 );
 const credential = /^msession_([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{43})$/u.exec(access.credential);
 const payload = credential?.[1];
@@ -126,19 +159,27 @@ if (signingSecret !== undefined) {
         throw new Error("The configured signing key was not used");
     }
 }
-const readConfiguration = sessionEndpoints.readConfiguration({ computerId: owner.computerId, target: access.target });
-await requestSession(readConfiguration, 200, access.credential);
-await requestSession(readConfiguration, 401, `${signed}.${Buffer.alloc(32).toString("base64url")}`);
+await requestSession(access.target, 200, access.credential, encryptionAccess);
+await requestSession(access.target, 401, `${signed}.${Buffer.alloc(32).toString("base64url")}`, encryptionAccess);
 const successor = `morty_computer_v1_${randomBytes(32).toString("base64url")}`;
 await request(`/morty/api/v1/computers/${owner.computerId}/identity/revoke-all-access`, 200, owner.computerToken, {
     successor,
 });
-await requestSession(readConfiguration, 401, access.credential);
-const renewed = v.parse(
-    v.object({ credential: v.string() }),
-    await request(`${chat}/native-sessions/access`, 200, successor, access.target),
-);
-await requestSession(readConfiguration, 200, renewed.credential);
+await requestSession(access.target, 401, access.credential, encryptionAccess);
+using successorApi = {
+    ...createOwnerApi({
+        origin: origin.origin,
+        computerId: owner.computerId,
+        credential: successor,
+        request: (request) => fetch(request),
+        encryptionAccess,
+    }),
+    [Symbol.dispose]() {
+        this.close();
+    },
+};
+const renewed = await successorApi.api.connectSession(access.target, signal);
+await renewed.sessions.readConfiguration(access.target, signal);
 await writeFile(
     values.evidence,
     `${JSON.stringify(
