@@ -261,7 +261,7 @@ for (const schedule of ["before-snapshot", "after-snapshot", "after-recovery"] a
         });
         const waitForDelta = (text: string): Promise<void> =>
             observed.has(text) ? Promise.resolve() : new Promise((resolve) => waiters.set(text, resolve));
-        await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
+        await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
         const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
         await page.goto(connected.url);
         const composer = page.getByRole("textbox", { name: "Message" });
@@ -278,7 +278,7 @@ for (const schedule of ["before-snapshot", "after-snapshot", "after-recovery"] a
         phase = "recovery";
         // Recovery runs quietly first: the page offers no manual retry while it reconnects on its own.
         network.interrupt();
-        const resumed = page.clock.runFor(5000);
+        const resumed = runtime.clock.runFor(5000);
         if (gate !== null) {
             await gate.reached;
             await runtime.continueReply("wait for steering", {
@@ -331,7 +331,7 @@ test("Given a partial reply, when it finishes while the browser is disconnected,
     network,
 }) => {
     const { page } = runtime;
-    await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
+    await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
@@ -348,7 +348,7 @@ test("Given a partial reply, when it finishes while the browser is disconnected,
         outcome: "complete",
         output: [{ kind: "text", text: "|OFFLINE_END|" }],
     });
-    await page.clock.runFor(5000);
+    await runtime.clock.runFor(5000);
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
     await expect(responses).toContainText("Waiting for steering|OFFLINE_END|");
     await expect(composer).toHaveValue("Preserve this draft.");
@@ -364,7 +364,7 @@ test("Given the user has loaded older messages, when the connection recovers, th
     network,
 }) => {
     const { page } = runtime;
-    await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
+    await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
@@ -398,7 +398,7 @@ test("Given the user has loaded older messages, when the connection recovers, th
     const before = await reading.boundingBox();
     // Recovery runs quietly first: the page offers no manual retry while it reconnects on its own.
     network.interrupt();
-    await page.clock.runFor(5000);
+    await runtime.clock.runFor(5000);
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
     expect(await messages.allTextContents()).toEqual(loaded);
     await expect(composer).toHaveValue("Keep my history draft.");

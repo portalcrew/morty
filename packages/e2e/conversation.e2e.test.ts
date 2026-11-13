@@ -1,4 +1,3 @@
-import { mock } from "node:test";
 import { expect, test } from "./infra/test.ts";
 
 test("Given an agent answer with reasoning and a tool call, When the user inspects the agent work, Then every process row shares compact hover disclosure styling", async ({
@@ -134,17 +133,11 @@ test("Given an agent answer with reasoning and a tool call, When the user inspec
 });
 
 test.describe("elapsed time across reloads", () => {
-    test.beforeEach(() => {
-        mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-13T08:00:00Z") });
-    });
-    test.afterEach(() => {
-        mock.timers.reset();
-    });
     test("Given a working reply, When the user reloads after 65 seconds, Then elapsed time and live content remain consistent", async ({
         runtime,
     }, testInfo) => {
         const { page } = runtime;
-        await page.clock.setFixedTime(new Date("2026-10-13T08:00:00Z"));
+        await runtime.clock.setFixedTime(new Date("2026-10-13T08:00:00Z"));
         await runtime.openPairedChat();
 
         await page.getByRole("textbox", { name: "Message" }).fill("First conversation");
@@ -177,8 +170,7 @@ test.describe("elapsed time across reloads", () => {
         const linkedFile = "Content could not be loaded: partial.bin";
         await expect(page.getByText(linkedFile, { exact: true })).toBeVisible();
         const activeSessionUrl = page.url();
-        mock.timers.setTime(Date.parse("2026-10-13T08:01:05Z"));
-        await page.clock.setFixedTime(new Date("2026-10-13T08:01:05Z"));
+        await runtime.clock.setFixedTime(new Date("2026-10-13T08:01:05Z"));
         await page.reload();
         await expect(page.getByRole("status", { name: "Agent is working" })).toHaveText("Working for 1min 5s");
         await page.screenshot({ fullPage: true, path: testInfo.outputPath("active-turn-primary.png") });

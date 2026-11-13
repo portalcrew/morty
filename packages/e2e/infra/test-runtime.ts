@@ -5,6 +5,7 @@ import { ANONYMOUS_CREDENTIAL_KEY_NAME } from "../../web/src/services/identity/a
 import { encodeIdentityScope } from "../../web/src/services/identity/identity-scope-url.ts";
 import { anonymousCreationKey, ChatApi, jsonRequest, object, text } from "./chat-api.ts";
 import type { LocalStack } from "./local-stack.ts";
+import { RuntimeClock } from "./runtime-clock.ts";
 import { ControlledSetupRuntime } from "./setup-daemon.ts";
 import { followSetupInstructions } from "./setup-instructions.ts";
 
@@ -40,6 +41,7 @@ export async function createTestRuntime(
     try {
         const context = await browser.newContext(contextOptions);
         const page = await context.newPage();
+        const clock = new RuntimeClock(page);
         await journey.attachBrowser(browser, context, page);
         const chat = new ChatApi(stack.chatOrigin, journey.signal);
 
@@ -88,12 +90,17 @@ export async function createTestRuntime(
 
         return {
             close: async () => {
-                await Promise.all([runtime, ...additionalRuntimes].map((computer) => computer.disconnect()));
+                try {
+                    await Promise.all([runtime, ...additionalRuntimes].map((computer) => computer.disconnect()));
+                } finally {
+                    clock.close();
+                }
             },
             failure: Promise.race([runtime.failure, additionalFailure.promise]),
             continueReply: runtime.continueReply,
             writeFiles: runtime.writeFiles,
             page,
+            clock,
             origin: stack.chatOrigin,
             openChat,
             openPairedChat: async (computerName?: string) => {

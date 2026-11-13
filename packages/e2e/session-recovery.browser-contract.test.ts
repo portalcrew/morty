@@ -162,7 +162,7 @@ test("Given a healthy conversation, when the stability timer and foreground sign
             connections += 1;
         }
     });
-    await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
+    await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
@@ -175,7 +175,7 @@ test("Given a healthy conversation, when the stability timer and foreground sign
     );
     await composer.fill("Keep this draft across a healthy resume.");
     const before = connections;
-    await page.clock.runFor(25000);
+    await runtime.clock.runFor(25000);
     await page.evaluate(() => {
         document.dispatchEvent(new Event("visibilitychange"));
         document.dispatchEvent(new Event("resume"));
@@ -190,7 +190,7 @@ test("Given a healthy conversation, when the stability timer and foreground sign
     await expect(page.getByRole("article", { name: "Agent response" }).last()).toContainText(
         "Keep this draft across a healthy resume.",
     );
-    await page.clock.runFor(5000);
+    await runtime.clock.runFor(5000);
     await expect(composer).toBeEnabled();
     await expect(page.getByRole("alert")).toHaveCount(0);
     // Submissions and foreground recovery both reuse the Computer's healthy transport.
@@ -209,7 +209,7 @@ test("Given an interrupted browser connection, when a task completes before fore
             socket.on("close", () => sockets.delete(socket));
         }
     });
-    await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
+    await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
@@ -235,7 +235,7 @@ test("Given an interrupted browser connection, when a task completes before fore
         output: [{ kind: "text", text: "Task finished while the browser was disconnected." }],
     });
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-    await page.clock.runFor(5000);
+    await runtime.clock.runFor(5000);
     await expect(composer).toBeEnabled();
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
     await expect(composer).toHaveValue("Preserve this unsent draft.");
@@ -266,7 +266,7 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
             activeSockets.add(socket);
             socket.on("close", () => activeSockets.delete(socket));
         });
-        await page.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
+        await runtime.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
         const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
         await page.goto(connected.url);
         const composer = page.getByRole("textbox", { name: "Message" });
@@ -285,13 +285,13 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
         await socketsClosed;
         await expect(composer).toBeEnabled();
         await expect(page.getByTestId(dataTestId.sendMessage)).toBeDisabled();
-        await page.clock.runFor(12000);
+        await runtime.clock.runFor(12000);
         if (recovery !== "automatic") {
             // Spend the bounded reconnect retry budget before an explicit wakeup.
-            await page.clock.runFor(300000);
+            await runtime.clock.runFor(300000);
             // Hold time while the network returns, so only the wakeup reconnects: an automatic retry still scheduled
             // would otherwise recover first. Restoring ends any attempt still waiting on the outage.
-            await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+            await runtime.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
         }
         network.restore();
         if (recovery === "online") {
@@ -299,10 +299,7 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
         } else if (recovery === "manual") {
             await page.getByRole("button", { name: "Retry now", exact: true }).click();
         }
-        if (recovery !== "automatic") {
-            await page.clock.resume();
-        }
-        await page.clock.runFor(6000);
+        await runtime.clock.runFor(6000);
         await expect(composer).toBeEnabled();
         await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
         await expect(composer).toHaveValue("Preserve my unsent draft.");
@@ -321,8 +318,8 @@ for (const route of ["session", "suspended"] as const) {
         network,
     }) => {
         const { page } = runtime;
-        await page.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
-        await page.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
+        await runtime.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
+        await runtime.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
         const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
         await page.goto(connected.url);
         const composer = page.getByRole("textbox", { name: "Message" });
@@ -337,7 +334,7 @@ for (const route of ["session", "suspended"] as const) {
         network.blackhole();
         if (route === "suspended") {
             // Resume overdue timers once, as after a long browser suspension.
-            await page.clock.fastForward(120000);
+            await runtime.clock.fastForward(120000);
         }
         await page.evaluate(() => {
             document.dispatchEvent(new Event("resume"));
@@ -346,19 +343,19 @@ for (const route of ["session", "suspended"] as const) {
         });
         if (route === "session") {
             // Foreground hints must not probe or reset an otherwise-open Session transport.
-            await page.clock.runFor(5000);
+            await runtime.clock.runFor(5000);
             await expect(composer).toBeEnabled();
             await expect(page.getByTestId(dataTestId.sendMessage)).toBeEnabled();
             await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
         }
         if (route === "session") {
             // The SDK pings every 20 seconds and drops a tunnel that leaves a ping unanswered for 10.
-            await page.clock.runFor(30000);
+            await runtime.clock.runFor(30000);
             // Let the real replacement handshake and Session reconciliation complete before advancing
             // another connection deadline. An editable composer and a hidden notice also hold during recovery.
             await expect(page.getByTestId(dataTestId.sendMessage)).toBeEnabled();
         }
-        await page.clock.runFor(15000);
+        await runtime.clock.runFor(15000);
         await expect(composer).toBeEnabled();
         await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
         await expect(composer).toHaveValue("Continue after resuming.");
@@ -375,8 +372,8 @@ test("Given a silently stalled session without a lifecycle event, when its liven
     network,
 }) => {
     const { page } = runtime;
-    await page.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
-    await page.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
+    await runtime.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
+    await runtime.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
@@ -391,8 +388,8 @@ test("Given a silently stalled session without a lifecycle event, when its liven
     network.blackhole();
     // The SDK pings every 20 seconds and drops a tunnel that leaves a ping unanswered for 10; the Session then
     // reconnects on a new tunnel.
-    await page.clock.runFor(30000);
-    await page.clock.runFor(5000);
+    await runtime.clock.runFor(30000);
+    await runtime.clock.runFor(5000);
     await expect(composer).toBeEnabled();
     await expect(page.getByTestId(dataTestId.sendMessage)).toBeEnabled();
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
@@ -415,8 +412,8 @@ test("Given a live Session stream with stalled requests, when foreground hints p
             connections += 1;
         }
     });
-    await page.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
-    await page.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
+    await runtime.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
+    await runtime.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
@@ -435,15 +432,15 @@ test("Given a live Session stream with stalled requests, when foreground hints p
         window.dispatchEvent(new Event("online"));
     });
     // Foreground hints alone do not probe or reset the stream.
-    await page.clock.runFor(5000);
+    await runtime.clock.runFor(5000);
     await expect(page.getByTestId(dataTestId.sendMessage)).toBeEnabled();
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
     expect(connections).toBe(before);
     // The stalled tunnel cannot carry the SDK's 20-second ping, so it is dropped once that ping goes unanswered for
     // 10 seconds and the Session continues on a new connection.
-    await page.clock.runFor(30000);
-    // The replacement handshake and authorization use real network I/O. Let retry timers run while those finish.
-    await page.clock.resume();
+    await runtime.clock.runFor(30000);
+    // Advance retry deadlines together with both payload clocks while the real handshake completes.
+    await runtime.clock.runFor(5000);
     await expect.poll(() => connections).toBeGreaterThan(before);
     await expect(page.getByTestId(dataTestId.sendMessage)).toBeEnabled();
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
@@ -461,7 +458,7 @@ test("Given a mobile browser with an unsent draft, when its network is disabled 
 }) => {
     const { page } = runtime;
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
+    await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
@@ -475,7 +472,7 @@ test("Given a mobile browser with an unsent draft, when its network is disabled 
     await expect(page.getByRole("button", { name: "Send message" })).toBeDisabled();
     await composer.fill("Keep this draft and my offline edits");
     await page.context().setOffline(false);
-    await page.clock.runFor(5000);
+    await runtime.clock.runFor(5000);
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
     await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
     await expect(composer).toHaveValue("Keep this draft and my offline edits");
@@ -490,7 +487,7 @@ test("Given an active turn on mobile, when the browser goes offline and the user
     runtime,
 }) => {
     const { page } = runtime;
-    await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
+    await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
@@ -508,7 +505,7 @@ test("Given an active turn on mobile, when the browser goes offline and the user
     await expect(composer).toHaveValue("Keep this follow-up");
     await expect(page.getByTestId(dataTestId.queuedMessage)).toHaveCount(0);
     await page.context().setOffline(false);
-    await page.clock.runFor(5000);
+    await runtime.clock.runFor(5000);
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
     await expect(page.getByTestId(dataTestId.sendMessage)).toBeEnabled();
     await composer.press("Enter");
