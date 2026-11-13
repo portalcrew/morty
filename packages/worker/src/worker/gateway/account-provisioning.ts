@@ -1,7 +1,7 @@
 import * as v from "valibot";
 import type { AccountProvisioner } from "../../contracts/account-provisioning.ts";
 import type { CloudBindings } from "../../contracts/cloud-bindings.ts";
-import { accountComputerId } from "../../contracts/computer-id.ts";
+import { accountComputerId, computerObjectName } from "../../contracts/computer-id.ts";
 import { computerManagementSchema } from "../../contracts/computer-management.ts";
 import { computerAccountPath } from "../../contracts/computer-relay-http.ts";
 import { validateIdentifier } from "../../contracts/relay/pairing.ts";
@@ -18,7 +18,7 @@ export function accountProvisioner(bindings: CloudBindings): AccountProvisioner 
         using deadline = new RequestDeadline(signal, 15_000);
         try {
             deadline.signal.throwIfAborted();
-            const stub = configured.COMPUTER_RELAY.getByName(computerId, { locationHint });
+            const stub = configured.COMPUTER_RELAY.getByName(computerObjectName(computerId), { locationHint });
             return await deadline.wait(
                 (async () => {
                     const response = await stub.fetch(

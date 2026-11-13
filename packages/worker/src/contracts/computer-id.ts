@@ -48,3 +48,11 @@ export function computerIdFromPrefixedValue(value: string): string | null {
     const computerId = match?.[1];
     return computerId !== undefined && decodeComputerPlacement(computerId) !== null ? computerId : null;
 }
+
+/**
+ * The name of the Durable Object that owns a computer's storage. Its version is part of the name, so raising it
+ * starts every computer on a fresh object instead of reinterpreting storage written under an earlier layout.
+ */
+export function computerObjectName(computerId: string): string {
+    return `v2/${computerId}`;
+}

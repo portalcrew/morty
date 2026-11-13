@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { DatabaseError } from "../../../../infra/sql-database.ts";
 import type { DurableObjectDatabase } from "../../../infra/durable-object-database.ts";
-import { computerConnection } from "../../../schema/pairing-do/index.ts";
+import { computerConnection } from "../../../schema/computer-relay-do/index.ts";
 import { activeGeneration } from "../../management/storage/computer-generation.ts";
 import type { ComputerConnection, LatestComputerConnection } from "../entity/computer-connection.ts";
 

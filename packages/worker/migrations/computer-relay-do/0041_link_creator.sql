@@ -1,1 +1,0 @@
-ALTER TABLE `identity_transfer` ADD `created_by_credential_id` text;

@@ -32,6 +32,7 @@ import { createRuntimeContext } from "../../src/computer-relay/components/runtim
 import { createRelayDurableObjectContext } from "../../src/computer-relay/composition/relay-durable-object-context.ts";
 import { ComputerRelay as RelayComputerRelay } from "../../src/computer-relay/computer-relay.ts";
 import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-object-database.ts";
+import { computerObjectName } from "../../src/contracts/computer-id.ts";
 import { RelayAuthenticationConfiguration } from "../../src/contracts/relay/computer-management.ts";
 import type { RelayBindings } from "../../src/contracts/relay-bindings.ts";
 import { browserOperationHeaders, closeBrowserSocket, requestBrowserOperation } from "./browser-session.ts";
@@ -418,7 +419,9 @@ describe.sequential("Relay Session-only boundary", () => {
             });
             // Browser transports are not hibernatable. Finish the subscription before waking the daemon again.
             await closeBrowserSocket(v2Socket, new AbortController().signal);
-            await evictDurableObject(environment.COMPUTER_RELAY.getByName(computerId), { webSockets: "hibernate" });
+            await evictDurableObject(environment.COMPUTER_RELAY.getByName(computerObjectName(computerId)), {
+                webSockets: "hibernate",
+            });
             // A delayed result after the caller has finished must not disconnect the Computer.
             daemon.send(historyPage);
             // A Computer that closed the Session refuses to load its history. The refusal is a typed conflict, so a
@@ -529,14 +532,17 @@ describe.sequential("Relay Session-only boundary", () => {
             otherBrowser.send('{"kind":"ping"}');
             expect(await otherMessages.next()).toBe('{"kind":"pong"}');
             await closeBrowserSocket(otherBrowser, new AbortController().signal);
-            await runInDurableObject(environment.COMPUTER_RELAY.getByName(computerId), async (_instance, state) => {
-                const sessionTables = [
-                    ...state.storage.sql.exec<{ name: string }>(
-                        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('sessions', 'session_bindings', 'session_configuration_snapshots', 'turns', 'attempts', 'interactions', 'pending_work', 'command_receipts', 'session_event_receipts', 'reliable_event_receipts', 'computer_active_sessions', 'computer_disconnect')",
-                    ),
-                ];
-                expect(sessionTables).toEqual([]);
-            });
+            await runInDurableObject(
+                environment.COMPUTER_RELAY.getByName(computerObjectName(computerId)),
+                async (_instance, state) => {
+                    const sessionTables = [
+                        ...state.storage.sql.exec<{ name: string }>(
+                            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('sessions', 'session_bindings', 'session_configuration_snapshots', 'turns', 'attempts', 'interactions', 'pending_work', 'command_receipts', 'session_event_receipts', 'reliable_event_receipts', 'computer_active_sessions', 'computer_disconnect')",
+                        ),
+                    ];
+                    expect(sessionTables).toEqual([]);
+                },
+            );
         } finally {
             daemon.close(1000, "Test complete");
         }
@@ -659,14 +665,17 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
     const heartbeat = async (): Promise<number> => {
         daemon.send(COMPUTER_HEARTBEAT_MESSAGE);
         expect(await daemonMessages.next()).toBe(COMPUTER_HEARTBEAT_ACK_MESSAGE);
-        return await runInDurableObject(environment.COMPUTER_RELAY.getByName(computerId), (_instance, state) => {
-            const socket = state.getWebSockets("daemon")[0];
-            const answeredAt = socket === undefined ? null : state.getWebSocketAutoResponseTimestamp(socket);
-            if (answeredAt === null) {
-                throw new Error("Expected Cloudflare to have answered the heartbeat");
-            }
-            return answeredAt.getTime();
-        });
+        return await runInDurableObject(
+            environment.COMPUTER_RELAY.getByName(computerObjectName(computerId)),
+            (_instance, state) => {
+                const socket = state.getWebSockets("daemon")[0];
+                const answeredAt = socket === undefined ? null : state.getWebSocketAutoResponseTimestamp(socket);
+                if (answeredAt === null) {
+                    throw new Error("Expected Cloudflare to have answered the heartbeat");
+                }
+                return answeredAt.getTime();
+            },
+        );
     };
     if (options.anchorClockToHeartbeat === true) {
         vi.setSystemTime(await heartbeat());
@@ -856,7 +865,7 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
             destinationComputerId: string = computerId,
         ) =>
             requestBrowserOperation(
-                (request) => env.COMPUTER_RELAY.getByName(destinationComputerId).fetch(request),
+                (request) => env.COMPUTER_RELAY.getByName(computerObjectName(destinationComputerId)).fetch(request),
                 new Request(
                     `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${computerId}/harnesses/codex/sessions/${requestedSessionId}/turns`,
                     {
@@ -872,7 +881,7 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
             ),
         readSessionExecution: (commandId?: string) =>
             requestBrowserOperation(
-                (request) => env.COMPUTER_RELAY.getByName(computerId).fetch(request),
+                (request) => env.COMPUTER_RELAY.getByName(computerObjectName(computerId)).fetch(request),
                 new Request(
                     `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${computerId}/harnesses/codex/sessions/${sessionId}/active-turn?${new URLSearchParams(
                         commandId === undefined ? {} : { commandId },
@@ -911,46 +920,55 @@ it.each(["text", "binary"])(
             }
         });
         const deliver = (message: string | Uint8Array) =>
-            runInDurableObject(env.COMPUTER_RELAY.getByName(runtime.computerId), async (_instance, state) => {
-                const pending: Promise<void>[] = [];
-                const database = new DurableObjectDatabase(state.storage);
-                const { access } = computerAccess(runtime.computerId, state.storage);
-                const context = createRelayDurableObjectContext(state, { database, access: () => access });
-                const relay = new DaemonWebSocketRoutes(
-                    createRuntimeContext({
-                        doDatabase: database,
-                        services: context.services,
-                        gateways: context.gateways,
-                        utilities: {
-                            waitUntil: (operation) => {
-                                pending.push(operation);
+            runInDurableObject(
+                env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)),
+                async (_instance, state) => {
+                    const pending: Promise<void>[] = [];
+                    const database = new DurableObjectDatabase(state.storage);
+                    const { access } = computerAccess(runtime.computerId, state.storage);
+                    const context = createRelayDurableObjectContext(state, { database, access: () => access });
+                    const relay = new DaemonWebSocketRoutes(
+                        createRuntimeContext({
+                            doDatabase: database,
+                            services: context.services,
+                            gateways: context.gateways,
+                            utilities: {
+                                waitUntil: (operation) => {
+                                    pending.push(operation);
+                                },
                             },
-                        },
-                    }),
-                );
-                const daemon = state.getWebSockets("daemon")[0];
-                if (daemon === undefined) {
-                    throw new Error("Expected the accepted Computer connection");
-                }
-                await relay.webSocketMessage(
-                    daemon,
-                    typeof message === "string" ? message : new Uint8Array(message).buffer,
-                );
-                await Promise.all(pending);
-            });
+                        }),
+                    );
+                    const daemon = state.getWebSockets("daemon")[0];
+                    if (daemon === undefined) {
+                        throw new Error("Expected the accepted Computer connection");
+                    }
+                    await relay.webSocketMessage(
+                        daemon,
+                        typeof message === "string" ? message : new Uint8Array(message).buffer,
+                    );
+                    await Promise.all(pending);
+                },
+            );
         try {
             await deliver(liveEvent(runtime.sessionTarget, "before revocation"));
             expect(await messages.next()).toContain("before revocation");
-            await runInDurableObject(env.COMPUTER_RELAY.getByName(runtime.computerId), (_instance, state) => {
-                state.storage.sql.exec(`CREATE TRIGGER reject_computer_disconnect BEFORE UPDATE OF disconnected_at ON computer_connection
+            await runInDurableObject(
+                env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)),
+                (_instance, state) => {
+                    state.storage.sql.exec(`CREATE TRIGGER reject_computer_disconnect BEFORE UPDATE OF disconnected_at ON computer_connection
                 BEGIN SELECT RAISE(ABORT, 'Controlled disconnect failure'); END`);
-            });
+                },
+            );
             try {
                 await expect(runtime.revoke()).rejects.toThrow();
             } finally {
-                await runInDurableObject(env.COMPUTER_RELAY.getByName(runtime.computerId), (_instance, state) => {
-                    state.storage.sql.exec("DROP TRIGGER reject_computer_disconnect");
-                });
+                await runInDurableObject(
+                    env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)),
+                    (_instance, state) => {
+                        state.storage.sql.exec("DROP TRIGGER reject_computer_disconnect");
+                    },
+                );
             }
             // A revoked Computer's daemon is told so, and stops instead of retrying.
             const reconnected = await runtime.reconnect();
@@ -1703,7 +1721,7 @@ describe.sequential("Relay Turn submission", () => {
             const signingSecret = "rotated-test-only-session-signing-secret";
             const reissued = await runtime.resignCredential(async () => await relaySigningKey(signingSecret));
             const statuses = await runInDurableObject(
-                env.COMPUTER_RELAY.getByName(runtime.computerId),
+                env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)),
                 async (_instance, state) => {
                     // Reconstruct the production object with the same persisted sockets and a newly deployed binding.
                     const rotated = new RelayComputerRelay(state, {
@@ -2352,7 +2370,9 @@ it("Given a Fork in flight, When it is requested again concurrently and after Re
         expect(original).toMatchObject({ action: "fork", target: forkTarget });
         expect(await responseJson(await concurrent, 200)).toEqual(original);
 
-        await evictDurableObject(env.COMPUTER_RELAY.getByName(runtime.computerId), { webSockets: "hibernate" });
+        await evictDurableObject(env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)), {
+            webSockets: "hibernate",
+        });
         const replayed = runtime.forkNative(operationId, input);
         // The Computer answers the retry from the receipt it keeps under the same operation identity.
         expect(record(JSON.parse(await runtime.daemonMessages.next()))).toEqual(fork);
@@ -2534,7 +2554,7 @@ describe("Computer prompt acknowledgements", () => {
             const credential = await runtime.issueComputerCredential(runtime.computerId);
             const queue = (idempotencyKey: string) =>
                 requestBrowserOperation(
-                    (request) => env.COMPUTER_RELAY.getByName(runtime.computerId).fetch(request),
+                    (request) => env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)).fetch(request),
                     new Request(
                         `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/turns`,
                         {

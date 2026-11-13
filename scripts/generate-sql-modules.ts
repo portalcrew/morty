@@ -66,16 +66,6 @@ await writeMigrationModule(
     await sqlFiles(join(cli, "migrations/session-event-cache")),
 );
 await writeMigrationModule(
-    join(worker, "src/computer-relay/generated/connection-do-migrations.ts"),
-    "relayOperationsDurableObjectMigrations",
-    await sqlFiles(join(worker, "migrations/connection-do")),
-);
-await writeMigrationModule(
-    join(worker, "src/computer-relay/generated/pairing-do-migrations.ts"),
-    "computerDurableObjectMigrations",
-    await sqlFiles(join(worker, "migrations/pairing-do")),
-);
-await writeMigrationModule(
     join(worker, "src/computer-relay/generated/computer-relay-do-migrations.ts"),
     "computerDurableObjectMigrations",
     await sqlFiles(join(worker, "migrations/computer-relay-do")),

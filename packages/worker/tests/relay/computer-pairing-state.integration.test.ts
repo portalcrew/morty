@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";
 import { ComputerDirectoryStorage } from "../../src/computer-relay/components/management/storage/computer-directory-storage.ts";
 import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-object-database.ts";
+import { computerObjectName } from "../../src/contracts/computer-id.ts";
 import { RelayAuthenticationConfiguration } from "../../src/contracts/relay/computer-management.ts";
 import { hashPairingCredential } from "../../src/contracts/relay/pairing.ts";
 import { computerBackend, createOwner, ownerRequest } from "./owner-fixture.ts";
@@ -37,7 +38,7 @@ async function computer() {
     const owner = await createOwner();
     const { computerId } = owner;
     const backend = computerBackend(computerId);
-    const stub = env.COMPUTER_RELAY.getByName(computerId);
+    const stub = env.COMPUTER_RELAY.getByName(computerObjectName(computerId));
     const request = async (path: string, method = "GET", body?: object, token = owner.token) =>
         await worker.fetch(
             new Request(`${origin}${path}`, {

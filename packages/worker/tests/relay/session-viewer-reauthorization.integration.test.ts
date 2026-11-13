@@ -11,6 +11,7 @@ import { afterAll, afterEach, beforeEach, expect, it, onTestFinished, vi } from 
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";
 import { IdentityStorage } from "../../src/computer-relay/components/management/storage/identity-storage.ts";
 import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-object-database.ts";
+import { computerObjectName } from "../../src/contracts/computer-id.ts";
 import { RelayAuthenticationConfiguration } from "../../src/contracts/relay/computer-management.ts";
 import { createOwner, issueSession, ownerRequest, pairComputer } from "./owner-fixture.ts";
 
@@ -95,7 +96,7 @@ async function openSessionView(_slug: string) {
     daemon.send(COMPUTER_HEARTBEAT_MESSAGE);
     await heartbeat;
     vi.setSystemTime(
-        await runInDurableObject(env.COMPUTER_RELAY.getByName(computerId), (_instance, state) => {
+        await runInDurableObject(env.COMPUTER_RELAY.getByName(computerObjectName(computerId)), (_instance, state) => {
             const socket = state.getWebSockets("daemon")[0];
             const answeredAt = socket === undefined ? null : state.getWebSocketAutoResponseTimestamp(socket);
             if (answeredAt === null) {
@@ -176,7 +177,7 @@ it("Given a live Session view the revocation push missed, When the Computer's Se
     });
 
     // The revocation commits, but its push never reaches the view (or reached it before the view opened).
-    await runInDurableObject(env.COMPUTER_RELAY.getByName(computerId), async (_instance, state) => {
+    await runInDurableObject(env.COMPUTER_RELAY.getByName(computerObjectName(computerId)), async (_instance, state) => {
         const signal = AbortSignal.timeout(10_000);
         const identities = new IdentityStorage(new DurableObjectDatabase(state.storage), computerId);
         const credential = await identities.findCredential(owner.token, Date.now(), signal);
@@ -191,7 +192,7 @@ it("Given a live Session view the revocation push missed, When the Computer's Se
             ),
         ).toBe(true);
     });
-    expect(await runDurableObjectAlarm(env.COMPUTER_RELAY.getByName(computerId))).toBe(true);
+    expect(await runDurableObjectAlarm(env.COMPUTER_RELAY.getByName(computerObjectName(computerId)))).toBe(true);
 
     expect(await viewInbox.next()).toMatchObject({
         kind: "session.events.end",

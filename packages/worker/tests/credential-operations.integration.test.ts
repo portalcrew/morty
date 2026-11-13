@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { computerObjectName } from "../src/contracts/computer-id.ts";
 import worker, { fetchPublicApplication } from "../src/worker/application.ts";
 import { APP_ORIGIN, createIdentityFixture } from "./support/identity-fixture.ts";
 
@@ -162,7 +163,7 @@ test("Given browser access granted through a link, When the access term its link
     expect((await session(browser)).status).toBe(200);
 
     const namespace = fixture.environment().COMPUTER_RELAY;
-    const storage = namespace.get(namespace.idFromName(owner.computerId));
+    const storage = namespace.get(namespace.idFromName(computerObjectName(owner.computerId)));
     const aged = await storage.fetch(new Request("https://computer.internal/aged-links", { method: "POST" }));
     expect(aged.status).toBe(204);
 
@@ -217,7 +218,7 @@ test("Given a well-formed Computer identifier that was never created, When an un
     expect(await response.json()).toMatchObject({ error: { code: "COMPUTER_NOT_FOUND" } });
     const namespace = fixture.environment().COMPUTER_RELAY;
     const stored = await namespace
-        .get(namespace.idFromName(computerId))
+        .get(namespace.idFromName(computerObjectName(computerId)))
         .fetch(new Request("https://computer.internal/stored-state"));
     expect(await stored.json()).toEqual({ keys: [], tables: [] });
 });

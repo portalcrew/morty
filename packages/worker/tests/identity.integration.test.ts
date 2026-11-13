@@ -1,5 +1,6 @@
 import * as v from "valibot";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { computerObjectName } from "../src/contracts/computer-id.ts";
 import worker, { fetchPublicApplication } from "../src/worker/application.ts";
 import { APP_ORIGIN, accountRequest, anonymousCreationKey, createIdentityFixture } from "./support/identity-fixture.ts";
 
@@ -101,7 +102,7 @@ test("Given no D1 binding, When a user creates Computers and later links saved C
     expect(wrongComputerCredential.status).toBe(401);
     const namespace = environment.COMPUTER_RELAY;
     const stored = await namespace
-        .get(namespace.idFromName(first.computerId))
+        .get(namespace.idFromName(computerObjectName(first.computerId)))
         .fetch(new Request("https://computer.internal/stored-state"));
     expect(await stored.json()).toMatchObject({ keys: expect.arrayContaining(["computer-account", "computer-id"]) });
 });

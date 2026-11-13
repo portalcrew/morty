@@ -1,1 +1,0 @@
-DROP TABLE `reliable_event_receipts`;

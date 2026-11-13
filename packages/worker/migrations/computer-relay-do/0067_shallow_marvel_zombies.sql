@@ -1,1 +1,0 @@
-DROP TABLE `managed_bot`;

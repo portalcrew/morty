@@ -1,7 +1,7 @@
 import * as v from "valibot";
 import type { AccountProvisioner } from "../../contracts/account-provisioning.ts";
 import type { CloudBindings } from "../../contracts/cloud-bindings.ts";
-import { accountComputerId, decodeComputerPlacement } from "../../contracts/computer-id.ts";
+import { accountComputerId, computerObjectName, decodeComputerPlacement } from "../../contracts/computer-id.ts";
 import type { ComputerLocationHint } from "../../contracts/computer-location.ts";
 import {
     ComputerManagementError,
@@ -39,7 +39,7 @@ export class ComputerRelayGateway {
         try {
             deadline.signal.throwIfAborted();
             const namespace = this.#bindings.COMPUTER_RELAY;
-            const stub = namespace.getByName(this.#computerId, {
+            const stub = namespace.getByName(computerObjectName(this.#computerId), {
                 locationHint: this.#locationHint,
             });
             return await deadline.wait(operation(stub, deadline.signal));

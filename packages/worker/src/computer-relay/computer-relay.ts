@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { COMPUTER_HEARTBEAT_ACK_MESSAGE, COMPUTER_HEARTBEAT_MESSAGE } from "@morty-build/client/protocol";
 import { Hono } from "hono";
-import { decodeComputerPlacement } from "../contracts/computer-id.ts";
+import { computerObjectName, decodeComputerPlacement } from "../contracts/computer-id.ts";
 import { ComputerManagementError } from "../contracts/computer-management.ts";
 import type { ConfiguredRelayBindings } from "../contracts/relay-bindings.ts";
 import { errorHandler } from "../http/error-middleware.ts";
@@ -142,7 +142,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
     }
 
     #owns(computerId: string): boolean {
-        return this.env.COMPUTER_RELAY.idFromName(computerId).toString() === this.ctx.id.toString();
+        return this.env.COMPUTER_RELAY.idFromName(computerObjectName(computerId)).toString() === this.ctx.id.toString();
     }
 
     #operate(computerId: string): Store {

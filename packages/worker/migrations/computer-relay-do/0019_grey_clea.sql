@@ -1,1 +1,0 @@
-ALTER TABLE `managed_bot` ADD `agent_ref` text;

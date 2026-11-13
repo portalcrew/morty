@@ -1,1 +1,0 @@
-ALTER TABLE `managed_bot` RENAME COLUMN "runtime_id" TO "computer_id";

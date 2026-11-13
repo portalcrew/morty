@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { ComputerIdentityCredential } from "../../../../contracts/relay/pairing-identity.ts";
 import { relayDrizzle } from "../../../../infra/drizzle-database.ts";
 import type { DurableObjectDatabase } from "../../../infra/durable-object-database.ts";
-import { computerPairing, daemonCredential } from "../../../schema/pairing-do/index.ts";
+import { computerPairing, daemonCredential } from "../../../schema/computer-relay-do/index.ts";
 import { activeGeneration } from "./computer-generation.ts";
 
 /** Whether this computer's storage holds the credential: an active daemon credential, or a pairing code it issued. */
