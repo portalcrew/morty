@@ -182,6 +182,7 @@ export {
 } from "./session/files/index.ts";
 
 export type {
+    InteractionAccepted,
     SessionElicitationField,
     SessionElicitationOption,
     SessionElicitationRequestedEvent,
@@ -195,6 +196,7 @@ export type {
 } from "./session/interactions/index.ts";
 
 export {
+    decodeInteractionAccepted,
     decodeSessionElicitationRequestedEvent,
     decodeSessionElicitationRespondCommand,
     decodeSessionInteractionAnsweredEvent,
@@ -373,10 +375,12 @@ export {
 
 export type {
     Turn,
+    TurnCancellation,
+    TurnReference,
     TurnState,
 } from "./session/turn/index.ts";
 
-export { decodeTurn } from "./session/turn/index.ts";
+export { decodeTurn, decodeTurnCancellation, decodeTurnReference } from "./session/turn/index.ts";
 
 export type {
     WorkspaceEntriesEvent,

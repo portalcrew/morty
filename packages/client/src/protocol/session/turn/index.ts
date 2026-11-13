@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { identifierSchema } from "../../shared/identifier.ts";
+import { decodeZodValue } from "../../shared/message-codec.ts";
 import { sessionConfigurationSelectionsSchema } from "../configuration/index.ts";
 import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
 
@@ -51,3 +52,17 @@ export const decodeTurn = (value: unknown): Turn | null => {
     const decoded = turnSchema.safeParse(value);
     return decoded.success ? decoded.data : null;
 };
+
+/** What the Relay answers when it steered or withdrew a Turn: the Turn it acted on. */
+const turnReferenceSchema = z.object({ turnId: identifierSchema }).readonly();
+
+export type TurnReference = z.infer<typeof turnReferenceSchema>;
+
+/** What the Relay answers when it stopped a Turn: the Turn, and `cancelled` or the Agent's stop reason. */
+const turnCancellationSchema = z.object({ stopReason: z.string().max(255), turnId: identifierSchema }).readonly();
+
+export type TurnCancellation = z.infer<typeof turnCancellationSchema>;
+
+export const decodeTurnReference = (value: unknown): TurnReference => decodeZodValue(value, turnReferenceSchema);
+export const decodeTurnCancellation = (value: unknown): TurnCancellation =>
+    decodeZodValue(value, turnCancellationSchema);
