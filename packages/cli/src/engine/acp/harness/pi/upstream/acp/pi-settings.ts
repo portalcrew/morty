@@ -7,7 +7,8 @@ function isObject(x: unknown): x is Record<string, unknown> {
 }
 
 function deepMerge(a: Record<string, unknown>, b: Record<string, unknown>): Record<string, unknown> {
-    const out: Record<string, unknown> = { ...a };
+    // Configuration keys are data: never consult or invoke Object.prototype setters.
+    const out: Record<string, unknown> = Object.assign(Object.create(null), a);
     for (const [k, v] of Object.entries(b)) {
         const av = out[k];
         if (isObject(av) && isObject(v)) {
