@@ -70,7 +70,7 @@ jobs:
   # A skipped pipeline would skip every later job by default, so each release
   # job requires the success of the job it needs explicitly.
   deployment-preflight:
-    if: ${{ !cancelled() && needs.accepted.result == 'success' && needs.accepted.outputs.release == 'true' && (needs.pipeline.result == 'success' || (needs.pipeline.result == 'skipped' && needs.accepted.outputs.run-id != '')) && github.repository_id == '1446677406' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ !cancelled() && needs.accepted.result == 'success' && needs.accepted.outputs.release == 'true' && (needs.pipeline.result == 'success' || (needs.pipeline.result == 'skipped' && needs.accepted.outputs.run-id != '')) && github.repository_id == '1456063169' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     needs: [accepted, pipeline]
     runs-on: ubuntu-latest
     environment: morty-production
@@ -142,7 +142,7 @@ jobs:
           retention-days: 90
 
   publish:
-    if: ${{ !cancelled() && needs.deployment-preflight.result == 'success' && github.repository_id == '1446677406' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ !cancelled() && needs.deployment-preflight.result == 'success' && github.repository_id == '1456063169' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     needs: deployment-preflight
     runs-on: ubuntu-latest
     environment: morty-npm

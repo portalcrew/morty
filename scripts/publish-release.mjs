@@ -5,7 +5,7 @@ import { verifiedRelease } from "./release-artifact.mjs";
 
 const release = await verifiedRelease();
 if (
-    process.env.GITHUB_REPOSITORY_ID !== "1446677406" ||
+    process.env.GITHUB_REPOSITORY_ID !== "1456063169" ||
     process.env.GITHUB_REF !== "refs/heads/main" ||
     !process.env.ACTIONS_ID_TOKEN_REQUEST_URL
 ) {

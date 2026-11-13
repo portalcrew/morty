@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { appendFile } from "node:fs/promises";
 
 // A rename must not change which repository owns accepted release history.
-const repositoryId = 1446677406;
+const repositoryId = 1456063169;
 const resolvedRepository = JSON.parse(
     execFileSync("gh", ["api", `repositories/${repositoryId}`], { encoding: "utf8", timeout: 60000 }),
 );

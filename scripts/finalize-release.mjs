@@ -65,7 +65,7 @@ if (published.version !== release.version || published.dist?.integrity !== relea
 }
 const gh = (...args) => execFileSync("gh", args, { encoding: "utf8", timeout: 120000 });
 const repository = process.env.GITHUB_REPOSITORY;
-if (process.env.GITHUB_REPOSITORY_ID !== "1446677406" || process.env.GITHUB_REF !== "refs/heads/main") {
+if (process.env.GITHUB_REPOSITORY_ID !== "1456063169" || process.env.GITHUB_REF !== "refs/heads/main") {
     throw new Error("Release finalization requires the protected main workflow");
 }
 if (!/^\d+$/.test(process.env.ACCEPTANCE_RUN_ID ?? "")) {

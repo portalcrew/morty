@@ -4,7 +4,7 @@ import { releaseVersion, verifiedRelease } from "./release-artifact.mjs";
 
 // The merge queue tests the exact commit that becomes main and builds its release
 // archive. Release that archive instead of rebuilding and retesting the same source.
-const repositoryId = 1446677406;
+const repositoryId = 1456063169;
 const repository = process.env.GITHUB_REPOSITORY;
 const revision = process.env.GITHUB_SHA;
 const run = process.env.GITHUB_RUN_ID;
