@@ -15,54 +15,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Markdown cannot change tests or the release archive's behavior. The policy in
-  # markdown-policy.yml keeps Markdown changes in their own pull requests, and the
-  # main release chain runs the complete pipeline for commits without an accepted archive.
-  changes:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      markdown-only: ${{ steps.classify.outputs.markdown-only }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - name: Classify the changed files
-        id: classify
-        env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
-        run: |
-          # Without rename detection a rename lists both paths. An empty diff runs everything.
-          changed="$(git diff --no-renames --name-only "$BASE...$HEAD")"
-          if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qviE '\.(md|markdown|mdx)$'; then
-            echo "markdown-only=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "markdown-only=false" >> "$GITHUB_OUTPUT"
-          fi
-
+  # Every job starts at once. The pipeline classifies the change itself, so that nothing waits for a job that only
+  # decides whether the change is Markdown-only.
   pipeline:
-    needs: changes
     uses: ./.github/workflows/morty-pipeline.yml
     with:
-      markdown-only: ${{ needs.changes.outputs.markdown-only == 'true' }}
+      base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+      head-sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
       # The merge queue commit becomes main unchanged; main releases its accepted archive.
       release: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_ref == 'refs/heads/main' }}
     permissions:
       contents: read
       actions: read
 
-  # The single required check. It fails unless the classification and every
-  # applicable pipeline job succeeded, including when either was cancelled.
+  # The single required check. It fails unless every applicable pipeline job
+  # succeeded, including when the pipeline was cancelled.
   ci-ok:
-    needs: [changes, pipeline]
+    needs: [pipeline]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Require the complete pipeline to pass
         env:
-          CHANGES: ${{ needs.changes.result }}
           PIPELINE: ${{ needs.pipeline.result }}
-        run: test "$CHANGES" = success && test "$PIPELINE" = success
+        run: test "$PIPELINE" = success

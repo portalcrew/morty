@@ -6,10 +6,14 @@ name: Morty pipeline
 on:
   workflow_call:
     inputs:
-      markdown-only:
-        description: The change touches only Markdown, so only static checks and the security scan apply.
-        type: boolean
-        default: false
+      base-sha:
+        description: The revision the change is compared against. Without a range, every job applies.
+        type: string
+        default: ''
+      head-sha:
+        description: The revision that carries the change. When the range lists only Markdown, only static checks and the security scan apply.
+        type: string
+        default: ''
       release:
         description: Build the release candidate for this main commit, carrying its release version and tested on every supported OS.
         type: boolean
@@ -40,7 +44,6 @@ jobs:
       - run: pnpm knip
 
   services:
-    if: ${{ !inputs.markdown-only }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -50,16 +53,31 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+      # Markdown cannot change tests or the release archive's behavior. Each job classifies the change itself, so that
+      # every job starts at once instead of waiting for a job that only decides this.
+      - &scope
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ inputs.base-sha }}
+          HEAD_SHA: ${{ inputs.head-sha }}
+        run: node scripts/classify-changes.mjs
       - run: corepack enable
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm install --frozen-lockfile
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm build:cli
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm test:client
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm test:relay-support
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm test:relay
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm test:worker
+        if: steps.scope.outputs.markdown-only != 'true'
 
   runtime:
-    if: ${{ !inputs.markdown-only }}
     strategy:
       fail-fast: false
       matrix:
@@ -73,13 +91,17 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+      - *scope
       - run: corepack enable
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm install --frozen-lockfile
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm build:cli
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm test:runtime --shard=${{ matrix.shard }}/2
+        if: steps.scope.outputs.markdown-only != 'true'
 
   web:
-    if: ${{ !inputs.markdown-only }}
     strategy:
       fail-fast: false
       matrix:
@@ -93,13 +115,17 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+      - *scope
       - run: corepack enable
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm install --frozen-lockfile
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm build:cli
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm test:web --shard=${{ matrix.shard }}/4
+        if: steps.scope.outputs.markdown-only != 'true'
 
   browser:
-    if: ${{ !inputs.markdown-only }}
     strategy:
       fail-fast: false
       matrix:
@@ -118,12 +144,18 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+      - *scope
       - run: corepack enable
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm install --frozen-lockfile
+        if: steps.scope.outputs.markdown-only != 'true'
       - run: pnpm build:cli
+        if: steps.scope.outputs.markdown-only != 'true'
       - name: Install the accepted real Codex boundary dependency
+        if: steps.scope.outputs.markdown-only != 'true'
         run: npm install --global @openai/codex@0.166.0
       - run: pnpm test:e2e --shard=${{ matrix.shard }}/8
+        if: steps.scope.outputs.markdown-only != 'true'
         env:
           # A failed journey keeps its trace, page, screenshot and process logs here for the failure artifact. The path
           # is relative to the suite in packages/e2e: in a container job, runner paths name the host, not the container.
@@ -140,12 +172,13 @@ jobs:
   # Packing does not depend on test results, so the archive is built and accepted
   # while the source checks run. Only publication requires every job to pass.
   package:
-    if: ${{ !inputs.markdown-only }}
     permissions:
       contents: read
       actions: read
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      markdown-only: ${{ steps.scope.outputs.markdown-only }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -154,27 +187,29 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+      - *scope
       - name: Reuse immutable artifacts when retrying this run
         id: archive
+        if: steps.scope.outputs.markdown-only != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/restore-release.mjs
       - run: corepack enable
-        if: steps.archive.outputs.restored != 'true'
+        if: steps.scope.outputs.markdown-only != 'true' && steps.archive.outputs.restored != 'true'
       - run: pnpm install --frozen-lockfile
-        if: steps.archive.outputs.restored != 'true'
+        if: steps.scope.outputs.markdown-only != 'true' && steps.archive.outputs.restored != 'true'
       - name: Assign the stable version
-        if: steps.archive.outputs.restored != 'true'
+        if: steps.scope.outputs.markdown-only != 'true' && steps.archive.outputs.restored != 'true'
         env:
           MORTY_RELEASE_CANDIDATE: ${{ inputs.release }}
         run: node scripts/prepare-release.mjs
       - run: pnpm build:cli
-        if: steps.archive.outputs.restored != 'true'
+        if: steps.scope.outputs.markdown-only != 'true' && steps.archive.outputs.restored != 'true'
       - name: Pack once and record source and integrity
-        if: steps.archive.outputs.restored != 'true'
+        if: steps.scope.outputs.markdown-only != 'true' && steps.archive.outputs.restored != 'true'
         run: node scripts/pack-release.mjs
       - name: Build and verify the matching cloud artifact
-        if: steps.archive.outputs.restored != 'true'
+        if: steps.scope.outputs.markdown-only != 'true' && steps.archive.outputs.restored != 'true'
         env:
           EXPECTED_REVISION: ${{ github.sha }}
           MORTY_CLI_RELEASE_MANIFEST: .release/release.json
@@ -183,7 +218,7 @@ jobs:
           mv .deployment-output/production .release/cloud
           python3 deployment/deploy.py production --release .release/cloud --verify-release-only
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: steps.archive.outputs.restored != 'true'
+        if: steps.scope.outputs.markdown-only != 'true' && steps.archive.outputs.restored != 'true'
         with:
           name: morty-release
           path: .release/
@@ -193,6 +228,7 @@ jobs:
 
   installed:
     needs: package
+    if: ${{ needs.package.outputs.markdown-only != 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -218,6 +254,7 @@ jobs:
 
   acceptance:
     needs: package
+    if: ${{ needs.package.outputs.markdown-only != 'true' }}
     runs-on: ubuntu-latest
     container: *playwright-container
     timeout-minutes: 30
