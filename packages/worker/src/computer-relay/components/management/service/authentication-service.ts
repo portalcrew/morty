@@ -74,7 +74,7 @@ type ComputerLinkResult =
 /** Who shared the link a device joined through, as the owner recognizes it. */
 export type DeviceSharer = { readonly kind: "computer" } | { readonly kind: "device"; readonly label: string | null };
 
-/** Null when the link's sharer is unknown, such as a credential from before credential kinds were recorded. */
+/** Null when the link's sharer is unknown: a link shared before its sharer was recorded as an access holder. */
 function deviceSharer(kind: Credential["kind"] | null, label: string | null): DeviceSharer | null {
     switch (kind) {
         case "local":

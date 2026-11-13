@@ -8,5 +8,5 @@ export {
     daemonCredential,
     retiredDaemonCredential,
 } from "./computer-pairing.ts";
-export { continueLink } from "./continue-link.ts";
+export { continueLink, linkSharedByDevice, linkSharedByOwner } from "./continue-link.ts";
 export { ownerCredential } from "./owner-credential.ts";
