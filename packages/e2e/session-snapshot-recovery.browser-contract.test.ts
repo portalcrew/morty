@@ -391,13 +391,22 @@ test("Given a partial reply, when it finishes while the browser is disconnected,
     await composer.fill("Preserve this draft.");
     // Recovery runs quietly first: the page offers no manual retry while it reconnects on its own.
     network.interrupt();
+    // Closing the proxy socket is asynchronous in WebKit. Observe the interruption before finishing the reply.
+    await expect(page.getByTestId(dataTestId.sendMessage)).toBeDisabled();
     await runtime.continueReply("wait for steering", {
         outcome: "complete",
         output: [{ kind: "text", text: "|OFFLINE_END|" }],
     });
-    await runtime.clock.runFor(5000);
+    // Network callbacks can schedule backoff after a clock advance returns. Drive time until the user sees recovery.
+    let advanced = 0;
+    await expect(async () => {
+        if (advanced < 300_000) {
+            await runtime.clock.runFor(1000);
+            advanced += 1000;
+        }
+        expect(await responses.textContent()).toContain("Waiting for steering|OFFLINE_END|");
+    }).toPass({ intervals: [0], timeout: test.info().project.use.actionTimeout ?? 30_000 });
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
-    await expect(responses).toContainText("Waiting for steering|OFFLINE_END|");
     await expect(composer).toHaveValue("Preserve this draft.");
     await expect(page.getByRole("button", { name: "Stop agent output" })).toBeHidden();
     const recovered = await responses.allTextContents();
