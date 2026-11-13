@@ -172,3 +172,65 @@ test("Given a first message whose Session is still being created, When I open an
     );
     expect(conversationEntry(app, "My carefully written first message")).toBeUndefined();
 });
+
+test("Given two first messages whose Sessions were being created, When both creations fail and the page reloads, Then both messages return to the New Session draft", {
+    timeout: 60_000,
+}, async () => {
+    const creations: PromiseWithResolvers<void>[] = [];
+    let holding = false;
+    onTestFinished(() => {
+        for (const creation of creations) {
+            creation.resolve();
+        }
+    });
+    const app = await createTestApp({
+        connectAgent: true,
+        agent: {
+            harness: "settings-test",
+            label: "Settings Agent",
+            beforeSessionCreated: async () => {
+                if (holding) {
+                    const creation = Promise.withResolvers<void>();
+                    void creation.promise.catch(() => undefined);
+                    creations.push(creation);
+                    await creation.promise;
+                }
+            },
+        },
+    });
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Earlier conversation");
+    await app.waitForView(() => {
+        expect(document.body.textContent).toContain("Settings Agent: Earlier conversation");
+        expect(conversationEntry(app, "Earlier conversation")).toBeDefined();
+    });
+    holding = true;
+    for (const message of ["First unsent message", "Second unsent message"]) {
+        await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
+        const draft = await app.queryElementByTestId(
+            dataTestId.messageComposer,
+            (element) => element instanceof HTMLTextAreaElement && !element.disabled && element.value === "",
+        );
+        await sendPrompt(app, draft, message);
+        await app.waitForView(() =>
+            getByRole(app.elementByTestId(dataTestId.queuedMessage), "status", { name: "Sending message" }),
+        );
+    }
+    const earlier = conversationEntry(app, "Earlier conversation");
+    if (earlier === undefined) {
+        throw new Error("Expected the earlier conversation in the sidebar");
+    }
+    await app.user.click(earlier);
+    await app.waitForView(() => expect(document.body.textContent).toContain("Settings Agent: Earlier conversation"));
+    expect(creations).toHaveLength(2);
+    for (const creation of creations) {
+        creation.reject(new Error("The controlled Agent could not create a Session"));
+    }
+
+    const reloaded = await app.reload();
+    await reloaded.user.click(await reloaded.queryElementByTestId(dataTestId.newConversation));
+    await reloaded.waitForView(() => {
+        const composer = reloaded.elementByTestId(dataTestId.messageComposer);
+        expect(composer).toHaveProperty("value", expect.stringContaining("First unsent message"));
+        expect(composer).toHaveProperty("value", expect.stringContaining("Second unsent message"));
+    });
+});
