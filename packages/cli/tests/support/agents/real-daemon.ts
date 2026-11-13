@@ -9,6 +9,8 @@ import {
     COMPUTER_HEARTBEAT_ACK_MESSAGE,
     COMPUTER_HEARTBEAT_MESSAGE,
     COMPUTER_LIVENESS_READY_KIND,
+    decodeContentChunkFrame,
+    decodeFileBeginEvent,
     decodeMessageKind,
     decodeNativeSessionResult,
     decodeSessionEventEnvelope,
@@ -17,6 +19,7 @@ import {
     encodeComputerLivenessReadyEvent,
     encodeNativeSessionCommand,
     encodeSessionCreateCommand,
+    encodeWorkerFileCredit,
     isPromptTerminal,
     MORTY_API_PREFIX,
     type NativeSessionTarget,
@@ -336,6 +339,21 @@ async function withDaemonConnection(
             }
             const decoded =
                 typeof message === "string" ? await encryption.decode(message) : await contentFrames.decode(message);
+            // The real Worker grants one download chunk at a time. This fixture
+            // owns that relay-side flow control while all file bytes stay encrypted.
+            const requestId =
+                typeof decoded === "string"
+                    ? decodeMessageKind(decoded) === "file.begin"
+                        ? decodeFileBeginEvent(decoded).requestId
+                        : null
+                    : decodeContentChunkFrame(decoded).requestId;
+            if (requestId !== null) {
+                const connection = socket;
+                if (connection === undefined) {
+                    throw new Error("Daemon is not connected");
+                }
+                connection.send(encodeWorkerFileCredit({ kind: "worker.file.credit", requestId, chunks: 1 }));
+            }
             return typeof decoded === "string" ? decoded : Buffer.from(decoded);
         };
         const nextMessage = async (): Promise<string> => {

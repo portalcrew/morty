@@ -1,9 +1,7 @@
-import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
 import {
     AGENT_SETTINGS_DISCOVER_KIND,
@@ -12,53 +10,23 @@ import {
     encodeAgentSettingsDiscoverCommand,
     MORTY_API_PREFIX,
 } from "@morty-build/client/protocol";
-import { listen, port, sendText } from "@morty-build/relay-test-support/websocket";
+import { listen, port } from "@morty-build/relay-test-support/websocket";
 import { expect, test } from "vitest";
+import { WebSocketServer } from "ws";
 import { RuntimeLocalContext } from "../../src/engine/runtime/config.ts";
 import { runRuntime } from "../../src/engine/runtime/run.ts";
 import { ControlledAcpConnection } from "../support/agents/controlled-acp-connection.ts";
 import { createControlledAgent } from "../support/agents/controlled-agent-definition.ts";
 import { memoryComputerCredentials } from "../support/computer-credentials.ts";
 import { createControlledRuntimeConfig } from "../support/controlled-runtime-config.ts";
+import { createEncryptedDaemonGateway, type EncryptedDaemonPeer } from "../support/encrypted-daemon-gateway.ts";
 
-const websocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const recorderPath = fileURLToPath(new URL("./fixtures/acp-environment-recorder.ts", import.meta.url));
 
-/** Reads the daemon's unmasked text frames until one of the given kind arrives. */
-function nextMessageOfKind(socket: Duplex, kind: string): Promise<void> {
-    return new Promise((resolve_) => {
-        let buffered = Buffer.alloc(0);
-        const onData = (chunk: Buffer): void => {
-            buffered = Buffer.concat([buffered, chunk]);
-            while (buffered.byteLength >= 6) {
-                const encodedLength = buffered.readUInt8(1) & 0x7f;
-                const headerLength = encodedLength === 126 ? 4 : encodedLength === 127 ? 10 : 2;
-                const payloadLength =
-                    encodedLength === 126
-                        ? buffered.readUInt16BE(2)
-                        : encodedLength === 127
-                          ? Number(buffered.readBigUInt64BE(2))
-                          : encodedLength;
-                const frameLength = headerLength + 4 + payloadLength;
-                if (buffered.byteLength < frameLength) {
-                    return;
-                }
-                const mask = buffered.subarray(headerLength, headerLength + 4);
-                const payload = Buffer.from(buffered.subarray(headerLength + 4, frameLength));
-                const opcode = buffered.readUInt8(0) & 0x0f;
-                buffered = buffered.subarray(frameLength);
-                for (let index = 0; index < payload.byteLength; index += 1) {
-                    payload.writeUInt8(payload.readUInt8(index) ^ mask.readUInt8(index % 4), index);
-                }
-                if (opcode === 1 && decodeMessageKind(payload.toString("utf8")) === kind) {
-                    socket.off("data", onData);
-                    resolve_();
-                    return;
-                }
-            }
-        };
-        socket.on("data", onData);
-    });
+async function nextMessageOfKind(socket: EncryptedDaemonPeer, kind: string): Promise<void> {
+    while (decodeMessageKind(await socket.next()) !== kind) {
+        // Read the real daemon until its correlated result arrives.
+    }
 }
 
 /** Starts a daemon whose Computer keeps its data in an installation directory, launches its Agent, and reads what the Agent inherited. */
@@ -77,25 +45,19 @@ async function inheritedStateDirectory(daemonEnvironment: NodeJS.ProcessEnv): Pr
     const record = join(directory, "agent-environment.json");
     await Promise.all([mkdir(installationData, { recursive: true }), mkdir(workspace)]);
 
-    const socketReady = Promise.withResolvers<Duplex>();
-    const sockets = new Set<Duplex>();
+    const gateway = await createEncryptedDaemonGateway(
+        installationData,
+        "channel_environment",
+        AbortSignal.timeout(60_000),
+    );
+    const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
     const relay = createServer((request, response) => {
         request.resume();
         response.writeHead(request.method === "PUT" ? 204 : 404);
         response.end();
     });
-    relay.on("upgrade", (request, socket) => {
-        sockets.add(socket);
-        socket.on("error", () => undefined);
-        const accept = createHash("sha1")
-            .update(`${request.headers["sec-websocket-key"] ?? ""}${websocketGuid}`)
-            .digest("base64");
-        socket.write(
-            `HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
-        );
-        sendText(socket, JSON.stringify({ kind: "computer.liveness.ready" }));
-        socketReady.resolve(socket);
-    });
+    const sockets = new WebSocketServer({ server: relay });
+    sockets.on("connection", (socket) => socketReady.resolve(gateway.connect(socket)));
     await listen(relay);
     const relayUrl = new URL(`ws://127.0.0.1:${port(relay)}${MORTY_API_PREFIX}/channels/channel_environment/daemon`);
 
@@ -134,8 +96,7 @@ async function inheritedStateDirectory(daemonEnvironment: NodeJS.ProcessEnv): Pr
     try {
         const socket = await socketReady.promise;
         const discovered = nextMessageOfKind(socket, AGENT_SETTINGS_DISCOVERED_KIND);
-        sendText(
-            socket,
+        await socket.send(
             encodeAgentSettingsDiscoverCommand({
                 harness: agent.harness,
                 kind: AGENT_SETTINGS_DISCOVER_KIND,
@@ -147,11 +108,10 @@ async function inheritedStateDirectory(daemonEnvironment: NodeJS.ProcessEnv): Pr
         return recorded;
     } finally {
         cancellation.abort();
-        for (const socket of sockets) {
-            socket.destroy();
-        }
-        relay.close();
         await runtime;
+        await gateway.close();
+        await new Promise<void>((resolve) => sockets.close(() => resolve()));
+        await new Promise<void>((resolve) => relay.close(() => resolve()));
         await rm(directory, { force: true, recursive: true });
     }
 }

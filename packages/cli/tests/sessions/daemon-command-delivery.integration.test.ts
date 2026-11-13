@@ -22,7 +22,6 @@ const submit = (peer: RealDaemonPeer, commandId: string, prompt: string): void =
     peer.send(
         encodeSessionPromptCommand({
             attachments: [],
-            requestId: commandId,
             commandId,
             requestId: commandId,
             disposition: SessionPromptDisposition.Append,
@@ -136,11 +135,12 @@ test("Given a running turn and a later queued command, When the clock moves back
                 const queued = "z-queued";
                 submit(peer, running, "hold after first delta");
                 await waitForLifecycle(peer, running, "prompt.started");
-                vi.setSystemTime(new Date("2026-10-28T09:00:00Z"));
+                // Exercise backwards ordering without making the client's newly signed
+                // packets older than the Computer's independently enforced replay window.
+                vi.setSystemTime(new Date("2026-10-28T09:59:59Z"));
                 peer.send(
                     encodeSessionPromptCommand({
                         attachments: [],
-                        requestId: queued,
                         commandId: queued,
                         requestId: queued,
                         disposition: SessionPromptDisposition.Append,
@@ -310,7 +310,6 @@ test.each([
                     peer.send(
                         encodeSessionPromptCommand({
                             attachments: [],
-                            requestId: steering,
                             commandId: steering,
                             requestId: steering,
                             disposition: SessionPromptDisposition.Append,

@@ -1,9 +1,7 @@
-import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { sameNativeSession } from "@morty-build/client/native-session";
 import {
@@ -24,72 +22,26 @@ import {
     type SessionPromptCommand,
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
-import { listen, port, sendText } from "@morty-build/relay-test-support/websocket";
+import { listen, port } from "@morty-build/relay-test-support/websocket";
 import { describe, expect, it } from "vitest";
+import { WebSocketServer } from "ws";
 import { RuntimeLocalContext } from "../../src/engine/runtime/config.ts";
 import { runRuntime } from "../../src/engine/runtime/run.ts";
 import { ControlledAcpConnection } from "../support/agents/controlled-acp-connection.ts";
 import { createControlledAgent } from "../support/agents/controlled-agent-definition.ts";
 import { memoryComputerCredentials } from "../support/computer-credentials.ts";
 import { createControlledRuntimeConfig as createRuntimeConfig } from "../support/controlled-runtime-config.ts";
+import { createEncryptedDaemonGateway, type EncryptedDaemonPeer } from "../support/encrypted-daemon-gateway.ts";
 
-const websocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const sendText = (peer: EncryptedDaemonPeer, message: string) => peer.send(message);
 const fakeAgentPath = fileURLToPath(new URL("./fixtures/acp-peer.ts", import.meta.url));
 
 class ClientFrames {
-    #buffered = Buffer.alloc(0);
-    readonly #messages: string[] = [];
-    readonly #resolvers: Array<(message: string) => void> = [];
+    readonly next: () => Promise<string>;
 
-    constructor(socket: Duplex) {
-        socket.on("data", (chunk: Buffer) => {
-            this.#buffered = Buffer.concat([this.#buffered, chunk]);
-            this.decode();
-        });
+    constructor(socket: EncryptedDaemonPeer) {
+        this.next = socket.next;
     }
-
-    readonly next = (): Promise<string> => {
-        const message = this.#messages.shift();
-        if (message !== undefined) {
-            return Promise.resolve(message);
-        }
-        return new Promise((resolve) => this.#resolvers.push(resolve));
-    };
-
-    private readonly decode = (): void => {
-        while (this.#buffered.byteLength >= 6) {
-            const encodedLength = this.#buffered.readUInt8(1) & 0x7f;
-            if (encodedLength === 127) {
-                throw new Error("Test relay received an oversized daemon frame");
-            }
-            const headerLength = encodedLength === 126 ? 4 : 2;
-            if (this.#buffered.byteLength < headerLength + 4) {
-                return;
-            }
-            const payloadLength = encodedLength === 126 ? this.#buffered.readUInt16BE(2) : encodedLength;
-            const frameLength = headerLength + 4 + payloadLength;
-            if (this.#buffered.byteLength < frameLength) {
-                return;
-            }
-            const opcode = this.#buffered.readUInt8(0) & 0x0f;
-            const mask = this.#buffered.subarray(headerLength, headerLength + 4);
-            const payload = Buffer.from(this.#buffered.subarray(headerLength + 4, frameLength));
-            this.#buffered = this.#buffered.subarray(frameLength);
-            for (let index = 0; index < payload.byteLength; index += 1) {
-                payload.writeUInt8(payload.readUInt8(index) ^ mask.readUInt8(index % 4), index);
-            }
-            if (opcode !== 1) {
-                continue;
-            }
-            const message = payload.toString("utf8");
-            const resolve = this.#resolvers.shift();
-            if (resolve === undefined) {
-                this.#messages.push(message);
-            } else {
-                resolve(message);
-            }
-        }
-    };
 }
 
 class TerminalSessionResult {
@@ -108,8 +60,12 @@ class TerminalSessionResult {
 
 const bufferedSessionEvents = new WeakMap<ClientFrames, SessionLiveEvent[]>();
 
-async function createSession(socket: Duplex, frames: ClientFrames, harness: string): Promise<NativeSessionTarget> {
-    sendText(
+async function createSession(
+    socket: EncryptedDaemonPeer,
+    frames: ClientFrames,
+    harness: string,
+): Promise<NativeSessionTarget> {
+    await sendText(
         socket,
         encodeSessionCreateCommand({
             kind: "session.create",
@@ -232,8 +188,13 @@ describe("daemon session configuration boundary", () => {
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const socketReady = Promise.withResolvers<Duplex>();
-        const relaySockets = new Set<Duplex>();
+        const gateway = await createEncryptedDaemonGateway(
+            stateDirectory,
+            "channel_alpha",
+            AbortSignal.timeout(120_000),
+        );
+        const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
+        const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((request, response) => {
             if (request.method === "PUT" && request.url?.includes("/catalog") === true) {
                 request.resume();
@@ -244,24 +205,8 @@ describe("daemon session configuration boundary", () => {
             response.writeHead(404);
             response.end();
         });
-        relay.on("connection", (socket) => {
-            relaySockets.add(socket);
-            socket.once("close", () => relaySockets.delete(socket));
-            socket.on("error", () => undefined);
-        });
-        relay.on("upgrade", (request, socket) => {
-            const key = request.headers["sec-websocket-key"];
-            const accept = createHash("sha1")
-                .update(`${key ?? ""}${websocketGuid}`)
-                .digest("base64");
-            socket.write(
-                "HTTP/1.1 101 Switching Protocols\r\n" +
-                    "Connection: Upgrade\r\n" +
-                    "Upgrade: websocket\r\n" +
-                    `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-            );
-            sendText(socket, JSON.stringify({ kind: "computer.liveness.ready" }));
-            socketReady.resolve(socket);
+        relay.on("upgrade", (request, socket, head) => {
+            relaySockets.handleUpgrade(request, socket, head, (peer) => socketReady.resolve(gateway.connect(peer)));
         });
         await listen(relay);
 
@@ -299,7 +244,7 @@ describe("daemon session configuration boundary", () => {
         try {
             const frames = new ClientFrames(await socketReady.promise);
             const requestId = "codex-changing-model-catalog";
-            sendText(
+            await sendText(
                 await socketReady.promise,
                 encodeAgentSettingsDiscoverCommand({
                     harness: agent.harness,
@@ -317,11 +262,10 @@ describe("daemon session configuration boundary", () => {
             expect(model).toMatchObject({ type: "select", values: [expect.objectContaining({ value: "test-small" })] });
         } finally {
             cancellation.abort();
-            for (const socket of relaySockets) {
-                socket.destroy();
-            }
-            relay.close();
             await runtime;
+            await gateway.close();
+            await new Promise<void>((resolve) => relaySockets.close(() => resolve()));
+            await new Promise<void>((resolve) => relay.close(() => resolve()));
             await rm(stateDirectory, { force: true, recursive: true });
         }
     });
@@ -332,8 +276,13 @@ describe("daemon session configuration boundary", () => {
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const socketReady = Promise.withResolvers<Duplex>();
-        const relaySockets = new Set<Duplex>();
+        const gateway = await createEncryptedDaemonGateway(
+            stateDirectory,
+            "channel_alpha",
+            AbortSignal.timeout(120_000),
+        );
+        const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
+        const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((request, response) => {
             if (request.method === "PUT" && request.url?.includes("/catalog") === true) {
                 request.resume();
@@ -344,24 +293,8 @@ describe("daemon session configuration boundary", () => {
             response.writeHead(404);
             response.end();
         });
-        relay.on("connection", (socket) => {
-            relaySockets.add(socket);
-            socket.once("close", () => relaySockets.delete(socket));
-            socket.on("error", () => undefined);
-        });
-        relay.on("upgrade", (request, socket) => {
-            const key = request.headers["sec-websocket-key"];
-            const accept = createHash("sha1")
-                .update(`${key ?? ""}${websocketGuid}`)
-                .digest("base64");
-            socket.write(
-                "HTTP/1.1 101 Switching Protocols\r\n" +
-                    "Connection: Upgrade\r\n" +
-                    "Upgrade: websocket\r\n" +
-                    `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-            );
-            sendText(socket, JSON.stringify({ kind: "computer.liveness.ready" }));
-            socketReady.resolve(socket);
+        relay.on("upgrade", (request, socket, head) => {
+            relaySockets.handleUpgrade(request, socket, head, (peer) => socketReady.resolve(gateway.connect(peer)));
         });
         await listen(relay);
 
@@ -404,7 +337,7 @@ describe("daemon session configuration boundary", () => {
         try {
             const frames = new ClientFrames(await socketReady.promise);
             const noEffortRequestId = "controlled-settings-without-effort";
-            sendText(
+            await sendText(
                 await socketReady.promise,
                 encodeAgentSettingsDiscoverCommand({
                     harness: agent.harness,
@@ -425,11 +358,10 @@ describe("daemon session configuration boundary", () => {
             );
         } finally {
             cancellation.abort();
-            for (const socket of relaySockets) {
-                socket.destroy();
-            }
-            relay.close();
             await runtime;
+            await gateway.close();
+            await new Promise<void>((resolve) => relaySockets.close(() => resolve()));
+            await new Promise<void>((resolve) => relay.close(() => resolve()));
             await rm(stateDirectory, { force: true, recursive: true });
         }
     });
@@ -447,8 +379,13 @@ describe("daemon session configuration boundary", () => {
         await writeFile(join(project, ".claude", "settings.json"), JSON.stringify({ model: "test-large" }));
         const projectDirectory = await realpath(project);
 
-        const socketReady = Promise.withResolvers<Duplex>();
-        const relaySockets = new Set<Duplex>();
+        const gateway = await createEncryptedDaemonGateway(
+            stateDirectory,
+            "channel_alpha",
+            AbortSignal.timeout(120_000),
+        );
+        const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
+        const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((request, response) => {
             if (request.method === "PUT" && request.url?.includes("/catalog") === true) {
                 request.resume();
@@ -459,24 +396,8 @@ describe("daemon session configuration boundary", () => {
             response.writeHead(404);
             response.end();
         });
-        relay.on("connection", (socket) => {
-            relaySockets.add(socket);
-            socket.once("close", () => relaySockets.delete(socket));
-            socket.on("error", () => undefined);
-        });
-        relay.on("upgrade", (request, socket) => {
-            const key = request.headers["sec-websocket-key"];
-            const accept = createHash("sha1")
-                .update(`${key ?? ""}${websocketGuid}`)
-                .digest("base64");
-            socket.write(
-                "HTTP/1.1 101 Switching Protocols\r\n" +
-                    "Connection: Upgrade\r\n" +
-                    "Upgrade: websocket\r\n" +
-                    `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-            );
-            sendText(socket, JSON.stringify({ kind: "computer.liveness.ready" }));
-            socketReady.resolve(socket);
+        relay.on("upgrade", (request, socket, head) => {
+            relaySockets.handleUpgrade(request, socket, head, (peer) => socketReady.resolve(gateway.connect(peer)));
         });
         await listen(relay);
 
@@ -516,7 +437,7 @@ describe("daemon session configuration boundary", () => {
         try {
             const socket = await socketReady.promise;
             const frames = new ClientFrames(socket);
-            sendText(
+            await sendText(
                 socket,
                 encodeAgentSettingsDiscoverCommand({
                     harness: agent.harness,
@@ -531,7 +452,7 @@ describe("daemon session configuration boundary", () => {
                 expect.objectContaining({ defaultValue: "test-large", id: "model" }),
             );
 
-            sendText(
+            await sendText(
                 socket,
                 encodeAgentSettingsDiscoverCommand({
                     harness: agent.harness,
@@ -546,11 +467,10 @@ describe("daemon session configuration boundary", () => {
             );
         } finally {
             cancellation.abort();
-            for (const socket of relaySockets) {
-                socket.destroy();
-            }
-            relay.close();
             await runtime;
+            await gateway.close();
+            await new Promise<void>((resolve) => relaySockets.close(() => resolve()));
+            await new Promise<void>((resolve) => relay.close(() => resolve()));
             await rm(stateDirectory, { force: true, recursive: true });
         }
     });
@@ -561,8 +481,13 @@ describe("daemon session configuration boundary", () => {
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const socketReady = Promise.withResolvers<Duplex>();
-        const relaySockets = new Set<Duplex>();
+        const gateway = await createEncryptedDaemonGateway(
+            stateDirectory,
+            "channel_alpha",
+            AbortSignal.timeout(120_000),
+        );
+        const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
+        const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((request, response) => {
             if (request.method === "PUT" && request.url?.includes("/catalog") === true) {
                 request.resume();
@@ -573,24 +498,8 @@ describe("daemon session configuration boundary", () => {
             response.writeHead(404);
             response.end();
         });
-        relay.on("connection", (socket) => {
-            relaySockets.add(socket);
-            socket.once("close", () => relaySockets.delete(socket));
-            socket.on("error", () => undefined);
-        });
-        relay.on("upgrade", (request, socket) => {
-            const key = request.headers["sec-websocket-key"];
-            const accept = createHash("sha1")
-                .update(`${key ?? ""}${websocketGuid}`)
-                .digest("base64");
-            socket.write(
-                "HTTP/1.1 101 Switching Protocols\r\n" +
-                    "Connection: Upgrade\r\n" +
-                    "Upgrade: websocket\r\n" +
-                    `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-            );
-            sendText(socket, JSON.stringify({ kind: "computer.liveness.ready" }));
-            socketReady.resolve(socket);
+        relay.on("upgrade", (request, socket, head) => {
+            relaySockets.handleUpgrade(request, socket, head, (peer) => socketReady.resolve(gateway.connect(peer)));
         });
         await listen(relay);
 
@@ -638,7 +547,7 @@ describe("daemon session configuration boundary", () => {
         try {
             const frames = new ClientFrames(await socketReady.promise);
             const noEffortRequestId = "controlled-settings-single-model";
-            sendText(
+            await sendText(
                 await socketReady.promise,
                 encodeAgentSettingsDiscoverCommand({
                     harness: agent.harness,
@@ -659,11 +568,10 @@ describe("daemon session configuration boundary", () => {
             );
         } finally {
             cancellation.abort();
-            for (const socket of relaySockets) {
-                socket.destroy();
-            }
-            relay.close();
             await runtime;
+            await gateway.close();
+            await new Promise<void>((resolve) => relaySockets.close(() => resolve()));
+            await new Promise<void>((resolve) => relay.close(() => resolve()));
             await rm(stateDirectory, { force: true, recursive: true });
         }
     });
@@ -674,8 +582,13 @@ describe("daemon session configuration boundary", () => {
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const socketReady = Promise.withResolvers<Duplex>();
-        const relaySockets = new Set<Duplex>();
+        const gateway = await createEncryptedDaemonGateway(
+            stateDirectory,
+            "channel_alpha",
+            AbortSignal.timeout(120_000),
+        );
+        const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
+        const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((request, response) => {
             if (request.method === "PUT" && request.url?.includes("/catalog") === true) {
                 request.resume();
@@ -686,24 +599,8 @@ describe("daemon session configuration boundary", () => {
             response.writeHead(404);
             response.end();
         });
-        relay.on("connection", (socket) => {
-            relaySockets.add(socket);
-            socket.once("close", () => relaySockets.delete(socket));
-            socket.on("error", () => undefined);
-        });
-        relay.on("upgrade", (request, socket) => {
-            const key = request.headers["sec-websocket-key"];
-            const accept = createHash("sha1")
-                .update(`${key ?? ""}${websocketGuid}`)
-                .digest("base64");
-            socket.write(
-                "HTTP/1.1 101 Switching Protocols\r\n" +
-                    "Connection: Upgrade\r\n" +
-                    "Upgrade: websocket\r\n" +
-                    `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-            );
-            sendText(socket, JSON.stringify({ kind: "computer.liveness.ready" }));
-            socketReady.resolve(socket);
+        relay.on("upgrade", (request, socket, head) => {
+            relaySockets.handleUpgrade(request, socket, head, (peer) => socketReady.resolve(gateway.connect(peer)));
         });
         await listen(relay);
 
@@ -743,7 +640,7 @@ describe("daemon session configuration boundary", () => {
         try {
             const frames = new ClientFrames(await socketReady.promise);
             const requestId = "controlled-default-model-effort";
-            sendText(
+            await sendText(
                 await socketReady.promise,
                 encodeAgentSettingsDiscoverCommand({
                     harness: agent.harness,
@@ -771,11 +668,10 @@ describe("daemon session configuration boundary", () => {
             });
         } finally {
             cancellation.abort();
-            for (const socket of relaySockets) {
-                socket.destroy();
-            }
-            relay.close();
             await runtime;
+            await gateway.close();
+            await new Promise<void>((resolve) => relaySockets.close(() => resolve()));
+            await new Promise<void>((resolve) => relay.close(() => resolve()));
             await rm(stateDirectory, { force: true, recursive: true });
         }
     });
@@ -786,32 +682,19 @@ describe("daemon session configuration boundary", () => {
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const socketReady = Promise.withResolvers<Duplex>();
-        const relaySockets = new Set<Duplex>();
+        const gateway = await createEncryptedDaemonGateway(
+            stateDirectory,
+            "channel_alpha",
+            AbortSignal.timeout(120_000),
+        );
+        const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
+        const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((_request, response) => {
             response.writeHead(404);
             response.end();
         });
-        relay.on("connection", (socket) => {
-            relaySockets.add(socket);
-            socket.once("close", () => relaySockets.delete(socket));
-            socket.on("error", () => undefined);
-        });
-        relay.on("upgrade", (request, socket) => {
-            const key = request.headers["sec-websocket-key"];
-            if (typeof key !== "string") {
-                socket.destroy();
-                return;
-            }
-            const accept = createHash("sha1").update(`${key}${websocketGuid}`).digest("base64");
-            socket.write(
-                "HTTP/1.1 101 Switching Protocols\r\n" +
-                    "Connection: Upgrade\r\n" +
-                    "Upgrade: websocket\r\n" +
-                    `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-            );
-            sendText(socket, JSON.stringify({ kind: "computer.liveness.ready" }));
-            socketReady.resolve(socket);
+        relay.on("upgrade", (request, socket, head) => {
+            relaySockets.handleUpgrade(request, socket, head, (peer) => socketReady.resolve(gateway.connect(peer)));
         });
         await listen(relay);
 
@@ -859,7 +742,6 @@ describe("daemon session configuration boundary", () => {
             const sessionTarget = await createSession(socket, frames, agent.harness);
             const runningCommandId = "running_configured_turn";
             const runningPrompt: SessionPromptCommand = {
-                requestId: runningCommandId,
                 commandId: runningCommandId,
                 requestId: runningCommandId,
                 disposition: SessionPromptDisposition.Append,
@@ -875,7 +757,7 @@ describe("daemon session configuration boundary", () => {
                 ],
                 target: sessionTarget,
             };
-            sendText(socket, encodeSessionPromptCommand(runningPrompt));
+            await sendText(socket, encodeSessionPromptCommand(runningPrompt));
             await readCommandActivity(frames, sessionTarget, runningCommandId);
 
             const steeringPrompt: SessionPromptCommand = {
@@ -886,7 +768,7 @@ describe("daemon session configuration boundary", () => {
                 prompt: "focus on the requested fix",
                 targetCommandId: runningCommandId,
             };
-            sendText(socket, encodeSessionPromptCommand(steeringPrompt));
+            await sendText(socket, encodeSessionPromptCommand(steeringPrompt));
 
             // The steering Turn is accepted and then injected into the running
             // Turn, so only the running Turn carries the Agent's reply.
@@ -903,9 +785,8 @@ describe("daemon session configuration boundary", () => {
         } finally {
             cancellation.abort();
             await runtime;
-            for (const socket of relaySockets) {
-                socket.destroy();
-            }
+            await gateway.close();
+            await new Promise<void>((resolve) => relaySockets.close(() => resolve()));
             await new Promise<void>((resolve) => relay.close(() => resolve()));
             await rm(stateDirectory, { force: true, recursive: true });
         }
@@ -917,32 +798,19 @@ describe("daemon session configuration boundary", () => {
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const socketReady = Promise.withResolvers<Duplex>();
-        const relaySockets = new Set<Duplex>();
+        const gateway = await createEncryptedDaemonGateway(
+            stateDirectory,
+            "channel_alpha",
+            AbortSignal.timeout(120_000),
+        );
+        const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
+        const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((_request, response) => {
             response.writeHead(404);
             response.end();
         });
-        relay.on("connection", (socket) => {
-            relaySockets.add(socket);
-            socket.once("close", () => relaySockets.delete(socket));
-            socket.on("error", () => undefined);
-        });
-        relay.on("upgrade", (request, socket) => {
-            const key = request.headers["sec-websocket-key"];
-            if (typeof key !== "string") {
-                socket.destroy();
-                return;
-            }
-            const accept = createHash("sha1").update(`${key}${websocketGuid}`).digest("base64");
-            socket.write(
-                "HTTP/1.1 101 Switching Protocols\r\n" +
-                    "Connection: Upgrade\r\n" +
-                    "Upgrade: websocket\r\n" +
-                    `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-            );
-            sendText(socket, JSON.stringify({ kind: "computer.liveness.ready" }));
-            socketReady.resolve(socket);
+        relay.on("upgrade", (request, socket, head) => {
+            relaySockets.handleUpgrade(request, socket, head, (peer) => socketReady.resolve(gateway.connect(peer)));
         });
         await listen(relay);
 
@@ -986,7 +854,6 @@ describe("daemon session configuration boundary", () => {
             const sessionTarget = await createSession(socket, frames, agent.harness);
             const runningCommandId = "running_drifted_settings_turn";
             const runningPrompt: SessionPromptCommand = {
-                requestId: runningCommandId,
                 commandId: runningCommandId,
                 requestId: runningCommandId,
                 disposition: SessionPromptDisposition.Append,
@@ -999,7 +866,7 @@ describe("daemon session configuration boundary", () => {
                 ],
                 target: sessionTarget,
             };
-            sendText(socket, encodeSessionPromptCommand(runningPrompt));
+            await sendText(socket, encodeSessionPromptCommand(runningPrompt));
             await readCommandActivity(frames, sessionTarget, runningCommandId);
 
             // Steering cannot reconfigure a running Agent, so the member's newer effort
@@ -1016,7 +883,7 @@ describe("daemon session configuration boundary", () => {
                 ],
                 targetCommandId: runningCommandId,
             };
-            sendText(socket, encodeSessionPromptCommand(steeringPrompt));
+            await sendText(socket, encodeSessionPromptCommand(steeringPrompt));
 
             // The steering Turn is accepted and then injected into the running
             // Turn, so only the running Turn carries the Agent's reply.
@@ -1033,9 +900,8 @@ describe("daemon session configuration boundary", () => {
         } finally {
             cancellation.abort();
             await runtime;
-            for (const socket of relaySockets) {
-                socket.destroy();
-            }
+            await gateway.close();
+            await new Promise<void>((resolve) => relaySockets.close(() => resolve()));
             await new Promise<void>((resolve) => relay.close(() => resolve()));
             await rm(stateDirectory, { force: true, recursive: true });
         }

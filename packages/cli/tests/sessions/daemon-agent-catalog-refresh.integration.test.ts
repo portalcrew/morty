@@ -1,9 +1,7 @@
-import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -22,8 +20,9 @@ import {
     MORTY_API_PREFIX,
     NATIVE_SESSION_REQUEST_KIND,
 } from "@morty-build/client/protocol";
-import { listen, port, sendText } from "@morty-build/relay-test-support/websocket";
+import { listen, port } from "@morty-build/relay-test-support/websocket";
 import { expect, test, vi } from "vitest";
+import { WebSocketServer } from "ws";
 import { discoverLocalAgentInventory } from "../../src/engine/agent/discovery/discover-local-agents.ts";
 import type { LocalAgentSpecification } from "../../src/engine/agent/specification/agent-specification.ts";
 import { publishAgentCatalog } from "../../src/engine/runtime/catalog/publish-agent-catalog.ts";
@@ -33,8 +32,9 @@ import { runRuntime } from "../../src/engine/runtime/run.ts";
 import { acpAdapters } from "../support/acp-adapters.ts";
 import { ControlledAcpSpecification } from "../support/agents/controlled-acp-specification.ts";
 import { memoryComputerCredentials } from "../support/computer-credentials.ts";
+import { createEncryptedDaemonGateway, type EncryptedDaemonPeer } from "../support/encrypted-daemon-gateway.ts";
 
-const websocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const sendText = (peer: EncryptedDaemonPeer, message: string) => peer.send(message);
 const fakeAgentPath = fileURLToPath(new URL("./fixtures/acp-peer.ts", import.meta.url));
 
 class RefreshableAgentSpecification extends ControlledAcpSpecification {
@@ -135,7 +135,7 @@ type PrepareOutcome =
           readonly discovered: ReturnType<typeof decodeAgentSettingsDiscoveredEvent>;
       };
 
-async function nextCommandOutcome(frames: ClientFrames, requestId: string): Promise<PrepareOutcome> {
+async function nextCommandOutcome(frames: EncryptedDaemonPeer, requestId: string): Promise<PrepareOutcome> {
     for (;;) {
         const message = await frames.next();
         const kind = decodeMessageKind(message);
@@ -170,62 +170,6 @@ async function nextCommandOutcome(frames: ClientFrames, requestId: string): Prom
             }
         }
     }
-}
-
-class ClientFrames {
-    #buffered = Buffer.alloc(0);
-    readonly #messages: string[] = [];
-    readonly #resolvers: Array<(message: string) => void> = [];
-
-    constructor(socket: Duplex) {
-        socket.on("data", (chunk: Buffer) => {
-            this.#buffered = Buffer.concat([this.#buffered, chunk]);
-            this.decode();
-        });
-    }
-
-    readonly next = (): Promise<string> => {
-        const message = this.#messages.shift();
-        if (message !== undefined) {
-            return Promise.resolve(message);
-        }
-        return new Promise((resolve) => this.#resolvers.push(resolve));
-    };
-
-    private readonly decode = (): void => {
-        while (this.#buffered.byteLength >= 6) {
-            const encodedLength = this.#buffered.readUInt8(1) & 0x7f;
-            if (encodedLength === 127) {
-                throw new Error("Test relay received an oversized daemon frame");
-            }
-            const headerLength = encodedLength === 126 ? 4 : 2;
-            if (this.#buffered.byteLength < headerLength + 4) {
-                return;
-            }
-            const payloadLength = encodedLength === 126 ? this.#buffered.readUInt16BE(2) : encodedLength;
-            const frameLength = headerLength + 4 + payloadLength;
-            if (this.#buffered.byteLength < frameLength) {
-                return;
-            }
-            const opcode = this.#buffered.readUInt8(0) & 0x0f;
-            const mask = this.#buffered.subarray(headerLength, headerLength + 4);
-            const payload = Buffer.from(this.#buffered.subarray(headerLength + 4, frameLength));
-            this.#buffered = this.#buffered.subarray(frameLength);
-            for (let index = 0; index < payload.byteLength; index += 1) {
-                payload.writeUInt8(payload.readUInt8(index) ^ mask.readUInt8(index % 4), index);
-            }
-            if (opcode !== 1) {
-                continue;
-            }
-            const message = payload.toString("utf8");
-            const resolve = this.#resolvers.shift();
-            if (resolve === undefined) {
-                this.#messages.push(message);
-            } else {
-                resolve(message);
-            }
-        }
-    };
 }
 
 test.for([
@@ -266,8 +210,12 @@ test.for([
         await symlink(peerLauncher, join(binDirectory, "controlled-acp-peer"));
 
         const catalogBodies: string[] = [];
-        const socketReady = Promise.withResolvers<Duplex>();
-        const relaySockets = new Set<Duplex>();
+        const gateway = await createEncryptedDaemonGateway(
+            stateDirectory,
+            "channel_alpha",
+            AbortSignal.timeout(120_000),
+        );
+        const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
         const relay = createServer((request, response) => {
             if (request.method === "PUT" && request.url?.includes("/catalog") === true) {
                 const chunks: Buffer[] = [];
@@ -282,25 +230,8 @@ test.for([
             response.writeHead(404);
             response.end();
         });
-        relay.on("connection", (socket) => {
-            relaySockets.add(socket);
-            socket.once("close", () => relaySockets.delete(socket));
-            socket.on("error", () => undefined);
-        });
-        relay.on("upgrade", (request, socket) => {
-            const key = request.headers["sec-websocket-key"];
-            const accept = createHash("sha1")
-                .update(`${key ?? ""}${websocketGuid}`)
-                .digest("base64");
-            socket.write(
-                "HTTP/1.1 101 Switching Protocols\r\n" +
-                    "Connection: Upgrade\r\n" +
-                    "Upgrade: websocket\r\n" +
-                    `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-            );
-            sendText(socket, JSON.stringify({ kind: "computer.liveness.ready" }));
-            socketReady.resolve(socket);
-        });
+        const sockets = new WebSocketServer({ server: relay });
+        sockets.on("connection", (socket) => socketReady.resolve(gateway.connect(socket)));
         await listen(relay);
 
         const relayUrl = new URL(`ws://127.0.0.1:${port(relay)}${MORTY_API_PREFIX}/channels/channel_alpha/daemon`);
@@ -348,8 +279,8 @@ test.for([
         const runtime = runRuntime(config, cancellation.signal);
 
         try {
-            const frames = new ClientFrames(await socketReady.promise);
-            sendText(
+            const frames = await socketReady.promise;
+            await sendText(
                 await socketReady.promise,
                 encodeSessionCreateCommand({
                     harness,
@@ -365,7 +296,7 @@ test.for([
                 ready: { agentVersion: "1.0.0" },
             });
             if (queryBeforeUpgrade) {
-                sendText(
+                await sendText(
                     await socketReady.promise,
                     encodeNativeSessionCommand({
                         harness,
@@ -385,7 +316,7 @@ test.for([
             await unlink(link);
             await symlink(secondLauncher, link);
 
-            sendText(
+            await sendText(
                 await socketReady.promise,
                 encodeSessionCreateCommand({
                     harness,
@@ -406,7 +337,7 @@ test.for([
             });
 
             const settingsRequestId = "settings-after-agent-upgrade";
-            sendText(
+            await sendText(
                 await socketReady.promise,
                 encodeAgentSettingsDiscoverCommand({
                     harness,
@@ -420,7 +351,7 @@ test.for([
                 discovered: { agentVersion: "1.1.0" },
             });
 
-            sendText(
+            await sendText(
                 await socketReady.promise,
                 encodeNativeSessionCommand({
                     harness,
@@ -437,7 +368,7 @@ test.for([
             });
 
             if (harness === "codex") {
-                sendText(
+                await sendText(
                     await socketReady.promise,
                     encodeSessionPreviewHistoryPageLoad({
                         directory: ".",
@@ -474,11 +405,10 @@ test.for([
             );
         } finally {
             cancellation.abort();
-            for (const socket of relaySockets) {
-                socket.destroy();
-            }
-            relay.close();
             await runtime.catch(() => {});
+            await gateway.close();
+            await new Promise<void>((resolve) => sockets.close(() => resolve()));
+            await new Promise<void>((resolve) => relay.close(() => resolve()));
             await rm(stateDirectory, { force: true, recursive: true });
             vi.useRealTimers();
         }

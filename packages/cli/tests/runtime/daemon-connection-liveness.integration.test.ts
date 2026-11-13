@@ -11,9 +11,9 @@ import {
     COMPUTER_HEARTBEAT_KIND,
     COMPUTER_HEARTBEAT_MESSAGE,
     COMPUTER_LIVENESS_READY_KIND,
+    decodeComputerDiagnosticsResult,
     decodeMessageKind,
     decodeSessionEventEnvelope,
-    decodeSessionOperationFailedEvent,
     decodeSessionReadyEvent,
     encodeComputerLivenessReadyEvent,
     encodeSessionCreateCommand,
@@ -37,9 +37,21 @@ import { acpAdapters } from "../support/acp-adapters.ts";
 import { ControlledAcpConnection } from "../support/agents/controlled-acp-connection.ts";
 import { createControlledAgent } from "../support/agents/controlled-agent-definition.ts";
 import { memoryComputerCredentials } from "../support/computer-credentials.ts";
+import { createEncryptedDaemonFrames } from "../support/encrypted-daemon-frames.ts";
 
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const fakeAgentPath = fileURLToPath(new URL("../sessions/fixtures/acp-peer.ts", import.meta.url));
+type EncryptedFrames = Awaited<ReturnType<typeof createEncryptedDaemonFrames>>;
+
+async function decodeClientFrame(
+    frame: ClientWebSocketFrame,
+    encryption: EncryptedFrames,
+): Promise<ClientWebSocketFrame> {
+    if (frame.opcode !== 1 || frame.text === COMPUTER_HEARTBEAT_MESSAGE) {
+        return frame;
+    }
+    return new ClientWebSocketFrame(frame.opcode, await encryption.decode(frame.text));
+}
 
 function restoreEnvironmentVariable(name: string, previous: string | undefined): void {
     if (previous === undefined) {
@@ -52,10 +64,12 @@ function restoreEnvironmentVariable(name: string, previous: string | undefined):
 class ClientWebSocketFrame {
     readonly opcode: number;
     readonly text: string;
+    readonly bytes: Buffer;
 
-    constructor(opcode: number, text: string) {
+    constructor(opcode: number, text: string, bytes = Buffer.from(text)) {
         this.opcode = opcode;
         this.text = text;
+        this.bytes = bytes;
     }
 }
 
@@ -111,8 +125,8 @@ class ControllableTimer implements Timer {
     };
 }
 
-function readClientFrame(socket: Duplex): Promise<ClientWebSocketFrame> {
-    return new Promise((resolve, reject) => {
+function readClientFrame(socket: Duplex, encryption?: EncryptedFrames): Promise<ClientWebSocketFrame> {
+    return new Promise<ClientWebSocketFrame>((resolve, reject) => {
         let buffered = Buffer.alloc(0);
         const fail = (error: Error): void => {
             cleanup();
@@ -152,12 +166,12 @@ function readClientFrame(socket: Duplex): Promise<ClientWebSocketFrame> {
             }
             const opcode = buffered.readUInt8(0) & 0x0f;
             cleanup();
-            resolve(new ClientWebSocketFrame(opcode, payload.toString("utf8")));
+            resolve(new ClientWebSocketFrame(opcode, payload.toString("utf8"), payload));
         };
         socket.on("close", handleClose);
         socket.on("data", handleData);
         socket.on("error", fail);
-    });
+    }).then(async (frame) => (encryption === undefined ? frame : await decodeClientFrame(frame, encryption)));
 }
 
 function observeClientFrames(socket: Duplex, observe: (frame: ClientWebSocketFrame) => void): () => void {
@@ -183,7 +197,7 @@ function observeClientFrames(socket: Duplex, observe: (frame: ClientWebSocketFra
             for (let index = 0; index < payload.byteLength; index += 1) {
                 payload.writeUInt8(payload.readUInt8(index) ^ mask.readUInt8(index % 4), index);
             }
-            observe(new ClientWebSocketFrame(buffered.readUInt8(0) & 0x0f, payload.toString("utf8")));
+            observe(new ClientWebSocketFrame(buffered.readUInt8(0) & 0x0f, payload.toString("utf8"), payload));
             buffered = buffered.subarray(frameLength);
         }
     };
@@ -195,8 +209,12 @@ class ClientFrameQueue {
     readonly #frames: ClientWebSocketFrame[] = [];
     readonly #waiters: Array<(frame: ClientWebSocketFrame) => void> = [];
     readonly close: () => void;
+    readonly #socket: Duplex;
+    readonly #encryption: EncryptedFrames;
 
-    constructor(socket: Duplex) {
+    constructor(socket: Duplex, encryption: EncryptedFrames) {
+        this.#socket = socket;
+        this.#encryption = encryption;
         this.close = observeClientFrames(socket, (frame) => {
             const resolve = this.#waiters.shift();
             if (resolve === undefined) {
@@ -207,9 +225,23 @@ class ClientFrameQueue {
         });
     }
 
-    readonly next = (): Promise<ClientWebSocketFrame> => {
-        const frame = this.#frames.shift();
-        return frame === undefined ? new Promise((resolve) => this.#waiters.push(resolve)) : Promise.resolve(frame);
+    readonly next = async (): Promise<ClientWebSocketFrame> => {
+        const raw =
+            this.#frames.shift() ?? (await new Promise<ClientWebSocketFrame>((resolve) => this.#waiters.push(resolve)));
+        const frame = await decodeClientFrame(raw, this.#encryption);
+        if (frame.opcode === 1 && decodeMessageKind(frame.text) === "session.ready") {
+            writeServerTextFrame(
+                this.#socket,
+                await this.#encryption.encode(
+                    JSON.stringify({
+                        kind: "session.events.subscribe",
+                        subscriptionId: crypto.randomUUID(),
+                        target: decodeSessionReadyEvent(frame.text).target,
+                    }),
+                ),
+            );
+        }
+        return frame;
     };
 }
 
@@ -249,6 +281,13 @@ describe("daemon relay connection liveness", () => {
 
     it("Given a liveness-capable relay stops acknowledging heartbeats, When the acknowledgement deadline expires, Then the daemon reconnects", async () => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-heartbeat-"));
+        const encryption = await createEncryptedDaemonFrames(
+            stateDirectory,
+            "heartbeat-channel",
+            AbortSignal.timeout(120_000),
+        );
+        const sendCommand = async (socket: Duplex, message: string): Promise<void> =>
+            writeServerTextFrame(socket, await encryption.encode(message));
         const defaultWorkspace = join(stateDirectory, "workspace");
         await mkdir(defaultWorkspace);
         const relay = createServer((request, response) => {
@@ -345,9 +384,9 @@ describe("daemon relay connection liveness", () => {
             if (firstSocket === undefined) {
                 throw new Error("Test relay did not retain the daemon connection");
             }
-            const controlResponse = readClientFrame(firstSocket);
+            const controlResponse = readClientFrame(firstSocket, encryption);
             writeServerTextFrame(firstSocket, COMPUTER_HEARTBEAT_ACK_MESSAGE);
-            writeServerTextFrame(
+            await sendCommand(
                 firstSocket,
                 encodeWorkspaceListCommand({
                     directory: ".",
@@ -374,6 +413,7 @@ describe("daemon relay connection liveness", () => {
             cancellation.abort();
             await vi.runAllTimersAsync();
             await runtime;
+            encryption.close();
             for (const socket of sockets) {
                 socket.destroy();
             }
@@ -398,6 +438,13 @@ describe("daemon relay connection liveness", () => {
 
     it("Given an active Computer is revoked by the Relay, When the daemon receives the terminal close, Then it exits instead of reconnecting", async () => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-computer-revoked-"));
+        const encryption = await createEncryptedDaemonFrames(
+            stateDirectory,
+            "computer-revoked-channel",
+            AbortSignal.timeout(120_000),
+        );
+        const sendCommand = async (socket: Duplex, message: string): Promise<void> =>
+            writeServerTextFrame(socket, await encryption.encode(message));
         const defaultWorkspace = join(stateDirectory, "workspace");
         await mkdir(defaultWorkspace);
         const relay = createServer((request, response) => {
@@ -481,8 +528,8 @@ describe("daemon relay connection liveness", () => {
 
         try {
             const socket = await upgraded;
-            const barrier = readClientFrame(socket);
-            writeServerTextFrame(
+            const barrier = readClientFrame(socket, encryption);
+            await sendCommand(
                 socket,
                 encodeWorkspaceListCommand({
                     directory: ".",
@@ -509,6 +556,7 @@ describe("daemon relay connection liveness", () => {
         } finally {
             cancellation.abort();
             await runtime.catch(() => undefined);
+            encryption.close();
             for (const socket of sockets) {
                 socket.destroy();
             }
@@ -533,6 +581,13 @@ describe("daemon relay connection liveness", () => {
 
     it("Given a healthy idle daemon connection, When the Relay sends a future event and twenty minutes pass, Then the same connection remains available", async () => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-liveness-"));
+        const encryption = await createEncryptedDaemonFrames(
+            stateDirectory,
+            "liveness-channel",
+            AbortSignal.timeout(120_000),
+        );
+        const sendCommand = async (socket: Duplex, message: string): Promise<void> =>
+            writeServerTextFrame(socket, await encryption.encode(message));
         const defaultWorkspace = join(stateDirectory, "workspace");
         await mkdir(defaultWorkspace);
         let catalogRequestCount = 0;
@@ -584,9 +639,9 @@ describe("daemon relay connection liveness", () => {
                     "Upgrade: websocket\r\n" +
                     `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
             );
-            clientFrames.push(readClientFrame(socket));
+            clientFrames.push(readClientFrame(socket, encryption));
             respondToClientClose(socket);
-            writeServerTextFrame(
+            void sendCommand(
                 socket,
                 encodeWorkspaceListCommand({
                     directory: ".",
@@ -646,7 +701,7 @@ describe("daemon relay connection liveness", () => {
             if (socket === undefined) {
                 throw new Error("Test relay did not retain the daemon connection");
             }
-            const frames = new ClientFrameQueue(socket);
+            const frames = new ClientFrameQueue(socket, encryption);
             writeServerTextFrame(
                 socket,
                 JSON.stringify({
@@ -655,7 +710,7 @@ describe("daemon relay connection liveness", () => {
                     target: { harness: "claude", sessionId: "session-1" },
                 }),
             );
-            writeServerTextFrame(
+            await sendCommand(
                 socket,
                 encodeWorkspaceListCommand({
                     directory: ".",
@@ -663,14 +718,22 @@ describe("daemon relay connection liveness", () => {
                     requestId: "after-twenty-minutes",
                 }),
             );
-            // The unrecognized request is refused at once, naming it, and the known command behind it still
-            // completes on the same connection.
-            expect(decodeSessionOperationFailedEvent((await frames.next()).text)).toMatchObject({
-                code: "unsupported_operation",
-                requestId: "future-changed-request",
-                target: { harness: "claude", sessionId: "session-1" },
-            });
+            // Unauthenticated future traffic is discarded, not promoted to an
+            // authenticated operation failure. The next encrypted command still works.
             expect(decodeMessageKind((await frames.next()).text)).toBe(WORKSPACE_ENTRIES_KIND);
+            await sendCommand(
+                socket,
+                JSON.stringify({ kind: "computer.diagnostics.read", requestId: "future-rejection" }),
+            );
+            const rejected = decodeComputerDiagnosticsResult(
+                (await nextFrameOfKind(frames, "computer.diagnostics.result")).text,
+            );
+            expect(rejected.entries).toContainEqual(
+                expect.objectContaining({
+                    event: "protocol_message_discarded",
+                    requestId: "unknown",
+                }),
+            );
 
             expect({ catalogRequestCount, connectionCount, requestedUrls }).toEqual({
                 catalogRequestCount: 2,
@@ -681,6 +744,7 @@ describe("daemon relay connection liveness", () => {
             cancellation.abort();
             await vi.runAllTimersAsync();
             await runtime;
+            encryption.close();
             for (const socket of sockets) {
                 socket.destroy();
             }
@@ -703,8 +767,15 @@ describe("daemon relay connection liveness", () => {
         }
     });
 
-    it("Given a connected daemon, When the Relay sends command kinds the daemon does not recognize, Then it skips them and keeps serving the same connection", async () => {
+    it("Given a connected daemon, When the Relay sends unknown kinds and malformed frames, Then unknown kinds keep the connection usable and malformed frames cause a protocol close followed by recovery", async () => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-unsupported-command-"));
+        const encryption = await createEncryptedDaemonFrames(
+            stateDirectory,
+            "unsupported-channel",
+            AbortSignal.timeout(120_000),
+        );
+        const sendCommand = async (socket: Duplex, message: string): Promise<void> =>
+            writeServerTextFrame(socket, await encryption.encode(message));
         const defaultWorkspace = join(stateDirectory, "workspace");
         await mkdir(defaultWorkspace);
         const relay = createServer((request, response) => {
@@ -785,7 +856,8 @@ describe("daemon relay connection liveness", () => {
         vi.useFakeTimers({ toFake: ["Date"] });
         vi.setSystemTime(new Date("2026-09-04T00:00:00.000Z"));
         const firstConnection = waitForUpgrade();
-        const runtime = runRuntime(config, cancellation.signal);
+        const timer = new ControllableTimer();
+        const runtime = runRuntime(config, cancellation.signal, timer);
 
         try {
             await firstConnection;
@@ -793,7 +865,7 @@ describe("daemon relay connection liveness", () => {
             if (socket === undefined) {
                 throw new Error("Test relay did not retain the daemon connection");
             }
-            const frames = new ClientFrameQueue(socket);
+            const frames = new ClientFrameQueue(socket, encryption);
 
             // A newer Relay sends a command kind this daemon version predates.
             writeServerTextFrame(
@@ -806,7 +878,7 @@ describe("daemon relay connection liveness", () => {
             );
             // The unknown command must not disturb the connection: a known command
             // on the same socket still completes.
-            writeServerTextFrame(
+            await sendCommand(
                 socket,
                 encodeWorkspaceListCommand({
                     directory: ".",
@@ -818,7 +890,7 @@ describe("daemon relay connection liveness", () => {
             expect(connectionCount).toBe(1);
 
             // Additive fields must not cause a known operation to disappear.
-            writeServerTextFrame(
+            await sendCommand(
                 socket,
                 JSON.stringify({
                     kind: WORKSPACE_LIST_KIND,
@@ -831,15 +903,11 @@ describe("daemon relay connection liveness", () => {
             expect(JSON.parse(extended.text).requestId).toBe("extended-workspace-request");
             expect(connectionCount).toBe(1);
 
-            // Future envelopes with no recognizable discriminator are ignored.
-            writeServerTextFrame(socket, JSON.stringify({ version: 3, message: { kind: "future" } }));
-            // A valid WebSocket binary frame with an unrecognized application format.
+            // Future binary formats are discarded before any upload can use their bytes.
             socket.write(Buffer.from([0x82, 3, 0xff, 0x00, 0x03]));
-            writeServerTextFrame(socket, "{not-json");
-
             // Unknown commands are skipped regardless of their other fields.
             writeServerTextFrame(socket, JSON.stringify({ kind: "session.future.read", requestId: "??" }));
-            writeServerTextFrame(
+            await sendCommand(
                 socket,
                 encodeWorkspaceListCommand({
                     directory: ".",
@@ -849,9 +917,49 @@ describe("daemon relay connection liveness", () => {
             );
             await nextFrameOfKind(frames, WORKSPACE_ENTRIES_KIND);
             expect(connectionCount).toBe(1);
+            let currentSocket = socket;
+            let currentFrames = frames;
+            let expectedConnections = 1;
+            for (const invalid of [
+                {
+                    kind: "text",
+                    text: JSON.stringify({ version: 3, message: { kind: "future" } }),
+                    reason: "Invalid protocol message",
+                },
+                { kind: "text", text: "{not-json", reason: "Invalid protocol message" },
+            ] as const) {
+                const retry = timer.waitForTask(500);
+                writeServerTextFrame(currentSocket, invalid.text);
+                let closed = await currentFrames.next();
+                while (closed.opcode !== 8) {
+                    closed = await currentFrames.next();
+                }
+                expect(closed.bytes.readUInt16BE(0)).toBe(4008);
+                expect(closed.bytes.subarray(2).toString()).toBe(invalid.reason);
+                const upgraded = waitForUpgrade();
+                (await retry).run();
+                await upgraded;
+                if (daemonSocket === undefined) {
+                    throw new Error("Missing recovered connection");
+                }
+                currentSocket = daemonSocket;
+                currentFrames = new ClientFrameQueue(currentSocket, encryption);
+                await sendCommand(
+                    currentSocket,
+                    encodeWorkspaceListCommand({
+                        directory: ".",
+                        kind: WORKSPACE_LIST_KIND,
+                        requestId: `recovered-${expectedConnections}`,
+                    }),
+                );
+                await nextFrameOfKind(currentFrames, WORKSPACE_ENTRIES_KIND);
+                expectedConnections += 1;
+                expect(connectionCount).toBe(expectedConnections);
+            }
         } finally {
             cancellation.abort();
             await runtime;
+            encryption.close();
             for (const socket of sockets) {
                 socket.destroy();
             }
@@ -876,6 +984,13 @@ describe("daemon relay connection liveness", () => {
 
     it("Given a live daemon sends without acknowledgements, When it reconnects, Then it resumes live delivery without replaying prior events", async () => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-reconciliation-"));
+        const encryption = await createEncryptedDaemonFrames(
+            stateDirectory,
+            "reconciliation-channel",
+            AbortSignal.timeout(120_000),
+        );
+        const sendCommand = async (socket: Duplex, message: string): Promise<void> =>
+            writeServerTextFrame(socket, await encryption.encode(message));
         const defaultWorkspace = join(stateDirectory, "workspace");
         await mkdir(defaultWorkspace);
         let reconciliationRequestCount = 0;
@@ -932,7 +1047,7 @@ describe("daemon relay connection liveness", () => {
             );
             daemonSockets.push(socket);
             respondToClientClose(socket);
-            clientFrames.push(new ClientFrameQueue(socket));
+            clientFrames.push(new ClientFrameQueue(socket, encryption));
             writeServerTextFrame(
                 socket,
                 encodeComputerLivenessReadyEvent({
@@ -940,7 +1055,7 @@ describe("daemon relay connection liveness", () => {
                 }),
             );
             if (daemonSockets.length === 2) {
-                writeServerTextFrame(
+                void sendCommand(
                     socket,
                     encodeWorkspaceListCommand({
                         directory: ".",
@@ -1019,7 +1134,7 @@ describe("daemon relay connection liveness", () => {
                 throw new Error("Test relay did not retain the first connection");
             }
             const startSession = async (socket: Duplex, frames: ClientFrameQueue, commandId: string) => {
-                writeServerTextFrame(
+                await sendCommand(
                     socket,
                     encodeSessionCreateCommand({
                         kind: "session.create",
@@ -1044,7 +1159,7 @@ describe("daemon relay connection liveness", () => {
                         continue;
                     }
                     const sessionTarget = decodeSessionReadyEvent(frame.text).target;
-                    writeServerTextFrame(
+                    await sendCommand(
                         socket,
                         encodeSessionPromptCommand({
                             kind: SESSION_PROMPT_KIND,
@@ -1095,7 +1210,7 @@ describe("daemon relay connection liveness", () => {
             // No delivery acknowledgements exist. Reconnection starts receiving live events.
             // More than the former 16-event window must stream without any delivery ACK.
             for (let turn = 0; turn < 6; turn += 1) {
-                writeServerTextFrame(
+                await sendCommand(
                     firstSocket,
                     encodeSessionPromptCommand({
                         commandId: `live-command-${turn}`,
@@ -1205,6 +1320,7 @@ describe("daemon relay connection liveness", () => {
         } finally {
             cancellation.abort();
             await runtime;
+            encryption.close();
             for (const socket of sockets) {
                 socket.destroy();
             }

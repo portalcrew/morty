@@ -1,5 +1,10 @@
 import { createClientPayloadEncryption, type PayloadEncryptor } from "@morty-build/client";
-import { daemonInboundSignatures, decodeEncryptedDaemonMessage, decodeMessageKind } from "@morty-build/client/protocol";
+import {
+    daemonInboundSignatures,
+    decodeContentChunkAck,
+    decodeEncryptedDaemonMessage,
+    decodeMessageKind,
+} from "@morty-build/client/protocol";
 import { ComputerEncryptionStore } from "../../src/engine/runtime/connection/computer-encryption-store.ts";
 
 /** Exercises the daemon's real message codecs using its persisted Computer capability. */
@@ -29,6 +34,11 @@ export async function createEncryptedDaemonFrames(stateDirectory: string, comput
             return await codec.encode(value, encryption, signal);
         },
         decode: async (message: string): Promise<string> => {
+            // Chunk acknowledgement is the Worker's content-free flow-control
+            // message, not an application payload with a plaintext alternative.
+            if (decodeMessageKind(message) === "content.chunk.ack") {
+                return JSON.stringify(decodeContentChunkAck(message));
+            }
             return JSON.stringify(await decodeEncryptedDaemonMessage(message, encryption, signal));
         },
         close: encryption.close,

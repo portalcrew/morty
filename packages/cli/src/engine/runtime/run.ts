@@ -66,6 +66,7 @@ async function publishAgentCatalogUntilAvailable(
 }
 
 export interface RunRuntimeOptions {
+    readonly onInitialized?: () => void;
     /** The pool the Runtime's Agent processes run in; the daemon keeps it to release idle processes on request. */
     readonly processes?: AgentProcessPool;
     readonly onConnectionStatus?: (status: "online" | "reconnecting") => void;
@@ -131,6 +132,7 @@ export async function runRuntime(
             sessionStore,
             sessionCreations,
         } = layer;
+        options.onInitialized?.();
         let connectionEpoch = 0;
         let connectionAnnounced = false;
         let catalogPublished = false;

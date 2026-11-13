@@ -1,4 +1,4 @@
-import { MortyApiError } from "@morty-build/client";
+import { MortyError } from "@morty-build/client";
 import { expect, it } from "vitest";
 import { startTestRelay } from "../support/relay.ts";
 
@@ -41,8 +41,11 @@ it("Given two clients holding one configuration revision, When they edit concurr
         expect(accepted).toHaveLength(1);
         const rejected = results.filter((result) => result.status === "rejected");
         expect(rejected).toHaveLength(1);
-        expect(rejected[0]?.reason).toBeInstanceOf(MortyApiError);
-        expect(rejected[0]?.reason).toMatchObject({ code: "session_configuration_conflict", status: 409 });
+        expect(rejected[0]?.reason).toBeInstanceOf(MortyError);
+        expect(rejected[0]?.reason).toMatchObject({ code: "session_configuration_conflict" });
+        // This is an authenticated Computer operation failure, not an HTTP failure
+        // synthesized by the Worker from private configuration data.
+        expect(rejected[0]?.reason).not.toHaveProperty("status");
         const committed = accepted[0];
         if (committed === undefined) {
             throw new Error("One configuration edit must commit");
@@ -54,7 +57,7 @@ it("Given two clients holding one configuration revision, When they edit concurr
                 edit,
                 cancellation.signal,
             ),
-        ).rejects.toMatchObject({ code: "session_configuration_conflict", status: 409 });
+        ).rejects.toMatchObject({ code: "session_configuration_conflict" });
         const current = await (
             await runtime.sessionClient(ready.target, cancellation.signal)
         ).sessions.readConfiguration(ready.target, cancellation.signal);

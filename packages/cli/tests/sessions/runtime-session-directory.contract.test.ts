@@ -1,7 +1,12 @@
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { decodeSessionReadyEvent } from "@morty-build/client/protocol";
+import { WsTransport } from "@morty-build/client";
+import {
+    type SessionCreateCommand,
+    sessionCreateCommandCodec,
+    sessionReadyEventCodec,
+} from "@morty-build/client/protocol";
 import { expect, it, onTestFinished } from "vitest";
 import { startTestRelay } from "../support/relay.ts";
 
@@ -23,6 +28,22 @@ for (const client of ["SDK", "HTTP"] as const) {
                 client === "SDK"
                     ? await runtime.createSession(request, cancellation.signal)
                     : await (async () => {
+                          const transport = new WsTransport();
+                          onTestFinished(() => transport.close());
+                          transport.configureEncryption(await runtime.encryptionAccess(cancellation.signal));
+                          const command = {
+                              kind: "session.create",
+                              requestId: crypto.randomUUID(),
+                              operationId: request.operationId,
+                              harness: request.harness,
+                              configurations: request.configurations,
+                              directory: request.directory,
+                          } satisfies SessionCreateCommand;
+                          const body = await sessionCreateCommandCodec.encode(
+                              command,
+                              transport.payloadEncryption,
+                              cancellation.signal,
+                          );
                           const response = await relay.app.request(
                               new Request(
                                   `${relay.baseUrl}/morty/api/v1/computers/${owner.computerId}/managed-sessions/open`,
@@ -32,12 +53,7 @@ for (const client of ["SDK", "HTTP"] as const) {
                                           authorization: `Bearer ${owner.token}`,
                                           "content-type": "application/json",
                                       },
-                                      body: JSON.stringify({
-                                          harness: request.harness,
-                                          configurations: request.configurations,
-                                          workspaceRef: request.directory,
-                                          conversationKey: request.operationId,
-                                      }),
+                                      body,
                                       signal: cancellation.signal,
                                   },
                               ),
@@ -47,7 +63,13 @@ for (const client of ["SDK", "HTTP"] as const) {
                           if (typeof access !== "object" || access === null || !("ready" in access)) {
                               throw new Error("Missing Session access");
                           }
-                          return decodeSessionReadyEvent(JSON.stringify(access.ready));
+                          const ready = await sessionReadyEventCodec.decode(
+                              JSON.stringify(access.ready),
+                              transport.payloadEncryption,
+                              cancellation.signal,
+                          );
+                          expect(ready.requestId).toBe(command.requestId);
+                          return ready;
                       })();
             const { target: sessionTarget } = ready;
             expect(ready).toMatchObject({
