@@ -7,7 +7,7 @@ import {
 } from "@morty-build/client";
 import type {
     NativeSessionTarget,
-    SessionConfigOption,
+    SessionConfigurationSelection,
     SessionEvent,
     SessionLiveEvent,
 } from "@morty-build/client/protocol";
@@ -195,12 +195,7 @@ export interface SessionPaneStore {
     readonly deleteQueued: (commandId: string, signal: AbortSignal) => Promise<void>;
     /** Takes a queued message out of the queue and back into the composer, ahead of any draft, for editing. */
     readonly editQueued: (commandId: string, signal: AbortSignal) => Promise<void>;
-    readonly configure: (
-        option: SessionConfigOption,
-        value: string,
-        booleanValue: boolean,
-        signal: AbortSignal,
-    ) => Promise<void>;
+    readonly configure: (selection: SessionConfigurationSelection, signal: AbortSignal) => Promise<void>;
     readonly openTitleEdit: () => void;
     readonly setTitleDraft: (draft: string) => void;
     readonly confirmTitleEdit: (signal: AbortSignal) => Promise<void>;
@@ -1289,11 +1284,11 @@ export function createSessionPaneModel(options: {
                 await messageQueue.getState().deleteMessage(queuedMessage(commandId), signal),
             editQueued: async (commandId, signal) =>
                 await messageQueue.getState().editMessage(queuedMessage(commandId), signal),
-            configure: async (option, value, booleanValue, signal) => {
+            configure: async (selection, signal) => {
                 if (!canChangeSettings(operationFacts())) {
                     return;
                 }
-                await settings.getState().configure(option, value, booleanValue, signal);
+                await settings.getState().configure(selection, signal);
             },
             openTitleEdit: () => {
                 // A new edit replaces the failure the last rename left.

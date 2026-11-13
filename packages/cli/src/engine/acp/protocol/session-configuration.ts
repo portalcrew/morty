@@ -2,10 +2,6 @@ import type { SessionConfigOption, SessionConfigValue } from "@morty-build/clien
 import { isRecord, readString } from "../../util/value-utils.ts";
 export const MAXIMUM_CONFIG_OPTIONS = 100;
 
-export type SessionConfigurationSelection =
-    | { readonly type: "boolean"; readonly configId: string; readonly booleanValue: boolean }
-    | { readonly type: "select"; readonly configId: string; readonly value: string };
-
 function truncate(value: string, maximum: number): string {
     return value.length <= maximum ? value : value.slice(0, maximum);
 }

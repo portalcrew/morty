@@ -121,9 +121,8 @@ test("Given a real Codex conversation in Plan mode, When its process recovers be
                                       sessionConfigurations: [
                                           {
                                               configId: "collaboration_mode",
-                                              valueType: "select" as const,
+                                              type: "select" as const,
                                               value: "plan",
-                                              booleanValue: false,
                                           },
                                       ],
                                   }

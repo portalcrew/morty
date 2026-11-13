@@ -133,9 +133,7 @@ test.each(["owned", "borrowed"])(
                         attachments: [],
                         prompt: "Stream a concise proposed plan",
                         disposition: SessionPromptDisposition.Append,
-                        sessionConfigurations: [
-                            { configId: "collaboration_mode", valueType: "select", value: "plan", booleanValue: false },
-                        ],
+                        sessionConfigurations: [{ configId: "collaboration_mode", type: "select", value: "plan" }],
                     }),
                 );
                 const live: SessionEventPayload[] = [];

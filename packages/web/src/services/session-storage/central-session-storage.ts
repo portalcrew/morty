@@ -304,12 +304,18 @@ const pendingRequestEntries = {
     sessionConfigurations: v.exactOptional(
         v.pipe(
             v.array(
-                v.strictObject({
-                    booleanValue: v.boolean(),
-                    configId: submissionIdentifier,
-                    value: v.pipe(v.string(), v.maxLength(500)),
-                    valueType: v.picklist(["boolean", "select"]),
-                }),
+                v.variant("type", [
+                    v.strictObject({
+                        configId: submissionIdentifier,
+                        type: v.literal("select"),
+                        value: v.pipe(v.string(), v.maxLength(500)),
+                    }),
+                    v.strictObject({
+                        booleanValue: v.boolean(),
+                        configId: submissionIdentifier,
+                        type: v.literal("boolean"),
+                    }),
+                ]),
             ),
             v.maxLength(100),
             v.readonly(),

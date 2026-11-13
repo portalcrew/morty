@@ -276,9 +276,9 @@ test("Given a draft Bot, When its owner sends the first message's creation reque
 });
 
 for (const { reason, ...configuration } of [
-    { reason: "missing", configId: "removed-setting", valueType: "select", value: "default", booleanValue: false },
-    { reason: "changed type", configId: "model", valueType: "boolean", value: "", booleanValue: true },
-    { reason: "removed value", configId: "model", valueType: "select", value: "removed-model", booleanValue: false },
+    { reason: "missing", configId: "removed-setting", type: "select", value: "default" },
+    { reason: "changed type", configId: "model", type: "boolean", booleanValue: true },
+    { reason: "removed value", configId: "model", type: "select", value: "removed-model" },
 ]) {
     test(`Given a ${reason} Agent setting, When Chat creates a conversation, Then it reports a conflict and a corrected retry opens one fully configured session`, async ({
         cloud,
@@ -303,9 +303,9 @@ for (const { reason, ...configuration } of [
         });
 
         const configurations = [
-            { configId: "model", valueType: "select", value: "test-large", booleanValue: false },
-            { configId: "fast", valueType: "boolean", value: "", booleanValue: true },
-            { configId: "effort", valueType: "select", value: "high", booleanValue: false },
+            { configId: "model", type: "select", value: "test-large" },
+            { configId: "fast", type: "boolean", booleanValue: true },
+            { configId: "effort", type: "select", value: "high" },
         ];
         const opened = await fixture.request(`chat/managed-sessions/open`, { ...input, configurations });
         expect(opened.status).toBe(200);
@@ -376,7 +376,7 @@ test("Given a completed creation operation, When its first-send settings are cha
     const { target } = v.parse(v.object({ target: targetSchema }), await first.json());
     const refused = await fixture.request(`chat/managed-sessions/open`, {
         ...input,
-        configurations: [{ configId: "model", valueType: "select", value: "test-large", booleanValue: false }],
+        configurations: [{ configId: "model", type: "select", value: "test-large" }],
     });
     expect(refused.status).toBe(409);
     expect(await refused.json()).toMatchObject({ error: { code: "idempotency_conflict" } });
@@ -425,8 +425,8 @@ test("Given an Agent whose model decides its effort levels, When Chat starts a c
         conversationKey: "effort-before-model",
         workspaceRef: ".",
         configurations: [
-            { configId: "effort", valueType: "select", value: "low", booleanValue: false },
-            { configId: "model", valueType: "select", value: "test-large", booleanValue: false },
+            { configId: "effort", type: "select", value: "low" },
+            { configId: "model", type: "select", value: "test-large" },
         ],
     });
     expect(opened.status).toBe(200);
@@ -452,8 +452,8 @@ test("Given dependent Agent settings, When applying a later selection changes an
         conversationKey: "dependent-settings",
         workspaceRef: ".",
         configurations: [
-            { configId: "model", valueType: "select", value: "test-large", booleanValue: false },
-            { configId: "mode", valueType: "select", value: "plan", booleanValue: false },
+            { configId: "model", type: "select", value: "test-large" },
+            { configId: "mode", type: "select", value: "plan" },
         ],
     });
     expect(response.status).toBe(409);
@@ -850,7 +850,7 @@ test("Given an existing conversation, When a repeated start is refused, Then the
     expect(await repeated.json()).toMatchObject({ target });
     const refused = await fixture.request(`chat/managed-sessions/open`, {
         ...input,
-        configurations: [{ configId: "removed-setting", valueType: "select", value: "default", booleanValue: false }],
+        configurations: [{ configId: "removed-setting", type: "select", value: "default" }],
     });
     expect(refused.status).toBe(409);
     expect(await refused.json()).toMatchObject({ error: { code: "idempotency_conflict" } });

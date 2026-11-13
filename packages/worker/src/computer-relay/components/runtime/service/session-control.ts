@@ -14,6 +14,7 @@ import {
     decodeSessionRenameCommand,
     type NativeSessionTarget,
     ProtocolMessageError,
+    type SessionConfigurationSelection,
     type SessionPromptCommand,
 } from "@morty-build/client/protocol";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
@@ -46,13 +47,9 @@ export type InteractionResponse =
     | { readonly kind: "permission"; readonly optionId: string; readonly outcome: "cancelled" | "selected" }
     | { readonly kind: "elicitation"; readonly action: "accept" | "cancel" | "decline"; readonly content: string };
 
-export interface SessionConfiguration {
-    readonly configId: string;
+export type SessionConfiguration = SessionConfigurationSelection & {
     readonly expectedConfigurationRevision: string;
-    readonly valueType: "select" | "boolean";
-    readonly value: string;
-    readonly booleanValue: boolean;
-}
+};
 
 /**
  * The operations every Session API offers on one Session. Each builds the Computer command for the Session's target

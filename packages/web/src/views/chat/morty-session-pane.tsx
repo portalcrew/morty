@@ -1,4 +1,4 @@
-import type { SessionConfigOption } from "@morty-build/client/protocol";
+import type { SessionConfigurationSelection } from "@morty-build/client/protocol";
 import { Check, CircleAlert, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useStore } from "zustand";
@@ -628,8 +628,8 @@ function MortySessionPaneBody({
         timeline.messages.length === 0 &&
         presentation.awaitingMessage === null;
     const initialMessage = presentation.awaitingMessage;
-    const configure = (option: SessionConfigOption, value: string, booleanValue: boolean) =>
-        run(async (signal) => await pane.store.getState().configure(option, value, booleanValue, signal));
+    const configure = (selection: SessionConfigurationSelection) =>
+        run(async (signal) => await pane.store.getState().configure(selection, signal));
     const openLocalFile = (path: string) => {
         void pane.filePreview.getState().open(path, pane.operationsSignal());
     };
@@ -1101,7 +1101,12 @@ function MortySessionPaneBody({
                                                   id: option.id,
                                                   kind: "boolean" as const,
                                                   label: option.name,
-                                                  onCheckedChange: () => configure(option, "", !option.booleanValue),
+                                                  onCheckedChange: () =>
+                                                      configure({
+                                                          booleanValue: !option.booleanValue,
+                                                          configId: option.id,
+                                                          type: "boolean",
+                                                      }),
                                                   testId: dataTestId.agentSetting(option.id),
                                               }
                                             : {
@@ -1109,7 +1114,8 @@ function MortySessionPaneBody({
                                                   id: option.id,
                                                   kind: "select" as const,
                                                   label: option.name,
-                                                  onValueChange: (value: string) => configure(option, value, false),
+                                                  onValueChange: (value: string) =>
+                                                      configure({ configId: option.id, type: "select", value }),
                                                   options: option.values.map((value) => ({
                                                       value: value.value,
                                                       label: value.name,

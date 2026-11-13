@@ -44,9 +44,7 @@ test.each(["allow_once", "reject_once"] as const)(
                     kind: "session.prompt",
                     prompt,
                     target: peer.target,
-                    sessionConfigurations: [
-                        { configId: "mode", valueType: "select", value: "read-only", booleanValue: false },
-                    ],
+                    sessionConfigurations: [{ configId: "mode", type: "select", value: "read-only" }],
                 }),
             );
             let approvals = 0;
@@ -158,9 +156,7 @@ test.each(["allow_once", "reject_once"] as const)(
                         kind: "session.prompt",
                         prompt,
                         target: peer.target,
-                        sessionConfigurations: [
-                            { configId: "mode", valueType: "select", value: "default", booleanValue: false },
-                        ],
+                        sessionConfigurations: [{ configId: "mode", type: "select", value: "default" }],
                     }),
                 );
                 let approvals = 0;

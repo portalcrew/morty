@@ -174,14 +174,13 @@ describe("Session settings reads after a daemon restart", () => {
             // Configure a model so a later read has a non-default value to find.
             await first.applySessionConfiguration({
                 agent,
-                booleanValue: false,
                 configId: "model",
                 cwd: process.cwd(),
                 requestId: "config-read-retired-configure",
                 target: sessionTarget,
                 signal: AbortSignal.timeout(10_000),
                 value: "test-large",
-                valueType: "select",
+                type: "select",
             });
         } finally {
             // Closing the daemon retires the Session's process; the Session itself outlives it.

@@ -79,9 +79,8 @@ test.each(["foreground", "background"] as const)(
                                       sessionConfigurations: [
                                           {
                                               configId: "reasoning_effort",
-                                              valueType: "select",
+                                              type: "select",
                                               value: "high",
-                                              booleanValue: false,
                                           },
                                       ],
                                   }

@@ -1,5 +1,9 @@
 import { MortyApiError } from "@morty-build/client";
-import type { NativeSessionTarget, SessionConfigOption } from "@morty-build/client/protocol";
+import type {
+    NativeSessionTarget,
+    SessionConfigOption,
+    SessionConfigurationSelection,
+} from "@morty-build/client/protocol";
 import { createStore } from "zustand/vanilla";
 import { rememberAgentSettingChoice } from "../../services/chat/last-agent-settings.ts";
 import { recordBrowserError } from "../../services/diagnostics/browser-diagnostics.ts";
@@ -46,12 +50,7 @@ export interface SessionSettingsStore {
      * Changes one setting through whichever pane follows the Session. The change is the Session's: switching panes
      * neither ends it nor drops its result.
      */
-    readonly configure: (
-        option: SessionConfigOption,
-        value: string,
-        booleanValue: boolean,
-        signal: AbortSignal,
-    ) => Promise<void>;
+    readonly configure: (selection: SessionConfigurationSelection, signal: AbortSignal) => Promise<void>;
 }
 
 /** The Session's settings on this page and the change the user asked of them, whichever pane shows them. */
@@ -128,20 +127,14 @@ export function createSessionSettingsStore(options: {
                         }
                     });
             },
-            configure: async (option, value, booleanValue, signal) => {
-                set({ change: { configId: option.id, kind: "configuring" } });
+            configure: async (selection, signal) => {
+                set({ change: { configId: selection.configId, kind: "configuring" } });
                 try {
                     await options.connection.send(
                         async (client, requestSignal) => {
                             return await client.sessions.updateConfiguration(
                                 options.sessionTarget,
-                                {
-                                    booleanValue,
-                                    configId: option.id,
-                                    expectedConfigurationRevision: get().configurationRevision,
-                                    value,
-                                    valueType: option.type,
-                                },
+                                { ...selection, expectedConfigurationRevision: get().configurationRevision },
                                 requestSignal,
                             );
                         },
@@ -151,9 +144,9 @@ export function createSessionSettingsStore(options: {
                     rememberAgentSettingChoice(
                         options.computerId,
                         options.sessionTarget.harness,
-                        option.type === "boolean"
-                            ? { configId: option.id, kind: "boolean", value: booleanValue }
-                            : { configId: option.id, kind: "select", value },
+                        selection.type === "boolean"
+                            ? { configId: selection.configId, kind: "boolean", value: selection.booleanValue }
+                            : { configId: selection.configId, kind: "select", value: selection.value },
                     );
                     refresh(signal);
                     set({ change: { kind: "idle" } });

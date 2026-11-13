@@ -1,6 +1,5 @@
-import type { SessionConfigOption } from "@morty-build/client/protocol";
+import type { SessionConfigOption, SessionConfigurationSelection } from "@morty-build/client/protocol";
 import { z } from "zod";
-import type { SessionConfigurationSelection } from "../../acp/protocol/session-configuration.ts";
 import { inDependencyOrder } from "../settings/configuration-dependencies.ts";
 
 export type StoredSessionConfiguration = SessionConfigurationSelection;

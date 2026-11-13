@@ -34,8 +34,8 @@ test("Given a creation operation still applying initial settings, When another c
                 {
                     ...input,
                     configurations: [
-                        { configId: "model", valueType: "select", value: "test-large", booleanValue: false },
-                        { configId: "missing-option", valueType: "select", value: "anything", booleanValue: false },
+                        { configId: "model", type: "select", value: "test-large" },
+                        { configId: "missing-option", type: "select", value: "anything" },
                     ],
                 },
                 signal,
