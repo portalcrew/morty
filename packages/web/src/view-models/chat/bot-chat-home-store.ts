@@ -4,7 +4,6 @@ import { createStore } from "zustand/vanilla";
 import { isApiConnectionError } from "../../services/api/worker-api-transport.ts";
 import {
     type BotChatApi,
-    type BotComputerConfiguration,
     type ChatAccess,
     type ChatDraftConfiguration,
     computerAgentAvailability,
@@ -19,8 +18,8 @@ import type { Clock } from "../../services/time/clock.ts";
 import { formatError } from "../format-error.ts";
 import { type ComposerAttachmentStore, createComposerAttachmentStore } from "./composer-attachment-store.ts";
 import { returnToComposer } from "./composer-return.ts";
-import type { ComputerObservation } from "./computer-recovery.ts";
-import { botConnectionStatus, type ComputerStatusStore, type ComputerStatusStoreApi } from "./computer-status-store.ts";
+import { COMPUTER_REVOKED_MESSAGE, type ComputerEntryOutcome } from "./computer-follower.ts";
+import type { ComputerStatusStore, ComputerStatusStoreApi } from "./computer-status-store.ts";
 import {
     type ConversationCreationState,
     failedDraftMessage,
@@ -36,7 +35,6 @@ import {
 import { type DraftControlsStore, draftConfiguration } from "./draft-controls-store.ts";
 import { canRetryFirstMessage, canSendFirstMessage, type NewConversationFacts } from "./new-conversation-rules.ts";
 import type { OpenMortySession } from "./open-session.ts";
-import { startRecoveryNotice } from "./recovery-notice.ts";
 import { prependToDraft, type SubmittedMessage } from "./session-delivery-store.ts";
 import type { SessionTitles, SessionTitlesStore } from "./session-titles-store.ts";
 
@@ -44,30 +42,20 @@ export type BotChatHomeStoreApi = Omit<ReturnType<typeof createBotChatHomeStore>
 
 type SetupReason = "unconfigured" | "computer-revoked" | "agent-missing" | "computer-offline" | "agent-required";
 
-/** Why a Session load waiting on a revoked Computer fails. */
-const COMPUTER_REVOKED_MESSAGE = "This computer was disconnected. Run Morty setup on it again to reconnect.";
-
-/** Initialization owns only the entry request, never the selected session or the Computer's availability. */
-type HomeInitialization =
-    | { readonly kind: "loading" }
-    | { readonly kind: "ready" }
-    | {
-          readonly kind: "failed";
-          readonly failure: "computer" | "agent-required" | "unavailable";
-          readonly message: string;
-      };
-
 /**
  * Whether the home view failed only because the Computer was unreachable, so the workspace retries it once the Computer
  * is back. A selection that is loading again is a retry in flight, not a failure.
  */
-export function homeWaitsForComputer(home: Pick<BotChatHomeStore, "initialization" | "selection">): boolean {
+export function homeWaitsForComputer(
+    home: Pick<BotChatHomeStore, "selection">,
+    computer: Pick<ComputerStatusStore, "entry">,
+): boolean {
     const selection = home.selection;
     if (selection.kind === "draft") {
         return false;
     }
     return (
-        (home.initialization.kind === "failed" && home.initialization.failure === "computer") ||
+        (computer.entry.kind === "failed" && computer.entry.failure === "computer") ||
         (selection.kind === "failed" && selection.failure === "computer")
     );
 }
@@ -85,13 +73,20 @@ export interface BotChatHomeStore {
         readonly draft: string;
         readonly attachments: ReturnType<typeof createComposerAttachmentStore>;
     } | null;
-    readonly initialization: HomeInitialization;
     readonly selection: ConversationSelectionState;
     readonly creation: ConversationCreationState;
     readonly draft: string;
     /** Bumped whenever the message list should re-arm following the latest message. */
     readonly scrollFollowRevision: number;
+    /** Loads the selected Session once the Computer's entry request is answered. */
     readonly load: (signal: AbortSignal) => Promise<void>;
+    /**
+     * The Computer answered the page's entry request. The selection waiting for it moves in the same step: to loading
+     * when the Computer is paired, to a failure when it is not.
+     */
+    readonly entryAnswered: (outcome: ComputerEntryOutcome) => void;
+    /** The pairing was revoked: a Session still loading for it fails. */
+    readonly computerRevoked: (message: string) => void;
     readonly newConversation: () => void;
     readonly openManaged: (target: NativeSessionTarget) => void;
     readonly retry: () => void;
@@ -125,7 +120,7 @@ function homeSetupReason(home: BotChatHomeStore, computer: ComputerStatusStore):
     }
     if (
         (home.selection.kind === "failed" && home.selection.failure === "agent-required") ||
-        (home.initialization.kind === "failed" && home.initialization.failure === "agent-required")
+        (computer.entry.kind === "failed" && computer.entry.failure === "agent-required")
     ) {
         return "agent-required";
     }
@@ -144,7 +139,7 @@ function homeSetupReason(home: BotChatHomeStore, computer: ComputerStatusStore):
 
 export function homeCanStartConversation(home: BotChatHomeStore, computer: ComputerStatusStore): boolean {
     return (
-        home.initialization.kind === "ready" &&
+        computer.entry.kind === "ready" &&
         computer.pairing.kind === "paired" &&
         computer.computerConfiguration !== null &&
         homeSetupReason(home, computer) === null
@@ -201,10 +196,7 @@ export const createBotChatHomeStore = (
         | "conversationSession"
         | "createConversation"
         | "managedSession"
-        | "readComputerPairing"
-        | "waitForComputerPairingChange"
         | "waitForComputerConfigurationChange"
-        | "computerConfiguration"
         | "directory"
     >,
     options: {
@@ -216,14 +208,14 @@ export const createBotChatHomeStore = (
         /** Whether the connection header reports the New Session page's connection available, network and Computer included. */
         readonly connectionAvailable: () => boolean;
         readonly entry?: "address" | "restore";
-        /**
-         * Announced with every Computer configuration the page observes, after the view follows it: the owner keeps the
-         * other workspace workflows on it and retries what the Computer failed once it is back.
-         */
-        readonly onComputerConfiguration: (
-            configuration: BotComputerConfiguration,
-            observation: ComputerObservation,
-        ) => void;
+        /** How the Computer answered the page's entry request, or null while it has not. */
+        readonly computerEntry: () => ComputerEntryOutcome | null;
+        /** Resolves once the Computer answered the page's entry request, which a Session load waits for. */
+        readonly computerEntered: (signal: AbortSignal) => Promise<ComputerEntryOutcome>;
+        /** An operation through the Computer failed for connectivity: the Computer's follow recovers. */
+        readonly onComputerInterrupted: () => void;
+        /** An operation reported the Computer's pairing revoked: the Computer's follow waits for setup to repair it. */
+        readonly onComputerRevokedByOperation: (message: string, signal: AbortSignal) => Promise<void>;
         /** Announced when the view failed only because the Computer was unreachable and waits for it to be retried. */
         readonly onWaitingForComputer: () => void;
         readonly clock: Clock;
@@ -240,11 +232,6 @@ export const createBotChatHomeStore = (
          * home load, which loads the selected Session. The directory of conversations does not depend on the selection.
          */
         readonly onSelectionChanged: () => void;
-        /**
-         * Announced once setup pairs the Computer again after revocation. Every Session connection this page opened
-         * belongs to the revoked pairing, so the owner starts the page over.
-         */
-        readonly onComputerReplaced: () => void;
         /** Announced when a created conversation joins the directory: the owner reloads it without reloading the home view. */
         readonly onDirectoryRefreshed: () => void;
         /**
@@ -319,6 +306,8 @@ export const createBotChatHomeStore = (
         // First messages no Session took while the New Session page was not showing them, oldest first. Each keeps
         // its reload copy until a New Session draft takes it back.
         let returned: readonly ReturnedFirstMessage[] = [];
+        // The first load restores what an earlier page could not hand to a Session; later loads only load the Session.
+        let firstLoadStarted = false;
         /**
          * Returns a first message no Session took to the New Session draft, ahead of what the draft holds, as a reload
          * returns it. Leaving the page that sent it is not discarding it. Off the draft page, or while the draft reads
@@ -346,298 +335,83 @@ export const createBotChatHomeStore = (
         return {
             composerAttachments: createComposerAttachmentStore(),
             draftHandoff: null,
-            initialization: { kind: "loading" },
             selection,
             creation: { kind: "draft" },
             draft: "",
             scrollFollowRevision: 0,
             load: async (signal) => {
                 signal.throwIfAborted();
-                let recoveryNotice: AbortController | null = null;
-                const clearRecoveryNotice = (): void => {
-                    recoveryNotice?.abort();
-                    recoveryNotice = null;
-                };
-                const configurationUnavailable = (): void => {
-                    // Repeated failures belong to one interruption, so they cannot postpone its notice.
-                    if (recoveryNotice !== null) {
-                        return;
-                    }
-                    if (computer.getState().watchInterrupted() === "visible") {
-                        return;
-                    }
-                    recoveryNotice = startRecoveryNotice({
-                        clock: options.clock,
-                        signal,
-                        onNotice: (notice) => computer.getState().interruptionNoticed(notice),
-                    });
-                };
                 titles.getState().restore();
                 const startedWith = titles.getState().titles;
-                const starting = get();
-                if (starting.initialization.kind !== "ready") {
-                    set({ initialization: { kind: "loading" } });
-                }
-                if (starting.initialization.kind === "loading" && starting.selection.kind === "draft") {
-                    const draft = centralSessionStorage.read(newConversationDraftEntry(computerId)) ?? "";
-                    // First messages an earlier page could not hand to a Session return ahead of the draft, the oldest first.
-                    const unsent = unsentFirstMessages();
-                    if (unsent.length === 0) {
-                        set({ draft });
+                if (!firstLoadStarted) {
+                    firstLoadStarted = true;
+                    if (get().selection.kind === "draft") {
+                        const draft = centralSessionStorage.read(newConversationDraftEntry(computerId)) ?? "";
+                        // First messages an earlier page could not hand to a Session return ahead of the draft, the oldest first.
+                        const unsent = unsentFirstMessages();
+                        if (unsent.length === 0) {
+                            set({ draft });
+                        } else {
+                            const restored = unsent
+                                .toReversed()
+                                .reduce((text, message) => prependToDraft(message.content, text), draft);
+                            centralSessionStorage.write(newConversationDraftEntry(computerId), restored);
+                            centralSessionStorage.remove(unsentEntry);
+                            set({ draft: restored });
+                        }
                     } else {
-                        const restored = unsent
-                            .toReversed()
-                            .reduce((text, message) => prependToDraft(message.content, text), draft);
-                        centralSessionStorage.write(newConversationDraftEntry(computerId), restored);
-                        centralSessionStorage.remove(unsentEntry);
-                        set({ draft: restored });
+                        // A page that opens on another conversation keeps an earlier page's unsent first messages for the next draft.
+                        const known = new Set(returned.map((message) => message.commandId));
+                        returned = [
+                            ...returned,
+                            ...unsentFirstMessages()
+                                .filter((message) => !known.has(message.commandId))
+                                .map((message) => ({ ...message, attachments: [] })),
+                        ];
                     }
-                } else if (starting.initialization.kind === "loading") {
-                    // A page that opens on another conversation keeps an earlier page's unsent first messages for the next draft.
-                    const known = new Set(returned.map((message) => message.commandId));
-                    returned = [
-                        ...returned,
-                        ...unsentFirstMessages()
-                            .filter((message) => !known.has(message.commandId))
-                            .map((message) => ({ ...message, attachments: [] })),
-                    ];
                 }
-                // Entry failures and session failures belong to the request that failed.
+                // A Session's failure belongs to the load that was in flight for it.
                 const failLoad = (
                     failure: "computer" | "agent-required" | "unavailable" | "connection",
                     message: string,
                 ): void => {
-                    const current = get();
-                    if (current.selection.kind === "loading") {
+                    const current = get().selection;
+                    if (current.kind === "loading") {
                         set({
-                            selection: transitionConversationSelection(current.selection, {
+                            selection: transitionConversationSelection(current, {
                                 kind: "session-load-failed",
                                 failure,
                                 message,
-                                target: current.selection.target,
+                                target: current.target,
                             }),
                         });
-                    } else {
-                        set({
-                            initialization: {
-                                kind: "failed",
-                                failure: failure === "connection" ? "unavailable" : failure,
-                                message,
-                            },
-                        });
-                    }
-                };
-                /**
-                 * Which stage of the load is in flight. A network failure before
-                 * the session content exists is an unfinished user request that
-                 * must become an operable failure; afterwards it only takes the
-                 * background watches, which can be resumed without replaying
-                 * the session load.
-                 */
-                let phase: "request" | "setup" | "watch" = "request";
-                const completeSetup = (): void => {
-                    signal.throwIfAborted();
-                    get().retry();
-                };
-                /**
-                 * Follows the Computer configuration. Each watch adopts its comparison baseline as the snapshot, so a
-                 * brief Computer change between two reads cannot leave the page stale. `baselineFollowsChange` says
-                 * the first baseline may already differ from what the page last saw, as after a network outage.
-                 */
-                const watchComputerConfigurationChanges = async (baselineFollowsChange = false): Promise<void> => {
-                    let afterChange = baselineFollowsChange;
-                    while (true) {
-                        try {
-                            await requests.waitForComputerConfigurationChange(signal, (configuration) =>
-                                applyConfiguration(configuration, afterChange),
-                            );
-                        } catch (cause) {
-                            if (cause instanceof DOMException && cause.name === "TimeoutError") {
-                                continue;
-                            }
-                            throw cause;
-                        }
-                        signal.throwIfAborted();
-                        afterChange = true;
-                    }
-                };
-                /**
-                 * Adopts a watched Computer configuration snapshot: a draft's view follows it, and the workspace
-                 * retries what the Computer failed once a snapshot shows it back.
-                 */
-                const applyConfiguration = (configuration: BotComputerConfiguration, afterChange: boolean): void => {
-                    signal.throwIfAborted();
-                    if (get().selection.kind === "draft") {
-                        // A recovered configuration read completes draft initialization after a network outage.
-                        set({ initialization: { kind: "ready" } });
-                    }
-                    observeConfiguration(configuration, { kind: "watch", afterChange });
-                };
-                /** Records the authoritative snapshot and announces it to the other workspace workflows. */
-                const observeConfiguration = (
-                    configuration: BotComputerConfiguration,
-                    observation: ComputerObservation,
-                ): void => {
-                    clearRecoveryNotice();
-                    computer.getState().configurationObserved(configuration, options.clock.now());
-                    options.onComputerConfiguration(configuration, observation);
-                };
-                /**
-                 * The Computer's pairing was revoked. The page says so, and starts over once setup pairs it
-                 * again: every Session connection it opened belongs to the revoked pairing.
-                 */
-                const awaitComputerReplacement = async (message: string, watchSignal: AbortSignal): Promise<void> => {
-                    computer.getState().pairingRevoked();
-                    set((current) => ({
-                        initialization: { kind: "ready" },
-                        selection:
-                            current.selection.kind === "pending" || current.selection.kind === "loading"
-                                ? transitionConversationSelection(current.selection, {
-                                      kind: "session-load-failed",
-                                      failure: "unavailable",
-                                      message,
-                                      target: current.selection.target,
-                                  })
-                                : current.selection,
-                    }));
-                    await requests.waitForComputerPairingChange(watchSignal);
-                    watchSignal.throwIfAborted();
-                    options.onComputerReplaced();
-                };
-                /** Refresh the pairing and workspace after an interrupted API read. */
-                const followConfigurationChanges = async (watchSignal: AbortSignal): Promise<void> => {
-                    let dropped = true;
-                    let armed = false;
-                    while (true) {
-                        try {
-                            if (dropped) {
-                                watchSignal.throwIfAborted();
-                                const pairing = await requests.readComputerPairing(watchSignal);
-                                watchSignal.throwIfAborted();
-                                if (pairing === "revoked") {
-                                    await awaitComputerReplacement(COMPUTER_REVOKED_MESSAGE, watchSignal);
-                                    return;
-                                }
-                                computer.getState().pairingRead(pairing);
-                                if (pairing === "unpaired") {
-                                    // An unpaired Computer waits for the pairing
-                                    // it just read to change; the pairing flow
-                                    // completes by restarting the load.
-                                    await requests.waitForComputerPairingChange(watchSignal);
-                                    watchSignal.throwIfAborted();
-                                    completeSetup();
-                                    return;
-                                }
-                                if (phase === "setup") {
-                                    // Pairing completed during the outage. Finish
-                                    // setup just as a setup-watch notification
-                                    // would, including draft settings and the
-                                    // directory. No session operation was issued
-                                    // while the Computer was unconfigured.
-                                    completeSetup();
-                                    return;
-                                }
-                                dropped = false;
-                            }
-                            // A bound Computer keeps following workspace
-                            // changes even while its Computer is offline.
-                            // A watch re-armed after a network outage may find a Computer that changed meanwhile.
-                            const rearmed = armed;
-                            armed = true;
-                            await watchComputerConfigurationChanges(rearmed);
-                            return;
-                        } catch (cause) {
-                            watchSignal.throwIfAborted();
-                            if (!isApiConnectionError(cause)) {
-                                throw cause;
-                            }
-                            console.error("The Morty API request failed.", cause);
-                            configurationUnavailable();
-                            await options.clock.sleep(5000, watchSignal);
-                            dropped = true;
-                        }
                     }
                 };
                 try {
-                    const current = get();
-                    if (
-                        homeCanStartConversation(current, computer.getState()) &&
-                        botConnectionStatus(computer.getState()).kind === "connected" &&
-                        (current.selection.kind === "pending" || current.selection.kind === "loading") &&
-                        current.selection.target.kind === "session"
-                    ) {
-                        const target = current.selection.target;
-                        set({
-                            selection: transitionConversationSelection(current.selection, {
-                                kind: "session-load-started",
-                            }),
-                        });
-                        const session = await requests.managedSession(target.identity, signal);
-                        signal.throwIfAborted();
-                        acceptLoadedSelection({ kind: "session-loaded", session, target }, startedWith);
-                        phase = "watch";
-                        await followConfigurationChanges(signal);
+                    // A draft or an open Session has nothing to load.
+                    if (get().selection.kind === "draft" || get().selection.kind === "ready") {
                         return;
                     }
-                    const pairing = await requests.readComputerPairing(signal);
+                    // An answer the page already holds moves the selection before anything else runs.
+                    const outcome = options.computerEntry() ?? (await options.computerEntered(signal));
                     signal.throwIfAborted();
-                    if (pairing === "revoked") {
-                        await awaitComputerReplacement(COMPUTER_REVOKED_MESSAGE, signal);
+                    get().entryAnswered(outcome);
+                    if (outcome.kind === "failed") {
+                        // The request this load waited on failed; the Computer's status holds why.
+                        const entry = computer.getState().entry;
+                        if (entry.kind === "failed") {
+                            failLoad(entry.failure, entry.message);
+                        }
                         return;
                     }
-                    computer.getState().pairingRead(pairing);
-                    if (pairing === "unpaired") {
-                        computer.getState().pairingDialog.getState().show();
-                        set((current) => ({
-                            selection:
-                                current.selection.kind === "pending" || current.selection.kind === "loading"
-                                    ? transitionConversationSelection(current.selection, {
-                                          kind: "session-load-failed",
-                                          failure: "unavailable",
-                                          message: "Connect your local agent to load this session.",
-                                          target: current.selection.target,
-                                      })
-                                    : current.selection,
-                            initialization: { kind: "ready" },
-                        }));
-                        // The interruption during the setup wait is handled by
-                        // the same repeatable recovery loop that owns every
-                        // later watch: it waits for connectivity, re-reads the
-                        // pairing state, and keeps waiting on the setup watch
-                        // for an unconfigured Computer.
-                        phase = "setup";
-                        await followConfigurationChanges(signal);
+                    const current = get().selection;
+                    if (current.kind !== "loading" || current.target.kind !== "session") {
                         return;
                     }
-                    const configuration = await requests.computerConfiguration(signal);
+                    const target = current.target;
+                    const session = await requests.managedSession(target.identity, signal);
                     signal.throwIfAborted();
-                    set((current) => ({
-                        initialization: { kind: "ready" },
-                        selection: transitionConversationSelection(current.selection, {
-                            kind: "session-load-started",
-                        }),
-                    }));
-                    observeConfiguration(configuration, { kind: "read" });
-                    const currentSelection = get().selection;
-                    if (currentSelection.kind === "ready") {
-                        computer.getState().pairingDialog.getState().dismiss();
-                        await watchComputerConfigurationChanges();
-                        return;
-                    }
-                    const currentTarget = currentSelection.kind === "draft" ? null : currentSelection.target;
-                    if (currentTarget?.kind === "session") {
-                        const session = await requests.managedSession(currentTarget.identity, signal);
-                        signal.throwIfAborted();
-                        acceptLoadedSelection({ kind: "session-loaded", session, target: currentTarget }, startedWith);
-                        phase = "watch";
-                        await followConfigurationChanges(signal);
-                        return;
-                    }
-                    if (currentTarget === null) {
-                        computer.getState().pairingDialog.getState().dismiss();
-                        await watchComputerConfigurationChanges();
-                        return;
-                    }
+                    acceptLoadedSelection({ kind: "session-loaded", session, target }, startedWith);
                 } catch (cause) {
                     if (signal.aborted) {
                         return;
@@ -672,38 +446,16 @@ export const createBotChatHomeStore = (
                         return;
                     }
                     if (isApiConnectionError(cause)) {
-                        configurationUnavailable();
-                        // A network outage is an ordinary failed call. An
-                        // established conversation keeps whatever it showed, and
-                        // the next user action reports its own failure; a load
-                        // the user is still waiting on must not strand the page,
-                        // so it becomes an operable failure state that keeps its
-                        // target.
+                        // A network outage is an ordinary failed call. The Computer's follow recovers from it; a load
+                        // the user is still waiting on must not strand the page, so it becomes an operable failure
+                        // that keeps its target.
+                        options.onComputerInterrupted();
                         console.error("The Morty API request failed.", cause);
-                        const message = formatError(cause, "Chat is unavailable.");
-                        const current = get();
-                        if (current.selection.kind === "pending" || current.selection.kind === "loading") {
-                            // The selection never completed, so this load is a
-                            // user request still in flight: it becomes an
-                            // operable failure that keeps its target.
-                            failLoad("connection", message);
-                            return;
-                        }
-                        // Content is already on screen: the view stays, and the
-                        // dropped watches are re-armed when connectivity returns.
-                        await followConfigurationChanges(signal);
+                        failLoad("connection", formatError(cause, "Chat is unavailable."));
                         return;
                     }
                     if (cause instanceof CloudApiError && cause.code === "computer_revoked") {
-                        // An operation reported the revocation, so the page's last pairing read may predate it. Waiting
-                        // starts from a read after it; one that already differs means setup is pairing again.
-                        const pairing = await requests.readComputerPairing(signal);
-                        signal.throwIfAborted();
-                        if (pairing !== "revoked") {
-                            options.onComputerReplaced();
-                            return;
-                        }
-                        await awaitComputerReplacement(cause.message, signal);
+                        await options.onComputerRevokedByOperation(cause.message, signal);
                         return;
                     }
                     if (cause instanceof CloudApiError && cause.code === "AGENT_REQUIRED") {
@@ -721,17 +473,54 @@ export const createBotChatHomeStore = (
                         // Only a failed read is eligible for automatic replay; it does not assert the computer is offline.
                         failLoad("computer", message);
                         options.onWaitingForComputer();
-                        await followConfigurationChanges(signal);
                         return;
                     }
                     failLoad("unavailable", message);
-                } finally {
-                    // Quiet feedback is owned by an active recovery. Once this load exits,
-                    // an unavailable watch needs the manual retry entry point immediately.
-                    if (!signal.aborted) {
-                        computer.getState().interruptionUnattended();
+                }
+            },
+            entryAnswered: (outcome) => {
+                const current = get().selection;
+                if (current.kind !== "pending" && current.kind !== "loading") {
+                    return;
+                }
+                switch (outcome.kind) {
+                    case "paired": {
+                        const next = transitionConversationSelection(current, { kind: "session-load-started" });
+                        if (next !== current) {
+                            set({ selection: next });
+                        }
+                        return;
                     }
-                    clearRecoveryNotice();
+                    case "unpaired":
+                        set({
+                            selection: transitionConversationSelection(current, {
+                                kind: "session-load-failed",
+                                failure: "unavailable",
+                                message: "Connect your local agent to load this session.",
+                                target: current.target,
+                            }),
+                        });
+                        return;
+                    case "revoked":
+                        get().computerRevoked(COMPUTER_REVOKED_MESSAGE);
+                        return;
+                    case "failed":
+                        return;
+                    default:
+                        return outcome satisfies never;
+                }
+            },
+            computerRevoked: (message) => {
+                const current = get().selection;
+                if (current.kind === "pending" || current.kind === "loading") {
+                    set({
+                        selection: transitionConversationSelection(current, {
+                            kind: "session-load-failed",
+                            failure: "unavailable",
+                            message,
+                            target: current.target,
+                        }),
+                    });
                 }
             },
             newConversation: () => {

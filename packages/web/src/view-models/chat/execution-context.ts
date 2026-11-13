@@ -14,7 +14,7 @@ export function pendingExecutionContext(
     computer: ComputerStatusStore,
     settings: DraftControlsStore["settings"],
 ): ExecutionContext {
-    const loading = home.selection.kind === "loading" || home.initialization.kind === "loading";
+    const loading = home.selection.kind === "loading" || computer.entry.kind === "loading";
     const base: ExecutionContext = {
         ...connectionPresentation(computer, home.selection, null),
         harness: "",
