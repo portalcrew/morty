@@ -9,7 +9,7 @@ import {
     rememberedComputers,
     resumeComputerAddress,
 } from "../../services/identity/remembered-computers.ts";
-import type { BotConnectionStatus } from "./bot-chat-home-store.ts";
+import type { BotConnectionStatus } from "./computer-status-store.ts";
 
 export interface ComputerChoice {
     readonly key: string;

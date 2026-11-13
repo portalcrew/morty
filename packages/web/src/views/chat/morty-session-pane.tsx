@@ -518,7 +518,8 @@ function MortySessionPaneBody({
     readonly workspace: ChatWorkspace;
 }) {
     const home = useStore(workspace.home);
-    const computerConfiguration = home.computerConfiguration;
+    const computer = useStore(workspace.computer);
+    const computerConfiguration = computer.computerConfiguration;
     const model = useStore(pane.store);
     const composer = useStore(pane.composer);
     const timeline = sessionProjectionTimeline(model.projection);
@@ -554,7 +555,7 @@ function MortySessionPaneBody({
     const respondToElicitation = (response: ElicitationInteractionResponse): void => {
         interactionModel.respondToElicitation(response, pane.operationsSignal());
     };
-    const executionContext = sessionExecutionContext(pane.session, home, model.connection);
+    const executionContext = sessionExecutionContext(pane.session, home, computer, model.connection);
     const presentation = sessionPanePresentation(
         model,
         execution,

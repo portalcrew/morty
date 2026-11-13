@@ -1,5 +1,6 @@
 import type { ConnectionFeedback, ExecutionContext } from "../../components/chat/execution-context.ts";
-import { type BotChatHomeStore, botConnectionStatus } from "./bot-chat-home-store.ts";
+import { botConnectionStatus, type ComputerStatusStore } from "./computer-status-store.ts";
+import type { ConversationSelectionState } from "./conversation-selection-machine.ts";
 import type { SessionConnection } from "./session-connection.ts";
 
 /** A computer goes offline when it sleeps, loses its network, or restarts; only a restart needs the user to start Morty again. */
@@ -17,10 +18,11 @@ type ConnectionPresentation = Pick<
 
 /** One projection for the header, details and composer; none infer availability independently. */
 export function connectionPresentation(
-    home: BotChatHomeStore,
+    status: ComputerStatusStore,
+    selection: ConversationSelectionState,
     session: SessionConnection | null,
 ): ConnectionPresentation {
-    const computer = botConnectionStatus(home);
+    const computer = botConnectionStatus(status);
     const computerStatus =
         computer.kind === "connected"
             ? "Online"
@@ -33,16 +35,16 @@ export function connectionPresentation(
                   : computer.kind === "connecting"
                     ? "Checking availability"
                     : "Status unavailable";
-    const watch = home.configurationWatch;
+    const watch = status.configurationWatch;
     const checkedAt =
         watch.kind === "current" ? watch.checkedAt : watch.kind === "unavailable" ? watch.lastCheckedAt : null;
     const lastConfirmed =
-        (!home.networkAvailable || watch.kind === "unavailable") &&
+        (!status.networkAvailable || watch.kind === "unavailable") &&
         checkedAt !== null &&
-        home.computerConfiguration !== null
-            ? `Last confirmed ${home.computerConfiguration.computer.online ? "online" : "offline"} at ${new Date(checkedAt).toLocaleTimeString()}`
+        status.computerConfiguration !== null
+            ? `Last confirmed ${status.computerConfiguration.computer.online ? "online" : "offline"} at ${new Date(checkedAt).toLocaleTimeString()}`
             : null;
-    const connection = sessionLabel(session, home.selection.kind === "draft");
+    const connection = sessionLabel(session, selection.kind === "draft");
     const present = (
         indicator: ExecutionContext["indicator"],
         feedback: ConnectionFeedback,
@@ -55,7 +57,7 @@ export function connectionPresentation(
         // the Session's own recovery lifecycle decide when an interruption needs a composer notice.
         feedback:
             session?.kind === "ready" &&
-            home.networkAvailable &&
+            status.networkAvailable &&
             computer.kind !== "unpaired" &&
             computer.kind !== "revoked"
                 ? { kind: "hidden" }
@@ -68,7 +70,7 @@ export function connectionPresentation(
             { kind: "closed", description: session.reason ?? "This Session was archived." },
         );
     }
-    if (!home.networkAvailable) {
+    if (!status.networkAvailable) {
         return present(
             { kind: "offline", label: "No network connection" },
             {
@@ -180,10 +182,10 @@ export function connectionPresentation(
             },
         );
     }
-    if (session?.kind === "first-loading" || (session === null && home.selection.kind === "loading")) {
+    if (session?.kind === "first-loading" || (session === null && selection.kind === "loading")) {
         return present({ kind: "recovering", label: "Connecting" }, { kind: "hidden" });
     }
-    if (session === null && home.selection.kind === "failed") {
+    if (session === null && selection.kind === "failed") {
         return present({ kind: "failed", label: "Session unavailable" }, { kind: "hidden" });
     }
     return present({ kind: "ready", label: "Connection available" }, { kind: "hidden" });

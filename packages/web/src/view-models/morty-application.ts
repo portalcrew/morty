@@ -237,7 +237,7 @@ export function createMortyApplication(options: {
         anonymousSession.getState().storedAccessRemoved();
     };
     const networkChanged = (): void => {
-        workspace?.home.getState().setNetworkAvailable(navigator.onLine);
+        workspace?.computer.getState().networkChanged(navigator.onLine);
     };
     window.addEventListener("offline", networkChanged);
     window.addEventListener("online", networkChanged);

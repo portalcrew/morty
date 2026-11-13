@@ -29,13 +29,13 @@ import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import type { DaemonDiagnosticsSource } from "../../services/diagnostics/browser-diagnostics.ts";
 import {
     type BotChatHomeStore,
-    botConnectionStatus,
     homeCanStartConversation,
     newConversationPresentation,
 } from "../../view-models/chat/bot-chat-home-store.ts";
 import { chatDiagnostics } from "../../view-models/chat/chat-diagnostics.ts";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { canAddAttachments } from "../../view-models/chat/composer-attachment-store.ts";
+import { botConnectionStatus } from "../../view-models/chat/computer-status-store.ts";
 import {
     conversationComposerLocked,
     conversationCreationBusy,
@@ -171,10 +171,11 @@ export function BotChatHome(props: BotChatHomeProps) {
 function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & { readonly desktop: boolean }) {
     const store = workspace.home;
     const model = useStore(store);
+    const computer = useStore(workspace.computer);
     const draftControls = useStore(workspace.draftControls);
-    const executionContext = pendingExecutionContext(model, draftControls.settings);
+    const executionContext = pendingExecutionContext(model, computer, draftControls.settings);
     const attachmentModel = useStore(model.composerAttachments);
-    const connectionStatus = botConnectionStatus(model);
+    const connectionStatus = botConnectionStatus(computer);
     const creationBusy = conversationCreationBusy(model.creation);
     const composerLocked = conversationComposerLocked(model.creation);
     // Leaving the page cancels creation with the workspace; only other failures are unexpected.
@@ -194,17 +195,18 @@ function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & 
     const queuedInitialMessage = queuedDraftMessage(model.creation);
     const draft = model.draft;
     const titles = useStore(workspace.titles, (state) => state.titles);
-    const pendingConversation = pendingConversationPresentation(model, titles);
-    const canStartConversation = homeCanStartConversation(model);
+    const pendingConversation = pendingConversationPresentation(model.selection, computer, titles);
+    const canStartConversation = homeCanStartConversation(model, computer);
     const presentation = newConversationPresentation(
         model,
+        computer,
         attachmentModel,
         draftControls.settings,
         executionContext.available,
     );
-    const pairingNotice = useStore(model.pairingDialog, (state) => state.open);
+    const pairingNotice = useStore(computer.pairingDialog, (state) => state.open);
 
-    const newSessionHarness = activeHarnessMark(model, draftControls.settings);
+    const newSessionHarness = activeHarnessMark(model, computer, draftControls.settings);
     const newSessionHarnessLoading =
         draftControls.settings.kind === "loading" || draftControls.settings.kind === "switching";
     const showNewSessionTitle = model.selection.kind === "draft";
@@ -256,7 +258,7 @@ function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & 
                 workspace={workspace}
                 activeTarget={activeConversationTarget}
                 connectionStatus={connectionStatus}
-                onConnectAgent={model.pairing.kind === "unpaired" ? model.pairingDialog.getState().show : null}
+                onConnectAgent={computer.pairing.kind === "unpaired" ? computer.pairingDialog.getState().show : null}
                 requests={requests}
                 onOpen={(session) => openManaged(session.target)}
                 onNewConversation={newConversation}
@@ -265,7 +267,7 @@ function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & 
                 <DevicesDialog
                     accessExpiry={workspace.accessExpiry}
                     devices={workspace.linkedDevices}
-                    computerName={model.computerConfiguration?.computer?.computerName ?? ""}
+                    computerName={computer.computerConfiguration?.computer?.computerName ?? ""}
                     signal={workspace.operationsSignal}
                     store={workspace.deviceAccess}
                 />
@@ -415,7 +417,7 @@ function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & 
                                     )}
                                 </div>
                             </FollowLatestScrollArea>
-                            {model.computerConfiguration !== null && model.selection.kind === "draft" && (
+                            {computer.computerConfiguration !== null && model.selection.kind === "draft" && (
                                 <BotChatComposer
                                     attachmentModel={attachmentModel}
                                     focusScope={workspace}
@@ -457,11 +459,11 @@ function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & 
                     )}
                 </section>
             </div>
-            {pairingNotice && model.pairing.kind === "unpaired" && (
+            {pairingNotice && computer.pairing.kind === "unpaired" && (
                 <Dialog
                     title="Connect agent"
                     description="Morty is ready. Paste this instruction into your local agent to connect it."
-                    onClose={model.pairingDialog.getState().dismiss}
+                    onClose={computer.pairingDialog.getState().dismiss}
                 >
                     <PairingInstruction actionPresentation="dialog" />
                 </Dialog>

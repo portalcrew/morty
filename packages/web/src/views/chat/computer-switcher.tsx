@@ -16,7 +16,7 @@ import {
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { textLinkClassName } from "../../components/ui/text-link.ts";
 import { dataTestId } from "../../data-testid.ts";
-import type { BotConnectionStatus } from "../../view-models/chat/bot-chat-home-store.ts";
+import type { BotConnectionStatus } from "../../view-models/chat/computer-status-store.ts";
 import {
     type ComputerChoice,
     type ComputerSwitcherModel,
