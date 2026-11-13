@@ -12,7 +12,7 @@ import { requestTimeoutMiddleware } from "../middleware/request-timeout-middlewa
 import { instructionDocumentRoutes } from "./components/instruction-documents/http/instruction-document-routes.ts";
 import { cloudRoutes } from "./composition/cloud-http.ts";
 import { forwardToComputer } from "./gateway/computer-object-routing.ts";
-import { notFoundPage, webPages } from "./http/web-pages.ts";
+import { webPages } from "./http/web-pages.ts";
 
 const MAXIMUM_REQUEST_BODY_BYTES = 3 * 1_024 * 1_024;
 
@@ -121,7 +121,7 @@ const publicApplication = new Hono<{ readonly Bindings: CloudBindings }>()
     .route("/", instructionDocumentRoutes)
     .route("/morty/api", cloudRoutes)
     .route("/", createComputerForwardingRoutes())
-    .notFound((context) => notFoundPage(context.req.raw) ?? notFound());
+    .notFound((context) => (context.req.path.startsWith("/doc/") ? context.text("Not found", 404) : notFound()));
 
 export async function fetchPublicApplication(
     request: Request,

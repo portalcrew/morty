@@ -4,6 +4,7 @@ import { useExternalStore } from "../../view-models/external-store.ts";
 import type { MortyApplication } from "../../view-models/morty-application.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
 import { useMortyApplication } from "../application/application-context.tsx";
+import { NotFoundPage } from "../application/not-found-page.tsx";
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
 import { ContinuePageContent } from "./continue-page-content.tsx";
 
@@ -30,7 +31,7 @@ function ContinuePage() {
     return <ContinuePageLive application={application} continuation={application.continuation} />;
 }
 
-const rootRoute = createRootRoute({ component: Outlet });
+const rootRoute = createRootRoute({ component: Outlet, notFoundComponent: NotFoundPage });
 const continueRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/continue",

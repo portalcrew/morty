@@ -126,9 +126,9 @@ test("Given the setup URL, When a browser opens it directly, Then it receives th
     }
 });
 
-test("Given an unknown Worker-first URL, When an agent fetches it, Then the server returns the structured JSON 404", async () => {
+test("Given an unknown API URL, When an agent fetches it, Then the server returns the structured JSON 404", async () => {
     for (const headers of [{}, { Accept: "*/*" }, { Accept: "application/json" }]) {
-        for (const path of ["/doc/unknown.md", "/morty/api", "/morty/api/unknown"]) {
+        for (const path of ["/morty/api", "/morty/api/unknown"]) {
             const response = await runtime.dispatchFetch(`https://morty.example${path}`, { headers });
             expect(response.status, path).toBe(404);
             expect(response.headers.get("content-type"), path).not.toContain("text/html");
@@ -137,36 +137,33 @@ test("Given an unknown Worker-first URL, When an agent fetches it, Then the serv
     }
 });
 
-test("Given an unknown document URL, When a browser navigates to it, Then it shows a not-found page that links back home", async () => {
-    for (const headers of [browserNavigation, { "Sec-Fetch-Dest": "document" }, { Accept: "text/html" }]) {
+test("Given an unknown document URL, When a browser or agent fetches it, Then it returns plain not-found text with status 404", async () => {
+    for (const headers of [
+        browserNavigation,
+        { "Sec-Fetch-Dest": "document" },
+        { Accept: "text/html" },
+        {},
+        { Accept: "application/json" },
+    ]) {
         for (const path of unknownPaths.map((path) => `/doc${path}`)) {
             const response = await runtime.dispatchFetch(`https://morty.example${path}?token=private-token`, {
                 headers,
                 redirect: "manual",
             });
             expect(response.status, path).toBe(404);
-            expect(response.headers.get("content-type"), path).toContain("text/html");
-            expect(response.headers.get("x-robots-tag"), path).toBe("noindex");
-            expect(response.headers.get("cache-control"), path).toBe("no-store");
-            expect(response.headers.get("vary"), path).toMatch(/Accept/);
+            expect(response.headers.get("content-type"), path).toContain("text/plain");
             expect(response.headers.get("location"), path).toBeNull();
-            const html = await response.text();
-            expect(html, path).toContain('<html lang="en">');
-            expect(html, path).toContain("<title>Page not found · Morty</title>");
-            expect(html, path).toContain("<h1>Page not found</h1>");
-            expect(html, path).toMatch(/<a [^>]*href="\/"[^>]*>Go to Morty home<\/a>/);
-            expect(html, path).not.toMatch(/private-token|<script/);
-            expect(html, path).not.toContain(path);
+            expect(await response.text(), path).toBe("Not found");
         }
     }
 });
 
-test("Given a browser, When a script, API call or form submission misses, Then it keeps the JSON 404", async () => {
+test("Given a browser, When a script, API call or form submission misses, Then documents return text and APIs keep JSON", async () => {
     const script = await runtime.dispatchFetch("https://morty.example/doc/privacy", {
         headers: { ...browserNavigation, "Sec-Fetch-Dest": "empty" },
     });
     expect(script.status).toBe(404);
-    expect(await script.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+    expect(await script.text()).toBe("Not found");
     const api = await runtime.dispatchFetch("https://morty.example/morty/api/unknown", {
         headers: browserNavigation,
     });
@@ -177,7 +174,17 @@ test("Given a browser, When a script, API call or form submission misses, Then i
         headers: browserNavigation,
     });
     expect(post.status).toBe(404);
-    expect(await post.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+    expect(await post.text()).toBe("Not found");
+});
+
+test("Given an unknown document URL, When a client sends HEAD, Then it returns plain-text 404 headers without a body", async () => {
+    const response = await runtime.dispatchFetch("https://morty.example/doc/unknown.md", {
+        method: "HEAD",
+        headers: browserNavigation,
+    });
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-type")).toContain("text/plain");
+    expect(await response.text()).toBe("");
 });
 
 test("Given an unknown SPA URL, When a browser sends HEAD, Then it receives application headers without a body", async () => {
