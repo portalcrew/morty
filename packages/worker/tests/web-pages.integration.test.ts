@@ -73,6 +73,31 @@ const browserNavigation = {
     "Sec-Fetch-Mode": "navigate",
 };
 
+test("Given SPA entry points and generated documents, When a browser opens Morty and an agent fetches docs, Then assets serve the app and the Worker serves documents", async () => {
+    const bindings = await runtime.getBindings<{ ASSETS: { fetch: typeof fetch } }>();
+    for (const path of ["/chat", "/continue", "/setup", "/new-page"]) {
+        const response = await bindings.ASSETS.fetch(`https://morty.example${path}`, {
+            headers: browserNavigation,
+            redirect: "manual",
+        });
+        expect(response.status, path).toBe(200);
+        expect(response.headers.get("location"), path).toBeNull();
+        expect(await response.text(), path).toContain('<div id="root">');
+    }
+    for (const [path, type] of [
+        ["/doc/setup.md", "text/markdown"],
+        ["/doc/agent-api.md", "text/markdown"],
+        ["/doc/agent-api/openapi.json", "application/json"],
+        ["/doc/agent-api/asyncapi.json", "application/json"],
+    ]) {
+        const response = await runtime.dispatchFetch(`https://morty.example${path}`, { headers: browserNavigation });
+        expect(response.status, path).toBe(200);
+        expect(response.headers.get("content-type"), path).toContain(type);
+        expect(response.headers.get("x-instruction-cache"), path).not.toBeNull();
+        await response.text();
+    }
+});
+
 test("Given a browser opening Morty, When HTML is served by assets or the Worker, Then it prevents framing and MIME sniffing and limits referrers", async () => {
     for (const path of ["/", "/chat", "/setup", "/page-that-does-not-exist"]) {
         const response = await runtime.dispatchFetch(`https://morty.example${path}`, { headers: browserNavigation });
@@ -101,9 +126,9 @@ test("Given the setup URL, When a browser opens it directly, Then it receives th
     }
 });
 
-test("Given an unknown URL, When an agent fetches it, Then the server returns the structured JSON 404", async () => {
+test("Given an unknown Worker-first URL, When an agent fetches it, Then the server returns the structured JSON 404", async () => {
     for (const headers of [{}, { Accept: "*/*" }, { Accept: "application/json" }]) {
-        for (const path of [...unknownPaths, "/morty/api/unknown"]) {
+        for (const path of ["/doc/unknown.md", "/morty/api", "/morty/api/unknown"]) {
             const response = await runtime.dispatchFetch(`https://morty.example${path}`, { headers });
             expect(response.status, path).toBe(404);
             expect(response.headers.get("content-type"), path).not.toContain("text/html");
@@ -112,9 +137,9 @@ test("Given an unknown URL, When an agent fetches it, Then the server returns th
     }
 });
 
-test("Given an unknown URL, When a browser navigates to it, Then it shows a not-found page that links back home", async () => {
+test("Given an unknown document URL, When a browser navigates to it, Then it shows a not-found page that links back home", async () => {
     for (const headers of [browserNavigation, { "Sec-Fetch-Dest": "document" }, { Accept: "text/html" }]) {
-        for (const path of unknownPaths) {
+        for (const path of unknownPaths.map((path) => `/doc${path}`)) {
             const response = await runtime.dispatchFetch(`https://morty.example${path}?token=private-token`, {
                 headers,
                 redirect: "manual",
@@ -137,7 +162,7 @@ test("Given an unknown URL, When a browser navigates to it, Then it shows a not-
 });
 
 test("Given a browser, When a script, API call or form submission misses, Then it keeps the JSON 404", async () => {
-    const script = await runtime.dispatchFetch("https://morty.example/privacy", {
+    const script = await runtime.dispatchFetch("https://morty.example/doc/privacy", {
         headers: { ...browserNavigation, "Sec-Fetch-Dest": "empty" },
     });
     expect(script.status).toBe(404);
@@ -147,7 +172,7 @@ test("Given a browser, When a script, API call or form submission misses, Then i
     });
     expect(api.status).toBe(404);
     expect(await api.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
-    const post = await runtime.dispatchFetch("https://morty.example/privacy", {
+    const post = await runtime.dispatchFetch("https://morty.example/doc/privacy", {
         method: "POST",
         headers: browserNavigation,
     });
@@ -155,12 +180,12 @@ test("Given a browser, When a script, API call or form submission misses, Then i
     expect(await post.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
 });
 
-test("Given an unknown URL, When a browser sends HEAD, Then it receives the not-found page headers without a body", async () => {
+test("Given an unknown SPA URL, When a browser sends HEAD, Then it receives application headers without a body", async () => {
     const head = await runtime.dispatchFetch("https://morty.example/privacy", {
         method: "HEAD",
         headers: browserNavigation,
     });
-    expect(head.status).toBe(404);
+    expect(head.status).toBe(200);
     expect(head.headers.get("content-type")).toContain("text/html");
     expect(await head.text()).toBe("");
 });
@@ -194,7 +219,7 @@ test("Given application routes, When a client sends HEAD or POST, Then only the 
     expect(head.headers.get("x-robots-tag")).toBe("noindex");
     expect(await head.text()).toBe("");
     const post = await runtime.dispatchFetch("https://morty.example/chat", { method: "POST" });
-    expect(post.status).toBe(404);
+    expect(post.status).toBe(405);
 });
 
 test("Given the public home page, When a crawler fetches it without JavaScript, Then it receives product metadata, a maximum scale of one and usable images", async () => {
@@ -253,7 +278,7 @@ test("Given a cached application page, When the browser revalidates it, Then the
 
 test("Given the asset router, When an agent requests installation resources, Then the setup document is served to both programmatic and browser requests", async () => {
     for (const headers of [{}, { "Sec-Fetch-Mode": "navigate" }]) {
-        const setup = await runtime.dispatchFetch("https://morty.example/setup.md", { headers });
+        const setup = await runtime.dispatchFetch("https://morty.example/doc/setup.md", { headers });
         expect(setup.status).toBe(200);
         expect(setup.headers.get("content-type")).toContain("text/markdown");
         expect(await setup.text()).toMatch(/^# Set up Morty/);

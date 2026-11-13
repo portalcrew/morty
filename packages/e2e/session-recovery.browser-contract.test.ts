@@ -163,7 +163,7 @@ test("Given a healthy conversation, when the stability timer and foreground sign
         }
     });
     await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
@@ -210,7 +210,7 @@ test("Given an interrupted browser connection, when a task completes before fore
         }
     });
     await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
@@ -267,7 +267,7 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
             socket.on("close", () => activeSockets.delete(socket));
         });
         await page.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
-        const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+        const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
         await page.goto(connected.url);
         const composer = page.getByRole("textbox", { name: "Message" });
         await expect(composer).toBeEnabled();
@@ -323,7 +323,7 @@ for (const route of ["session", "suspended"] as const) {
         const { page } = runtime;
         await page.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
         await page.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
-        const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+        const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
         await page.goto(connected.url);
         const composer = page.getByRole("textbox", { name: "Message" });
         await expect(composer).toBeEnabled();
@@ -377,7 +377,7 @@ test("Given a silently stalled session without a lifecycle event, when its liven
     const { page } = runtime;
     await page.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
     await page.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
@@ -417,7 +417,7 @@ test("Given a live Session stream with stalled requests, when foreground hints p
     });
     await page.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
     await page.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
@@ -462,7 +462,7 @@ test("Given a mobile browser with an unsent draft, when its network is disabled 
     const { page } = runtime;
     await page.setViewportSize({ width: 390, height: 844 });
     await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
@@ -491,7 +491,7 @@ test("Given an active turn on mobile, when the browser goes offline and the user
 }) => {
     const { page } = runtime;
     await page.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();

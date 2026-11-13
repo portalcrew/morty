@@ -119,15 +119,15 @@ test("Given a stored identity, When the user shares access with an AI agent, The
     expect(handoff.textContent).toContain("Works for one device until");
     await app.user.click(getByRole(handoff, "button", { name: "Copy instructions" }));
     const instructions = await navigator.clipboard.readText();
-    expect(instructions).toContain(`${app.origin}/agent-api.md`);
+    expect(instructions).toContain(`${app.origin}/doc/agent-api.md`);
     const link = instructions.split("\n").find((line) => line.startsWith(`${app.origin}/continue`));
     if (link === undefined) {
         throw new Error("The agent instructions must contain the continue link.");
     }
 
-    const guide = await app.transport.request(new Request(new URL("/agent-api.md", app.origin)));
+    const guide = await app.transport.request(new Request(new URL("/doc/agent-api.md", app.origin)));
     expect(guide.status).toBe(200);
-    expect(await guide.text()).toContain(`${app.origin}/agent-api/openapi.json`);
+    expect(await guide.text()).toContain(`${app.origin}/doc/agent-api/openapi.json`);
     const redeemed = await app.transport.request(
         new Request(new URL("/morty/api/v1/identity/transfers/redeem", app.origin), {
             method: "POST",
@@ -299,7 +299,7 @@ test("Given an expired handoff with no retained access, When the user copies the
     await app.user.click(copy);
 
     expect(await navigator.clipboard.readText()).toBe(
-        `Fetch ${window.location.origin}/setup.md and complete the Morty setup for me. You may install missing prerequisites and pair this computer.`,
+        `Fetch ${window.location.origin}/doc/setup.md and complete the Morty setup for me. You may install missing prerequisites and pair this computer.`,
     );
     expect(getByRole(document.body, "button", { name: "Copied" })).toBeInstanceOf(HTMLButtonElement);
     expect(queryByRole(document.body, "button", { name: "Dismiss notification" })).toBeNull();

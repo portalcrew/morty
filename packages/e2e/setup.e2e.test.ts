@@ -13,9 +13,9 @@ function directoryLabel(path: string): string {
 test("Given a saved setup handoff, When its Computer reconnects, Then setup returns a concise QR image reference", async ({
     runtime,
 }) => {
-    const original = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const original = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await runtime.disconnectRuntime();
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     const statuses = connected.events.map((event) => event["status"]);
 
     expect(original.events).toContainEqual(expect.objectContaining({ status: "ready", computer: "created" }));
@@ -45,7 +45,7 @@ test("Given a saved setup handoff, When its Computer reconnects, Then setup retu
 test("Given the agent's shell exposes its Claude Code session, When it follows the published setup instructions, Then the handoff link continues that session", async ({
     runtime,
 }) => {
-    const connected = await runtime.followInstructions("/setup.md", "claude-shell-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "claude-shell-session");
 
     expect(new URL(connected.url).searchParams.get("sessionId")).toBe("claude-shell-session");
     expect(connected.events).not.toContainEqual(expect.objectContaining({ status: "session_id_mismatch" }));
@@ -54,10 +54,10 @@ test("Given the agent's shell exposes its Claude Code session, When it follows t
 test("Given a saved Computer the manager no longer manages, When the user approves its replacement, Then setup pairs a fresh Computer", async ({
     runtime,
 }) => {
-    const original = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const original = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await runtime.forgetRuntimeConnections();
     const connected = await runtime.followInstructions(
-        "/setup.md",
+        "/doc/setup.md",
         "setup-reconnect-session",
         undefined,
         undefined,
@@ -76,7 +76,7 @@ test("Given a saved Computer the manager no longer manages, When the user approv
 test("Given a browser opened the saved Computer's link, When the user approves replacing it, Then earlier access ends and the new link works in the same tab", async ({
     runtime,
 }) => {
-    const original = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const original = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     const { page } = runtime;
     await page.goto(original.url);
     await expect(page.getByRole("textbox", { name: "Message" })).toBeEnabled();
@@ -84,7 +84,7 @@ test("Given a browser opened the saved Computer's link, When the user approves r
     await runtime.forgetRuntimeConnections();
 
     const connected = await runtime.followInstructions(
-        "/setup.md",
+        "/doc/setup.md",
         "setup-reconnect-session",
         undefined,
         undefined,
@@ -112,10 +112,10 @@ test("Given a saved Computer and another same-App connection, When its Runtime r
 }) => {
     await runtime.openChat();
     await runtime.connectUnrelatedRuntime();
-    const original = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const original = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await runtime.disconnectRuntime();
 
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session", 5_000);
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session", 5_000);
 
     expect(connected.computerId).toBe(original.computerId);
     expect(connected.events).toEqual(
@@ -130,8 +130,8 @@ test("Given a saved Computer and another same-App connection, When its Runtime r
 test("Given a healthy connected Computer, When setup runs again, Then it reuses the live connection and hands off to Chat", async ({
     runtime,
 }) => {
-    const original = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const original = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     expect(connected.computerId).toBe(original.computerId);
     expect(connected.events).toContainEqual(expect.objectContaining({ status: "computer_already_online" }));
     expect(connected.events).not.toContainEqual(expect.objectContaining({ status: "runtime_started" }));
@@ -147,7 +147,7 @@ test("Given a healthy connected Computer, When setup runs again, Then it reuses 
 test("Given a native session handoff, When the browser opens it, Then the original session opens directly in Chat", async ({
     runtime,
 }) => {
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     const { page } = runtime;
     await page.goto(connected.url);
     await expect(page).toHaveURL((url) => url.pathname === "/chat" && url.searchParams.has("sessionId"));
@@ -159,7 +159,7 @@ test("Given a native session handoff, When the browser opens it, Then the origin
 test("Given a successful native session handoff, When the browser opens the retained link again, Then it reopens the same session", async ({
     runtime,
 }) => {
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     const { page } = runtime;
     await page.goto(connected.url);
     await expect(page).toHaveURL((url) => url.pathname === "/chat" && url.searchParams.has("sessionId"));
@@ -175,14 +175,14 @@ test("Given a successful native session handoff, When the browser opens the reta
 test("Given setup was previously paired in another directory, When a new project handoff opens, Then new sessions use the reported project directory", async ({
     runtime,
 }, testInfo) => {
-    const original = await runtime.followInstructions("/setup.md", "setup-reconnect-session");
+    const original = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     const workspace = join(
         original.workspace,
         "project with spaces \u00e9",
         ...Array.from({ length: 4 }, () => "\u00e9".repeat(90)),
     );
     await mkdir(workspace, { recursive: true });
-    const connected = await runtime.followInstructions("/setup.md", "setup-reconnect-session", 5000, workspace);
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session", 5000, workspace);
     expect(connected.workspace).toBe(workspace);
     await runtime.page.goto(connected.url);
     await expect(runtime.page.getByRole("textbox", { name: "Message" })).toBeEnabled();

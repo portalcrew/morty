@@ -36,7 +36,7 @@ test("Given the generated agent API description, When a peer sends every documen
     );
     expect(created.status).toBe(201);
     const owner = v.parse(v.object({ computerId: v.string(), computerToken: v.string() }), await created.json());
-    const described = await bindings.request(new Request(`${bindings.origin}/agent-api/openapi.json`, { signal }));
+    const described = await bindings.request(new Request(`${bindings.origin}/doc/agent-api/openapi.json`, { signal }));
     expect(described.status).toBe(200);
     const document = v.parse(documentSchema, await described.json());
     const transport = await connectComputerApiWebSocket(bindings.origin, owner.computerId, signal);

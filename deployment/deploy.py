@@ -178,7 +178,7 @@ def main():
             secret_file.write_text(json.dumps(secrets))
             run(WRANGLER + ['deploy', '--config', str(config_file), '--message', 'morty ' + manifest['revision'], '--secrets-file', str(secret_file)], env)
             checks = []
-            for url, content in [(expected['morty_origin'] + '/', 'Morty'), (expected['morty_origin'] + '/setup.md', 'morty setup --base-url ' + expected['morty_origin'])]:
+            for url, content in [(expected['morty_origin'] + '/', 'Morty'), (expected['morty_origin'] + '/doc/setup.md', 'morty setup --base-url ' + expected['morty_origin'])]:
                 with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'Morty-Deployment/1.0', 'Cache-Control': 'no-cache'}), timeout=40) as response:
                     body = response.read()
                     if response.status != 200 or content and content not in body.decode():

@@ -59,7 +59,7 @@ test("Given a new visitor reviewing setup, When they expand its details, Then th
     ]);
     expect(getByRole(document.body, "link", { name: /^Read setup\.md/ })).toHaveProperty(
         "href",
-        `${window.location.origin}/setup.md`,
+        `${window.location.origin}/doc/setup.md`,
     );
 });
 
@@ -115,7 +115,7 @@ test("Given a new visitor, When they copy the instruction, Then the clipboard ho
     await app.user.click(copy);
     const instruction = await navigator.clipboard.readText();
     expect(instruction).toBe(
-        `Fetch ${window.location.origin}/setup.md and complete the Morty setup for me. You may install missing prerequisites and pair this computer.`,
+        `Fetch ${window.location.origin}/doc/setup.md and complete the Morty setup for me. You may install missing prerequisites and pair this computer.`,
     );
     const nextStep = getByRole(document.body, "status", { name: "Setup next step" });
     expect(nextStep.textContent).toContain("Paste into your agent, then open the link it returns.");
@@ -137,7 +137,7 @@ test("Given the first screen, When the user reaches the copy button by keyboard 
     await app.user.keyboard("{Enter}");
 
     const instruction = await navigator.clipboard.readText();
-    expect(instruction).toContain(`${window.location.origin}/setup.md`);
+    expect(instruction).toContain(`${window.location.origin}/doc/setup.md`);
     await app.user.click(getByText(document.body, "Review what setup does", { exact: true }));
     expect(getByRole(document.body, "textbox", { name: "Agent setup prompt" })).toHaveProperty("value", instruction);
     expect(getByRole(document.body, "button", { name: "Copied" })).toBeInstanceOf(HTMLButtonElement);
@@ -159,7 +159,7 @@ test("Given a user wants to inspect or manually copy setup, When they expand the
     await app.user.click(pairing);
 
     expect(pairing.readOnly).toBe(true);
-    expect(pairing.value).toContain(`${window.location.origin}/setup.md`);
+    expect(pairing.value).toContain(`${window.location.origin}/doc/setup.md`);
     expect(pairing.selectionStart).toBe(0);
     expect(pairing.selectionEnd).toBe(pairing.value.length);
     expect(document.body.textContent).toContain("Keep that computer awake and online.");
@@ -175,7 +175,7 @@ test("Given the first screen, When the user clicks Copy again after success, The
     );
     const copied = getByRole(document.body, "button", { name: "Copied" });
     const instruction = await navigator.clipboard.readText();
-    expect(instruction).toContain(`${window.location.origin}/setup.md`);
+    expect(instruction).toContain(`${window.location.origin}/doc/setup.md`);
 
     await app.user.click(copied);
 
@@ -192,7 +192,7 @@ test("Given the setup prompt was just copied, When its confirmation animation co
     await act(async () => {
         fireEvent.click(copy);
     });
-    expect(await navigator.clipboard.readText()).toContain(`${window.location.origin}/setup.md`);
+    expect(await navigator.clipboard.readText()).toContain(`${window.location.origin}/doc/setup.md`);
     const copied = getByRole(document.body, "button", { name: "Copied" });
     expect(copied).toBeInstanceOf(HTMLButtonElement);
 
