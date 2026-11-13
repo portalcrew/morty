@@ -293,11 +293,14 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
             // would otherwise recover first. Restoring ends any attempt still waiting on the outage.
             await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
         }
+        if (recovery === "manual") {
+            // Retry while the outage still holds the connection. Once the network returns, the Computer's own
+            // recovery can remove this action before a user activates it; that is successful automatic recovery.
+            await page.getByRole("button", { name: "Retry now", exact: true }).click();
+        }
         network.restore();
         if (recovery === "online") {
             await page.evaluate(() => window.dispatchEvent(new Event("online")));
-        } else if (recovery === "manual") {
-            await page.getByRole("button", { name: "Retry now", exact: true }).click();
         }
         if (recovery !== "automatic") {
             await page.clock.resume();
