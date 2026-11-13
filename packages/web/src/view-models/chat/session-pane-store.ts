@@ -68,6 +68,8 @@ import {
     canRetryFailedMessage,
     canRetryUnknownDelivery,
     canSend,
+    canStop,
+    canStopFromSettings,
     canSubmit,
     composerHasMessage,
     type SessionOperationFacts,
@@ -230,6 +232,7 @@ function sessionOperationFacts(
         configuring: settings.change.kind === "configuring",
         delivery: delivery.state.kind,
         waitingForInput: waitingForInput(execution.interactions),
+        ownerRunsTurn: ownerRunsTurn(execution.turn),
     };
 }
 
@@ -282,9 +285,8 @@ export function sessionPanePresentation(
         composerInputDisabled,
         settingsDisabled: !canChangeSettings(facts),
         settingsNotice: controlRunning ? "New settings may not affect this response." : null,
-        settingsStopDisabled:
-            !connectionAvailable || model.connection.kind !== "ready" || stopping || ownerRunsTurn(execution.turn),
-        stopDisabled: !connectionAvailable || model.connection.kind !== "ready" || ownerRunsTurn(execution.turn),
+        settingsStopDisabled: !canStopFromSettings(facts),
+        stopDisabled: !canStop(facts),
         canSuggestProgress:
             !controlRunning &&
             canSend(facts) &&
@@ -1311,7 +1313,12 @@ export function createSessionPaneModel(options: {
                 }
                 await rename.getState().confirm(trimmed, signal);
             },
-            stop: async (signal) => await tasks.getState().stop(acceptedTurn(execution.getState().state.turn), signal),
+            stop: async (signal) => {
+                if (!canStop(operationFacts())) {
+                    return;
+                }
+                await tasks.getState().stop(acceptedTurn(execution.getState().state.turn), signal);
+            },
         };
     });
     const welcome = createSessionWelcomeStore({

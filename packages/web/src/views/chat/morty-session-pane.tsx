@@ -498,16 +498,13 @@ function OlderHistorySkeleton() {
 }
 
 export function MortySessionPane({ workspace }: { readonly workspace: ChatWorkspace }) {
-    // The workspace owns the pane model outside React; the keyed view reads
-    // it and hands it to the pane body, which subscribes to its stores. The
-    // pane for a ready selection is always built before the view renders
-    // through it; the empty stand-in covers the gap without conditional
-    // hooks.
-    const pane = workspace.sessionPane();
-    if (pane === null) {
+    // The workspace owns the pane outside React; the view follows it and hands its model to the pane body, which
+    // subscribes to its stores.
+    const pane = useStore(workspace.pane);
+    if (pane.kind === "none") {
         return <section className={chatSessionPaneFillClassName} />;
     }
-    return <MortySessionPaneBody pane={pane} workspace={workspace} />;
+    return <MortySessionPaneBody pane={pane.model} workspace={workspace} />;
 }
 
 function MortySessionPaneBody({
