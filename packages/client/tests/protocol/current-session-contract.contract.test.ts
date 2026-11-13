@@ -87,11 +87,9 @@ it("Given history holding a turn's lifecycle, When a client decodes it, Then the
 });
 it("Given a session list entry without status, When a client decodes it, Then it rejects the retired entry", () => {
     const entry = {
-        harness: "agent-1",
         directory: ".",
         directoryLabel: "Workspace",
         prompted: false,
-        sessionId: "session-1",
         target: { harness: "agent-1", sessionId: "session-1" },
         title: "Session",
         updatedAt: "2026-11-07T00:00:00.000Z",
@@ -100,28 +98,4 @@ it("Given a session list entry without status, When a client decodes it, Then it
     expect(() => decodeSessionsListedEvent(JSON.stringify(page))).toThrow();
     const current = { ...page, entries: [{ ...entry, status: { kind: "idle" } }] };
     expect(decodeSessionsListedEvent(JSON.stringify(current))).toEqual(current);
-});
-
-it("Given a Session's metadata disagrees with its native pair, When it crosses the protocol boundary, Then the client rejects the conflicting identity", () => {
-    const entry = {
-        harness: "claude",
-        directory: ".",
-        directoryLabel: "Workspace",
-        prompted: false,
-        sessionId: "native-1",
-        target: { harness: "claude", sessionId: "native-1" },
-        status: { kind: "idle" },
-        title: "Session",
-        updatedAt: "2026-11-07T00:00:00.000Z",
-    };
-    for (const conflicting of [
-        { ...entry, harness: "codex" },
-        { ...entry, sessionId: "native-2" },
-    ]) {
-        expect(() =>
-            decodeSessionsListedEvent(
-                JSON.stringify({ kind: "session.listed", entries: [conflicting], requestId: "request-1" }),
-            ),
-        ).toThrow();
-    }
 });
