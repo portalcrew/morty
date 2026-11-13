@@ -6,6 +6,7 @@ import {
     type NativeSessionEntry,
     type NativeSessionResult,
     type NativeSessionTarget,
+    type SessionExecution,
     type SessionMetadata,
     type SessionReadyEvent,
 } from "@morty-build/client/protocol";
@@ -33,10 +34,7 @@ interface AuthorizedNativeSession {
 }
 
 /** What an execution read of a Session this Runtime holds reports; a Session it does not hold is refused. */
-export type ActiveTurnRead = Pick<
-    Extract<NativeSessionResult, { readonly action: "active-turn" }>,
-    "turn" | "queued" | "command" | "lastTurn" | "interactionState" | "executionPosition"
->;
+export type ActiveTurnRead = SessionExecution;
 
 const MAXIMUM_SESSION_TITLE_LENGTH = 500;
 const forkSuffixPattern = / \(Fork #([1-9][0-9]*)\)$/u;

@@ -1,3 +1,4 @@
+import type { SessionExecution } from "@morty-build/client/protocol";
 import { AcpSessionTable } from "../../storage/session/acp-session-table.ts";
 import { CommandLedgerTable } from "../../storage/session/command-ledger-table.ts";
 import { LiveEventPositionTable } from "../../storage/session/live-event-position-table.ts";
@@ -85,20 +86,30 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         operations,
     );
     // The Session's commands, receipts, interactions and event position are read in one synchronous step.
-    const nativeSessions = new NativeSessionService(resolveAgent, directories, manager, sessionCreations, (request) => {
-        const interactionState = manager.interactionSnapshot(request.target);
-        const snapshot = activeSessions.executionSnapshot(request.target);
-        const lastTurn = snapshot.turn === null ? operations.lastTurn(request.target) : undefined;
-        return {
-            ...snapshot,
-            executionPosition: events.livePosition(request.target),
-            interactionState,
-            ...(request.deliveryCommandId === undefined
-                ? {}
-                : { command: operations.delivery(request.deliveryCommandId, request.target) }),
-            ...(lastTurn === undefined ? {} : { lastTurn }),
-        };
-    });
+    const nativeSessions = new NativeSessionService(
+        resolveAgent,
+        directories,
+        manager,
+        sessionCreations,
+        (request): SessionExecution => {
+            const interactionState = manager.interactionSnapshot(request.target);
+            const { turn, queued } = activeSessions.executionSnapshot(request.target);
+            const read = {
+                queued,
+                executionPosition: events.livePosition(request.target),
+                interactionState,
+                ...(request.deliveryCommandId === undefined
+                    ? {}
+                    : { command: operations.delivery(request.deliveryCommandId, request.target) }),
+            };
+            // How the last started command ended is told only while none runs.
+            if (turn !== null) {
+                return { ...read, turn };
+            }
+            const lastTurn = operations.lastTurn(request.target);
+            return { ...read, turn: null, ...(lastTurn === undefined ? {} : { lastTurn }) };
+        },
+    );
     // Outcomes retained across a restart are published once. The sink keeps them until the Relay connects,
     // and a later reconnect does not replay events it already sent. An outcome the previous process recorded is
     // restated as the outcome it recorded, so status notifications do not take it for a new one.

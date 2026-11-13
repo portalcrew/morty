@@ -279,6 +279,7 @@ export type {
     NativeSessionEntry,
     NativeSessionRequest,
     NativeSessionResult,
+    SessionExecution,
     SessionInteractionSnapshot,
 } from "./session/native/index.ts";
 
