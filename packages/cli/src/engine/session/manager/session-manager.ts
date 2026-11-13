@@ -240,23 +240,32 @@ export class SessionManager {
         recovery: SessionRecovery,
         metrics: OperationMetrics = unmeasuredOperationMetrics,
     ): Promise<AgentSession> {
-        return await this.#executionProcesses.prepare(options.target, async () => {
-            const effectiveOptions = options;
-            return await this.#startRetainedSessionProcess(
-                effectiveOptions,
-                async (capabilities) =>
-                    await AgentSession.start(
-                        effectiveOptions,
-                        recovery,
-                        this.#observer,
-                        this.#executionRecord,
-                        this.#store,
-                        metrics,
-                        options.adapter,
-                        capabilities,
-                    ),
-            );
-        });
+        return await this.#executionProcesses.prepare(
+            options.target,
+            async () => await this.#startSession(options, recovery, metrics),
+        );
+    }
+
+    /** Starts the Session's process, which the Runtime retains until the Session is stopped or retired. */
+    async #startSession(
+        options: SessionPrepareOptions,
+        recovery: SessionRecovery,
+        metrics: OperationMetrics = unmeasuredOperationMetrics,
+    ): Promise<AgentSession> {
+        return await this.#startRetainedSessionProcess(
+            options,
+            async (capabilities) =>
+                await AgentSession.start(
+                    options,
+                    recovery,
+                    this.#observer,
+                    this.#executionRecord,
+                    this.#store,
+                    metrics,
+                    options.adapter,
+                    capabilities,
+                ),
+        );
     }
 
     async #replaceExecutionPreparation(existing: AgentSession, options: SessionPrepareOptions): Promise<AgentSession> {
@@ -264,20 +273,7 @@ export class SessionManager {
         const recovery: SessionRecovery = options.recovery ?? { kind: "interactive-only" };
         return await this.#executionProcesses.prepare(options.target, async () => {
             await this.#retireSessionProcess(options.target, existing, async () => await existing.close());
-            const runtime = await this.#startRetainedSessionProcess(
-                options,
-                async (capabilities) =>
-                    await AgentSession.start(
-                        options,
-                        recovery,
-                        this.#observer,
-                        this.#executionRecord,
-                        this.#store,
-                        unmeasuredOperationMetrics,
-                        options.adapter,
-                        capabilities,
-                    ),
-            );
+            const runtime = await this.#startSession(options, recovery);
             try {
                 await replaySessionConfigurations(
                     desiredConfigOptions.map(storedSessionConfiguration),
@@ -326,20 +322,7 @@ export class SessionManager {
         }
         return await this.#executionProcesses.prepare(options.target, async () => {
             await this.#stopSessionProcess(options.target, existing);
-            return await this.#startRetainedSessionProcess(
-                options,
-                async (capabilities) =>
-                    await AgentSession.start(
-                        options,
-                        recovery,
-                        this.#observer,
-                        this.#executionRecord,
-                        this.#store,
-                        unmeasuredOperationMetrics,
-                        options.adapter,
-                        capabilities,
-                    ),
-            );
+            return await this.#startSession(options, recovery);
         });
     }
 
