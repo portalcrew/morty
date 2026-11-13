@@ -61,6 +61,21 @@ trusts by design helps separate a vulnerability from intended behavior.
   still sees routing metadata. Pairing delivers encryption access in a URL fragment,
   not in a request to the relay. Protect sharing links and authorized devices. See
   [What Morty does with your data](README.md#what-morty-does-with-your-data).
+- **What E2EE protects, and what it does not.** It protects Session payloads from a
+  relay that stores and forwards them, from its logs, and from anyone who observes
+  traffic without the secret. The daemon rejects replayed or altered messages. It is
+  not designed to protect against the following:
+  - **A relay that serves malicious code.** The web application, and the helper that
+    setup instructions give a remote Agent, are delivered by the same service that
+    relays traffic. A compromised service could deliver code that reads the secret.
+  - **Exposure of the secret.** One secret per Computer is shared by every authorized
+    device, and Morty does not derive a fresh key for each connection. Someone who
+    obtains it can read ciphertext they have recorded and create messages the daemon
+    accepts. A device that joined keeps the secret in its browser storage until
+    Morty running there finds its access gone or the storage is cleared.
+  - **Ending one device's access.** Disconnecting a device, or the end of a sharing
+    term, stops the relay from serving that device but does not change the secret.
+    Revoking all access gives the computer a new identity and a new secret.
 
 A path that gives someone access they were never given, or keeps access after it
 was revoked or expired, is in scope. Using access that was given, including
