@@ -25,14 +25,11 @@ export {
     COMPUTER_LIVENESS_READY_KIND,
     COMPUTER_PING_KIND,
     COMPUTER_PONG_KIND,
-    COMPUTER_STATUS_KIND,
     computerPingCommandCodec,
     computerPongEventCodec,
     decodeComputerHeartbeatAckEvent,
     decodeComputerHeartbeatEvent,
-    decodeComputerStatusEvent,
     encodeComputerLivenessReadyEvent,
-    encodeComputerStatusEvent,
 } from "./computer/liveness.ts";
 export { CONTENT_CHUNK_ACK_KIND, decodeContentChunkAck, encodeContentChunkAck } from "./relay/content-chunk-ack.ts";
 export type { WorkerFileCredit } from "./relay/file-credit.ts";
@@ -47,11 +44,6 @@ export {
     encodeWorkerRequestCancel,
     WORKER_REQUEST_CANCEL_KIND,
 } from "./relay/request-cancellation.ts";
-export {
-    decodeWorkerRequestRejected,
-    encodeWorkerRequestRejected,
-    WORKER_REQUEST_REJECTED_KIND,
-} from "./relay/request-rejection.ts";
 export type {
     SessionAccessClaims,
     SessionAccessGrant,

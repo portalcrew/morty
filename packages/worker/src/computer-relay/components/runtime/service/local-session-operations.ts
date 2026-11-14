@@ -2,13 +2,8 @@ import type { FileReadCommandRouting, NativeSessionTarget, SessionAccessGrant } 
 import {
     type AgentSettingsDiscoverCommandRouting,
     contentWriteCommandCodec,
-    decodeMessageKind,
-    decodeWorkerFileCredit,
-    decodeWorkerRequestCancel,
     ProtocolMessageError,
     type SessionEventsSubscribeCommandRouting,
-    WORKER_FILE_CREDIT_KIND,
-    WORKER_REQUEST_CANCEL_KIND,
 } from "@morty-build/client/protocol";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
@@ -41,21 +36,15 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
         signal.throwIfAborted();
         await cx.services.runtime.expireSilentDaemons();
         signal.throwIfAborted();
-        return cx.gateways.requests.open(requestId, target, async (socket, message) => {
-            if (typeof message === "string" && decodeMessageKind(message) === WORKER_FILE_CREDIT_KIND) {
-                const credit = decodeWorkerFileCredit(message);
-                if (credit.requestId !== requestId) {
-                    throw new PairingDirectoryError("invalid_request", "The credit does not own this operation");
+        return cx.gateways.requests.open(requestId, target, {
+            message: async (socket, message) => {
+                if (!signal.aborted) {
+                    await cx.services.runtime.receiveOperation(computerId, socket, message, signal);
+                    return;
                 }
-                signal.throwIfAborted();
-                cx.services.runtime.grantFileCredit(computerId, socket, requestId, signal);
-                return;
-            }
-            if (typeof message === "string" && decodeMessageKind(message) === WORKER_REQUEST_CANCEL_KIND) {
-                const cancellation = decodeWorkerRequestCancel(message);
-                if (cancellation.requestId !== requestId) {
-                    throw new PairingDirectoryError("invalid_request", "The cancellation does not own this operation");
-                }
+                throw signal.reason;
+            },
+            cancel: (socket) => {
                 const cleanup = new AbortController();
                 const timer = setTimeout(
                     () => cleanup.abort(new DOMException("Cancellation timed out", "TimeoutError")),
@@ -66,13 +55,11 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
                 } finally {
                     clearTimeout(timer);
                 }
-                return;
-            }
-            if (!signal.aborted) {
-                await cx.services.runtime.receiveOperation(computerId, socket, message, signal);
-                return;
-            }
-            throw signal.reason;
+            },
+            credit: (socket) => {
+                signal.throwIfAborted();
+                cx.services.runtime.grantFileCredit(computerId, socket, requestId, signal);
+            },
         });
     };
     return {

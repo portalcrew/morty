@@ -12,14 +12,10 @@ import {
     contentCommitCommandCodec,
     contentReadyEventCodec,
     contentWriteCommandCodec,
-    decodeComputerStatusEvent,
     decodeContentChunkAck,
     decodeMessageKind,
-    decodeWorkerRequestRejected,
     encodeClientToRelayMessage,
     encodeFileStreamRecord,
-    encodeWorkerFileCredit,
-    encodeWorkerRequestCancel,
     FILE_BEGIN_KIND,
     FILE_END_KIND,
     FILE_FAILED_KIND,
@@ -41,7 +37,7 @@ import {
     computerControlReplyDecoders,
     computerControlTarget,
 } from "./computer-control-registry.ts";
-import type { ComputerReplyConnection, ReplyDecision } from "./computer-reply-request.ts";
+import { type ComputerReplyConnection, type ReplyDecision, RequestRejectedEvent } from "./computer-reply-request.ts";
 import type { ContentUploadReader } from "./content-upload-reader.ts";
 
 export type { ComputerReplyConnection } from "./computer-reply-request.ts";
@@ -90,21 +86,7 @@ async function awaitComputerReply<Reply>(
                     return;
                 }
                 try {
-                    const kind = decodeMessageKind(event.data);
-                    if (kind === "computer.status") {
-                        if (!decodeComputerStatusEvent(event.data).online) {
-                            onClose();
-                        }
-                        return;
-                    }
-                    if (kind === "worker.request.rejected") {
-                        const rejected = decodeWorkerRequestRejected(event.data);
-                        if (rejected.requestId === requestId) {
-                            reject(new SessionRuntimeError(rejected.code, rejected.message));
-                        }
-                        return;
-                    }
-                    const result = exchange.receive(event.data, kind, reject, deadline);
+                    const result = exchange.receive(event.data, decodeMessageKind(event.data), reject, deadline);
                     if (result.kind === "complete") {
                         resolve(result.value);
                     }
@@ -122,13 +104,22 @@ async function awaitComputerReply<Reply>(
                     );
                 }
             };
+            const onRejected = (event: Event) => {
+                if (event instanceof RequestRejectedEvent && event.requestId === requestId) {
+                    reject(new SessionRuntimeError(event.code, event.message));
+                }
+            };
             cleanup = () => {
                 deadline.removeEventListener("abort", onAbort);
                 socket.removeEventListener("message", onMessage);
+                socket.removeEventListener("rejected", onRejected);
+                socket.removeEventListener("offline", onClose);
                 socket.removeEventListener("close", onClose);
                 socket.removeEventListener("error", onClose);
             };
             socket.addEventListener("message", onMessage);
+            socket.addEventListener("rejected", onRejected);
+            socket.addEventListener("offline", onClose);
             socket.addEventListener("close", onClose);
             socket.addEventListener("error", onClose);
             deadline.addEventListener("abort", onAbort, { once: true });
@@ -209,8 +200,8 @@ export async function requestClientControl(
         [failureKind]: (message) => accept(computerControlReplyDecoders[failureKind](message)),
     };
     const cancel = (): void => {
-        if (command.kind === "native.session.request" && socket.readyState === WebSocket.OPEN) {
-            socket.send(encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId }));
+        if (command.kind === "native.session.request") {
+            socket.cancel();
         }
     };
     callerCancellation?.addEventListener("abort", cancel, { once: true });
@@ -321,11 +312,7 @@ export async function requestComputerContentWrite(
     };
     return await awaitComputerReply(socket, command.requestId, signal, {
         send: () => socket.send(encodedCommand),
-        abandoned: () => {
-            if (socket.readyState === WebSocket.OPEN) {
-                socket.send(encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId: command.requestId }));
-            }
-        },
+        abandoned: () => socket.cancel(),
         receive: (encoded, kind, fail, deadline) => {
             switch (kind) {
                 case CONTENT_CHUNK_ACK_KIND: {
@@ -417,10 +404,8 @@ export async function requestComputerFile(
             clearTimeout(timer);
             cleanup();
             try {
-                if (!completed && socket.readyState === WebSocket.OPEN) {
-                    socket.send(
-                        encodeWorkerRequestCancel({ kind: "worker.request.cancel", requestId: command.requestId }),
-                    );
+                if (!completed) {
+                    socket.cancel();
                 }
             } catch (cause) {
                 logger.warn(
@@ -463,13 +448,7 @@ export async function requestComputerFile(
                     try {
                         deadline.throwIfAborted();
                         state = { ...state, credit: "outstanding" };
-                        socket.send(
-                            encodeWorkerFileCredit({
-                                kind: "worker.file.credit",
-                                requestId: command.requestId,
-                                chunks: 1,
-                            }),
-                        );
+                        socket.creditFile();
                     } catch (cause) {
                         fail(cause);
                     }
@@ -535,17 +514,11 @@ export async function requestComputerFile(
                 }
                 endStream(encoded);
             },
-            "worker.request.rejected": (encoded) => {
-                const rejection = decodeWorkerRequestRejected(encoded);
-                if (rejection.requestId === command.requestId) {
-                    fail(new SessionRuntimeError(rejection.code, rejection.message));
-                }
-            },
-            "computer.status": (encoded) => {
-                if (!decodeComputerStatusEvent(encoded).online) {
-                    onClose();
-                }
-            },
+        };
+        const onRejected = (event: Event): void => {
+            if (event instanceof RequestRejectedEvent && event.requestId === command.requestId) {
+                fail(new SessionRuntimeError(event.code, event.message));
+            }
         };
         const onMessage = (event: Event): void => {
             if (!(event instanceof MessageEvent) || state.kind === "finished") {
@@ -596,10 +569,14 @@ export async function requestComputerFile(
         cleanup = () => {
             deadline.removeEventListener("abort", onAbort);
             socket.removeEventListener("message", onMessage);
+            socket.removeEventListener("rejected", onRejected);
+            socket.removeEventListener("offline", onClose);
             socket.removeEventListener("close", onClose);
             socket.removeEventListener("error", onClose);
         };
         socket.addEventListener("message", onMessage);
+        socket.addEventListener("rejected", onRejected);
+        socket.addEventListener("offline", onClose);
         socket.addEventListener("close", onClose);
         socket.addEventListener("error", onClose);
         deadline.addEventListener("abort", onAbort, { once: true });

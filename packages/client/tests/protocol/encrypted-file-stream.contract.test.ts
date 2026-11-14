@@ -9,16 +9,12 @@ import {
 import {
     contentChunkCodec,
     decodeClientToRelayMessage,
-    decodeDaemonToRelayMessage,
     decodeFileStreamRecord,
-    decodeWorkerRequestRejected,
     encodeFileStreamRecord,
-    encodeWorkerRequestRejected,
     FILE_STREAM_MAX_CHUNK_BYTES,
     fileBeginEventCodec,
     fileEndEventCodec,
     fileReadCommandCodec,
-    sessionOperationFailedEventCodec,
 } from "../../src/protocol/index.ts";
 
 beforeEach(() => vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-12T00:00:00Z") }));
@@ -117,25 +113,4 @@ it("Given an invalid file stream header, when a client reads it, then it rejects
     new DataView(oversized.buffer).setUint32(1, FILE_STREAM_MAX_CHUNK_BYTES + 1);
     expect(() => decodeFileStreamRecord(oversized)).toThrowError();
     expect(() => decodeFileStreamRecord(new Uint8Array([2, 0, 0, 0, 1]))).toThrowError();
-});
-
-it("Given a Worker refusal, when a client reads it, then it remains distinct from a Computer-authored failure", () => {
-    const refusal = {
-        kind: "worker.request.rejected" as const,
-        requestId: "request-1",
-        code: "computer_offline",
-        message: "The local computer is offline",
-    };
-    const encoded = encodeWorkerRequestRejected(refusal);
-    expect(decodeWorkerRequestRejected(encoded)).toEqual(refusal);
-    expect(() => decodeClientToRelayMessage(encoded)).toThrowError();
-    expect(() => decodeDaemonToRelayMessage(encoded)).toThrowError();
-    expect(() =>
-        sessionOperationFailedEventCodec.decodeRouting(
-            JSON.stringify({
-                ...refusal,
-                kind: "session.operation.failed",
-            }),
-        ),
-    ).toThrowError();
 });

@@ -1,13 +1,11 @@
 import { nativeSessionKey, sameNativeSession } from "@morty-build/client/native-session";
 import {
     COMPUTER_LIVENESS_READY_KIND,
-    COMPUTER_STATUS_KIND,
     type ComputerLivenessReadyEvent,
     type DaemonToRelayMessage,
     decodeDaemonToRelayMessage,
     ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     encodeComputerLivenessReadyEvent,
-    encodeComputerStatusEvent,
     type NativeSessionTarget,
     SESSION_EVENT_KIND,
     type SessionEventsSubscribeCommandRouting,
@@ -275,7 +273,7 @@ export class ComputerService {
             }
         }
         if (connected) {
-            this.notifyOffline(computerId);
+            this.notifyOffline();
         }
     };
 
@@ -660,11 +658,9 @@ export class ComputerService {
         }
     };
 
-    private readonly notifyOffline = (computerId: string): void => {
+    private readonly notifyOffline = (): void => {
         for (const { socket } of this.#cx.gateways.peers.operations()) {
-            if (socket.isOpen()) {
-                socket.send(encodeComputerStatusEvent({ kind: COMPUTER_STATUS_KIND, computerId, online: false }));
-            }
+            socket.computerOffline();
         }
     };
 }
