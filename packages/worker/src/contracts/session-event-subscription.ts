@@ -5,7 +5,6 @@ import type {
 } from "@morty-build/client/protocol";
 
 export interface SessionViewerIdentity {
-    readonly role: "viewer";
     readonly expiresAt: number;
     readonly credential: {
         readonly signingKeyId: string;
