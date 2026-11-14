@@ -31,15 +31,7 @@ export async function authorizeSessionContentUpload(
         );
     }
     try {
-        const access = await sessions.authorizeSession(
-            {
-                kind: "session",
-                computerId,
-                target,
-            },
-            credential,
-            request.signal,
-        );
+        const access = await sessions.authorizeSession({ computerId, target }, credential, request.signal);
         return { access, target, contentKey };
     } catch (cause) {
         request.signal.throwIfAborted();

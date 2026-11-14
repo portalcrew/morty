@@ -2,16 +2,9 @@ import type {
     AgentSettingsDiscoverCommandRouting,
     ComputerDiagnosticsRequestRouting,
     ComputerPingCommandRouting,
-    NativeSessionCommandRouting,
     NativeSessionTarget,
     SessionAccessHolder,
-    SessionArchiveCommandRouting,
     SessionCreateCommandRouting,
-    SessionListCommandRouting,
-    SessionPrepareCommandRouting,
-    SessionPreviewHistoryPageLoadRouting,
-    SessionRestoreCommandRouting,
-    WorkspaceListCommandRouting,
 } from "@morty-build/client/protocol";
 import * as v from "valibot";
 import { ComputerManagementError, relayIdentifier } from "../../../../contracts/computer-management.ts";
@@ -19,6 +12,7 @@ import type { ComputerPairing } from "../../../../contracts/computer-pairing.ts"
 import { isHttpError } from "../../../../contracts/http-error.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import type { ComputerBackendService } from "../../computer/service/computer-backend-service.ts";
+import type { ClientControlCommand } from "../../runtime/service/computer-control-registry.ts";
 
 /** Application use cases call the services in their own ComputerRelay, not an HTTP client or another Worker. */
 export class LocalComputerService {
@@ -136,11 +130,9 @@ export class LocalComputerService {
             },
             15_000,
         );
-    readonly listChatDirectory = async (
-        computerId: string,
-        command: WorkspaceListCommandRouting,
-        signal: AbortSignal,
-    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
+    /** Sends a client's command to the Computer and returns its reply. */
+    readonly clientControl = async (computerId: string, command: ClientControlCommand, signal: AbortSignal) =>
+        await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
     readonly discoverChatAgentSettings = async (
         computerId: string,
         command: AgentSettingsDiscoverCommandRouting,
@@ -172,29 +164,6 @@ export class LocalComputerService {
                 ready,
             };
         });
-    readonly listEncryptedChatSessions = async (
-        computerId: string,
-        command: SessionListCommandRouting,
-        signal: AbortSignal,
-    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
-
-    readonly readEncryptedChatSession = async (
-        computerId: string,
-        command: SessionRestoreCommandRouting,
-        signal: AbortSignal,
-    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
-    readonly prepareEncryptedChatSession = async (
-        computerId: string,
-        command: SessionPrepareCommandRouting,
-        signal: AbortSignal,
-    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
-
-    readonly archiveEncryptedChatSession = async (
-        computerId: string,
-        command: SessionArchiveCommandRouting,
-        signal: AbortSignal,
-    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
-
     readonly nativeSessionAccess = async (
         computerId: string,
         target: NativeSessionTarget,
@@ -205,14 +174,4 @@ export class LocalComputerService {
         await this.#run(computerId, signal, async (computer, signal) =>
             computer.issueSessionAccess(target, lifetime, holder, signal),
         );
-    readonly encryptedNativeSessions = async (
-        computerId: string,
-        command: NativeSessionCommandRouting,
-        signal: AbortSignal,
-    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
-    readonly encryptedPreviewSession = async (
-        computerId: string,
-        command: SessionPreviewHistoryPageLoadRouting,
-        signal: AbortSignal,
-    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
 }

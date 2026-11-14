@@ -1,4 +1,4 @@
-import type { AgentDescriptor, VerifiedComputerAccess } from "../../../../contracts/relay/pairing.ts";
+import type { VerifiedComputerAccess } from "../../../../contracts/relay/pairing.ts";
 import { logger } from "../../../../infra/logger.ts";
 import type { ComputerConnectionOperations } from "../../runtime/service/computer-service.ts";
 import type { PairingDirectoryService } from "./pairing-directory-service.ts";
@@ -15,14 +15,6 @@ export class ComputerConnectionService {
         this.#pairings = cx.services.pairings;
         this.#runtime = cx.services.runtime;
     }
-    readonly updateAgentCatalog = (
-        computerId: string,
-        token: string,
-        successor: string | null,
-        agents: readonly AgentDescriptor[],
-        signal: AbortSignal,
-    ) => this.#pairings.updateAgentCatalog(computerId, token, successor, agents, signal);
-
     /**
      * Authorizes a daemon connection, rotating its credential. A reused credential ends the Computer's access first; a
      * daemon of a Computer whose access ended is told so, so it stops instead of retrying.

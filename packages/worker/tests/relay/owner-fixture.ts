@@ -49,7 +49,7 @@ export async function issueSession(computerId: string, target: NativeSessionTarg
         new SessionAccessService(
             computerAccess(computerId, state.storage).access,
             new SessionAccessSigner(env.MORTY_SESSION_SIGNING_SECRET),
-        ).issue({ kind: "session", computerId, target }, expiresInSeconds, holder, AbortSignal.timeout(10_000)),
+        ).issue({ computerId, target }, expiresInSeconds, holder, AbortSignal.timeout(10_000)),
     );
 }
 

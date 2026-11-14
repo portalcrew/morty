@@ -10,9 +10,10 @@ import { ComputerAuthenticationError } from "../../../../contracts/relay/compute
 import type { ComputerAccessService } from "../../management/service/computer-access-service.ts";
 import { SessionAccessCredentialExpiredError, type SessionAccessSigner } from "../entity/session-access-credential.ts";
 
-export type SessionAccessTarget =
-    | { readonly kind: "session"; readonly computerId: string; readonly target: NativeSessionTarget }
-    | { readonly kind: "unavailable" };
+export interface SessionAccessTarget {
+    readonly computerId: string;
+    readonly target: NativeSessionTarget;
+}
 
 /** A verified Session credential: the Session it selects, and the authorization of each operation on it. */
 export interface SessionAccess {
@@ -49,9 +50,6 @@ export class SessionAccessService {
         readonly computerId: string;
         readonly target: NativeSessionTarget;
     }> => {
-        if (target.kind !== "session") {
-            throw new ComputerAuthenticationError("session_permission_denied", "A selected Session is required");
-        }
         const nativeTarget = decodeNativeSessionTarget(target.target);
         if (!Number.isSafeInteger(expiresInSeconds) || expiresInSeconds < 60 || expiresInSeconds > 900) {
             throw new ComputerAuthenticationError("invalid_request", "The Session credential lifetime is invalid");
@@ -79,12 +77,6 @@ export class SessionAccessService {
         };
     };
 
-    readonly authorizeLiveEvents = async (
-        target: SessionAccessTarget,
-        credentialValue: string,
-        signal: AbortSignal,
-    ): Promise<SessionAccess> => await this.authorizeSession(target, credentialValue, signal);
-
     readonly authorizeSession = async (
         target: SessionAccessTarget,
         credentialValue: string,
@@ -105,12 +97,6 @@ export class SessionAccessService {
         credentialValue: string,
         signal: AbortSignal,
     ): Promise<SessionAccess> => {
-        if (target.kind !== "session") {
-            throw new ComputerAuthenticationError(
-                "session_permission_denied",
-                "The credential authorizes only a selected Session",
-            );
-        }
         let claims: Awaited<ReturnType<SessionAccessSigner["verify"]>>;
         try {
             claims = await this.#signer.verify(credentialValue, Date.now());

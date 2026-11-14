@@ -109,11 +109,7 @@ export function createSessionWebSocketRoutes(ctx: {
             const target = context.var.target;
             const services = ctx.services.forComputer(computerId);
             const credential = context.var.credential;
-            const access = await services.sessions.authenticate(
-                { kind: "session", computerId, target },
-                credential,
-                request.signal,
-            );
+            const access = await services.sessions.authenticate({ computerId, target }, credential, request.signal);
             context.set("access", access);
             await next();
             return;

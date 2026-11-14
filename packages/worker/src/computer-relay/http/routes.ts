@@ -85,13 +85,12 @@ export function createComputerHttpRoutes(
         .post(filePath, timeout, computerFromPath, authorizeTarget, cors, fileReadLimit, async (context) => {
             const services = ctx.services.sessions(context.var.computerId);
             const target = {
-                kind: "session",
                 computerId: context.var.computerId,
                 target: {
                     harness: validateIdentifier(context.req.param("harness"), "harness"),
                     sessionId: validateIdentifier(context.req.param("sessionId"), "session_id"),
                 },
-            } satisfies Parameters<typeof services.sessions.authorizeLiveEvents>[0];
+            } satisfies Parameters<typeof services.sessions.authorizeSession>[0];
             const credential = (context.req.header("authorization") ?? "").match(/^Bearer ([^\s]+)$/u)?.[1];
             if (credential === undefined) {
                 return context.json(
@@ -99,7 +98,7 @@ export function createComputerHttpRoutes(
                     401,
                 );
             }
-            const access = await services.sessions.authorizeLiveEvents(target, credential, context.req.raw.signal);
+            const access = await services.sessions.authorizeSession(target, credential, context.req.raw.signal);
             const command = decodeFileRead(await context.req.text(), target.target);
             return services.operations.readSessionFile(access.computerId, command, context.req.raw.signal);
         })

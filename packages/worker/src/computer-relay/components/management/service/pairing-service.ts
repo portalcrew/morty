@@ -17,13 +17,6 @@ export class PairingService {
         this.#pairings = cx.services.pairings;
     }
 
-    readonly createComputerPairing = (
-        computerId: string,
-        pairingKey: string,
-        idempotencyKey: string,
-        signal: AbortSignal,
-    ) => this.#pairings.createComputerPairing(computerId, pairingKey, idempotencyKey, signal);
-
     readonly listComputers = async (computerId: string, signal: AbortSignal) => {
         const channels = await this.#pairings.listComputers(computerId, signal);
         return await Promise.all(
@@ -43,24 +36,4 @@ export class PairingService {
         }
         return new ComputerSummary(channel, await this.#runtime.readStatus(signal));
     };
-
-    readonly readComputerPairing = (computerId: string, signal: AbortSignal) =>
-        this.#pairings.readComputerPairing(computerId, signal);
-
-    readonly redeemComputerPairing: PairingDirectoryService["redeemComputerPairing"] = async (
-        computerId,
-        pairingCode,
-        computerName,
-        workspaceName,
-        agents,
-        signal,
-    ) =>
-        await this.#pairings.redeemComputerPairing(
-            computerId,
-            pairingCode,
-            computerName,
-            workspaceName,
-            agents,
-            signal,
-        );
 }

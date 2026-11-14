@@ -25,10 +25,10 @@ export function createComputerRoutes(ctx: RelayProtocolRouteContext) {
             protocolBodyLimit,
             bodyParser<RelayHttpEnvironment, typeof catalogRequestSchema>(catalogRequestSchema),
             async (context) => {
-                const useCases = ctx.services.forComputer(context.var.computerId).services.computerConnections;
+                const pairings = ctx.services.forComputer(context.var.computerId).services.pairings;
                 const body = context.req.valid("json");
                 const agents = validateAgents(body.agents);
-                await useCases.updateAgentCatalog(
+                await pairings.updateAgentCatalog(
                     validateIdentifier(context.req.param("computerId"), "computer_id"),
                     bearerToken(context.req.raw),
                     context.req.header(COMPUTER_SUCCESSOR_CREDENTIAL_HEADER) ?? null,

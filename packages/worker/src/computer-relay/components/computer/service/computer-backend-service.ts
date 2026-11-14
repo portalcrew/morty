@@ -32,14 +32,14 @@ export class ComputerBackendService {
 
     // Pairing retries derive the same code without storing or transporting a service credential.
     readonly createPairing = async (idempotencyKey: string, signal: AbortSignal) =>
-        await this.#context.services.computerPairings.createComputerPairing(
+        await this.#context.services.pairings.createComputerPairing(
             this.computerId,
             await hashSecret(`morty.internal.pairing.v1:${this.#pairingRoot}`),
             idempotencyKey,
             signal,
         );
     readonly readPairing = async (signal: AbortSignal) =>
-        await this.#context.services.computerPairings.readComputerPairing(this.computerId, signal);
+        await this.#context.services.pairings.readComputerPairing(this.computerId, signal);
     readonly computers = async (signal: AbortSignal) =>
         await this.#context.services.computerPairings.listComputers(this.computerId, signal);
     readonly agents = async (signal: AbortSignal) =>
@@ -49,13 +49,7 @@ export class ComputerBackendService {
         lifetime: number,
         holder: SessionAccessHolder,
         signal: AbortSignal,
-    ) =>
-        await this.#sessionAccess.issue(
-            { kind: "session", computerId: this.computerId, target },
-            lifetime,
-            holder,
-            signal,
-        );
+    ) => await this.#sessionAccess.issue({ computerId: this.computerId, target }, lifetime, holder, signal);
     readonly clientControl = async (command: ClientControlCommand, signal: AbortSignal) => {
         const access = await this.#context.services.pairings.authorizeComputer(this.computerId, signal);
         return await this.operations.requestClientControl(access.computerId, command, signal);
