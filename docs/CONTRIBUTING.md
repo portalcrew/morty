@@ -17,9 +17,9 @@ use the [glossary](GLOSSARY.md) for Morty's application and Session terminology.
 
 Read this guide before opening an issue or pull request.
 
-Pull requests can currently be opened only by repository collaborators with write
-access. Everyone else is welcome to open an issue describing the problem or the
-outcome they need; the maintainers decide whether and how to implement it.
+Pull requests from outside the maintainer team are reviewed and merged slowly. We
+recommend opening an issue describing the problem or the outcome you need; the
+maintainers decide whether and how to implement it.
 
 Compatibility is mandatory unless the human user or maintainer explicitly requires
 the particular breaking change. Follow the engineering rules and
