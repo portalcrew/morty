@@ -11,7 +11,7 @@ import {
     contentChunkCodec,
     contentCommitCommandCodec,
     contentReadyEventCodec,
-    contentWriteCommandCodec,
+    type contentWriteCommandCodec,
     decodeContentChunkAck,
     decodeMessageKind,
     encodeClientToRelayMessage,
@@ -39,8 +39,6 @@ import {
 } from "./computer-control-registry.ts";
 import { type ComputerReplyConnection, type ReplyDecision, RequestRejectedEvent } from "./computer-reply-request.ts";
 import type { ContentUploadReader } from "./content-upload-reader.ts";
-
-export type { ComputerReplyConnection } from "./computer-reply-request.ts";
 
 export interface ComputerFileStream {
     readonly finished: Promise<void>;
@@ -225,10 +223,10 @@ export async function requestClientControl(
 export async function requestComputerContentWrite(
     socket: ComputerReplyConnection,
     encodedCommand: string,
+    command: ReturnType<typeof contentWriteCommandCodec.decodeRouting>,
     records: ContentUploadReader,
     signal: AbortSignal,
 ): Promise<string> {
-    const command = contentWriteCommandCodec.decodeRouting(encodedCommand);
     type UploadState = { readonly kind: "waiting" } | { readonly kind: "uploading" } | { readonly kind: "committed" };
     let state: UploadState = { kind: "waiting" };
     let upload: Promise<void> = Promise.resolve();
@@ -290,9 +288,6 @@ export async function requestComputerContentWrite(
                 throw new SessionRuntimeError("invalid_request", "The content commit is invalid");
             }
             deadline.throwIfAborted();
-            if (state.kind !== "uploading") {
-                throw new SessionRuntimeError("invalid_request", "The content upload is no longer active");
-            }
             state = { kind: "committed" };
             socket.send(record.encoded);
             return;

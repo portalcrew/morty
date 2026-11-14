@@ -5,22 +5,15 @@ import type { HttpError } from "../../../../contracts/http-error.ts";
 const MAX_PENDING_BYTES = CONTENT_UPLOAD_MAX_ENCODED_BYTES;
 const MAX_PENDING_UPLOADS = 16;
 
-class UploadAdmissionError extends Error implements HttpError {
-    readonly #code: "invalid_message" | "request_capacity_exceeded";
-
-    constructor(code: "invalid_message" | "request_capacity_exceeded") {
-        super(
-            code === "invalid_message"
-                ? "The WebSocket transport message is invalid"
-                : "The WebSocket transport has too many pending uploads",
-        );
-        this.name = "UploadAdmissionError";
-        this.#code = code;
+class UploadCapacityError extends Error implements HttpError {
+    constructor() {
+        super("The WebSocket transport has too many pending uploads");
+        this.name = "UploadCapacityError";
     }
 
     readonly toHttpJson: HttpError["toHttpJson"] = () => ({
-        body: { error: { code: this.#code, message: this.message } },
-        status: this.#code === "invalid_message" ? 400 : 429,
+        body: { error: { code: "request_capacity_exceeded", message: this.message } },
+        status: 429,
     });
 }
 
@@ -40,16 +33,12 @@ export class WebSocketUploadCapacity {
         readonly signal: AbortSignal;
     }): void => {
         signal.throwIfAborted();
-        const limit = format === "encrypted-content" ? MAX_PENDING_BYTES : MAX_BODY_BYTES;
-        if (!Number.isSafeInteger(byteLength) || byteLength < 1 || byteLength > limit) {
-            throw new UploadAdmissionError("invalid_message");
-        }
         if (
             this.#bytes + byteLength > MAX_PENDING_BYTES ||
             (format === "ordinary" && this.#ordinaryBytes + byteLength > MAX_BODY_BYTES) ||
             this.#uploads >= MAX_PENDING_UPLOADS
         ) {
-            throw new UploadAdmissionError("request_capacity_exceeded");
+            throw new UploadCapacityError();
         }
         this.#bytes += byteLength;
         if (format === "ordinary") {

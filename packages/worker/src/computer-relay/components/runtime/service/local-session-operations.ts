@@ -170,7 +170,7 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
                 }
                 const socket = await connect(command.requestId, target, deadline.signal);
                 try {
-                    return await requestComputerContentWrite(socket, first.encoded, records, deadline.signal);
+                    return await requestComputerContentWrite(socket, first.encoded, command, records, deadline.signal);
                 } catch (cause) {
                     socket.close(1000, "Content upload ended");
                     throw cause;

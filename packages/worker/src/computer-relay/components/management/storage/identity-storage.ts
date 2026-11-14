@@ -672,7 +672,7 @@ export class IdentityStorage {
         signal: AbortSignal,
     ): Promise<AnonymousIdentity | null> => {
         const parsed = readTransferCredential(code);
-        if (parsed?.kind !== "morty_transfer_v1" || parsed.computerId !== this.#computerId) {
+        if (parsed === null || parsed.computerId !== this.#computerId) {
             return null;
         }
         signal.throwIfAborted();

@@ -39,7 +39,6 @@ export interface DaemonSocketIdentity {
 }
 
 export interface ComputerPeers extends RelayPeers {
-    readonly sockets: () => readonly { readonly identity: DaemonSocketIdentity; readonly socket: RelaySocket }[];
     /** Daemon connections with the time each one's heartbeat was last answered by the host. */
     readonly daemonConnections: () => readonly {
         readonly identity: DaemonSocketIdentity;
@@ -52,7 +51,7 @@ export interface ComputerPeers extends RelayPeers {
     };
 }
 
-type ComputerPeer = ReturnType<ComputerPeers["sockets"]>[number];
+type ComputerPeer = ReturnType<ComputerPeers["daemonConnections"]>[number];
 
 interface RuntimeContext {
     readonly services: {
@@ -154,14 +153,14 @@ export class ComputerService {
             for (const viewer of this.#cx.gateways.peers.viewers()) {
                 viewer.close(1000, "Previous daemon disconnected");
             }
-            for (const { socket } of this.#cx.gateways.peers.sockets()) {
+            for (const { socket } of this.#cx.gateways.peers.daemonConnections()) {
                 socket.close(1000, "Previous daemon disconnected");
             }
             for (const { socket } of this.#cx.gateways.peers.operations()) {
                 socket.close(1000, "Previous daemon disconnected");
             }
         }
-        const previous = this.#cx.gateways.peers.sockets().filter(({ socket }) => socket.isOpen());
+        const previous = this.#cx.gateways.peers.daemonConnections().filter(({ socket }) => socket.isOpen());
         for (const attachment of this.#attachments) {
             if (attachment.identity.computerId === computerId) {
                 attachment.controller.abort(new DOMException("Computer connection replaced", "AbortError"));
@@ -251,7 +250,7 @@ export class ComputerService {
                 attachment.controller.abort(new DOMException("Computer revoked", "AbortError"));
             }
         }
-        for (const { identity, socket } of this.#cx.gateways.peers.sockets()) {
+        for (const { identity, socket } of this.#cx.gateways.peers.daemonConnections()) {
             if (identity.computerId !== computerId) {
                 continue;
             }
@@ -293,7 +292,7 @@ export class ComputerService {
      */
     readonly currentDaemon = (): ComputerPeer | undefined =>
         this.#cx.gateways.peers
-            .sockets()
+            .daemonConnections()
             .find(({ identity, socket }) => socket.isOpen() && this.#cx.services.connections.isCurrent(identity));
 
     readonly registerSessionSubscription = async (
@@ -534,11 +533,7 @@ export class ComputerService {
         }
     };
 
-    readonly detach = async (
-        identity: DaemonSocketIdentity,
-        socket: RelaySocket,
-        signal: AbortSignal,
-    ): Promise<void> => {
+    readonly detach = async (identity: DaemonSocketIdentity, signal: AbortSignal): Promise<void> => {
         // The latest connection detaches once it closes, also after its generation ended: what was sent into it
         // must still be released.
         const latest = () => this.#cx.services.connections.standing(identity) !== "replaced";
@@ -558,12 +553,12 @@ export class ComputerService {
             return;
         }
         this.#cx.services.connections.disconnected(identity.connectionEpoch, Date.now());
-        this.relay(identity.computerId).detachDaemon(socket);
+        this.relay(identity.computerId).detachDaemon();
     };
 
-    private readonly closeSilentDaemons = (): readonly ComputerPeer[] => {
+    private readonly closeSilentDaemons = (): readonly DaemonSocketIdentity[] => {
         const now = Date.now();
-        const silent: ComputerPeer[] = [];
+        const silent: DaemonSocketIdentity[] = [];
         for (const { identity, socket, heartbeat } of this.#cx.gateways.peers.daemonConnections()) {
             if (!socket.isOpen()) {
                 continue;
@@ -587,7 +582,7 @@ export class ComputerService {
                 "Computer daemon stopped heartbeating",
             );
             socket.close(4001, "Computer heartbeat timed out");
-            silent.push({ identity, socket });
+            silent.push(identity);
         }
         return silent;
     };
@@ -603,15 +598,15 @@ export class ComputerService {
 
     // The connection may never report its close, so the Relay detaches it itself. The command or
     // read that noticed the silence may end first, so the detach does not share its cancellation.
-    private readonly detachDaemons = async (daemons: readonly ComputerPeer[]): Promise<void> => {
-        for (const { identity, socket } of daemons) {
+    private readonly detachDaemons = async (daemons: readonly DaemonSocketIdentity[]): Promise<void> => {
+        for (const identity of daemons) {
             const timeout = new AbortController();
             const timer = setTimeout(
                 () => timeout.abort(new DOMException("The Computer detach timed out", "TimeoutError")),
                 DAEMON_DETACH_TIMEOUT_MILLISECONDS,
             );
             try {
-                await this.detach(identity, socket, timeout.signal);
+                await this.detach(identity, timeout.signal);
             } finally {
                 clearTimeout(timer);
             }

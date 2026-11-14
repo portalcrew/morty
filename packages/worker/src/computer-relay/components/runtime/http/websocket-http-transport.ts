@@ -133,7 +133,7 @@ class PendingBinaryUpload {
     readonly authorization = this.#ready.promise;
     readonly #controller = new AbortController();
     readonly #timeout: ReturnType<typeof setTimeout>;
-    #state: "pending" | "authorized" | "closed" = "pending";
+    #closed = false;
 
     readonly byteLength: number;
     readonly message: Readonly<Record<string, unknown>>;
@@ -173,7 +173,6 @@ class PendingBinaryUpload {
                 await this.fail(response);
                 return;
             }
-            this.#state = "authorized";
             this.#ready.resolve(true);
         } catch (cause) {
             if (!this.#controller.signal.aborted) {
@@ -183,10 +182,10 @@ class PendingBinaryUpload {
     };
 
     readonly close = (): void => {
-        if (this.#state === "closed") {
+        if (this.#closed) {
             return;
         }
-        this.#state = "closed";
+        this.#closed = true;
         clearTimeout(this.#timeout);
         this.#connectionBudget.release(this.byteLength, this.#encryptedUpload);
         this.#controller.abort();
@@ -377,12 +376,11 @@ function bearerCredential(frameHeaders: Headers): string {
 
 function requestFromMessage(
     value: Readonly<Record<string, unknown>>,
-    requestId: string,
     origin: string,
     browserOrigin: string | null,
     signal: AbortSignal,
     binaryBody?: Uint8Array,
-): { readonly request: Request; readonly requestId: string; readonly body: string } {
+): { readonly request: Request; readonly body: string } {
     const endpoint = framePath(value, origin);
     const method = string(value, "method", 16);
     if (!REQUEST_METHODS.some((allowed) => allowed === method)) {
@@ -401,7 +399,6 @@ function requestFromMessage(
             method,
             signal,
         }),
-        requestId,
         body: textBody,
     };
 }
@@ -489,7 +486,6 @@ export function acceptWebSocketHttpTransport({
         requests.clear();
     };
     const receive = (data: string | ArrayBuffer) => {
-        const event = { data };
         touch();
         void (async () => {
             let requestId = "unknown";
@@ -497,17 +493,13 @@ export function acceptWebSocketHttpTransport({
             try {
                 let decoded: unknown;
                 let binaryBody: Uint8Array | undefined;
-                if (typeof event.data === "string") {
-                    decoded = JSON.parse(event.data);
+                if (typeof data === "string") {
+                    decoded = JSON.parse(data);
                 } else {
                     const arrayBuffer =
-                        typeof event.data === "object" && event.data !== null
-                            ? Reflect.get(event.data, "arrayBuffer")
-                            : undefined;
+                        typeof data === "object" && data !== null ? Reflect.get(data, "arrayBuffer") : undefined;
                     const binary =
-                        typeof arrayBuffer === "function"
-                            ? await Reflect.apply(arrayBuffer, event.data, [])
-                            : event.data;
+                        typeof arrayBuffer === "function" ? await Reflect.apply(arrayBuffer, data, []) : data;
                     const chunk = decodeContentChunkFrame(binary);
                     requestId = chunk.requestId;
                     const upload = binaryRequests.get(chunk.requestId);
@@ -727,7 +719,6 @@ export function acceptWebSocketHttpTransport({
                     }
                     const declaration = requestFromMessage(
                         message,
-                        requestId,
                         new URL(request.url).origin,
                         browserOrigin,
                         controller.signal,
@@ -784,13 +775,11 @@ export function acceptWebSocketHttpTransport({
                 requestId = requestIdFromMessage(message);
                 const converted = requestFromMessage(
                     message,
-                    requestId,
                     new URL(request.url).origin,
                     browserOrigin,
                     controller.signal,
                     binaryBody,
                 );
-                requestId = converted.requestId;
                 operation = new PendingRequest(requestId, controller.signal, requests);
                 const response = await dispatch({
                     kind: "request",

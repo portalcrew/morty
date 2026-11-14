@@ -27,7 +27,6 @@ export function createRuntimeContext(cx: {
     const source = cx.gateways.peers;
     const peers: ComputerPeers = {
         accept: source.accept,
-        sockets: source.sockets,
         daemonConnections: source.daemonConnections,
         // Which daemon is current is the connection record's fact, so the daemons are the one it names.
         daemons: () => {
