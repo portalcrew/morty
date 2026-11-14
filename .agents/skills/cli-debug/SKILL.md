@@ -1,6 +1,6 @@
 ---
 name: cli-debug
-description: Debug Morty CLI daemon failures on a user's local machine using the bounded local diagnostic log. Use when a user asks why a local Agent operation failed (for example a native session import, fork, or preview returning "The local agent operation could not be completed."), where the daemon writes diagnostics, how to read logs/daemon.log, or how to correlate a Morty relay failure code with the local cause.
+description: Debug Morty CLI daemon failures on a user's local machine using the bounded local diagnostic log. Use when a user asks why a local Agent operation failed (for example a native session list, find, import, or fork returning "The local agent operation could not be completed."), where the daemon writes diagnostics, how to read logs/daemon.log, or how to correlate a Morty relay failure code with the local cause.
 ---
 
 # CLI Debugging
@@ -73,7 +73,7 @@ For failure events, read the cause chain fields `failureName`,
 error. The message is sanitized before it is written: control characters are
 replaced, credential-looking query parameters are redacted, URLs are reduced to
 their origin, and the line is truncated. Treat redaction markers (`[redacted]`,
-`[redacted-url]`, `[local-path]`) as evidence of sanitization, not corruption.
+`[redacted-url]`) as evidence of sanitization, not corruption.
 
 Note what is intentionally not in the log: full stdout/stderr of child Agents,
 prompt content, and session transcripts. Do not try to recover those from this
@@ -93,7 +93,7 @@ Correlate by:
    inspect that range of lines.
 2. `computerId`: match the paired computer shown in the browser.
 3. `requestId` or `sessionId`: match when the reporter can supply one.
-4. `harness` and `action` (`list`/`find`/`preview`/`import`/`fork`) on
+4. `harness` and `action` (`list`/`find`/`import`/`fork`/`active-turn`) on
    `native_session_operation_failed` events.
 
 Keep the daemon's error taxonomy straight when interpreting codes:
@@ -114,8 +114,9 @@ history" — if the needed evidence was already trimmed, say so.
 Distinguish evidence sources:
 
 - `logs/daemon.log`: durable local diagnostics (this skill's primary source).
-- Daemon stderr/stdout lines (`Morty daemon diagnostic ...`, `Morty relay
-  diagnostic ...`): same events, ephemeral console stream.
+- Daemon stderr/stdout lines `Morty relay diagnostic ...`: the relay events of
+  the log, as an ephemeral console stream. Most `Morty daemon diagnostic ...`
+  events, such as `native_session_operation_failed`, are only in the log.
 - Local `wrangler dev` or Chat web output: not evidence of daemon behavior.
 
 ## Implement and verify a fix

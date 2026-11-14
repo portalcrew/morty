@@ -78,4 +78,4 @@ command to see its options; that output is the authoritative description.
 | `agents` | Show detected, missing, and integration-ready Agents |
 | `logs` | Print the local daemon diagnostic logs for a bug report |
 
-For hosting and runtime configuration, see [deployment](deployment.md).
+For hosting, see [deployment](deployment.md).

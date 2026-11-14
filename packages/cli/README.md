@@ -19,11 +19,11 @@ Morty's installed package is tested on Linux, macOS and Windows.
 Give your coding Agent this prompt:
 
 ```text
-Fetch https://morty.build/setup.md and complete the Morty setup for me.
+Fetch https://morty.build/doc/setup.md and complete the Morty setup for me.
 You may install missing prerequisites and pair this machine.
 ```
 
-Read the [setup instructions](https://morty.build/setup.md) before running them.
+Read the [setup instructions](https://morty.build/doc/setup.md) before running them.
 Open the resulting link in a browser or scan its QR code on your phone.
 
 ## Manage your installation
