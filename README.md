@@ -50,8 +50,8 @@ Open the link it returns, or scan the QR code on your phone. No mobile app requi
 
 Setup is a document your agent reads, not a black box:
 [setup.md](https://morty.build/doc/setup.md) is public, and it tells your agent to
-download the installer to a private temporary directory and inspect it before
-running it. Read it yourself before you paste the prompt.
+run the Morty CLI (already installed, or through `npx`); no separate setup script is
+downloaded or run. Read it yourself before you paste the prompt.
 
 ## What you need
 
