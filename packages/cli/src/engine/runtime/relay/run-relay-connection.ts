@@ -7,16 +7,8 @@ import {
     decodeWorkerToDaemonMessage,
 } from "@morty-build/client/protocol";
 import { type MessageEvent, WebSocket } from "undici";
-import type { ResolveAgent } from "../../session/api/session-api.ts";
-import type { ExternalContentStore } from "../../session/content/external-content-store.ts";
-import type { SessionManager } from "../../session/manager/session-manager.ts";
-import type { NativeSessionService } from "../../session/native/native-session-browser.ts";
-import type { PromptLifecycle } from "../../session/prompt/prompt-lifecycle.ts";
-import type { SessionCreations } from "../../session/record/session-creations.ts";
-import type { ExecutionReceipts } from "../../session/turn/execution-receipts.ts";
-import type { SessionTurns } from "../../session/turn/session-turns.ts";
-import type { WorkspaceDirectoryService } from "../../session/workspace/workspace-directory.ts";
 import type { Timer } from "../../util/timer.ts";
+import type { CommandServices } from "../command/context.ts";
 import { createCommandRegistry } from "../command/registry/index.ts";
 import { createSessionSubscriptions } from "../command/registry/subscriptions.ts";
 import { receive, send } from "../command/transport.ts";
@@ -47,18 +39,10 @@ function closeRelaySocket(socket: WebSocket, code: number, reason: string): void
 }
 
 export interface RelayConnectionOptions {
-    readonly resolveAgent: ResolveAgent;
+    readonly services: CommandServices;
     readonly config: RuntimeConfig;
-    readonly directories: WorkspaceDirectoryService;
-    readonly sessions: SessionManager;
-    readonly sessionCreations: SessionCreations;
-    readonly nativeSessions: NativeSessionService;
-    readonly operations: ExecutionReceipts;
     readonly publisher: RuntimeSessionEventPublisher;
     readonly payloadEncryption: PayloadEncryptionConnection;
-    readonly eventProjection: PromptLifecycle;
-    readonly externalContent: ExternalContentStore;
-    readonly sessionTurns: SessionTurns;
     readonly connectionEpoch: number;
     readonly diagnostics: RelayConnectionDiagnostics;
     readonly onConnected: () => void;
@@ -67,18 +51,10 @@ export interface RelayConnectionOptions {
 }
 
 export async function runRelayConnection({
-    resolveAgent,
+    services,
     config,
-    directories,
-    sessionTurns,
-    sessionCreations,
-    nativeSessions,
-    operations,
     publisher,
     payloadEncryption,
-    eventProjection,
-    externalContent,
-    sessions,
     connectionEpoch,
     diagnostics,
     onConnected,
@@ -102,16 +78,8 @@ export async function runRelayConnection({
     let queuedMessages = 0;
     let queuedBytes = 0;
     const commands = createCommandRegistry({
-        resolveAgent,
+        ...services,
         config,
-        directories,
-        sessions,
-        nativeSessions,
-        operations,
-        eventProjection,
-        externalContent,
-        sessionTurns,
-        sessionCreations,
         diagnostics,
         socket,
         payloadEncryption,
