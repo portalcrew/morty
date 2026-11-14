@@ -73,7 +73,6 @@ import {
     sessionRenderItemId,
     sessionRenderItems,
 } from "../../view-models/chat/session-render-items.ts";
-import { createSessionResourceStore } from "../../view-models/chat/session-resource-store.ts";
 import { sessionTitle } from "../../view-models/chat/session-titles-store.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
 import { ChatMessageQueue } from "./chat-message-queue.tsx";
@@ -156,7 +155,6 @@ function SessionRenderItemContent({
     if (item.kind === "assistant-text") {
         return (
             <MortyAssistantText
-                createResourceStore={createSessionResourceStore}
                 openLocalFile={openLocalFile}
                 readImage={pane.readResource}
                 text={item.text}
@@ -167,12 +165,7 @@ function SessionRenderItemContent({
     if (item.kind === "thinking") {
         return (
             <div data-testid={dataTestId.agentResponse}>
-                <AgentThinking
-                    active={active}
-                    createResourceStore={createSessionResourceStore}
-                    entries={item.entries}
-                    readImage={pane.readResource}
-                />
+                <AgentThinking active={active} entries={item.entries} readImage={pane.readResource} />
             </div>
         );
     }

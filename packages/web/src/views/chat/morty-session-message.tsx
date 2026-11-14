@@ -10,7 +10,6 @@ import { AgentResponseText } from "../../components/agents/agent-response-text.t
 import { isDisplayableImageType } from "../../components/agents/displayable-image-type.ts";
 import { ExternalContentBlock, LinkedResourceBlock } from "../../components/agents/external-content-block.tsx";
 import { loadDiagramRenderer } from "../../components/agents/mermaid-code-block.tsx";
-import type { SessionResourceStoreFactory } from "../../components/agents/resource-reader.ts";
 import { AgentThinking } from "../../components/chat/agent-thinking.tsx";
 import { AttemptFailure } from "../../components/chat/attempt-failure.tsx";
 import { AuthenticationNotice } from "../../components/chat/authentication-notice.tsx";
@@ -29,7 +28,6 @@ import {
     type SessionMessage,
     sessionTextValue,
 } from "../../view-models/chat/session-presentation.ts";
-import { createSessionResourceStore } from "../../view-models/chat/session-resource-store.ts";
 
 // Warm the lazily loaded rich renderers once the page settles, so the first
 // LaTeX or Mermaid content resolves its renderer without a visible fallback
@@ -59,13 +57,11 @@ function safeRemoteUrl(value: string): string | null {
 
 function MessageContentBlock({
     content,
-    createResourceStore,
     openLocalFile,
     readImage,
     speaker,
 }: {
     readonly content: ContentBlock;
-    readonly createResourceStore: SessionResourceStoreFactory;
     readonly openLocalFile: (path: string) => void;
     readonly readImage?: MarkdownImageReader | undefined;
     readonly speaker: "assistant" | "user";
@@ -74,7 +70,6 @@ function MessageContentBlock({
         case "text": {
             const markdown = (
                 <AgentMarkdown
-                    createResourceStore={createResourceStore}
                     markdown={content.text}
                     openLocalFile={openLocalFile}
                     readImage={readImage}
@@ -116,7 +111,6 @@ function MessageContentBlock({
             if (path !== null) {
                 return (
                     <LinkedResourceBlock
-                        createResourceStore={createResourceStore}
                         mediaType={content.mimeType ?? "application/octet-stream"}
                         name={content.name}
                         path={path}
@@ -149,20 +143,12 @@ function MessageContentBlock({
         case "external_image":
         case "external_audio":
         case "external_resource":
-            return (
-                <ExternalContentBlock
-                    content={content}
-                    createResourceStore={createResourceStore}
-                    readContent={readImage}
-                    speaker={speaker}
-                />
-            );
+            return <ExternalContentBlock content={content} readContent={readImage} speaker={speaker} />;
     }
 }
 
 function UserMessage({
     message,
-    createResourceStore,
     deliveryUnknownUserMessageId,
     onRemoveUnknownDelivery,
     onRetryUnknownDelivery,
@@ -171,7 +157,6 @@ function UserMessage({
     retryUnknownDeliveryDisabled,
 }: {
     readonly message: Extract<SessionMessage, { readonly role: "user" }>;
-    readonly createResourceStore: SessionResourceStoreFactory;
     readonly deliveryUnknownUserMessageId: string | null;
     readonly onRemoveUnknownDelivery: () => void;
     readonly onRetryUnknownDelivery: () => void;
@@ -198,7 +183,6 @@ function UserMessage({
                             {images.map((content, index) => (
                                 <MessageContentBlock
                                     content={content}
-                                    createResourceStore={createResourceStore}
                                     key={`${message.firstEvent.eventId}:image:${index.toString()}`}
                                     openLocalFile={openLocalFile}
                                     readImage={readImage}
@@ -216,7 +200,6 @@ function UserMessage({
                             {bubbleContents.map((content, index) => (
                                 <MessageContentBlock
                                     content={content}
-                                    createResourceStore={createResourceStore}
                                     key={`${message.firstEvent.eventId}:${index.toString()}`}
                                     openLocalFile={openLocalFile}
                                     readImage={readImage}
@@ -255,13 +238,11 @@ function UserMessage({
 
 export function MortyAssistantText({
     text,
-    createResourceStore,
     openLocalFile,
     readImage,
     streaming,
 }: {
     readonly text: string;
-    readonly createResourceStore?: SessionResourceStoreFactory | undefined;
     readonly streaming: boolean;
     readonly openLocalFile: (path: string) => void;
     readonly readImage?: MarkdownImageReader | undefined;
@@ -271,7 +252,6 @@ export function MortyAssistantText({
             <MessageBubble speaker="assistant">
                 <AgentResponseText
                     text={text}
-                    createResourceStore={createResourceStore}
                     openLocalFile={openLocalFile}
                     readImage={readImage}
                     streaming={streaming}
@@ -304,11 +284,9 @@ export function MortySessionMessage({
     readonly openLocalFile: (path: string) => void;
     readonly active?: boolean;
 }) {
-    const createResourceStore: SessionResourceStoreFactory = createSessionResourceStore;
     if (message.role === "user") {
         return (
             <UserMessage
-                createResourceStore={createResourceStore}
                 deliveryUnknownUserMessageId={deliveryUnknownUserMessageId}
                 message={message}
                 onRemoveUnknownDelivery={onRemoveUnknownDelivery}
@@ -324,7 +302,6 @@ export function MortySessionMessage({
         if (presentation.content.type === "text") {
             return (
                 <MortyAssistantText
-                    createResourceStore={createResourceStore}
                     openLocalFile={openLocalFile}
                     readImage={readImage}
                     text={sessionTextValue(presentation.content.text)}
@@ -336,7 +313,6 @@ export function MortySessionMessage({
             <div className="min-w-0" data-testid={dataTestId.agentResponse}>
                 <MessageContentBlock
                     content={presentation.content}
-                    createResourceStore={createResourceStore}
                     openLocalFile={openLocalFile}
                     readImage={readImage}
                     speaker="assistant"
@@ -349,7 +325,6 @@ export function MortySessionMessage({
             return (
                 <AgentThinking
                     active={active}
-                    createResourceStore={createResourceStore}
                     entries={[
                         {
                             id: message.firstEvent.eventId,
@@ -365,7 +340,6 @@ export function MortySessionMessage({
         return (
             <MessageContentBlock
                 content={presentation.content}
-                createResourceStore={createResourceStore}
                 openLocalFile={openLocalFile}
                 readImage={readImage}
                 speaker="assistant"
@@ -405,12 +379,7 @@ export function MortySessionMessage({
     }
     return (
         <div data-testid={dataTestId.agentResponse}>
-            <AgentThinking
-                active={active}
-                createResourceStore={createResourceStore}
-                entries={[presentation.entry]}
-                readImage={readImage}
-            />
+            <AgentThinking active={active} entries={[presentation.entry]} readImage={readImage} />
         </div>
     );
 }

@@ -8,7 +8,6 @@ import { ImageCanvas } from "../../components/images/image-canvas.tsx";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import type { FilePreviewLayout, FilePreviewState } from "../../view-models/chat/file-preview-store.ts";
-import { createSessionResourceStore } from "../../view-models/chat/session-resource-store.ts";
 import { describePageFailure } from "../../view-models/format-error.ts";
 
 function CodeLineNumbers({ code }: { readonly code: string }) {
@@ -96,7 +95,6 @@ function PreviewContent({
                     <AgentMarkdown
                         key={state.path}
                         className="mx-auto max-w-3xl [&>:first-child]:mt-0"
-                        createResourceStore={createSessionResourceStore}
                         markdown={state.text}
                         openLocalFile={onMarkdownLink}
                         readImage={readMarkdownImage}

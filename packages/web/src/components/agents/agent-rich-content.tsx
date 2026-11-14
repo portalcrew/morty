@@ -4,7 +4,6 @@ import { ToolTextPreview } from "../chat/tool-text-preview.tsx";
 import { ImageGallery, PreviewImage } from "../images/image-gallery.tsx";
 import type { MarkdownImageReader } from "./agent-markdown.tsx";
 import { AgentMarkdown } from "./agent-markdown.tsx";
-import type { SessionResourceStoreFactory } from "./resource-reader.ts";
 import { SessionResource } from "./session-resource.tsx";
 
 const SAFE_IMAGE_MIME = /^image\/(?:gif|jpeg|png|webp)$/;
@@ -85,21 +84,15 @@ function ContentHeader({ content }: { readonly content: AgentDisplayContent }) {
 
 function LocalImage({
     content,
-    createResourceStore,
     mediaTestId,
     readImage,
 }: {
     readonly content: ImageContent;
-    readonly createResourceStore: SessionResourceStoreFactory;
     readonly mediaTestId?: string | undefined;
     readonly readImage?: MarkdownImageReader | undefined;
 }) {
     return (
-        <SessionResource
-            createStore={createResourceStore}
-            request={{ kind: "raster-image", path: content.uri }}
-            read={readImage}
-        >
+        <SessionResource request={{ kind: "raster-image", path: content.uri }} read={readImage}>
             {(state) => {
                 if (state.kind === "loading") {
                     return (
@@ -135,27 +128,18 @@ function LocalImage({
 
 function AgentRichContentItem({
     content,
-    createResourceStore,
     mediaTestId,
     openLocalFile,
     readImage,
 }: {
     readonly content: AgentDisplayContent;
-    readonly createResourceStore: SessionResourceStoreFactory | undefined;
     readonly mediaTestId?: string | undefined;
     readonly readImage?: MarkdownImageReader | undefined;
     readonly openLocalFile?: ((path: string) => void) | undefined;
 }) {
     if (content.type === "image" && content.uri.length > 0) {
-        if (readImage !== undefined && createResourceStore !== undefined) {
-            return (
-                <LocalImage
-                    content={content}
-                    createResourceStore={createResourceStore}
-                    mediaTestId={mediaTestId}
-                    readImage={readImage}
-                />
-            );
+        if (readImage !== undefined) {
+            return <LocalImage content={content} mediaTestId={mediaTestId} readImage={readImage} />;
         }
         return (
             <div className="rounded-lg border-[0.5px] border-black/8 bg-black/[0.02] p-3 text-xs text-muted-foreground">
@@ -262,14 +246,11 @@ function AgentRichContentItem({
 
 export function AgentRichContent({
     contents,
-    createResourceStore,
     mediaTestId,
     readImage,
     openLocalFile,
 }: {
     readonly contents: readonly AgentDisplayContent[];
-    /** The view-model resource store factory; without it remote images render as links. */
-    readonly createResourceStore?: SessionResourceStoreFactory | undefined;
     readonly mediaTestId?: string | undefined;
     readonly readImage?: MarkdownImageReader | undefined;
     readonly openLocalFile?: ((path: string) => void) | undefined;
@@ -283,7 +264,6 @@ export function AgentRichContent({
                 {contents.map((content, index) => (
                     <AgentRichContentItem
                         content={content}
-                        createResourceStore={createResourceStore}
                         key={displayKey(content, index)}
                         mediaTestId={mediaTestId}
                         readImage={readImage}

@@ -22,9 +22,9 @@ export interface SessionResourceStore {
 }
 
 /**
- * The injected view-model factory that owns the resource workflow. Declared
- * here so components stay decoupled from the view-model layer while views
- * pass the concrete implementation down explicitly.
+ * The view-model factory that owns the resource workflow. Declared here so
+ * components stay decoupled from the view-model layer; the application provides
+ * the concrete implementation once through `SessionResourceStoreProvider`.
  */
 export type SessionResourceStoreFactory = (
     request: SessionResourceRequest,

@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo } from "react";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { useStore } from "zustand";
 import { textLinkClassName } from "../ui/text-link.ts";
 import type {
@@ -8,27 +8,44 @@ import type {
     SessionResourceStoreFactory,
 } from "./resource-reader.ts";
 
+const StoreFactoryContext = createContext<SessionResourceStoreFactory | null>(null);
+
+/** Provides the view-model factory that owns the resource workflow, once for the whole application. */
+export function SessionResourceStoreProvider({
+    createStore,
+    children,
+}: {
+    readonly createStore: SessionResourceStoreFactory;
+    readonly children: ReactNode;
+}) {
+    return <StoreFactoryContext value={createStore}>{children}</StoreFactoryContext>;
+}
+
+function useResourceStoreFactory(): SessionResourceStoreFactory {
+    const factory = useContext(StoreFactoryContext);
+    if (factory === null) {
+        throw new Error("A session resource needs a SessionResourceStoreProvider above it.");
+    }
+    return factory;
+}
+
 /**
- * Renders a session-scoped resource through a store created by the injected
- * factory: the factory comes from the view-model layer (passed down from the
- * owning view alongside the reader port), so this component stays
- * business-decoupled while the store owns loading, cancellation, and the
- * object URL's lifetime.
+ * Renders a session-scoped resource through a store created by the provided
+ * factory, so this component stays business-decoupled while the store owns
+ * loading, cancellation, and the object URL's lifetime.
  */
 export function SessionResource({
-    createStore: createResourceStore,
     request,
     read,
     inline = false,
     children,
 }: {
-    /** The view-model factory that owns the resource workflow. */
-    readonly createStore: SessionResourceStoreFactory;
     readonly request: SessionResourceRequest;
     readonly read: SessionResourceReader | undefined;
     readonly inline?: boolean;
     readonly children: (state: SessionResourceState) => ReactNode;
 }) {
+    const createResourceStore = useResourceStoreFactory();
     const { path, kind } = request;
     const store = useMemo(() => createResourceStore({ path, kind }, read), [createResourceStore, path, kind, read]);
     const model = useStore(store);
