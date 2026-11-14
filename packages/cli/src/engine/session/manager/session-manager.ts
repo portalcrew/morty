@@ -39,7 +39,6 @@ import {
     AgentSettingsSnapshot,
     type CreatedSession,
     type ElicitationResponseOptions,
-    NullSessionObserver,
     type PermissionResponseOptions,
     type PreparedSession,
     type PromptResult,
@@ -73,7 +72,7 @@ export class SessionManager {
         settledTurns: (target) => this.#settledTurns(target),
     };
     readonly #lastTurn: (target: NativeSessionTarget) => LastTurnOutcome | undefined;
-    readonly #agentSettingsObserver = new NullSessionObserver();
+    readonly #agentSettingsObserver: SessionObserver = {};
     readonly #lifecycles = new SessionLifecycles();
     readonly #sessionRetirements = new NativeSessionMap<Promise<void>>();
     readonly #store: SessionStore;
@@ -421,10 +420,6 @@ export class SessionManager {
                 creation.resolve();
             }
         });
-
-    /** A Session created with the Agent's own settings. */
-    readonly createNativeSession = async (options: SessionCreationOptions): Promise<NativeSessionTarget> =>
-        (await this.createSession(options, async () => undefined)).target;
 
     /** Keeps the process of a Session the harness just opened, unless the harness named a Session already known. */
     async #retainCreated(runtime: AgentSession): Promise<NativeSessionTarget> {

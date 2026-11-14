@@ -10,7 +10,6 @@ import { describe, expect, it, vi } from "vitest";
 import { openPreviewEventCache } from "../../src/engine/acp/adapter/preview-event-cache.ts";
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
 import { acpSessionStoreMigrations } from "../../src/engine/generated/acp-session-store-migrations.ts";
-import { NullSessionObserver } from "../../src/engine/session/api/session-api.ts";
 import { SqliteSessionLiveEventPosition } from "../../src/engine/session/history/live-event-positions.ts";
 import {
     CachedSessionEventStore,
@@ -84,7 +83,7 @@ describe("ACP conversation sessions", () => {
             { MORTY_FAKE_ACP_STATE_DIRECTORY: temporaryDirectory },
         );
         const manager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
@@ -145,7 +144,7 @@ describe("ACP conversation sessions", () => {
             { MORTY_FAKE_ACP_STATE_DIRECTORY: temporaryDirectory },
         );
         const firstManager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store,
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
@@ -191,7 +190,7 @@ describe("ACP conversation sessions", () => {
 
             vi.setSystemTime(new Date("2026-10-14T12:00:00.000Z"));
             const reopenedManager = new SessionManager({
-                observer: new NullSessionObserver(),
+                observer: {},
                 store,
                 adapters: acpAdapters,
                 onSessionClosed: () => undefined,
@@ -719,7 +718,7 @@ describe("ACP conversation sessions", () => {
             new MemorySessionEventStore(),
         );
         const firstRuntime = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: firstStore,
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
@@ -765,7 +764,7 @@ describe("ACP conversation sessions", () => {
             new MemorySessionEventStore(),
         );
         const restartedRuntime = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: restartedStore,
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
@@ -1214,7 +1213,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
 
     it("Given an ACP agent announces a different session while creating one, When Morty receives the created session, Then the local boundary rejects the queued update", async () => {
         const manager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
@@ -1270,7 +1269,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
 
     it("Given an ACP agent returns the standard authentication error, When Morty starts its session, Then the local boundary preserves an authentication-required code", async () => {
         const manager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
@@ -1320,7 +1319,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
 
     it("Given an ACP agent rejects a prompt with a non-authentication error, When Morty runs that turn, Then the local boundary preserves the agent's real failure reason", async () => {
         const manager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
@@ -1382,7 +1381,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
 
     it("Given Codex includes an invalid-prompt detail in an internal ACP error, When Morty runs that turn, Then the user receives the actionable detail", async () => {
         const manager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
@@ -1569,7 +1568,7 @@ agent.once("exit", (code) => process.exit(code ?? 84));
 
     it("Given an ACP subprocess exits during shutdown, When its session manager closes, Then the stream failure is contained", async () => {
         const manager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,

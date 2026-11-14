@@ -4,7 +4,6 @@ import { join } from "node:path";
 import type { NativeSessionCommand } from "@morty-build/client/protocol";
 import { describe, expect, it, vi } from "vitest";
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
-import { NullSessionObserver } from "../../src/engine/session/api/session-api.ts";
 import { MemorySessionStore } from "../../src/engine/session/record/session-store.ts";
 import { systemTimer } from "../../src/engine/util/timer.ts";
 import { acpAdapters } from "../support/acp-adapters.ts";
@@ -91,7 +90,7 @@ describe("native session preparation", () => {
         vi.setSystemTime(new Date("2026-09-14T00:00:00Z"));
         const f = await fixture("Claude Code", "exclusive-writer");
         const external = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,

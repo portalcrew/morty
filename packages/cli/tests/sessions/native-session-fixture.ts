@@ -5,7 +5,7 @@ import type { AcpSessionUpdate, NativeSessionCommand, SessionLiveEvent } from "@
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
 import type { AdapterResolver } from "../../src/engine/acp/native-history/preview-contract.ts";
 import { createRuntimeConfig, RuntimeAgentDependencies, RuntimeLocalContext } from "../../src/engine/runtime/config.ts";
-import { NullSessionObserver } from "../../src/engine/session/api/session-api.ts";
+import type { SessionObserver } from "../../src/engine/session/api/session-api.ts";
 import { NativeSessionService } from "../../src/engine/session/native/native-session-browser.ts";
 import { SessionCreations } from "../../src/engine/session/record/session-creations.ts";
 import { MemorySessionStore } from "../../src/engine/session/record/session-store.ts";
@@ -24,10 +24,10 @@ const acpUrl = new URL("./fixtures/acp-peer.ts", import.meta.url).toString();
 
 // Real providers cannot deterministically supply destructive test sessions or stalled
 // loads. These ACP subprocesses maintain their own disposable session files.
-class NativeSessionObserver extends NullSessionObserver {
+class NativeSessionObserver implements SessionObserver {
     readonly updates: AcpSessionUpdate[] = [];
     readonly #waiters: { readonly matches: (update: AcpSessionUpdate) => boolean; readonly resolve: () => void }[] = [];
-    override readonly onSessionEvent = (event: SessionLiveEvent): Promise<void> => {
+    readonly onSessionEvent = (event: SessionLiveEvent): Promise<void> => {
         if (event.type === "acp") {
             this.updates.push(event.payload);
             for (const waiter of this.#waiters.splice(0).filter((candidate) => {
@@ -161,7 +161,7 @@ export async function fixture(
     } satisfies Omit<Extract<NativeSessionCommand, { readonly action: "find" }>, "action" | "sessionId">;
     const seed = async (title: string, cwd = workspace): Promise<string> => {
         const external = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,

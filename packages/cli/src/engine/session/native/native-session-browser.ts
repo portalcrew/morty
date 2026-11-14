@@ -34,9 +34,6 @@ interface AuthorizedNativeSession {
     readonly directoryLabel: string;
 }
 
-/** What an execution read of a Session this Runtime holds reports; a Session it does not hold is refused. */
-export type ActiveTurnRead = SessionExecution;
-
 const MAXIMUM_SESSION_TITLE_LENGTH = 500;
 const forkSuffixPattern = / \(Fork #([1-9][0-9]*)\)$/u;
 
@@ -82,14 +79,14 @@ export class NativeSessionService {
     readonly #creations: SessionCreations;
     readonly #activeTurn: (
         command: Extract<NativeSessionCommand, { readonly action: "active-turn" }>,
-    ) => ActiveTurnRead;
+    ) => SessionExecution;
 
     constructor(
         resolveAgent: ResolveAgent,
         directories: WorkspaceDirectoryService,
         sessions: SessionManager,
         creations: SessionCreations,
-        activeTurn: (command: Extract<NativeSessionCommand, { readonly action: "active-turn" }>) => ActiveTurnRead,
+        activeTurn: (command: Extract<NativeSessionCommand, { readonly action: "active-turn" }>) => SessionExecution,
     ) {
         this.#resolveAgent = resolveAgent;
         this.#directories = directories;

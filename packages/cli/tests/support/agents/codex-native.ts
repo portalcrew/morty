@@ -10,7 +10,6 @@ import {
     RuntimeAgentDependencies,
     RuntimeLocalContext,
 } from "../../../src/engine/runtime/config.ts";
-import { NullSessionObserver } from "../../../src/engine/session/api/session-api.ts";
 import { NativeSessionService } from "../../../src/engine/session/native/native-session-browser.ts";
 import { SessionCreations } from "../../../src/engine/session/record/session-creations.ts";
 import { MemorySessionStore } from "../../../src/engine/session/record/session-store.ts";
@@ -38,7 +37,7 @@ export async function codexFixture(
     const agent = testAgentDefinition("codex", "Codex", codex.executable, codex.environment);
     const store = new MemorySessionStore();
     const sessions = new SessionManager({
-        observer: new NullSessionObserver(),
+        observer: {},
         store,
         adapters,
         onSessionClosed: () => undefined,

@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
-import { NullSessionObserver } from "../../src/engine/session/api/session-api.ts";
 import { MemorySessionStore } from "../../src/engine/session/record/session-store.ts";
 import { systemTimer } from "../../src/engine/util/timer.ts";
 import { acpAdapters } from "../support/acp-adapters.ts";
@@ -14,7 +13,7 @@ import { fakeAgent } from "./acp-feature-fixture.ts";
 it("Given a Session's creation is cancelled while its settings are applied, When the Runtime lists its Sessions, Then the half-configured Session is not held and a new creation succeeds", async () => {
     const directory = await mkdtemp(join(tmpdir(), "morty-session-creation-"));
     const manager = new SessionManager({
-        observer: new NullSessionObserver(),
+        observer: {},
         store: new MemorySessionStore(),
         adapters: acpAdapters,
         onSessionClosed: () => undefined,

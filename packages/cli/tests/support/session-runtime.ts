@@ -57,8 +57,14 @@ export class SessionRuntimeFixture {
     readonly ensureSession = (options: TestSessionPrepareOptions) =>
         this.sessions.ensureSession({ ...options, adapter: this.adapters.resolve(options.agent) });
 
-    readonly createNativeSession = (options: Omit<SessionCreationOptions, "adapter">) =>
-        this.sessions.createNativeSession({ ...options, adapter: this.adapters.resolve(options.agent) });
+    /** A Session created with the Agent's own settings. */
+    readonly createNativeSession = async (options: Omit<SessionCreationOptions, "adapter">) =>
+        (
+            await this.sessions.createSession(
+                { ...options, adapter: this.adapters.resolve(options.agent) },
+                async () => undefined,
+            )
+        ).target;
 
     readonly createConfiguredSession = (
         options: Omit<SessionCreationOptions, "adapter">,

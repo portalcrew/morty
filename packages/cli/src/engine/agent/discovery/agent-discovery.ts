@@ -90,7 +90,6 @@ export class AgentDiscoveryResult {
 
 export class LocalAgentInventory {
     readonly available: readonly AvailableAgent[];
-    readonly discoveries: readonly AgentDiscovery[];
     readonly results: readonly AgentDiscoveryResult[];
     readonly unavailable: readonly UnavailableAgent[];
 
@@ -108,7 +107,6 @@ export class LocalAgentInventory {
             }
         }
         this.available = Object.freeze(available);
-        this.discoveries = Object.freeze([...discoveries]);
         this.results = Object.freeze([...results]);
         this.unavailable = Object.freeze(unavailable);
     }
