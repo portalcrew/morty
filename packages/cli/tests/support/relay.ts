@@ -4,10 +4,10 @@ import type { FakeAgentHarnessDefinition } from "./agent-harness.ts";
 import { createFakeAgentHarnessRuntime } from "./relay-agent-harness.ts";
 
 /** Starts the production Relay boundary with isolated local Cloudflare storage. */
-export async function startTestRelay(options: { readonly allowedOrigins?: ReadonlySet<string> } = {}) {
+export async function startTestRelay() {
     const cancellation = new AbortController();
     const runtimes: AsyncDisposable[] = [];
-    const bindings = await createTestMortyRelayBindings(options.allowedOrigins);
+    const bindings = await createTestMortyRelayBindings();
     try {
         const app = { request: bindings.request };
         await bindings.configure({ APP_ORIGIN: bindings.origin });

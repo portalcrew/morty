@@ -63,7 +63,6 @@ test("Given a valid large tool event, When it is published live, Then the client
         origin: network.origin,
         computerId: owner.computerId,
         credential: owner.computerToken,
-        request: async (request) => await fetch(request),
         encryptionAccess,
     });
     const transport = new WsTransport();

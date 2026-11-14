@@ -48,7 +48,6 @@ test("Given a prompt with a separate reply address, when it is retried or confli
             origin: bindings.origin,
             computerId: owner.computerId,
             credential: owner.computerToken,
-            request: async (request) => await fetch(request),
             encryptionAccess,
         });
         const transport = new WsTransport();

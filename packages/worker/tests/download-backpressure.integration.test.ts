@@ -53,7 +53,6 @@ test("Given a slow file download, When the browser stops reading and cancels, Th
         origin: network.origin,
         computerId: owner.computerId,
         credential: owner.computerToken,
-        request: async (request) => await fetch(request),
         encryptionAccess: await runtime.encryptionAccess(signal),
     });
     try {

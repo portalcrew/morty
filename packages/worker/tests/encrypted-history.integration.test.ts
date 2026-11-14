@@ -53,7 +53,6 @@ test("Given large valid history events, When the client reads all pages, Then ev
         origin: network.origin,
         computerId: owner.computerId,
         credential: owner.computerToken,
-        request: async (request) => await fetch(request),
         encryptionAccess,
     });
     const transport = new WsTransport();

@@ -67,7 +67,6 @@ test("Given a browser opening a Session, When its device is revoked before the C
             computerId: owner.computerId,
             credential: browser,
             encryptionAccess: await runtime.encryptionAccess(AbortSignal.timeout(15_000)),
-            request: (value) => worker.fetch(value, env),
         });
         onTestFinished(browserApi.close);
         const opening = browserApi.api.createConversation(
@@ -138,7 +137,6 @@ test("Given a device with an open Session, When its owner disconnects it while t
             computerId: owner.computerId,
             credential: browser,
             encryptionAccess: await runtime.encryptionAccess(AbortSignal.timeout(15_000)),
-            request: (value) => worker.fetch(value, cloud.environment()),
         });
         onTestFinished(browserApi.close);
         const window = await browserApi.api.createConversation(
@@ -215,7 +213,6 @@ async function sharedComputer(cloud: Awaited<ReturnType<typeof createIdentityFix
             computerId: owner.computerId,
             credential: token,
             encryptionAccess: await runtime.encryptionAccess(AbortSignal.timeout(15_000)),
-            request: (value) => worker.fetch(value, cloud.environment()),
         });
         onTestFinished(browserApi.close);
         const window = await browserApi.api.createConversation(

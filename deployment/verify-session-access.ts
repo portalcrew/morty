@@ -133,7 +133,6 @@ using ownerApi = {
         origin: origin.origin,
         computerId: owner.computerId,
         credential: owner.computerToken,
-        request: (request) => fetch(request),
         encryptionAccess,
     }),
     [Symbol.dispose]() {
@@ -171,7 +170,6 @@ using successorApi = {
         origin: origin.origin,
         computerId: owner.computerId,
         credential: successor,
-        request: (request) => fetch(request),
         encryptionAccess,
     }),
     [Symbol.dispose]() {

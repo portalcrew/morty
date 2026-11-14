@@ -20,11 +20,11 @@ export async function prepareTestMortyRelayBindings(workerEntryPoint?: string) {
         throw new Error("Expected the Relay Worker bundle");
     }
     const script = output.text;
-    return (allowedOrigins: ReadonlySet<string> = new Set(["*"])) => createRelayBindings(script, allowedOrigins);
+    return () => createRelayBindings(script);
 }
 
 /** Owns the real Cloudflare adapters for Computer/Worker integration scenarios. */
-function createCloudflareRuntime(script: string, allowedOrigins: ReadonlySet<string>) {
+function createCloudflareRuntime(script: string) {
     const options = {
         name: "morty-test-relay",
         modules: true,
@@ -35,7 +35,7 @@ function createCloudflareRuntime(script: string, allowedOrigins: ReadonlySet<str
             ANONYMOUS_CREATION_LIMITER: { namespace_id: "103001", simple: { limit: 1_000, period: 60 } },
         },
         bindings: {
-            MORTY_ALLOWED_ORIGINS: JSON.stringify([...allowedOrigins]),
+            MORTY_ALLOWED_ORIGINS: JSON.stringify(["*"]),
             MORTY_SESSION_SIGNING_SECRET: "local-development-only-session-signing-secret",
         },
         durableObjects: miniflareDurableObjects(new NodeURL("../wrangler.test.jsonc", import.meta.url)),
@@ -57,13 +57,13 @@ function createCloudflareRuntime(script: string, allowedOrigins: ReadonlySet<str
     };
 }
 
-export async function createTestMortyRelayBindings(allowedOrigins: ReadonlySet<string> = new Set(["*"])) {
+export async function createTestMortyRelayBindings() {
     const createBindings = await prepareTestMortyRelayBindings();
-    return createBindings(allowedOrigins);
+    return createBindings();
 }
 
-async function createRelayBindings(script: string, allowedOrigins: ReadonlySet<string>) {
-    const { runtime, configure } = createCloudflareRuntime(script, allowedOrigins);
+async function createRelayBindings(script: string) {
+    const { runtime, configure } = createCloudflareRuntime(script);
     try {
         const ready = await runtime.ready;
         const env = await runtime.getBindings();

@@ -153,7 +153,6 @@ export async function createFakeAgentHarnessRuntime(options: {
             origin: options.origin,
             computerId: pairing.computerId,
             credential: options.credential,
-            request: async (request) => await options.server.request(request),
             encryptionAccess: await (await ComputerEncryptionStore.open(directory, pairing.computerId, signal)).access(
                 signal,
             ),

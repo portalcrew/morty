@@ -332,7 +332,6 @@ test("Given the answer to a new conversation's Session creation is lost, When th
         computerId: fixture.computerId,
         credential: fixture.credential,
         encryptionAccess: await fixture.runtime.encryptionAccess(signal),
-        request: (value) => fetch(value),
     });
     onTestFinished(owner.close);
     const input = { harness: "codex", workspaceRef: ".", workspaceLabel: ".", configurations: [] };
@@ -393,7 +392,6 @@ test("Given a new conversation whose Session creation never reached the Computer
         computerId: fixture.computerId,
         credential: fixture.credential,
         encryptionAccess: await fixture.runtime.encryptionAccess(signal),
-        request: (value) => fetch(value),
     });
     onTestFinished(owner.close);
     const input = {
@@ -774,7 +772,6 @@ test("Given two browsers joined through links, When one disconnects the other br
         computerId: fixture.computerId,
         credential: other,
         encryptionAccess: await fixture.runtime.encryptionAccess(AbortSignal.timeout(15_000)),
-        request: (value) => fetchPublicApplication(value, cloud.environment()),
     });
     onTestFinished(browserApi.close);
     const window = await browserApi.api.createConversation(
