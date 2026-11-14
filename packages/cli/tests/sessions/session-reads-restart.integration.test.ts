@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AcpAgentDefinition } from "../../src/engine/acp/agent/agent-definition.ts";
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
-import { NullSessionObserver } from "../../src/engine/session/api/session-api.ts";
 import { MemorySessionEventStore } from "../../src/engine/session/history/session-event-store.ts";
 import { MemorySessionStore, SqliteSessionStore } from "../../src/engine/session/record/session-store.ts";
 import { AcpSessionTable } from "../../src/engine/storage/session/acp-session-table.ts";
@@ -45,7 +44,7 @@ async function controlledAgent(
 
 function createManager(store: MemorySessionStore | SqliteSessionStore): SessionManager {
     return new SessionManager({
-        observer: new NullSessionObserver(),
+        observer: {},
         store,
         adapters: acpAdapters,
         onSessionClosed: () => undefined,

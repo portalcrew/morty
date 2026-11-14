@@ -546,21 +546,16 @@ export class ExecutionReceipts {
         commandId: string,
         sessionTarget: NativeSessionTarget,
         commandJson: string,
-        legacyCommandJson: string,
         admits: () => boolean,
     ): RuntimeExecutionReceipt => {
         const commandHash = createHash("sha256").update(commandJson).digest("hex");
-        const legacyCommandHash = createHash("sha256").update(legacyCommandJson).digest("hex");
         const standing = this.#standing(commandId, sessionTarget);
         switch (standing.kind) {
             case "foreign":
             case "cancelled":
                 return { kind: "conflict" };
             case "retained":
-                if (
-                    standing.command.commandHash !== commandHash &&
-                    standing.command.commandHash !== legacyCommandHash
-                ) {
+                if (standing.command.commandHash !== commandHash) {
                     return { kind: "conflict" };
                 }
                 return {
@@ -570,9 +565,7 @@ export class ExecutionReceipts {
                     state: isUnsettled(standing.command.fate) ? "unsettled" : "settled",
                 };
             case "expired":
-                return standing.commandHash === commandHash || standing.commandHash === legacyCommandHash
-                    ? { kind: "expired" }
-                    : { kind: "conflict" };
+                return standing.commandHash === commandHash ? { kind: "expired" } : { kind: "conflict" };
             case "retryable":
             case "unseen":
                 break;

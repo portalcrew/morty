@@ -15,7 +15,6 @@ import type {
     SessionPermissionRespondCommand,
 } from "@morty-build/client/protocol";
 import type { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
-import type { BackgroundActivity } from "../../acp/agent/agent-lifecycle.ts";
 import type { PromptImageInput, PromptResourceInput } from "../../acp/client/prompt-content.ts";
 import type { AcpContentExternalizer } from "../../acp/content/content-externalizer.ts";
 import type { Adapter } from "../../acp/native-history/preview-contract.ts";
@@ -93,13 +92,9 @@ export type ElicitationResponseOptions = AnswerOf<SessionElicitationRespondComma
 export type PromptResult = AgentPromptResponse;
 
 export interface SessionObserver {
-    readonly onBackgroundActivity?: (source: object, activity: BackgroundActivity) => void;
+    /** A process's background work started or ended: the pool re-reads which processes are busy. */
+    readonly onBackgroundActivity?: () => void;
     readonly onSessionEvent?: (event: SessionLiveEvent) => Promise<void>;
-}
-
-export class NullSessionObserver implements SessionObserver {
-    readonly onBackgroundActivity = (_source: object, _activity: BackgroundActivity): void => {};
-    readonly onSessionEvent = (_event: SessionLiveEvent): Promise<void> => Promise.resolve();
 }
 
 export interface SessionConfigurationSnapshot {

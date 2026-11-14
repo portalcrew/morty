@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
 import { RuntimeLocalContext } from "../../src/engine/runtime/config.ts";
-import { NullSessionObserver } from "../../src/engine/session/api/session-api.ts";
 import { MemorySessionStore } from "../../src/engine/session/record/session-store.ts";
 import { systemTimer } from "../../src/engine/util/timer.ts";
 import { acpAdapters } from "../support/acp-adapters.ts";
@@ -19,7 +18,7 @@ import { fakeAgent, fakeAgentPath, RecordingObserver } from "./acp-feature-fixtu
 describe("acp commands environment", () => {
     it("Given an ACP Agent has not advertised commands, When Morty prepares a session, Then it does not invent compact", async () => {
         const manager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,

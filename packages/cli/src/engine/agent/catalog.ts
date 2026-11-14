@@ -5,14 +5,6 @@ import { SerialTaskQueue } from "../util/serial-task-queue.ts";
 /** The launch definition of a cataloged Agent, as the computer names it. */
 export type CatalogAgent = AcpAgentDefinition;
 
-export class LocalAgentCatalogSnapshot {
-    readonly agents: readonly AcpAgentDefinition[];
-
-    constructor(agents: readonly AcpAgentDefinition[]) {
-        this.agents = Object.freeze([...agents]);
-    }
-}
-
 class LocalAgentCatalogError extends OperationError {
     constructor() {
         super("agent_not_ready", "The requested local Agent is not ready");
@@ -21,15 +13,15 @@ class LocalAgentCatalogError extends OperationError {
 }
 
 export class LocalAgentCatalog {
-    #snapshot: LocalAgentCatalogSnapshot;
+    #agents: readonly AcpAgentDefinition[];
     readonly #updates = new SerialTaskQueue();
 
     constructor(agents: readonly AcpAgentDefinition[]) {
-        this.#snapshot = this.validate(agents);
+        this.#agents = this.validate(agents);
     }
 
     readonly find = (harness: string): AcpAgentDefinition => {
-        for (const agent of this.#snapshot.agents) {
+        for (const agent of this.#agents) {
             if (agent.harness === harness) {
                 return agent;
             }
@@ -37,30 +29,27 @@ export class LocalAgentCatalog {
         throw new LocalAgentCatalogError();
     };
 
-    readonly read = (): LocalAgentCatalogSnapshot => this.#snapshot;
+    readonly read = (): readonly AcpAgentDefinition[] => this.#agents;
 
     /** Serializes replacements and publication; a failed publication restores only its own prior snapshot. */
     readonly replaceAndPublish = async (
         build: (current: readonly CatalogAgent[]) => readonly CatalogAgent[],
         publish: (signal: AbortSignal) => Promise<void>,
         signal: AbortSignal,
-    ): Promise<LocalAgentCatalogSnapshot> => {
-        return await this.#updates.run(async (updateSignal) => {
-            const previous = this.#snapshot;
-            const next = this.validate(build(previous.agents));
-            this.#snapshot = next;
+    ): Promise<void> => {
+        await this.#updates.run(async (updateSignal) => {
+            const previous = this.#agents;
+            this.#agents = this.validate(build(previous));
             try {
                 await publish(updateSignal);
             } catch (error) {
-                this.#snapshot = previous;
+                this.#agents = previous;
                 throw error;
             }
-            // Return this publication's snapshot, not a later writer's catalog.
-            return next;
         }, signal);
     };
 
-    private readonly validate = (agents: readonly AcpAgentDefinition[]): LocalAgentCatalogSnapshot => {
+    private readonly validate = (agents: readonly AcpAgentDefinition[]): readonly AcpAgentDefinition[] => {
         const identifiers = new Set<string>();
         for (const agent of agents) {
             if (identifiers.has(agent.harness)) {
@@ -68,6 +57,6 @@ export class LocalAgentCatalog {
             }
             identifiers.add(agent.harness);
         }
-        return new LocalAgentCatalogSnapshot(agents);
+        return Object.freeze([...agents]);
     };
 }

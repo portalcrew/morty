@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { expect, test, vi } from "vitest";
 import { harnessAdapters } from "../../src/engine/acp/adapter/registry.ts";
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
-import { NullSessionObserver } from "../../src/engine/session/api/session-api.ts";
 import { MemorySessionStore } from "../../src/engine/session/record/session-store.ts";
 import { systemTimer } from "../../src/engine/util/timer.ts";
 import { testAgentDefinition } from "../support/agent-definition.ts";
@@ -17,7 +16,7 @@ test("Given Codex initialization fails once, When the user creates a conversatio
     const directory = await mkdtemp(join(tmpdir(), "morty-codex-initialize-"));
     const command = join(directory, "codex.mjs");
     const sessions = new SessionRuntimeFixture({
-        observer: new NullSessionObserver(),
+        observer: {},
         store: new MemorySessionStore(),
         adapters: harnessAdapters,
         onSessionClosed: () => undefined,

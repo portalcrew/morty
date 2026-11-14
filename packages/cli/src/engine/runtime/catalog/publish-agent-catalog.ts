@@ -70,9 +70,8 @@ export async function publishAgentCatalog(config: RuntimeConfig, signal: AbortSi
     signal.throwIfAborted();
     const timeoutSignal = AbortSignal.timeout(CATALOG_UPDATE_TIMEOUT_MILLISECONDS);
     const requestSignal = AbortSignal.any([signal, timeoutSignal]);
-    const catalog = config.catalog.read();
     const body = JSON.stringify({
-        agents: catalog.agents.map((agent) => ({
+        agents: config.catalog.read().map((agent) => ({
             agentPath: agent.agentIdentity.requestedPath,
             agentVersion: agent.agentVersion,
             capabilities: agent.capabilities,

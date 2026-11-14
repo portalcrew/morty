@@ -1,7 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
-import { NullSessionObserver } from "../../src/engine/session/api/session-api.ts";
 import { MemorySessionStore } from "../../src/engine/session/record/session-store.ts";
 import { systemTimer } from "../../src/engine/util/timer.ts";
 import { acpAdapters } from "../support/acp-adapters.ts";
@@ -17,7 +16,7 @@ const fakeAgentPath = fileURLToPath(new URL("./fixtures/acp-peer.ts", import.met
 describe("Agent setting capabilities", () => {
     it("Given an Agent reports its reasoning effort as the provider default, When a session is prepared, Then Morty keeps the effort setting with that current value", async () => {
         const manager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
@@ -95,7 +94,7 @@ describe("Agent setting capabilities", () => {
 
     it("Given an Agent does not expose adjustable reasoning effort, When a session is prepared, Then Morty does not invent an effort setting", async () => {
         const manager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
@@ -156,7 +155,7 @@ describe("Agent setting capabilities", () => {
 
     it("Given Pi exposes no approval or sandbox setting, When its session is prepared, Then Morty exposes no synthetic execution control", async () => {
         const manager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
@@ -216,7 +215,7 @@ describe("Agent setting capabilities", () => {
 
     it("Given an Agent acknowledges a setting without applying it, When Morty configures the session, Then the Turn is rejected", async () => {
         const manager = new SessionManager({
-            observer: new NullSessionObserver(),
+            observer: {},
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,

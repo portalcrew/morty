@@ -199,7 +199,7 @@ export class AgentSession {
             onBackgroundActivity: (activity) => {
                 const previous = this.#backgroundActivity;
                 this.#backgroundActivity = activity;
-                this.#observer.onBackgroundActivity?.(this, activity);
+                this.#observer.onBackgroundActivity?.();
                 if (previous !== "none" && activity === "none") {
                     // Background work may have appended to native history on this process's behalf.
                     void this.#recordNativeHistoryRevision();
