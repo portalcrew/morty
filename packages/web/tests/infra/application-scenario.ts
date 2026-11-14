@@ -48,15 +48,23 @@ export async function openAgentModelPicker(app: TestApp): Promise<void> {
     );
 }
 
+/** The message composer once it accepts input. */
+export async function readyComposer(app: TestApp): Promise<HTMLTextAreaElement> {
+    const composer = await app.queryElementByTestId(
+        dataTestId.messageComposer,
+        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
+    );
+    if (!(composer instanceof HTMLTextAreaElement)) {
+        throw new Error("Expected the message composer");
+    }
+    return composer;
+}
+
 export async function sendPrompt(app: TestApp, composer: HTMLElement, prompt: string): Promise<void> {
     if (!(composer instanceof HTMLTextAreaElement)) {
         throw new Error("Expected the message composer to be a textarea");
     }
-    const readyComposer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
-    await app.user.click(readyComposer);
+    await app.user.click(await readyComposer(app));
     await app.user.paste(prompt);
     const send = await app.waitForView(() => {
         const element = app.elementByTestId(dataTestId.sendMessage);

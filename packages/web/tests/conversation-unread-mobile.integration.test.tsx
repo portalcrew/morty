@@ -2,7 +2,7 @@ import { getByRole } from "@testing-library/dom";
 import type { DetachedWindowAPI } from "happy-dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 
 declare global {
@@ -25,10 +25,7 @@ test("Given a reply finished in another session on a phone, When the user looks 
         if (daemon === null) {
             throw new Error("Expected a connected controlled Agent Runtime");
         }
-        const composer = await app.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        const composer = await readyComposer(app);
         await sendPrompt(app, composer, HELD_PROMPT);
         await app.waitForView(() =>
             expect(

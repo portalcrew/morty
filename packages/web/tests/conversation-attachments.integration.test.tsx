@@ -2,7 +2,7 @@ import { fireEvent, getAllByRole, getByLabelText, getByRole, queryByRole } from 
 import { act } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 
 async function renderedImageBytes(sources: readonly (string | null)[]): Promise<readonly Uint8Array[]> {
@@ -189,10 +189,7 @@ test("Given an existing Session draft, When Chat remounts during an attachment r
     await app.waitForView(() => getByRole(dialog, "heading", { name: "Native draft-lifetime" }));
     await app.user.click(getByRole(dialog, "button", { name: "Open" }));
     await app.waitForView(() => expect(queryByRole(document.body, "dialog", { name: "Open Session" })).toBeNull());
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     await app.user.click(composer);
     await app.user.paste("Keep this unsent draft");
     const input = getByLabelText(document.body, "Choose attachments");
@@ -208,10 +205,7 @@ test("Given an existing Session draft, When Chat remounts during an attachment r
         app.remount();
     });
     await app.waitForView(() => getByRole(document.body, "heading", { name: "Native draft-lifetime" }));
-    const restored = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const restored = await readyComposer(app);
     if (!(restored instanceof HTMLTextAreaElement)) {
         throw new Error("Expected the message composer");
     }
@@ -224,10 +218,7 @@ test("Given an existing Session draft, When Chat remounts during an attachment r
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     expect(queryByRole(document.body, "list", { name: "Attachments" })).toBeNull();
     await app.user.click(await app.queryElementByTestId(dataTestId.managedConversation));
-    const reopened = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const reopened = await readyComposer(app);
     if (!(reopened instanceof HTMLTextAreaElement)) {
         throw new Error("Expected the reopened message composer");
     }

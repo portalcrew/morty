@@ -1,20 +1,9 @@
 import { queryAllByRole } from "@testing-library/dom";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { refreshSessions, sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, refreshSessions, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./support/chat-worker.ts";
-
-async function readyComposer(app: TestApp): Promise<HTMLTextAreaElement> {
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
-    if (!(composer instanceof HTMLTextAreaElement)) {
-        throw new Error("Expected the message composer");
-    }
-    return composer;
-}
 
 function directoryEntry(app: TestApp, title: string): HTMLElement | undefined {
     return app.elementsByTestId(dataTestId.managedConversation).find((entry) => entry.textContent?.includes(title));

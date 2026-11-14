@@ -10,7 +10,7 @@ import { act } from "@testing-library/react";
 import { flushSync } from "react-dom";
 import { expect, onTestFinished, test, vi } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./support/chat-worker.ts";
@@ -110,10 +110,7 @@ test("Given a rejected submission after an earlier failure, When another viewer'
         expect(getByRole(app.elementByTestId(dataTestId.queuedMessage), "alert").textContent).toBeTruthy();
     });
     const other = await app.openViewer();
-    const otherComposer = await other.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const otherComposer = await readyComposer(other);
     app.transport.disconnect();
     await app.waitForView(() =>
         expect(getByRole(form, "button", { name: "Send message" })).toHaveProperty("disabled", true),
@@ -285,14 +282,7 @@ test("Given a stopped turn whose messages span two history pages, When I reopen 
     await app.waitForView(() => expect(stoppedNotices()).toHaveLength(1));
     await app.waitForView(() => expect(app.optionalElementByTestId(dataTestId.sessionStatus)).toBeNull());
     const secondPrompt = "hold reasoning only";
-    await sendPrompt(
-        app,
-        await app.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        ),
-        secondPrompt,
-    );
+    await sendPrompt(app, await readyComposer(app), secondPrompt);
     await daemon.continueReply(secondPrompt, { outcome: "complete", output: reply("Turn two") });
     await app.waitForView(() => expect(document.body.textContent).toContain("Turn two part 19."));
     await app.waitForView(() => expect(app.optionalElementByTestId(dataTestId.sessionStatus)).toBeNull());

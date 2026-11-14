@@ -1,14 +1,11 @@
 import { getByRole } from "@testing-library/dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { openAgentModelPicker, sendPrompt } from "./infra/application-scenario.ts";
+import { openAgentModelPicker, readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 
 async function openConfiguredConversation(app: TestApp, reply: string): Promise<void> {
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     await sendPrompt(app, composer, "Keep my selected model");
     await app.waitForView(() =>
         expect(getByRole(document.body, "log", { name: "Messages" }).textContent).toContain(reply),
@@ -53,10 +50,7 @@ test("Given a configured conversation, When the user reopens it, Then the conver
     await openConfiguredConversation(app, "Settings Agent: Keep my selected model");
 
     const reloaded = await app.reload();
-    const composer = await reloaded.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(reloaded);
     expect(reloaded.elementByTestId(dataTestId.agentConfiguration).textContent).toContain("Test Large");
     await sendPrompt(reloaded, composer, "Continue on this Computer");
     await reloaded.waitForView(() =>
@@ -74,10 +68,7 @@ test("Given the Agent changed its model during a turn and the user then picked a
     if (app.daemon === null) {
         throw new Error("Expected the connected Computer");
     }
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     // The Agent switches its own model during a turn, as Claude Code does on entering plan mode.
     await sendPrompt(app, composer, "hold after first delta");
     await app.daemon.continueReply("hold after first delta", {

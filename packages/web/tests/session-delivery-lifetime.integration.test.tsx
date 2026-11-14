@@ -1,7 +1,7 @@
 import { getByLabelText, getByRole, queryAllByLabelText, queryByRole } from "@testing-library/dom";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { refreshSessions, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
+import { readyComposer, refreshSessions, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./support/chat-worker.ts";
@@ -359,10 +359,7 @@ test("Given a message whose file is still uploading, When I switch to New Sessio
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Look at this file");
     await app.waitForView(() => expect(left).toBe(true));
     observer.disconnect();
-    await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    await readyComposer(app);
 
     await app.user.click(sessionEntry(app, "Session that sends a file"));
     await app.waitForView(() => {

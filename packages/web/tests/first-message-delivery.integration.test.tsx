@@ -2,7 +2,7 @@ import { resolveObjectURL } from "node:buffer";
 import { getByLabelText, getByRole, queryByLabelText, queryByRole } from "@testing-library/dom";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 
 const REMOVE_ATTACHMENT = 'button[aria-label="Remove notes.json"]';
@@ -11,10 +11,7 @@ test("Given a first prompt with an attachment, When it creates the conversation,
     timeout: 30_000,
 }, async () => {
     const app = await createTestApp({ connectAgent: true });
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     await app.user.upload(
         getByLabelText(document.body, "Choose attachments"),
         new File(["Attachment contents"], "notes.json", { type: "text/plain" }),
@@ -71,10 +68,7 @@ test("Given an attachment upload is rejected before turn submission, When I send
     timeout: 30_000,
 }, async () => {
     const app = await createTestApp({ connectAgent: true });
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     const name = `${"notes".repeat(101)}.json`;
     await app.user.upload(
         getByLabelText(document.body, "Choose attachments"),
@@ -107,10 +101,7 @@ test("Given my message whose attachment upload was rejected, When I discard it, 
     timeout: 30_000,
 }, async () => {
     const app = await createTestApp({ connectAgent: true });
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     const name = `${"notes".repeat(101)}.json`;
     await app.user.upload(
         getByLabelText(document.body, "Choose attachments"),

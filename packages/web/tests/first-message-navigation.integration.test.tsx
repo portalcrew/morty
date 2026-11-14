@@ -1,7 +1,7 @@
 import { getByRole } from "@testing-library/dom";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 
 function answered(app: TestApp, text: string): boolean {
@@ -33,10 +33,7 @@ for (const moment of moments) {
         timeout: 60_000,
     }, async () => {
         const app = await createTestApp({ connectAgent: true });
-        const composer = await app.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        const composer = await readyComposer(app);
         await sendPrompt(app, composer, "Keep the earlier conversation");
         await app.waitForView(() => expect(answered(app, "Codex turn 1: Keep the earlier conversation")).toBe(true));
         await app.waitForView(() => expect(app.optionalElementByTestId(dataTestId.sessionStatus)).toBeNull());
@@ -58,10 +55,7 @@ for (const moment of moments) {
         });
         observer.observe(document.body, { childList: true, subtree: true, characterData: true });
         onTestFinished(() => observer.disconnect());
-        const draft = await app.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        const draft = await readyComposer(app);
         await sendPrompt(app, draft, prompt);
         await app.waitForView(() => expect(switched).toBe(true));
         observer.disconnect();
@@ -98,10 +92,7 @@ test("Given a first prompt whose conversation is still being created, When I sta
     });
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     onTestFinished(() => observer.disconnect());
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     await sendPrompt(app, composer, prompt);
     await app.waitForView(() => expect(restarted).toBe(true));
     observer.disconnect();

@@ -1,7 +1,7 @@
 import { getByRole } from "@testing-library/dom";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 
 function harnessProduct(app: TestApp): string | null {
@@ -11,10 +11,7 @@ function harnessProduct(app: TestApp): string | null {
 }
 
 async function waitForComposer(app: TestApp): Promise<void> {
-    await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    await readyComposer(app);
 }
 
 test("Given the draft agent settings are still loading, When they settle, Then the header stands in a skeleton for the agent mark instead of a spinner", {

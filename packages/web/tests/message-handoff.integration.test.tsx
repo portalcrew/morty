@@ -2,7 +2,7 @@ import { RequestError } from "@agentclientprotocol/sdk/unstable";
 import { getByLabelText, getByRole, queryByRole } from "@testing-library/dom";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./support/chat-worker.ts";
 
@@ -24,10 +24,7 @@ test("Given a slow Session creation, When I send text and an attachment and writ
             },
         },
     });
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     await app.user.upload(
         getByLabelText(document.body, "Choose attachments"),
         new File(["First attachment"], "first.json", { type: "text/plain" }),
@@ -92,10 +89,7 @@ test.each(["refused", "failed"] as const)(
                 },
             },
         });
-        const composer = await app.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        const composer = await readyComposer(app);
         await app.user.click(composer);
         await app.user.paste("Retry this original message");
         const send = await app.waitForView(() => {

@@ -1,6 +1,6 @@
 import type { DetachedWindowAPI } from "happy-dom";
 import { afterEach, expect, test } from "vitest";
-import { dataTestId } from "../src/data-testid.ts";
+import { readyComposer } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 
 declare global {
@@ -23,10 +23,7 @@ function openKeyboard(): void {
 
 async function openComposer() {
     const app = await createTestApp({ connectAgent: true });
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     const form = composer.closest("form");
     if (form === null) {
         throw new Error("The composer is not inside a form");

@@ -1,6 +1,6 @@
 import { getByRole, queryByRole } from "@testing-library/dom";
 import { expect, test } from "vitest";
-import { dataTestId } from "../src/data-testid.ts";
+import { readyComposer } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 
@@ -9,10 +9,7 @@ test("Given a connected computer, When Morty revokes its Computer, Then the page
 }, async () => {
     const clock = new TestClock("2026-11-09T08:00:00Z");
     const app = await createTestApp({ connectAgent: true, clock });
-    await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    await readyComposer(app);
     if (app.daemon === null) {
         throw new Error("Expected the connected Computer");
     }

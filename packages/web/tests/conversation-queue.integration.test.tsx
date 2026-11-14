@@ -6,7 +6,7 @@ import { act } from "@testing-library/react";
 import * as v from "valibot";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./support/chat-worker.ts";
 
@@ -500,10 +500,7 @@ test("Given two queued submissions are accepted before their snapshot arrives, W
     const app = await createTestApp({ environment, connectAgent: true });
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "wait for steering");
     await app.queryElementByTestId(dataTestId.sessionStatus);
-    await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    await readyComposer(app);
     await app.waitForView(() =>
         expect(getByLabelText(document.body, "Choose attachments")).toHaveProperty("disabled", false),
     );

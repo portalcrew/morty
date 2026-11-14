@@ -13,7 +13,7 @@ import { render } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { renderRegisteredTool } from "../src/components/chat/tools/tool-renderer-registry.tsx";
 import { dataTestId } from "../src/data-testid.ts";
-import { expandProcessSections, sendPrompt } from "./infra/application-scenario.ts";
+import { expandProcessSections, readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 
 test("Given the agent references external content, When the user reads the response, Then Chat loads and renders the referenced file", {
@@ -300,10 +300,7 @@ test("Given the agent sends separate reasoning messages, When the user reads the
     expect(thinking.querySelector("strong")).toBeNull();
     expect(thinking.querySelector("code")).toBeNull();
 
-    await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    await readyComposer(app);
     // A reasoning-only segment has no completion state of its own: once the
     // turn finishes, its summary must stop shimmering.
     expect(document.body.querySelector(".animate-loading-text-shimmer")).toBeNull();
