@@ -53,7 +53,7 @@ export type FormElicitation = Extract<ElicitationInteraction, { readonly mode: "
  * The first required choice the answers leave empty. A select is not a native form control, so the form's own required
  * check never covers it.
  */
-export function missingRequiredChoice(
+function missingRequiredChoice(
     fields: readonly SessionElicitationField[],
     answers: Readonly<Record<string, ElicitationFieldValue>>,
 ): SessionElicitationField | undefined {
@@ -277,7 +277,7 @@ function scopeLabel(kind: PermissionOption["kind"]): string {
 }
 
 /** What a permission option's button and its recorded decision read. */
-export function permissionOptionLabel(option: PermissionOption): string {
+function permissionOptionLabel(option: PermissionOption): string {
     if (genericAnswerNames.has(option.name.trim().toLowerCase())) {
         return scopeLabel(option.kind);
     }
