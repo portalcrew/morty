@@ -1,6 +1,7 @@
 import { isDirectoryPath, isIdentifier, MAX_WORKSPACE_PATH_LENGTH } from "@morty-build/client/protocol";
 import * as v from "valibot";
 import { identityScopeSchema } from "../identity/identity-scope-url.ts";
+import { jsonStorageEntry, type StorageEntry, scopedKey, stringStorageEntry } from "../storage-entry.ts";
 
 /**
  * Central management of every value the web application persists in browser
@@ -14,54 +15,9 @@ import { identityScopeSchema } from "../identity/identity-scope-url.ts";
  * - `encode` failure skips the write entirely.
  */
 
-export interface LocalStorageEntry<T> {
-    readonly key: string;
-    readonly schema: v.GenericSchema<T>;
-    readonly encode: (value: T) => string;
-    readonly decode: (raw: string) => T | null;
-}
-
-function decodeJsonWith<T>(schema: v.GenericSchema<T>, raw: string): T | null {
-    try {
-        const parsed = v.safeParse(schema, JSON.parse(raw));
-        return parsed.success ? parsed.output : null;
-    } catch {
-        return null;
-    }
-}
-
-/** Entry whose value is stored as JSON, encoded with `JSON.stringify`. */
-function jsonLocalStorageEntry<T>(options: {
-    readonly key: string;
-    readonly schema: v.GenericSchema<T>;
-}): LocalStorageEntry<T> {
-    return {
-        key: options.key,
-        schema: options.schema,
-        encode: (value) => JSON.stringify(v.parse(options.schema, value)),
-        decode: (raw) => decodeJsonWith(options.schema, raw),
-    };
-}
-
-/** Entry whose value is stored as the raw string itself. */
-function stringLocalStorageEntry(options: {
-    readonly key: string;
-    readonly schema: v.GenericSchema<string>;
-}): LocalStorageEntry<string> {
-    return {
-        key: options.key,
-        schema: options.schema,
-        encode: (value) => v.parse(options.schema, value),
-        decode: (raw) => {
-            const parsed = v.safeParse(options.schema, raw);
-            return parsed.success ? parsed.output : null;
-        },
-    };
-}
-
 export const centralLocalStorage = {
     /** Reads and decodes; null when absent, undecodable, or storage is unavailable. */
-    read: <T>(entry: LocalStorageEntry<T>): T | null => {
+    read: <T>(entry: StorageEntry<T>): T | null => {
         let raw: string | null;
         try {
             raw = window.localStorage.getItem(entry.key);
@@ -71,13 +27,13 @@ export const centralLocalStorage = {
         return raw === null ? null : entry.decode(raw);
     },
     /** Removes the stored value. */
-    remove: (entry: LocalStorageEntry<never> | { readonly key: string }): void => {
+    remove: (entry: StorageEntry<never> | { readonly key: string }): void => {
         try {
             window.localStorage.removeItem(entry.key);
         } catch {}
     },
     /** Encodes and stores; a failed encode or unavailable storage skips the write. */
-    write: <T>(entry: LocalStorageEntry<T>, value: T): boolean => {
+    write: <T>(entry: StorageEntry<T>, value: T): boolean => {
         try {
             window.localStorage.setItem(entry.key, entry.encode(value));
             return true;
@@ -87,14 +43,10 @@ export const centralLocalStorage = {
     },
 };
 
-function scopedKey(prefix: string, ...parts: readonly string[]): string {
-    return `${prefix}${parts.map((part) => encodeURIComponent(part)).join(":")}`;
-}
-
 const settingIdentifierSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
 
 export const computerEncryptionEntry = (computerId: string) =>
-    jsonLocalStorageEntry({
+    jsonStorageEntry({
         key: scopedKey("morty:computer-encryption:v1:", computerId),
         schema: v.pipe(
             v.strictObject({
@@ -131,7 +83,7 @@ export const MAX_AGENT_SETTING_PREFERENCES = 100;
  * choice as a kind and a value; it is no longer read either.
  */
 export const lastAgentSettingsEntry = (computerId: string, harness: string) =>
-    jsonLocalStorageEntry({
+    jsonStorageEntry({
         key: scopedKey("morty:last-agent-settings:v3:", computerId, harness),
         schema: v.pipe(
             v.array(agentSettingPreferenceSchema),
@@ -153,8 +105,8 @@ export const lastAgentSettingsEntry = (computerId: string, harness: string) =>
  * The harness a computer last worked in, so a new draft continues there instead of
  * falling back to whichever connected Agent happens to be listed first.
  */
-export const lastHarnessEntry = (computerId: string): LocalStorageEntry<string> =>
-    stringLocalStorageEntry({
+export const lastHarnessEntry = (computerId: string): StorageEntry<string> =>
+    stringStorageEntry({
         key: scopedKey("morty:last-harness:v1:", computerId),
         schema: settingIdentifierSchema,
     });
@@ -166,8 +118,8 @@ export const lastHarnessEntry = (computerId: string): LocalStorageEntry<string> 
 const directorySchema = v.custom<string>(isDirectoryPath, "Invalid directory path");
 const directoryLabelSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(MAX_WORKSPACE_PATH_LENGTH));
 
-export const lastCwdEntry = (computerId: string, harness: string): LocalStorageEntry<string> =>
-    stringLocalStorageEntry({
+export const lastCwdEntry = (computerId: string, harness: string): StorageEntry<string> =>
+    stringStorageEntry({
         key: scopedKey("morty:last-cwd:", computerId, harness),
         schema: directorySchema,
     });
@@ -179,7 +131,7 @@ const recentCwdPreferenceSchema = v.pipe(
 export type RecentCwdPreference = v.InferOutput<typeof recentCwdPreferenceSchema>;
 
 export const recentCwdEntry = (computerId: string) =>
-    jsonLocalStorageEntry({
+    jsonStorageEntry({
         key: scopedKey("morty:recent-cwd:", computerId),
         schema: v.pipe(
             v.array(recentCwdPreferenceSchema),
@@ -204,7 +156,7 @@ export const MAX_REMEMBERED_COMPUTERS = 10;
 const credentialComputerIdSchema = v.pipe(v.string(), v.regex(/^prj_(wn|ap|an|as)_01_[A-Za-z0-9_-]{24}$/u));
 
 /** Access membership and credentials commit together; presentation never writes this entry. */
-export const browserAccessEntry = jsonLocalStorageEntry({
+export const browserAccessEntry = jsonStorageEntry({
     key: "morty:browser-access:v2",
     schema: v.pipe(
         v.object({
@@ -249,7 +201,7 @@ export type RememberedComputer = v.InferOutput<typeof computerPreferenceSchema> 
 
 /** Preferences have no authority to add, replace or remove access. Each computer writes only its own preferences. */
 export const computerPreferenceEntry = (scope: { readonly computerId: string }) =>
-    jsonLocalStorageEntry({
+    jsonStorageEntry({
         key: scopedKey("morty:computer-preference:v2:", scope.computerId),
         schema: computerPreferenceSchema,
     });
@@ -274,8 +226,8 @@ export function readableComputer(value: unknown): RememberedComputer | null {
 // ---------------------------------------------------------------------------
 
 /** When the latest device this browser was told about joined the Computer; later joins are new to it. */
-export const linkedDevicesSeenEntry = (computerId: string): LocalStorageEntry<string> =>
-    stringLocalStorageEntry({
+export const linkedDevicesSeenEntry = (computerId: string): StorageEntry<string> =>
+    stringStorageEntry({
         key: scopedKey("morty:linked-devices-seen:v1:", computerId),
         schema: v.pipe(v.string(), v.isoTimestamp()),
     });
@@ -290,8 +242,8 @@ export interface AccessAcknowledgement {
 }
 
 /** What the user was already told about this browser's access, so it is not repeated for the same access. */
-export const accessAcknowledgedEntry = (computerId: string): LocalStorageEntry<AccessAcknowledgement> =>
-    jsonLocalStorageEntry({
+export const accessAcknowledgedEntry = (computerId: string): StorageEntry<AccessAcknowledgement> =>
+    jsonStorageEntry({
         key: scopedKey("morty:access-acknowledged:v1:", computerId),
         schema: v.object({
             expiresAt: v.pipe(v.string(), v.isoTimestamp()),

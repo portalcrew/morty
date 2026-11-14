@@ -232,10 +232,6 @@ function processSummary(
     const entries = items.flatMap((item) => (item.kind === "thinking" ? item.entries : []));
     const tools = entries.filter((entry) => entry.kind === "tool");
     return {
-        failed: tools.filter(
-            (entry) =>
-                entry.state.kind === "failed" || (entry.state.kind === "background" && entry.state.status === "failed"),
-        ).length,
         backgroundRunning: tools.filter((tool) => tool.state.kind === "background" && tool.state.status === "running")
             .length,
         backgroundUnknown: tools.filter((tool) => tool.state.kind === "background" && tool.state.status === "unknown")

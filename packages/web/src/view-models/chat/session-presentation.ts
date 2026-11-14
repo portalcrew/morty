@@ -20,6 +20,18 @@ export const COMPACTION_CHARACTER_LIMIT = 16 * 1024;
 
 export type SessionPresentationEvent = SessionEvent | SessionLiveEvent;
 
+/** The events of both lists once each, in first-seen order; where an event appears in both, `second` supplies it. */
+export function mergeEventsById<T extends { readonly eventId: string }>(
+    first: readonly T[],
+    second: readonly T[],
+): readonly T[] {
+    const events = new Map(first.map((event) => [event.eventId, event]));
+    for (const event of second) {
+        events.set(event.eventId, event);
+    }
+    return [...events.values()];
+}
+
 export type SessionText =
     | {
           readonly kind: "initial";

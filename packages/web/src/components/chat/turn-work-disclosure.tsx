@@ -15,7 +15,6 @@ export interface TurnWorkSummary {
     readonly backgroundRunning: number;
     readonly backgroundUnknown: number;
     readonly fileEdits: number;
-    readonly failed: number;
     readonly interrupted: number;
     readonly steps: number;
 }
