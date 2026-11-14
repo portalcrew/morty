@@ -1,5 +1,4 @@
 import { isComputerCredentialSuccessor } from "@morty-build/client/protocol";
-import type { ComputerAccess } from "../../../../contracts/relay/computer-authentication.ts";
 import { computerPairingStatus, computerRevokedAt } from "../../../../contracts/relay/computer-pairing-state.ts";
 import type {
     AgentDescriptor,
@@ -30,7 +29,7 @@ export interface PairingDirectoryInfrastructure {
     readonly store: ComputerRelayStore;
     readonly services: {
         readonly identities: ComputerIdentityService;
-        readonly computerAccounts: Pick<ComputerAccessService, "authorizeComputer" | "isActive">;
+        readonly computerAccounts: Pick<ComputerAccessService, "authorizeComputer">;
     };
 }
 
@@ -40,15 +39,6 @@ export class PairingDirectoryService {
     constructor(cx: PairingDirectoryInfrastructure) {
         this.#cx = cx;
     }
-
-    private readonly activeStorage = async (computerId: string, signal: AbortSignal) => {
-        const active = await this.#cx.services.computerAccounts.isActive(computerId, signal);
-        signal.throwIfAborted();
-        if (!active) {
-            throw new PairingDirectoryError("unauthorized", "The Computer is no longer active");
-        }
-        return this.#cx.store;
-    };
 
     private readonly identityStorage = async (credential: ComputerIdentityCredential, signal: AbortSignal) => {
         await this.#cx.services.identities.authenticate(credential, signal);
@@ -81,22 +71,21 @@ export class PairingDirectoryService {
         }
         // Only the daemon that saved a successor can present the retired credential with it. Another successor means
         // a copy of the credential connected first, so neither copy may keep the Computer.
-        const storage = await this.activeStorage(rotation.access.computerId, signal);
-        await storage.revokeComputer(Date.now(), signal);
+        await this.#cx.store.revokeComputer(Date.now(), signal);
         return rotation;
     };
 
-    readonly authorizeComputer = async (computerId: string, signal: AbortSignal): Promise<ComputerAccess> =>
+    readonly authorizeComputer = async (computerId: string, signal: AbortSignal): Promise<void> =>
         await this.#cx.services.computerAccounts.authorizeComputer(computerId, signal);
 
     private readonly decodeCreatedComputerPairing = async (
         row: ComputerPairingRow,
-        owner: ComputerAccess,
+        computerId: string,
         pairingKey: string,
         idempotencyKey: string,
         signal: AbortSignal,
     ) => {
-        const secrets = await deriveComputerPairingSecrets(pairingKey, owner.computerId, idempotencyKey);
+        const secrets = await deriveComputerPairingSecrets(pairingKey, computerId, idempotencyKey);
         const codeHash = await hashPairingCredential(secrets.pairingCode);
         const pollHash = await hashPairingCredential(secrets.pollToken);
         signal.throwIfAborted();
@@ -106,11 +95,7 @@ export class PairingDirectoryService {
                 "This pairing cannot be reused; reinstall Morty and create a new pairing",
             );
         }
-        return new CreatedComputerPairing(
-            new Date(row.expires_at).toISOString(),
-            secrets.pairingCode,
-            owner.computerId,
-        );
+        return new CreatedComputerPairing(new Date(row.expires_at).toISOString(), secrets.pairingCode, computerId);
     };
 
     /** Replays retain the original identity, secrets and deadline; retries keep the same key after an ambiguous failure. */
@@ -122,10 +107,10 @@ export class PairingDirectoryService {
     ): Promise<CreatedComputerPairing> => {
         const normalizedComputerId = validateIdentifier(computerId, "computer_id");
         const normalizedKey = validateIdentifier(idempotencyKey, "idempotency_key");
-        const owner = await this.authorizeComputer(normalizedComputerId, signal);
-        const storage = await this.activeStorage(owner.computerId, signal);
+        await this.authorizeComputer(normalizedComputerId, signal);
+        const storage = this.#cx.store;
         // The secrets derive from the request, so a retry presents the same hashes as the request it repeats.
-        const secrets = await deriveComputerPairingSecrets(pairingKey, owner.computerId, normalizedKey);
+        const secrets = await deriveComputerPairingSecrets(pairingKey, normalizedComputerId, normalizedKey);
         const now = Date.now();
         const expiresAt = now + PAIRING_LIFETIME_MILLISECONDS;
         let stored: Awaited<ReturnType<ComputerRelayStore["requestComputerPairing"]>>;
@@ -148,7 +133,13 @@ export class PairingDirectoryService {
         }
         switch (stored.kind) {
             case "existing":
-                return this.decodeCreatedComputerPairing(stored.request, owner, pairingKey, normalizedKey, signal);
+                return this.decodeCreatedComputerPairing(
+                    stored.request,
+                    normalizedComputerId,
+                    pairingKey,
+                    normalizedKey,
+                    signal,
+                );
             case "quota_exceeded":
                 throw new PairingDirectoryError(
                     "computer_quota_exceeded",
@@ -158,19 +149,18 @@ export class PairingDirectoryService {
                 return new CreatedComputerPairing(
                     new Date(expiresAt).toISOString(),
                     secrets.pairingCode,
-                    owner.computerId,
+                    normalizedComputerId,
                 );
         }
     };
 
     readonly readComputerPairing = async (computerId: string, signal: AbortSignal): Promise<PairingStatus> => {
-        const owner = await this.authorizeComputer(computerId, signal);
-        const storage = await this.activeStorage(owner.computerId, signal);
-        const row = await storage.readComputerPairing(signal);
+        await this.authorizeComputer(computerId, signal);
+        const row = await this.#cx.store.readComputerPairing(signal);
         if (row === null) {
             throw new PairingDirectoryError("pairing_not_found", "The Computer pairing request was not found");
         }
-        return computerPairingStatus(row, owner.computerId, Date.now());
+        return computerPairingStatus(row, computerId, Date.now());
     };
 
     private readonly redeemPairing = async (
@@ -189,7 +179,6 @@ export class PairingDirectoryService {
         if (pairing === null || computerId !== expectedComputerId) {
             throw new PairingDirectoryError("invalid_pairing_code", "The pairing code is invalid or expired");
         }
-        await this.#cx.services.computerAccounts.authorizeComputer(computerId, signal);
         const daemonToken = await deriveComputerDaemonToken(pairingCode, computerId, pairing.poll_token_hash);
         const claimed = await storage.claimPairing(
             {
@@ -229,24 +218,17 @@ export class PairingDirectoryService {
         computerId: string,
         signal: AbortSignal,
     ): Promise<readonly ComputerDescriptor[]> => {
-        const access = await this.authorizeComputer(computerId, signal);
-        const storage = await this.activeStorage(access.computerId, signal);
-        const runtimes = await storage.listComputers(signal);
+        await this.authorizeComputer(computerId, signal);
+        const runtimes = await this.#cx.store.listComputers(signal);
         return runtimes.map(
             (row) =>
-                new ComputerDescriptor(
-                    parseAgents(row.agents_json),
-                    row.computer_name,
-                    row.workspace_name,
-                    access.computerId,
-                ),
+                new ComputerDescriptor(parseAgents(row.agents_json), row.computer_name, row.workspace_name, computerId),
         );
     };
 
     readonly isComputerRevoked = async (computerId: string, signal: AbortSignal): Promise<boolean> => {
-        const access = await this.authorizeComputer(computerId, signal);
-        const storage = await this.activeStorage(access.computerId, signal);
-        const row = await storage.readComputer(signal);
+        await this.authorizeComputer(computerId, signal);
+        const row = await this.#cx.store.readComputer(signal);
         return row !== null && computerRevokedAt(row.revoked_at) !== null;
     };
 

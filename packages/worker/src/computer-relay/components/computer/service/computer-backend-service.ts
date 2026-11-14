@@ -51,15 +51,14 @@ export class ComputerBackendService {
         signal: AbortSignal,
     ) => await this.#sessionAccess.issue({ computerId: this.computerId, target }, lifetime, holder, signal);
     readonly clientControl = async (command: ClientControlCommand, signal: AbortSignal) => {
-        const access = await this.#context.services.pairings.authorizeComputer(this.computerId, signal);
-        return await this.operations.requestClientControl(access.computerId, command, signal);
+        await this.#context.services.pairings.authorizeComputer(this.computerId, signal);
+        return await this.operations.requestClientControl(this.computerId, command, signal);
     };
     readonly settings = async (command: AgentSettingsDiscoverCommandRouting, signal: AbortSignal) => {
         const computers = await this.#context.services.pairings.listComputers(this.computerId, signal);
         if (!computers.some((computer) => computer.computerId === this.computerId)) {
             throw new PairingDirectoryError("computer_access_denied", "This credential cannot access this Computer");
         }
-        const access = await this.#context.services.pairings.authorizeComputer(this.computerId, signal);
-        return await this.operations.requestAgentSettings(access.computerId, command, signal);
+        return await this.operations.requestAgentSettings(this.computerId, command, signal);
     };
 }

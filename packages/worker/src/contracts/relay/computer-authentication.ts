@@ -1,8 +1,4 @@
 import type { HttpError } from "../http-error.ts";
-export interface ComputerAccess {
-    readonly computerId: string;
-}
-
 export type ComputerAuthenticationErrorCode =
     | "computer_access_denied"
     | "credential_expired"
