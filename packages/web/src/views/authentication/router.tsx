@@ -1,6 +1,6 @@
 import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/react-router";
+import { useStore } from "zustand";
 import type { ContinueStoreApi } from "../../view-models/authentication/continue-store.ts";
-import { useExternalStore } from "../../view-models/external-store.ts";
 import type { MortyApplication } from "../../view-models/morty-application.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
 import { useMortyApplication } from "../application/application-context.tsx";
@@ -17,7 +17,7 @@ function ContinuePageLive({
 }) {
     // The application creates the redeem with itself; the page only
     // subscribes.
-    const { retry, enterMorty, state, diagnostics, continueHref } = useExternalStore(continuation);
+    const { retry, enterMorty, state, diagnostics, continueHref } = useStore(continuation);
     return (
         <>
             <ContinuePageContent continueHref={continueHref} enterMorty={enterMorty} retry={retry} state={state} />

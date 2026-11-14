@@ -11,6 +11,7 @@ export interface CallDefinition {
 }
 
 export interface ComputerCallEncoding extends ComputerCallTarget {
+    /** The resource under the Computer; empty for the Computer itself. */
     readonly path: string;
     readonly definition: CallDefinition;
     readonly body?: unknown;
@@ -24,14 +25,13 @@ export function encodeComputerCall({ origin, computerId, path, definition, body 
         endpoint: {
             ...definition,
             target: { kind: "computer", computerId },
-            url: new URL(`/morty/api/v1/${path}`, origin),
+            url: new URL(
+                `/morty/api/v1/computers/${encodeURIComponent(computerId)}${path === "" ? "" : `/${path}`}`,
+                origin,
+            ),
         },
         body: body === undefined ? null : JSON.stringify(body),
     };
-}
-
-export function encodeIdentityCall(input: ComputerCallEncoding): ApiRequest {
-    return encodeComputerCall({ ...input, path: `computers/${encodeURIComponent(input.computerId)}/${input.path}` });
 }
 
 export function encodeWorkerCall({

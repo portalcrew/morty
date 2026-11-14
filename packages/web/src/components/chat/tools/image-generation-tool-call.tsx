@@ -23,12 +23,11 @@ export function matchesImageGenerationToolCall(entry: ToolRendererProps["entry"]
     return entry.title === "Generate image" && entry.content.some((content) => content.type === "image");
 }
 
-export function ImageGenerationToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function ImageGenerationToolCall({ entry }: ToolRendererProps) {
     const prompt = promptFrom(entry.input);
     return (
         <ToolCallDisclosure
             ariaLabel={`Tool: ${entry.title}`}
-            autoOpen={autoOpen}
             icon={<ImageIcon aria-hidden="true" className="size-4 shrink-0" />}
             state={entry.state}
             title={entry.title}

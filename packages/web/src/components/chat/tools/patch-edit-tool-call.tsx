@@ -22,13 +22,13 @@ export function matchesPatchEditToolCall({ input }: ToolRendererProps["entry"]):
     return v.safeParse(inputSchema, parseJson(input)).success;
 }
 
-export function PatchEditToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function PatchEditToolCall({ entry }: ToolRendererProps) {
     const input = v.safeParse(inputSchema, parseJson(entry.input));
     if (!input.success) {
         return null;
     }
     return (
-        <EditToolPresentation autoOpen={autoOpen} entry={entry}>
+        <EditToolPresentation entry={entry}>
             <div className="overflow-hidden rounded-lg border border-black/7 bg-black/[0.025]">
                 <HighlightedCode code={input.output.patchText} language="diff" />
             </div>

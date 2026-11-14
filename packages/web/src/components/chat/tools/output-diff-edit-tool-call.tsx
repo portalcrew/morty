@@ -27,13 +27,13 @@ export function matchesOutputDiffEditToolCall({ output }: ToolRendererProps["ent
     return !isOversizedToolText(output) && v.safeParse(outputSchema, parseJson(output)).success;
 }
 
-export function OutputDiffEditToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function OutputDiffEditToolCall({ entry }: ToolRendererProps) {
     const output = v.safeParse(outputSchema, parseJson(entry.output));
     if (!output.success) {
         return null;
     }
     return (
-        <EditToolPresentation autoOpen={autoOpen} entry={entry}>
+        <EditToolPresentation entry={entry}>
             <FileDiffList diffs={fileDiffsWithoutRichContent(output.output, entry)} />
         </EditToolPresentation>
     );

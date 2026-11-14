@@ -25,7 +25,6 @@ import { DesktopChatLayout } from "../../components/utils/desktop-chat-layout.ts
 import { FollowLatestScrollArea } from "../../components/utils/follow-latest-scroll-area.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
-import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import type { DaemonDiagnosticsSource } from "../../services/diagnostics/browser-diagnostics.ts";
 import {
     type BotChatHomeStore,
@@ -79,25 +78,6 @@ function PreSessionFailure({
 }
 
 type BotChatHomeProps = {
-    readonly requests: Pick<
-        BotChatApi,
-        | "archiveManagedSession"
-        | "computerConfiguration"
-        | "directory"
-        | "readComputerPairing"
-        | "waitForComputerPairingChange"
-        | "waitForComputerConfigurationChange"
-        | "nativeSessions"
-        | "nativeSession"
-        | "managedSessions"
-        | "managedSession"
-        | "connectSession"
-        | "createConversation"
-        | "conversationSession"
-        | "agentSettings"
-        | "daemonDiagnostics"
-        | "networkDiagnostic"
-    >;
     readonly workspace: ChatWorkspace;
 };
 
@@ -168,7 +148,7 @@ export function BotChatHome(props: BotChatHomeProps) {
     return <DesktopChatLayout>{(desktop) => <BotChatHomeLayout {...props} desktop={desktop} />}</DesktopChatLayout>;
 }
 
-function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & { readonly desktop: boolean }) {
+function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly desktop: boolean }) {
     const store = workspace.home;
     const model = useStore(store);
     const computer = useStore(workspace.computer);
@@ -216,8 +196,8 @@ function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & 
         harness: activeConversationTarget?.harness ?? null,
         sessionId: activeConversationTarget?.sessionId ?? null,
         context: () => chatDiagnostics(workspace),
-        read: (signal) => requests.daemonDiagnostics(signal),
-        readNetwork: (signal) => requests.networkDiagnostic(signal),
+        read: (signal) => workspace.requests.daemonDiagnostics(signal),
+        readNetwork: (signal) => workspace.requests.networkDiagnostic(signal),
     };
     const reportButton = (
         <BugReportButton appearance="icon" daemonSource={sessionDiagnostics} dialog={workspace.bugReportDialog} />
@@ -259,7 +239,6 @@ function BotChatHomeLayout({ requests, workspace, desktop }: BotChatHomeProps & 
                 activeTarget={activeConversationTarget}
                 connectionStatus={connectionStatus}
                 onConnectAgent={computer.pairing.kind === "unpaired" ? computer.pairingDialog.getState().show : null}
-                requests={requests}
                 onOpen={(session) => openManaged(session.target)}
                 onNewConversation={newConversation}
             />

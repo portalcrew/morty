@@ -1,5 +1,6 @@
 import { Bug, ChevronDown, X } from "lucide-react";
 import { Tooltip } from "radix-ui";
+import { useStore } from "zustand";
 import { AttachCancelBoundary, HiddenFileInput } from "../../components/diagnostics/attach-controls.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
 import {
@@ -20,7 +21,6 @@ import {
     type BugReportStoreApi,
     bugReportImageAccept,
 } from "../../view-models/bug-report-store.ts";
-import { useExternalStore } from "../../view-models/external-store.ts";
 import { mobileDrawerCardRowClassName } from "../chat/computer-switcher.tsx";
 
 const appearances = {
@@ -98,8 +98,8 @@ export function BugReportButton({
  * unmounts when loading completes.
  */
 export function BugReportDialogHost({ dialog }: { readonly dialog: BugReportDialogStore }) {
-    const open = useExternalStore(dialog, (state) => state.open);
-    const report = useExternalStore(dialog, (state) => state.report);
+    const open = useStore(dialog, (state) => state.open);
+    const report = useStore(dialog, (state) => state.report);
     return open && report !== null ? <BugReportDialog dialog={dialog} key="bug-report-dialog" report={report} /> : null;
 }
 
@@ -144,7 +144,7 @@ function BugReportDialog({
 }) {
     const hideBugReport = dialog.getState().hide;
     const { state, description, images, technicalDetails, addImages, removeImage, describe, send, close } =
-        useExternalStore(report);
+        useStore(report);
     const closeDialog = () => {
         close();
         hideBugReport();

@@ -136,7 +136,6 @@ function ToolCall({
         <ToolCallSupplementalContent value={supplementalContent}>
             <ToolCallDisclosure
                 ariaLabel={`Tool: ${entry.title}`}
-                autoOpen={false}
                 icon={<Wrench aria-hidden="true" className="size-3.5 shrink-0" />}
                 state={entry.state}
                 testId={dataTestId.agentToolCall}

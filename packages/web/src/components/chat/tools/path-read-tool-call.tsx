@@ -78,7 +78,7 @@ export function matchesPathReadToolCall({ input }: ToolRendererProps["entry"]): 
     return v.safeParse(requestSchema, parseJson(input)).success;
 }
 
-export function PathReadToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function PathReadToolCall({ entry }: ToolRendererProps) {
     const request = v.safeParse(requestSchema, parseJson(entry.input));
     if (!request.success) {
         return null;
@@ -87,19 +87,14 @@ export function PathReadToolCall({ autoOpen, entry }: ToolRendererProps) {
     const response = content ?? (isOversizedToolText(entry.output) ? entry.output : responseText(entry.output));
     if (isOversizedToolText(response)) {
         return (
-            <ReadToolPresentation
-                autoOpen={autoOpen}
-                path={request.output.path}
-                state={entry.state}
-                title={entry.title}
-            >
+            <ReadToolPresentation path={request.output.path} state={entry.state} title={entry.title}>
                 <ToolTextPreview className="font-mono text-xs" text={response} />
             </ReadToolPresentation>
         );
     }
     const parsed = parseOutput(response);
     return (
-        <ReadToolPresentation autoOpen={autoOpen} path={request.output.path} state={entry.state} title={entry.title}>
+        <ReadToolPresentation path={request.output.path} state={entry.state} title={entry.title}>
             {parsed.rangeLabel.length > 0 && <ReadToolLabel>{parsed.rangeLabel}</ReadToolLabel>}
             {parsed.body.length > 0 &&
                 (parsed.lines === null ? (

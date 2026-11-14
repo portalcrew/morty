@@ -4,12 +4,11 @@ import { ToolCallDisclosure } from "./tool-call-status.tsx";
 import { toolTextContent } from "./tool-display-content.ts";
 import type { ToolRendererProps } from "./tool-renderer.ts";
 
-export function SearchToolPresentation({ autoOpen, entry, path }: ToolRendererProps & { readonly path: string }) {
+export function SearchToolPresentation({ entry, path }: ToolRendererProps & { readonly path: string }) {
     const result = toolTextContent(entry.content) ?? entry.output;
     return (
         <ToolCallDisclosure
             ariaLabel={`Search: ${entry.title}`}
-            autoOpen={autoOpen}
             icon={<Search aria-hidden="true" className="size-4 shrink-0" />}
             state={entry.state}
             title={entry.title}

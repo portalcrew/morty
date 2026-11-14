@@ -1,4 +1,5 @@
 import { Check, Copy, Link, Send } from "lucide-react";
+import { useStore } from "zustand";
 import {
     SetupPromptCopiedHint,
     SetupPromptDetails,
@@ -7,7 +8,6 @@ import {
 import { Button } from "../../components/ui/cloud-button.tsx";
 import { CopyToClipboardButton } from "../../components/ui/copy-to-clipboard-button.tsx";
 import { agentSetupPrompt } from "../../services/device/setup-handoff.ts";
-import { useExternalStore } from "../../view-models/external-store.ts";
 import type { SendLinkStoreApi, SetupHandoffModel } from "../../view-models/send-link-store.ts";
 import { setupPrimaryButtonClassName, setupPrimaryButtonSize } from "../setup/setup-card-shell.tsx";
 
@@ -42,7 +42,7 @@ function ShareSetupLink({
     readonly primaryAction: ReturnType<typeof pairingPrimaryActionProps>;
     readonly sendLink: SendLinkStoreApi;
 }) {
-    const { send, state } = useExternalStore(sendLink);
+    const { send, state } = useStore(sendLink);
     return (
         <>
             <Button

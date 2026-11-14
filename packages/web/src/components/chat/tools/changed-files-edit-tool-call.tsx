@@ -35,7 +35,7 @@ export function matchesChangedFilesEditToolCall(entry: ToolRendererProps["entry"
     return parseChanges(entry) !== null;
 }
 
-export function ChangedFilesEditToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function ChangedFilesEditToolCall({ entry }: ToolRendererProps) {
     const changes = parseChanges(entry);
     if (changes === null) {
         return null;
@@ -44,7 +44,7 @@ export function ChangedFilesEditToolCall({ autoOpen, entry }: ToolRendererProps)
         (path) => !entry.content.some((content) => content.type === "diff" && content.path === path),
     );
     return (
-        <EditToolPresentation autoOpen={autoOpen} entry={entry}>
+        <EditToolPresentation entry={entry}>
             {pathsWithoutRichContent.length > 0 ? (
                 <ul aria-label="Changed files" className="grid gap-1">
                     {pathsWithoutRichContent.map((path, index) => (

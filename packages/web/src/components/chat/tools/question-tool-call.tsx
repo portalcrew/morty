@@ -97,7 +97,7 @@ export function matchesQuestionToolCall({ input }: ToolRendererProps["entry"]): 
     return parseRequest(input) !== null;
 }
 
-export function QuestionToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function QuestionToolCall({ entry }: ToolRendererProps) {
     const request = parseRequest(entry.input);
     if (request === null) {
         return null;
@@ -106,7 +106,6 @@ export function QuestionToolCall({ autoOpen, entry }: ToolRendererProps) {
     return (
         <ToolCallDisclosure
             ariaLabel={`Questions: ${entry.title}`}
-            autoOpen={autoOpen}
             icon={<CircleHelp aria-hidden="true" className="size-4 shrink-0" />}
             state={entry.state}
             title={entry.title}

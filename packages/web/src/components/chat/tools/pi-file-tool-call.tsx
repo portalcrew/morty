@@ -47,14 +47,14 @@ export function matchesPiFileToolCall({ output }: ToolRendererProps["entry"]): b
     return parseResult(output) !== null;
 }
 
-export function PiFileToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function PiFileToolCall({ entry }: ToolRendererProps) {
     const result = parseResult(entry.output);
     if (result === null) {
         return null;
     }
     const text = result.content.map((item) => item.text).join("\n");
     return (
-        <EditToolPresentation autoOpen={autoOpen} entry={entry}>
+        <EditToolPresentation entry={entry}>
             {result.details?.diff === undefined ? (
                 text.length > 0 ? (
                     <ToolTextPreview text={text} />

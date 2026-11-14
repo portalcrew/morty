@@ -1,5 +1,5 @@
 import type { AnyRouter } from "@tanstack/react-router";
-import { useExternalStore } from "../../view-models/external-store.ts";
+import { useStore } from "zustand";
 import type { MortyApplication } from "../../view-models/morty-application.ts";
 import { App } from "../application/app.tsx";
 import { NotFoundPage } from "../application/not-found-page.tsx";
@@ -13,7 +13,7 @@ export function SessionApplication({
     readonly signedInRouter: AnyRouter;
     readonly continuationRouter: AnyRouter;
 }) {
-    const { state } = useExternalStore(application.anonymousSession);
+    const { state } = useStore(application.anonymousSession);
     // Missing pages must not be hidden by loading, pairing, or setup screens.
     if (!/^\/(?:chat\/?|setup\/?|continue\/?)?$/.test(window.location.pathname)) {
         return <NotFoundPage />;

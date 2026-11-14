@@ -25,7 +25,7 @@ export function matchesSkillToolCall({ input }: ToolRendererProps["entry"]): boo
     return parseInput(input) !== null;
 }
 
-export function SkillToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function SkillToolCall({ entry }: ToolRendererProps) {
     const input = parseInput(entry.input);
     if (input === null) {
         return null;
@@ -34,7 +34,6 @@ export function SkillToolCall({ autoOpen, entry }: ToolRendererProps) {
     return (
         <ToolCallDisclosure
             ariaLabel={`Skill: ${input.skill}`}
-            autoOpen={autoOpen}
             icon={<BookOpen aria-hidden="true" className="size-4 shrink-0" />}
             state={entry.state}
             title={title}

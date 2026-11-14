@@ -1,9 +1,9 @@
 import type { ApiRequest, ComputerCallTarget, WorkerCallTarget } from "./call.ts";
-import { encodeIdentityCall, encodeWorkerCall } from "./encode-call.ts";
+import { encodeComputerCall, encodeWorkerCall } from "./encode-call.ts";
 
 export const identityCalls = Object.freeze({
     session: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeIdentityCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "session",
@@ -26,7 +26,7 @@ export const identityCalls = Object.freeze({
         readonly accessDuration: "1h" | "1d" | "7d" | "30d" | null;
         readonly replaces: string | null;
     }): ApiRequest =>
-        encodeIdentityCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "identity/transfers",
@@ -75,7 +75,7 @@ export const identityCalls = Object.freeze({
             },
         }),
     linkedDevices: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeIdentityCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "identity/devices",
@@ -88,7 +88,7 @@ export const identityCalls = Object.freeze({
             },
         }),
     endOtherBrowserAccess: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeIdentityCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "identity/other-browser-access",
@@ -105,7 +105,7 @@ export const identityCalls = Object.freeze({
         computerId,
         deviceId,
     }: ComputerCallTarget & { readonly deviceId: string }): ApiRequest =>
-        encodeIdentityCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: `identity/devices/${encodeURIComponent(deviceId)}`,
@@ -118,7 +118,7 @@ export const identityCalls = Object.freeze({
             },
         }),
     endLocalCredential: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeIdentityCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "identity/local-credential",
@@ -131,7 +131,7 @@ export const identityCalls = Object.freeze({
             },
         }),
     endBrowserAccess: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeIdentityCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "identity/browser-access",

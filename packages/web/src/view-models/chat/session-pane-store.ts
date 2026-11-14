@@ -14,8 +14,8 @@ import type {
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
-import { saveLastHarnessPreference } from "../../services/chat/last-harness-preference.ts";
 import { recordBrowserDiagnostic } from "../../services/diagnostics/browser-diagnostics.ts";
+import { centralLocalStorage, lastHarnessEntry } from "../../services/local-storage/central-local-storage.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import { formatError, isRetryableComputerConnectionFailure, isSessionClosedFailure } from "../format-error.ts";
 import { reportApplicationError } from "../report-error.ts";
@@ -457,7 +457,7 @@ export function createSessionPaneModel(options: {
     // Working in a conversation makes its harness the reference for the next draft. Its settings carry into New
     // Session only where the user changes them: the others are the Agent's and its directory's, which the draft reads
     // for itself.
-    saveLastHarnessPreference(computerId, sessionTarget.harness);
+    centralLocalStorage.write(lastHarnessEntry(computerId), sessionTarget.harness);
     const openedAt = Date.now();
     // The turn the Session was opened with, which this pane follows from its start.
     const openedRunning =

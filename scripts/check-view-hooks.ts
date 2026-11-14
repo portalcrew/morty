@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 /**
  * Forbids React hooks in packages/web/src/views.
  *
- * Views render view-model state and wire DOM callbacks. They read stores through `useStore` or `useExternalStore`,
+ * Views render view-model state and wire DOM callbacks. They read stores through `useStore`,
  * routing through the router's hooks, and the application through `useMortyApplication`. Every other hook, including
  * a component's own hook such as a media query or a motion state, belongs to a component in
  * packages/web/src/components, which a view renders instead of calling the hook. Namespace calls such as
@@ -12,7 +12,7 @@ import { existsSync, readFileSync } from "node:fs";
  */
 
 const SCANNED = "packages/web/src/views";
-const ALLOWED_HOOKS = new Set(["useStore", "useExternalStore", "useRouter", "useMortyApplication"]);
+const ALLOWED_HOOKS = new Set(["useStore", "useRouter", "useMortyApplication"]);
 const HOOK_CALL = /(?<![\w.$])(?:\w+\.)?(use[A-Z]\w*)\s*(?:<[^()]*>)?\s*\(/gu;
 const NAMED_IMPORTS = /import\s+(?:type\s+)?(?:\w+\s*,\s*)?\{([^}]*)\}\s*from/gu;
 

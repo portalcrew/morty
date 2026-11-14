@@ -43,7 +43,7 @@ import { DesktopChatLayout } from "../../components/utils/desktop-chat-layout.ts
 import { ScrollEdgeFade } from "../../components/utils/scroll-edge-fade.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
-import type { BotChatApi, ManagedChatSession } from "../../services/chat/bot-chat-api.ts";
+import type { ManagedChatSession } from "../../services/chat/bot-chat-api.ts";
 import { chatDiagnostics } from "../../view-models/chat/chat-diagnostics.ts";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { computerLocationLabel } from "../../view-models/chat/computer-location-label.ts";
@@ -425,7 +425,6 @@ export function ConversationSidebar({
     connectionStatus,
     workspace,
     onConnectAgent,
-    requests,
     activeTarget,
     onOpen,
     onNewConversation,
@@ -434,16 +433,6 @@ export function ConversationSidebar({
     readonly connectionStatus: BotConnectionStatus;
     readonly workspace: ChatWorkspace;
     readonly onConnectAgent: (() => void) | null;
-    readonly requests: Pick<
-        BotChatApi,
-        | "archiveManagedSession"
-        | "computerConfiguration"
-        | "nativeSessions"
-        | "nativeSession"
-        | "managedSessions"
-        | "daemonDiagnostics"
-        | "networkDiagnostic"
-    >;
     readonly activeTarget: NativeSessionTarget | null;
     readonly onOpen: (session: ManagedChatSession) => void;
     readonly onNewConversation: () => void;
@@ -487,8 +476,8 @@ export function ConversationSidebar({
         harness: activeTarget?.harness ?? null,
         sessionId: activeTarget?.sessionId ?? null,
         context: () => chatDiagnostics(workspace),
-        read: (signal: AbortSignal) => requests.daemonDiagnostics(signal),
-        readNetwork: (signal: AbortSignal) => requests.networkDiagnostic(signal),
+        read: (signal: AbortSignal) => workspace.requests.daemonDiagnostics(signal),
+        readNetwork: (signal: AbortSignal) => workspace.requests.networkDiagnostic(signal),
     };
     const measureNetwork = () => {
         void diagnostic.measure(workspace.operationsSignal()).catch(() => undefined);
