@@ -1,6 +1,7 @@
 import * as v from "valibot";
 import { HighlightedCode, languageForPath } from "../highlighted-code.tsx";
 import { isOversizedToolText, ToolTextPreview } from "../tool-text-preview.tsx";
+import { parseJson } from "./parse-json.ts";
 import { type NumberedCodeLine, NumberedCodeLines, ReadToolPresentation } from "./read-tool-presentation.tsx";
 import { toolTextContent } from "./tool-display-content.ts";
 import type { ToolRendererProps } from "./tool-renderer.ts";
@@ -13,14 +14,6 @@ const requestSchema = v.pipe(
     }),
     v.readonly(),
 );
-
-function parseJson(value: string): unknown {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return null;
-    }
-}
 
 function parseNumberedLines(value: string): readonly NumberedCodeLine[] | null {
     const normalized = value.replace(/\n+$/u, "");

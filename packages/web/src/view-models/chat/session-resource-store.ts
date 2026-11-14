@@ -1,11 +1,11 @@
 import { createStore } from "zustand/vanilla";
+import { isDisplayableImageType, isRasterImageType } from "../../components/agents/displayable-image-type.ts";
 import type {
     SessionResourceReader,
     SessionResourceRequest,
     SessionResourceStore,
 } from "../../components/agents/resource-reader.ts";
 import { createFilePreviewImage } from "../../services/chat/file-preview-surface.ts";
-import { isDisplayableImageType, isRasterImageType } from "../../services/chat/image-media-type.ts";
 
 export type {
     SessionResourceReader,

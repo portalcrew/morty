@@ -1,5 +1,6 @@
 import * as v from "valibot";
 import { isOversizedToolText } from "../tool-text-preview.tsx";
+import { parseJson } from "./parse-json.ts";
 import { ShellCommandPresentation } from "./shell-command-presentation.tsx";
 import { toolTextContent } from "./tool-display-content.ts";
 import type { ToolRendererProps } from "./tool-renderer.ts";
@@ -20,14 +21,6 @@ const responseSchema = v.pipe(
     }),
     v.readonly(),
 );
-
-function parseJson(value: string): unknown {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return null;
-    }
-}
 
 export function matchesWorkdirShellCommandToolCall({ input }: ToolRendererProps["entry"]): boolean {
     return v.safeParse(requestSchema, parseJson(input)).success;

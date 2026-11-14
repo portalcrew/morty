@@ -1,6 +1,7 @@
 import * as v from "valibot";
 import { HighlightedCode } from "../highlighted-code.tsx";
 import { EditToolPresentation } from "./edit-tool-presentation.tsx";
+import { parseJson } from "./parse-json.ts";
 import type { ToolRendererProps } from "./tool-renderer.ts";
 
 const inputSchema = v.pipe(
@@ -9,14 +10,6 @@ const inputSchema = v.pipe(
     }),
     v.readonly(),
 );
-
-function parseJson(value: string): unknown {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return null;
-    }
-}
 
 export function matchesPatchEditToolCall({ input }: ToolRendererProps["entry"]): boolean {
     return v.safeParse(inputSchema, parseJson(input)).success;

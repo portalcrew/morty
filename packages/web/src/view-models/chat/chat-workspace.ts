@@ -83,7 +83,6 @@ export interface ChatWorkspace {
     readonly retryDraftControls: () => void;
     /** Restarts the directory load, for example from the sidebar refresh button. */
     readonly refreshDirectory: () => void;
-    /** Reports a session activity change from an open session pane. */
     /** The signal of the current home loading attempt; aborted when loading restarts. */
     readonly chatSignal: () => AbortSignal;
     /** A stable signal for user-triggered operations such as archiving and diagnostics. */

@@ -35,13 +35,9 @@ type ConfigurationWatch =
           readonly notice: "quiet" | "visible";
       };
 
-export type BotConnectionStatus =
-    | { readonly kind: "connecting"; readonly label: "Connecting" }
-    | { readonly kind: "connected"; readonly label: "Connected" }
-    | { readonly kind: "unavailable"; readonly label: "Unavailable" }
-    | { readonly kind: "unpaired"; readonly label: "Disconnected" }
-    | { readonly kind: "revoked"; readonly label: "Disconnected" }
-    | { readonly kind: "disconnected"; readonly label: "Disconnected" };
+export type BotConnectionStatus = {
+    readonly kind: "connecting" | "connected" | "unavailable" | "unpaired" | "revoked" | "disconnected";
+};
 
 /**
  * What the page knows of its Computer: whether it is paired, the configuration the page follows, how that follow stands
@@ -143,18 +139,16 @@ export function botConnectionStatus(
     >,
 ): BotConnectionStatus {
     if (computer.pairing.kind === "unpaired") {
-        return { kind: "unpaired", label: "Disconnected" };
+        return { kind: "unpaired" };
     }
     if (computer.pairing.kind === "revoked") {
-        return { kind: "revoked", label: "Disconnected" };
+        return { kind: "revoked" };
     }
     if (!computer.networkAvailable || computer.configurationWatch.kind === "unavailable") {
-        return { kind: "unavailable", label: "Unavailable" };
+        return { kind: "unavailable" };
     }
     if (computer.computerConfiguration !== null) {
-        return computer.computerConfiguration.computer.online
-            ? { kind: "connected", label: "Connected" }
-            : { kind: "disconnected", label: "Disconnected" };
+        return computer.computerConfiguration.computer.online ? { kind: "connected" } : { kind: "disconnected" };
     }
-    return { kind: "connecting", label: "Connecting" };
+    return { kind: "connecting" };
 }

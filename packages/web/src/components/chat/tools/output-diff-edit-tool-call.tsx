@@ -1,6 +1,7 @@
 import * as v from "valibot";
 import { isOversizedToolText } from "../tool-text-preview.tsx";
 import { EditToolPresentation, FileDiffList, fileDiffsWithoutRichContent } from "./edit-tool-presentation.tsx";
+import { parseJson } from "./parse-json.ts";
 import type { ToolRendererProps } from "./tool-renderer.ts";
 
 const outputSchema = v.pipe(
@@ -14,14 +15,6 @@ const outputSchema = v.pipe(
     ),
     v.readonly(),
 );
-
-function parseJson(value: string): unknown {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return null;
-    }
-}
 
 export function matchesOutputDiffEditToolCall({ output }: ToolRendererProps["entry"]): boolean {
     return !isOversizedToolText(output) && v.safeParse(outputSchema, parseJson(output)).success;
