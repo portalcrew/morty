@@ -3,6 +3,7 @@ import type { SessionPresentationEvent } from "./session-presentation.ts";
 import {
     appendSessionMessageEvent,
     createSessionMessageReduction,
+    mergeEventsById,
     prependSessionMessageEvents,
     type SessionExecutionMessage,
     type SessionExecutionObservation,
@@ -76,17 +77,6 @@ export interface SessionProjectionResult {
 
 export function createSessionProjection(): SessionProjection {
     return { kind: "pristine", pending: null, revision: 0 };
-}
-
-function mergeSessionEvents(
-    first: readonly SessionPresentationEvent[],
-    second: readonly SessionPresentationEvent[],
-): readonly SessionPresentationEvent[] {
-    const events = new Map(first.map((event) => [event.eventId, event]));
-    for (const event of second) {
-        events.set(event.eventId, event);
-    }
-    return [...events.values()];
 }
 
 function newestTitle(events: readonly SessionPresentationEvent[]): string | undefined {
@@ -204,7 +194,7 @@ export function transitionSessionProjection(
             if (state.pending === null || input.revision !== state.revision) {
                 return { effects: [], state };
             }
-            const events = mergeSessionEvents(
+            const events = mergeEventsById(
                 input.history.events,
                 state.pending.buffer.filter(
                     (event) =>

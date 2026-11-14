@@ -80,6 +80,7 @@ import {
 import type { SessionPageState } from "./session-page-state.ts";
 import {
     createSessionMessageReduction,
+    mergeEventsById,
     type SessionExecutionMessage,
     sessionEventCommandIds,
     sessionReductionMessages,
@@ -384,7 +385,7 @@ async function readSessionHistory(
             throw new Error("The Computer returned the same message-history cursor twice.");
         }
         sessionGenerationId = page.sessionGenerationId;
-        events = mergeSessionEvents(page.events, events);
+        events = mergeEventsById(page.events, events);
         nextCursor = page.nextCursor;
         renderableMessages = sessionReductionMessages(createSessionMessageReduction({ events, nextCursor }));
     } while (
@@ -416,17 +417,6 @@ async function untilSettledOrAborted(work: Promise<void>, signal: AbortSignal): 
         signal.addEventListener("abort", abort, { once: true });
         void work.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
     });
-}
-
-function mergeSessionEvents(
-    current: readonly SessionEvent[],
-    incoming: readonly SessionEvent[],
-): readonly SessionEvent[] {
-    const byId = new Map(current.map((event) => [event.eventId, event]));
-    for (const event of incoming) {
-        byId.set(event.eventId, event);
-    }
-    return [...byId.values()];
 }
 
 export function createSessionPaneModel(options: {

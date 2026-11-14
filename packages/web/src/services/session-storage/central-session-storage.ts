@@ -6,6 +6,7 @@ import {
     type NativeSessionTarget,
 } from "@morty-build/client/protocol";
 import * as v from "valibot";
+import { jsonStorageEntry, type StorageEntry, scopedKey, stringStorageEntry } from "../storage-entry.ts";
 
 /**
  * Central management of every value the web application persists in browser
@@ -19,31 +20,9 @@ import * as v from "valibot";
  * - `encode` failure skips the write entirely.
  */
 
-export interface SessionStorageEntry<T> {
-    readonly key: string;
-    readonly schema: v.GenericSchema<T>;
-    readonly encode: (value: T) => string;
-    readonly decode: (raw: string) => T | null;
-}
-
-/** Entry with a fully custom encode/decode contract. */
-function customSessionStorageEntry<T>(options: {
-    readonly key: string;
-    readonly schema: v.GenericSchema<T>;
-    readonly encode: (value: T) => string;
-    readonly decode: (raw: string) => T | null;
-}): SessionStorageEntry<T> {
-    return {
-        key: options.key,
-        schema: options.schema,
-        encode: options.encode,
-        decode: options.decode,
-    };
-}
-
 export const centralSessionStorage = {
     /** Reads and decodes; null when absent, undecodable, or storage is unavailable. */
-    read: <T>(entry: SessionStorageEntry<T>): T | null => {
+    read: <T>(entry: StorageEntry<T>): T | null => {
         let raw: string | null;
         try {
             raw = window.sessionStorage.getItem(entry.key);
@@ -53,13 +32,13 @@ export const centralSessionStorage = {
         return raw === null ? null : entry.decode(raw);
     },
     /** Removes the stored value. */
-    remove: (entry: SessionStorageEntry<never> | { readonly key: string }): void => {
+    remove: (entry: StorageEntry<never> | { readonly key: string }): void => {
         try {
             window.sessionStorage.removeItem(entry.key);
         } catch {}
     },
     /** Encodes and stores; callers that require durability must handle false. */
-    write: <T>(entry: SessionStorageEntry<T>, value: T): boolean => {
+    write: <T>(entry: StorageEntry<T>, value: T): boolean => {
         try {
             window.sessionStorage.setItem(entry.key, entry.encode(value));
             return true;
@@ -69,39 +48,19 @@ export const centralSessionStorage = {
     },
 };
 
-function scopedKey(prefix: string, ...parts: readonly string[]): string {
-    return `${prefix}${parts.map((part) => encodeURIComponent(part)).join(":")}`;
-}
-
 // ---------------------------------------------------------------------------
 // Unsent message drafts
 // ---------------------------------------------------------------------------
 
 const messageDraftSchema = v.pipe(v.string(), v.maxLength(100_000));
 
-/** Entry whose value is stored as the raw string itself. */
-function stringSessionStorageEntry(options: {
-    readonly key: string;
-    readonly schema: v.GenericSchema<string>;
-}): SessionStorageEntry<string> {
-    return {
-        key: options.key,
-        schema: options.schema,
-        encode: (value) => v.parse(options.schema, value),
-        decode: (raw) => {
-            const parsed = v.safeParse(options.schema, raw);
-            return parsed.success ? parsed.output : null;
-        },
-    };
-}
-
 /** One-time confirmation carried across the existing access-ending page reload. */
-export const accessEndedNoticeEntry = stringSessionStorageEntry({
+export const accessEndedNoticeEntry = stringStorageEntry({
     key: "morty:access-ended:v1",
     schema: v.literal("ended"),
 });
 
-export const accessEndedComputerEntry = stringSessionStorageEntry({
+export const accessEndedComputerEntry = stringStorageEntry({
     key: "morty:access-ended-computer:v1",
     schema: v.pipe(v.string(), v.maxLength(256)),
 });
@@ -115,42 +74,29 @@ const transferRedemptionSchema = v.pipe(
 );
 
 /** The key naming this tab's redemption of a link; a retry or reload after a lost reply repeats that redemption. */
-export const transferRedemptionEntry = customSessionStorageEntry({
+export const transferRedemptionEntry = jsonStorageEntry({
     key: "morty:transfer-redemption:v1",
     schema: transferRedemptionSchema,
-    encode: (value) => JSON.stringify(v.parse(transferRedemptionSchema, value)),
-    decode: (raw) => {
-        try {
-            const parsed = v.safeParse(transferRedemptionSchema, JSON.parse(raw));
-            return parsed.success ? parsed.output : null;
-        } catch {
-            return null;
-        }
-    },
 });
 
 /** Carries first-visit guidance from a successful native handoff to its session. */
 export const sessionWelcomeEntry = (
     computerId: string,
     sessionTarget: NativeSessionTarget,
-): SessionStorageEntry<"pending"> => ({
+): StorageEntry<"pending"> => ({
     key: scopedKey("morty:session-welcome:v2:", computerId, nativeSessionKey(sessionTarget)),
-    schema: v.literal("pending"),
     encode: (value) => v.parse(v.literal("pending"), value),
     decode: (raw) => (raw === "pending" ? "pending" : null),
 });
 
-export const newConversationDraftEntry = (computerId: string): SessionStorageEntry<string> =>
-    stringSessionStorageEntry({
+export const newConversationDraftEntry = (computerId: string): StorageEntry<string> =>
+    stringStorageEntry({
         key: scopedKey("morty:message-draft:new:v1:", computerId),
         schema: messageDraftSchema,
     });
 
-export const sessionDraftEntry = (
-    computerId: string,
-    sessionTarget: NativeSessionTarget,
-): SessionStorageEntry<string> =>
-    stringSessionStorageEntry({
+export const sessionDraftEntry = (computerId: string, sessionTarget: NativeSessionTarget): StorageEntry<string> =>
+    stringStorageEntry({
         key: scopedKey("morty:message-draft:session:v2:", computerId, nativeSessionKey(sessionTarget)),
         schema: messageDraftSchema,
     });
@@ -159,8 +105,8 @@ export const sessionDraftEntry = (
 export const sessionUnsentMessageEntry = (
     computerId: string,
     sessionTarget: NativeSessionTarget,
-): SessionStorageEntry<string> =>
-    stringSessionStorageEntry({
+): StorageEntry<string> =>
+    stringStorageEntry({
         key: scopedKey("morty:unsent-message:session:v2:", computerId, nativeSessionKey(sessionTarget)),
         schema: messageDraftSchema,
     });
@@ -184,19 +130,10 @@ export type ElicitationAnswerDrafts = v.InferOutput<typeof elicitationAnswerDraf
 export const elicitationAnswerDraftsEntry = (
     computerId: string,
     sessionTarget: NativeSessionTarget,
-): SessionStorageEntry<ElicitationAnswerDrafts> =>
-    customSessionStorageEntry({
+): StorageEntry<ElicitationAnswerDrafts> =>
+    jsonStorageEntry({
         key: scopedKey("morty:elicitation-answers:v2:", computerId, nativeSessionKey(sessionTarget)),
         schema: elicitationAnswerDraftsSchema,
-        encode: (value) => JSON.stringify(v.parse(elicitationAnswerDraftsSchema, value)),
-        decode: (raw) => {
-            try {
-                const parsed = v.safeParse(elicitationAnswerDraftsSchema, JSON.parse(raw));
-                return parsed.success ? parsed.output : null;
-            } catch {
-                return null;
-            }
-        },
     });
 
 const agentQuestionChoicesSchema = v.pipe(
@@ -219,19 +156,10 @@ export type AgentQuestionChoicesByMessage = v.InferOutput<typeof agentQuestionCh
 export const agentQuestionChoicesEntry = (
     computerId: string,
     sessionTarget: NativeSessionTarget,
-): SessionStorageEntry<AgentQuestionChoicesByMessage> =>
-    customSessionStorageEntry({
+): StorageEntry<AgentQuestionChoicesByMessage> =>
+    jsonStorageEntry({
         key: scopedKey("morty:agent-question-choices:v2:", computerId, nativeSessionKey(sessionTarget)),
         schema: agentQuestionChoicesSchema,
-        encode: (value) => JSON.stringify(v.parse(agentQuestionChoicesSchema, value)),
-        decode: (raw) => {
-            try {
-                const parsed = v.safeParse(agentQuestionChoicesSchema, JSON.parse(raw));
-                return parsed.success ? parsed.output : null;
-            } catch {
-                return null;
-            }
-        },
     });
 
 const unsentFirstMessageSchema = v.pipe(
@@ -250,21 +178,10 @@ export type UnsentFirstMessage = v.InferOutput<typeof unsentFirstMessageSchema>;
  * The first messages whose Sessions do not exist yet, oldest first, one per message: several creations can be in
  * flight at once, and a reload returns every one of them to the new-conversation composer.
  */
-export const newConversationUnsentMessagesEntry = (
-    computerId: string,
-): SessionStorageEntry<readonly UnsentFirstMessage[]> =>
-    customSessionStorageEntry({
+export const newConversationUnsentMessagesEntry = (computerId: string): StorageEntry<readonly UnsentFirstMessage[]> =>
+    jsonStorageEntry({
         key: scopedKey("morty:unsent-messages:new:v2:", computerId),
         schema: unsentFirstMessagesSchema,
-        encode: (value) => JSON.stringify(v.parse(unsentFirstMessagesSchema, value)),
-        decode: (raw) => {
-            try {
-                const parsed = v.safeParse(unsentFirstMessagesSchema, JSON.parse(raw));
-                return parsed.success ? parsed.output : null;
-            } catch {
-                return null;
-            }
-        },
     });
 
 const rememberedSessionSchema = v.pipe(
@@ -278,19 +195,10 @@ const rememberedSessionSchema = v.pipe(
 export type RememberedSession = v.InferOutput<typeof rememberedSessionSchema>;
 
 /** Display-only context for this tab, scoped to the authenticated identity; never grants access. */
-export const rememberedSessionEntry = (identity: string): SessionStorageEntry<RememberedSession> =>
-    customSessionStorageEntry({
+export const rememberedSessionEntry = (identity: string): StorageEntry<RememberedSession> =>
+    jsonStorageEntry({
         key: scopedKey("morty:remembered-session:v1:", identity),
         schema: rememberedSessionSchema,
-        encode: (value) => JSON.stringify(v.parse(rememberedSessionSchema, value)),
-        decode: (raw) => {
-            try {
-                const parsed = v.safeParse(rememberedSessionSchema, JSON.parse(raw));
-                return parsed.success ? parsed.output : null;
-            } catch {
-                return null;
-            }
-        },
     });
 
 const submissionIdentifier = v.custom<string>(isIdentifier);
@@ -340,19 +248,10 @@ export type SessionPendingSubmission = v.InferOutput<typeof pendingSubmissionSch
 export const sessionPendingSubmissionEntry = (
     computerId: string,
     sessionTarget: NativeSessionTarget,
-): SessionStorageEntry<SessionPendingSubmission> =>
-    customSessionStorageEntry({
+): StorageEntry<SessionPendingSubmission> =>
+    jsonStorageEntry({
         key: scopedKey("morty:pending-submission:v2:", computerId, nativeSessionKey(sessionTarget)),
         schema: pendingSubmissionSchema,
-        encode: (value) => JSON.stringify(v.parse(pendingSubmissionSchema, value)),
-        decode: (raw) => {
-            try {
-                const parsed = v.safeParse(pendingSubmissionSchema, JSON.parse(raw));
-                return parsed.success ? parsed.output : null;
-            } catch {
-                return null;
-            }
-        },
     });
 
 export class SessionStorageWriteError extends Error {

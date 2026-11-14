@@ -2,11 +2,9 @@ import { createStore } from "zustand/vanilla";
 import type { ResponseCopyModel } from "../../components/chat/response-copy-button.tsx";
 import { type Clock, systemClock } from "../../services/time/clock.ts";
 
-export function createResponseCopyStore(
-    text: string,
-    clipboard: Pick<Clipboard, "writeText"> | undefined = navigator.clipboard,
-    clock: Clock = systemClock,
-) {
+export function createResponseCopyStore(text: string) {
+    const clipboard: Pick<Clipboard, "writeText"> | undefined = navigator.clipboard;
+    const clock: Clock = systemClock;
     let lifetime: AbortController | null = null;
     let operation: AbortController | null = null;
     return createStore<ResponseCopyModel>()((set, get) => {
