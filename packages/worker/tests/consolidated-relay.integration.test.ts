@@ -94,11 +94,16 @@ test("Given canonical Computer paths, When an owner manages identity and pairing
             expect(await runtimeOnly.json()).toMatchObject({ error: { code: "invalid_target" } });
         }
         const oversized = { ...sharing, replaces: "x".repeat(3 * 1_024 * 1_024) };
-        const oversizedHttp = await bindings.request(request("/identity/transfers", oversized));
+        // The Worker refuses an oversized body before reading it, so a client still uploading may see its connection
+        // closed instead of the answer; whichever it sees, the request was not accepted.
+        const oversizedHttp = await bindings.request(request("/identity/transfers", oversized)).catch(() => null);
         const oversizedWebSocket = await transport.fetch(request("/identity/transfers", oversized));
-        expect(oversizedHttp.ok).toBe(false);
-        expect(oversizedWebSocket.status).toBe(oversizedHttp.status);
-        expect(await oversizedWebSocket.json()).toEqual(await oversizedHttp.json());
+        expect(oversizedWebSocket.status).toBe(413);
+        expect(await oversizedWebSocket.json()).toMatchObject({ error: { code: "INVALID_REQUEST" } });
+        if (oversizedHttp !== null) {
+            expect(oversizedHttp.status).toBe(413);
+            expect(await oversizedHttp.json()).toMatchObject({ error: { code: "INVALID_REQUEST" } });
+        }
         const retired = await transport.fetch(new Request(request("/identity/local-credential"), { method: "DELETE" }));
         expect(retired.status).toBe(204);
         expect(await retired.text()).toBe("");

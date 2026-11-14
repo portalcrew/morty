@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
 import { ManagementError } from "../../../../contracts/management-error.ts";
 import { computerFromPath } from "../../../../http/computer-target.ts";
+import { controlBodyLimit } from "../../../../http/control-body-limit.ts";
 import { errorHandler } from "../../../../http/error-middleware.ts";
 import { requestTimeoutMiddleware } from "../../../../middleware/request-timeout-middleware.ts";
 import { createBotChatRoutes } from "../../chat/http/bot-chat-routes.ts";
@@ -13,12 +13,7 @@ import type { ManagementRouteContext } from "./route-context.ts";
 export function createManagementApplication(ctx: ManagementRouteContext) {
     return new Hono<ManagementHttpEnvironment>()
         .onError(errorHandler)
-        .use(
-            "*",
-            requestTimeoutMiddleware<ManagementHttpEnvironment>(30_000),
-            computerFromPath,
-            bodyLimit({ maxSize: 3 * 1_024 * 1_024 }),
-        )
+        .use("*", requestTimeoutMiddleware<ManagementHttpEnvironment>(30_000), computerFromPath, controlBodyLimit)
         .notFound(() => {
             throw new ManagementError("NOT_FOUND", "Not found.", 404);
         })

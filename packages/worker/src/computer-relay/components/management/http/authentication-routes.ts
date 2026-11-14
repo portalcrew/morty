@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
 import * as v from "valibot";
 import { transferRedemptionInput } from "../../../../contracts/agent-api/identity-requests.ts";
 import { documented, identityResponse } from "../../../../contracts/agent-api/responses.ts";
@@ -14,6 +13,7 @@ import { relayIdentifier } from "../../../../contracts/computer-management.ts";
 import { ManagementError } from "../../../../contracts/management-error.ts";
 import { bodyParser } from "../../../../http/body-parser.ts";
 import { computerFromTransfer } from "../../../../http/computer-target.ts";
+import { controlBodyLimit } from "../../../../http/control-body-limit.ts";
 import { json } from "../../../../http/json.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import { readBearerToken } from "../../../../http/request-headers.ts";
@@ -261,7 +261,7 @@ export function createTransferRedemptionRoutes(ctx: ManagementRouteContext) {
         "/identity/transfers/redeem",
         requestTimeoutMiddleware<ManagementHttpEnvironment>(30_000),
         computerFromTransfer,
-        bodyLimit({ maxSize: 3 * 1_024 * 1_024 }),
+        controlBodyLimit,
         bodyParser<ManagementHttpEnvironment, typeof transferRedemptionInput>(transferRedemptionInput),
         async (context) => {
             const application = await applicationForRequest(ctx, context);
