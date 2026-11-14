@@ -13,7 +13,6 @@ it("Given two clients holding one configuration revision, When they edit concurr
                 harness: "claude",
                 configurations: [],
                 directory: ".",
-                computerId: runtime.computerId,
                 operationId: crypto.randomUUID(),
             },
             cancellation.signal,

@@ -145,7 +145,6 @@ it("Given a deeply nested multibyte project path, When the SDK browses it and ru
             {
                 ...identity,
                 configurations: [],
-                computerId: runtime.computerId,
                 operationId: crypto.randomUUID(),
             },
             signal,
@@ -195,7 +194,6 @@ it("Given a Session in a selected workspace, When the App prompts it and reads i
                 harness: "claude",
                 configurations: [],
                 directory,
-                computerId: runtime.computerId,
                 operationId: crypto.randomUUID(),
             },
             signal,

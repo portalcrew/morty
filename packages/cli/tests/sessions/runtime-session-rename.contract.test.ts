@@ -12,7 +12,6 @@ it("Given a prompted local conversation, When the Session is renamed, Then the d
                 harness: "claude",
                 configurations: [],
                 directory: ".",
-                computerId: runtime.computerId,
                 operationId: crypto.randomUUID(),
             },
             cancellation.signal,

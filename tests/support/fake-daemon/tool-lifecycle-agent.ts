@@ -4,7 +4,7 @@ import {
     ControlledEndpointConnection,
     type ControlledSessionUpdate,
     controlledSessionUpdates,
-    fakeDaemonCapabilities,
+    fakeHarnessCapabilities,
 } from "@morty-build/runtime-test-support/fake-daemon";
 import type { AgentTermination } from "../../../packages/cli/src/engine/acp/agent/agent-lifecycle.ts";
 import { createControlledAgent } from "../../../packages/cli/tests/support/agents/controlled-agent-definition.ts";
@@ -320,6 +320,6 @@ export function createToolLifecycleAgent(beforeCancellationApplied?: () => Promi
         process.execPath,
         {},
         "controlled-harness",
-        fakeDaemonCapabilities,
+        fakeHarnessCapabilities,
     );
 }

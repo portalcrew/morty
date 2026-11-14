@@ -26,7 +26,6 @@ test("Given a creation operation still applying initial settings, When another c
         const input = {
             harness: "configuration-test",
             directory: ".",
-            computerId: runtime.computerId,
             operationId,
         };
         const refused = runtime

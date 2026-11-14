@@ -33,7 +33,6 @@ export function createOwnerApi(options: {
                 readonly harness: string;
                 readonly configurations: readonly SessionConfigurationSelection[];
                 readonly directory: string;
-                readonly computerId: string;
                 readonly operationId: string;
             },
             signal: AbortSignal,

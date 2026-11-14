@@ -66,8 +66,6 @@ export class LocalStack {
     }
 
     async start() {
-        const revision = (await this.harness.run("git", ["rev-parse", "HEAD"], { cwd: repository })).stdout.trim();
-        this.harness.record("mortyRevision", revision);
         const variables = {
             APP_ORIGIN: this.chatOrigin,
             MORTY_SESSION_SIGNING_SECRET: sessionSigningSecret,
