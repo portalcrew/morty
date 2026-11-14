@@ -20,7 +20,11 @@ export function createSessionEventSubscriptions(ctx: {
         };
         using deadline = new RequestDeadline(request.signal, 30_000);
         const services = ctx.services.forComputer(computerId);
-        const access = await services.sessions.authenticate({ computerId, target }, request.credential, deadline.signal);
+        const access = await services.sessions.authenticate(
+            { computerId, target },
+            request.credential,
+            deadline.signal,
+        );
         await access.authorize(deadline.signal);
         await services.operations.subscribeSessionEvents(
             computerId,

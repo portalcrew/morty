@@ -57,10 +57,7 @@ export type {
     SessionAccessGrant,
     SessionAccessHolder,
 } from "./session/access/index.ts";
-export {
-    decodeSessionAccessCredential,
-    decodeSessionAccessGrant,
-} from "./session/access/index.ts";
+export { decodeSessionAccessCredential } from "./session/access/index.ts";
 export { MAX_LOCAL_AGENT_DIRECTORY_ENTRIES } from "./session/agent/directory.ts";
 export type {
     AgentModelEffort,
