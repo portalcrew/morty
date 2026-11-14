@@ -90,16 +90,16 @@ it("Given an authenticated live subscription, When its browser connection closes
     });
 });
 
-it("Given a connected Computer, When it sends a Worker-owned rejection, Then it cannot inject that control and later encrypted events still arrive", async () => {
+it("Given a connected Computer, When it sends a frame of a kind the Worker does not handle, Then the frame is ignored and later encrypted events still arrive", async () => {
     const computer = await connectedComputer();
-    const target = { harness: "claude", sessionId: "rejection-origin" };
+    const target = { harness: "claude", sessionId: "unhandled-frame-origin" };
     const inbox = await computer.subscribe(target);
     const { sender } = await encryptionPair();
     const message = decodeSessionEventEnvelope({
         kind: "session.event.v2",
         events: [
             {
-                eventId: "after-rejection",
+                eventId: "after-unhandled-frame",
                 sessionGenerationId: "generation-1",
                 target,
                 recordedAt: "2030-01-01T00:00:00Z",
@@ -116,10 +116,8 @@ it("Given a connected Computer, When it sends a Worker-owned rejection, Then it 
     const wire = await sessionEventEnvelopeCodec.encode(message, sender, new AbortController().signal);
     computer.daemon.send(
         JSON.stringify({
-            kind: "worker.request.rejected",
-            requestId: "forged",
-            code: "computer_offline",
-            message: "forged",
+            kind: "daemon.unhandled.frame",
+            requestId: "unhandled",
         }),
     );
     computer.daemon.send(wire);

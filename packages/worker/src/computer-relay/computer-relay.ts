@@ -28,15 +28,12 @@ import { DurableObjectDatabase } from "./infra/durable-object-database.ts";
 
 const REAUTHORIZATION_INTERVAL_MILLISECONDS = 60_000;
 
-type Store = ComputerRelayStore;
-type ComputerHttpEnvironment = ComputerRouteHttpEnvironment;
-
 /**
  * Owns one computer's storage. Requests routed to the computer run here against that storage, and every other
  * Worker or Durable Object reaches it only through its HTTP boundary.
  */
 export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
-    #store: Store | null = null;
+    #store: ComputerRelayStore | null = null;
     readonly #account = new DurableComputerAccount(this.ctx.storage);
 
     readonly #browserServices = new ComputerServices(
@@ -76,7 +73,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         };
         const httpApplication = createComputerHttpApplication(ctx);
         const websocketApplication = createComputerWebSocketApplication(ctx);
-        return new Hono<ComputerHttpEnvironment>()
+        return new Hono<ComputerRouteHttpEnvironment>()
             .onError(errorHandler)
             .route("/", createComputerHttpRoutes(ctx, httpApplication, websocketApplication))
             .notFound(() =>
@@ -131,7 +128,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
     }
 
     /** The store of the computer this object holds; null when `computerId` names another computer. */
-    #computerStore(computerId: string): Store | null {
+    #computerStore(computerId: string): ComputerRelayStore | null {
         if (!this.#owns(computerId)) {
             return null;
         }
@@ -145,7 +142,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         return this.env.COMPUTER_RELAY.idFromName(computerObjectName(computerId)).toString() === this.ctx.id.toString();
     }
 
-    #operate(computerId: string): Store {
+    #operate(computerId: string): ComputerRelayStore {
         const store = decodeComputerPlacement(computerId) === null ? null : this.#computerStore(computerId);
         if (store === null) {
             throw new Error("The computer is unavailable");
@@ -189,7 +186,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
     }
 
     #servicesCache: ReturnType<typeof createComputerRelayServices> | undefined;
-    #services(computerId: string, store: Store) {
+    #services(computerId: string, store: ComputerRelayStore) {
         this.#servicesCache ??= createComputerRelayServices(
             this.env,
             computerId,

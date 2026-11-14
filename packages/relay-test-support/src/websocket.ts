@@ -31,15 +31,3 @@ export function sendText(socket: Duplex, text: string): void {
             : Buffer.from([0x81, 126, payload.byteLength >> 8, payload.byteLength & 0xff]);
     socket.write(Buffer.concat([header, payload]));
 }
-
-export function sendBinary(socket: Duplex, bytes: Uint8Array): void {
-    if (bytes.byteLength > 65_535) {
-        throw new Error("Test WebSocket message is too large");
-    }
-    const payload = Buffer.from(bytes);
-    const header =
-        payload.byteLength < 126
-            ? Buffer.from([0x82, payload.byteLength])
-            : Buffer.from([0x82, 126, payload.byteLength >> 8, payload.byteLength & 0xff]);
-    socket.write(Buffer.concat([header, payload]));
-}

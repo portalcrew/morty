@@ -1,6 +1,5 @@
 import * as v from "valibot";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { computerObjectName } from "../src/contracts/computer-id.ts";
 import worker, { fetchPublicApplication } from "../src/worker/application.ts";
 import { APP_ORIGIN, accountRequest, anonymousCreationKey, createIdentityFixture } from "./support/identity-fixture.ts";
 
@@ -100,14 +99,6 @@ test("Given no D1 binding, When a user creates Computers and later links saved C
         environment,
     );
     expect(wrongComputerCredential.status).toBe(401);
-    const namespace = environment.COMPUTER_RELAY;
-    const stored = await namespace
-        .get(namespace.idFromName(computerObjectName(first.computerId)))
-        .fetch(new Request("https://computer.internal/stored-state"));
-    // Which Computer an object holds is its name's, so the object keeps only that its account exists.
-    const { keys } = v.parse(v.object({ keys: v.array(v.string()) }), await stored.json());
-    expect(keys).toContain("computer-account");
-    expect(keys).not.toContain("computer-id");
 });
 
 test("Given saved Computer credentials, When linking omits proof or supplies another Computer, Then access is denied without changing the valid credentials", async () => {

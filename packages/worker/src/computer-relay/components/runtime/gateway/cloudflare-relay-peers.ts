@@ -1,18 +1,13 @@
 import * as v from "valibot";
 import type { RelaySocket } from "../service/computer-relay-actor.ts";
-import type {
-    ComputerPeers,
-    ComputerSocket,
-    DaemonHeartbeat,
-    DaemonSocketIdentity,
-} from "../service/computer-service.ts";
+import type { ComputerPeers, DaemonHeartbeat, DaemonSocketIdentity } from "../service/computer-service.ts";
 
 const attachmentSchema = v.object({
     connectionEpoch: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
     computerId: v.string(),
 });
 
-export class CloudflareRelaySocket implements ComputerSocket {
+export class CloudflareRelaySocket implements RelaySocket {
     readonly #socket: WebSocket;
 
     constructor(socket: WebSocket) {
