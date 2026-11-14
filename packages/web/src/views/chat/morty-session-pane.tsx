@@ -660,8 +660,6 @@ function MortySessionPaneBody({
                                     <ReadonlyWorkingDirectory
                                         className="shrink-0"
                                         directoryLabel={workingDirectoryLabel}
-                                        iconClassName="size-3"
-                                        tooltipSide="bottom"
                                     />
                                 )}
                             </header>
@@ -1157,8 +1155,6 @@ function MortySessionPaneBody({
                                             className="-mb-1.5 min-h-0 max-w-full gap-1 px-1 py-0 text-[11px] font-normal text-morty-text-3"
                                             clip="end"
                                             directoryLabel={workingDirectoryLabel}
-                                            iconClassName="size-3"
-                                            tooltipSide="bottom"
                                         />
                                     )}
                                 </div>

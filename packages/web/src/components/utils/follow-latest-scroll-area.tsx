@@ -44,8 +44,6 @@ type FollowLatestScrollAreaProps = Omit<ComponentPropsWithoutRef<"div">, "ref" |
     /** Uses the product scrollbar while keeping this component's scroll ref on its viewport. */
     readonly useProductScrollbar?: boolean;
     readonly viewportClassName?: string;
-    /** `from-<surface> to-<surface>/0` for the opaque surface behind this scroller. */
-    readonly topFadeClassName?: string;
 };
 
 /**
@@ -59,7 +57,6 @@ export function FollowLatestScrollArea({
     followRevision = null,
     jumpToLatest,
     showTopFade = false,
-    topFadeClassName = "from-card to-card/0",
     useProductScrollbar = false,
     viewportClassName,
     className,
@@ -206,7 +203,7 @@ export function FollowLatestScrollArea({
                     aria-hidden="true"
                     className={cn(
                         "pointer-events-none absolute inset-x-0 top-0 z-10 h-10 bg-gradient-to-b transition-opacity duration-150 motion-reduce:transition-none",
-                        topFadeClassName,
+                        "from-card to-card/0",
                         topFadeVisible ? "opacity-100" : "opacity-0",
                     )}
                 />

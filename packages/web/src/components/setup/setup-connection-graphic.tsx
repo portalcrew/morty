@@ -16,12 +16,12 @@ const setupHarnessMarkClassName = "text-[#171717]/70";
  * the Morty mark. The clip path needs a per-instance id, so this stays a
  * component rather than markup a view inlines.
  */
-export function SetupConnectionGraphic({ className = "" }: { readonly className?: string }) {
+export function SetupConnectionGraphic() {
     const bandClipId = `setup-connection-band-${useId().replaceAll(":", "")}`;
     return (
         <figure
             aria-label="Codex, Claude Code, and Pi connect to Morty"
-            className={cn("relative -mt-10 mb-6 h-[140px] w-[calc(100%+4rem)] shrink-0", className)}
+            className="relative -mt-10 mb-6 h-[140px] w-[calc(100%+4rem)] shrink-0"
         >
             <svg
                 aria-hidden="true"

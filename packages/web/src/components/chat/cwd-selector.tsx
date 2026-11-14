@@ -40,14 +40,10 @@ export function ReadonlyWorkingDirectory({
     className,
     clip = "start",
     directoryLabel,
-    iconClassName = "size-3.5",
-    tooltipSide = "top",
 }: {
     readonly className?: string;
     readonly clip?: "start" | "end";
     readonly directoryLabel: string;
-    readonly iconClassName?: string;
-    readonly tooltipSide?: "top" | "bottom";
 }) {
     return (
         <Tooltip.Provider delayDuration={150}>
@@ -58,14 +54,14 @@ export function ReadonlyWorkingDirectory({
                         data-testid={dataTestId.workingDirectory}
                         title={directoryLabel}
                     >
-                        <FolderOpen aria-hidden="true" className={cn("shrink-0 text-morty-text-3/60", iconClassName)} />
+                        <FolderOpen aria-hidden="true" className="shrink-0 text-morty-text-3/60 size-3" />
                         <StartClippedLabel clip={clip} value={directoryLabel} />
                     </span>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                     <MortyTooltipContent
                         className="max-w-80 break-all px-3 py-2 leading-5"
-                        side={tooltipSide}
+                        side="bottom"
                         sideOffset={8}
                     >
                         {directoryLabel}

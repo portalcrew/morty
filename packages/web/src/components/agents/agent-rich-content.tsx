@@ -84,11 +84,9 @@ function ContentHeader({ content }: { readonly content: AgentDisplayContent }) {
 
 function LocalImage({
     content,
-    mediaTestId,
     readImage,
 }: {
     readonly content: ImageContent;
-    readonly mediaTestId?: string | undefined;
     readonly readImage?: MarkdownImageReader | undefined;
 }) {
     return (
@@ -114,7 +112,6 @@ function LocalImage({
                         <PreviewImage
                             alt={content.name.length > 0 ? content.name : "Agent-provided image"}
                             className="max-h-[480px] w-auto max-w-full rounded-lg object-contain"
-                            data-testid={mediaTestId}
                             loading="lazy"
                             blob={state.blob}
                             src={state.source}
@@ -128,18 +125,14 @@ function LocalImage({
 
 function AgentRichContentItem({
     content,
-    mediaTestId,
-    openLocalFile,
     readImage,
 }: {
     readonly content: AgentDisplayContent;
-    readonly mediaTestId?: string | undefined;
     readonly readImage?: MarkdownImageReader | undefined;
-    readonly openLocalFile?: ((path: string) => void) | undefined;
 }) {
     if (content.type === "image" && content.uri.length > 0) {
         if (readImage !== undefined) {
-            return <LocalImage content={content} mediaTestId={mediaTestId} readImage={readImage} />;
+            return <LocalImage content={content} readImage={readImage} />;
         }
         return (
             <div className="rounded-lg border-[0.5px] border-black/8 bg-black/[0.02] p-3 text-xs text-muted-foreground">
@@ -161,7 +154,6 @@ function AgentRichContentItem({
                 <PreviewImage
                     alt={content.name.length > 0 ? content.name : "Agent-provided image"}
                     className="max-h-[480px] w-auto max-w-full rounded-lg object-contain"
-                    data-testid={mediaTestId}
                     loading="lazy"
                     src={`data:${content.mimeType};base64,${content.data}`}
                 />
@@ -224,7 +216,7 @@ function AgentRichContentItem({
     if (content.type === "text") {
         return (
             <div className="rounded-lg border-[0.5px] border-black/8 bg-white px-3 py-2">
-                <AgentMarkdown markdown={content.text} openLocalFile={openLocalFile} streaming={false} />
+                <AgentMarkdown markdown={content.text} streaming={false} />
             </div>
         );
     }
@@ -246,14 +238,10 @@ function AgentRichContentItem({
 
 export function AgentRichContent({
     contents,
-    mediaTestId,
     readImage,
-    openLocalFile,
 }: {
     readonly contents: readonly AgentDisplayContent[];
-    readonly mediaTestId?: string | undefined;
     readonly readImage?: MarkdownImageReader | undefined;
-    readonly openLocalFile?: ((path: string) => void) | undefined;
 }) {
     if (contents.length === 0) {
         return null;
@@ -262,13 +250,7 @@ export function AgentRichContent({
         <ImageGallery>
             <div className="mt-2 grid gap-2">
                 {contents.map((content, index) => (
-                    <AgentRichContentItem
-                        content={content}
-                        key={displayKey(content, index)}
-                        mediaTestId={mediaTestId}
-                        readImage={readImage}
-                        openLocalFile={openLocalFile}
-                    />
+                    <AgentRichContentItem content={content} key={displayKey(content, index)} readImage={readImage} />
                 ))}
             </div>
         </ImageGallery>
