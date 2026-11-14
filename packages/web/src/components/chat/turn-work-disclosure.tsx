@@ -31,18 +31,16 @@ function counted(count: number, singular: string, plural: string): string {
 export function TurnWorkDisclosure({
     children,
     className,
-    open: requestedOpen,
     summary,
     working = false,
 }: {
     readonly children: ReactNode;
     readonly className?: string | undefined;
-    readonly open?: boolean | undefined;
     readonly summary: TurnWorkSummary;
     readonly working?: boolean | undefined;
 }) {
     const [choice, setChoice] = useState<DisclosureChoice>("unset");
-    const open = requestedOpen ?? disclosureOpen(choice, false);
+    const open = disclosureOpen(choice, false);
     const contentId = useId();
     const parts: { readonly key: string; readonly text: string; readonly alert: boolean }[] = [
         { key: "steps", text: counted(summary.steps, "step", "steps"), alert: false },

@@ -47,7 +47,6 @@ function NewDeviceCard({
             body={<DeviceSummary device={describeLinkedDevice(device, "notice")} layout="notice" />}
             bodyClassName="max-sm:hidden"
             detail="Not you? Disconnect it in Devices."
-            detailClassName="max-sm:hidden"
             icon={ShieldAlert}
             label="New device connected"
             mobileTitleSuffix={device.label ?? "Unknown browser"}

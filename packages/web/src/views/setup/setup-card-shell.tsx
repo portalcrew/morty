@@ -110,15 +110,9 @@ export function SetupCardDescription({
     return <p className={`mt-2 max-w-xl text-16 leading-[26px] text-morty-text-2 ${className}`}>{children}</p>;
 }
 
-export function SetupCardAlert({
-    children,
-    className = "",
-}: {
-    readonly children: ReactNode;
-    readonly className?: string;
-}) {
+export function SetupCardAlert({ children }: { readonly children: ReactNode }) {
     return (
-        <p role="alert" className={cn("mt-2 max-w-xl text-16 leading-[26px] text-morty-text-2", className)}>
+        <p role="alert" className="mt-2 max-w-xl text-16 leading-[26px] text-morty-text-2">
             {children}
         </p>
     );

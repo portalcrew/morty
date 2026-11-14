@@ -25,7 +25,7 @@ const accessNoticeTitleIconClassName = "mt-[3px] size-3.5 shrink-0";
 const accessNoticeIconSpacerClassName = "size-3.5 shrink-0";
 const accessNoticeIndentedRowClassName = "flex items-start gap-2";
 const accessNoticeTitleClassName = "text-13 font-semibold leading-5 max-sm:truncate";
-const accessNoticeDetailClassName = "[font-size:var(--text-12)] leading-4 text-muted-foreground";
+const accessNoticeDetailClassName = "[font-size:var(--text-12)] leading-4 text-muted-foreground max-sm:hidden";
 export const sidebarAccessNoticeActionClassName = "max-w-full whitespace-normal";
 const accessNoticeActionsClassName = "flex flex-wrap items-center gap-1.5 pt-2 pb-1 max-sm:pt-1 max-sm:pb-0";
 /** Menu surface is bg-background (#fafafb); fill sits between that and user-message-surface (#e6e8eb). */
@@ -41,7 +41,6 @@ export function SidebarAccessNoticeCard({
     body,
     bodyClassName,
     detail,
-    detailClassName,
     icon: Icon,
     label,
     title,
@@ -51,7 +50,6 @@ export function SidebarAccessNoticeCard({
     readonly body?: ReactNode;
     readonly bodyClassName?: string;
     readonly detail: string;
-    readonly detailClassName?: string;
     readonly icon: typeof ShieldCheck;
     readonly label: string;
     readonly title: string;
@@ -72,7 +70,7 @@ export function SidebarAccessNoticeCard({
                     <div className={cn(accessNoticeIndentedRowClassName, "mt-1")}>
                         <div aria-hidden="true" className={accessNoticeIconSpacerClassName} />
                         <div className="min-w-0 flex-1">
-                            <p className={cn(accessNoticeDetailClassName, detailClassName)}>{detail}</p>
+                            <p className={accessNoticeDetailClassName}>{detail}</p>
                             <div className={accessNoticeActionsClassName}>{actions}</div>
                         </div>
                     </div>
@@ -119,7 +117,7 @@ export function SidebarAccessNoticeCard({
             <div className={cn(accessNoticeIndentedRowClassName, "relative mt-1 shrink-0")}>
                 <div aria-hidden="true" className={accessNoticeIconSpacerClassName} />
                 <div className="min-w-0 flex-1">
-                    <p className={cn(accessNoticeDetailClassName, detailClassName)}>{detail}</p>
+                    <p className={accessNoticeDetailClassName}>{detail}</p>
                     <div className={accessNoticeActionsClassName}>{actions}</div>
                 </div>
             </div>
@@ -156,7 +154,6 @@ function JoinedAccessNoticeCard({
                 </>
             }
             detail="Only devices you add can use your computer. See them, or disconnect any, in Devices."
-            detailClassName="max-sm:hidden"
             icon={ShieldCheck}
             label="This browser's access"
             title={`This browser can use ${computerName || "your computer"} until ${formatMoment(expiresAt)}.`}
@@ -179,7 +176,6 @@ function EndingAccessNoticeCard({
                 </Button>
             }
             detail="To keep using Morty here, open a new link from your computer or another device. Your local agent and tasks keep running."
-            detailClassName="max-sm:hidden"
             icon={Clock3}
             label="Access ending soon"
             title={`Access in this browser ends ${formatMoment(expiresAt)}`}

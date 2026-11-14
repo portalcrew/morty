@@ -1,5 +1,4 @@
 import { useId } from "react";
-import { cn } from "@/lib/utils";
 
 const petals = [
     {
@@ -29,11 +28,11 @@ const petals = [
 ] as const;
 
 /** The whole-document loading mark: every petal scales in clockwise sequence. */
-export function MortyLoadingMark({ className }: { readonly className?: string }) {
+export function MortyLoadingMark() {
     const clipPrefix = useId().replaceAll(":", "");
 
     return (
-        <span aria-hidden="true" className={cn("relative grid size-17 shrink-0 place-items-center", className)}>
+        <span aria-hidden="true" className="relative grid size-17 shrink-0 place-items-center">
             <svg aria-hidden="true" className="absolute size-0 overflow-hidden" focusable="false">
                 <defs>
                     {petals.map((petal) => (

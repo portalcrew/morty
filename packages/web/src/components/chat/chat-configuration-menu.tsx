@@ -334,7 +334,6 @@ function SettingControl({
     desktop,
     nestedOpen,
     onNestedOpenChange,
-    expanded = false,
     nestedContent,
     assignButton,
     pickerId,
@@ -348,7 +347,6 @@ function SettingControl({
     readonly desktop: boolean;
     readonly nestedOpen: boolean;
     readonly onNestedOpenChange: (open: boolean) => void;
-    readonly expanded?: boolean;
     readonly nestedContent?:
         | ((
               close: () => void,
@@ -451,7 +449,7 @@ function SettingControl({
                 ? {
                       role: "combobox",
                       "aria-controls": nestedContent === undefined ? pickerId : `${pickerId}-${control.id}`,
-                      "aria-expanded": nestedContent === undefined ? expanded : nestedOpen,
+                      "aria-expanded": nestedContent === undefined ? false : nestedOpen,
                       "aria-haspopup": "listbox",
                   }
                 : { role: "switch", "aria-checked": control.checked })}
