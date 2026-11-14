@@ -27,12 +27,12 @@ export function SidebarUserMenu({
     onEndAccess,
 }: {
     /** Read-only facts about this browser's access, shown above the actions. */
-    readonly header?: ReactNode;
+    readonly header: ReactNode;
     readonly disabled: boolean;
     readonly endAccessDisabled: boolean;
     readonly onMeasureNetwork: () => void;
-    /** Shows the devices with access to this computer; null when this page cannot list them. */
-    readonly onOpenDevices: (() => void) | null;
+    /** Shows the devices with access to this computer. */
+    readonly onOpenDevices: () => void;
     readonly onEndAccess: () => void;
 }) {
     const openedByPointer = useRef(false);
@@ -88,18 +88,14 @@ export function SidebarUserMenu({
                     sideOffset={overlayTriggerOffsetPx}
                 >
                     {header}
-                    {onOpenDevices !== null && (
-                        <DropdownMenu.Item
-                            className="flex h-9 cursor-pointer items-center gap-2 rounded-full px-3 outline-none data-[highlighted]:bg-accent"
-                            onSelect={onOpenDevices}
-                        >
-                            <MonitorSmartphone aria-hidden="true" className="size-4" />
-                            Devices
-                        </DropdownMenu.Item>
-                    )}
-                    {header !== undefined ? (
-                        <DropdownMenu.Separator className={cn("-mx-1.5 my-1.5", overlayMenuSeparatorClassName)} />
-                    ) : null}
+                    <DropdownMenu.Item
+                        className="flex h-9 cursor-pointer items-center gap-2 rounded-full px-3 outline-none data-[highlighted]:bg-accent"
+                        onSelect={onOpenDevices}
+                    >
+                        <MonitorSmartphone aria-hidden="true" className="size-4" />
+                        Devices
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Separator className={cn("-mx-1.5 my-1.5", overlayMenuSeparatorClassName)} />
                     <DropdownMenu.Item
                         className="flex h-9 cursor-pointer items-center gap-2 rounded-full px-3 outline-none data-[highlighted]:bg-accent"
                         onSelect={onMeasureNetwork}

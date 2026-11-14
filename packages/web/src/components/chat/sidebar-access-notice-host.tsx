@@ -24,18 +24,14 @@ export function SidebarAccessNoticeHost({
     attachLinkedDevices,
     children,
 }: {
-    readonly attachAccess: ((node: HTMLElement | null) => (() => void) | undefined) | null;
-    readonly attachLinkedDevices: ((node: HTMLElement | null) => (() => void) | undefined) | null;
+    readonly attachAccess: (node: HTMLElement | null) => (() => void) | undefined;
+    readonly attachLinkedDevices: (node: HTMLElement | null) => (() => void) | undefined;
     readonly children: ReactNode;
 }) {
     // The stores follow their data while the host is attached, so the ref must change only when they do: a ref created
     // per render would detach and reattach on every render and restart their reads each time.
     const attach = useMemo(
-        () =>
-            mergeAttachHandlers(
-                ...(attachLinkedDevices === null ? [] : [attachLinkedDevices]),
-                ...(attachAccess === null ? [] : [attachAccess]),
-            ),
+        () => mergeAttachHandlers(attachLinkedDevices, attachAccess),
         [attachAccess, attachLinkedDevices],
     );
 

@@ -242,15 +242,13 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                 onOpen={(session) => openManaged(session.target)}
                 onNewConversation={newConversation}
             />
-            {workspace.deviceAccess !== null && workspace.linkedDevices !== null && (
-                <DevicesDialog
-                    accessExpiry={workspace.accessExpiry}
-                    devices={workspace.linkedDevices}
-                    computerName={computer.computerConfiguration?.computer?.computerName ?? ""}
-                    signal={workspace.operationsSignal}
-                    store={workspace.deviceAccess}
-                />
-            )}
+            <DevicesDialog
+                accessExpiry={workspace.accessExpiry}
+                devices={workspace.linkedDevices}
+                computerName={computer.computerConfiguration?.computer?.computerName ?? ""}
+                signal={workspace.operationsSignal}
+                store={workspace.deviceAccess}
+            />
             {workspace.accessNotice !== null && (
                 <div
                     role="status"
@@ -410,11 +408,7 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                                             : (inline) => (
                                                   <ConnectionNotice
                                                       feedback={executionContext.feedback}
-                                                      footer={
-                                                          workspace.computers === null ? undefined : (
-                                                              <OnlineComputerAlternative model={workspace.computers} />
-                                                          )
-                                                      }
+                                                      footer={<OnlineComputerAlternative model={workspace.computers} />}
                                                       inline={inline}
                                                       onRetryNow={store.getState().retry}
                                                   />
