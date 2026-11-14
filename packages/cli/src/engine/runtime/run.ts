@@ -8,6 +8,7 @@ import { runCleanup } from "../util/run-cleanup.ts";
 import { systemTimer, type Timer } from "../util/timer.ts";
 import { publishAgentCatalog } from "./catalog/publish-agent-catalog.ts";
 import { resolveCatalogAgent } from "./catalog/resolve-catalog-agent.ts";
+import type { CommandServices } from "./command/context.ts";
 import type { RuntimeConfig } from "./config.ts";
 import { ComputerEncryptionStore } from "./connection/computer-encryption-store.ts";
 import { RuntimeDiagnosticLog } from "./observability/diagnostic-log.ts";
@@ -132,6 +133,17 @@ export async function runRuntime(
             sessionStore,
             sessionCreations,
         } = layer;
+        const services: CommandServices = {
+            resolveAgent,
+            directories,
+            sessions: agentRuntime,
+            sessionCreations,
+            nativeSessions,
+            operations,
+            eventProjection,
+            externalContent,
+            sessionTurns: activeSessions,
+        };
         options.onInitialized?.();
         let connectionEpoch = 0;
         let connectionAnnounced = false;
@@ -173,18 +185,10 @@ export async function runRuntime(
                 connectionEpoch += 1;
                 try {
                     await runRelayConnection({
+                        services,
                         config,
-                        resolveAgent,
-                        directories,
-                        sessions: agentRuntime,
-                        sessionCreations,
-                        nativeSessions,
-                        operations,
                         publisher,
                         payloadEncryption,
-                        eventProjection,
-                        externalContent,
-                        sessionTurns: activeSessions,
                         connectionEpoch,
                         diagnostics,
                         onConnected: () => {

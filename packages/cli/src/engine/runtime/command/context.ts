@@ -32,3 +32,17 @@ export interface CommandContext {
     readonly signal: AbortSignal;
     readonly timer: Timer;
 }
+
+/** The collaborators the Runtime builds once; every relay connection hands the same ones to its commands. */
+export type CommandServices = Pick<
+    CommandContext,
+    | "resolveAgent"
+    | "directories"
+    | "sessions"
+    | "sessionCreations"
+    | "nativeSessions"
+    | "operations"
+    | "eventProjection"
+    | "externalContent"
+    | "sessionTurns"
+>;
