@@ -310,12 +310,13 @@ export class BotChatApi {
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await sessionCreateCommandCodec.encode(command, encryption, signal);
         const result = await this.#request({ endpoint, body }, signal);
-        const encoded = JSON.stringify(result);
-        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), result).success) {
-            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
-            if (failure.requestId !== command.requestId) {
-                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
-            }
+        const failure = await this.#computerFailure(
+            result,
+            { requestId: command.requestId },
+            { code: "INVALID_SESSION", message: "The Computer returned an invalid Session response." },
+            signal,
+        );
+        if (failure !== null) {
             throw new CloudApiError(failure.code, failure.message);
         }
         const access = v.parse(accessSchema, {
@@ -360,11 +361,13 @@ export class BotChatApi {
         const body = await sessionListCommandCodec.encode(command, encryption, signal);
         const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
-        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
-            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
-            if (failure.requestId !== command.requestId) {
-                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
-            }
+        const failure = await this.#computerFailure(
+            value,
+            { requestId: command.requestId },
+            { code: "INVALID_SESSION", message: "The Computer returned an invalid Session response." },
+            signal,
+        );
+        if (failure !== null) {
             throw new CloudApiError(failure.code, failure.message);
         }
         const listed = await sessionsListedEventCodec.decode(encoded, encryption, signal);
@@ -395,14 +398,13 @@ export class BotChatApi {
         const body = await sessionArchiveCommandCodec.encode(command, encryption, signal);
         const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
-        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
-            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
-            if (
-                failure.requestId !== command.requestId ||
-                (failure.target !== undefined && !sameNativeSession(failure.target, target))
-            ) {
-                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
-            }
+        const failure = await this.#computerFailure(
+            value,
+            { requestId: command.requestId, target },
+            { code: "INVALID_SESSION", message: "The Computer returned an invalid Session response." },
+            signal,
+        );
+        if (failure !== null) {
             throw new CloudApiError(failure.code, failure.message);
         }
         const archived = await sessionArchivedEventCodec.decode(encoded, encryption, signal);
@@ -420,14 +422,13 @@ export class BotChatApi {
         const body = await sessionRestoreCommandCodec.encode(command, encryption, signal);
         const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
-        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
-            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
-            if (
-                failure.requestId !== command.requestId ||
-                (failure.target !== undefined && !sameNativeSession(failure.target, target))
-            ) {
-                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
-            }
+        const failure = await this.#computerFailure(
+            value,
+            { requestId: command.requestId, target },
+            { code: "INVALID_SESSION", message: "The Computer returned an invalid Session response." },
+            signal,
+        );
+        if (failure !== null) {
             if (failure.code === "session_not_found") {
                 throw new CloudApiError(
                     "NOT_FOUND",
@@ -546,11 +547,13 @@ export class BotChatApi {
         const body = await workspaceListCommandCodec.encode(command, encryption, signal);
         const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
-        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
-            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
-            if (failure.requestId !== command.requestId) {
-                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid directory response.");
-            }
+        const failure = await this.#computerFailure(
+            value,
+            { requestId: command.requestId },
+            { code: "INVALID_SESSION", message: "The Computer returned an invalid directory response." },
+            signal,
+        );
+        if (failure !== null) {
             throw new CloudApiError(failure.code, failure.message);
         }
         const entries = await workspaceEntriesEventCodec.decode(encoded, encryption, signal);
@@ -667,6 +670,34 @@ export class BotChatApi {
         }
         return result;
     };
+    /**
+     * The failure the Computer reported for a request, or null when `value` is another kind of reply. A failure answers
+     * only the request that was sent, about the Session it named; any other is an invalid response, reported as `invalid`.
+     */
+    readonly #computerFailure = async (
+        value: unknown,
+        request: { readonly requestId: string; readonly target?: NativeSessionTarget },
+        invalid: { readonly code: string; readonly message: string },
+        signal: AbortSignal,
+    ) => {
+        if (!v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
+            return null;
+        }
+        const failure = await sessionOperationFailedEventCodec.decode(
+            JSON.stringify(value),
+            this.#sessionTransport().payloadEncryption,
+            signal,
+        );
+        if (
+            failure.requestId !== request.requestId ||
+            (request.target !== undefined &&
+                failure.target !== undefined &&
+                !sameNativeSession(failure.target, request.target))
+        ) {
+            throw new CloudApiError(invalid.code, invalid.message);
+        }
+        return failure;
+    };
     readonly #nativeSessionResult = async (
         { endpoint, command }: CommandCall<{ readonly requestId: string }>,
         signal: AbortSignal,
@@ -675,11 +706,13 @@ export class BotChatApi {
         const body = await nativeSessionCommandCodec.encode(command, encryption, signal);
         const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
-        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
-            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
-            if (failure.requestId !== command.requestId) {
-                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session response.");
-            }
+        const failure = await this.#computerFailure(
+            value,
+            { requestId: command.requestId },
+            { code: "INVALID_SESSION", message: "The Computer returned an invalid Session response." },
+            signal,
+        );
+        if (failure !== null) {
             throw new CloudApiError(failure.code, failure.message);
         }
         const result = await nativeSessionResultCodec.decode(encoded, encryption, signal);
@@ -707,14 +740,13 @@ export class BotChatApi {
         const body = await sessionPreviewHistoryPageLoadCodec.encode(command, encryption, signal);
         const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
-        if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
-            const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
-            if (
-                failure.requestId !== command.requestId ||
-                (failure.target !== undefined && !sameNativeSession(failure.target, command.target))
-            ) {
-                throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid Session preview.");
-            }
+        const failure = await this.#computerFailure(
+            value,
+            { requestId: command.requestId, target: command.target },
+            { code: "INVALID_SESSION", message: "The Computer returned an invalid Session preview." },
+            signal,
+        );
+        if (failure !== null) {
             throw new CloudApiError(failure.code, failure.message);
         }
         const result = await sessionPreviewHistoryPageLoadedCodec.decode(encoded, encryption, signal);
@@ -742,21 +774,13 @@ export class BotChatApi {
                     const encryption = this.#sessionTransport().payloadEncryption;
                     const body = await sessionPrepareCommandCodec.encode(command, encryption, parent);
                     const value = await this.#request({ endpoint, body }, parent);
-                    if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
-                        const failure = await sessionOperationFailedEventCodec.decode(
-                            JSON.stringify(value),
-                            encryption,
-                            parent,
-                        );
-                        if (
-                            failure.requestId !== command.requestId ||
-                            (failure.target !== undefined && !sameNativeSession(failure.target, target))
-                        ) {
-                            throw new CloudApiError(
-                                "INVALID_SESSION_ACCESS",
-                                "The selected Session could not be verified.",
-                            );
-                        }
+                    const failure = await this.#computerFailure(
+                        value,
+                        { requestId: command.requestId, target },
+                        { code: "INVALID_SESSION_ACCESS", message: "The selected Session could not be verified." },
+                        parent,
+                    );
+                    if (failure !== null) {
                         throw new CloudApiError(failure.code, failure.message);
                     }
                     return v.parse(sessionAccessSchema, value);
