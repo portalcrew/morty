@@ -302,7 +302,8 @@ export function DevicesDialog({
                             <li>Morty records the approximate city a device joined from, never its IP address.</li>
                             <li>Your conversation history stays on your computer.</li>
                             <li>
-                                Messages pass through Morty's relay and are not end-to-end encrypted.{" "}
+                                Messages are end-to-end encrypted: Morty's relay forwards ciphertext and still sees
+                                routing details.{" "}
                                 <ExternalLink className={textLinkClassName} href={dataPolicy}>
                                     How Morty handles data
                                 </ExternalLink>
