@@ -33,7 +33,7 @@ test("Given Codex fails a turn with a reason, When a member's prompt runs throug
             const event = decodeSessionLiveEvent(JSON.parse(await peer.nextEvent()));
             if (event.type === "acp" && event.payload.sessionUpdate === "user_message_chunk") {
                 userMessage = {
-                    messageId: event.payload.messageId ?? undefined,
+                    messageId: event.payload.messageId,
                     text: event.payload.content.type === "text" ? event.payload.content.text : undefined,
                 };
             }

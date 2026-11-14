@@ -19,7 +19,6 @@ export interface HarnessCallbackParams {
     readonly interactions: Pick<NativeSessionInteractions, "onPermission" | "onElicitation"> & {
         readonly onElicitationComplete?: NativeSessionInteractions["onElicitationComplete"];
     };
-    readonly onBackgroundActivity?: NativeSessionSubscriber["onBackgroundActivity"];
 }
 
 export function harnessSessionCallbacks(

@@ -27,7 +27,7 @@ async function observe(peer: RealDaemonPeer, ids: readonly string[]) {
         if (kind === "session.operation.failed") {
             const event = decodeSessionOperationFailedEvent(raw);
             if (pending.delete(event.requestId)) {
-                failures.push(event.code ?? "unknown");
+                failures.push(event.code);
             }
         } else if (kind === "session.event.v2") {
             for (const event of decodeSessionEventEnvelope(raw).events) {

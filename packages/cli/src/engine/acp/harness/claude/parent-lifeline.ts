@@ -39,7 +39,7 @@ export function spawnClaudeWithParentLifeline(options: SpawnOptions): SpawnedPro
         windowsHide: true,
     });
     const lifeline = child.stdio[3];
-    if (child.stdin === null || child.stdout === null || child.stderr === null || !(lifeline instanceof Duplex)) {
+    if (!(lifeline instanceof Duplex)) {
         child.kill("SIGKILL");
         throw new Error("The Claude process supervisor has no parent lifeline");
     }

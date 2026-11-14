@@ -58,9 +58,6 @@ async function loadHistoryPage(
         cursor = sourceNextCursor;
     } while (cursor !== null);
 
-    if (sessionGenerationId === null || throughPosition === null) {
-        throw new SessionError("session_history_unavailable", "The Session history is unavailable");
-    }
     const candidates = loaded.slice(-eventLimit);
     // The encrypted private JSON contains the page and queue. Reserve space for the
     // routing JSON, a 512-character cursor, the AES-GCM packet and base64 framing.

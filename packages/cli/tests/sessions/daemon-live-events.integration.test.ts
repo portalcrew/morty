@@ -577,7 +577,7 @@ describe("daemon V2 live delivery", () => {
                         event.type === "acp" &&
                         event.payload.sessionUpdate === sessionUpdate &&
                         (("messageId" in event.payload &&
-                            ["at-limit", "over-limit", "unicode-limit"].includes(event.payload.messageId ?? "")) ||
+                            ["at-limit", "over-limit", "unicode-limit"].includes(event.payload.messageId)) ||
                             "compactionId" in event.payload)
                     ) {
                         chunks.push(event);
@@ -671,7 +671,7 @@ describe("daemon V2 live delivery", () => {
             for (;;) {
                 const event = await nextLive(fixture);
                 if (event.type === "acp" && event.payload.sessionUpdate === "user_message_chunk") {
-                    userMessageIds.push(event.payload.messageId ?? "");
+                    userMessageIds.push(event.payload.messageId);
                 }
                 if (event.type === "acp" && event.payload.sessionUpdate === "agent_message_chunk") {
                     break;
@@ -717,7 +717,7 @@ describe("daemon V2 live delivery", () => {
             while (completed.size < 3) {
                 const event = await nextLive(fixture);
                 if (event.type === "acp" && event.payload.sessionUpdate === "user_message_chunk") {
-                    userMessageIds.push(event.payload.messageId ?? "");
+                    userMessageIds.push(event.payload.messageId);
                 }
                 if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
                     completed.add(event.payload.commandId);
@@ -1146,7 +1146,7 @@ describe("daemon V2 live delivery", () => {
             const page = await history(fixture, command);
             // The running Agent can emit metadata after its last text chunk.
             // The snapshot must cover every observed event, including that text.
-            expect(BigInt(page.throughPosition ?? "0")).toBeGreaterThanOrEqual(BigInt(lastPosition));
+            expect(BigInt(page.throughPosition)).toBeGreaterThanOrEqual(BigInt(lastPosition));
             expect(page.nextCursor).toBeNull();
             const recovered = page.events
                 .flatMap((event) =>

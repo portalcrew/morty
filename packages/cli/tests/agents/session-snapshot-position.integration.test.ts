@@ -97,9 +97,6 @@ for (const harness of ["codex", "claude", "pi"] as const) {
                 await entered.promise;
                 const before = await readPage(1000);
                 expect(before).toHaveProperty("throughPosition");
-                if (before.throughPosition === undefined) {
-                    throw new Error("Missing snapshot position");
-                }
                 const beforePosition = BigInt(before.throughPosition);
                 expect(observed.every((event) => BigInt(event.position) <= beforePosition)).toBe(true);
                 release.resolve();
@@ -125,9 +122,6 @@ for (const harness of ["codex", "claude", "pi"] as const) {
                 }
                 const after = await readPage(1000);
                 expect(after).toHaveProperty("throughPosition");
-                if (after.throughPosition === undefined) {
-                    throw new Error("Missing snapshot position");
-                }
                 const afterPosition = BigInt(after.throughPosition);
                 expect(afterPosition).toBeGreaterThan(beforePosition);
                 expect(observed.every((event) => BigInt(event.position) <= afterPosition)).toBe(true);
@@ -150,9 +144,6 @@ for (const harness of ["codex", "claude", "pi"] as const) {
                 // The Agent may publish more after the turn (Claude titles the session at idle), so the
                 // newest one-event page covers at least the reply snapshot and a live event it can name.
                 const page = await readPage(1);
-                if (page.throughPosition === undefined) {
-                    throw new Error("Missing snapshot position");
-                }
                 const pagePosition = page.throughPosition;
                 expect(BigInt(pagePosition)).toBeGreaterThanOrEqual(afterPosition);
                 while (!observed.some((event) => event.position === pagePosition)) {

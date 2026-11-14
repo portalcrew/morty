@@ -441,7 +441,6 @@ function sendChatCompletion(
 export class FakeOpenAiProvider implements AsyncDisposable {
     static readonly apiKey = "morty-agent-daemon-fixture";
 
-    readonly apiKey = FakeOpenAiProvider.apiKey;
     readonly model: string;
     readonly origin: string;
     readonly response: string;

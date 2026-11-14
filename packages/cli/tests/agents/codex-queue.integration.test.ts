@@ -112,7 +112,7 @@ test("Given real Codex has accepted a steering prompt, When V2 recovery reloads 
                 if (requested !== undefined) {
                     steeringEventId = requested.eventId;
                     if (requested.type === "acp" && requested.payload.sessionUpdate === "user_message_chunk") {
-                        steeringMessageId = requested.payload.messageId ?? undefined;
+                        steeringMessageId = requested.payload.messageId;
                     }
                     break;
                 }
