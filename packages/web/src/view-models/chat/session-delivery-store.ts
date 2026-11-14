@@ -10,6 +10,7 @@ import type { PromptAttachment } from "@morty-build/client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
 import { CloudApiError } from "../../services/management/management-api.ts";
+import { SessionStorageWriteError } from "../../services/session-storage/central-session-storage.ts";
 import { formatError } from "../format-error.ts";
 import { runtimeCoversMessage, runtimeHoldsCommand, type SessionExecutionState } from "./session-execution.ts";
 
@@ -166,6 +167,31 @@ export interface SessionDeliveryStore {
     readonly retry: (submit: SubmitTurn) => Promise<void>;
 }
 
+/** The request a reload recovers: one the browser may have delivered, by the identity it was submitted under. */
+function pendingSubmission(state: DeliveryState): {
+    readonly commandId: string;
+    readonly placement: DeliveryPlacement;
+    readonly request: Journal["request"];
+} | null {
+    switch (state.kind) {
+        case "submitting":
+        case "delivery-unknown":
+            return {
+                commandId: state.journal.commandId,
+                placement: state.journal.placement,
+                request: state.journal.request,
+            };
+        case "idle":
+        case "awaiting-connection":
+        case "preparing":
+        case "preparation-failed":
+        case "failed":
+            return null;
+        default:
+            return state satisfies never;
+    }
+}
+
 /**
  * Text the Computer has not taken: a reload returns it to the composer. A message that may have been delivered is
  * not unsent, because sending it again under a new identity could run it twice.
@@ -256,7 +282,22 @@ export const createSessionDeliveryStore = (options: {
         set: (state: Update) => void,
         get: () => SessionDeliveryStore,
     ): Promise<void> => {
-        set({ state: { kind: "submitting", journal } });
+        try {
+            set({ state: { kind: "submitting", journal } });
+        } catch (cause) {
+            // The request could not be saved, so it cannot be recovered after a reload: it does not leave the browser.
+            if (!(cause instanceof SessionStorageWriteError)) {
+                throw cause;
+            }
+            set({
+                state: {
+                    kind: "preparation-failed",
+                    message: journalMessage(journal),
+                    failure: submissionFailure(cause, cause.message),
+                },
+            });
+            return;
+        }
         try {
             const accepted = await submit(
                 {
@@ -302,15 +343,11 @@ export const createSessionDeliveryStore = (options: {
     return createStore<SessionDeliveryStore>()((setState, get) => {
         const set = (update: Update): void => {
             const state = update.state;
-            options.pendingSubmissionChanged(
-                state.kind === "submitting" || state.kind === "delivery-unknown"
-                    ? {
-                          commandId: state.journal.commandId,
-                          placement: state.journal.placement,
-                          request: state.journal.request,
-                      }
-                    : null,
-            );
+            const pending = pendingSubmission(state);
+            // The request is saved once, when it is frozen; moving from submitting to unknown keeps what was saved.
+            if (pending?.commandId !== pendingSubmission(get().state)?.commandId) {
+                options.pendingSubmissionChanged(pending);
+            }
             options.unsentMessageChanged(unsentContent(state));
             setState(update);
         };
