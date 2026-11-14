@@ -324,14 +324,8 @@ function requestIdFromMessage(value: Readonly<Record<string, unknown>>): string 
     return requestId;
 }
 
-function requestFromMessage(
-    value: Readonly<Record<string, unknown>>,
-    requestId: string,
-    origin: string,
-    browserOrigin: string | null,
-    signal: AbortSignal,
-    binaryBody?: Uint8Array,
-): { readonly request: Request; readonly requestId: string; readonly body: string } {
+/** The Morty API path a frame names: under the API prefix, not the transport itself, and exactly as written. */
+function framePath(value: Readonly<Record<string, unknown>>, origin: string): URL {
     const path = string(value, "path", 8_192);
     if (!path.startsWith(`${MORTY_API_PREFIX}/`) || path.startsWith(`${MORTY_API_PREFIX}/v1/transport`)) {
         throw transportError("invalid_target");
@@ -340,6 +334,56 @@ function requestFromMessage(
     if (endpoint.origin !== origin || `${endpoint.pathname}${endpoint.search}` !== path || endpoint.hash.length > 0) {
         throw transportError("invalid_target");
     }
+    return endpoint;
+}
+
+/** The Session a subscription frame addresses: `.../computers/{computer}/harnesses/{harness}/sessions/{session}/events`. */
+function subscriptionAddress(endpoint: URL): {
+    readonly computerId: string;
+    readonly harness: string;
+    readonly sessionId: string;
+} {
+    const prefix = `${MORTY_API_PREFIX}/v1/computers/`;
+    let parts: string[];
+    try {
+        parts = endpoint.pathname.startsWith(prefix)
+            ? endpoint.pathname.slice(prefix.length).split("/").map(decodeURIComponent)
+            : [];
+    } catch {
+        throw new WebSocketDispatchError();
+    }
+    const [computerId, harnesses, harness, sessions, sessionId, events] = parts;
+    if (
+        parts.length !== 6 ||
+        computerId === undefined ||
+        harness === undefined ||
+        sessionId === undefined ||
+        harnesses !== "harnesses" ||
+        sessions !== "sessions" ||
+        events !== "events"
+    ) {
+        throw new WebSocketDispatchError();
+    }
+    return { computerId, harness, sessionId };
+}
+
+function bearerCredential(frameHeaders: Headers): string {
+    const credential = (frameHeaders.get("authorization") ?? "").match(/^Bearer ([^\s]+)$/u)?.[1];
+    if (credential === undefined) {
+        throw new WebSocketDispatchError();
+    }
+    return credential;
+}
+
+function requestFromMessage(
+    value: Readonly<Record<string, unknown>>,
+    requestId: string,
+    origin: string,
+    browserOrigin: string | null,
+    signal: AbortSignal,
+    binaryBody?: Uint8Array,
+): { readonly request: Request; readonly requestId: string; readonly body: string } {
+    const endpoint = framePath(value, origin);
     const method = string(value, "method", 16);
     if (!REQUEST_METHODS.some((allowed) => allowed === method)) {
         throw transportError("invalid_method");
@@ -531,21 +575,12 @@ export function acceptWebSocketHttpTransport({
                     } catch {
                         throw transportError("invalid_message");
                     }
+                    // The same checks an ordinary request gets, in the same order: the path, then the headers.
+                    const endpoint = framePath(message, new URL(request.url).origin);
+                    const frameHeaders = headers(message["headers"]);
+                    const address = subscriptionAddress(endpoint);
+                    const credential = bearerCredential(frameHeaders);
                     const subscriptionController = new AbortController();
-                    const converted = requestFromMessage(
-                        {
-                            body: encoded,
-                            headers: message["headers"],
-                            kind: REQUEST_KIND,
-                            method: "GET",
-                            path: message["path"],
-                            requestId: subscriptionId,
-                        },
-                        subscriptionId,
-                        new URL(request.url).origin,
-                        browserOrigin,
-                        subscriptionController.signal,
-                    );
                     subscriptions.set(subscriptionId, { controller: subscriptionController, kind: "pending" });
                     let nextSequenceId = 1;
                     const openedAt = Date.now();
@@ -570,7 +605,7 @@ export function acceptWebSocketHttpTransport({
                                         event: "session_event_subscription_disconnected",
                                         source: "upstream_close",
                                         cfRay: request.headers.get("cf-ray")?.slice(0, 128) ?? null,
-                                        path: new URL(converted.request.url).pathname,
+                                        path: endpoint.pathname,
                                         subscriptionId,
                                         elapsedMilliseconds: Math.max(0, now - openedAt),
                                         lastMessageAgeMilliseconds:
@@ -635,10 +670,10 @@ export function acceptWebSocketHttpTransport({
                         }
                     };
                     try {
-                        await subscribe(converted.request, subscription, {
-                            message: messageReceived,
-                            close: finish,
-                        });
+                        await subscribe(
+                            { ...address, credential, command: subscription, signal: subscriptionController.signal },
+                            { message: messageReceived, close: finish },
+                        );
                         subscriptionController.signal.throwIfAborted();
                     } catch (cause) {
                         if (subscriptions.get(subscriptionId)?.controller === subscriptionController) {

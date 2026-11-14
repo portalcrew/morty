@@ -382,7 +382,7 @@ class MultipleSubscriptionDaemonBoundary {
     readonly fetch = (_operation: WebSocketHttpOperation): Promise<Response> => {
         throw new Error("Subscriptions must not be dispatched as HTTP requests");
     };
-    readonly subscribe: SubscribeSessionEvents = async (request, _subscription, observer) => {
+    readonly subscribe: SubscribeSessionEvents = async (request, observer) => {
         this.downstreams.push({
             send: (data) => {
                 if (!request.signal.aborted) {
@@ -418,7 +418,10 @@ it("Given two quiet subscriptions, When multiple heartbeat intervals pass, Then 
                     subscriptionId,
                     path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
                     body: await subscriptionBody(subscriptionId),
-                    headers: [["content-type", "application/json"]],
+                    headers: [
+                        ["authorization", "Bearer browser-credential"],
+                        ["content-type", "application/json"],
+                    ],
                 }),
             );
             expect(JSON.parse(await ready)).toEqual({
@@ -831,7 +834,10 @@ it("Given an established event subscription, When the browser transport closes, 
     socket.send(
         JSON.stringify({
             body: await subscriptionBody("subscription-1"),
-            headers: [["content-type", "application/json"]],
+            headers: [
+                ["authorization", "Bearer browser-credential"],
+                ["content-type", "application/json"],
+            ],
             kind: "session.events.subscribe",
             path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
             subscriptionId: "subscription-1",
@@ -871,7 +877,10 @@ it("Given two live subscriptions, When each receives event batches, Then deliver
         socket.send(
             JSON.stringify({
                 body: await subscriptionBody(subscriptionId, subscriptionId),
-                headers: [["content-type", "application/json"]],
+                headers: [
+                    ["authorization", "Bearer browser-credential"],
+                    ["content-type", "application/json"],
+                ],
                 kind: "session.events.subscribe",
                 path: `/morty/api/v1/computers/computer/harnesses/claude/sessions/${subscriptionId}/events`,
                 subscriptionId,
@@ -936,7 +945,10 @@ it("Given an established event subscription is quiet, When the transport idle de
         socket.send(
             JSON.stringify({
                 body: await subscriptionBody("subscription-1"),
-                headers: [["content-type", "application/json"]],
+                headers: [
+                    ["authorization", "Bearer browser-credential"],
+                    ["content-type", "application/json"],
+                ],
                 kind: "session.events.subscribe",
                 path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
                 subscriptionId: "subscription-1",

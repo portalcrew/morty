@@ -25,9 +25,20 @@ export interface SessionViewer extends SessionEventObserver {
     readonly identity: SessionViewerIdentity;
 }
 
-/** The caller owns cancellation for the entire subscription, including admission. */
+/** A browser's request to follow one Session's live events, as its frame named the Session and the credential. */
+interface SessionEventSubscriptionRequest {
+    /** The Computer the frame's path names; the subscriber checks that it owns it. */
+    readonly computerId: string;
+    readonly harness: string;
+    readonly sessionId: string;
+    /** The bearer credential of the frame's `authorization` header. */
+    readonly credential: string;
+    readonly command: SessionEventsSubscribeCommandRouting;
+    /** The caller owns cancellation for the entire subscription, including admission. */
+    readonly signal: AbortSignal;
+}
+
 export type SubscribeSessionEvents = (
-    request: Request,
-    subscription: SessionEventsSubscribeCommandRouting,
+    request: SessionEventSubscriptionRequest,
     observer: SessionEventObserver,
 ) => Promise<void>;
