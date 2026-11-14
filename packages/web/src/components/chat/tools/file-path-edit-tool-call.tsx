@@ -24,13 +24,13 @@ export function matchesFilePathEditToolCall({ input }: ToolRendererProps["entry"
     return v.safeParse(inputSchema, parseJson(input)).success;
 }
 
-export function FilePathEditToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function FilePathEditToolCall({ entry }: ToolRendererProps) {
     const input = v.safeParse(inputSchema, parseJson(entry.input));
     if (!input.success) {
         return null;
     }
     return (
-        <EditToolPresentation autoOpen={autoOpen} entry={entry}>
+        <EditToolPresentation entry={entry}>
             <FileDiffList
                 diffs={fileDiffsWithoutRichContent(
                     [

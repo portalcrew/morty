@@ -33,12 +33,12 @@ export function matchesWorkdirShellCommandToolCall({ input }: ToolRendererProps[
     return v.safeParse(requestSchema, parseJson(input)).success;
 }
 
-export function WorkdirShellCommandToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function WorkdirShellCommandToolCall({ entry }: ToolRendererProps) {
     const displayContent = toolTextContent(entry.content);
     const response =
         displayContent === null && !isOversizedToolText(entry.output)
             ? v.safeParse(responseSchema, parseJson(entry.output))
             : null;
     const output = displayContent ?? (response?.success === true ? response.output.output.trimEnd() : entry.output);
-    return <ShellCommandPresentation autoOpen={autoOpen} entry={entry} response={output} />;
+    return <ShellCommandPresentation entry={entry} response={output} />;
 }

@@ -1,5 +1,5 @@
 import { Check, ChevronDown, CircleMinus, X } from "lucide-react";
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
 import { cn } from "../../../lib/utils.ts";
 import { ScrollEdgeFade } from "../../utils/scroll-edge-fade.tsx";
 import type { ToolCallState } from "./tool-renderer.ts";
@@ -51,7 +51,6 @@ const toolCallStatusSlotClassName = "inline-flex shrink-0 items-center justify-c
 
 export function ToolCallDisclosure({
     ariaLabel,
-    autoOpen,
     children,
     icon,
     state,
@@ -59,20 +58,14 @@ export function ToolCallDisclosure({
     title,
 }: {
     readonly ariaLabel: string;
-    readonly autoOpen: boolean;
     readonly children?: ReactNode;
     readonly icon: ReactNode;
     readonly state: ToolCallState;
     readonly testId?: string | undefined;
     readonly title: string;
 }) {
-    const [open, setOpen] = useState(autoOpen);
+    const [open, setOpen] = useState(false);
     const supplementalContent = useContext(ToolCallSupplementalContent);
-    useEffect(() => {
-        if (autoOpen) {
-            setOpen(true);
-        }
-    }, [autoOpen]);
     return (
         <fieldset aria-label={ariaLabel} className="group/tool m-0 min-w-0 border-0 p-0" data-testid={testId}>
             <button

@@ -5,10 +5,6 @@ export function matchesRichContentEditToolCall({ content }: ToolRendererProps["e
     return content.some((item) => item.type === "diff");
 }
 
-export function RichContentEditToolCall({ autoOpen, entry }: ToolRendererProps) {
-    return (
-        <EditToolPresentation autoOpen={autoOpen} entry={entry}>
-            {null}
-        </EditToolPresentation>
-    );
+export function RichContentEditToolCall({ entry }: ToolRendererProps) {
+    return <EditToolPresentation entry={entry}>{null}</EditToolPresentation>;
 }

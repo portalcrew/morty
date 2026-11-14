@@ -30,13 +30,11 @@ export function ReadToolLabel({ children }: { readonly children: string }) {
 }
 
 export function ReadToolPresentation({
-    autoOpen,
     children,
     path,
     state,
     title,
 }: {
-    readonly autoOpen: boolean;
     readonly children: ReactNode;
     readonly path: string;
     readonly state: ToolCallState;
@@ -45,7 +43,6 @@ export function ReadToolPresentation({
     return (
         <ToolCallDisclosure
             ariaLabel={`Read: ${title}`}
-            autoOpen={autoOpen}
             icon={<FileText aria-hidden="true" className="size-4 shrink-0" />}
             state={state}
             title={title}

@@ -133,5 +133,5 @@ export function renderRegisteredTool(entry: ToolThinkingEntry): ReactNode | null
         return null;
     }
     const Component = renderer.Component;
-    return <Component autoOpen={false} entry={entry} />;
+    return <Component entry={entry} />;
 }

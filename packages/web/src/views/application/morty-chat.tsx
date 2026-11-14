@@ -1,4 +1,4 @@
-import { useExternalStore } from "../../view-models/external-store.ts";
+import { useStore } from "zustand";
 import type { MortyApplication } from "../../view-models/morty-application.ts";
 import { BotChatHome } from "../chat/bot-chat-home.tsx";
 
@@ -8,9 +8,9 @@ import { BotChatHome } from "../chat/bot-chat-home.tsx";
  * flows the workspace into the chat views through props.
  */
 export function MortyChat({ application }: { readonly application: MortyApplication }) {
-    const { workspace } = useExternalStore(application.sessionWorkspace);
+    const { workspace } = useStore(application.sessionWorkspace);
     if (workspace === null) {
         return <section className="flex min-h-dvh" />;
     }
-    return <BotChatHome requests={workspace.requests} workspace={workspace} />;
+    return <BotChatHome workspace={workspace} />;
 }

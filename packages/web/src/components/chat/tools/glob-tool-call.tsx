@@ -24,10 +24,10 @@ export function matchesGlobToolCall({ input }: ToolRendererProps["entry"]): bool
     return v.safeParse(requestSchema, parseJson(input)).success;
 }
 
-export function GlobToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function GlobToolCall({ entry }: ToolRendererProps) {
     const request = v.safeParse(requestSchema, parseJson(entry.input));
     if (!request.success) {
         return null;
     }
-    return <SearchToolPresentation autoOpen={autoOpen} entry={entry} path={request.output.path ?? "."} />;
+    return <SearchToolPresentation entry={entry} path={request.output.path ?? "."} />;
 }

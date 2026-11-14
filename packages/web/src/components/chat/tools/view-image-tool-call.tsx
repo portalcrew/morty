@@ -9,11 +9,10 @@ export function matchesViewImageToolCall(entry: ToolRendererProps["entry"]): boo
     );
 }
 
-export function ViewImageToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function ViewImageToolCall({ entry }: ToolRendererProps) {
     return (
         <ToolCallDisclosure
             ariaLabel={`Tool: ${entry.title}`}
-            autoOpen={autoOpen}
             icon={<ImageIcon aria-hidden="true" className="size-4 shrink-0" />}
             state={entry.state}
             title={entry.title}

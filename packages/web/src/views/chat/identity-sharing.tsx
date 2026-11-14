@@ -1,4 +1,4 @@
-import type { StoreApi } from "zustand";
+import { type StoreApi, useStore } from "zustand";
 import { CopyLinkButton } from "../../components/chat/copy-link-button.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
 import { dialogBodyStackClassName, dialogSectionTitleClassName } from "../../components/ui/dialog.tsx";
@@ -17,7 +17,6 @@ import {
     type IdentitySharingStore,
     type SharingRecipient,
 } from "../../view-models/chat/identity-sharing-store.ts";
-import { useExternalStore } from "../../view-models/external-store.ts";
 
 const durationLabels: Readonly<Record<DeviceAccessDuration, string>> = {
     "1h": "1 hour",
@@ -241,11 +240,11 @@ function AgentHandoffSkeleton() {
 
 /** Renders the sharing dialog's transfer, whose store is created when the dialog opens. */
 export function IdentitySharing({ store }: { readonly store: StoreApi<IdentitySharingStore> }) {
-    const state = useExternalStore(store, (state) => state.state);
-    const choose = useExternalStore(store, (state) => state.choose);
-    const recipient = useExternalStore(store, (state) => state.recipient);
-    const chooseRecipient = useExternalStore(store, (state) => state.chooseRecipient);
-    const recipientTransitioning = useExternalStore(store, (state) => state.recipientTransitioning);
+    const state = useStore(store, (state) => state.state);
+    const choose = useStore(store, (state) => state.choose);
+    const recipient = useStore(store, (state) => state.recipient);
+    const chooseRecipient = useStore(store, (state) => state.chooseRecipient);
+    const recipientTransitioning = useStore(store, (state) => state.recipientTransitioning);
     // The Worker states the duration a link grants; until the first link exists there is nothing to show.
     const duration =
         state.kind === "ready" ? state.transfer.accessDuration : state.kind === "initial" ? null : state.duration;

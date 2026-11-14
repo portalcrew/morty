@@ -57,7 +57,7 @@ export function matchesBrowserJavascriptToolCall(entry: ToolRendererProps["entry
     return entry.name === "cua_repl/js" || parseRequest(entry.input) !== null;
 }
 
-export function BrowserJavascriptToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function BrowserJavascriptToolCall({ entry }: ToolRendererProps) {
     const request = parseRequest(entry.input);
     const title = request?.title ?? entry.title;
     const displayContent = toolTextContent(entry.content);
@@ -67,7 +67,6 @@ export function BrowserJavascriptToolCall({ autoOpen, entry }: ToolRendererProps
     return (
         <ToolCallDisclosure
             ariaLabel={`Browser: ${title}`}
-            autoOpen={autoOpen}
             icon={<Monitor aria-hidden="true" className="size-4 shrink-0" />}
             state={entry.state}
             title={title}

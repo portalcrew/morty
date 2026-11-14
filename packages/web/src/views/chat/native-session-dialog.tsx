@@ -1,5 +1,6 @@
 import { ChevronLeft, CircleAlert, Inbox, MessageSquare, PackageOpen, Unplug } from "lucide-react";
 import type { ReactNode } from "react";
+import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
 import { mobileHeaderIconButtonClassName } from "../../components/chat/chat-header-control.ts";
 import { mobileSheetSessionRowClassName } from "../../components/chat/mobile-sheet.ts";
@@ -22,7 +23,6 @@ import type { DaemonDiagnosticsSource } from "../../services/diagnostics/browser
 import type { BugReportDialogStore } from "../../view-models/bug-report-dialog-store.ts";
 import type { NativeSessionAgent } from "../../view-models/chat/native-session-agents.ts";
 import { type NativeSessionStore, nativeSessionPresentation } from "../../view-models/chat/native-session-store.ts";
-import { useExternalStore } from "../../view-models/external-store.ts";
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
 import { MortySessionMessage } from "./morty-session-message.tsx";
 
@@ -227,7 +227,7 @@ export function NativeSessionDialog({
     readonly bugReportDialog: BugReportDialogStore;
     readonly daemonSource: DaemonDiagnosticsSource;
 }) {
-    const model = nativeSessionPresentation(useExternalStore(store), sessions);
+    const model = nativeSessionPresentation(useStore(store), sessions);
     const diagnostics: DaemonDiagnosticsSource = {
         ...daemonSource,
         harness: model.directory.kind === "ready" ? model.directory.harness : null,

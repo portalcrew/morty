@@ -21,7 +21,7 @@ import {
     saveLastCwdPreference,
     saveRecentCwdPreference,
 } from "@/services/chat/last-cwd-preference";
-import { readLastHarnessPreference, saveLastHarnessPreference } from "@/services/chat/last-harness-preference";
+import { centralLocalStorage, lastHarnessEntry } from "@/services/local-storage/central-local-storage";
 import { isComputerConnectionFailure } from "@/services/management/management-api";
 import type { AgentModelCatalog } from "../../services/diagnostics/model-catalog.ts";
 import { formatError } from "../format-error.ts";
@@ -310,7 +310,7 @@ export const createDraftControlsStore = (
             // are actually applied. A fallback to another connected Agent, or
             // a load that fails, must leave the user's choice in place.
             if (rememberHarness) {
-                saveLastHarnessPreference(computerId, selectedAgent.harness);
+                centralLocalStorage.write(lastHarnessEntry(computerId), selectedAgent.harness);
             }
             // The directory is remembered only where the user chooses one (`rememberDirectory`, a handoff), never
             // from the directory a draft happened to load in.
@@ -419,7 +419,9 @@ export const createDraftControlsStore = (
             }
             try {
                 const switching = currentSettings.kind === "switching";
-                const requestedHarness = switching ? currentSettings.harness : readLastHarnessPreference(computerId);
+                const requestedHarness = switching
+                    ? currentSettings.harness
+                    : centralLocalStorage.read(lastHarnessEntry(computerId));
                 const configuration = computerConfiguration();
                 const agents =
                     configuration === null || computerAgentAvailability(configuration.computer) !== "available"

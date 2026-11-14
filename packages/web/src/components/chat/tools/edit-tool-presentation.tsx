@@ -44,15 +44,10 @@ export function FileDiffList({ diffs }: { readonly diffs: readonly FileDiffValue
     ));
 }
 
-export function EditToolPresentation({
-    autoOpen,
-    children,
-    entry,
-}: ToolRendererProps & { readonly children: ReactNode }) {
+export function EditToolPresentation({ children, entry }: ToolRendererProps & { readonly children: ReactNode }) {
     return (
         <ToolCallDisclosure
             ariaLabel={`Edit: ${entry.title}`}
-            autoOpen={autoOpen}
             icon={<FileDiff aria-hidden="true" className="size-4 shrink-0" />}
             state={entry.state}
             title={entry.title}

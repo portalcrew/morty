@@ -6,7 +6,6 @@ import { ChatConfigurationMenu } from "../../components/chat/chat-configuration-
 import { MortyTooltipContent } from "../../components/ui/morty-tooltip-content.tsx";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { draftHarnessSelection, draftShownOptions } from "../../view-models/chat/draft-controls-store.ts";
-import { useExternalStore } from "../../view-models/external-store.ts";
 import { computerDisconnectedMessage } from "../../view-models/format-error.ts";
 
 function DraftChatControlsSkeleton() {
@@ -28,7 +27,7 @@ export function DraftChatControls({
     readonly workspace: ChatWorkspace;
     readonly disabled: boolean;
 }) {
-    const viewModel = useExternalStore(workspace.draftControls);
+    const viewModel = useStore(workspace.draftControls);
     // The picker offers the Agents the Computer offers now, which can change while the draft is open.
     const computerConfiguration = useStore(workspace.computer, (state) => state.computerConfiguration);
     const signal = workspace.chatSignal();

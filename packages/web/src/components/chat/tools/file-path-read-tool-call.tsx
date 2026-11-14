@@ -42,7 +42,7 @@ export function matchesFilePathReadToolCall({ input }: ToolRendererProps["entry"
     return v.safeParse(requestSchema, parseJson(input)).success;
 }
 
-export function FilePathReadToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function FilePathReadToolCall({ entry }: ToolRendererProps) {
     const request = v.safeParse(requestSchema, parseJson(entry.input));
     if (!request.success) {
         return null;
@@ -50,12 +50,7 @@ export function FilePathReadToolCall({ autoOpen, entry }: ToolRendererProps) {
     const response = toolTextContent(entry.content) ?? entry.output;
     const lines = isOversizedToolText(response) ? null : parseNumberedLines(response);
     return (
-        <ReadToolPresentation
-            autoOpen={autoOpen}
-            path={request.output.file_path}
-            state={entry.state}
-            title={entry.title}
-        >
+        <ReadToolPresentation path={request.output.file_path} state={entry.state} title={entry.title}>
             {response.length > 0 &&
                 (isOversizedToolText(response) ? (
                     <ToolTextPreview className="font-mono text-xs" text={response} />

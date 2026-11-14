@@ -26,13 +26,13 @@ export function matchesInputDiffEditToolCall({ input }: ToolRendererProps["entry
     return v.safeParse(inputSchema, parseJson(input)).success;
 }
 
-export function InputDiffEditToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function InputDiffEditToolCall({ entry }: ToolRendererProps) {
     const input = v.safeParse(inputSchema, parseJson(entry.input));
     if (!input.success) {
         return null;
     }
     return (
-        <EditToolPresentation autoOpen={autoOpen} entry={entry}>
+        <EditToolPresentation entry={entry}>
             <FileDiffList diffs={fileDiffsWithoutRichContent(input.output, entry)} />
         </EditToolPresentation>
     );

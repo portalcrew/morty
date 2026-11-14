@@ -5,14 +5,7 @@ import type {
     SessionConfigurationSelection,
 } from "@morty-build/client/protocol";
 import type { ApiRequest, ComputerCallTarget } from "./call.ts";
-import { type ComputerCallEncoding, encodeComputerCall } from "./encode-call.ts";
-
-function encodeChatCall(input: ComputerCallEncoding): ApiRequest {
-    return encodeComputerCall({
-        ...input,
-        path: `computers/${encodeURIComponent(input.computerId)}/${input.path}`,
-    });
-}
+import { encodeComputerCall } from "./encode-call.ts";
 
 interface AgentDirectory {
     readonly harness: string;
@@ -21,7 +14,7 @@ interface AgentDirectory {
 
 export const chatCalls = Object.freeze({
     verifyAgent: ({ origin, computerId, harness }: ComputerCallTarget & { readonly harness: string }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "setup",
@@ -35,7 +28,7 @@ export const chatCalls = Object.freeze({
             body: { kind: "agent.settings.discover", requestId: crypto.randomUUID(), harness, directory: "." },
         }),
     daemonDiagnostics: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "diagnostics/daemon",
@@ -49,7 +42,7 @@ export const chatCalls = Object.freeze({
             body: { kind: "computer.diagnostics.read", requestId: crypto.randomUUID() },
         }),
     networkDiagnostic: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "diagnostics/network",
@@ -74,7 +67,7 @@ export const chatCalls = Object.freeze({
             readonly workspaceRef: string;
         };
     }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "managed-sessions/open",
@@ -95,7 +88,7 @@ export const chatCalls = Object.freeze({
             },
         }),
     managedSessions: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "managed-sessions",
@@ -113,7 +106,7 @@ export const chatCalls = Object.freeze({
         computerId,
         target,
     }: ComputerCallTarget & { readonly target: NativeSessionTarget }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "managed-sessions/archive",
@@ -131,7 +124,7 @@ export const chatCalls = Object.freeze({
         computerId,
         target,
     }: ComputerCallTarget & { readonly target: NativeSessionTarget }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "managed-sessions/resolve",
@@ -157,7 +150,7 @@ export const chatCalls = Object.freeze({
         readonly action: "find" | "import";
         readonly directory: string;
     }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "native-sessions/continue",
@@ -183,7 +176,7 @@ export const chatCalls = Object.freeze({
         harness,
         workspaceRef,
     }: ComputerCallTarget & { readonly harness: string; readonly workspaceRef: string }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "agent-settings",
@@ -197,7 +190,7 @@ export const chatCalls = Object.freeze({
             body: { kind: "agent.settings.discover", requestId: crypto.randomUUID(), harness, directory: workspaceRef },
         }),
     computerConfiguration: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "workspace",
@@ -210,7 +203,7 @@ export const chatCalls = Object.freeze({
             },
         }),
     directory: ({ origin, computerId, directory }: ComputerCallTarget & { readonly directory: string }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "workspace/directory",
@@ -234,7 +227,7 @@ export const chatCalls = Object.freeze({
         readonly requestId: string;
         readonly input: ForkMortyNativeSessionRequest;
     }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: `native-sessions/forks/${encodeURIComponent(operationId)}`,
@@ -254,7 +247,7 @@ export const chatCalls = Object.freeze({
     }: ComputerCallTarget & {
         readonly input: Omit<Extract<NativeSessionRequest, { readonly action: "list" }>, "kind" | "requestId">;
     }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "native-sessions",
@@ -273,7 +266,7 @@ export const chatCalls = Object.freeze({
         sessionId,
         identity,
     }: ComputerCallTarget & { readonly sessionId: string; readonly identity: AgentDirectory }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: `native-sessions/${encodeURIComponent(sessionId)}/import`,
@@ -298,7 +291,7 @@ export const chatCalls = Object.freeze({
         sessionId,
         identity,
     }: ComputerCallTarget & { readonly sessionId: string; readonly identity: AgentDirectory }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: `native-sessions/${encodeURIComponent(sessionId)}`,
@@ -323,7 +316,7 @@ export const chatCalls = Object.freeze({
         computerId,
         target,
     }: ComputerCallTarget & { readonly target: NativeSessionTarget }): ApiRequest =>
-        encodeChatCall({
+        encodeComputerCall({
             origin,
             computerId,
             path: "native-sessions/access",

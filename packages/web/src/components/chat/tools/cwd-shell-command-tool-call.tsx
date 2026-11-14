@@ -43,7 +43,7 @@ export function matchesCwdShellCommandToolCall({ input, output }: ToolRendererPr
     );
 }
 
-export function CwdShellCommandToolCall({ autoOpen, entry }: ToolRendererProps) {
+export function CwdShellCommandToolCall({ entry }: ToolRendererProps) {
     const displayContent = toolTextContent(entry.content);
     const response =
         displayContent === null && !isOversizedToolText(entry.output)
@@ -54,5 +54,5 @@ export function CwdShellCommandToolCall({ autoOpen, entry }: ToolRendererProps) 
         (response?.success === true
             ? ("output" in response.output ? response.output.output : response.output.formatted_output).trimEnd()
             : entry.output);
-    return <ShellCommandPresentation autoOpen={autoOpen} entry={entry} response={output} />;
+    return <ShellCommandPresentation entry={entry} response={output} />;
 }
