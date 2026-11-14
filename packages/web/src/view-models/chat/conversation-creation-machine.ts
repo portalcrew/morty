@@ -1,5 +1,4 @@
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
-import type { ChatAccess } from "../../services/chat/bot-chat-api.ts";
 
 export interface QueuedDraftMessage {
     readonly attachments: readonly ComposerAttachment[];
@@ -16,27 +15,15 @@ export type ConversationCreationState =
           readonly error: string;
           readonly message: QueuedDraftMessage;
       }
-    | {
-          readonly kind: "draft-message-sending";
-          readonly access: ChatAccess;
-          readonly message: QueuedDraftMessage;
-      }
-    | {
-          readonly kind: "draft-message-send-failed";
-          readonly access: ChatAccess;
-          readonly error: string;
-          readonly message: QueuedDraftMessage;
-      };
+    | { readonly kind: "draft-message-sending"; readonly message: QueuedDraftMessage };
 
 export type ConversationCreationEvent =
     | { readonly kind: "reset" }
     | { readonly kind: "draft-message-queued"; readonly message: QueuedDraftMessage }
-    | { readonly kind: "session-created"; readonly commandId: string; readonly access: ChatAccess }
+    | { readonly kind: "session-created"; readonly commandId: string }
     | { readonly kind: "session-create-failed"; readonly commandId: string; readonly error: string }
-    | { readonly kind: "draft-message-retry-requested"; readonly commandId: string }
     /** The conversation exists and its first message now belongs to it. */
-    | { readonly kind: "conversation-created"; readonly commandId: string }
-    | { readonly kind: "draft-message-send-failed"; readonly commandId: string; readonly error: string };
+    | { readonly kind: "conversation-created"; readonly commandId: string };
 
 function isCurrentMessage(state: ConversationCreationState, commandId: string): boolean {
     switch (state.kind) {
@@ -45,7 +32,6 @@ function isCurrentMessage(state: ConversationCreationState, commandId: string): 
         case "session-creating":
         case "session-create-failed":
         case "draft-message-sending":
-        case "draft-message-send-failed":
             return state.message.commandId === commandId;
     }
 }
@@ -64,35 +50,21 @@ export function transitionConversationCreation(
                     return { kind: "session-creating", message: event.message };
                 case "session-creating":
                 case "draft-message-sending":
-                case "draft-message-send-failed":
                     return state;
             }
             return state;
         case "session-created":
             return state.kind === "session-creating" && isCurrentMessage(state, event.commandId)
-                ? { access: event.access, kind: "draft-message-sending", message: state.message }
+                ? { kind: "draft-message-sending", message: state.message }
                 : state;
         case "session-create-failed":
             return state.kind === "session-creating" && isCurrentMessage(state, event.commandId)
                 ? { error: event.error, kind: "session-create-failed", message: state.message }
                 : state;
-        case "draft-message-retry-requested":
-            return state.kind === "draft-message-send-failed" && isCurrentMessage(state, event.commandId)
-                ? { access: state.access, kind: "draft-message-sending", message: state.message }
-                : state;
         case "conversation-created":
             // The first message now belongs to its conversation; the draft starts over.
             return state.kind === "draft-message-sending" && isCurrentMessage(state, event.commandId)
                 ? { kind: "draft" }
-                : state;
-        case "draft-message-send-failed":
-            return state.kind === "draft-message-sending" && isCurrentMessage(state, event.commandId)
-                ? {
-                      access: state.access,
-                      error: event.error,
-                      kind: "draft-message-send-failed",
-                      message: state.message,
-                  }
                 : state;
     }
 }
@@ -104,7 +76,6 @@ export function queuedDraftMessage(state: ConversationCreationState): QueuedDraf
         case "session-creating":
         case "session-create-failed":
         case "draft-message-sending":
-        case "draft-message-send-failed":
             return state.message;
     }
 }
@@ -113,7 +84,6 @@ export function queuedDraftMessage(state: ConversationCreationState): QueuedDraf
 export function failedDraftMessage(state: ConversationCreationState): QueuedDraftMessage | null {
     switch (state.kind) {
         case "session-create-failed":
-        case "draft-message-send-failed":
             return state.message;
         case "draft":
         case "session-creating":
@@ -132,15 +102,12 @@ export function conversationCreationStatus(state: ConversationCreationState): st
             return "Session creation failed";
         case "draft-message-sending":
             return "Sending message";
-        case "draft-message-send-failed":
-            return "Message failed to send";
     }
 }
 
 export function conversationCreationError(state: ConversationCreationState): string {
     switch (state.kind) {
         case "session-create-failed":
-        case "draft-message-send-failed":
             return state.error;
         case "draft":
         case "session-creating":
@@ -156,7 +123,6 @@ export function conversationCreationBusy(state: ConversationCreationState): bool
             return true;
         case "draft":
         case "session-create-failed":
-        case "draft-message-send-failed":
             return false;
     }
 }
@@ -168,7 +134,6 @@ export function conversationComposerLocked(state: ConversationCreationState): bo
         case "session-creating":
         case "session-create-failed":
         case "draft-message-sending":
-        case "draft-message-send-failed":
             return true;
     }
 }

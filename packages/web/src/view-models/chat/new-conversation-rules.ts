@@ -35,13 +35,12 @@ export function canSendFirstMessage(
 }
 
 /**
- * Retrying a first message whose Session could not be created or opened submits that same message again, whatever
- * the composer holds now.
+ * Retrying a first message whose Session could not be created submits that same message again, whatever the
+ * composer holds now.
  */
 export function canRetryFirstMessage(facts: NewConversationFacts): boolean {
     switch (facts.creation) {
         case "session-create-failed":
-        case "draft-message-send-failed":
             return pageCanCreate(facts);
         case "draft":
         case "session-creating":

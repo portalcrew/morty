@@ -640,52 +640,38 @@ export const createBotChatHomeStore = (
                         keepUnsentFirstMessage({ commandId, content });
                     }
                 }
+                set((state) => ({
+                    creation: transitionConversationCreation(state.creation, {
+                        kind: "draft-message-queued",
+                        message: queuedMessage,
+                    }),
+                    ...(current.creation.kind === "draft" ? { draft: "" } : {}),
+                }));
                 let access: ChatAccess;
-                if (
-                    current.creation.kind === "draft-message-send-failed" &&
-                    current.creation.message.commandId === commandId
-                ) {
-                    access = current.creation.access;
+                try {
+                    access = await requests.createConversation(commandId, settings, signal);
+                    signal.throwIfAborted();
                     set((state) => ({
                         creation: transitionConversationCreation(state.creation, {
                             commandId,
-                            kind: "draft-message-retry-requested",
+                            kind: "session-created",
                         }),
                     }));
-                } else {
+                } catch (cause) {
+                    signal.throwIfAborted();
                     set((state) => ({
                         creation: transitionConversationCreation(state.creation, {
-                            kind: "draft-message-queued",
-                            message: queuedMessage,
+                            commandId,
+                            error: formatError(cause, "The Session could not be created."),
+                            kind: "session-create-failed",
                         }),
-                        ...(current.creation.kind === "draft" ? { draft: "" } : {}),
                     }));
-                    try {
-                        access = await requests.createConversation(commandId, settings, signal);
-                        signal.throwIfAborted();
-                        set((state) => ({
-                            creation: transitionConversationCreation(state.creation, {
-                                access,
-                                commandId,
-                                kind: "session-created",
-                            }),
-                        }));
-                    } catch (cause) {
-                        signal.throwIfAborted();
-                        set((state) => ({
-                            creation: transitionConversationCreation(state.creation, {
-                                commandId,
-                                error: formatError(cause, "The Session could not be created."),
-                                kind: "session-create-failed",
-                            }),
-                        }));
-                        // The page that sent it shows the failure with Retry; once the user has left it, the message
-                        // returns to the draft.
-                        if (failedDraftMessage(get().creation)?.commandId !== commandId) {
-                            returnFirstMessage(queuedMessage);
-                        }
-                        return false;
+                    // The page that sent it shows the failure with Retry; once the user has left it, the message
+                    // returns to the draft.
+                    if (failedDraftMessage(get().creation)?.commandId !== commandId) {
+                        returnFirstMessage(queuedMessage);
                     }
+                    return false;
                 }
                 signal.throwIfAborted();
                 const conversationId = access.target;
@@ -696,23 +682,7 @@ export const createBotChatHomeStore = (
                 const following = sending.kind === "draft-message-sending" && sending.message.commandId === commandId;
                 let session: OpenMortySession | null = null;
                 if (following) {
-                    try {
-                        session = requests.conversationSession(
-                            access,
-                            { kind: "idle" },
-                            settings.workspaceLabel,
-                            title,
-                        );
-                    } catch (cause) {
-                        set((state) => ({
-                            creation: transitionConversationCreation(state.creation, {
-                                commandId,
-                                error: formatError(cause, "The message could not be sent."),
-                                kind: "draft-message-send-failed",
-                            }),
-                        }));
-                        return false;
-                    }
+                    session = requests.conversationSession(access, { kind: "idle" }, settings.workspaceLabel, title);
                     options.navigation.showManaged(session.target);
                 }
                 // The Session takes the message and its durable copy in one step, so a reload always finds one.

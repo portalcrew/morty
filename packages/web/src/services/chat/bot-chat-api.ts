@@ -13,7 +13,6 @@ import {
     computerPongEventCodec,
     decodeNativeSessionEvents,
     decodeSessionAccessCredential,
-    decodeSessionReadyEvent,
     type Identifier,
     isDirectoryPath,
     isIdentifier,
@@ -22,6 +21,7 @@ import {
     nativeSessionResultCodec,
     type SessionConfigOption,
     type SessionConfigurationSelection,
+    type SessionReadyEvent,
     sessionArchiveCommandCodec,
     sessionArchivedEventCodec,
     sessionCreateCommandCodec,
@@ -71,7 +71,8 @@ const accessSchema = v.pipe(
     }),
     v.readonly(),
 );
-export type ChatAccess = v.InferOutput<typeof accessSchema>;
+/** The Session access a creation returns: its credential, and the readiness reply the Computer answered it with. */
+export type ChatAccess = Omit<v.InferOutput<typeof accessSchema>, "ready"> & { readonly ready: SessionReadyEvent };
 const managedSessionStatusSchema = v.variant("kind", [
     v.pipe(
         v.object({
@@ -339,12 +340,7 @@ export class BotChatApi {
         title = "Untitled session",
     ) => {
         // The Session is named once, by its access; what it was opened with is the rest of its readiness reply.
-        const {
-            kind: _kind,
-            requestId,
-            target: _target,
-            ...ready
-        } = decodeSessionReadyEvent(JSON.stringify(access.ready));
+        const { kind: _kind, requestId, target: _target, ...ready } = access.ready;
         return {
             target: access.target,
             requestId,
