@@ -25,12 +25,6 @@ interface DeliveryAttempt {
     readonly prepare: (message: SubmittedMessage, signal: AbortSignal) => Promise<Journal["request"]>;
     readonly submit: SubmitTurn;
 }
-type SubmissionOutcome =
-    | { readonly kind: "accepted"; readonly turn: AcceptedTurn }
-    /** The request failed, but the service had already shown it has the command. */
-    | { readonly kind: "delivered" }
-    | { readonly kind: "rejected" }
-    | { readonly kind: "delivery-unknown" };
 /**
  * Where this page shows a message: as the Session's next turn, or in its queue. Sending decides it from whether a
  * turn runs; once the service answers, the Computer's admission decides it. It never changes what is submitted: the
@@ -169,7 +163,7 @@ export interface SessionDeliveryStore {
      * settles, and the next pane shows where it is. The message is `preparing` as soon as this is called.
      */
     readonly send: (message: SubmittedMessage, attempt: DeliveryAttempt) => Promise<void>;
-    readonly retry: (submit: SubmitTurn) => Promise<SubmissionOutcome | null>;
+    readonly retry: (submit: SubmitTurn) => Promise<void>;
 }
 
 /**
@@ -261,7 +255,7 @@ export const createSessionDeliveryStore = (options: {
         signal: AbortSignal,
         set: (state: Update) => void,
         get: () => SessionDeliveryStore,
-    ): Promise<SubmissionOutcome> => {
+    ): Promise<void> => {
         set({ state: { kind: "submitting", journal } });
         try {
             const accepted = await submit(
@@ -273,7 +267,6 @@ export const createSessionDeliveryStore = (options: {
             );
             signal.throwIfAborted();
             confirm(journal, accepted.queued ? "queue" : "turn", set, get);
-            return { kind: "accepted", turn: accepted };
         } catch (cause) {
             if (signal.aborted || cause instanceof MortyCancellationError) {
                 // The Session's lifetime on this page ended first. Losing the attempt's connection does not discard
@@ -294,17 +287,16 @@ export const createSessionDeliveryStore = (options: {
                 set({
                     state: { kind: "failed", journal, failure: submissionFailure(cause, "The message was rejected.") },
                 });
-                return { kind: "rejected" };
+                return;
             }
             const state = get().state;
             // A command the Computer already started will not run again: it holds the message, whatever the page saw.
             const applied = cause instanceof MortyOperationError && cause.outcome === "applied";
             if (state.kind === "submitting" && (applied || delivered(journal))) {
                 confirm(journal, journal.placement, set, get);
-                return { kind: "delivered" };
+                return;
             }
             set({ state: { kind: "delivery-unknown", journal } });
-            return { kind: "delivery-unknown" };
         }
     };
     return createStore<SessionDeliveryStore>()((setState, get) => {
@@ -391,9 +383,9 @@ export const createSessionDeliveryStore = (options: {
             // Only an unknown delivery repeats its identity; the Computer never runs a rejected command identity again.
             retry: async (submit) => {
                 const state = get().state;
-                return state.kind === "delivery-unknown"
-                    ? await send(state.journal, submit, options.lifetime, set, get)
-                    : null;
+                if (state.kind === "delivery-unknown") {
+                    await send(state.journal, submit, options.lifetime, set, get);
+                }
             },
         };
     });

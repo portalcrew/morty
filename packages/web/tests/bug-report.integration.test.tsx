@@ -13,10 +13,6 @@ import { sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 
 /**
- * A dependency-injected transport that touches nothing: measurements and
- * requests degrade instead of reaching the network.
- */
-/**
  * A real transport pointed at an unreachable origin and never opened: every
  * operation fails on its own, so measurements and requests degrade instead of
  * reaching the network.

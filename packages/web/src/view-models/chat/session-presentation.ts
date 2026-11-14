@@ -1042,9 +1042,8 @@ export function sessionEventCommandIds(events: readonly SessionPresentationEvent
 export type SessionExecutionState =
     /** Still running, or has not reported an outcome yet. */
     | { readonly kind: "open" }
-    | { readonly kind: "finished" }
-    /** Failed, or stopped before completing (for example cancelled or at a limit). */
-    | { readonly kind: "ended-early" };
+    /** Completed, failed, or stopped before completing. */
+    | { readonly kind: "ended" };
 
 function terminalExecutionState(message: SessionMessage): SessionExecutionState | null {
     if (message.role !== "assistant") {
@@ -1052,12 +1051,12 @@ function terminalExecutionState(message: SessionMessage): SessionExecutionState 
     }
     const presentation = message.presentation;
     if (presentation.kind === "failure") {
-        return { kind: "ended-early" };
+        return { kind: "ended" };
     }
     if (presentation.kind !== "completed" || presentation.completion.kind === "steered") {
         return null;
     }
-    return completedTurnNotice(presentation.completion) === null ? { kind: "finished" } : { kind: "ended-early" };
+    return { kind: "ended" };
 }
 
 /** Returns, for each message, the state of the execution that owns it. */
@@ -1111,7 +1110,7 @@ export function sessionExecutionStates(
         } else if (end < messages.length || (!sessionWorking && !span.managed)) {
             // A later execution started, or the conversation is idle and Morty never
             // ran this one: history imported from the Agent carries no lifecycle outcome.
-            state = { kind: "finished" };
+            state = { kind: "ended" };
         } else {
             state = { kind: "open" };
         }
