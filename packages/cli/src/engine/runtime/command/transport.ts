@@ -61,11 +61,13 @@ export async function sendContentChunk(
     send(socket, await contentChunkCodec.encode({ requestId, sequence, bytes }, payloadEncryption, signal));
 }
 
-export async function reportOperationFailure(
+/** Answers a request with a failure. A reply that outlives its connection has no reader. */
+export async function replyFailure(
     { socket, payloadEncryption, signal }: Pick<CommandContext, "socket" | "payloadEncryption" | "signal">,
     requestId: string,
     target: NativeSessionTarget | undefined,
-    error: unknown,
+    code: string,
+    message: string,
     runtimeTimings: readonly DurationMetric[] = [],
 ): Promise<void> {
     if (socket.readyState !== WebSocket.OPEN) {
@@ -73,9 +75,9 @@ export async function reportOperationFailure(
     }
     const encoded = await sessionOperationFailedEventCodec.encode(
         {
-            code: operationErrorCode(error),
+            code,
             kind: "session.operation.failed",
-            message: operationErrorMessage(error),
+            message,
             requestId,
             ...(runtimeTimings.length === 0 ? {} : { runtimeTimings }),
             ...(target === undefined ? {} : { target }),
@@ -86,4 +88,22 @@ export async function reportOperationFailure(
     if (socket.readyState === WebSocket.OPEN) {
         send(socket, encoded);
     }
+}
+
+/** Answers a request with the failure an error describes. */
+export async function reportOperationFailure(
+    context: Pick<CommandContext, "socket" | "payloadEncryption" | "signal">,
+    requestId: string,
+    target: NativeSessionTarget | undefined,
+    error: unknown,
+    runtimeTimings: readonly DurationMetric[] = [],
+): Promise<void> {
+    await replyFailure(
+        context,
+        requestId,
+        target,
+        operationErrorCode(error),
+        operationErrorMessage(error),
+        runtimeTimings,
+    );
 }

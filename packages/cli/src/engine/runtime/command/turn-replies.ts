@@ -1,12 +1,8 @@
-import {
-    type NativeSessionTarget,
-    type PromptCompletion,
-    sessionOperationFailedEventCodec,
-} from "@morty-build/client/protocol";
+import type { NativeSessionTarget, PromptCompletion } from "@morty-build/client/protocol";
 import { WebSocket } from "undici";
 import type { ExecutionReceipts } from "../../session/turn/execution-receipts.ts";
 import type { CommandContext } from "./context.ts";
-import { send } from "./transport.ts";
+import { replyFailure, send } from "./transport.ts";
 
 /** How a settled command ended, as the ledger's outcome records it. */
 export type SettledCommand =
@@ -36,30 +32,6 @@ export function reply(socket: WebSocket, encoded: string | Uint8Array): void {
     if (socket.readyState === WebSocket.OPEN) {
         send(socket, encoded);
     }
-}
-
-export async function replyFailure(
-    { socket, payloadEncryption, signal }: Pick<CommandContext, "socket" | "payloadEncryption" | "signal">,
-    requestId: string,
-    target: NativeSessionTarget | undefined,
-    code: string,
-    message: string,
-): Promise<void> {
-    if (socket.readyState !== WebSocket.OPEN) {
-        return;
-    }
-    const encoded = await sessionOperationFailedEventCodec.encode(
-        {
-            code,
-            kind: "session.operation.failed",
-            message,
-            requestId,
-            ...(target === undefined ? {} : { target }),
-        },
-        payloadEncryption,
-        AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
-    );
-    reply(socket, encoded);
 }
 
 /** Answers a request with a settled command's failure, or with the loss of its outcome. */

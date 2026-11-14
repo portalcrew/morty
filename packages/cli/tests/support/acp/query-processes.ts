@@ -3,9 +3,9 @@ import { type NativeSessionQueryKey, nativeSessionQueryKey } from "../../../src/
 import type { AcpAgentDefinition } from "../../../src/engine/acp/agent/agent-definition.ts";
 import type { NativeSessionQuery } from "../../../src/engine/acp/native-history/preview-contract.ts";
 import type { NativeSessionPage } from "../../../src/engine/acp/protocol/native-session.ts";
-import { waitForSharedOperation } from "../../../src/engine/session/manager/operation-drain.ts";
 import type { AgentProcessPool } from "../../../src/engine/session/process/agent-process-pool.ts";
 import { RetainedAgentProcesses } from "../../../src/engine/session/process/retained-agent-processes.ts";
+import { waitForSharedOperation } from "../../../src/engine/util/wait-for-shared-operation.ts";
 import { AcpQuerySession } from "./query-session.ts";
 import type { AcpSessionConnector } from "./session-events.ts";
 

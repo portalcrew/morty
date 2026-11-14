@@ -15,6 +15,7 @@ import type { NativeSessionOrigin } from "../../acp/protocol/native-session.ts";
 import { unsupportedSessionCapabilities } from "../../acp/protocol/session-capabilities.ts";
 import { type OperationMetrics, unmeasuredOperationMetrics } from "../../infra/operation-metrics.ts";
 import type { Timer } from "../../util/timer.ts";
+import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
 import { AgentSession, type SessionExecutionRecord } from "../live/agent-session.ts";
 import { replaySessionConfigurations, storedSessionConfiguration } from "../live/session-configurations.ts";
 import { nativeSessionQuery } from "../native/native-query.ts";
@@ -24,7 +25,7 @@ import { MemorySessionStore, type SessionStore, type StoredSession } from "../re
 import { isModelOption } from "../settings/configuration-dependencies.ts";
 import { ActiveExecutions } from "../turn/active-executions.ts";
 import type { SettledTurn } from "../turn/execution-receipts.ts";
-import { RuntimeOperations, waitForSharedOperation } from "./operation-drain.ts";
+import { RuntimeOperations } from "./operation-drain.ts";
 import {
     type ImmediateSessionOperation,
     SessionLifecycles,

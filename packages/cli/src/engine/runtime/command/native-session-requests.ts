@@ -5,6 +5,7 @@ import { operationErrorCode } from "../../infra/operation-error.ts";
 import { SessionError } from "../../session/api/session-error.ts";
 import type { NativeSessionService } from "../../session/native/native-session-browser.ts";
 import type { Timer } from "../../util/timer.ts";
+import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
 import type { RelayConnectionDiagnostics } from "../relay/diagnostics.ts";
 import { reportOperationFailure } from "./transport.ts";
 import { reply } from "./turn-replies.ts";
@@ -61,20 +62,10 @@ export function createNativeSessionRequestHandler(dependencies: NativeRequestDep
                 operationSignal.throwIfAborted();
                 const skipPrevious = command.action === "active-turn";
                 if (previous.length > 0 && !skipPrevious) {
-                    await new Promise<void>((resolve, reject) => {
-                        const onAbort = (): void => reject(operationSignal.reason);
-                        operationSignal.addEventListener("abort", onAbort, { once: true });
-                        void Promise.all(previous.map((request) => request.completion)).then(
-                            () => {
-                                operationSignal.removeEventListener("abort", onAbort);
-                                resolve();
-                            },
-                            (error: unknown) => {
-                                operationSignal.removeEventListener("abort", onAbort);
-                                reject(error);
-                            },
-                        );
-                    });
+                    await waitForSharedOperation(
+                        Promise.all(previous.map((request) => request.completion)),
+                        operationSignal,
+                    );
                 }
                 operationSignal.throwIfAborted();
                 const result = await nativeSessions.execute(command, operationSignal);
