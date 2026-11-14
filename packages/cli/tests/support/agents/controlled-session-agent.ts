@@ -113,14 +113,6 @@ export class ControlledSessionAgent {
 
     readonly endpointCount = (): number => this.#endpoints.length;
 
-    readonly endpoint = (index: number): ControlledSessionEndpoint => {
-        const endpoint = this.#endpoints[index];
-        if (endpoint === undefined) {
-            throw new Error(`Agent endpoint ${index.toString()} was never started`);
-        }
-        return endpoint;
-    };
-
     readonly releaseAll = (): void => {
         this.closes.release();
     };

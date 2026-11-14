@@ -6,10 +6,6 @@ function truncate(value: string, maximum: number): string {
     return value.length <= maximum ? value : value.slice(0, maximum);
 }
 
-function readBoolean(value: unknown, fallback = false): boolean {
-    return typeof value === "boolean" ? value : fallback;
-}
-
 function normalizeConfigValue(
     option: Readonly<Record<string, unknown>>,
     groupId = "",
@@ -92,7 +88,7 @@ function normalizeConfigOptions(value: unknown, modes: unknown): readonly Sessio
             }
             if (option["type"] === "boolean") {
                 normalized.push({
-                    booleanValue: readBoolean(option["currentValue"]),
+                    booleanValue: option["currentValue"] === true,
                     category,
                     description: truncate(readString(option["description"]), 500),
                     id,

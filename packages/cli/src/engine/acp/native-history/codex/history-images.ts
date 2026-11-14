@@ -77,7 +77,7 @@ async function replaceImageMarkers(text: string, replace: (uri: string) => Promi
     let cursor = 0;
     let rewritten = "";
     for (const match of matches) {
-        const index = match.index ?? 0;
+        const index = match.index;
         rewritten += text.slice(cursor, index);
         rewritten += await replace(match[1] ?? "");
         cursor = index + match[0].length;

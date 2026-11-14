@@ -147,12 +147,6 @@ export class AdapterSessionConnection {
         this.#connection = connectControlledAgent(options.agent, {
             cwd: options.cwd,
             client,
-            onBackgroundActivity: (activity) => {
-                if (this.#lifetime.signal.aborted) {
-                    return;
-                }
-                this.#onBackgroundActivity(activity);
-            },
             onPromptDelegation: async (stage) => {
                 if (!this.#lifetime.signal.aborted) {
                     await options.onPromptDelegation?.(stage);

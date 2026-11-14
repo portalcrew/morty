@@ -1,4 +1,4 @@
-import { basename, isAbsolute, normalize } from "node:path";
+import { isAbsolute, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalPath, readFileBytes, readFileStart, readPathMetadata } from "../../storage/files/local-files.ts";
 
@@ -15,12 +15,10 @@ export type LocalRasterMimeType = "image/png" | "image/jpeg" | "image/gif" | "im
 /** A local image file identified by canonical path, read on demand. */
 export class LocalRasterImage {
     readonly mimeType: LocalRasterMimeType;
-    readonly name: string;
     readonly sourceUri: string;
 
-    constructor(name: string, mimeType: LocalRasterMimeType, sourceUri: string) {
+    constructor(mimeType: LocalRasterMimeType, sourceUri: string) {
         this.mimeType = mimeType;
-        this.name = name;
         this.sourceUri = sourceUri;
     }
 
@@ -117,5 +115,5 @@ export async function readLocalRaster(uri: string, signal: AbortSignal): Promise
     if (mimeType === null) {
         return null;
     }
-    return new LocalRasterImage(basename(target) || "Image", mimeType, target);
+    return new LocalRasterImage(mimeType, target);
 }

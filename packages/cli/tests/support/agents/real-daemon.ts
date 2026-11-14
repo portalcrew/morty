@@ -56,7 +56,6 @@ export interface DaemonConnectionPeer {
     /** Runs a `morty` command against this daemon's installation, as the user's terminal would. */
     readonly cli: (args: readonly string[]) => Promise<void>;
     readonly restart: (mode?: "crash", restoreFiles?: () => Promise<void>) => Promise<void>;
-    readonly stateDirectory: string;
     readonly send: (message: string | Uint8Array) => void;
     /** Delivers a text message exactly as written, as a relay without the Computer's encryption access would. */
     readonly sendUnsealed: (message: string) => void;
@@ -407,7 +406,6 @@ async function withDaemonConnection(
                     await subscribe(target);
                 }
             },
-            stateDirectory: directory,
             cli: async (args) => await cli(args),
             readDiagnostics: async () => await readFile(join(directory, "logs", "daemon.log"), "utf8"),
             signal,

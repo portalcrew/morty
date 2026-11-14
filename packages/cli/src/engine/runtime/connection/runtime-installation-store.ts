@@ -55,9 +55,9 @@ function validatePairingGeneration(value: string): string {
     return value;
 }
 
-function validateIdentifier(value: string, code: string): string {
+function validateIdentifier(value: string): string {
     if (!isIdentifier(value)) {
-        throw new RuntimeInstallationStoreError(code, "The saved Runtime connection is invalid");
+        throw new RuntimeInstallationStoreError("invalid_connection", "The saved Runtime connection is invalid");
     }
     return value;
 }
@@ -107,7 +107,7 @@ function decodeSavedConnection(value: Readonly<Record<string, unknown>>): SavedC
     return new SavedComputerConnection(
         activation,
         validatePairingGeneration(pairingGeneration),
-        validateIdentifier(computerId, "invalid_connection"),
+        validateIdentifier(computerId),
         defaultWorkspace,
         parseRelayOrigin(relayOrigin),
         {
@@ -124,14 +124,18 @@ function decodeConnection(value: unknown): SavedComputerConnection {
     return decodeSavedConnection(value);
 }
 
-async function readJsonFile(path: string, signal: AbortSignal, missingCode: string): Promise<unknown> {
+async function readJsonFile(path: string, signal: AbortSignal): Promise<unknown> {
     signal.throwIfAborted();
     const read = await readInstallationFile(path);
     switch (read.kind) {
         case "missing":
-            throw new RuntimeInstallationStoreError(missingCode, "The saved Runtime connection was not found", {
-                cause: read.cause,
-            });
+            throw new RuntimeInstallationStoreError(
+                "connection_not_found",
+                "The saved Runtime connection was not found",
+                {
+                    cause: read.cause,
+                },
+            );
         case "unopenable":
             throw new RuntimeInstallationStoreError(
                 "connection_unavailable",
@@ -215,7 +219,7 @@ export class RuntimeInstallationStore {
         signal: AbortSignal,
     ): Promise<SavedComputerConnection> => {
         validatePairingGeneration(pairingGeneration);
-        const connection = decodeConnection(await readJsonFile(this.pairingPath, signal, "connection_not_found"));
+        const connection = decodeConnection(await readJsonFile(this.pairingPath, signal));
         if (connection.pairingGeneration !== pairingGeneration) {
             throw new RuntimeInstallationStoreError(
                 "connection_not_found",
@@ -232,7 +236,7 @@ export class RuntimeInstallationStore {
         const stored = new SavedComputerConnection(
             "active",
             pairingGeneration(),
-            validateIdentifier(input.computerId, "invalid_connection"),
+            validateIdentifier(input.computerId),
             input.defaultWorkspace,
             parseRelayOrigin(input.relayOrigin.toString()),
             { current: validateComputerCredential(input.computerCredential), successor: null },
@@ -245,7 +249,7 @@ export class RuntimeInstallationStore {
 
     readonly currentConnection = async (signal: AbortSignal): Promise<SavedComputerConnection | null> => {
         try {
-            return decodeConnection(await readJsonFile(this.pairingPath, signal, "connection_not_found"));
+            return decodeConnection(await readJsonFile(this.pairingPath, signal));
         } catch (cause) {
             if (cause instanceof RuntimeInstallationStoreError && cause.code === "connection_not_found") {
                 return null;

@@ -79,7 +79,7 @@ export class RecordingObserver implements SessionObserver {
                     return [];
                 }
                 // The controlled peer marks commentary with a progress message id.
-                return update.messageId?.startsWith("progress-") ? [] : [update.content.text];
+                return update.messageId.startsWith("progress-") ? [] : [update.content.text];
             })
             .join("");
 

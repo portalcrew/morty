@@ -35,7 +35,7 @@ function promptInput(prompt: readonly ContentBlock[]): readonly unknown[] {
             case "resource":
                 return [
                     {
-                        text: "text" in block.resource ? (block.resource.text ?? "") : "",
+                        text: "text" in block.resource ? block.resource.text : "",
                         text_elements: [],
                         type: "text",
                     },

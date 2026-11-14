@@ -1066,7 +1066,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
                     (update.sessionUpdate === "agent_message_chunk" ||
                         update.sessionUpdate === "agent_thought_chunk") &&
                     update.content.type === "text"
-                        ? { messageId: update.messageId ?? "", text: update.content.text }
+                        ? { messageId: update.messageId, text: update.content.text }
                         : null,
                 )
                 .filter((entry): entry is { messageId: string; text: string } => entry !== null),

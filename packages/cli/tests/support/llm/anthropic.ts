@@ -19,14 +19,6 @@ interface AnthropicTool {
     readonly name: string;
 }
 
-interface ProviderRequestDiagnostic {
-    readonly scenario: FakeProviderScenario;
-    readonly selectedTool: string | undefined;
-    readonly toolResultCount: number;
-    readonly tools: readonly string[];
-    readonly url: string;
-}
-
 function isObject(value: unknown): value is JsonObject {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -213,7 +205,6 @@ export class FakeAnthropicProvider implements AsyncDisposable {
     readonly response: string;
     readonly #answer: string;
     readonly #close: () => Promise<void>;
-    readonly #requests: ProviderRequestDiagnostic[];
     readonly #toolPrompts: readonly (string | undefined)[];
 
     private constructor(
@@ -221,7 +212,6 @@ export class FakeAnthropicProvider implements AsyncDisposable {
         model: string,
         answer: string,
         toolPrompts: readonly (string | undefined)[],
-        requests: ProviderRequestDiagnostic[],
         close: () => Promise<void>,
     ) {
         this.origin = origin;
@@ -229,12 +219,7 @@ export class FakeAnthropicProvider implements AsyncDisposable {
         this.#answer = answer;
         this.#toolPrompts = toolPrompts;
         this.response = fakeProviderResponse(answer, selectFakeProviderScenario(fakeProviderPrompts.successfulTool));
-        this.#requests = requests;
         this.#close = close;
-    }
-
-    diagnostics(): readonly ProviderRequestDiagnostic[] {
-        return this.#requests;
     }
 
     responseFor(prompt: string): string {
@@ -259,7 +244,6 @@ export class FakeAnthropicProvider implements AsyncDisposable {
             readonly subagent?: SubagentScript;
         } = {},
     ): Promise<FakeAnthropicProvider> {
-        const requests: ProviderRequestDiagnostic[] = [];
         // A subagent script's inner prompt is the subagent's tool prompt.
         const toolPrompts = [options.toolPrompt, options.subagent?.innerPrompt];
         let disconnectsRemaining = options.disconnectsBeforeSuccess ?? 0;
@@ -297,13 +281,6 @@ export class FakeAnthropicProvider implements AsyncDisposable {
                     ? selectTool(tools, scenario, completedToolCalls, options.readPath, options.bash)
                     : undefined);
             const selectedAnswer = scripted?.text ?? fakeProviderResponse(answer, scenario);
-            requests.push({
-                scenario,
-                selectedTool: tool?.name,
-                toolResultCount: completedToolCalls,
-                tools: tools.map(({ name }) => name),
-                url: request.url ?? "",
-            });
             const content =
                 tool === undefined
                     ? { type: "text", text: selectedAnswer }
@@ -340,7 +317,6 @@ export class FakeAnthropicProvider implements AsyncDisposable {
             model,
             answer,
             toolPrompts,
-            requests,
             close,
         );
     }

@@ -3,7 +3,6 @@ import type { AcpContentExternalizer } from "../../src/engine/acp/content/conten
 import type { AdapterResolver } from "../../src/engine/acp/native-history/preview-contract.ts";
 import type {
     SessionConfigurationChange,
-    SessionConfigureOptions,
     SessionCreationOptions,
     SessionPrepareOptions,
     SessionSteerOptions,
@@ -70,9 +69,6 @@ export class SessionRuntimeFixture {
         target: await this.createNativeSession(options),
     });
 
-    readonly configureSession = (options: WithoutAdapter<SessionConfigureOptions>) =>
-        this.sessions.configureSession({ ...options, adapter: this.adapters.resolve(options.agent) });
-
     readonly applySessionConfiguration = (options: WithoutAdapter<SessionConfigurationChange>) =>
         this.sessions.applySessionConfiguration({ ...options, adapter: this.adapters.resolve(options.agent) });
 
@@ -81,12 +77,6 @@ export class SessionRuntimeFixture {
 
     readonly steerPrompt = (options: Omit<SessionSteerOptions, "adapter">) =>
         this.sessions.steerPrompt({ ...options, adapter: this.adapters.resolve(options.agent) });
-
-    readonly listNativeSessions = (options: Omit<SessionCreationOptions, "adapter">, cursor: string | null) =>
-        this.adapters.resolve(options.agent).listSessions({
-            query: nativeSessionQuery({ ...options, adapter: this.adapters.resolve(options.agent) }),
-            cursor,
-        });
 
     readonly previewNativeSessionEvents = (
         options: Omit<SessionCreationOptions, "adapter">,
@@ -133,8 +123,6 @@ export class SessionRuntimeFixture {
         }
     };
 
-    readonly renameSession = (...args: Parameters<SessionManager["renameSession"]>) =>
-        this.sessions.renameSession(...args);
     readonly cancelPrompt = (...args: Parameters<SessionManager["cancelPrompt"]>) =>
         this.sessions.cancelPrompt(...args);
     readonly respondPermission = (...args: Parameters<SessionManager["respondPermission"]>) =>
