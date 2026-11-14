@@ -110,15 +110,12 @@ export class SessionManager {
         this.#timer = timer;
     }
 
-    readonly recordLifecycleEvent = async (
-        target: NativeSessionTarget,
-        event: SessionEventPayload,
-    ): Promise<boolean> => {
+    readonly recordLifecycleEvent = (target: NativeSessionTarget, event: SessionEventPayload): boolean => {
         const runtime = this.#executionProcesses.get(target);
         if (runtime === undefined) {
             return false;
         }
-        return await runtime.recordControlEvent(event);
+        return runtime.recordControlEvent(event);
     };
 
     #isHeld(target: NativeSessionTarget): boolean {

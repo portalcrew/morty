@@ -204,7 +204,7 @@ export class AgentSession {
                 // Only the prompt this Session is running can be delegated; a late report has no command to name.
                 const commandId = this.#delegableCommandId;
                 if (commandId !== null) {
-                    await this.recordLifecycleEvent({
+                    this.recordLifecycleEvent({
                         payload: { commandId, kind: "prompt.delegated", stage },
                         type: "lifecycle-metadata",
                     });
@@ -703,7 +703,7 @@ export class AgentSession {
         // An Agent update that arrived meanwhile is newer than this response.
         if (this.#configOptions === before) {
             this.#configOptions = configured;
-            await this.#publishConfiguration();
+            this.#publishConfiguration();
         }
     };
 
@@ -747,7 +747,7 @@ export class AgentSession {
         };
     };
 
-    readonly #publishConfiguration = async (): Promise<void> => {
+    readonly #publishConfiguration = (): void => {
         // Use the existing v2 ACP event vocabulary so old observers can still decode the stream.
         const event = this.#store.events.append(this.target, {
             type: "acp",
@@ -764,7 +764,7 @@ export class AgentSession {
                 })),
             },
         });
-        await this.#observer.onSessionEvent?.(event);
+        this.#observer.onSessionEvent?.(event);
     };
 
     readonly #target = (): AdapterSessionTarget => ({
@@ -806,7 +806,7 @@ export class AgentSession {
         this.writeStoredSession(new Date().toISOString());
         const lifecycle = options.lifecycle;
         if (lifecycle !== undefined) {
-            await this.recordLifecycleEvent({
+            this.recordLifecycleEvent({
                 payload: {
                     commandId: options.commandId,
                     content: lifecycle.content,
@@ -816,7 +816,7 @@ export class AgentSession {
                 },
                 type: "lifecycle-metadata",
             });
-            await this.recordLifecycleEvent({
+            this.recordLifecycleEvent({
                 payload: {
                     attemptId: lifecycle.attemptId,
                     commandId: options.commandId,
@@ -838,7 +838,7 @@ export class AgentSession {
             this.writeStoredSession(new Date().toISOString());
             if (lifecycle !== undefined) {
                 const messageId = result._meta?.messageId;
-                await this.recordLifecycleEvent({
+                this.recordLifecycleEvent({
                     payload: {
                         commandId: options.commandId,
                         completion: promptCompletion(promptEnd(result.stopReason), true),
@@ -856,7 +856,7 @@ export class AgentSession {
                     : new AcpExecutionError("ACP agent execution failed", { cause: error });
             if (lifecycle !== undefined) {
                 const message = failure instanceof AcpPromptExecutionError ? { messageId: failure.messageId } : {};
-                await this.recordLifecycleEvent({
+                this.recordLifecycleEvent({
                     payload: options.cancellationRequested()
                         ? {
                               commandId: options.commandId,
@@ -899,7 +899,7 @@ export class AgentSession {
         options.signal.throwIfAborted();
         const lifecycle = options.lifecycle;
         if (lifecycle !== undefined) {
-            await this.recordLifecycleEvent({
+            this.recordLifecycleEvent({
                 payload: {
                     commandId: options.commandId,
                     content: lifecycle.content,
@@ -909,7 +909,7 @@ export class AgentSession {
                 },
                 type: "lifecycle-metadata",
             });
-            await this.recordLifecycleEvent({
+            this.recordLifecycleEvent({
                 payload: {
                     attemptId: lifecycle.attemptId,
                     commandId: options.commandId,
@@ -921,7 +921,7 @@ export class AgentSession {
         try {
             const outcome = await this.#adapter.steer({ ...this.#target(), content: options, signal: options.signal });
             if (lifecycle !== undefined) {
-                await this.recordLifecycleEvent({
+                this.recordLifecycleEvent({
                     payload: {
                         commandId: options.commandId,
                         completion: { kind: "steered" },
@@ -938,7 +938,7 @@ export class AgentSession {
                     ? error
                     : new AcpExecutionError("ACP agent execution failed", { cause: error });
             if (lifecycle !== undefined) {
-                await this.recordLifecycleEvent({
+                this.recordLifecycleEvent({
                     payload: {
                         attemptId: lifecycle.attemptId,
                         code: failure.code,
@@ -975,20 +975,20 @@ export class AgentSession {
         await this.#interactions.respondElicitation(options);
     };
 
-    readonly recordControlEvent = async (event: SessionEventPayload): Promise<boolean> => {
+    readonly recordControlEvent = (event: SessionEventPayload): boolean => {
         if (this.#sessionLoad.kind !== "loaded") {
             return false;
         }
-        await this.recordLifecycleEvent(event);
+        this.recordLifecycleEvent(event);
         return true;
     };
 
-    readonly recordLifecycleEvent = async (event: SessionEventPayload): Promise<void> => {
+    readonly recordLifecycleEvent = (event: SessionEventPayload): void => {
         if (event.type !== "lifecycle-metadata" || this.#sessionLoad.kind !== "loaded") {
             return;
         }
         const liveEvent = this.#sessionLoad.history.recordLifecycle(event);
-        await this.#observer.onSessionEvent?.(liveEvent);
+        this.#observer.onSessionEvent?.(liveEvent);
     };
 
     /**
@@ -1060,9 +1060,7 @@ export class AgentSession {
         if (this.#sessionLoad.kind === "capturing") {
             this.#sessionLoad.history.replay(event.payload);
         } else if (this.#sessionLoad.kind === "loaded") {
-            await this.#sessionLoad.history.record(event.payload, async (liveEvent) => {
-                await this.#observer.onSessionEvent?.(liveEvent);
-            });
+            this.#observer.onSessionEvent?.(this.#sessionLoad.history.record(event.payload));
         }
         switch (event.kind) {
             case "content":

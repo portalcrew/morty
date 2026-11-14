@@ -22,7 +22,7 @@ export class RecordingObserver implements SessionObserver {
     readonly elicitationArrived = Promise.withResolvers<SessionElicitationRequestedEvent>();
     readonly #eventWaiters: Array<(event: SessionEventPayload) => void> = [];
 
-    readonly onSessionEvent = (liveEvent: SessionLiveEvent): Promise<void> => {
+    readonly onSessionEvent = (liveEvent: SessionLiveEvent): void => {
         if (liveEvent.type === "lifecycle-metadata") {
             switch (liveEvent.payload.kind) {
                 case "session.permission.requested":
@@ -47,7 +47,6 @@ export class RecordingObserver implements SessionObserver {
         for (const resolve of this.#eventWaiters.splice(0)) {
             resolve(event);
         }
-        return Promise.resolve();
     };
 
     /** Resolves on the next recorded session event, without polling or timing. */

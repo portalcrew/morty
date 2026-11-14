@@ -119,13 +119,8 @@ export class HistoryReplayCapture {
         }
     };
 
-    readonly record = async (
-        rawUpdate: AcpSessionUpdate,
-        onRecorded: (event: SessionLiveEvent) => Promise<void> = () => Promise.resolve(),
-    ): Promise<void> => {
-        const event = this.#events.append(this.#sessionTarget, { payload: rawUpdate, type: "acp" });
-        await onRecorded(event);
-    };
+    readonly record = (rawUpdate: AcpSessionUpdate): SessionLiveEvent =>
+        this.#events.append(this.#sessionTarget, { payload: rawUpdate, type: "acp" });
 
     readonly recordLifecycle = (event: SessionEventPayload): SessionLiveEvent => {
         if (event.type !== "lifecycle-metadata") {

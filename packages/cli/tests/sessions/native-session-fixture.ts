@@ -27,7 +27,7 @@ const acpUrl = new URL("./fixtures/acp-peer.ts", import.meta.url).toString();
 class NativeSessionObserver implements SessionObserver {
     readonly updates: AcpSessionUpdate[] = [];
     readonly #waiters: { readonly matches: (update: AcpSessionUpdate) => boolean; readonly resolve: () => void }[] = [];
-    readonly onSessionEvent = (event: SessionLiveEvent): Promise<void> => {
+    readonly onSessionEvent = (event: SessionLiveEvent): void => {
         if (event.type === "acp") {
             this.updates.push(event.payload);
             for (const waiter of this.#waiters.splice(0).filter((candidate) => {
@@ -40,7 +40,6 @@ class NativeSessionObserver implements SessionObserver {
                 waiter.resolve();
             }
         }
-        return Promise.resolve();
     };
     /** Settles once an Agent update matching `matches` arrives, or at once if one already has. */
     readonly nextUpdate = (matches: (update: AcpSessionUpdate) => boolean): Promise<void> => {
