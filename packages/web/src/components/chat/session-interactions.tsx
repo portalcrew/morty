@@ -9,12 +9,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { textLinkClassName } from "@/components/ui/text-link";
 import { useWrappedButtonRadius } from "@/components/utils/use-wrapped-button-radius";
 import { cn } from "@/lib/utils";
+import { type ElicitationFieldValue, elicitationFieldValue } from "@/services/chat/elicitation-form";
 import {
-    type ElicitationFieldValue,
-    elicitationFieldValue,
-    encodeElicitationAnswers,
-} from "@/services/chat/elicitation-form";
-import { type PermissionFileChange, permissionPresentation } from "@/view-models/chat/session-interaction-store";
+    type FormElicitation,
+    type PermissionFileChange,
+    permissionPresentation,
+} from "@/view-models/chat/session-interaction-store";
 import type {
     ElicitationInteraction,
     ElicitationInteractionResponse,
@@ -260,51 +260,6 @@ function FieldControl({
     );
 }
 
-/** Generic affirmatives/negatives carry no scope, so the label is derived from the option kind instead. */
-const genericAnswerNames = new Set(["n", "no", "y", "yes"]);
-
-type PermissionOption = PermissionInteraction["options"][number];
-
-function scopeLabel(kind: PermissionOption["kind"]): string {
-    switch (kind) {
-        case "allow_once":
-            return "Allow";
-        case "allow_always":
-            return "Allow for this session";
-        case "reject_once":
-            return "Deny";
-        case "reject_always":
-            return "Deny for this session";
-        default: {
-            const unexpected: never = kind;
-            throw new Error(`Unsupported permission option: ${unexpected}`);
-        }
-    }
-}
-
-function optionLabel(option: PermissionOption): string {
-    if (genericAnswerNames.has(option.name.trim().toLowerCase())) {
-        return scopeLabel(option.kind);
-    }
-    const lower = option.name.toLowerCase();
-    switch (option.kind) {
-        case "allow_once":
-        case "allow_always":
-            return lower.startsWith("allow") ? option.name : `Allow: ${option.name}`;
-        case "reject_once":
-        case "reject_always":
-            return lower.startsWith("deny") || lower.startsWith("reject") ? option.name : `Deny: ${option.name}`;
-        default: {
-            const unexpected: never = option.kind;
-            throw new Error(`Unsupported permission option: ${unexpected}`);
-        }
-    }
-}
-
-function isAllowKind(kind: PermissionOption["kind"]): boolean {
-    return kind === "allow_once" || kind === "allow_always";
-}
-
 /** The shell command when this is an `execute` request carrying one. */
 function executeCommand(permission: PermissionInteraction): string | undefined {
     if (permission.toolKind !== "execute") {
@@ -398,7 +353,7 @@ function PermissionCard({
         const answer = permission.state.answer;
         const chosen =
             answer.outcome === "selected"
-                ? permission.options.find((option) => option.optionId === answer.optionId)
+                ? presentation.options.find((option) => option.optionId === answer.optionId)
                 : undefined;
         return (
             <section className={interactionCardClassName} role="alertdialog" aria-label="Agent permission request">
@@ -411,7 +366,7 @@ function PermissionCard({
                             <dl className="mt-2 grid gap-1 text-12 leading-5">
                                 <div className="flex flex-wrap gap-x-1.5">
                                     <dt className="text-muted-foreground">Decision:</dt>
-                                    <dd className="font-medium text-foreground">{optionLabel(chosen)}</dd>
+                                    <dd className="font-medium text-foreground">{chosen.label}</dd>
                                 </div>
                             </dl>
                         )}
@@ -490,7 +445,7 @@ function PermissionCard({
                         className="sticky bottom-0 z-20 flex flex-wrap items-center gap-2 bg-surface-elevated pt-3"
                         ref={actionRow}
                     >
-                        {permission.options.map((option) => (
+                        {presentation.options.map((option) => (
                             <Button
                                 className="max-w-full whitespace-normal py-[7.5px]!"
                                 disabled={busy}
@@ -503,9 +458,9 @@ function PermissionCard({
                                     });
                                 }}
                                 size="sm"
-                                variant={isAllowKind(option.kind) ? "primary" : "outline"}
+                                variant={option.allow ? "primary" : "outline"}
                             >
-                                {optionLabel(option)}
+                                {option.label}
                             </Button>
                         ))}
                         <Button
@@ -539,19 +494,23 @@ function ElicitationCard({
     busy,
     elicitation,
     draft,
+    requiredNotice,
     respond,
+    accept,
     editAnswer,
 }: {
     readonly busy: boolean;
     readonly elicitation: ElicitationInteraction;
     /** What the user typed into this question so far. */
     readonly draft: Readonly<Record<string, ElicitationFieldValue>>;
+    /** Why the question cannot be accepted yet, once the user tried; empty otherwise. */
+    readonly requiredNotice: string;
     readonly respond: (response: ElicitationInteractionResponse) => void;
+    readonly accept: (elicitation: FormElicitation) => void;
     readonly editAnswer: (fieldName: string, value: ElicitationFieldValue) => void;
 }) {
     const externalUrl = elicitation.mode === "url" ? safeExternalUrl(elicitation.url) : "";
     const answered = elicitation.state.kind !== "pending";
-    const [missingRequiredTitle, setMissingRequiredTitle] = useState("");
     const refuse = (action: "cancel" | "decline"): void => {
         respond({
             answer: { action },
@@ -655,26 +614,7 @@ function ElicitationCard({
                             className="mt-3 grid gap-3"
                             onSubmit={(event) => {
                                 event.preventDefault();
-                                // The library Select is not a native form control, so its required gate is checked here.
-                                const missing = elicitation.fields.find(
-                                    (field) =>
-                                        field.type === "select" &&
-                                        field.required &&
-                                        elicitationFieldValue(field, draft) === "",
-                                );
-                                if (missing !== undefined) {
-                                    setMissingRequiredTitle(missing.title);
-                                    return;
-                                }
-                                setMissingRequiredTitle("");
-                                respond({
-                                    answer: {
-                                        action: "accept",
-                                        content: encodeElicitationAnswers(elicitation.fields, draft),
-                                    },
-                                    interactionId: elicitation.interactionId,
-                                    target: elicitation.target,
-                                });
+                                accept(elicitation);
                             }}
                         >
                             {elicitation.fields.map((field) => (
@@ -686,9 +626,7 @@ function ElicitationCard({
                                     onChange={(value) => editAnswer(field.name, value)}
                                 />
                             ))}
-                            {missingRequiredTitle.length > 0 && (
-                                <MortyAlert>Select an option for {missingRequiredTitle}.</MortyAlert>
-                            )}
+                            {requiredNotice.length > 0 && <MortyAlert>{requiredNotice}</MortyAlert>}
                             <div className="flex flex-wrap gap-2">
                                 <Button
                                     className="min-h-11 md:min-h-9"
@@ -730,7 +668,9 @@ const NO_ANSWERS: Readonly<Record<string, ElicitationFieldValue>> = {};
 export function SessionInteractionCards({
     elicitations,
     answerDrafts,
+    requiredNotices,
     onElicitationAnswer,
+    onElicitationAccept,
     fileChanges,
     permissions,
     onElicitationResponse,
@@ -742,7 +682,10 @@ export function SessionInteractionCards({
     readonly elicitations: readonly ElicitationInteraction[];
     /** What the user typed into each pending question, by interaction id. */
     readonly answerDrafts: ReadonlyMap<string, Readonly<Record<string, ElicitationFieldValue>>>;
+    /** Why a question cannot be accepted yet, by interaction id, once the user tried. */
+    readonly requiredNotices: ReadonlyMap<string, string>;
     readonly onElicitationAnswer: (interactionId: string, fieldName: string, value: ElicitationFieldValue) => void;
+    readonly onElicitationAccept: (elicitation: FormElicitation) => void;
     /** The diffs announced for each permission's tool call, by interaction id. */
     readonly fileChanges: ReadonlyMap<string, readonly PermissionFileChange[]>;
     readonly permissions: readonly PermissionInteraction[];
@@ -770,7 +713,9 @@ export function SessionInteractionCards({
             {elicitations.map((elicitation) => (
                 <ElicitationCard
                     busy={busyInteractionIds.has(elicitation.interactionId)}
+                    accept={onElicitationAccept}
                     draft={answerDrafts.get(elicitation.interactionId) ?? NO_ANSWERS}
+                    requiredNotice={requiredNotices.get(elicitation.interactionId) ?? ""}
                     editAnswer={(fieldName, value) => onElicitationAnswer(elicitation.interactionId, fieldName, value)}
                     elicitation={elicitation}
                     key={elicitation.interactionId}
