@@ -33,3 +33,7 @@ export class ManagementError extends Error implements HttpError {
         headers: this.headers,
     });
 }
+
+/** The answer for a computer that was never created, which every boundary gives the same way. */
+export const computerNotFound = (): ManagementError =>
+    new ManagementError("COMPUTER_NOT_FOUND", "The Morty computer does not exist.", 404);

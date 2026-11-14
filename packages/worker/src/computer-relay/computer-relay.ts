@@ -3,6 +3,7 @@ import { COMPUTER_HEARTBEAT_ACK_MESSAGE, COMPUTER_HEARTBEAT_MESSAGE } from "@mor
 import { Hono } from "hono";
 import { computerObjectName, decodeComputerPlacement } from "../contracts/computer-id.ts";
 import { ComputerManagementError } from "../contracts/computer-management.ts";
+import { computerNotFound } from "../contracts/management-error.ts";
 import type { ConfiguredRelayBindings } from "../contracts/relay-bindings.ts";
 import { errorHandler } from "../http/error-middleware.ts";
 import { logger } from "../infra/logger.ts";
@@ -58,6 +59,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         const ctx: ComputerRouteContext = {
             bindings: this.env,
             ownsComputer: (computerId) => this.#owns(computerId),
+            holdsComputer: () => this.#account.holdsAccount(),
             services: {
                 browser: this.#browserServices,
                 relay: (computerId) => this.#services(computerId, storeFor(computerId)).relay,
@@ -122,7 +124,11 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
     }
 
     #database: DurableObjectDatabase | undefined;
+    /** Opening the database creates its schema, so only a computer that was created has one. */
     get #computerDatabase(): DurableObjectDatabase {
+        if (!this.#account.holdsAccount()) {
+            throw computerNotFound();
+        }
         this.#database ??= new DurableObjectDatabase(this.ctx.storage);
         return this.#database;
     }

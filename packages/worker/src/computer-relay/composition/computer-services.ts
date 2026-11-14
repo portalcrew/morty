@@ -2,7 +2,7 @@ import * as v from "valibot";
 import type { CloudBindings } from "../../contracts/cloud-bindings.ts";
 import { computerBootstrap } from "../../contracts/computer-bootstrap.ts";
 import { ComputerManagementError, relayIdentifier } from "../../contracts/computer-management.ts";
-import { ManagementError } from "../../contracts/management-error.ts";
+import { computerNotFound } from "../../contracts/management-error.ts";
 import { ManagedSessionOperations } from "../components/chat/infra/managed-session-operations.ts";
 import type { ComputerBackendService } from "../components/computer/service/computer-backend-service.ts";
 import type { IdentityOperations } from "../components/management/service/identity-operations.ts";
@@ -98,7 +98,7 @@ export class ComputerServices {
         signal: AbortSignal,
     ): Promise<ApplicationContext> => {
         if (!(await this.#account.isActive(signal))) {
-            throw new ManagementError("COMPUTER_NOT_FOUND", "The Morty computer does not exist.", 404);
+            throw computerNotFound();
         }
         return createApplicationDependencies({
             bindings: env,

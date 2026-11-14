@@ -8,6 +8,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { ComputerManagementError } from "../../contracts/computer-management.ts";
 import { COMPUTER_INTERNAL_PREFIX } from "../../contracts/computer-relay-http.ts";
+import { computerNotFound } from "../../contracts/management-error.ts";
 import { PairingDirectoryError, validateIdentifier } from "../../contracts/relay/pairing.ts";
 import { relayAuthenticationFromEnvironment } from "../../contracts/relay-authentication-environment.ts";
 import type { SubscribeSessionEvents } from "../../contracts/session-event-subscription.ts";
@@ -49,60 +50,70 @@ export function createComputerHttpRoutes(
         }
         await next();
     };
-    return new Hono<ComputerRouteHttpEnvironment>()
-        .use("*", errorMiddleware)
-        .post(
-            `${COMPUTER_INTERNAL_PREFIX}/:computerId/account`,
-            timeout,
-            computerFromPath,
-            authorizeTarget,
-            async (context) => {
-                const computerId = context.var.computerId;
-                await ctx.services.accounts.create(context.req.raw.signal);
-                return context.json({ computerId });
-            },
-        )
-        .route("/", createRelayProtocolRoutes({ services: { forComputer: ctx.services.relay } }))
-        .post("/__computer/bootstrap", async (context) => {
-            using deadline = new RequestDeadline(context.req.raw.signal, 45_000);
-            const input: unknown = await context.req.json();
-            return json(await ctx.services.browser.bootstrap(input, ctx.bindings, deadline.signal), 201);
-        })
-        .get(
-            `${MORTY_API_PREFIX}/v1/computers/:computerId/transport`,
-            timeout,
-            computerFromPath,
-            authorizeTarget,
-            (context) => {
-                return acceptWebSocketHttpTransport({
-                    request: context.req.raw,
-                    dispatch: websocket.dispatch,
-                    subscribe: websocket.subscribe,
-                });
-            },
-        )
-        .options(filePath, timeout, computerFromPath, authorizeTarget, cors)
-        .post(filePath, timeout, computerFromPath, authorizeTarget, cors, fileReadLimit, async (context) => {
-            const services = ctx.services.sessions(context.var.computerId);
-            const target = {
-                computerId: context.var.computerId,
-                target: {
-                    harness: validateIdentifier(context.req.param("harness"), "harness"),
-                    sessionId: validateIdentifier(context.req.param("sessionId"), "session_id"),
+    return (
+        new Hono<ComputerRouteHttpEnvironment>()
+            .use("*", errorMiddleware)
+            .post(
+                `${COMPUTER_INTERNAL_PREFIX}/:computerId/account`,
+                timeout,
+                computerFromPath,
+                authorizeTarget,
+                async (context) => {
+                    const computerId = context.var.computerId;
+                    await ctx.services.accounts.create(context.req.raw.signal);
+                    return context.json({ computerId });
                 },
-            } satisfies Parameters<typeof services.sessions.authorizeSession>[0];
-            const credential = (context.req.header("authorization") ?? "").match(/^Bearer ([^\s]+)$/u)?.[1];
-            if (credential === undefined) {
-                return context.json(
-                    { error: { code: "session_access_required", message: "A Session credential is required" } },
-                    401,
-                );
-            }
-            await services.sessions.authorizeSession(target, credential, context.req.raw.signal);
-            const command = decodeFileRead(await context.req.text(), target.target);
-            return services.operations.readSessionFile(command, context.req.raw.signal);
-        })
-        .all("/morty/api/*", (context) => dispatchHttpRequest(context.req.raw));
+            )
+            // A request for a computer that was never created is refused here, before any route accepts a connection or
+            // opens storage for it. A CORS preflight asks for nothing, so it is answered either way.
+            .use("*", async (context, next) => {
+                if (context.req.method !== "OPTIONS" && !ctx.holdsComputer()) {
+                    throw computerNotFound();
+                }
+                await next();
+            })
+            .route("/", createRelayProtocolRoutes({ services: { forComputer: ctx.services.relay } }))
+            .post("/__computer/bootstrap", async (context) => {
+                using deadline = new RequestDeadline(context.req.raw.signal, 45_000);
+                const input: unknown = await context.req.json();
+                return json(await ctx.services.browser.bootstrap(input, ctx.bindings, deadline.signal), 201);
+            })
+            .get(
+                `${MORTY_API_PREFIX}/v1/computers/:computerId/transport`,
+                timeout,
+                computerFromPath,
+                authorizeTarget,
+                (context) => {
+                    return acceptWebSocketHttpTransport({
+                        request: context.req.raw,
+                        dispatch: websocket.dispatch,
+                        subscribe: websocket.subscribe,
+                    });
+                },
+            )
+            .options(filePath, timeout, computerFromPath, authorizeTarget, cors)
+            .post(filePath, timeout, computerFromPath, authorizeTarget, cors, fileReadLimit, async (context) => {
+                const services = ctx.services.sessions(context.var.computerId);
+                const target = {
+                    computerId: context.var.computerId,
+                    target: {
+                        harness: validateIdentifier(context.req.param("harness"), "harness"),
+                        sessionId: validateIdentifier(context.req.param("sessionId"), "session_id"),
+                    },
+                } satisfies Parameters<typeof services.sessions.authorizeSession>[0];
+                const credential = (context.req.header("authorization") ?? "").match(/^Bearer ([^\s]+)$/u)?.[1];
+                if (credential === undefined) {
+                    return context.json(
+                        { error: { code: "session_access_required", message: "A Session credential is required" } },
+                        401,
+                    );
+                }
+                await services.sessions.authorizeSession(target, credential, context.req.raw.signal);
+                const command = decodeFileRead(await context.req.text(), target.target);
+                return services.operations.readSessionFile(command, context.req.raw.signal);
+            })
+            .all("/morty/api/*", (context) => dispatchHttpRequest(context.req.raw))
+    );
 }
 
 /** The read is encrypted for the Computer; the Relay checks only that it addresses the Session the URL authorized. */
