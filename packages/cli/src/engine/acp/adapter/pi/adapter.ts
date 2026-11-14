@@ -19,13 +19,13 @@ import { memoryHistoryPreviewSnapshot } from "../../native-history/preview-snaps
 import { nativeSessionPageSchema, type SessionId, sessionIdSchema } from "../../protocol/native-session.ts";
 import { normalizeAcpCapabilities } from "../../protocol/session-capabilities.ts";
 import { normalizeSessionConfiguration } from "../../protocol/session-configuration.ts";
+import { harnessSessionCallbacks } from "../harness-client-events.ts";
 import { HarnessHistoryPreviews } from "../harness-history-previews.ts";
-import type { HarnessSession } from "../harness-session.ts";
+import { HarnessSession } from "../harness-session.ts";
 import { sessionCreationResponse } from "../lifecycle-output.ts";
 import { findNativeSession } from "../native-session-lookup.ts";
-import { piClientCallbacks, piSessionCallbacks } from "./client-callbacks.ts";
-import { createPiCatalogClient, createPiClient, type PiClientRuntime, piRuntime } from "./create-client.ts";
-import { type PiWorkspace, startPiSession } from "./pi-session.ts";
+import { piClientCallbacks } from "./client-callbacks.ts";
+import { createPiCatalogClient, createPiClient } from "./create-client.ts";
 
 const START_TIMEOUT_MILLISECONDS = 60_000;
 
@@ -35,10 +35,6 @@ interface PiSessionResponse {
     readonly modes?: unknown;
 }
 
-function workspaceOf(target: { readonly cwd: string }): PiWorkspace {
-    return { cwd: target.cwd };
-}
-
 /** Live Pi operations call the Pi harness directly; each native session owns one Pi client. */
 export class PiAdapter implements Adapter {
     readonly #dependencies: AdapterDependencies;
@@ -46,18 +42,15 @@ export class PiAdapter implements Adapter {
     readonly #lifetime = new AbortController();
     readonly #previews: HarnessHistoryPreviews;
     #agent: AcpAgentDefinition;
-    #runtime: PiClientRuntime;
 
     constructor(agent: AcpAgentDefinition, dependencies: AdapterDependencies) {
         this.#agent = agent;
-        this.#runtime = piRuntime(agent);
         this.#dependencies = dependencies;
         this.#previews = new HarnessHistoryPreviews(dependencies.processes, memoryHistoryPreviewSnapshot, Infinity);
     }
 
     readonly refreshAgent: Adapter["refreshAgent"] = (agent) => {
         this.#agent = agent;
-        this.#runtime = piRuntime(agent);
     };
 
     /** Pi answers `initialize` from its configuration without launching a process. */
@@ -96,7 +89,7 @@ export class PiAdapter implements Adapter {
         const sessionId = sessionIdSchema.parse(params.sessionId);
         const request = { cwd: params.scope.cwd, sessionId: sessionId, mcpServers: [] };
         const existing = this.#sessions.get(sessionId);
-        existing?.assertWorkspace(workspaceOf(params.scope));
+        existing?.assertWorkspace(params.scope);
         if (existing?.available === true && mode === "resume") {
             try {
                 const response = await waitForAgentOperation(existing.agent.resumeSession(request), params.signal);
@@ -119,17 +112,24 @@ export class PiAdapter implements Adapter {
         params: AdapterSessionCreateParams,
         start: (agent: PiAcpAgent) => Promise<PiSessionResponse & { readonly sessionId: string }>,
     ): Promise<AdapterSessionOpened> => {
-        const { session, response } = await startPiSession(
+        const runtime = this.#agent;
+        const signal = AbortSignal.any([
+            params.signal,
+            this.#lifetime.signal,
+            AbortSignal.timeout(START_TIMEOUT_MILLISECONDS),
+        ]);
+        const { session, response } = await HarnessSession.start(
             {
-                runtime: this.#runtime,
-                workspace: workspaceOf(params.scope),
-                callbacks: piSessionCallbacks(params, params.scope.externalizeUpdate),
-                externalizer: this.#dependencies.contentExternalizer,
-                signal: AbortSignal.any([
-                    params.signal,
-                    this.#lifetime.signal,
-                    AbortSignal.timeout(START_TIMEOUT_MILLISECONDS),
-                ]),
+                workspace: { cwd: params.scope.cwd },
+                signal,
+                create: async (lifetime) => {
+                    const callbacks = piClientCallbacks(
+                        harnessSessionCallbacks(params, params.scope.externalizeUpdate),
+                        this.#dependencies.contentExternalizer,
+                        lifetime,
+                    );
+                    return { agent: await createPiClient(runtime, callbacks, signal), drained: callbacks.drained };
+                },
             },
             start,
         );
@@ -169,7 +169,7 @@ export class PiAdapter implements Adapter {
         if (session === undefined) {
             throw new AcpExecutionError("The native session is not active", {}, "invalid_agent_session");
         }
-        session.assertWorkspace(workspaceOf(target));
+        session.assertWorkspace(target);
         if (!session.available) {
             throw new AcpExecutionError("The Pi session is unavailable", {}, "session_busy");
         }
@@ -230,7 +230,7 @@ export class PiAdapter implements Adapter {
     readonly releaseSession: Adapter["releaseSession"] = async (params) => {
         const sessionId = sessionIdSchema.parse(params.sessionId);
         const session = this.#sessions.get(sessionId);
-        session?.assertWorkspace(workspaceOf(params));
+        session?.assertWorkspace(params);
         await this.#release(sessionId);
         params.signal.throwIfAborted();
     };
@@ -358,7 +358,7 @@ export class PiAdapter implements Adapter {
                 AbortSignal.timeout(START_TIMEOUT_MILLISECONDS),
             ]),
         };
-        const runtime = this.#runtime;
+        const runtime = this.#agent;
         return await this.#previews.read({
             identity: { kind: "fresh" },
             query: scoped,
@@ -382,7 +382,7 @@ export class PiAdapter implements Adapter {
     };
 
     readonly #catalog = (): PiAcpAgent =>
-        createPiCatalogClient(this.#runtime, {
+        createPiCatalogClient(this.#agent, {
             sessionUpdate: async () => undefined,
             startUserMessage: () => undefined,
             requestPermission: rejectCatalogInteraction,

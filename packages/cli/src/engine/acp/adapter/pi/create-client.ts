@@ -6,10 +6,6 @@ import { piProcessHost } from "./process-host.ts";
 
 export type PiClientRuntime = Pick<AcpAgentDefinition, "agentIdentity" | "command" | "environment">;
 
-export function piRuntime(agent: PiClientRuntime): PiClientRuntime {
-    return { agentIdentity: agent.agentIdentity, command: agent.command, environment: agent.environment };
-}
-
 /** Constructs a Pi agent for operations that never launch Pi, such as capabilities and session listing. */
 export function createPiCatalogClient(runtime: PiClientRuntime, callbacks: PiAcpClient): PiAcpAgent {
     return new PiAcpAgent(callbacks, { environment: piEnvironment(runtime), processes: piProcessHost });
