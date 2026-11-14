@@ -15,7 +15,7 @@ export function MessageBubble({
     readonly status?: ReactNode;
     readonly "data-testid"?: string | undefined;
 }) {
-    const messageCopyText = speaker === "user" ? (copyText ?? (typeof children === "string" ? children : null)) : null;
+    const messageCopyText = speaker === "user" ? (copyText ?? null) : null;
     const content = (
         <>
             {children}

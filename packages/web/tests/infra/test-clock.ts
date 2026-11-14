@@ -13,8 +13,6 @@ export class TestClock implements Clock {
         }
     }
     readonly now = (): number => this.#now;
-    /** How many sleeps are waiting for time to advance. */
-    readonly pendingSleeps = (): number => this.#timers.size;
     readonly sleep = (milliseconds: number, signal: AbortSignal): Promise<void> =>
         new Promise((resolve, reject) => {
             signal.throwIfAborted();

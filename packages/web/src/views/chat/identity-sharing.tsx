@@ -138,7 +138,6 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
                     ) : (
                         <CopyLinkButton
                             className="col-start-3 row-start-2 min-w-0"
-                            prominent
                             url={props.transfer.url}
                             urlClassName={identitySharingUrlBoxClassName}
                         />
@@ -196,7 +195,6 @@ function AgentHandoffSection({
                 <AgentHandoffHeading />
                 <CopyLinkButton
                     copyLabel="Copy instructions"
-                    prominent
                     subject="instructions"
                     url={agentHandoffInstructions(transfer)}
                     urlClassName="whitespace-pre-wrap break-normal"

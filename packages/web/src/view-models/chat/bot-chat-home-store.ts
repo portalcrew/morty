@@ -91,7 +91,7 @@ export interface BotChatHomeStore {
     readonly openManaged: (target: NativeSessionTarget) => void;
     readonly retry: () => void;
     readonly setDraft: (draft: string) => void;
-    readonly createConversation: (signal: AbortSignal) => Promise<boolean>;
+    readonly createConversation: (signal: AbortSignal) => Promise<void>;
     /** Hands the draft written during creation to the Session the page followed; null for any other Session. */
     readonly takeNextDraft: (sessionTarget: NativeSessionTarget) => {
         readonly draft: string;
@@ -615,7 +615,7 @@ export const createBotChatHomeStore = (
                         : canRetryFirstMessage(facts);
                 // The rule already requires both; checking them again narrows their types.
                 if (!allowed || settings === null || current.selection.kind !== "draft") {
-                    return false;
+                    return;
                 }
                 const commandId = current.selection.key;
                 const content = draft.trim();
@@ -671,7 +671,7 @@ export const createBotChatHomeStore = (
                     if (failedDraftMessage(get().creation)?.commandId !== commandId) {
                         returnFirstMessage(queuedMessage);
                     }
-                    return false;
+                    return;
                 }
                 signal.throwIfAborted();
                 const conversationId = access.target;
@@ -717,7 +717,7 @@ export const createBotChatHomeStore = (
                     announceSelection();
                 }
                 onDirectoryRefreshed();
-                return true;
+                return;
             },
             takeNextDraft: (sessionTarget) => {
                 const handoff = get().draftHandoff;

@@ -9,14 +9,12 @@ export function CopyLinkButton({
     url,
     urlClassName,
     copyLabel = "Copy link",
-    prominent = false,
     subject = "link",
 }: {
     readonly className?: string;
     readonly url: string;
     readonly urlClassName?: string;
     readonly copyLabel?: string;
-    readonly prominent?: boolean;
     /** What the copied text is, as the manual-copy fallback names it. */
     readonly subject?: string;
 }) {
@@ -32,7 +30,7 @@ export function CopyLinkButton({
                 {url}
             </p>
             <Button
-                variant={prominent ? "primary" : "outline"}
+                variant="primary"
                 onClick={() => {
                     if (navigator.clipboard === undefined) {
                         setCopy("failed");
