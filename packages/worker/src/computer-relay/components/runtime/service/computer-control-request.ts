@@ -27,7 +27,7 @@ import {
     fileFailedEventCodec,
     type NativeSessionTarget,
 } from "@morty-build/client/protocol";
-import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
+import { COMPUTER_REPLY_INVALID_CODE, SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import { logger } from "../../../../infra/logger.ts";
 import {
     type ClientControlCommand,
@@ -38,6 +38,11 @@ import {
 } from "./computer-control-registry.ts";
 import { type ComputerReplyConnection, type ReplyDecision, RequestRejectedEvent } from "./computer-reply-request.ts";
 import type { ContentUploadReader } from "./content-upload-reader.ts";
+
+/** A reply the Worker cannot accept: the Computer, not the caller, is at fault, and the command may have run. */
+function invalidComputerReply(message: string, options: ErrorOptions = {}): SessionRuntimeError {
+    return new SessionRuntimeError(COMPUTER_REPLY_INVALID_CODE, message, options);
+}
 
 export interface ComputerFileStream {
     readonly finished: Promise<void>;
@@ -94,9 +99,7 @@ async function awaitComputerReply<Reply>(
                     reject(
                         cause instanceof SessionRuntimeError
                             ? cause
-                            : new SessionRuntimeError("invalid_request", "The Computer returned an invalid response", {
-                                  cause,
-                              }),
+                            : invalidComputerReply("The Computer returned an invalid response", { cause }),
                     );
                 }
             };
@@ -169,21 +172,21 @@ export async function requestClientControl(
             (reply.kind !== "native.session.result" || reply.action !== "fork") &&
             (reply.target.harness !== target.harness || reply.target.sessionId !== target.sessionId)
         ) {
-            throw new SessionRuntimeError("invalid_request", "The Computer returned an invalid reply target");
+            throw invalidComputerReply("The Computer returned an invalid reply target");
         }
         if (
             command.kind === "native.session.request" &&
             reply.kind === "native.session.result" &&
             reply.action !== command.action
         ) {
-            throw new SessionRuntimeError("invalid_request", "The Computer returned an invalid native operation");
+            throw invalidComputerReply("The Computer returned an invalid native operation");
         }
         if (
             command.kind === "agent.settings.discover" &&
             reply.kind === "agent.settings.discovered" &&
             reply.harness !== command.harness
         ) {
-            throw new SessionRuntimeError("invalid_request", "The Computer returned an invalid Agent settings target");
+            throw invalidComputerReply("The Computer returned an invalid Agent settings target");
         }
         return { kind: "complete", value: reply };
     };
@@ -297,7 +300,7 @@ export async function requestComputerContentWrite(
             return false;
         }
         if (reply.target.harness !== command.target.harness || reply.target.sessionId !== command.target.sessionId) {
-            throw new SessionRuntimeError("invalid_request", "The Computer returned an invalid content target");
+            throw invalidComputerReply("The Computer returned an invalid content target");
         }
         return true;
     };
@@ -313,10 +316,7 @@ export async function requestComputerContentWrite(
                         acknowledgement === null ||
                         ack.sequence !== acknowledgement.sequence
                     ) {
-                        throw new SessionRuntimeError(
-                            "invalid_request",
-                            "The Computer returned an invalid content acknowledgement",
-                        );
+                        throw invalidComputerReply("The Computer returned an invalid content acknowledgement");
                     }
                     acknowledgement.resolve();
                     return { kind: "ignore" };
@@ -326,7 +326,7 @@ export async function requestComputerContentWrite(
                         return { kind: "ignore" };
                     }
                     if (state.kind !== "waiting") {
-                        throw new SessionRuntimeError("invalid_request", "The Computer repeated content admission");
+                        throw invalidComputerReply("The Computer repeated content admission");
                     }
                     state = { kind: "uploading" };
                     upload = Promise.resolve()
@@ -338,10 +338,7 @@ export async function requestComputerContentWrite(
                         return { kind: "ignore" };
                     }
                     if (state.kind !== "committed") {
-                        throw new SessionRuntimeError(
-                            "invalid_request",
-                            "The Computer completed an uncommitted upload",
-                        );
+                        throw invalidComputerReply("The Computer completed an uncommitted upload");
                     }
                     return { kind: "complete", value: encoded };
                 case FILE_FAILED_KIND:
@@ -467,13 +464,13 @@ export async function requestComputerFile(
                 reply.target.harness !== command.target.harness ||
                 reply.target.sessionId !== command.target.sessionId
             ) {
-                throw new SessionRuntimeError("invalid_request", "The Computer returned an invalid file target");
+                throw invalidComputerReply("The Computer returned an invalid file target");
             }
             return true;
         };
         const endStream = (encoded: string): void => {
             if (state.kind !== "streaming") {
-                throw new SessionRuntimeError("invalid_request", "The Computer ended an unknown file stream");
+                throw invalidComputerReply("The Computer ended an unknown file stream");
             }
             state.controller.enqueue(encodeFileStreamRecord({ kind: "message", encoded }));
             state.controller.close();
@@ -485,7 +482,7 @@ export async function requestComputerFile(
                     return;
                 }
                 if (state.kind !== "waiting") {
-                    throw new SessionRuntimeError("invalid_request", "The Computer returned invalid file metadata");
+                    throw invalidComputerReply("The Computer returned invalid file metadata");
                 }
                 startResponse(encoded, false);
             },
@@ -526,7 +523,7 @@ export async function requestComputerFile(
                         state.credit !== "outstanding" ||
                         chunk.sequence !== state.nextSequence
                     ) {
-                        throw new SessionRuntimeError("invalid_request", "The Computer returned invalid file chunks");
+                        throw invalidComputerReply("The Computer returned invalid file chunks");
                     }
                     const data: unknown = event.data;
                     let encoded: Uint8Array;
@@ -535,11 +532,11 @@ export async function requestComputerFile(
                     } else if (ArrayBuffer.isView(data)) {
                         encoded = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
                     } else {
-                        throw new SessionRuntimeError("invalid_request", "The Computer returned invalid file chunks");
+                        throw invalidComputerReply("The Computer returned invalid file chunks");
                     }
                     const receivedBytes = state.receivedBytes + encoded.byteLength;
                     if (receivedBytes > maxCiphertextBytes) {
-                        throw new SessionRuntimeError("invalid_request", "The Computer exceeded the file size limit");
+                        throw invalidComputerReply("The Computer exceeded the file size limit");
                     }
                     const controller = state.controller;
                     state = { ...state, receivedBytes, nextSequence: state.nextSequence + 1, credit: "available" };
@@ -551,7 +548,7 @@ export async function requestComputerFile(
                 fail(
                     cause instanceof SessionRuntimeError
                         ? cause
-                        : new SessionRuntimeError("invalid_request", "The Computer returned an invalid file", {
+                        : invalidComputerReply("The Computer returned an invalid file", {
                               cause,
                           }),
                 );
