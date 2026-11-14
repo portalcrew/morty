@@ -16,7 +16,7 @@ export function createRuntimeContext(cx: {
         readonly access: (computerId: string) => ComputerAccessService;
     };
     readonly gateways: {
-        readonly peers: Omit<ComputerPeers, "operations">;
+        readonly peers: Omit<ComputerPeers, "operations" | "daemons">;
     };
     readonly utilities: {
         readonly waitUntil: (operation: Promise<void>) => void;
@@ -29,7 +29,11 @@ export function createRuntimeContext(cx: {
         accept: source.accept,
         sockets: source.sockets,
         daemonConnections: source.daemonConnections,
-        daemons: source.daemons,
+        // Which daemon is current is the connection record's fact, so the daemons are the one it names.
+        daemons: () => {
+            const daemon = runtime.currentDaemon();
+            return daemon === undefined ? [] : [daemon.socket];
+        },
         viewers: () => [...source.viewers(), ...viewers.viewers()],
         operations: requests.routes,
     };

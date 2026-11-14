@@ -69,7 +69,7 @@ export class DaemonWebSocketRoutes {
         };
         if (!close.wasClean || (close.code !== 1000 && close.code !== 1001)) {
             this.#logger.warn(details, "Computer WebSocket closed");
-        } else if (context.role === "daemon" || context.role === "replaced-daemon") {
+        } else if (context.role === "daemon") {
             this.#logger.info(details, "Computer WebSocket closed");
         }
         const socket = new CloudflareRelaySocket(webSocket);

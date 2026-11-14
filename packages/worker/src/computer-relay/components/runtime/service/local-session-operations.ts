@@ -32,7 +32,7 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
         if (requestedComputer !== computerId || latest === null) {
             throw new PairingDirectoryError("computer_access_denied", "The selected Computer is unavailable");
         }
-        const daemon = cx.gateways.peers.sockets().find(({ identity }) => identity.role === "daemon");
+        const daemon = cx.services.runtime.currentDaemon();
         if (daemon !== undefined && daemon.identity.computerId !== computerId) {
             throw new PairingDirectoryError("computer_access_denied", "The selected Computer is unavailable");
         }
