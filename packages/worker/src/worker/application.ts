@@ -1,11 +1,11 @@
 import { Hono, type MiddlewareHandler } from "hono";
-import { bodyLimit } from "hono/body-limit";
 import { credentialRevocationPaths } from "../contracts/authentication/credential.ts";
 import { clientLocationHeader, clientLocationOf, encodeClientLocation } from "../contracts/client-location.ts";
 import type { CloudBindings } from "../contracts/cloud-bindings.ts";
 import { relayAuthenticationFromEnvironment } from "../contracts/relay-authentication-environment.ts";
 import { relayBindings } from "../contracts/relay-bindings.ts";
 import { computerFromPath, computerFromRuntimeCredential, computerFromTransfer } from "../http/computer-target.ts";
+import { controlBodyLimit } from "../http/control-body-limit.ts";
 import { errorHandler, errorMiddleware } from "../http/error-middleware.ts";
 import { RequestError } from "../http/request-error.ts";
 import { requestTimeoutMiddleware } from "../middleware/request-timeout-middleware.ts";
@@ -13,8 +13,6 @@ import { instructionDocumentRoutes } from "./components/instruction-documents/ht
 import { cloudRoutes } from "./composition/cloud-http.ts";
 import { forwardToComputer } from "./gateway/computer-object-routing.ts";
 import { webPages } from "./http/web-pages.ts";
-
-const MAXIMUM_REQUEST_BODY_BYTES = 3 * 1_024 * 1_024;
 
 type ForwardingEnvironment = {
     readonly Bindings: CloudBindings;
@@ -56,7 +54,8 @@ function createComputerForwardingRoutes() {
     return (
         new Hono<ForwardingEnvironment>()
             .onError(errorHandler)
-            .use("*", errorMiddleware, timeout)
+            // Every forwarded request is bounded before any route reads it, the transfer redemption's body included.
+            .use("*", errorMiddleware, timeout, controlBodyLimit)
             .get("/morty/api/v1/computers/connect", computerFromRuntimeCredential, forward)
             .post("/morty/api/v1/computers/:computerId/pairing/redeem", computerFromPath, forward)
             .put("/morty/api/v1/computers/:computerId/catalog", computerFromPath, forward)
@@ -114,9 +113,7 @@ const notFound = (): never => {
 
 const publicApplication = new Hono<{ readonly Bindings: CloudBindings }>()
     .onError(errorHandler)
-    .get("/morty/api/v1/health", bodyLimit({ maxSize: MAXIMUM_REQUEST_BODY_BYTES }), (context) =>
-        context.body(null, 204),
-    )
+    .get("/morty/api/v1/health", controlBodyLimit, (context) => context.body(null, 204))
     .route("/", webPages)
     .route("/", instructionDocumentRoutes)
     .route("/morty/api", cloudRoutes)
