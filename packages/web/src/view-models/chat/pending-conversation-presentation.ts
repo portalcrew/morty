@@ -3,6 +3,14 @@ import type { ConversationSelectionState } from "./conversation-selection-machin
 import { selectedConversationTarget } from "./conversation-selection-machine.ts";
 import { type SessionTitles, sessionTitle } from "./session-titles-store.ts";
 
+/**
+ * Whether the selected conversation's remote read has begun or is about to: a load in flight, or a selection waiting
+ * for the Computer's entry answer. A conversation whose read failed, on the entry or on the load, is not pending.
+ */
+export function conversationReadPending(selection: ConversationSelectionState, computer: ComputerStatusStore): boolean {
+    return selection.kind === "loading" || (selection.kind === "pending" && computer.entry.kind !== "failed");
+}
+
 /** A selected conversation is never presented as a new draft while its remote read is pending. */
 export function pendingConversationPresentation(
     selection: ConversationSelectionState,
