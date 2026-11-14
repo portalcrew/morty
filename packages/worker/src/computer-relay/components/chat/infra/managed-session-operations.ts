@@ -1,4 +1,4 @@
-/** Owned by the Account Durable Object so requests share one queue per Session. */
+/** Owned by the Computer's Durable Object so requests share one queue per Session. */
 export class ManagedSessionOperations {
     readonly #pending = new Map<string, Promise<void>>();
 

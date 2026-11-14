@@ -14,7 +14,7 @@ import { errorMiddleware, rethrowHonoError } from "../../../../http/error-middle
 import { protocolBodyLimit } from "../../../../http/protocol-body-limit.ts";
 import { pairingTimeoutMiddleware } from "../../../../middleware/pairing-timeout-middleware.ts";
 import { requestTimeoutMiddleware } from "../../../../middleware/request-timeout-middleware.ts";
-import type { RelayProtocolEnvironment as RelayHttpEnvironment } from "../../../http/environment.ts";
+import type { ComputerRouteHttpEnvironment } from "../../../http/environment.ts";
 import type { RelayProtocolRouteContext } from "./protocol-routes.ts";
 
 // The validators below decode each field into its domain value and report its own error code.
@@ -26,8 +26,8 @@ const redeemRequestSchema = v.object({
 });
 
 export function createComputerPairingRoutes(ctx: RelayProtocolRouteContext) {
-    const timeout = requestTimeoutMiddleware<RelayHttpEnvironment>(30_000);
-    return new Hono<RelayHttpEnvironment>()
+    const timeout = requestTimeoutMiddleware<ComputerRouteHttpEnvironment>(30_000);
+    return new Hono<ComputerRouteHttpEnvironment>()
         .onError(rethrowHonoError)
         .use("*", errorMiddleware)
         .post(
@@ -36,7 +36,7 @@ export function createComputerPairingRoutes(ctx: RelayProtocolRouteContext) {
             computerFromPath,
             pairingTimeoutMiddleware("Computer pairing redemption timed out"),
             protocolBodyLimit,
-            bodyParser<RelayHttpEnvironment, typeof redeemRequestSchema>(redeemRequestSchema),
+            bodyParser<ComputerRouteHttpEnvironment, typeof redeemRequestSchema>(redeemRequestSchema),
             async (context) => {
                 const body = context.req.valid("json");
                 const agents = validateAgents(body.agents);

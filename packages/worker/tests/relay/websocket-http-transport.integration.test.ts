@@ -97,13 +97,9 @@ it("Given a browser connection, When it requests a retired private Computer API,
     }
 });
 
-it.each([
-    { operation: "unknown-command", kind: "http.response", status: 404, code: "not_found" },
-    { operation: "access-credentials", kind: "http.response", status: 404, code: "not_found" },
-    { operation: "access-credentials/unknown-command", kind: "http.response", status: 404, code: "not_found" },
-])(
-    "Given a browser connection, When it requests Session operation $operation, Then the owning route preserves its existing $status rejection",
-    async ({ operation, kind, status, code }) => {
+it.each(["unknown-command", "access-credentials", "access-credentials/unknown-command"])(
+    "Given a browser connection, When it requests Session operation %s, Then the owning route answers 404 not_found",
+    async (operation) => {
         const computerId = "prj_ap_01_000000000000000000000001";
         const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
             headers: { Upgrade: "websocket" },
@@ -126,12 +122,12 @@ it.each([
                 }),
             );
             const frame = JSON.parse(await answer);
-            expect(frame).toMatchObject({ kind, status, requestId: "unsupported-session-operation" });
-            if (kind === "http.response") {
-                expect(JSON.parse(frame.body)).toMatchObject({ error: { code } });
-            } else {
-                expect(frame).toMatchObject({ code });
-            }
+            expect(frame).toMatchObject({
+                kind: "http.response",
+                status: 404,
+                requestId: "unsupported-session-operation",
+            });
+            expect(JSON.parse(frame.body)).toMatchObject({ error: { code: "not_found" } });
         } finally {
             socket.close();
         }
@@ -607,6 +603,7 @@ it("Given a binary upload sends an invalid chunk, When it retries the same reque
 
 it("Given an incomplete upload consumes the aggregate byte budget, When its deadline passes, Then capacity is released", async () => {
     vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
     try {
         const daemon = new TextDaemonBoundary("uploaded");
         const response = acceptWebSocketHttpTransport({

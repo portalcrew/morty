@@ -8,22 +8,22 @@ import { computerFromPath } from "../../../../http/computer-target.ts";
 import { errorMiddleware, rethrowHonoError } from "../../../../http/error-middleware.ts";
 import { protocolBodyLimit } from "../../../../http/protocol-body-limit.ts";
 import { requestTimeoutMiddleware } from "../../../../middleware/request-timeout-middleware.ts";
-import type { RelayProtocolEnvironment as RelayHttpEnvironment } from "../../../http/environment.ts";
+import type { ComputerRouteHttpEnvironment } from "../../../http/environment.ts";
 import type { RelayProtocolRouteContext } from "./protocol-routes.ts";
 
 // validateAgents decodes the catalog and reports its own error code.
 const catalogRequestSchema = v.object({ agents: v.unknown() });
 
 export function createComputerRoutes(ctx: RelayProtocolRouteContext) {
-    return new Hono<RelayHttpEnvironment>()
+    return new Hono<ComputerRouteHttpEnvironment>()
         .onError(rethrowHonoError)
         .use("*", errorMiddleware)
         .put(
             "/:computerId/catalog",
-            requestTimeoutMiddleware<RelayHttpEnvironment>(30_000),
+            requestTimeoutMiddleware<ComputerRouteHttpEnvironment>(30_000),
             computerFromPath,
             protocolBodyLimit,
-            bodyParser<RelayHttpEnvironment, typeof catalogRequestSchema>(catalogRequestSchema),
+            bodyParser<ComputerRouteHttpEnvironment, typeof catalogRequestSchema>(catalogRequestSchema),
             async (context) => {
                 const pairings = ctx.services.forComputer(context.var.computerId).services.pairings;
                 const body = context.req.valid("json");

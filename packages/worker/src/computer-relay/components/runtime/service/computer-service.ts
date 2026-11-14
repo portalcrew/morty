@@ -38,18 +38,16 @@ export interface DaemonSocketIdentity {
     readonly computerId: string;
 }
 
-export type ComputerSocket = RelaySocket;
-
 export interface ComputerPeers extends RelayPeers {
-    readonly sockets: () => readonly { readonly identity: DaemonSocketIdentity; readonly socket: ComputerSocket }[];
+    readonly sockets: () => readonly { readonly identity: DaemonSocketIdentity; readonly socket: RelaySocket }[];
     /** Daemon connections with the time each one's heartbeat was last answered by the host. */
     readonly daemonConnections: () => readonly {
         readonly identity: DaemonSocketIdentity;
-        readonly socket: ComputerSocket;
+        readonly socket: RelaySocket;
         readonly heartbeat: DaemonHeartbeat;
     }[];
     readonly accept: (identity: DaemonSocketIdentity) => {
-        readonly socket: ComputerSocket;
+        readonly socket: RelaySocket;
         readonly response: Response;
     };
 }
@@ -184,7 +182,7 @@ export class ComputerService {
 
     private readonly deferDaemonAttachment = (
         identity: DaemonSocketIdentity,
-        socket: ComputerSocket,
+        socket: RelaySocket,
         computerId: string,
         replaced: boolean,
     ): void => {
@@ -383,7 +381,7 @@ export class ComputerService {
 
     readonly receiveMessage = async (
         identity: DaemonSocketIdentity,
-        socket: ComputerSocket,
+        socket: RelaySocket,
         message: unknown,
         signal: AbortSignal,
     ): Promise<void> => {
@@ -447,7 +445,7 @@ export class ComputerService {
 
     private readonly authorizeDaemonMessage = async (
         identity: DaemonSocketIdentity,
-        socket: ComputerSocket,
+        socket: RelaySocket,
         signal: AbortSignal,
     ): Promise<boolean> => {
         if (this.fenceDaemon(identity, socket)) {
@@ -480,7 +478,7 @@ export class ComputerService {
      * Closes a daemon connection that is no longer the current one, telling a replaced daemon to reconnect and the
      * daemon of an ended generation that its Computer was revoked. True when it closed the connection.
      */
-    private readonly fenceDaemon = (identity: ComputerConnectionIdentity, socket: ComputerSocket): boolean => {
+    private readonly fenceDaemon = (identity: ComputerConnectionIdentity, socket: RelaySocket): boolean => {
         const standing = this.#cx.services.connections.standing(identity);
         switch (standing) {
             case "current":

@@ -16,9 +16,9 @@ import type {
 } from "@morty-build/client/protocol";
 import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
 import { computerRevoked } from "../../../../contracts/computer-pairing.ts";
-import type { SessionOperationQueue } from "../../../../contracts/session-operation-queue.ts";
 import type { ComputerIdentity } from "../../management/entity/computer-identity.ts";
 import type { LocalComputerService } from "../../management/service/local-computer-service.ts";
+import type { ManagedSessionOperations } from "../infra/managed-session-operations.ts";
 
 const OPENED_SESSION_CREDENTIAL_SECONDS = 900;
 const RENEWED_SESSION_CREDENTIAL_SECONDS = 600;
@@ -60,10 +60,10 @@ async function scopedNativeForkOperationId(computerId: string, key: string): Pro
 export class ChatService {
     readonly #computerId: string;
     readonly #relay: LocalComputerService;
-    readonly #sessionOperations: SessionOperationQueue;
+    readonly #sessionOperations: ManagedSessionOperations;
 
     constructor(cx: {
-        readonly sessionOperations: SessionOperationQueue;
+        readonly sessionOperations: ManagedSessionOperations;
         readonly services: { readonly computers: LocalComputerService };
         readonly identity: ComputerIdentity;
     }) {
