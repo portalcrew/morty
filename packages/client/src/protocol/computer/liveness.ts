@@ -6,11 +6,9 @@ import {
     decodeZodMessage as decodeRoutingZodMessage,
     encryptedFieldSchema,
     parseJson,
-    readBoolean,
     readIdentifier,
 } from "../shared/message-codec.ts";
 
-export const COMPUTER_STATUS_KIND = "computer.status";
 export const COMPUTER_LIVENESS_READY_KIND = "computer.liveness.ready";
 export const COMPUTER_HEARTBEAT_KIND = "computer.heartbeat";
 export const COMPUTER_HEARTBEAT_ACK_KIND = "computer.heartbeat.ack";
@@ -23,12 +21,6 @@ export const COMPUTER_PONG_KIND = "computer.pong";
  */
 export const COMPUTER_HEARTBEAT_MESSAGE = `{"kind":"${COMPUTER_HEARTBEAT_KIND}"}`;
 export const COMPUTER_HEARTBEAT_ACK_MESSAGE = `{"kind":"${COMPUTER_HEARTBEAT_ACK_KIND}"}`;
-
-export interface ComputerStatusEvent {
-    readonly kind: typeof COMPUTER_STATUS_KIND;
-    readonly online: boolean;
-    readonly computerId: string;
-}
 
 export interface ComputerLivenessReadyEvent {
     readonly kind: typeof COMPUTER_LIVENESS_READY_KIND;
@@ -50,17 +42,6 @@ interface ComputerPingCommand {
 interface ComputerPongEvent {
     readonly kind: typeof COMPUTER_PONG_KIND;
     readonly requestId: string;
-}
-
-export function decodeComputerStatusEvent(encoded: string): ComputerStatusEvent {
-    const value = parseJson(encoded);
-    assertKind(value, COMPUTER_STATUS_KIND);
-
-    return {
-        kind: COMPUTER_STATUS_KIND,
-        online: readBoolean(value, "online"),
-        computerId: readIdentifier(value, "computerId"),
-    };
 }
 
 export function decodeComputerLivenessReadyEvent(encoded: string): ComputerLivenessReadyEvent {
@@ -91,10 +72,6 @@ function decodeComputerPongEvent(encoded: string): ComputerPongEvent {
     const value = parseJson(encoded);
     assertKind(value, COMPUTER_PONG_KIND);
     return { kind: COMPUTER_PONG_KIND, requestId: readIdentifier(value, "requestId") };
-}
-
-export function encodeComputerStatusEvent(message: ComputerStatusEvent): string {
-    return JSON.stringify(decodeComputerStatusEvent(JSON.stringify(message)));
 }
 
 export function encodeComputerLivenessReadyEvent(message: ComputerLivenessReadyEvent): string {

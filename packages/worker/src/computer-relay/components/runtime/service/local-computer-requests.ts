@@ -3,18 +3,25 @@ import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import { logger } from "../../../../infra/logger.ts";
 import type { ClientControlReply } from "./computer-control-registry.ts";
-import type { ComputerReplyConnection } from "./computer-control-request.ts";
 import type { ComputerOperationSocket, HistoryRequestKind, RelayPeers, RelaySocket } from "./computer-relay-actor.ts";
+import { type ComputerReplyConnection, RequestRejectedEvent } from "./computer-reply-request.ts";
+
+/** What the owner of a request does with what its requester sends: a message for the Computer, a cancellation, or file credit. */
+export interface LocalComputerRequestHandlers {
+    readonly message: (socket: ComputerOperationSocket, message: unknown) => Promise<void>;
+    readonly cancel: (socket: ComputerOperationSocket) => void;
+    readonly credit: (socket: ComputerOperationSocket) => void;
+}
 
 class LocalComputerRequest extends EventTarget implements ComputerReplyConnection {
     #state: number = WebSocket.OPEN;
-    readonly #dispatch: (socket: ComputerOperationSocket, message: unknown) => Promise<void>;
+    readonly #handlers: LocalComputerRequestHandlers;
     readonly #release: () => void;
     readonly server: ComputerOperationSocket;
 
-    constructor(dispatch: (socket: ComputerOperationSocket, message: unknown) => Promise<void>, release: () => void) {
+    constructor(handlers: LocalComputerRequestHandlers, release: () => void) {
         super();
-        this.#dispatch = dispatch;
+        this.#handlers = handlers;
         this.#release = release;
         let history: { readonly kind: HistoryRequestKind; readonly requestId: string } | null = null;
         let request:
@@ -44,6 +51,16 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
             send: (message) => {
                 if (this.isOpen()) {
                     this.dispatchEvent(new MessageEvent("message", { data: message }));
+                }
+            },
+            reject: (requestId, code, message) => {
+                if (this.isOpen()) {
+                    this.dispatchEvent(new RequestRejectedEvent(requestId, code, message));
+                }
+            },
+            computerOffline: () => {
+                if (this.isOpen()) {
+                    this.dispatchEvent(new Event("offline"));
                 }
             },
             isOpen: () => this.isOpen(),
@@ -83,10 +100,21 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
     private readonly isOpen = () => this.#state === WebSocket.OPEN;
     readonly accept = (): void => {};
     readonly send = (message: string | ArrayBuffer | ArrayBufferView): void => {
+        this.run(() => this.#handlers.message(this.server, message));
+    };
+    readonly creditFile = (): void => {
+        this.run(() => this.#handlers.credit(this.server));
+    };
+    readonly cancel = (): void => {
+        if (this.isOpen()) {
+            this.run(() => this.#handlers.cancel(this.server));
+        }
+    };
+    private readonly run = (operation: () => void | Promise<void>): void => {
         if (!this.isOpen()) {
             throw new Error("The Computer request is closed");
         }
-        void this.#dispatch(this.server, message).catch((cause: unknown) => {
+        void (async () => await operation())().catch((cause: unknown) => {
             logger.error({ err: cause, event: "computer_local_request_failed" }, "Computer local request failed");
             this.dispatchEvent(new Event("error"));
             this.close();
@@ -177,7 +205,7 @@ export class LocalComputerRequests {
     readonly open = (
         requestId: string,
         target: NativeSessionTarget | undefined,
-        dispatch: (socket: ComputerOperationSocket, message: unknown) => Promise<void>,
+        handlers: LocalComputerRequestHandlers,
     ) => {
         for (const route of this.#routes) {
             if (route.requestId === requestId) {
@@ -187,7 +215,7 @@ export class LocalComputerRequests {
                 );
             }
         }
-        const connection = new LocalComputerRequest(dispatch, () => this.#routes.delete(route));
+        const connection = new LocalComputerRequest(handlers, () => this.#routes.delete(route));
         const route = { socket: connection.server, requestId, target };
         this.#routes.add(route);
         return connection;

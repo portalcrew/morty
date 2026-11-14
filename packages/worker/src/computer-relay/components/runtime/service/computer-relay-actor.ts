@@ -2,16 +2,13 @@ import { sameNativeSession } from "@morty-build/client/native-session";
 import {
     type AGENT_SETTINGS_DISCOVER_KIND,
     type ClientToRelayMessage,
-    COMPUTER_STATUS_KIND,
     contentChunkCodec,
     type DaemonToRelayMessage,
     decodeClientToRelayMessage,
     ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
-    encodeComputerStatusEvent,
     encodeSessionEventsUnsubscribe,
     encodeWorkerFileCredit,
     encodeWorkerRequestCancel,
-    encodeWorkerRequestRejected,
     type NativeSessionCommandRouting,
     type NativeSessionTarget,
     ProtocolMessageError,
@@ -21,7 +18,6 @@ import {
     type SessionEventEnvelopeRouting,
     type SessionEventsSubscribeCommandRouting,
     sessionEventsSubscribeCommandCodec,
-    WORKER_REQUEST_REJECTED_KIND,
 } from "@morty-build/client/protocol";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import type { SessionViewer } from "../../../../contracts/session-event-subscription.ts";
@@ -114,6 +110,10 @@ export interface RelaySocket {
 }
 
 export interface ComputerOperationSocket extends RelaySocket {
+    /** The Relay refuses this request itself, so its requester stops waiting. */
+    readonly reject: (requestId: string, code: string, message: string) => void;
+    /** The Computer went offline, so the requester stops waiting. */
+    readonly computerOffline: () => void;
     readonly recordRequestDaemon: (daemon: RelaySocket, action: NativeSessionCommandRouting["action"]) => void;
     readonly recordTransferDaemon: (daemon: RelaySocket, kind: "file-read" | "content-write") => void;
     readonly requestTransferKind: () => "file-read" | "content-write" | null;
@@ -517,15 +517,8 @@ export class ComputerRelayActor {
     };
 
     /** Refuses only this request; other operations on the connection remain usable. */
-    private readonly refuseOffline = (socket: RelaySocket, requestId: string): void => {
-        socket.send(
-            encodeWorkerRequestRejected({
-                code: "computer_offline",
-                kind: WORKER_REQUEST_REJECTED_KIND,
-                message: "The local computer is offline",
-                requestId,
-            }),
-        );
+    private readonly refuseOffline = (socket: ComputerOperationSocket, requestId: string): void => {
+        socket.reject(requestId, "computer_offline", "The local computer is offline");
     };
 
     private readonly forwardAgentSettingsDiscovery = (
@@ -540,27 +533,16 @@ export class ComputerRelayActor {
             return;
         }
         if (route === "busy") {
-            socket.send(
-                encodeWorkerRequestRejected({
-                    code: "agent_settings_discovery_busy",
-                    kind: WORKER_REQUEST_REJECTED_KIND,
-                    message: "This connection already has pending settings discovery requests",
-                    requestId,
-                }),
+            socket.reject(
+                requestId,
+                "agent_settings_discovery_busy",
+                "This connection already has pending settings discovery requests",
             );
             return;
         }
         if (this.sendToDaemon(encoded) === null) {
             socket.consumeAgentSettingsDiscoveryFailure(requestId);
-            socket.send(
-                encodeWorkerRequestRejected({
-                    code: "computer_offline",
-                    kind: WORKER_REQUEST_REJECTED_KIND,
-                    message: "The local computer is offline",
-                    requestId,
-                }),
-            );
-            return;
+            this.refuseOffline(socket, requestId);
         }
     };
 
@@ -665,16 +647,7 @@ export class ComputerRelayActor {
     private readonly failPendingAgentSettingsDiscoveries = (): void => {
         for (const socket of this.#peers.operations().map(({ socket }) => socket)) {
             for (const requestId of socket.takeAgentSettingsDiscoveries()) {
-                if (socket.isOpen()) {
-                    socket.send(
-                        encodeWorkerRequestRejected({
-                            code: "computer_offline",
-                            kind: WORKER_REQUEST_REJECTED_KIND,
-                            message: "The local computer is offline",
-                            requestId,
-                        }),
-                    );
-                }
+                this.refuseOffline(socket, requestId);
             }
         }
     };
@@ -698,10 +671,11 @@ export class ComputerRelayActor {
                 viewer.close(1000, "Computer offline");
             }
         }
-        this.broadcast(
-            this.#peers.operations().map(({ socket }) => socket),
-            encodeComputerStatusEvent({ kind: COMPUTER_STATUS_KIND, online, computerId: this.#computerId }),
-        );
+        if (!online) {
+            for (const { socket } of this.#peers.operations()) {
+                socket.computerOffline();
+            }
+        }
     };
 
     /** Hands an encrypted event batch, unread, to every viewer of its Session; an expired viewer is closed instead. */

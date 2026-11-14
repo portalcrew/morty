@@ -58,14 +58,6 @@ export function readIdentifier(value: Readonly<Record<string, unknown>>, key: st
     }
 }
 
-export function readBoolean(value: Readonly<Record<string, unknown>>, key: string): boolean {
-    const field = value[key];
-    if (typeof field !== "boolean") {
-        throw new ProtocolMessageError(`Invalid boolean field: ${key}`);
-    }
-    return field;
-}
-
 export function assertKind(value: Readonly<Record<string, unknown>>, expectedKind: string): void {
     if (value["kind"] !== expectedKind) {
         throw new ProtocolMessageError(`Expected message kind: ${expectedKind}`);
