@@ -333,6 +333,9 @@ const acpSessionUpdateSchema = z.discriminatedUnion("sessionUpdate", [
 ]);
 export type AcpSessionUpdate = z.infer<typeof acpSessionUpdateSchema>;
 
+/** How far the native session's owner has taken a command the Computer handed to it. */
+export const promptDelegationStageSchema = z.enum(["queued", "started"]);
+
 const lifecycleBase = { commandId: identifier };
 /** How an admitted prompt executes: as its own turn, or by steering the running turn of `targetCommandId`. */
 const promptDispatchSchema = z.discriminatedUnion("kind", [
@@ -414,9 +417,7 @@ const lifecycleMetadataSchema = z.discriminatedUnion("kind", [
     // may keep holding it; Codex pauses its queue after an interrupted turn until its user continues. `started`: the
     // owner began running it, so only the owner can stop it and cancelling it here leaves it running. Computers before
     // this event never delegate.
-    z
-        .object({ ...lifecycleBase, kind: z.literal("prompt.delegated"), stage: z.enum(["queued", "started"]) })
-        .readonly(),
+    z.object({ ...lifecycleBase, kind: z.literal("prompt.delegated"), stage: promptDelegationStageSchema }).readonly(),
     promptCompletedSchema,
     z
         .object({

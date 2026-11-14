@@ -10,6 +10,7 @@ import {
     encryptedFieldSchema,
     ProtocolMessageError,
 } from "../../shared/message-codec.ts";
+import { promptDelegationStageSchema } from "../events/index.ts";
 import {
     sessionElicitationAwaitingCompletionEventSchema,
     sessionElicitationRequestedEventSchema,
@@ -49,6 +50,12 @@ const activeTurnSnapshotSchema = z
         commandId: identifier,
         // When the Computer recorded the start of this running turn.
         startedAt: z.iso.datetime({ offset: true }),
+        // How far the native session's owner has taken the command when the Computer handed it there, and when it
+        // reached that stage; null when the Computer runs the command itself.
+        delegation: z
+            .object({ stage: promptDelegationStageSchema, at: z.iso.datetime({ offset: true }) })
+            .readonly()
+            .nullable(),
     })
     .readonly();
 

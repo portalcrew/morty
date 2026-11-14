@@ -37,6 +37,7 @@ export class SessionExecutionState {
             command,
             () => this.#operations.hasStarted(command.commandId, this.#sessionTarget),
             () => this.#operations.startedAt(command.commandId, this.#sessionTarget),
+            () => this.#operations.delegation(command.commandId, this.#sessionTarget),
             () => this.#executes(this.#sessionTarget, command.commandId),
         );
         this.#turnsByCommandId.set(command.commandId, turn);
