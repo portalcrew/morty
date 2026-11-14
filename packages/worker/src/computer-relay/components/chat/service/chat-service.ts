@@ -92,13 +92,13 @@ export class ChatService {
     readonly computerConfiguration = async (scope: ChatScope) => {
         await this.#requirePairedComputer(scope);
         return {
-            computer: await this.#relay.getChatComputerAgents(scope.computerId, scope.signal),
+            computer: await this.#relay.getChatComputerAgents(scope.signal),
         };
     };
 
     readonly daemonDiagnostics = async (scope: ChatScope, command: ComputerDiagnosticsRequestRouting) => {
         await this.#requirePairedComputer(scope);
-        const result = await this.#relay.readComputerDiagnostics(scope.computerId, command, scope.signal);
+        const result = await this.#relay.readComputerDiagnostics(command, scope.signal);
         if (result.kind !== "computer.diagnostics.result") {
             throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned invalid diagnostics.", 502);
         }
@@ -107,16 +107,16 @@ export class ChatService {
 
     readonly networkDiagnostic = async (scope: ChatScope, command: ComputerPingCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        return await this.#relay.measureComputerLatency(scope.computerId, command, scope.signal);
+        return await this.#relay.measureComputerLatency(command, scope.signal);
     };
 
     readonly setupComputers = async (scope: ChatScope) => ({
-        computers: await this.#relay.chatComputers(scope.computerId, scope.signal),
+        computers: await this.#relay.chatComputers(scope.signal),
     });
 
     readonly listDirectory = async (scope: ChatScope, command: WorkspaceListCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        const listing = await this.#relay.clientControl(scope.computerId, command, scope.signal);
+        const listing = await this.#relay.clientControl(command, scope.signal);
         if (listing.kind !== "workspace.entries" && listing.kind !== "session.operation.failed") {
             throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned an invalid directory.", 502);
         }
@@ -128,7 +128,7 @@ export class ChatService {
      * Agent connected; once its Computer was revoked it needs setup run again.
      */
     readonly #requirePairedComputer = async (scope: ChatScope): Promise<void> => {
-        const pairing = await this.#relay.readComputerPairing(scope.computerId, scope.signal);
+        const pairing = await this.#relay.readComputerPairing(scope.signal);
         switch (pairing) {
             case "paired":
                 return;
@@ -152,7 +152,7 @@ export class ChatService {
     ): Promise<Result> => this.#sessionOperations.run(nativeSessionKey(target), scope.signal, operation);
 
     readonly #requireComputerAgent = async (scope: ChatScope, harness: string) => {
-        const computer = await this.#relay.getChatComputerAgents(scope.computerId, scope.signal);
+        const computer = await this.#relay.getChatComputerAgents(scope.signal);
         if (!computer.agents.some((agent) => agent.harness === harness)) {
             throw new ComputerManagementError(
                 "AGENT_UNAVAILABLE",
@@ -165,7 +165,7 @@ export class ChatService {
     /** The Sessions the Computer holds, most recently updated first. */
     readonly managedSessions = async (scope: ChatScope, command: SessionListCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        const result = await this.#relay.clientControl(scope.computerId, command, scope.signal);
+        const result = await this.#relay.clientControl(command, scope.signal);
         if (result.kind !== "session.listed" && result.kind !== "session.operation.failed") {
             throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned an invalid Session list.", 502);
         }
@@ -176,14 +176,13 @@ export class ChatService {
     readonly agentSettings = async (scope: ChatScope, command: AgentSettingsDiscoverCommandRouting) => {
         await this.#requirePairedComputer(scope);
         await this.#requireComputerAgent(scope, command.harness);
-        return await this.#relay.discoverChatAgentSettings(scope.computerId, command, scope.signal);
+        return await this.#relay.discoverChatAgentSettings(command, scope.signal);
     };
 
     readonly openChat = async (scope: ChatScope, command: SessionCreateCommandRouting) => {
         await this.#requirePairedComputer(scope);
         await this.#requireComputerAgent(scope, command.harness);
         return await this.#relay.createChatSession(
-            scope.computerId,
             command,
             sessionCredentialLifetime(OPENED_SESSION_CREDENTIAL_SECONDS, scope.accessExpiresAt),
             scope.holder,
@@ -195,7 +194,7 @@ export class ChatService {
     readonly nativeSessionAccess = async (scope: ChatScope, command: SessionPrepareCommandRouting) => {
         await this.#requirePairedComputer(scope);
         return await this.#withSession(scope, command.target, async () => {
-            const ready = await this.#relay.clientControl(scope.computerId, command, scope.signal);
+            const ready = await this.#relay.clientControl(command, scope.signal);
             if (ready.kind === "session.operation.failed") {
                 return ready;
             }
@@ -207,7 +206,6 @@ export class ChatService {
                 );
             }
             return await this.#relay.nativeSessionAccess(
-                scope.computerId,
                 command.target,
                 sessionCredentialLifetime(RENEWED_SESSION_CREDENTIAL_SECONDS, scope.accessExpiresAt),
                 scope.holder,
@@ -219,7 +217,7 @@ export class ChatService {
     readonly managedSession = async (scope: ChatScope, command: SessionRestoreCommandRouting) => {
         return await this.#withSession(scope, command.target, async () => {
             await this.#requirePairedComputer(scope);
-            const restored = await this.#relay.clientControl(scope.computerId, command, scope.signal);
+            const restored = await this.#relay.clientControl(command, scope.signal);
             if (restored.kind === "session.operation.failed") {
                 return restored;
             }
@@ -242,7 +240,7 @@ export class ChatService {
     readonly archiveManagedSession = async (scope: ChatScope, command: SessionArchiveCommandRouting) => {
         await this.#requirePairedComputer(scope);
         return await this.#withSession(scope, command.target, async () => {
-            const archived = await this.#relay.clientControl(scope.computerId, command, scope.signal);
+            const archived = await this.#relay.clientControl(command, scope.signal);
             if (archived.kind === "session.operation.failed") {
                 return archived;
             }
@@ -258,7 +256,7 @@ export class ChatService {
         input: Extract<NativeSessionCommandRouting, { readonly action: "list" }>,
     ) => {
         await this.#requirePairedComputer(scope);
-        const result = await this.#relay.clientControl(scope.computerId, input, scope.signal);
+        const result = await this.#relay.clientControl(input, scope.signal);
         if (
             result.kind !== "session.operation.failed" &&
             (result.kind !== "native.session.result" || result.action !== "list")
@@ -278,14 +276,14 @@ export class ChatService {
         input: Extract<NativeSessionCommandRouting, { readonly action: "find" | "import" }>,
     ) => {
         const computer =
-            (await this.#relay.readComputerPairing(scope.computerId, scope.signal)) === "paired"
-                ? await this.#relay.getChatComputerAgents(scope.computerId, scope.signal)
+            (await this.#relay.readComputerPairing(scope.signal)) === "paired"
+                ? await this.#relay.getChatComputerAgents(scope.signal)
                 : undefined;
         const agent = computer?.agents.find((item) => item.harness === input.target.harness);
         if (computer === undefined || agent === undefined) {
             throw new ComputerManagementError("HARNESS_UNAVAILABLE", "The handoff harness is unavailable.", 409);
         }
-        const result = await this.#relay.clientControl(scope.computerId, input, scope.signal);
+        const result = await this.#relay.clientControl(input, scope.signal);
         if (
             result.kind !== "session.operation.failed" &&
             (result.kind !== "native.session.result" ||
@@ -310,7 +308,7 @@ export class ChatService {
                 400,
             );
         }
-        const events = await this.#relay.clientControl(scope.computerId, input, scope.signal);
+        const events = await this.#relay.clientControl(input, scope.signal);
         if (
             events.kind !== "session.operation.failed" &&
             (events.kind !== "session.preview-history.page.loaded" || !sameNativeSession(events.target, input.target))
@@ -337,7 +335,7 @@ export class ChatService {
                 400,
             );
         }
-        const result = await this.#relay.clientControl(scope.computerId, input, scope.signal);
+        const result = await this.#relay.clientControl(input, scope.signal);
         if (
             result.kind !== "session.operation.failed" &&
             (result.kind !== "native.session.result" ||
@@ -364,7 +362,7 @@ export class ChatService {
         if (input.requestId !== scopedOperationId) {
             throw new ComputerManagementError("INVALID_REQUEST", "The fork operation does not match the route.", 400);
         }
-        const result = await this.#relay.clientControl(scope.computerId, input, scope.signal);
+        const result = await this.#relay.clientControl(input, scope.signal);
         if (
             result.kind !== "session.operation.failed" &&
             (result.kind !== "native.session.result" ||
@@ -383,6 +381,6 @@ export class ChatService {
      */
     readonly verifyAgent = async (scope: ChatScope, command: AgentSettingsDiscoverCommandRouting) => {
         await this.#requireComputerAgent(scope, command.harness);
-        return await this.#relay.discoverChatAgentSettings(scope.computerId, command, scope.signal);
+        return await this.#relay.discoverChatAgentSettings(command, scope.signal);
     };
 }

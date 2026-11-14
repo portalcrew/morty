@@ -7,7 +7,7 @@ import type {
     SessionCreateCommandRouting,
 } from "@morty-build/client/protocol";
 import * as v from "valibot";
-import { ComputerManagementError, relayIdentifier } from "../../../../contracts/computer-management.ts";
+import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
 import type { ComputerPairing } from "../../../../contracts/computer-pairing.ts";
 import { isHttpError } from "../../../../contracts/http-error.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
@@ -39,15 +39,10 @@ export class LocalComputerService {
     };
 
     readonly #run = async <T>(
-        computerId: string,
         parent: AbortSignal,
         operation: (computer: ComputerBackendService, signal: AbortSignal) => Promise<T>,
         timeout = 120_000,
     ): Promise<T> => {
-        const selected = v.parse(relayIdentifier, computerId);
-        if (this.computer.computerId !== selected) {
-            throw new ComputerManagementError("NOT_FOUND", "The selected computer is unavailable.", 404);
-        }
         using deadline = new RequestDeadline(parent, timeout);
         const signal = deadline.signal;
         try {
@@ -67,15 +62,15 @@ export class LocalComputerService {
         }
     };
 
-    readonly createPairing = async (computerId: string, key: string, signal: AbortSignal) => ({
-        ...(await this.#run(computerId, signal, (computer, signal) => computer.createPairing(key, signal), 15_000)),
+    readonly createPairing = async (key: string, signal: AbortSignal) => ({
+        ...(await this.#run(signal, (computer, signal) => computer.createPairing(key, signal), 15_000)),
         relayUrl: this.configuration().origin,
     });
-    readonly readPairing = async (computerId: string, signal: AbortSignal) =>
-        await this.#run(computerId, signal, (computer, signal) => computer.readPairing(signal), 15_000);
-    readonly readComputerPairing = async (computerId: string, signal: AbortSignal): Promise<ComputerPairing> => {
+    readonly readPairing = async (signal: AbortSignal) =>
+        await this.#run(signal, (computer, signal) => computer.readPairing(signal), 15_000);
+    readonly readComputerPairing = async (signal: AbortSignal): Promise<ComputerPairing> => {
         try {
-            const pairing = await this.readPairing(computerId, signal);
+            const pairing = await this.readPairing(signal);
             switch (pairing.status) {
                 case "paired":
                     return "paired";
@@ -91,8 +86,8 @@ export class LocalComputerService {
             throw cause;
         }
     };
-    readonly chatComputers = async (computerId: string, signal: AbortSignal) => {
-        const computers = await this.#run(computerId, signal, (computer, signal) => computer.computers(signal), 15_000);
+    readonly chatComputers = async (signal: AbortSignal) => {
+        const computers = await this.#run(signal, (computer, signal) => computer.computers(signal), 15_000);
         return computers.map(({ computerId, computerName, online, agents }) => ({
             computerId,
             computerName,
@@ -100,20 +95,12 @@ export class LocalComputerService {
             agents: agents.map(({ harness, label }) => ({ harness, label })),
         }));
     };
-    readonly getChatComputerAgents = async (computerId: string, signal: AbortSignal) =>
-        await this.#run(computerId, signal, (computer, signal) => computer.agents(signal), 15_000);
-    readonly readComputerDiagnostics = async (
-        computerId: string,
-        command: ComputerDiagnosticsRequestRouting,
-        signal: AbortSignal,
-    ) => await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal), 10_000);
-    readonly measureComputerLatency = async (
-        computerId: string,
-        command: ComputerPingCommandRouting,
-        signal: AbortSignal,
-    ) =>
+    readonly getChatComputerAgents = async (signal: AbortSignal) =>
+        await this.#run(signal, (computer, signal) => computer.agents(signal), 15_000);
+    readonly readComputerDiagnostics = async (command: ComputerDiagnosticsRequestRouting, signal: AbortSignal) =>
+        await this.#run(signal, (computer, signal) => computer.clientControl(command, signal), 10_000);
+    readonly measureComputerLatency = async (command: ComputerPingCommandRouting, signal: AbortSignal) =>
         await this.#run(
-            computerId,
             signal,
             async (computer, signal) => {
                 const started = performance.now();
@@ -131,21 +118,17 @@ export class LocalComputerService {
             15_000,
         );
     /** Sends a client's command to the Computer and returns its reply. */
-    readonly clientControl = async (computerId: string, command: ClientControlCommand, signal: AbortSignal) =>
-        await this.#run(computerId, signal, (computer, signal) => computer.clientControl(command, signal));
-    readonly discoverChatAgentSettings = async (
-        computerId: string,
-        command: AgentSettingsDiscoverCommandRouting,
-        signal: AbortSignal,
-    ) => await this.#run(computerId, signal, (computer, signal) => computer.settings(command, signal));
+    readonly clientControl = async (command: ClientControlCommand, signal: AbortSignal) =>
+        await this.#run(signal, (computer, signal) => computer.clientControl(command, signal));
+    readonly discoverChatAgentSettings = async (command: AgentSettingsDiscoverCommandRouting, signal: AbortSignal) =>
+        await this.#run(signal, (computer, signal) => computer.settings(command, signal));
     readonly createChatSession = async (
-        computerId: string,
         command: SessionCreateCommandRouting,
         lifetime: number,
         holder: SessionAccessHolder,
         signal: AbortSignal,
     ) =>
-        await this.#run(computerId, signal, async (computer, signal) => {
+        await this.#run(signal, async (computer, signal) => {
             const ready = await computer.clientControl(command, signal);
             if (ready.kind === "session.operation.failed") {
                 return ready;
@@ -159,19 +142,18 @@ export class LocalComputerService {
             }
             return {
                 ...(await computer.issueSessionAccess(ready.target, lifetime, holder, signal)),
-                computerId,
+                computerId: computer.computerId,
                 target: ready.target,
                 ready,
             };
         });
     readonly nativeSessionAccess = async (
-        computerId: string,
         target: NativeSessionTarget,
         lifetime: number,
         holder: SessionAccessHolder,
         signal: AbortSignal,
     ) =>
-        await this.#run(computerId, signal, async (computer, signal) =>
+        await this.#run(signal, async (computer, signal) =>
             computer.issueSessionAccess(target, lifetime, holder, signal),
         );
 }

@@ -643,10 +643,7 @@ export function acceptWebSocketHttpTransport({
                             }
                             return;
                         }
-                        if (
-                            server.readyState === WebSocket.OPEN &&
-                            subscriptions.get(subscriptionId)?.kind === "open"
-                        ) {
+                        if (server.readyState === WebSocket.OPEN) {
                             lastMessageAt = Date.now();
                             server.send(
                                 JSON.stringify({

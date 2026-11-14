@@ -32,7 +32,6 @@ import { logger } from "../../../../infra/logger.ts";
 import {
     type ClientControlCommand,
     type ClientControlReply,
-    computerControlAddress,
     computerControlRegistry,
     computerControlReplyDecoders,
     computerControlTarget,
@@ -156,7 +155,7 @@ export async function requestClientControl(
     callerCancellation?: AbortSignal,
 ): Promise<ClientControlReply> {
     const encoded = encodeClientToRelayMessage(command);
-    const requestId = computerControlAddress(command);
+    const requestId = command.requestId;
     const target = computerControlTarget(command);
     const successKind = computerControlRegistry[command.kind];
     const accept = (reply: ClientControlReply): ReplyDecision<ClientControlReply> => {

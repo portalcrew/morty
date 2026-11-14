@@ -163,23 +163,24 @@ export class PairingDirectoryService {
         return computerPairingStatus(row, computerId, Date.now());
     };
 
-    private readonly redeemPairing = async (
-        expectedComputerId: string,
+    readonly redeemComputerPairing = async (
+        computerId: string,
         pairingCode: string,
         computerName: string,
         workspaceName: string,
         agents: readonly AgentDescriptor[],
         signal: AbortSignal,
     ): Promise<ClaimedPairing> => {
+        const expectedComputerId = validateIdentifier(computerId, "computer_id");
         signal.throwIfAborted();
         const codeHash = await hashPairingCredential(normalizePairingCode(pairingCode));
         const storage = await this.identityStorage({ kind: "pairing-code", codeHash }, signal);
         const pairing = await storage.readPairingCode(codeHash, signal);
-        const computerId = this.#cx.computerId;
-        if (pairing === null || computerId !== expectedComputerId) {
+        const boundComputerId = this.#cx.computerId;
+        if (pairing === null || boundComputerId !== expectedComputerId) {
             throw new PairingDirectoryError("invalid_pairing_code", "The pairing code is invalid or expired");
         }
-        const daemonToken = await deriveComputerDaemonToken(pairingCode, computerId, pairing.poll_token_hash);
+        const daemonToken = await deriveComputerDaemonToken(pairingCode, boundComputerId, pairing.poll_token_hash);
         const claimed = await storage.claimPairing(
             {
                 codeHash,
@@ -194,25 +195,8 @@ export class PairingDirectoryService {
         if (!claimed) {
             throw new PairingDirectoryError("invalid_pairing_code", "The pairing code is invalid or expired");
         }
-        return { computerId, daemonToken };
+        return { computerId: boundComputerId, daemonToken };
     };
-
-    readonly redeemComputerPairing = async (
-        computerId: string,
-        pairingCode: string,
-        computerName: string,
-        workspaceName: string,
-        agents: readonly AgentDescriptor[],
-        signal: AbortSignal,
-    ): Promise<ClaimedPairing> =>
-        await this.redeemPairing(
-            validateIdentifier(computerId, "computer_id"),
-            pairingCode,
-            computerName,
-            workspaceName,
-            agents,
-            signal,
-        );
 
     readonly listComputers = async (
         computerId: string,

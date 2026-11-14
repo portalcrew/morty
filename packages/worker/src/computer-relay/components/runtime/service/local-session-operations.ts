@@ -22,9 +22,8 @@ import { ContentUploadReader } from "./content-upload-reader.ts";
 export type LocalSessionOperations = Readonly<ReturnType<typeof createLocalSessionOperations>>;
 
 export function createLocalSessionOperations(cx: RuntimeContext, computerId: string) {
-    const checkTarget = (requestedComputer: string) => {
-        const latest = cx.services.connections.latest();
-        if (requestedComputer !== computerId || latest === null) {
+    const checkTarget = () => {
+        if (cx.services.connections.latest() === null) {
             throw new PairingDirectoryError("computer_access_denied", "The selected Computer is unavailable");
         }
         const daemon = cx.services.runtime.currentDaemon();
@@ -52,16 +51,12 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
         });
     };
     return {
-        requestClientControl: async (
-            requestedComputerId: string,
-            command: ClientControlCommand,
-            signal: AbortSignal,
-        ) => {
-            checkTarget(requestedComputerId);
+        requestClientControl: async (command: ClientControlCommand, signal: AbortSignal) => {
+            checkTarget();
             const requestId = command.requestId;
             const target = "target" in command ? command.target : undefined;
             const execute = async (operationSignal: AbortSignal) => {
-                checkTarget(requestedComputerId);
+                checkTarget();
                 return await requestClientControl(
                     await connect(requestId, target, operationSignal),
                     command,
@@ -75,11 +70,10 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
             return await execute(signal);
         },
         requestAgentSettings: async (
-            requestedComputerId: string,
             command: AgentSettingsDiscoverCommandRouting,
             signal: AbortSignal,
         ): Promise<string> => {
-            checkTarget(requestedComputerId);
+            checkTarget();
             return await requestComputerAgentSettings(
                 await connect(command.requestId, undefined, signal),
                 command,
@@ -87,7 +81,6 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
             );
         },
         subscribeSessionEvents: async (
-            requestedComputerId: string,
             sessionTarget: NativeSessionTarget,
             subscription: SessionEventsSubscribeCommandRouting,
             credential: {
@@ -98,10 +91,10 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
             observer: SessionEventObserver,
             signal: AbortSignal,
         ): Promise<void> => {
-            checkTarget(requestedComputerId);
+            checkTarget();
             signal.throwIfAborted();
             await cx.services.runtime.expireSilentDaemons();
-            checkTarget(requestedComputerId);
+            checkTarget();
             if (!cx.services.runtime.isOnline()) {
                 throw new PairingDirectoryError("computer_offline", "The Computer is offline");
             }
@@ -134,12 +127,8 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
                 throw cause;
             }
         },
-        readSessionFile: async (
-            requestedComputerId: string,
-            command: FileReadCommandRouting,
-            signal: AbortSignal,
-        ): Promise<Response> => {
-            checkTarget(requestedComputerId);
+        readSessionFile: async (command: FileReadCommandRouting, signal: AbortSignal): Promise<Response> => {
+            checkTarget();
             const socket = await connect(command.requestId, command.target, signal);
             try {
                 const stream = await requestComputerFile(socket, command, signal);
@@ -151,12 +140,11 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
             }
         },
         writeSessionContent: async (
-            requestedComputerId: string,
             target: NativeSessionTarget,
             body: ReadableStream<Uint8Array>,
             signal: AbortSignal,
         ): Promise<string> => {
-            checkTarget(requestedComputerId);
+            checkTarget();
             using deadline = new RequestDeadline(signal, 120_000);
             const records = new ContentUploadReader(body);
             try {

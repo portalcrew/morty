@@ -21,6 +21,7 @@ import { toHttpError } from "../../../../contracts/http-error.ts";
 import { PairingDirectoryError, validateIdentifier } from "../../../../contracts/relay/pairing.ts";
 import { WebSocketDispatchError, type WebSocketHttpOperation } from "../../../../contracts/websocket-http-dispatch.ts";
 import { bodyParser, readJsonTextBody } from "../../../../http/body-parser.ts";
+import { json } from "../../../../http/json.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import {
     authorizeSessionContentUpload,
@@ -52,7 +53,6 @@ const readTransportJson = async (context: Context<SessionWebSocketEnvironment>):
     }
     return readJsonTextBody(operation.body, context.req.raw.headers, context.req.raw.signal);
 };
-const json = (value: unknown): Response => Response.json(value, { headers: { "Cache-Control": "no-store" } });
 const notFound = (): Response =>
     Response.json(
         { error: { code: "not_found", message: "The requested Morty resource does not exist" } },
@@ -133,9 +133,7 @@ export function createSessionWebSocketRoutes(ctx: {
         const signal = context.req.raw.signal;
         await context.var.access.authorize(signal);
         return json(
-            await ctx.services
-                .forComputer(context.var.computerId)
-                .operations.requestClientControl(context.var.computerId, command, signal),
+            await ctx.services.forComputer(context.var.computerId).operations.requestClientControl(command, signal),
         );
     };
     const sessionPath = `${MORTY_API_PREFIX}/v1/computers/:computerId/harnesses/:harness/sessions/:sessionId`;
@@ -178,7 +176,7 @@ export function createSessionWebSocketRoutes(ctx: {
                 return json(
                     await ctx.services
                         .forComputer(context.var.computerId)
-                        .operations.requestClientControl(context.var.computerId, command, signal),
+                        .operations.requestClientControl(command, signal),
                 );
             },
         )
@@ -200,7 +198,7 @@ export function createSessionWebSocketRoutes(ctx: {
                 return json(
                     await ctx.services
                         .forComputer(context.var.computerId)
-                        .operations.requestClientControl(context.var.computerId, command, signal),
+                        .operations.requestClientControl(command, signal),
                 );
             },
         )
@@ -296,7 +294,7 @@ export function createSessionWebSocketRoutes(ctx: {
                 return json(
                     await ctx.services
                         .forComputer(context.var.computerId)
-                        .operations.requestClientControl(context.var.computerId, command, request.signal),
+                        .operations.requestClientControl(command, request.signal),
                 );
             },
         )
@@ -317,16 +315,11 @@ async function uploadContent(
     if (authorized instanceof Response) {
         return authorized;
     }
-    const { access, target } = authorized;
+    const { target } = authorized;
     if (request.body === null) {
         throw new PairingDirectoryError("invalid_request", "The content body is required");
     }
-    const available = await dependencies.operations.writeSessionContent(
-        access.computerId,
-        target,
-        request.body,
-        request.signal,
-    );
+    const available = await dependencies.operations.writeSessionContent(target, request.body, request.signal);
     return new Response(available, {
         headers: { "cache-control": "no-store", "content-type": "application/json" },
     });

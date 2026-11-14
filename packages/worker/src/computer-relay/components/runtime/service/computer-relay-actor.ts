@@ -23,10 +23,6 @@ import { logger } from "../../../../infra/logger.ts";
 
 type OperationRouting = Exclude<ClientToRelayMessage, { readonly kind: typeof SESSION_EVENTS_SUBSCRIBE_KIND }>;
 
-function operationAddress(command: OperationRouting): string {
-    return command.requestId;
-}
-
 function daemonHandler<K extends DaemonToRelayMessage["kind"]>(
     kind: K,
     handle: (message: Extract<DaemonToRelayMessage, { readonly kind: K }>, encoded: string) => void,
@@ -434,7 +430,7 @@ export class ComputerRelayActor {
         try {
             const command = decodeClientToRelayMessage(message);
             if (command.kind !== SESSION_EVENTS_SUBSCRIBE_KIND) {
-                const requestId = operationAddress(command);
+                const requestId = command.requestId;
                 const ownsOperation = this.#peers
                     .operations()
                     .some(
