@@ -93,11 +93,6 @@ export class SessionRuntimeFixture {
     readonly steerPrompt = (options: Omit<SessionSteerOptions, "adapter">) =>
         this.sessions.steerPrompt({ ...options, adapter: this.adapters.resolve(options.agent) });
 
-    readonly nativeSessionCapabilities = (options: Omit<SessionCreationOptions, "adapter">) =>
-        this.adapters
-            .resolve(options.agent)
-            .getCapabilities(nativeSessionQuery({ ...options, adapter: this.adapters.resolve(options.agent) }));
-
     readonly listNativeSessions = (options: Omit<SessionCreationOptions, "adapter">, cursor: string | null) =>
         this.adapters.resolve(options.agent).listSessions({
             query: nativeSessionQuery({ ...options, adapter: this.adapters.resolve(options.agent) }),

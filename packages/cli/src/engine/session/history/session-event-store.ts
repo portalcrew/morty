@@ -189,12 +189,6 @@ export interface SessionEventStore {
      * merged form, or `undefined` when no such announcement is recorded.
      */
     readonly getToolCall: (sessionTarget: NativeSessionTarget, toolCallId: string) => ProjectedToolCall | undefined;
-    /**
-     * Number of projected events whose payloads are currently held in memory.
-     * The store keeps this bounded by its retention window; it is the
-     * observable memory footprint of the Session event tier.
-     */
-    readonly materializedEventCount: (sessionTarget: NativeSessionTarget) => number;
     readonly materialize: (
         sessionTarget: NativeSessionTarget,
         sessionGenerationId: string,
@@ -301,9 +295,6 @@ export class MemorySessionEventStore implements SessionEventStore {
         const session = this.#events.get(sessionTarget);
         return session === undefined ? undefined : session.toolCall(toolCallId, this.#resolver(session));
     };
-
-    readonly materializedEventCount = (sessionTarget: NativeSessionTarget): number =>
-        this.#events.get(sessionTarget)?.materializedCount ?? 0;
 
     readonly materialize = (
         sessionTarget: NativeSessionTarget,
@@ -525,9 +516,6 @@ export class CachedSessionEventStore implements SessionEventStore {
         const sessionGenerationId = randomUUID();
         this.#sessions.set(sessionTarget, new SessionEvents(sessionGenerationId));
     };
-
-    readonly materializedEventCount = (sessionTarget: NativeSessionTarget): number =>
-        this.#sessions.get(sessionTarget)?.materializedCount ?? 0;
 
     readonly close = (): void => {
         if (this.#flushSchedule.kind === "closed") {

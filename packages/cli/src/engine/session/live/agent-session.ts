@@ -505,7 +505,6 @@ export class AgentSession {
             this.#capabilities,
             this.#commands,
             this.#configOptions,
-            this.#prompted(),
             this.#identity.kind === "bound" && this.#identity.origin !== "created",
             configurationRevision(this.#configOptions),
         );

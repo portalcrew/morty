@@ -1,5 +1,4 @@
-import type { Dirent } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -128,42 +127,7 @@ child.once("exit", (code) => process.exit(code ?? 1));
         );
     }
 
-    async rolloutDiagnostics(): Promise<readonly unknown[]> {
-        const sessions = join(this.#directory, "codex", "sessions");
-        const files = await jsonlFiles(sessions);
-        const diagnostics: unknown[] = [];
-        for (const file of files) {
-            const lines = (await readFile(file, "utf8")).split("\n");
-            for (const [index, line] of lines.entries()) {
-                if (!/(?:custom_tool_call|function_call|tool_call)/u.test(line)) {
-                    continue;
-                }
-                diagnostics.push({ file: file.slice(sessions.length + 1), line: index + 1, record: JSON.parse(line) });
-            }
-        }
-        return diagnostics;
-    }
-
     async [Symbol.asyncDispose](): Promise<void> {
         await rm(this.#directory, { force: true, maxRetries: 5, recursive: true, retryDelay: 100 });
     }
-}
-
-async function jsonlFiles(directory: string): Promise<readonly string[]> {
-    let entries: Dirent[];
-    try {
-        entries = await readdir(directory, { withFileTypes: true });
-    } catch (error) {
-        if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-            return [];
-        }
-        throw error;
-    }
-    const nested = await Promise.all(
-        entries.map((entry) => {
-            const path = join(directory, entry.name);
-            return entry.isDirectory() ? jsonlFiles(path) : Promise.resolve(path.endsWith(".jsonl") ? [path] : []);
-        }),
-    );
-    return nested.flat();
 }
