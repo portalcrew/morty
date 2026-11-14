@@ -1,3 +1,4 @@
+import { dataTestId } from "@/data-testid";
 import { cn } from "@/lib/utils";
 import { AgentMarkdown, MAX_MARKDOWN_CHARACTERS } from "../agents/agent-markdown.tsx";
 import { ToolTextPreview } from "./tool-text-preview.tsx";
@@ -44,19 +45,42 @@ function fencedCode(code: string, language: string): string {
     return `${fence}${language}\n${code}\n${fence}`;
 }
 
+function CodeLineNumbers({ code }: { readonly code: string }) {
+    const lineCount = code.split("\n").length;
+    return (
+        <div
+            aria-hidden="true"
+            className="sticky left-0 z-10 self-stretch border-r border-border/70 bg-surface-subtle px-3 py-4 text-right font-mono text-xs leading-4 text-muted-foreground select-none"
+            data-testid={dataTestId.filePreviewLineNumbers}
+        >
+            {Array.from({ length: lineCount }, (_, index) => (
+                <span className="block h-4" data-line-number="" key={index.toString()}>
+                    {index + 1}
+                </span>
+            ))}
+        </div>
+    );
+}
+
+/**
+ * Highlighted source. Code too large to show whole is elided by `ToolTextPreview`, so it has no line numbers to offer:
+ * numbers are drawn only beside lines that are all on screen.
+ */
 export function HighlightedCode({
     bare = false,
     code,
     language,
+    lineNumbers = false,
 }: {
     readonly bare?: boolean;
     readonly code: string;
     readonly language: string;
+    readonly lineNumbers?: boolean;
 }) {
     if (code.length > MAX_MARKDOWN_CHARACTERS) {
         return <ToolTextPreview className={cn("p-4 text-xs", bare && "max-h-none")} text={code} />;
     }
-    return (
+    const source = (
         <AgentMarkdown
             className={cn(
                 "text-xs [&_pre]:m-0 [&_pre]:text-xs",
@@ -66,5 +90,13 @@ export function HighlightedCode({
             markdown={fencedCode(code, language)}
             streaming={false}
         />
+    );
+    return lineNumbers ? (
+        <div className="flex min-w-0 items-start">
+            <CodeLineNumbers code={code} />
+            <div className="min-w-0 flex-1 [&_pre]:leading-4">{source}</div>
+        </div>
+    ) : (
+        source
     );
 }
