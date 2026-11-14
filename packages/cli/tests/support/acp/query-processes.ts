@@ -5,7 +5,6 @@ import type { NativeSessionQuery } from "../../../src/engine/acp/native-history/
 import type { NativeSessionPage } from "../../../src/engine/acp/protocol/native-session.ts";
 import type { AgentProcessPool } from "../../../src/engine/session/process/agent-process-pool.ts";
 import { RetainedAgentProcesses } from "../../../src/engine/session/process/retained-agent-processes.ts";
-import { waitForSharedOperation } from "../../../src/engine/util/wait-for-shared-operation.ts";
 import { AcpQuerySession } from "./query-session.ts";
 import type { AcpSessionConnector } from "./session-events.ts";
 
@@ -46,29 +45,33 @@ export class AgentQueryProcesses {
         const key = nativeSessionQueryKey(query);
         const pending = readers.pending(key);
         if (pending !== undefined) {
-            return await waitForSharedOperation(pending, query.signal);
+            return await pending.wait(query.signal);
         }
         const existing = readers.get(key);
         if (existing !== undefined && !existing.hasTerminated()) {
             readers.touch(key, existing);
             return existing;
         }
-        return await readers.prepare(key, async () => {
-            if (existing !== undefined) {
-                await this.retire(readers, key, existing);
-            }
-            const runtime = await this.#processes.startRetained(
-                query.signal,
-                () => AcpQuerySession.start(query, this.#connector),
-                {
-                    isBusy: () => readers.isBusy(key),
-                    retire: (runtime) => this.retire(readers, key, runtime),
-                    retireIdle: (runtime) => this.retire(readers, key, runtime),
-                },
-            );
-            readers.retain(key, runtime);
-            return runtime;
-        });
+        return await readers.prepare(
+            key,
+            async (signal) => {
+                if (existing !== undefined) {
+                    await this.retire(readers, key, existing);
+                }
+                const runtime = await this.#processes.startRetained(
+                    signal,
+                    () => AcpQuerySession.start({ ...query, signal }, this.#connector),
+                    {
+                        isBusy: () => readers.isBusy(key),
+                        retire: (runtime) => this.retire(readers, key, runtime),
+                        retireIdle: (runtime) => this.retire(readers, key, runtime),
+                    },
+                );
+                readers.retain(key, runtime);
+                return runtime;
+            },
+            query.signal,
+        );
     }
 
     readonly #use = async <T>(

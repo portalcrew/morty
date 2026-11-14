@@ -236,7 +236,8 @@ export class SessionManager {
     async #startPreparation(options: SessionPrepareOptions, recovery: SessionRecovery): Promise<AgentSession> {
         return await this.#executionProcesses.prepare(
             options.target,
-            async () => await this.#startSession(options, recovery),
+            async (signal) => await this.#startSession({ ...options, signal }, recovery),
+            options.signal,
         );
     }
 
@@ -260,28 +261,33 @@ export class SessionManager {
     async #replaceExecutionPreparation(existing: AgentSession, options: SessionPrepareOptions): Promise<AgentSession> {
         const desiredConfigOptions = existing.prepared().configOptions;
         const recovery: SessionRecovery = { kind: "interactive-only" };
-        return await this.#executionProcesses.prepare(options.target, async () => {
-            await this.#retireSessionProcess(options.target, existing, async () => await existing.close());
-            const runtime = await this.#startSession(options, recovery);
-            try {
-                await replaySessionConfigurations(
-                    desiredConfigOptions.map(storedSessionConfiguration),
-                    () => runtime.prepared().configOptions,
-                    async (desired) => {
-                        await runtime.applyConfiguration({
-                            ...options,
-                            ...desired,
-                            requestId: `execution-prepare-${desired.configId}`,
-                        });
-                    },
-                    options.signal,
-                );
-            } catch (error) {
-                await this.#retireSessionProcess(options.target, runtime, async () => await runtime.close());
-                throw error;
-            }
-            return runtime;
-        });
+        return await this.#executionProcesses.prepare(
+            options.target,
+            async (signal) => {
+                const shared = { ...options, signal };
+                await this.#retireSessionProcess(options.target, existing, async () => await existing.close());
+                const runtime = await this.#startSession(shared, recovery);
+                try {
+                    await replaySessionConfigurations(
+                        desiredConfigOptions.map(storedSessionConfiguration),
+                        () => runtime.prepared().configOptions,
+                        async (desired) => {
+                            await runtime.applyConfiguration({
+                                ...shared,
+                                ...desired,
+                                requestId: `execution-prepare-${desired.configId}`,
+                            });
+                        },
+                        signal,
+                    );
+                } catch (error) {
+                    await this.#retireSessionProcess(options.target, runtime, async () => await runtime.close());
+                    throw error;
+                }
+                return runtime;
+            },
+            options.signal,
+        );
     }
 
     /**
@@ -300,7 +306,7 @@ export class SessionManager {
         // Another operation may have reopened the Session while the native history was read.
         const pending = this.#executionProcesses.pending(options.target);
         if (pending !== undefined) {
-            return await waitForSharedOperation(pending, options.signal);
+            return await pending.wait(options.signal);
         }
         const current = this.#executionProcesses.get(options.target);
         if (current !== undefined && current !== existing) {
@@ -309,10 +315,14 @@ export class SessionManager {
         if (!changed) {
             return existing;
         }
-        return await this.#executionProcesses.prepare(options.target, async () => {
-            await this.#stopSessionProcess(options.target, existing);
-            return await this.#startSession(options, recovery);
-        });
+        return await this.#executionProcesses.prepare(
+            options.target,
+            async (signal) => {
+                await this.#stopSessionProcess(options.target, existing);
+                return await this.#startSession({ ...options, signal }, recovery);
+            },
+            options.signal,
+        );
     }
 
     async #prepareSession(options: SessionPrepareOptions, recovery: SessionRecovery): Promise<PreparedSession> {
@@ -321,7 +331,7 @@ export class SessionManager {
                 await this.#admit(options.target, { kind: "prepare" }, options.signal, () => undefined);
                 const pending = this.#executionProcesses.pending(options.target);
                 if (pending !== undefined) {
-                    const runtime = await waitForSharedOperation(pending, options.signal);
+                    const runtime = await pending.wait(options.signal);
                     if (runtime.runsIn(options.cwd)) {
                         this.#executionProcesses.touch(options.target, runtime);
                         if (recovery.kind === "history-required") {
@@ -485,7 +495,7 @@ export class SessionManager {
             this.#admitNow(options.target, { kind: "prepare-execution" });
             const pending = this.#executionProcesses.pending(options.target);
             if (pending !== undefined) {
-                await waitForSharedOperation(pending, options.signal);
+                await pending.wait(options.signal);
                 return await this.prepareExecutionSession(options);
             }
             const existing = this.#executionProcesses.get(options.target);
@@ -604,7 +614,7 @@ export class SessionManager {
             }
             const pending = this.#executionProcesses.pending(options.target);
             if (pending !== undefined) {
-                await waitForSharedOperation(pending, options.signal);
+                await pending.wait(options.signal);
             }
             // Nothing below awaits before the Agent receives the steer, so this check holds at the handoff.
             if (!this.acceptsSteering(options.target, options.targetCommandId)) {
@@ -771,7 +781,7 @@ export class SessionManager {
                     }
                     const pending = this.#executionProcesses.pending(options.target);
                     const runtime =
-                        pending === undefined ? this.#executionProcesses.get(options.target) : await pending;
+                        pending === undefined ? this.#executionProcesses.get(options.target) : await pending.completion;
                     if (runtime !== undefined) {
                         await this.#stopSessionProcess(options.target, runtime);
                     }
