@@ -33,7 +33,7 @@ export {
 } from "./computer/liveness.ts";
 export { CONTENT_CHUNK_ACK_KIND, decodeContentChunkAck, encodeContentChunkAck } from "./relay/content-chunk-ack.ts";
 export type { WorkerFileCredit } from "./relay/file-credit.ts";
-export { decodeWorkerFileCredit, encodeWorkerFileCredit, WORKER_FILE_CREDIT_KIND } from "./relay/file-credit.ts";
+export { encodeWorkerFileCredit, WORKER_FILE_CREDIT_KIND } from "./relay/file-credit.ts";
 export {
     MORTY_API_PREFIX,
     mortyApiUrl,
