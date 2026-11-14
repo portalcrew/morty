@@ -44,21 +44,10 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
                 }
                 throw signal.reason;
             },
-            cancel: (socket) => {
-                const cleanup = new AbortController();
-                const timer = setTimeout(
-                    () => cleanup.abort(new DOMException("Cancellation timed out", "TimeoutError")),
-                    15_000,
-                );
-                try {
-                    cx.services.runtime.cancelRequest(computerId, socket, requestId, cleanup.signal);
-                } finally {
-                    clearTimeout(timer);
-                }
-            },
+            cancel: (socket) => cx.services.runtime.cancelRequest(computerId, socket, requestId),
             credit: (socket) => {
                 signal.throwIfAborted();
-                cx.services.runtime.grantFileCredit(computerId, socket, requestId, signal);
+                cx.services.runtime.grantFileCredit(computerId, socket, requestId);
             },
         });
     };

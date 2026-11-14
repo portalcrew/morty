@@ -13,8 +13,6 @@ import {
     type NativeSessionTarget,
     ProtocolMessageError,
     SESSION_EVENTS_SUBSCRIBE_KIND,
-    type SESSION_HISTORY_PAGE_LOAD_KIND,
-    type SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND,
     type SessionEventEnvelopeRouting,
     type SessionEventsSubscribeCommandRouting,
     sessionEventsSubscribeCommandCodec,
@@ -100,8 +98,6 @@ function knownChunk(value: unknown, skipped: () => void) {
     }
 }
 
-export type HistoryRequestKind = "live" | "preview";
-
 export interface RelaySocket {
     readonly close: (code: number, reason: string) => void;
     readonly isOpen: () => boolean;
@@ -111,7 +107,7 @@ export interface RelaySocket {
 
 export interface ComputerOperationSocket extends RelaySocket {
     /** The Relay refuses this request itself, so its requester stops waiting. */
-    readonly reject: (requestId: string, code: string, message: string) => void;
+    readonly reject: (code: string, message: string) => void;
     /** The Computer went offline, so the requester stops waiting. */
     readonly computerOffline: () => void;
     readonly recordRequestDaemon: (daemon: RelaySocket, action: NativeSessionCommandRouting["action"]) => void;
@@ -119,12 +115,12 @@ export interface ComputerOperationSocket extends RelaySocket {
     readonly requestTransferKind: () => "file-read" | "content-write" | null;
     readonly requestDaemon: () => RelaySocket | null;
     readonly requestAction: () => NativeSessionCommandRouting["action"] | null;
+    /** Notes the request's Agent settings discovery; false when it is already pending, so a resend is ignored. */
+    readonly trackAgentSettingsDiscovery: (requestId: string, harness: string) => boolean;
     readonly consumeAgentSettingsDiscovery: (requestId: string, harness: string) => boolean;
     readonly consumeAgentSettingsDiscoveryFailure: (requestId: string) => boolean;
-    readonly takeAgentSettingsDiscoveries: () => readonly string[];
-    readonly bindHistoryRequest: (kind: HistoryRequestKind, requestId: string) => void;
-    readonly matchesHistoryRequest: (kind: HistoryRequestKind, requestId: string) => boolean;
-    readonly trackAgentSettingsDiscovery: (requestId: string, harness: string) => "tracked" | "duplicate" | "busy";
+    /** Forgets a pending discovery; whether there was one. */
+    readonly endAgentSettingsDiscovery: () => boolean;
 }
 
 export interface RelayPeers {
@@ -169,14 +165,8 @@ export class ComputerRelayActor {
         "agent.settings.discover": clientHandler("agent.settings.discover", (socket, command, encoded) =>
             this.forwardAgentSettingsDiscovery(socket, command, encoded),
         ),
-        "session.live-history.v2.page.load": clientHandler(
-            "session.live-history.v2.page.load",
-            (socket, command, encoded) => this.forwardHistoryPage(socket, "live", command, encoded),
-        ),
-        "session.preview-history.page.load": clientHandler(
-            "session.preview-history.page.load",
-            (socket, command, encoded) => this.forwardHistoryPage(socket, "preview", command, encoded),
-        ),
+        "session.live-history.v2.page.load": this.clientOperation("session.live-history.v2.page.load"),
+        "session.preview-history.page.load": this.clientOperation("session.preview-history.page.load"),
         "session.events.subscribe": clientHandler("session.events.subscribe", () => {
             throw new ProtocolMessageError("Subscription requires an authorized viewer");
         }),
@@ -239,14 +229,8 @@ export class ComputerRelayActor {
         "agent.settings.discovery.failed": daemonHandler("agent.settings.discovery.failed", (message, encoded) =>
             this.returnAgentSettingsDiscoveryFailure(message.requestId, encoded),
         ),
-        "session.live-history.v2.page.loaded": daemonHandler(
-            "session.live-history.v2.page.loaded",
-            (message, encoded) => this.returnHistoryPage("live", message.requestId, message.target, encoded),
-        ),
-        "session.preview-history.page.loaded": daemonHandler(
-            "session.preview-history.page.loaded",
-            (message, encoded) => this.returnHistoryPage("preview", message.requestId, message.target, encoded),
-        ),
+        "session.live-history.v2.page.loaded": this.addressedDaemon("session.live-history.v2.page.loaded"),
+        "session.preview-history.page.loaded": this.addressedDaemon("session.preview-history.page.loaded"),
         "computer.heartbeat": daemonHandler("computer.heartbeat", () => {}),
         "session.archived": this.addressedDaemon("session.archived"),
         "session.config.updated": this.addressedDaemon("session.config.updated"),
@@ -294,11 +278,10 @@ export class ComputerRelayActor {
         this.#computerId = computerId;
     }
 
-    readonly attachDaemon = async (replacedExistingConnection: boolean): Promise<void> => {
+    readonly attachDaemon = (replacedExistingConnection: boolean): void => {
         if (replacedExistingConnection) {
             this.failPendingAgentSettingsDiscoveries();
         }
-        this.broadcastComputerStatus(true);
     };
 
     /**
@@ -314,12 +297,12 @@ export class ComputerRelayActor {
     readonly failTransfersOwnedBy = (daemon: RelaySocket): void => {
         for (const route of this.#peers.operations()) {
             if (route.socket.requestTransferKind() !== null && route.socket.requestDaemon()?.isSame(daemon)) {
-                this.refuseOffline(route.socket, route.requestId);
+                this.refuseOffline(route.socket);
             }
         }
     };
 
-    readonly detachDaemon = async (socket: RelaySocket): Promise<void> => {
+    readonly detachDaemon = (socket: RelaySocket): void => {
         const anotherDaemonOnline = this.#peers
             .daemons()
             .some((candidate) => !candidate.isSame(socket) && candidate.isOpen());
@@ -327,7 +310,17 @@ export class ComputerRelayActor {
             return;
         }
         this.failPendingAgentSettingsDiscoveries();
-        this.broadcastComputerStatus(false);
+        this.notifyOffline();
+    };
+
+    /** The Computer went offline: its viewers close and every operation waiting on it stops waiting. */
+    readonly notifyOffline = (): void => {
+        for (const viewer of this.#peers.viewers()) {
+            viewer.close(1000, "Computer offline");
+        }
+        for (const { socket } of this.#peers.operations()) {
+            socket.computerOffline();
+        }
     };
 
     readonly forwardSessionSubscription = (
@@ -489,7 +482,7 @@ export class ComputerRelayActor {
             const original = socket.requestDaemon();
             const daemon = this.#peers.daemons().find((candidate) => candidate.isOpen() && original?.isSame(candidate));
             if (socket.requestTransferKind() !== "content-write" || daemon === undefined) {
-                this.refuseOffline(socket, command.requestId);
+                this.refuseOffline(socket);
             } else {
                 daemon.send(encoded);
             }
@@ -497,7 +490,7 @@ export class ComputerRelayActor {
         }
         const daemon = this.sendToDaemon(encoded);
         if (daemon === null) {
-            this.refuseOffline(socket, operationAddress(command));
+            this.refuseOffline(socket);
         } else if (command.kind === "content.write" || command.kind === "file.read") {
             socket.recordTransferDaemon(daemon, command.kind === "file.read" ? "file-read" : "content-write");
         }
@@ -510,15 +503,15 @@ export class ComputerRelayActor {
     ): void => {
         const daemon = this.sendToDaemon(encoded);
         if (daemon === null) {
-            this.refuseOffline(socket, command.requestId);
+            this.refuseOffline(socket);
             return;
         }
         socket.recordRequestDaemon(daemon, command.action);
     };
 
     /** Refuses only this request; other operations on the connection remain usable. */
-    private readonly refuseOffline = (socket: ComputerOperationSocket, requestId: string): void => {
-        socket.reject(requestId, "computer_offline", "The local computer is offline");
+    private readonly refuseOffline = (socket: ComputerOperationSocket): void => {
+        socket.reject("computer_offline", "The local computer is offline");
     };
 
     private readonly forwardAgentSettingsDiscovery = (
@@ -526,23 +519,13 @@ export class ComputerRelayActor {
         command: Extract<ClientToRelayMessage, { readonly kind: typeof AGENT_SETTINGS_DISCOVER_KIND }>,
         encoded: string,
     ): void => {
-        const { harness } = command;
-        const requestId = command.requestId;
-        const route = socket.trackAgentSettingsDiscovery(requestId, harness);
-        if (route === "duplicate") {
-            return;
-        }
-        if (route === "busy") {
-            socket.reject(
-                requestId,
-                "agent_settings_discovery_busy",
-                "This connection already has pending settings discovery requests",
-            );
+        const { harness, requestId } = command;
+        if (!socket.trackAgentSettingsDiscovery(requestId, harness)) {
             return;
         }
         if (this.sendToDaemon(encoded) === null) {
             socket.consumeAgentSettingsDiscoveryFailure(requestId);
-            this.refuseOffline(socket, requestId);
+            this.refuseOffline(socket);
         }
     };
 
@@ -608,46 +591,10 @@ export class ComputerRelayActor {
         }
     };
 
-    private readonly returnHistoryPage = (
-        kind: HistoryRequestKind,
-        requestId: string,
-        target: NativeSessionTarget,
-        encoded: string,
-    ): void => {
-        const recipient = this.#peers
-            .operations()
-            .find(
-                (route) =>
-                    route.socket.isOpen() &&
-                    route.socket.matchesHistoryRequest(kind, requestId) &&
-                    (route.target === undefined || sameNativeSession(route.target, target)),
-            )?.socket;
-        // A caller can close or time out independently of the authenticated daemon.
-        recipient?.send(encoded);
-    };
-
-    private readonly forwardHistoryPage = (
-        socket: ComputerOperationSocket,
-        kind: HistoryRequestKind,
-        command: Extract<
-            ClientToRelayMessage,
-            {
-                readonly kind: typeof SESSION_HISTORY_PAGE_LOAD_KIND | typeof SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND;
-            }
-        >,
-        encoded: string,
-    ): void => {
-        // A local history route belongs to one operation and ends with that caller.
-        socket.bindHistoryRequest(kind, command.requestId);
-        if (this.sendToDaemon(encoded) === null) {
-            socket.close(1013, "Computer offline");
-        }
-    };
-
     private readonly failPendingAgentSettingsDiscoveries = (): void => {
-        for (const socket of this.#peers.operations().map(({ socket }) => socket)) {
-            for (const requestId of socket.takeAgentSettingsDiscoveries()) {
-                this.refuseOffline(socket, requestId);
+        for (const { socket } of this.#peers.operations()) {
+            if (socket.endAgentSettingsDiscovery()) {
+                this.refuseOffline(socket);
             }
         }
     };
@@ -662,19 +609,6 @@ export class ComputerRelayActor {
             return daemon;
         } catch {
             return null;
-        }
-    };
-
-    private readonly broadcastComputerStatus = (online: boolean): void => {
-        if (!online) {
-            for (const viewer of this.#peers.viewers()) {
-                viewer.close(1000, "Computer offline");
-            }
-        }
-        if (!online) {
-            for (const { socket } of this.#peers.operations()) {
-                socket.computerOffline();
-            }
         }
     };
 

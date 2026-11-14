@@ -62,7 +62,6 @@ interface ComputerExchange<Reply> {
 
 async function awaitComputerReply<Reply>(
     socket: ComputerReplyConnection,
-    requestId: string,
     signal: AbortSignal,
     exchange: ComputerExchange<Reply>,
 ): Promise<Reply> {
@@ -105,7 +104,7 @@ async function awaitComputerReply<Reply>(
                 }
             };
             const onRejected = (event: Event) => {
-                if (event instanceof RequestRejectedEvent && event.requestId === requestId) {
+                if (event instanceof RequestRejectedEvent) {
                     reject(new SessionRuntimeError(event.code, event.message));
                 }
             };
@@ -124,8 +123,6 @@ async function awaitComputerReply<Reply>(
             socket.addEventListener("error", onClose);
             deadline.addEventListener("abort", onAbort, { once: true });
             try {
-                deadline.throwIfAborted();
-                socket.accept();
                 deadline.throwIfAborted();
                 exchange.send();
             } catch (cause) {
@@ -206,7 +203,7 @@ export async function requestClientControl(
     };
     callerCancellation?.addEventListener("abort", cancel, { once: true });
     try {
-        return await awaitComputerReply(socket, requestId, signal, {
+        return await awaitComputerReply(socket, signal, {
             send: () => {
                 callerCancellation?.throwIfAborted();
                 socket.send(encoded);
@@ -310,7 +307,7 @@ export async function requestComputerContentWrite(
         }
         return true;
     };
-    return await awaitComputerReply(socket, command.requestId, signal, {
+    return await awaitComputerReply(socket, signal, {
         send: () => socket.send(encodedCommand),
         abandoned: () => socket.cancel(),
         receive: (encoded, kind, fail, deadline) => {
@@ -516,7 +513,7 @@ export async function requestComputerFile(
             },
         };
         const onRejected = (event: Event): void => {
-            if (event instanceof RequestRejectedEvent && event.requestId === command.requestId) {
+            if (event instanceof RequestRejectedEvent) {
                 fail(new SessionRuntimeError(event.code, event.message));
             }
         };
@@ -582,7 +579,6 @@ export async function requestComputerFile(
         deadline.addEventListener("abort", onAbort, { once: true });
         try {
             deadline.throwIfAborted();
-            socket.accept();
             socket.send(encodeClientToRelayMessage(command));
         } catch (cause) {
             fail(cause);
@@ -609,7 +605,7 @@ export async function requestComputerAgentSettings(
             return reply.requestId === command.requestId ? { kind: "complete", value: message } : { kind: "ignore" };
         },
     };
-    return await awaitComputerReply(socket, command.requestId, signal, {
+    return await awaitComputerReply(socket, signal, {
         send: () => socket.send(encoded),
         receive: (message, kind) => handlers[kind]?.(message) ?? { kind: "ignore" },
     });

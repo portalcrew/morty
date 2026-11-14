@@ -3,7 +3,7 @@ import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import { logger } from "../../../../infra/logger.ts";
 import type { ClientControlReply } from "./computer-control-registry.ts";
-import type { ComputerOperationSocket, HistoryRequestKind, RelayPeers, RelaySocket } from "./computer-relay-actor.ts";
+import type { ComputerOperationSocket, RelayPeers, RelaySocket } from "./computer-relay-actor.ts";
 import { type ComputerReplyConnection, RequestRejectedEvent } from "./computer-reply-request.ts";
 
 /** What the owner of a request does with what its requester sends: a message for the Computer, a cancellation, or file credit. */
@@ -23,7 +23,6 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
         super();
         this.#handlers = handlers;
         this.#release = release;
-        let history: { readonly kind: HistoryRequestKind; readonly requestId: string } | null = null;
         let request:
             | { readonly kind: "not-forwarded" }
             | {
@@ -35,7 +34,8 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
                   readonly kind: "file-read" | "content-write";
                   readonly daemon: RelaySocket;
               } = { kind: "not-forwarded" };
-        const discoveries = new Map<string, string>();
+        // The Computer is asked for at most one Agent settings discovery per request: this one.
+        let discovery: { readonly requestId: string; readonly harness: string } | null = null;
         this.server = {
             recordRequestDaemon: (daemon, action) => {
                 request = { kind: "forwarded", daemon, action };
@@ -53,9 +53,9 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
                     this.dispatchEvent(new MessageEvent("message", { data: message }));
                 }
             },
-            reject: (requestId, code, message) => {
+            reject: (code, message) => {
                 if (this.isOpen()) {
-                    this.dispatchEvent(new RequestRejectedEvent(requestId, code, message));
+                    this.dispatchEvent(new RequestRejectedEvent(code, message));
                 }
             },
             computerOffline: () => {
@@ -65,40 +65,35 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
             },
             isOpen: () => this.isOpen(),
             isSame: (socket) => socket === this.server,
-            bindHistoryRequest: (kind, requestId) => {
-                history = { kind, requestId };
-            },
-            matchesHistoryRequest: (kind, requestId) => history?.kind === kind && history.requestId === requestId,
             trackAgentSettingsDiscovery: (requestId, harness) => {
-                const existing = discoveries.get(requestId);
-                if (existing !== undefined) {
-                    return existing === harness ? "duplicate" : "busy";
-                }
-                if (discoveries.size >= 4) {
-                    return "busy";
-                }
-                discoveries.set(requestId, harness);
-                return "tracked";
-            },
-            consumeAgentSettingsDiscovery: (requestId, harness) => {
-                if (discoveries.get(requestId) !== harness) {
+                if (discovery !== null) {
                     return false;
                 }
-                return discoveries.delete(requestId);
+                discovery = { requestId, harness };
+                return true;
             },
-            consumeAgentSettingsDiscoveryFailure: (requestId) => discoveries.delete(requestId),
-            takeAgentSettingsDiscoveries: () => {
-                const ids = [...discoveries.keys()];
-                discoveries.clear();
-                return ids;
+            consumeAgentSettingsDiscovery: (requestId, harness) => {
+                if (discovery?.requestId !== requestId || discovery.harness !== harness) {
+                    return false;
+                }
+                discovery = null;
+                return true;
+            },
+            consumeAgentSettingsDiscoveryFailure: (requestId) => {
+                if (discovery?.requestId !== requestId) {
+                    return false;
+                }
+                discovery = null;
+                return true;
+            },
+            endAgentSettingsDiscovery: () => {
+                const pending = discovery !== null;
+                discovery = null;
+                return pending;
             },
         };
     }
-    get readyState(): number {
-        return this.#state;
-    }
     private readonly isOpen = () => this.#state === WebSocket.OPEN;
-    readonly accept = (): void => {};
     readonly send = (message: string | ArrayBuffer | ArrayBufferView): void => {
         this.run(() => this.#handlers.message(this.server, message));
     };
