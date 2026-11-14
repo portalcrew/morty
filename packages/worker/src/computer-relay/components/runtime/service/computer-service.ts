@@ -208,7 +208,7 @@ export class ComputerService {
         const signal = AbortSignal.any([attachment.controller.signal, timeout.signal]);
         const operation = (async () => {
             try {
-                await this.attachDaemon(computerId, replaced, signal);
+                await this.relay(computerId).attachDaemon(replaced);
                 signal.throwIfAborted();
                 if (!this.#cx.services.connections.isCurrent(identity)) {
                     return;
@@ -329,11 +329,6 @@ export class ComputerService {
         this.relay(computerId).forwardSessionSubscription(daemon.socket, routing);
     };
 
-    readonly attachDaemon = async (computerId: string, replaced: boolean, signal: AbortSignal): Promise<void> => {
-        const relay = this.relay(computerId);
-        await relay.attachDaemon(replaced, signal);
-    };
-
     /** The public HTTP handler already authorized this local operation. */
     readonly receiveOperation = async (
         computerId: string,
@@ -436,7 +431,7 @@ export class ComputerService {
                     if (!(await this.authorizeDaemonMessage(identity, socket, signal))) {
                         return;
                     }
-                    this.relay(computerId).receiveDaemonChunk(socket, message);
+                    this.relay(computerId).receiveDaemonChunk(message);
                 });
             } catch (error) {
                 signal.throwIfAborted();
@@ -605,7 +600,7 @@ export class ComputerService {
             return;
         }
         this.#cx.services.connections.disconnected(identity.connectionEpoch, Date.now());
-        await this.relay(identity.computerId).detachDaemon(socket, signal);
+        await this.relay(identity.computerId).detachDaemon(socket);
     };
 
     private readonly closeSilentDaemons = (): readonly ComputerPeer[] => {

@@ -296,7 +296,7 @@ export class ComputerRelayActor {
         this.#liveEvents = new SessionLiveEventRelay(peers);
     }
 
-    readonly attachDaemon = async (replacedExistingConnection: boolean, _signal: AbortSignal): Promise<void> => {
+    readonly attachDaemon = async (replacedExistingConnection: boolean): Promise<void> => {
         if (replacedExistingConnection) {
             this.failPendingAgentSettingsDiscoveries();
         }
@@ -321,7 +321,7 @@ export class ComputerRelayActor {
         }
     };
 
-    readonly detachDaemon = async (socket: RelaySocket, _signal: AbortSignal): Promise<void> => {
+    readonly detachDaemon = async (socket: RelaySocket): Promise<void> => {
         const anotherDaemonOnline = this.#peers
             .daemons()
             .some((candidate) => !candidate.isSame(socket) && candidate.isOpen());
@@ -397,7 +397,7 @@ export class ComputerRelayActor {
         }
     };
 
-    readonly receiveDaemonChunk = (_socket: RelaySocket, message: unknown): void => {
+    readonly receiveDaemonChunk = (message: unknown): void => {
         const chunk = knownChunk(message, () => this.recordSkipped("unsupported_daemon_frame"));
         if (chunk === null) {
             return;
