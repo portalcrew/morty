@@ -11,16 +11,14 @@ file over asking the user to reproduce or enabling verbose output.
 
 ## Establish the target
 
-Resolve the CLI state root before anything else:
-
-| Precedence | Source | Path |
-| --- | --- | --- |
-| 1 | `MORTY_STATE_DIRECTORY` environment variable of the daemon process | its value |
-| 2 | platform default | macOS: `~/Library/Application Support/Morty/v3`; Windows: `%LOCALAPPDATA%\Morty\v3`; Linux: `$XDG_STATE_HOME/morty/v3` or `~/.local/state/morty/v3` |
+Resolve the CLI state root before anything else: an absolute
+`MORTY_STATE_DIRECTORY` in the daemon process's environment wins; otherwise it is
+the platform default described in
+[Data ownership and recovery](../../../docs/GUIDE.md#data-ownership-and-recovery).
 
 Read the variable from the environment the daemon actually runs in (for example
 the shell or service definition that started it); do not assume your current
-shell matches. When unset, use the platform default from the table.
+shell matches.
 
 Collect the selected daemon's diagnostics through the CLI, using its resolved
 state root explicitly:
@@ -37,8 +35,7 @@ node packages/cli/dist/cli.js logs --state-directory <stack-state>/morty
 ```
 
 The local-stack command `logs --worker runtime` reads setup output; it does not
-collect the daemon's diagnostic files. Do not search retired versioned
-installation directories or substitute another daemon's logs.
+collect the daemon's diagnostic files. Do not substitute another daemon's logs.
 
 The Computer diagnostic log is:
 
@@ -60,12 +57,8 @@ package version). Compare the invoking CLI and running Runtime versions using
 
 ## Read the log
 
-Each line is one JSON diagnostic with a stable prefix:
-
-```text
-Morty relay diagnostic {"computerId":"...","event":"relay_connection_failed",...}
-Morty daemon diagnostic {"computerId":"...","event":"native_session_operation_failed","requestId":"...",...,"failureName":"Error","failureMessage":"...","failureCode":"...","cause1Name":"...","cause1Message":"..."}
-```
+Each line is one JSON diagnostic whose prefix is `Morty relay diagnostic` or
+`Morty daemon diagnostic`, followed by an object with an `event` name.
 
 Extract evidence with line-oriented tools; the file is small by design:
 
@@ -74,15 +67,6 @@ MORTY_DIAGNOSTIC_LOG='/absolute/path/to/logs/daemon.log'
 tail -n 200 "$MORTY_DIAGNOSTIC_LOG"
 rg '"event":"native_session_operation_failed"' "$MORTY_DIAGNOSTIC_LOG" | tail -n 5
 ```
-
-Event families written to the log:
-
-| `event` | Meaning |
-| --- | --- |
-| `relay_connection_opened` / `relay_connection_closed` / `relay_connection_failed` | relay WebSocket lifecycle, including close code, reason, and source |
-| `relay_heartbeat_timed_out` | liveness deadline expired; daemon reconnected |
-| `agent_settings_discovery_failed`, `agent_settings_model_unsupported` | Agent settings discovery failures and unsupported model selections |
-| `native_session_operation_failed` | native session list/find/preview/import/fork failure |
 
 For failure events, read the cause chain fields `failureName`,
 `failureMessage`, `failureCode`, then `cause1*`, `cause2*` for the underlying
@@ -144,8 +128,7 @@ and delete it afterward. Preserve typed error codes and sanitized messages at
 every boundary, and record new daemon-side failures through the bounded local
 diagnostic log so they remain diagnosable after a restart.
 
-Run only relevant tests, then `pnpm lint` and `pnpm typecheck` in the Morty
-workspace. Use `pnpm ci:check` only to diagnose combined CI validation. Do not
+Verify as the root `AGENTS.md` "Verification" section describes. Do not
 publish or release the CLI unless the user explicitly asks.
 
 ## Report findings

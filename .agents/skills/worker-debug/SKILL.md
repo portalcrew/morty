@@ -14,8 +14,7 @@ that already happened; `wrangler tail` only observes new events.
 Resolve the repository root with `git rev-parse --show-toplevel`, inspect
 `wrangler.jsonc`, and inspect `git status --short` without changing user work.
 Read `deployment/targets.json` for the production account, Worker names and origins.
-The only hosted application environment is production; staging and benchmark
-are retired. Resolve the target service from the supplied URL or concrete evidence.
+The only hosted application environment is production. Resolve the target service from the supplied URL or concrete evidence.
 State which production service is being inspected. Bounded health and log reads
 are read-only; infer authorization for mutations from the user's task.
 
@@ -175,7 +174,7 @@ boundary. Preserve typed error codes and sanitized client messages; enrich local
 structured logs with safe schema issue paths when generic validation responses
 otherwise hide the cause.
 
-Run only relevant tests, then `pnpm lint` and `pnpm typecheck`. Use `pnpm ci:check` only to diagnose combined CI validation. Do not deploy unless the user explicitly asks.
+Verify as the root `AGENTS.md` "Verification" section describes. Do not deploy unless the user explicitly asks.
 
 ## Report findings
 

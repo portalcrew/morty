@@ -85,9 +85,7 @@ behavior tests. Follow the [Code of Conduct](../CODE_OF_CONDUCT.md); use
 Production builds load content-addressed JavaScript and CSS from an
 append-only R2 bucket. Deployments upload new assets before activating
 the Worker so an open page can still load its original chunks. Never delete these
-objects during ordinary deployment. Provision resources using the independent
-Morty production target. Local development uses isolated local resources without
-production credentials. Hosted staging and benchmark environments are retired.
+objects during ordinary deployment.
 
 ### Setup
 
