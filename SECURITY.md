@@ -18,8 +18,7 @@ an incident.
 **Please do not open a public issue for a security problem.**
 
 Report it privately through GitHub: open this repository's **Security** tab and
-choose **Report a vulnerability**. Only the maintainers can see the report. Do not
-post a report in the retired product repository.
+choose **Report a vulnerability**. Only the maintainers can see the report.
 
 Helpful things to include:
 
@@ -84,8 +83,7 @@ running commands through the Agent, is not.
 ## Scope
 
 Security fixes target the latest published `@morty-build/cli` release and current
-Morty services. Earlier pre-launch releases and saved state are unsupported under
-the documented [launch reset](README.md#installing-the-launch-release). Include
+Morty services. Earlier pre-launch releases and saved state are unsupported. Include
 your exact version even if you are unsure whether it is supported. Do not assume
 that a package update alone revokes exposed credentials; report the exposure so
 revocation and recovery can be assessed.

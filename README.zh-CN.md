@@ -63,7 +63,7 @@ You may install missing prerequisites and pair this machine.
 ## 停止 Morty
 
 `npx --yes @morty-build/cli@latest stop` 停止 Morty，
-保留本地身份、配对、工作区和 Agent 历史。
+保留配对关系和 Agent 历史。
 
 ## 已知限制
 
@@ -96,7 +96,7 @@ You may install missing prerequisites and pair this machine.
   关闭；如果暂时无法联系 relay，最迟在 15 分钟内关闭。
 - **Morty 记录设备加入时的大致位置，不记录 IP 地址。** 浏览器打开分享链接时，Morty
   保存 Cloudflare 提供的城市和国家，帮助你辨认自己的设备。
-- **重启更新。** `npx --yes @morty-build/cli@latest restart` 启动最新版。
+- **重启更新。** `npx --yes @morty-build/cli@latest restart` 启动最新版。用 `status` 查看 CLI 和 daemon 版本。
 - **网站向 Sentry 上报错误和性能诊断。** 报告会去除 URL 查询参数、用户信息、cookie、
   请求头和请求体。Morty 的服务器会在日志里记录 setup 进度（获取说明、创建身份、签发链接、
   打开链接），只记录步骤本身以及请求来自浏览器还是 Agent。你主动提交的 bug 报告还会附带

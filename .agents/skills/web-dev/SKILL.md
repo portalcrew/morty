@@ -74,7 +74,7 @@ and check; the port changes on every start.
 
 ```sh
 curl -sS -o /dev/null -w '%{http_code}\n' http://localhost:<port>/
-curl -sS -o /dev/null -w '%{http_code}\n' http://localhost:<port>/morty/api/health
+curl -sS -o /dev/null -w '%{http_code}\n' http://localhost:<port>/morty/api/v1/health
 ```
 
 Expect `200` for the SPA and `204` from the proxied deployed Worker. The second

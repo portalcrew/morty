@@ -28,8 +28,7 @@ daemon's diagnostics through the built checkout CLI:
 node packages/cli/dist/cli.js logs --state-directory <stateDir>/morty
 ```
 
-Use the selected stack's state directory; do not search retired installation
-generations or read another daemon's log.
+Use the selected stack's state directory; do not read another daemon's log.
 
 ## Correlating one request
 
@@ -73,12 +72,8 @@ use `node scripts/local-dev.cjs remove --state-dir <stateDir> --keep-state`;
 
 ## Boundary checklist
 
-When a request fails validation, compare every boundary in order:
-
-1. Browser request construction and serialized body size.
-2. Morty Worker global body limit, route body limit, and schema.
-3. ComputerRelay authorization and local relay operations.
-4. Runtime or Agent protocol validation.
+When a request fails validation, compare every boundary in order, as the
+`worker-debug` skill's "Diagnose across boundaries" lists them.
 
 ## Reproduce with a narrow API call
 

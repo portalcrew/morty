@@ -43,10 +43,8 @@ These rules apply to `packages/web`. Repository-wide rules in the root `AGENTS.m
 
 ## Testing
 
-- For routine local work, run `pnpm lint`, `pnpm typecheck`, and only related test
-  cases. Use `pnpm ci:check` locally only to diagnose the combined CI validation.
 - Integration tests enter through navigation or exercise user behavior through mouse and keyboard operations. Direct access to stores in tests is forbidden.
 - Integration tests must bootstrap and render the entire application. Rendering individual React components or views in an integration test is forbidden.
 - Tests prefer accessible roles, names, labels, and visible text. Use constants from `data-testid.ts` when an element has no stable semantic selector or the ID represents a supported product state. Ad hoc test IDs and selectors coupled to styling or DOM structure are forbidden.
-- Use the complete real application, router, Zustand stores, API clients, single Morty Worker, production daemon, transports, and storage. Inject a stateful controlled ACP harness only through the daemon's Agent dependency argument. Do not fake the API transport, replace modules, inject stores, or define request mocks inside scenarios.
-- Cover real daemon and Agent adapter behavior separately in Morty agent-daemon integration tests with real Agent executables. See the repository `docs/TESTING.md` for external identity/model-provider exceptions.
+- Use the complete real application, router, Zustand stores, API clients, single Morty Worker, production daemon, transports, and storage. Do not fake the API transport, replace modules, inject stores, or define request mocks inside scenarios.
+- The controlled ACP harness boundary and the separate real-Agent compatibility tests are defined in the root `AGENTS.md` (Delivery) and `docs/TESTING.md`.
