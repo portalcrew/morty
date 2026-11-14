@@ -200,7 +200,7 @@ export class ComputerService {
         const signal = AbortSignal.any([attachment.controller.signal, timeout.signal]);
         const operation = (async () => {
             try {
-                await this.relay(computerId).attachDaemon(replaced);
+                this.relay(computerId).attachDaemon(replaced);
                 signal.throwIfAborted();
                 if (!this.#cx.services.connections.isCurrent(identity)) {
                     return;
@@ -265,7 +265,7 @@ export class ComputerService {
             }
         }
         if (connected) {
-            this.notifyOffline();
+            this.relay(computerId).notifyOffline();
         }
     };
 
@@ -341,28 +341,18 @@ export class ComputerService {
         }
     };
 
-    readonly cancelRequest = (
-        computerId: string,
-        operation: ComputerOperationSocket,
-        requestId: string,
-        signal: AbortSignal,
-    ): void => {
-        const daemon = this.requestControlDaemon(computerId, operation, requestId, signal);
+    readonly cancelRequest = (computerId: string, operation: ComputerOperationSocket, requestId: string): void => {
+        const daemon = this.requestControlDaemon(computerId, operation, requestId);
         if (daemon !== null) {
             this.relay(computerId).forwardRequestCancellation(daemon, requestId);
         }
     };
 
-    readonly grantFileCredit = (
-        computerId: string,
-        operation: ComputerOperationSocket,
-        requestId: string,
-        signal: AbortSignal,
-    ): void => {
+    readonly grantFileCredit = (computerId: string, operation: ComputerOperationSocket, requestId: string): void => {
         if (operation.requestTransferKind() !== "file-read") {
             throw new PairingDirectoryError("invalid_request", "The credit does not own a file read");
         }
-        const daemon = this.requestControlDaemon(computerId, operation, requestId, signal);
+        const daemon = this.requestControlDaemon(computerId, operation, requestId);
         if (daemon === null) {
             throw new PairingDirectoryError("computer_offline", "The Computer connection closed");
         }
@@ -373,9 +363,7 @@ export class ComputerService {
         computerId: string,
         operation: ComputerOperationSocket,
         requestId: string,
-        signal: AbortSignal,
     ): RelaySocket | null => {
-        signal.throwIfAborted();
         const ownsOperation = this.#cx.gateways.peers
             .operations()
             .some((route) => route.requestId === requestId && route.socket.isSame(operation));
@@ -390,7 +378,6 @@ export class ComputerService {
         if (daemon === undefined || daemon.identity.computerId !== computerId || !daemon.socket.isSame(original)) {
             return null;
         }
-        signal.throwIfAborted();
         return daemon.socket;
     };
 
@@ -573,7 +560,7 @@ export class ComputerService {
             return;
         }
         this.#cx.services.connections.disconnected(identity.connectionEpoch, Date.now());
-        await this.relay(identity.computerId).detachDaemon(socket);
+        this.relay(identity.computerId).detachDaemon(socket);
     };
 
     private readonly closeSilentDaemons = (): readonly ComputerPeer[] => {
@@ -630,12 +617,6 @@ export class ComputerService {
             } finally {
                 clearTimeout(timer);
             }
-        }
-    };
-
-    private readonly notifyOffline = (): void => {
-        for (const { socket } of this.#cx.gateways.peers.operations()) {
-            socket.computerOffline();
         }
     };
 }
