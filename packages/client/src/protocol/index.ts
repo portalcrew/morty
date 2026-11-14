@@ -10,7 +10,6 @@ export type {
 export {
     computerDiagnosticsRequestCodec,
     computerDiagnosticsResultCodec,
-    decodeComputerDiagnosticsRequest,
     decodeComputerDiagnosticsResult,
 } from "./computer/diagnostics.ts";
 export type {
@@ -80,16 +79,13 @@ export {
     agentSettingsDiscoverCommandCodec,
     agentSettingsDiscoveredEventCodec,
     agentSettingsDiscoveryFailedEventCodec,
-    decodeAgentSettingsDiscoverCommand,
     decodeAgentSettingsDiscoveredEvent,
     encodeAgentSettingsDiscoverCommand,
 } from "./session/agent/settings.ts";
 export type {
     SessionConfigOption,
-    SessionConfigReadCommand,
     SessionConfigReadResult,
     SessionConfigurationSelection,
-    SessionConfigureCommand,
 } from "./session/configuration/index.ts";
 export {
     decodeSessionConfigReadResult,
@@ -105,7 +101,6 @@ export {
     sessionConfigurationSelection,
     sessionConfigureCommandCodec,
 } from "./session/configuration/index.ts";
-export type { SessionRenameCommand } from "./session/configuration/title.ts";
 export {
     decodeSessionRenamedEvent,
     encodeSessionRenameCommand,
@@ -238,24 +233,17 @@ export type {
     SessionListCommandRouting,
     SessionMetadata,
     SessionOperationFailedEvent,
-    SessionPrepareCommand,
     SessionPrepareCommandRouting,
     SessionReadyBody,
     SessionReadyEvent,
-    SessionRestoreCommand,
     SessionRestoreCommandRouting,
 } from "./session/lifecycle/index.ts";
 export {
-    decodeSessionArchiveCommand,
     decodeSessionArchivedEvent,
     decodeSessionCloseNoticeEvent,
-    decodeSessionCreateCommand,
-    decodeSessionListCommand,
     decodeSessionOperationFailedEvent,
-    decodeSessionPrepareCommand,
     decodeSessionPromptAcceptedEvent,
     decodeSessionReadyEvent,
-    decodeSessionRestoreCommand,
     decodeSessionRestoredEvent,
     decodeSessionsListedEvent,
     decodeSessionsQueriedEvent,
@@ -319,9 +307,7 @@ export {
 } from "./session/native/index.ts";
 export type { SessionPreviewHistoryPageLoadRouting } from "./session/observability/history.ts";
 export {
-    decodeSessionHistoryPageLoad,
     decodeSessionHistoryPageLoaded,
-    decodeSessionPreviewHistoryPageLoad,
     decodeSessionPreviewHistoryPageLoaded,
     encodeSessionHistoryPageLoad,
     encodeSessionPreviewHistoryPageLoad,
@@ -392,11 +378,9 @@ export type {
 export { decodeTurn, decodeTurnCancellation, decodeTurnReference } from "./session/turn/index.ts";
 export type {
     WorkspaceEntriesEvent,
-    WorkspaceListCommand,
     WorkspaceListCommandRouting,
 } from "./session/workspace/index.ts";
 export {
-    decodeWorkspaceListCommand,
     encodeWorkspaceListCommand,
     WORKSPACE_ENTRIES_KIND,
     WORKSPACE_LIST_KIND,

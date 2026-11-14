@@ -104,7 +104,7 @@ const agentSettingsDiscoveryFailedEventSchema = z
 
 type AgentSettingsDiscoveryFailedEvent = z.infer<typeof agentSettingsDiscoveryFailedEventSchema>;
 
-export const decodeAgentSettingsDiscoverCommand = (encoded: string): AgentSettingsDiscoverCommand =>
+const decodeAgentSettingsDiscoverCommand = (encoded: string): AgentSettingsDiscoverCommand =>
     decode(encoded, agentSettingsDiscoverCommandSchema);
 export const encodeAgentSettingsDiscoverCommand = (message: AgentSettingsDiscoverCommand): string =>
     encode(message, agentSettingsDiscoverCommandSchema);

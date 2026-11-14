@@ -40,7 +40,7 @@ const workspaceEntriesEventSchema = z
 
 export type WorkspaceEntriesEvent = z.infer<typeof workspaceEntriesEventSchema>;
 
-export const decodeWorkspaceListCommand = (encoded: string): WorkspaceListCommand =>
+const decodeWorkspaceListCommand = (encoded: string): WorkspaceListCommand =>
     decode(encoded, workspaceListCommandSchema);
 export const encodeWorkspaceListCommand = (message: WorkspaceListCommand): string =>
     encode(message, workspaceListCommandSchema);

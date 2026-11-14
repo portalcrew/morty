@@ -81,11 +81,11 @@ function decodeLoaded<T>(schema: z.ZodType<T>, encoded: string): T {
     }
 }
 
-export const decodeSessionHistoryPageLoad = (encoded: string): SessionHistoryPageLoad =>
+const decodeSessionHistoryPageLoad = (encoded: string): SessionHistoryPageLoad =>
     decode(sessionHistoryPageLoadSchema, encoded);
 export const decodeSessionHistoryPageLoaded = (encoded: string): SessionHistoryPageLoaded =>
     decodeLoaded(sessionHistoryPageLoadedSchema, encoded);
-export const decodeSessionPreviewHistoryPageLoad = (encoded: string): SessionPreviewHistoryPageLoad =>
+const decodeSessionPreviewHistoryPageLoad = (encoded: string): SessionPreviewHistoryPageLoad =>
     decode(sessionPreviewHistoryPageLoadSchema, encoded);
 export const decodeSessionPreviewHistoryPageLoaded = (encoded: string): SessionPreviewHistoryPageLoaded =>
     decodeLoaded(sessionPreviewHistoryPageLoadedSchema, encoded);
