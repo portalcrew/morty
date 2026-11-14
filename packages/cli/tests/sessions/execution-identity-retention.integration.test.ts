@@ -120,12 +120,16 @@ test("Given an executed command, When its receipt is evicted and the daemon rest
                     name: "missing.txt",
                     uri: "file:///missing.txt",
                 } as const;
-                for (const commandId of rejected) {
-                    send({ ...original, attachments: [unavailableAttachment], commandId, requestId: commandId });
-                }
-                const failures = await observe(peer, rejected);
-                for (const outcome of failures.outcomes.values()) {
-                    expect(outcome.kind).toBe("failed");
+                // Exercise the full receipt-retention boundary without flooding the bounded encrypted receive queue:
+                // each batch is answered before the next is sent, so the Computer's speed cannot overflow it.
+                for (let offset = 0; offset < rejected.length; offset += 64) {
+                    const batch = rejected.slice(offset, offset + 64);
+                    for (const commandId of batch) {
+                        send({ ...original, attachments: [unavailableAttachment], commandId, requestId: commandId });
+                    }
+                    for (const outcome of (await observe(peer, batch)).outcomes.values()) {
+                        expect(outcome.kind).toBe("failed");
+                    }
                 }
 
                 const cancelExpired = async () => {
