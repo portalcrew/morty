@@ -13,6 +13,12 @@ export class DurableComputerAccount {
         this.#storage = storage;
     }
 
+    /**
+     * Whether the object holds an account, read synchronously from storage for code that cannot wait on it. Only a
+     * computer that exists gets a database: a request naming one that does not must leave none behind.
+     */
+    readonly holdsAccount = (): boolean => this.#storage.kv.get(ACCOUNT_KEY) !== undefined;
+
     readonly isActive = async (signal: AbortSignal): Promise<boolean> =>
         await waitForAccount(async () => (await this.#storage.get(ACCOUNT_KEY)) !== undefined, signal);
 

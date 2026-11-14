@@ -67,7 +67,7 @@ async function subscriptionBody(subscriptionId: string, sessionId = "session"): 
 }
 
 it("Given a browser connection, When it requests a retired private Computer API, Then the transport rejects the target rather than routing it as a supported operation", async () => {
-    const computerId = "prj_ap_01_000000000000000000000001";
+    const { computerId } = await createOwner();
     const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
         headers: { Upgrade: "websocket" },
     });
@@ -100,7 +100,7 @@ it("Given a browser connection, When it requests a retired private Computer API,
 it.each(["unknown-command", "access-credentials", "access-credentials/unknown-command"])(
     "Given a browser connection, When it requests Session operation %s, Then the owning route answers 404 not_found",
     async (operation) => {
-        const computerId = "prj_ap_01_000000000000000000000001";
+        const { computerId } = await createOwner();
         const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
             headers: { Upgrade: "websocket" },
         });
@@ -135,12 +135,10 @@ it.each(["unknown-command", "access-credentials", "access-credentials/unknown-co
 );
 
 it("Given a browser connection, When it heartbeats through the public Relay transport, Then the Computer acknowledges it and an unauthenticated Session request is rejected", async () => {
-    const response = await SELF.fetch(
-        "https://relay.test/morty/api/v1/computers/prj_ap_01_000000000000000000000001/transport",
-        {
-            headers: { Upgrade: "websocket" },
-        },
-    );
+    const { computerId } = await createOwner();
+    const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
+        headers: { Upgrade: "websocket" },
+    });
     expect(response.status).toBe(101);
     const socket = response.webSocket;
     if (socket === null) {
@@ -157,7 +155,7 @@ it("Given a browser connection, When it heartbeats through the public Relay tran
                 kind: "http.request",
                 requestId: "after-heartbeat",
                 method: "GET",
-                path: "/morty/api/v1/computers/prj_ap_01_000000000000000000000001/harnesses/codex/sessions/example/active-turn",
+                path: `/morty/api/v1/computers/${computerId}/harnesses/codex/sessions/example/active-turn`,
                 headers: [],
                 body: "",
             }),
@@ -187,12 +185,10 @@ it.each([
 ])(
     "Given a Computer-bound browser, When it addresses another computer at $path (binary: $binary), Then the request is rejected without closing the browser connection",
     async ({ path, binary }) => {
-        const response = await SELF.fetch(
-            "https://relay.test/morty/api/v1/computers/prj_ap_01_000000000000000000000001/transport",
-            {
-                headers: { Upgrade: "websocket" },
-            },
-        );
+        const { computerId } = await createOwner();
+        const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
+            headers: { Upgrade: "websocket" },
+        });
         expect(response.status).toBe(101);
         const socket = response.webSocket;
         if (socket === null) {
@@ -327,10 +323,10 @@ it.each([
     "Given a $name Session credential, When a browser subscribes through its WS connection, Then the DO rejects the subscription without exposing an HTTP event endpoint",
     { timeout: 5_000 },
     async ({ authorization, code, status }) => {
-        const response = await SELF.fetch(
-            "https://relay.test/morty/api/v1/computers/prj_wn_01_ABCDEFGHIJKLMNOPQRSTUVWX/transport",
-            { headers: { Upgrade: "websocket" } },
-        );
+        const { computerId } = await createOwner();
+        const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
+            headers: { Upgrade: "websocket" },
+        });
         expect(response.status).toBe(101);
         const socket = response.webSocket;
         if (socket === null) {
@@ -341,7 +337,7 @@ it.each([
             const subscription = JSON.stringify({
                 kind: "session.events.subscribe",
                 subscriptionId: "unauthorized-subscription",
-                path: "/morty/api/v1/computers/prj_wn_01_ABCDEFGHIJKLMNOPQRSTUVWX/harnesses/claude/sessions/session-unauthorized/events",
+                path: `/morty/api/v1/computers/${computerId}/harnesses/claude/sessions/session-unauthorized/events`,
                 body: await subscriptionBody("unauthorized-subscription", "session-unauthorized"),
                 headers: [
                     ["content-type", "application/json"],
