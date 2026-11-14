@@ -1010,6 +1010,10 @@ function MortySessionPaneBody({
                             >
                                 <SessionInteractionCards
                                     answerDrafts={interactions.answerDrafts}
+                                    requiredNotices={interactions.requiredNotices}
+                                    onElicitationAccept={(elicitation) =>
+                                        interactionModel.acceptElicitation(elicitation, pane.operationsSignal())
+                                    }
                                     elicitations={interactions.elicitations}
                                     onElicitationAnswer={(interactionId, fieldName, value) =>
                                         interactionModel.editAnswer(interactionId, fieldName, value)

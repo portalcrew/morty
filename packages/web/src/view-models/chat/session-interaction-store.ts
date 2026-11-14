@@ -1,8 +1,14 @@
+import type { SessionElicitationField } from "@morty-build/client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { AgentDisplayContent } from "../../components/agents/display-content.ts";
-import type { ElicitationFieldValue } from "../../services/chat/elicitation-form.ts";
+import {
+    type ElicitationFieldValue,
+    elicitationFieldValue,
+    encodeElicitationAnswers,
+} from "../../services/chat/elicitation-form.ts";
 import { formatError } from "../format-error.ts";
 import type {
+    ElicitationInteraction,
     ElicitationInteractionResponse,
     PermissionInteraction,
     PermissionInteractionResponse,
@@ -27,6 +33,8 @@ export interface SessionInteractionStore {
     readonly answerDrafts: ElicitationAnswerDrafts;
     readonly editAnswer: (interactionId: string, fieldName: string, value: ElicitationFieldValue) => void;
     readonly submissions: ReadonlyMap<string, InteractionOperation>;
+    /** The questions the user tried to accept, so a required answer still missing is pointed out. */
+    readonly acceptAttempts: ReadonlySet<string>;
     /**
      * The Computer's account now leaves `pending` the questions still waiting for an answer. Drafts last only while
      * their question is pending; an answered or withdrawn question drops its draft.
@@ -34,6 +42,24 @@ export interface SessionInteractionStore {
     readonly questionsChanged: (pending: ReadonlySet<string>) => void;
     readonly respondToPermission: (response: PermissionInteractionResponse, signal: AbortSignal) => void;
     readonly respondToElicitation: (response: ElicitationInteractionResponse, signal: AbortSignal) => void;
+    /** Accepts a form question with the answers typed so far, unless a required answer is still missing. */
+    readonly acceptElicitation: (elicitation: FormElicitation, signal: AbortSignal) => void;
+}
+
+/** A question the Agent asks with fields to fill. */
+export type FormElicitation = Extract<ElicitationInteraction, { readonly mode: "form" }>;
+
+/**
+ * The first required choice the answers leave empty. A select is not a native form control, so the form's own required
+ * check never covers it.
+ */
+export function missingRequiredChoice(
+    fields: readonly SessionElicitationField[],
+    answers: Readonly<Record<string, ElicitationFieldValue>>,
+): SessionElicitationField | undefined {
+    return fields.find(
+        (field) => field.type === "select" && field.required && elicitationFieldValue(field, answers) === "",
+    );
 }
 
 export function createSessionInteractionStore(ports: {
@@ -87,16 +113,44 @@ export function createSessionInteractionStore(ports: {
                 );
             },
             submissions: new Map(),
+            acceptAttempts: new Set(),
             questionsChanged: (pending) => {
                 const drafts = get().answerDrafts;
                 if ([...drafts.keys()].some((id) => !pending.has(id))) {
                     replaceAnswerDrafts(new Map([...drafts].filter(([id]) => pending.has(id))));
+                }
+                if ([...get().acceptAttempts].some((id) => !pending.has(id))) {
+                    set((current) => ({
+                        acceptAttempts: new Set([...current.acceptAttempts].filter((id) => pending.has(id))),
+                    }));
                 }
             },
             respondToPermission: (response, signal) =>
                 submit(response.interactionId, signal, () => ports.permission(response, signal)),
             respondToElicitation: (response, signal) =>
                 submit(response.interactionId, signal, () => ports.elicitation(response, signal)),
+            acceptElicitation: (elicitation, signal) => {
+                const answers = get().answerDrafts.get(elicitation.interactionId) ?? {};
+                if (missingRequiredChoice(elicitation.fields, answers) !== undefined) {
+                    set((current) => ({
+                        acceptAttempts: new Set(current.acceptAttempts).add(elicitation.interactionId),
+                    }));
+                    return;
+                }
+                submit(elicitation.interactionId, signal, () =>
+                    ports.elicitation(
+                        {
+                            answer: {
+                                action: "accept",
+                                content: encodeElicitationAnswers(elicitation.fields, answers),
+                            },
+                            interactionId: elicitation.interactionId,
+                            target: elicitation.target,
+                        },
+                        signal,
+                    ),
+                );
+            },
         };
     });
 }
@@ -154,6 +208,20 @@ export function sessionInteractionPresentation(
             ]),
         ),
         elicitations,
+        requiredNotices: new Map(
+            elicitations.flatMap((elicitation) => {
+                if (elicitation.mode !== "form" || !model.acceptAttempts.has(elicitation.interactionId)) {
+                    return [];
+                }
+                const missing = missingRequiredChoice(
+                    elicitation.fields,
+                    model.answerDrafts.get(elicitation.interactionId) ?? {},
+                );
+                return missing === undefined
+                    ? []
+                    : [[elicitation.interactionId, `Select an option for ${missing.title}.`] as const];
+            }),
+        ),
         busyInteractionIds: new Set(
             Array.from(model.submissions).flatMap(([id, operation]) => (operation.kind === "submitting" ? [id] : [])),
         ),
@@ -178,21 +246,52 @@ export function permissionPresentation(permission: PermissionInteraction) {
                 ),
             ),
         ],
-        options: permission.options.map((option) => {
-            switch (option.kind) {
-                case "allow_once":
-                    return { ...option, label: `Allow: ${option.name}`, allow: true };
-                case "allow_always":
-                    return { ...option, label: `Allow: ${option.name}`, allow: true };
-                case "reject_once":
-                    return { ...option, label: `Deny: ${option.name}`, allow: false };
-                case "reject_always":
-                    return { ...option, label: `Deny: ${option.name}`, allow: false };
-                default: {
-                    const unexpected: never = option.kind;
-                    throw new Error(`Unsupported permission option: ${unexpected}`);
-                }
-            }
-        }),
+        options: permission.options.map((option) => ({
+            optionId: option.optionId,
+            label: permissionOptionLabel(option),
+            allow: option.kind === "allow_once" || option.kind === "allow_always",
+        })),
     };
+}
+
+/** Generic affirmatives/negatives carry no scope, so the label is derived from the option kind instead. */
+const genericAnswerNames = new Set(["n", "no", "y", "yes"]);
+
+type PermissionOption = PermissionInteraction["options"][number];
+
+function scopeLabel(kind: PermissionOption["kind"]): string {
+    switch (kind) {
+        case "allow_once":
+            return "Allow";
+        case "allow_always":
+            return "Allow for this session";
+        case "reject_once":
+            return "Deny";
+        case "reject_always":
+            return "Deny for this session";
+        default: {
+            const unexpected: never = kind;
+            throw new Error(`Unsupported permission option: ${unexpected}`);
+        }
+    }
+}
+
+/** What a permission option's button and its recorded decision read. */
+export function permissionOptionLabel(option: PermissionOption): string {
+    if (genericAnswerNames.has(option.name.trim().toLowerCase())) {
+        return scopeLabel(option.kind);
+    }
+    const lower = option.name.toLowerCase();
+    switch (option.kind) {
+        case "allow_once":
+        case "allow_always":
+            return lower.startsWith("allow") ? option.name : `Allow: ${option.name}`;
+        case "reject_once":
+        case "reject_always":
+            return lower.startsWith("deny") || lower.startsWith("reject") ? option.name : `Deny: ${option.name}`;
+        default: {
+            const unexpected: never = option.kind;
+            throw new Error(`Unsupported permission option: ${unexpected}`);
+        }
+    }
 }
