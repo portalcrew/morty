@@ -155,7 +155,6 @@ const sessionConfigureCommandPublicRoutingSchema = z.object({
 const sessionConfigureCommandRoutingSchema = sessionConfigureCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionConfigureCommandRouting = z.infer<typeof sessionConfigureCommandRoutingSchema>;
 const decodeSessionConfigureCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionConfigureCommandRoutingSchema);
 export const sessionConfigureCommandCodec = encryptedMessageCodec({
@@ -173,7 +172,6 @@ const sessionConfigReadCommandPublicRoutingSchema = z.object({
 const sessionConfigReadCommandRoutingSchema = sessionConfigReadCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionConfigReadCommandRouting = z.infer<typeof sessionConfigReadCommandRoutingSchema>;
 const decodeSessionConfigReadCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionConfigReadCommandRoutingSchema);
 export const sessionConfigReadCommandCodec = encryptedMessageCodec({
@@ -191,7 +189,6 @@ const sessionConfigUpdatedEventPublicRoutingSchema = z.object({
 const sessionConfigUpdatedEventRoutingSchema = sessionConfigUpdatedEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionConfigUpdatedEventRouting = z.infer<typeof sessionConfigUpdatedEventRoutingSchema>;
 const decodeSessionConfigUpdatedEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionConfigUpdatedEventRoutingSchema);
 export const sessionConfigUpdatedEventCodec = encryptedMessageCodec({
@@ -217,7 +214,6 @@ export function configurationWireJsonSchemas() {
         configuredReply: z.toJSONSchema(sessionConfigUpdatedEventRoutingSchema),
     };
 }
-export type SessionConfigReadResultRouting = z.infer<typeof sessionConfigReadResultRoutingSchema>;
 const decodeSessionConfigReadResultRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionConfigReadResultRoutingSchema);
 export const sessionConfigReadResultCodec = encryptedMessageCodec({

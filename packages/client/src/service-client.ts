@@ -26,7 +26,7 @@ import {
     type Turn,
     type TurnReference,
 } from "@morty-build/client/protocol";
-import type { MortyEndpointCall } from "./calls/call.ts";
+import type { MortyTransportEndpoint } from "./calls/call.ts";
 import { sessionEndpoints } from "./calls/session.ts";
 import type { ComputerEncryptionAccess, PayloadDecryptor } from "./encryption.ts";
 import {
@@ -574,12 +574,13 @@ export class MortyRequestExecutor {
         return this.#transport.payloadEncryption;
     }
 
-    readonly get = async (endpoint: MortyEndpointCall, body: string, signal: AbortSignal): Promise<string> =>
+    /** Sends one JSON body to the endpoint; the endpoint's own method is the HTTP method. */
+    readonly sendJson = async (endpoint: MortyTransportEndpoint, body: string, signal: AbortSignal): Promise<string> =>
         await this.request(endpoint, body, "application/json", signal);
 
     /** Sends the encrypted file read and returns the file only when every record of the answer answers that read. */
     readonly readFileStream = async (
-        endpoint: MortyEndpointCall,
+        endpoint: MortyTransportEndpoint,
         body: string,
         request: FileDownloadRequest,
         signal: AbortSignal,
@@ -629,21 +630,15 @@ export class MortyRequestExecutor {
         }
     };
 
-    readonly post = async (endpoint: MortyEndpointCall, body: string, signal: AbortSignal): Promise<string> =>
-        await this.request(endpoint, body, "application/json", signal);
-
-    readonly put = async (endpoint: MortyEndpointCall, body: string, signal: AbortSignal): Promise<string> =>
-        await this.request(endpoint, body, "application/json", signal);
-
     readonly putBinary = async (
-        endpoint: MortyEndpointCall,
+        endpoint: MortyTransportEndpoint,
         body: Uint8Array,
         contentType: string,
         signal: AbortSignal,
     ): Promise<string> => await this.request(endpoint, body, contentType, signal);
 
     readonly openLiveEventStream = async (
-        endpoint: MortyEndpointCall,
+        endpoint: MortyTransportEndpoint,
         body: string,
         subscriptionId: string,
         signal: AbortSignal,
@@ -691,7 +686,7 @@ export class MortyRequestExecutor {
     };
 
     private readonly request = async (
-        endpoint: MortyEndpointCall,
+        endpoint: MortyTransportEndpoint,
         body: string | Uint8Array,
         contentType: string,
         signal: AbortSignal,
@@ -752,7 +747,7 @@ export class MortySessionResources {
         signal: AbortSignal,
     ) => {
         const requestId = crypto.randomUUID();
-        const result = await this.#executor.post(
+        const result = await this.#executor.sendJson(
             sessionEndpoints.updateConfiguration({ computerId: this.#computerId, target }),
             await sessionConfigureCommandCodec.encode(
                 { ...request, kind: "session.configure", requestId, target },
@@ -777,7 +772,7 @@ export class MortySessionResources {
 
     readonly readConfiguration = async (target: NativeSessionTarget, signal: AbortSignal) => {
         const requestId = crypto.randomUUID();
-        const result = await this.#executor.get(
+        const result = await this.#executor.sendJson(
             sessionEndpoints.readConfiguration({ computerId: this.#computerId, target }),
             await sessionConfigReadCommandCodec.encode(
                 { kind: "session.config.read", requestId, target },
@@ -802,7 +797,7 @@ export class MortySessionResources {
 
     readonly rename = async (target: NativeSessionTarget, title: string, signal: AbortSignal) => {
         const requestId = crypto.randomUUID();
-        const result = await this.#executor.post(
+        const result = await this.#executor.sendJson(
             sessionEndpoints.rename({ computerId: this.#computerId, target }),
             await sessionRenameCommandCodec.encode(
                 { kind: "session.rename", requestId, target, title },
@@ -985,7 +980,7 @@ export class MortySessionResources {
         commandId?: string,
     ): Promise<SessionExecution> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.get(
+        const encoded = await this.#executor.sendJson(
             sessionEndpoints.readExecution({
                 computerId: this.#computerId,
                 target: sessionTarget,
@@ -1066,7 +1061,7 @@ export class MortyTurnResources {
             }
             throw cause;
         }
-        const result = await this.#executor.post(
+        const result = await this.#executor.sendJson(
             sessionEndpoints.submitTurn({ computerId: this.#computerId, target: sessionTarget }),
             encoded,
             signal,
@@ -1116,7 +1111,7 @@ export class MortyTurnResources {
         signal: AbortSignal,
     ): Promise<MortyTurnCancellation> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.post(
+        const encoded = await this.#executor.sendJson(
             sessionEndpoints.cancelTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
             await sessionCancelCommandCodec.encode(
                 { kind: "session.cancel", requestId, target: sessionTarget, commandId: turnId },
@@ -1172,7 +1167,7 @@ export class MortyTurnResources {
         signal: AbortSignal,
     ): Promise<void> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.post(
+        const encoded = await this.#executor.sendJson(
             sessionEndpoints.cancelQueuedTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
             await sessionCancelBeforeStartCommandCodec.encode(
                 { kind: "session.cancel-before-start", requestId, target: sessionTarget, commandId: turnId },
@@ -1205,7 +1200,7 @@ export class MortyTurnResources {
         signal: AbortSignal,
     ): Promise<{ readonly turnId: string }> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.put(
+        const encoded = await this.#executor.sendJson(
             sessionEndpoints.steerTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
             await sessionPromptDispositionCommandCodec.encode(
                 {
@@ -1257,7 +1252,7 @@ export class MortyInteractionResources {
         signal: AbortSignal,
     ): Promise<void> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.post(
+        const encoded = await this.#executor.sendJson(
             sessionEndpoints.respond({ computerId: this.#computerId, target: sessionTarget, interactionId }),
             request.kind === "permission"
                 ? await sessionPermissionRespondCommandCodec.encode(
@@ -1317,7 +1312,7 @@ export class MortyLiveEventSubscription {
     readonly #controller = new AbortController();
     readonly #executor: MortyRequestExecutor;
     readonly #observer: MortySessionEventObserver;
-    readonly #endpoint: MortyEndpointCall;
+    readonly #endpoint: MortyTransportEndpoint;
     readonly #target: NativeSessionTarget;
     #closed = false;
     readonly connected: Promise<void>;
@@ -1325,7 +1320,7 @@ export class MortyLiveEventSubscription {
 
     constructor(
         executor: MortyRequestExecutor,
-        endpoint: MortyEndpointCall,
+        endpoint: MortyTransportEndpoint,
         observer: MortySessionEventObserver,
         signal: AbortSignal,
         target: NativeSessionTarget,
@@ -1513,7 +1508,7 @@ export class MortyEventResources {
         signal: AbortSignal,
     ): Promise<SessionEventLogPage> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.get(
+        const encoded = await this.#executor.sendJson(
             sessionEndpoints.listEvents({
                 computerId: this.#computerId,
                 target: sessionTarget,

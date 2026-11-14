@@ -20,9 +20,9 @@ const computerDiagnosticsResultSchema = z
             .readonly(),
     })
     .refine((value) => JSON.stringify(value).length <= 65_536, "Diagnostics exceed the report limit");
-export type ComputerDiagnosticsRequest = Readonly<z.infer<typeof computerDiagnosticsRequestSchema>>;
+type ComputerDiagnosticsRequest = Readonly<z.infer<typeof computerDiagnosticsRequestSchema>>;
 export type ComputerDiagnosticsResult = Readonly<z.infer<typeof computerDiagnosticsResultSchema>>;
-export const decodeComputerDiagnosticsRequest = (raw: string): ComputerDiagnosticsRequest =>
+const decodeComputerDiagnosticsRequest = (raw: string): ComputerDiagnosticsRequest =>
     computerDiagnosticsRequestSchema.parse(JSON.parse(raw));
 export const decodeComputerDiagnosticsResult = (raw: string): ComputerDiagnosticsResult =>
     computerDiagnosticsResultSchema.parse(JSON.parse(raw));
@@ -51,7 +51,6 @@ const computerDiagnosticsResultPublicRoutingSchema = z.object({
 const computerDiagnosticsResultRoutingSchema = computerDiagnosticsResultPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type ComputerDiagnosticsResultRouting = z.infer<typeof computerDiagnosticsResultRoutingSchema>;
 const decodeComputerDiagnosticsResultRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, computerDiagnosticsResultRoutingSchema);
 export const computerDiagnosticsResultCodec = encryptedMessageCodec({

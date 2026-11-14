@@ -104,7 +104,7 @@ const agentSettingsDiscoveryFailedEventSchema = z
 
 type AgentSettingsDiscoveryFailedEvent = z.infer<typeof agentSettingsDiscoveryFailedEventSchema>;
 
-export const decodeAgentSettingsDiscoverCommand = (encoded: string): AgentSettingsDiscoverCommand =>
+const decodeAgentSettingsDiscoverCommand = (encoded: string): AgentSettingsDiscoverCommand =>
     decode(encoded, agentSettingsDiscoverCommandSchema);
 export const encodeAgentSettingsDiscoverCommand = (message: AgentSettingsDiscoverCommand): string =>
     encode(message, agentSettingsDiscoverCommandSchema);
@@ -139,7 +139,6 @@ const agentSettingsDiscoveredEventPublicRoutingSchema = z.object({
 const agentSettingsDiscoveredEventRoutingSchema = agentSettingsDiscoveredEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type AgentSettingsDiscoveredEventRouting = z.infer<typeof agentSettingsDiscoveredEventRoutingSchema>;
 const decodeAgentSettingsDiscoveredEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, agentSettingsDiscoveredEventRoutingSchema);
 export const agentSettingsDiscoveredEventCodec = encryptedMessageCodec({
@@ -156,7 +155,6 @@ const agentSettingsDiscoveryFailedEventPublicRoutingSchema = z.object({
 const agentSettingsDiscoveryFailedEventRoutingSchema = agentSettingsDiscoveryFailedEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type AgentSettingsDiscoveryFailedEventRouting = z.infer<typeof agentSettingsDiscoveryFailedEventRoutingSchema>;
 const decodeAgentSettingsDiscoveryFailedEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, agentSettingsDiscoveryFailedEventRoutingSchema);
 export const agentSettingsDiscoveryFailedEventCodec = encryptedMessageCodec({

@@ -81,11 +81,11 @@ function decodeLoaded<T>(schema: z.ZodType<T>, encoded: string): T {
     }
 }
 
-export const decodeSessionHistoryPageLoad = (encoded: string): SessionHistoryPageLoad =>
+const decodeSessionHistoryPageLoad = (encoded: string): SessionHistoryPageLoad =>
     decode(sessionHistoryPageLoadSchema, encoded);
 export const decodeSessionHistoryPageLoaded = (encoded: string): SessionHistoryPageLoaded =>
     decodeLoaded(sessionHistoryPageLoadedSchema, encoded);
-export const decodeSessionPreviewHistoryPageLoad = (encoded: string): SessionPreviewHistoryPageLoad =>
+const decodeSessionPreviewHistoryPageLoad = (encoded: string): SessionPreviewHistoryPageLoad =>
     decode(sessionPreviewHistoryPageLoadSchema, encoded);
 export const decodeSessionPreviewHistoryPageLoaded = (encoded: string): SessionPreviewHistoryPageLoaded =>
     decodeLoaded(sessionPreviewHistoryPageLoadedSchema, encoded);
@@ -120,7 +120,6 @@ const sessionHistoryPageLoadPublicRoutingSchema = z.object({
 const sessionHistoryPageLoadRoutingSchema = sessionHistoryPageLoadPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionHistoryPageLoadRouting = z.infer<typeof sessionHistoryPageLoadRoutingSchema>;
 const decodeSessionHistoryPageLoadRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionHistoryPageLoadRoutingSchema);
 export const sessionHistoryPageLoadCodec = encryptedMessageCodec({
@@ -138,7 +137,6 @@ const sessionPreviewHistoryPageLoadedPublicRoutingSchema = z.object({
 const sessionPreviewHistoryPageLoadedRoutingSchema = sessionPreviewHistoryPageLoadedPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionPreviewHistoryPageLoadedRouting = z.infer<typeof sessionPreviewHistoryPageLoadedRoutingSchema>;
 const decodeSessionPreviewHistoryPageLoadedRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionPreviewHistoryPageLoadedRoutingSchema);
 export const sessionPreviewHistoryPageLoadedCodec = encryptedMessageCodec({
@@ -162,7 +160,6 @@ export function historyWireJsonSchemas() {
         historyReply: z.toJSONSchema(sessionHistoryPageLoadedRoutingSchema),
     };
 }
-export type SessionHistoryPageLoadedRouting = z.infer<typeof sessionHistoryPageLoadedRoutingSchema>;
 const decodeSessionHistoryPageLoadedRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionHistoryPageLoadedRoutingSchema);
 export const sessionHistoryPageLoadedCodec = encryptedMessageCodec({

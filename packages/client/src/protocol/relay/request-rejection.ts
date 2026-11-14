@@ -18,9 +18,3 @@ export const decodeWorkerRequestRejected = (encoded: string): WorkerRequestRejec
     decodeZodMessage(encoded, workerRequestRejectedSchema);
 export const encodeWorkerRequestRejected = (message: WorkerRequestRejected): string =>
     encodeZodMessage(message, workerRequestRejectedSchema);
-
-export const workerRequestRejectedCodec = Object.freeze({
-    kind: WORKER_REQUEST_REJECTED_KIND,
-    decode: decodeWorkerRequestRejected,
-    encode: encodeWorkerRequestRejected,
-});

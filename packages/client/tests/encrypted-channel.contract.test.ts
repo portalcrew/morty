@@ -249,10 +249,6 @@ it("Given a Computer capability, when a prompt and reply cross an untrusted hop,
         attachments: [],
         disposition: "append",
     };
-    const turnCall = sessionEndpoints.submitTurn({ computerId: "computer-1", target: request.target });
-    const eventCall = sessionEndpoints.liveEvents({ computerId: "computer-1", target: request.target });
-    expect(turnCall.encrypted.request).toContain(sessionPromptCommandCodec);
-    expect(eventCall.encrypted.response).toContain(sessionEventEnvelopeCodec);
     const wire = await sessionPromptCommandCodec.encode(request, client, signal);
     const promptFrame = await hop.transfer(wire);
     expect(decodeRelayToDaemonMessage(promptFrame)).toEqual({
@@ -529,17 +525,12 @@ it("Given Agent settings routing metadata, when a reply crosses the relay bounda
 
 it("Given an authenticated sender, when a decrypted command violates its endpoint schema, then the computer rejects it before execution", async () => {
     const { client, computer } = await endpoints();
-    const call = sessionEndpoints.submitTurn({
-        computerId: "computer-1",
-        target: { harness: "codex", sessionId: "session-1" },
-    });
     const signal = new AbortController().signal;
     const malformedCommand = await forgePacket(
         client,
         { kind: "session.prompt", prompt: "missing identity and target" },
         signal,
     );
-    expect(call.encrypted.request).toContain(sessionPromptCommandCodec);
     await expect(sessionPromptCommandCodec.decode(malformedCommand, computer, signal)).rejects.toMatchObject({
         code: "invalid_protocol_message",
     });
@@ -612,10 +603,6 @@ it("Given a command with no private fields, when it crosses an untrusted hop, th
 it("Given a call declaration, when a different operation is delivered to its decoder, then it cannot be interpreted as that call", async () => {
     const { client, computer } = await endpoints();
     const signal = new AbortController().signal;
-    const call = sessionEndpoints.submitTurn({
-        computerId: "computer-1",
-        target: { harness: "codex", sessionId: "session-1" },
-    });
     const wrongOperation = await forgePacket(
         client,
         {
@@ -626,7 +613,6 @@ it("Given a call declaration, when a different operation is delivered to its dec
         },
         signal,
     );
-    expect(call.encrypted.request).toContain(sessionPromptCommandCodec);
     await expect(sessionPromptCommandCodec.decode(wrongOperation, computer, signal)).rejects.toMatchObject({
         code: "invalid_protocol_message",
     });
@@ -636,17 +622,12 @@ it("Given a declared call, when the computer refuses its request, then its encry
     const hop = await opaqueHop();
     const { client, computer } = await endpoints();
     const signal = new AbortController().signal;
-    const call = sessionEndpoints.submitTurn({
-        computerId: "computer-1",
-        target: { harness: "codex", sessionId: "session-1" },
-    });
     const failure = {
         kind: "session.operation.failed",
         requestId: "request-1",
         code: "computer_offline",
         message: "The local computer is offline",
     };
-    expect(call.encrypted.response).toContain(sessionOperationFailedEventCodec);
     const wire = await sessionOperationFailedEventCodec.encode(failure, computer, signal);
     expect(await sessionOperationFailedEventCodec.decode(await hop.transfer(wire, "daemon"), client, signal)).toEqual(
         failure,
@@ -658,9 +639,6 @@ it("Given a call's response codec, when a different operation's valid response a
     const { client, computer } = await endpoints();
     const signal = new AbortController().signal;
     const target = { harness: "codex", sessionId: "session-1" };
-    const call = sessionEndpoints.submitTurn({ computerId: "computer-1", target });
-    const renameCall = sessionEndpoints.rename({ computerId: "computer-1", target });
-    expect(renameCall.encrypted.response).toContain(sessionRenamedEventCodec);
     const wrongResponse = await sessionRenamedEventCodec.encode(
         {
             kind: "session.renamed",
@@ -672,7 +650,6 @@ it("Given a call's response codec, when a different operation's valid response a
         computer,
         signal,
     );
-    expect(call.encrypted.response).toContain(sessionPromptAcceptedEventCodec);
     await expect(sessionPromptAcceptedEventCodec.decode(wrongResponse, client, signal)).rejects.toMatchObject({
         code: "invalid_protocol_message",
     });
@@ -793,11 +770,6 @@ it("Given independent application frames, when a later frame arrives first, then
 
 it("Given encryption is selected, when a legacy plaintext message arrives, then it is rejected rather than downgraded", async () => {
     const { computer } = await endpoints();
-    const call = sessionEndpoints.submitTurn({
-        computerId: "computer-1",
-        target: { harness: "codex", sessionId: "session-1" },
-    });
-    expect(call.encrypted.request).toContain(sessionPromptCommandCodec);
     await expect(
         sessionPromptCommandCodec.decode(
             JSON.stringify({ kind: "session.prompt", prompt: "plaintext" }),
@@ -813,11 +785,6 @@ it("Given an encrypted message, when an undeclared field is added outside encryp
     const frame = frameRecord(
         await forgePacket(client, { kind: "session.prompt", requestId: "private-request" }, signal),
     );
-    const call = sessionEndpoints.submitTurn({
-        computerId: "computer-1",
-        target: { harness: "codex", sessionId: "session-1" },
-    });
-    expect(call.encrypted.request).toContain(sessionPromptCommandCodec);
     await expect(
         sessionPromptCommandCodec.decode(JSON.stringify({ ...frame, prompt: "plaintext" }), computer, signal),
     ).rejects.toMatchObject({ code: "invalid_protocol_message" });

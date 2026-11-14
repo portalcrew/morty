@@ -56,7 +56,6 @@ const sessionRenameCommandPublicRoutingSchema = z.object({
 const sessionRenameCommandRoutingSchema = sessionRenameCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionRenameCommandRouting = z.infer<typeof sessionRenameCommandRoutingSchema>;
 const decodeSessionRenameCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionRenameCommandRoutingSchema);
 export const sessionRenameCommandCodec = encryptedMessageCodec({
@@ -74,7 +73,6 @@ const sessionRenamedEventPublicRoutingSchema = z.object({
 const sessionRenamedEventRoutingSchema = sessionRenamedEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionRenamedEventRouting = z.infer<typeof sessionRenamedEventRoutingSchema>;
 const decodeSessionRenamedEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionRenamedEventRoutingSchema);
 export const sessionRenamedEventCodec = encryptedMessageCodec({

@@ -7,7 +7,6 @@ import {
 import {
     decodeZodMessage as decode,
     decodeZodMessage as decodeRoutingZodMessage,
-    decodeZodValue,
     encodeZodMessage as encode,
     encryptedFieldSchema,
 } from "../../shared/message-codec.ts";
@@ -117,8 +116,6 @@ const elicitationAnswerValueSchema = z.union([
     z.boolean(),
     z.array(z.string().max(500)).max(200).readonly(),
 ]);
-
-export type SessionElicitationAnswerValue = z.infer<typeof elicitationAnswerValueSchema>;
 
 const elicitationFormContentSchema = z
     .record(z.string().min(1).max(128), elicitationAnswerValueSchema)
@@ -295,13 +292,6 @@ export const encodeSessionElicitationRespondCommand = (message: SessionElicitati
 export const decodeSessionInteractionAnsweredEvent = (encoded: string): SessionInteractionAnsweredEvent =>
     decode(encoded, sessionInteractionAnsweredEventSchema);
 
-/** What the Relay answers when it took an answer to one of the Agent's requests. */
-const interactionAcceptedSchema = z.object({ accepted: z.literal(true) }).readonly();
-
-export type InteractionAccepted = z.infer<typeof interactionAcceptedSchema>;
-
-export const decodeInteractionAccepted = (value: unknown): InteractionAccepted =>
-    decodeZodValue(value, interactionAcceptedSchema);
 const sessionElicitationRespondCommandPublicRoutingSchema = z.object({
     kind: z.literal(SESSION_ELICITATION_RESPOND_KIND),
     requestId: routingIdentifier,
@@ -311,7 +301,6 @@ const sessionElicitationRespondCommandPublicRoutingSchema = z.object({
 const sessionElicitationRespondCommandRoutingSchema = sessionElicitationRespondCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionElicitationRespondCommandRouting = z.infer<typeof sessionElicitationRespondCommandRoutingSchema>;
 const decodeSessionElicitationRespondCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionElicitationRespondCommandRoutingSchema);
 export const sessionElicitationRespondCommandCodec = encryptedMessageCodec({
@@ -330,7 +319,6 @@ const sessionPermissionRespondCommandPublicRoutingSchema = z.object({
 const sessionPermissionRespondCommandRoutingSchema = sessionPermissionRespondCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionPermissionRespondCommandRouting = z.infer<typeof sessionPermissionRespondCommandRoutingSchema>;
 const decodeSessionPermissionRespondCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionPermissionRespondCommandRoutingSchema);
 export const sessionPermissionRespondCommandCodec = encryptedMessageCodec({
@@ -356,7 +344,6 @@ export function interactionWireJsonSchemas() {
         interactionReply: z.toJSONSchema(sessionInteractionAnsweredEventRoutingSchema),
     };
 }
-export type SessionInteractionAnsweredEventRouting = z.infer<typeof sessionInteractionAnsweredEventRoutingSchema>;
 const decodeSessionInteractionAnsweredEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionInteractionAnsweredEventRoutingSchema);
 export const sessionInteractionAnsweredEventCodec = encryptedMessageCodec({

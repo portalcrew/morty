@@ -339,7 +339,7 @@ const fileFailedEventSchema = z
 
 export type FileFailedEvent = z.infer<typeof fileFailedEventSchema>;
 
-export const decodeFileReadCommand = (encoded: string): FileReadCommand => decode(encoded, fileReadCommandSchema);
+const decodeFileReadCommand = (encoded: string): FileReadCommand => decode(encoded, fileReadCommandSchema);
 export const encodeFileReadCommand = (message: FileReadCommand): string => encode(message, fileReadCommandSchema);
 export const decodeFileBeginEvent = (encoded: string): FileBeginEvent => decode(encoded, fileBeginEventSchema);
 export const decodeFileEndEvent = (encoded: string): FileEndEvent => decode(encoded, fileEndEventSchema);
@@ -384,7 +384,6 @@ const contentWriteCommandPublicRoutingSchema = z.object({
 const contentWriteCommandRoutingSchema = contentWriteCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type ContentWriteCommandRouting = z.infer<typeof contentWriteCommandRoutingSchema>;
 const decodeContentWriteCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, contentWriteCommandRoutingSchema);
 export const contentWriteCommandCodec = encryptedMessageCodec({
@@ -402,7 +401,6 @@ const contentCommitCommandPublicRoutingSchema = z.object({
 const contentCommitCommandRoutingSchema = contentCommitCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type ContentCommitCommandRouting = z.infer<typeof contentCommitCommandRoutingSchema>;
 const decodeContentCommitCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, contentCommitCommandRoutingSchema);
 export const contentCommitCommandCodec = encryptedMessageCodec({
@@ -420,7 +418,6 @@ const fileBeginEventPublicRoutingSchema = z.object({
 const fileBeginEventRoutingSchema = fileBeginEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type FileBeginEventRouting = z.infer<typeof fileBeginEventRoutingSchema>;
 const decodeFileBeginEventRouting = (encoded: string) => decodeRoutingZodMessage(encoded, fileBeginEventRoutingSchema);
 export const fileBeginEventCodec = encryptedMessageCodec({
     kind: FILE_BEGIN_KIND,
@@ -435,7 +432,6 @@ const fileEndEventPublicRoutingSchema = z.object({
     target: routingTarget,
 });
 const fileEndEventRoutingSchema = fileEndEventPublicRoutingSchema.extend({ encrypted: encryptedFieldSchema }).strict();
-export type FileEndEventRouting = z.infer<typeof fileEndEventRoutingSchema>;
 const decodeFileEndEventRouting = (encoded: string) => decodeRoutingZodMessage(encoded, fileEndEventRoutingSchema);
 export const fileEndEventCodec = encryptedMessageCodec({
     kind: FILE_END_KIND,
@@ -452,7 +448,6 @@ const fileFailedEventPublicRoutingSchema = z.object({
 const fileFailedEventRoutingSchema = fileFailedEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type FileFailedEventRouting = z.infer<typeof fileFailedEventRoutingSchema>;
 const decodeFileFailedEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, fileFailedEventRoutingSchema);
 export const fileFailedEventCodec = encryptedMessageCodec({
@@ -470,7 +465,6 @@ const contentReadyEventPublicRoutingSchema = z.object({
 const contentReadyEventRoutingSchema = contentReadyEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type ContentReadyEventRouting = z.infer<typeof contentReadyEventRoutingSchema>;
 const decodeContentReadyEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, contentReadyEventRoutingSchema);
 export const contentReadyEventCodec = encryptedMessageCodec({
@@ -488,7 +482,6 @@ const contentAvailableEventPublicRoutingSchema = z.object({
 const contentAvailableEventRoutingSchema = contentAvailableEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type ContentAvailableEventRouting = z.infer<typeof contentAvailableEventRoutingSchema>;
 const decodeContentAvailableEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, contentAvailableEventRoutingSchema);
 export const contentAvailableEventCodec = encryptedMessageCodec({

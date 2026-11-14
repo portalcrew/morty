@@ -31,7 +31,7 @@
             "includeEntryExports": true
         },
         "packages/client": {
-            "includeEntryExports": false
+            "includeEntryExports": true
         },
         "packages/relay-test-support": {
             "entry": ["src/worker-entry.ts"]

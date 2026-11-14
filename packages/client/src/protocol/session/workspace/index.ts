@@ -40,7 +40,7 @@ const workspaceEntriesEventSchema = z
 
 export type WorkspaceEntriesEvent = z.infer<typeof workspaceEntriesEventSchema>;
 
-export const decodeWorkspaceListCommand = (encoded: string): WorkspaceListCommand =>
+const decodeWorkspaceListCommand = (encoded: string): WorkspaceListCommand =>
     decode(encoded, workspaceListCommandSchema);
 export const encodeWorkspaceListCommand = (message: WorkspaceListCommand): string =>
     encode(message, workspaceListCommandSchema);
@@ -71,7 +71,6 @@ const workspaceEntriesEventPublicRoutingSchema = z.object({
 const workspaceEntriesEventRoutingSchema = workspaceEntriesEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type WorkspaceEntriesEventRouting = z.infer<typeof workspaceEntriesEventRoutingSchema>;
 const decodeWorkspaceEntriesEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, workspaceEntriesEventRoutingSchema);
 export const workspaceEntriesEventCodec = encryptedMessageCodec({
