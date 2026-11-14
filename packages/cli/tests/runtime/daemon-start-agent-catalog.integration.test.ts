@@ -1,12 +1,12 @@
-import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
 import { collectLocalDaemonLogs } from "../../src/cli/handler/logs/logic/collect-local-logs.ts";
 import { openMortyInstallation } from "../../src/daemon/pairing/pair-local-computer.ts";
+import { runCli } from "../support/cli-command.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -15,28 +15,6 @@ afterEach(async () => {
         temporaryDirectories.splice(0).map(async (directory) => await rm(directory, { force: true, recursive: true })),
     );
 });
-
-async function runCli(
-    arguments_: readonly string[],
-    environment: Readonly<NodeJS.ProcessEnv>,
-    signal: AbortSignal,
-): Promise<{ readonly code: number | null; readonly stderr: string }> {
-    const child = spawn(process.execPath, [resolve(import.meta.dirname, "../../dist/cli.js"), ...arguments_], {
-        env: environment,
-        signal,
-        stdio: ["ignore", "ignore", "pipe"],
-    });
-    let stderr = "";
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk: string) => {
-        stderr += chunk;
-    });
-    const code = await new Promise<number | null>((resolve_, reject) => {
-        child.once("error", reject);
-        child.once("exit", resolve_);
-    });
-    return { code, stderr };
-}
 
 /** A Relay that accepts the Computer and records every Agent catalog the daemon publishes. */
 async function catalogRelay() {

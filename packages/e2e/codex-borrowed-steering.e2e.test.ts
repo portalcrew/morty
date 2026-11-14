@@ -8,7 +8,7 @@ import { CodexFixture } from "../../packages/cli/tests/support/agents/codex.ts";
 import { FakeOpenAiProvider } from "../../packages/cli/tests/support/llm/openai.ts";
 import { TestComputerHost } from "../cli/tests/support/computer-host.ts";
 import { dataTestId } from "../web/src/data-testid.ts";
-import { anonymousCreationKey, ChatApi, jsonRequest, object, text } from "./infra/chat-api.ts";
+import { ChatApi, object, text } from "./infra/chat-api.ts";
 import { E2EHarness } from "./infra/harness.ts";
 import { LocalStack } from "./infra/local-stack.ts";
 
@@ -77,16 +77,8 @@ test("Given desktop Codex owns a conversation, When I open it in Morty and queue
         );
         await completed.promise;
 
-        const identity = await jsonRequest(stack.chatOrigin, "/morty/api/v1/computers", {
-            body: { creationKey: anonymousCreationKey() },
-            signal,
-        });
-        const token = text(identity["computerToken"], "Computer token");
-        const computerId = text(identity["computerId"], "computer ID");
-
         const chat = new ChatApi(stack.chatOrigin, signal);
-        // biome-ignore lint/correctness/useHookAtTopLevel: ChatApi authentication is not a React hook.
-        await chat.useBrowserIdentity({ computerId, computerToken: token });
+        const { computerId } = await chat.createIdentity();
         const pairing = await chat.createPairing();
         const engine = new TestComputerHost({
             dataDirectory: join(harness.workDirectory, "computer"),

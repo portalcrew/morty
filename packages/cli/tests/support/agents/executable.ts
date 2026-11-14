@@ -11,3 +11,8 @@ export async function resolveTestExecutable(name: string, overrideVariable: stri
     }
     return executable.path;
 }
+
+/** A script that runs under the Node binary executing the tests. */
+export function executableSource(source: string): string {
+    return `#!${process.execPath}\n${source}`;
+}

@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { addAbortListener } from "node:events";
 import {
-    decodeMessageKind,
-    decodeNativeSessionResult,
     decodeSessionLiveEvent,
     encodeNativeSessionCommand,
     encodeSessionCancelCommand,
@@ -16,7 +14,7 @@ import { threadStartResponseSchema } from "../../src/engine/acp/harness/codex/ap
 import { CodexAgentSpecification } from "../../src/engine/agent/specification/vendors/codex-agent.ts";
 import { stopProcessTree } from "../../src/engine/util/process/executable.ts";
 import { CodexFixture } from "../support/agents/codex.ts";
-import { type RealDaemonPeer, withRealDaemon } from "../support/agents/real-daemon.ts";
+import { nextNativeSessionResult, withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
 test("Given a borrowed Codex conversation with queued input, When the user stops it, Then the input is withdrawn and the native owner can finish", async () => {
@@ -84,7 +82,7 @@ test("Given a borrowed Codex conversation with queued input, When the user stops
                     sessionId: thread.id,
                 }),
             );
-            const found = await nativeResult(peer, findId);
+            const found = await nextNativeSessionResult(peer, findId);
             if (found.action !== "find" || found.entry === null) {
                 throw new Error("The native conversation was not found");
             }
@@ -97,7 +95,7 @@ test("Given a borrowed Codex conversation with queued input, When the user stops
                     sessionId: found.entry.sessionId,
                 }),
             );
-            const imported = await nativeResult(peer, importId);
+            const imported = await nextNativeSessionResult(peer, importId);
             if (imported.action !== "import") {
                 throw new Error("Expected native import");
             }
@@ -151,19 +149,3 @@ test("Given a borrowed Codex conversation with queued input, When the user stops
         }
     });
 });
-
-async function nativeResult(peer: RealDaemonPeer, requestId: string) {
-    for (;;) {
-        const message = await peer.nextMessage();
-        const kind = decodeMessageKind(message);
-        if (kind === "session.operation.failed") {
-            throw new Error(message);
-        }
-        if (kind === "native.session.result") {
-            const result = decodeNativeSessionResult(message);
-            if (result.requestId === requestId) {
-                return result;
-            }
-        }
-    }
-}

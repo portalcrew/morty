@@ -17,6 +17,7 @@ import {
 import { expect, test, vi } from "vitest";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
 import { ControlledAcpSpecification } from "../support/agents/controlled-acp-specification.ts";
+import { executableSource } from "../support/agents/executable.ts";
 import { withControlledDaemon as withRealDaemon } from "../support/agents/real-daemon.ts";
 
 const fakeAgentPath = fileURLToPath(new URL("./fixtures/acp-peer.ts", import.meta.url));
@@ -101,10 +102,6 @@ test("Given a persisted native conversation, When a client prompts after restart
         vi.useRealTimers();
     }
 });
-
-function executableSource(source: string): string {
-    return `#!${process.execPath}\n${source}`;
-}
 
 interface FileReadResult {
     readonly bytes: Buffer;

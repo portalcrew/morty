@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { addAbortListener } from "node:events";
 import {
-    decodeMessageKind,
-    decodeNativeSessionResult,
     decodeSessionLiveEvent,
     encodeNativeSessionCommand,
     encodeSessionCancelCommand,
@@ -18,7 +16,7 @@ import { threadStartResponseSchema } from "../../src/engine/acp/harness/codex/ap
 import { CodexAgentSpecification } from "../../src/engine/agent/specification/vendors/codex-agent.ts";
 import { stopProcessTree } from "../../src/engine/util/process/executable.ts";
 import { CodexFixture } from "../support/agents/codex.ts";
-import { type RealDaemonPeer, withRealDaemon } from "../support/agents/real-daemon.ts";
+import { nextNativeSessionResult, type RealDaemonPeer, withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
 test("Given the Codex app owns a thread whose last turn it interrupted, When a message sent here waits in its paused queue and is stopped, Then it is withdrawn, the owner's later turns still arrive, and a later message reports when the owner starts it", async () => {
@@ -195,7 +193,7 @@ async function importThread(peer: RealDaemonPeer, threadId: string): Promise<Rea
     } as const;
     const findId = randomUUID();
     peer.send(encodeNativeSessionCommand({ ...identity, requestId: findId, action: "find", sessionId: threadId }));
-    const found = await nativeResult(peer, findId);
+    const found = await nextNativeSessionResult(peer, findId);
     if (found.action !== "find" || found.entry === null) {
         throw new Error("The native conversation was not found");
     }
@@ -208,7 +206,7 @@ async function importThread(peer: RealDaemonPeer, threadId: string): Promise<Rea
             sessionId: found.entry.sessionId,
         }),
     );
-    const imported = await nativeResult(peer, importId);
+    const imported = await nextNativeSessionResult(peer, importId);
     expect(imported).toMatchObject({
         action: "import",
         ready: { capabilities: { steering: false } },
@@ -217,20 +215,4 @@ async function importThread(peer: RealDaemonPeer, threadId: string): Promise<Rea
         throw new Error("Expected native import");
     }
     return imported.target;
-}
-
-async function nativeResult(peer: RealDaemonPeer, requestId: string) {
-    for (;;) {
-        const message = await peer.nextMessage();
-        const kind = decodeMessageKind(message);
-        if (kind === "session.operation.failed") {
-            throw new Error(message);
-        }
-        if (kind === "native.session.result") {
-            const result = decodeNativeSessionResult(message);
-            if (result.requestId === requestId) {
-                return result;
-            }
-        }
-    }
 }

@@ -5,7 +5,6 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
     decodeMessageKind,
-    decodeNativeSessionResult,
     decodeSessionLiveEvent,
     decodeSessionReadyEvent,
     encodeNativeSessionCommand,
@@ -19,7 +18,7 @@ import { ClaudeCodeAgentSpecification } from "../../src/engine/agent/specificati
 import { CodexAgentSpecification } from "../../src/engine/agent/specification/vendors/codex-agent.ts";
 import { ClaudeFixture } from "../support/agents/claude.ts";
 import { CodexFixture } from "../support/agents/codex.ts";
-import { type RealDaemonPeer, withRealDaemon } from "../support/agents/real-daemon.ts";
+import { nextNativeSessionResult, type RealDaemonPeer, withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
@@ -133,7 +132,7 @@ test.each(["codex", "claude"] as const)(
                             sessionId: source.sessionId,
                         }),
                     );
-                    const fork = await nativeResult(peer, requestId);
+                    const fork = await nextNativeSessionResult(peer, requestId);
                     if (fork.action !== "fork") {
                         throw new Error("Expected independent Fork");
                     }
@@ -187,7 +186,7 @@ async function nativeSource(peer: RealDaemonPeer, harness: string, configDirecto
                     cursor: null,
                 }),
             );
-            const listed = await nativeResult(peer, requestId);
+            const listed = await nextNativeSessionResult(peer, requestId);
             if (listed.action !== "list") {
                 throw new Error("Expected native session list");
             }
@@ -206,23 +205,6 @@ async function nativeSource(peer: RealDaemonPeer, harness: string, configDirecto
         }
     } finally {
         watcher?.close();
-    }
-}
-
-async function nativeResult(peer: RealDaemonPeer, requestId: string) {
-    for (;;) {
-        const message = await peer.nextMessage();
-        const kind = decodeMessageKind(message);
-        if (kind === "session.operation.failed") {
-            throw new Error(message);
-        }
-        if (kind !== "native.session.result") {
-            continue;
-        }
-        const result = decodeNativeSessionResult(message);
-        if (result.requestId === requestId) {
-            return result;
-        }
     }
 }
 

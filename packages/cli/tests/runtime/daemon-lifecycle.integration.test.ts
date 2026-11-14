@@ -1,10 +1,9 @@
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createConnection, type Socket } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 import { decodeMessageKind } from "@morty-build/client/protocol";
 import { listen, port } from "@morty-build/relay-test-support/websocket";
@@ -15,6 +14,7 @@ import cliPackage from "../../package.json" with { type: "json" };
 import { controlSocketPath } from "../../src/daemon/control/local-client.ts";
 import { openMortyInstallation } from "../../src/daemon/pairing/pair-local-computer.ts";
 import type { InstallationDirectory } from "../../src/engine/storage/installation/installation-files.ts";
+import { runCli } from "../support/cli-command.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -201,31 +201,4 @@ async function holdControlConnection(stateDirectory: InstallationDirectory, sign
         socket.destroy();
         throw cause;
     }
-}
-
-async function runCli(
-    arguments_: readonly string[],
-    environment: Readonly<NodeJS.ProcessEnv>,
-    signal: AbortSignal,
-): Promise<{ readonly code: number | null; readonly stderr: string; readonly stdout: string }> {
-    const child = spawn(process.execPath, [resolve(import.meta.dirname, "../../dist/cli.js"), ...arguments_], {
-        env: environment,
-        signal,
-        stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-        stdout += chunk;
-    });
-    child.stderr.on("data", (chunk: string) => {
-        stderr += chunk;
-    });
-    const code = await new Promise<number | null>((resolve_, reject) => {
-        child.once("error", reject);
-        child.once("exit", resolve_);
-    });
-    return { code, stderr, stdout };
 }

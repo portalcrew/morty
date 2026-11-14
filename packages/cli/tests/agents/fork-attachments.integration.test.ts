@@ -4,7 +4,6 @@ import { watch } from "node:fs";
 import {
     decodeContentChunkFrame,
     decodeMessageKind,
-    decodeNativeSessionResult,
     decodeSessionHistoryPageLoaded,
     decodeSessionLiveEvent,
     encodeFileReadCommand,
@@ -21,7 +20,7 @@ import { ClaudeFixture } from "../support/agents/claude.ts";
 import { CodexFixture } from "../support/agents/codex.ts";
 import { imageFixture } from "../support/agents/image-fixture.ts";
 import { PiFixture } from "../support/agents/pi.ts";
-import { type RealDaemonPeer, withRealDaemon } from "../support/agents/real-daemon.ts";
+import { nextNativeSessionResult, type RealDaemonPeer, withRealDaemon } from "../support/agents/real-daemon.ts";
 import { uploadPromptContent } from "../support/agents/upload-prompt-content.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
@@ -89,7 +88,7 @@ test.each(["pi", "claude", "codex"] as const)(
                         sessionId: source.sessionId,
                     }),
                 );
-                const fork = await nativeResult(peer, requestId);
+                const fork = await nextNativeSessionResult(peer, requestId);
                 if (fork.action !== "fork") {
                     throw new Error("Expected native fork");
                 }
@@ -169,23 +168,6 @@ async function finish(peer: RealDaemonPeer): Promise<void> {
     }
 }
 
-async function nativeResult(peer: RealDaemonPeer, requestId: string) {
-    for (;;) {
-        const message = await peer.nextMessage();
-        const kind = decodeMessageKind(message);
-        if (kind === "session.operation.failed") {
-            throw new Error(message);
-        }
-        if (kind !== "native.session.result") {
-            continue;
-        }
-        const result = decodeNativeSessionResult(message);
-        if (result.requestId === requestId) {
-            return result;
-        }
-    }
-}
-
 async function nativeSource(peer: RealDaemonPeer, harness: string, configDirectory: string | undefined) {
     // Claude flushes native history after live completion. Wait for its filesystem notification, not a polling delay.
     type NativeWrite = { readonly kind: "changed" } | { readonly kind: "failed"; readonly cause: Error };
@@ -211,7 +193,7 @@ async function nativeSource(peer: RealDaemonPeer, harness: string, configDirecto
                     cursor: null,
                 }),
             );
-            const listed = await nativeResult(peer, requestId);
+            const listed = await nextNativeSessionResult(peer, requestId);
             if (listed.action !== "list") {
                 throw new Error("Expected native session list");
             }

@@ -3,7 +3,7 @@ import { type BrowserContextOptions, chromium, firefox, webkit } from "playwrigh
 import { mortyFiles, mortyReply } from "../../../tests/support/fake-daemon/scenarios.ts";
 import { ANONYMOUS_CREDENTIAL_KEY_NAME } from "../../web/src/services/identity/anonymous-identity-api.ts";
 import { encodeIdentityScope } from "../../web/src/services/identity/identity-scope-url.ts";
-import { anonymousCreationKey, ChatApi, jsonRequest, object, text } from "./chat-api.ts";
+import { ChatApi, text } from "./chat-api.ts";
 import type { LocalStack } from "./local-stack.ts";
 import { RuntimeClock } from "./runtime-clock.ts";
 import { ControlledSetupRuntime } from "./setup-daemon.ts";
@@ -46,15 +46,7 @@ export async function createTestRuntime(
         const chat = new ChatApi(stack.chatOrigin, journey.signal);
 
         const openChat = async () => {
-            const identity = object(
-                await jsonRequest(stack.chatOrigin, "/morty/api/v1/computers", {
-                    body: { creationKey: anonymousCreationKey() },
-                    signal: journey.signal,
-                }),
-                "anonymous identity",
-            );
-            const token = text(identity["computerToken"], "Computer token");
-            const computerId = text(identity["computerId"], "computerId");
+            const { computerId, token } = await chat.createIdentity();
 
             const url = new URL(stack.chatOrigin);
             url.searchParams.set("identity", encodeIdentityScope({ computerId }));
@@ -84,8 +76,7 @@ export async function createTestRuntime(
                 { key: ANONYMOUS_CREDENTIAL_KEY_NAME, scope: { computerId }, token },
             );
             await page.goto(url.href);
-            const user = await chat.useBrowserIdentity({ computerId, computerToken: token });
-            return { computerId: user.computerId };
+            return { computerId };
         };
 
         return {
@@ -146,12 +137,7 @@ export async function createTestRuntime(
             forgetRuntimeConnections: async () => await runtime.forgetConnections(),
             connectUnrelatedRuntime: async () => {
                 const unrelated = new ChatApi(stack.chatOrigin, journey.signal);
-                await unrelated.useBrowserIdentity(
-                    await jsonRequest(stack.chatOrigin, "/morty/api/v1/computers", {
-                        body: { creationKey: anonymousCreationKey() },
-                        signal: journey.signal,
-                    }),
-                );
+                await unrelated.createIdentity();
                 const pairing = await unrelated.createPairing();
                 await runtime.pair(
                     journey.workDirectory,
