@@ -176,16 +176,9 @@ export function decodeEncryptedDaemonInboundMessage(
 export type ClientRequest = Exclude<ClientCommand, { readonly kind: typeof SESSION_EVENTS_SUBSCRIBE_KIND }>;
 
 /**
- * The address of a request: every answer to it, `session.operation.failed` included, carries this value as its
- * `requestId`. Senders, the Relay and the Computer all address replies through this one rule.
- */
-export function requestReplyAddress(request: ClientRequest): string {
-    return request.requestId;
-}
-
-/**
- * Reads, by the same rule, the address and Session of a request the receiver could not decode, so that it can still
- * answer it with a refusal. Null when the message names no address to answer.
+ * Reads the address and Session of a request the receiver could not decode, so that it can still answer it with a
+ * refusal. A request's address is its own `requestId`: every answer to it, `session.operation.failed` included,
+ * carries that value. Null when the message names no address to answer.
  */
 export function readUndecodedRequestAddress(
     encoded: string,

@@ -51,7 +51,6 @@ const computerDiagnosticsResultPublicRoutingSchema = z.object({
 const computerDiagnosticsResultRoutingSchema = computerDiagnosticsResultPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type ComputerDiagnosticsResultRouting = z.infer<typeof computerDiagnosticsResultRoutingSchema>;
 const decodeComputerDiagnosticsResultRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, computerDiagnosticsResultRoutingSchema);
 export const computerDiagnosticsResultCodec = encryptedMessageCodec({

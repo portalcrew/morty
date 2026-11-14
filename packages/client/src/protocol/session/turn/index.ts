@@ -24,8 +24,6 @@ const turnStateSchema = z.discriminatedUnion("kind", [
         .readonly(),
 ]);
 
-export type TurnState = z.infer<typeof turnStateSchema>;
-
 const promptTurnRequestSchema = z
     .object({
         content: z.string().max(100_000),

@@ -283,7 +283,6 @@ const nativeSessionCancelPublicRoutingSchema = z.object({
 const nativeSessionCancelRoutingSchema = nativeSessionCancelPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type NativeSessionCancelRouting = z.infer<typeof nativeSessionCancelRoutingSchema>;
 const decodeNativeSessionCancelRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, nativeSessionCancelRoutingSchema);
 export const nativeSessionCancelCodec = encryptedMessageCodec({

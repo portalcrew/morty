@@ -42,12 +42,12 @@ export interface ComputerHeartbeatAckEvent {
     readonly kind: typeof COMPUTER_HEARTBEAT_ACK_KIND;
 }
 
-export interface ComputerPingCommand {
+interface ComputerPingCommand {
     readonly kind: typeof COMPUTER_PING_KIND;
     readonly requestId: string;
 }
 
-export interface ComputerPongEvent {
+interface ComputerPongEvent {
     readonly kind: typeof COMPUTER_PONG_KIND;
     readonly requestId: string;
 }
@@ -125,7 +125,6 @@ const computerPongEventPublicRoutingSchema = routingZ.object({
 const computerPongEventRoutingSchema = computerPongEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type ComputerPongEventRouting = routingZ.infer<typeof computerPongEventRoutingSchema>;
 const decodeComputerPongEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, computerPongEventRoutingSchema);
 export const computerPongEventCodec = encryptedMessageCodec({

@@ -50,7 +50,6 @@ const sessionRecordFields = {
     updatedAt: z.iso.datetime({ offset: true }),
 };
 const sessionRecordSchema = z.object(sessionRecordFields).readonly();
-export type SessionRecord = z.infer<typeof sessionRecordSchema>;
 
 const sessionMetadataSchema = z.object({ ...sessionRecordFields, target: nativeSessionTargetSchema }).readonly();
 
@@ -318,7 +317,6 @@ const sessionQueryCommandPublicRoutingSchema = z.object({
 const sessionQueryCommandRoutingSchema = sessionQueryCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionQueryCommandRouting = z.infer<typeof sessionQueryCommandRoutingSchema>;
 const decodeSessionQueryCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionQueryCommandRoutingSchema);
 export const sessionQueryCommandCodec = encryptedMessageCodec({
@@ -409,7 +407,6 @@ const sessionArchivedEventPublicRoutingSchema = z.object({
 const sessionArchivedEventRoutingSchema = sessionArchivedEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionArchivedEventRouting = z.infer<typeof sessionArchivedEventRoutingSchema>;
 const decodeSessionArchivedEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionArchivedEventRoutingSchema);
 export const sessionArchivedEventCodec = encryptedMessageCodec({
@@ -426,7 +423,6 @@ const sessionCloseNoticeEventPublicRoutingSchema = z.object({
 const sessionCloseNoticeEventRoutingSchema = sessionCloseNoticeEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionCloseNoticeEventRouting = z.infer<typeof sessionCloseNoticeEventRoutingSchema>;
 const decodeSessionCloseNoticeEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionCloseNoticeEventRoutingSchema);
 export const sessionCloseNoticeEventCodec = encryptedMessageCodec({
@@ -443,7 +439,6 @@ const sessionsListedEventPublicRoutingSchema = z.object({
 const sessionsListedEventRoutingSchema = sessionsListedEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionsListedEventRouting = z.infer<typeof sessionsListedEventRoutingSchema>;
 const decodeSessionsListedEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionsListedEventRoutingSchema);
 export const sessionsListedEventCodec = encryptedMessageCodec({
@@ -460,7 +455,6 @@ const sessionsQueriedEventPublicRoutingSchema = z.object({
 const sessionsQueriedEventRoutingSchema = sessionsQueriedEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionsQueriedEventRouting = z.infer<typeof sessionsQueriedEventRoutingSchema>;
 const decodeSessionsQueriedEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionsQueriedEventRoutingSchema);
 export const sessionsQueriedEventCodec = encryptedMessageCodec({
@@ -478,7 +472,6 @@ const sessionRestoredEventPublicRoutingSchema = z.object({
 const sessionRestoredEventRoutingSchema = sessionRestoredEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionRestoredEventRouting = z.infer<typeof sessionRestoredEventRoutingSchema>;
 const decodeSessionRestoredEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionRestoredEventRoutingSchema);
 export const sessionRestoredEventCodec = encryptedMessageCodec({
@@ -496,7 +489,6 @@ const sessionOperationFailedEventPublicRoutingSchema = z.object({
 const sessionOperationFailedEventRoutingSchema = sessionOperationFailedEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionOperationFailedEventRouting = z.infer<typeof sessionOperationFailedEventRoutingSchema>;
 const decodeSessionOperationFailedEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionOperationFailedEventRoutingSchema);
 export const sessionOperationFailedEventCodec = encryptedMessageCodec({
@@ -514,7 +506,6 @@ const sessionPromptAcceptedEventPublicRoutingSchema = z.object({
 const sessionPromptAcceptedEventRoutingSchema = sessionPromptAcceptedEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionPromptAcceptedEventRouting = z.infer<typeof sessionPromptAcceptedEventRoutingSchema>;
 const decodeSessionPromptAcceptedEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionPromptAcceptedEventRoutingSchema);
 export const sessionPromptAcceptedEventCodec = encryptedMessageCodec({
@@ -543,7 +534,6 @@ export function lifecycleWireJsonSchemas() {
         failureReply: z.toJSONSchema(sessionOperationFailedEventRoutingSchema),
     };
 }
-export type SessionReadyEventRouting = z.infer<typeof sessionReadyEventRoutingSchema>;
 const decodeSessionReadyEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionReadyEventRoutingSchema);
 export const sessionReadyEventCodec = encryptedMessageCodec({

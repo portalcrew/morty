@@ -6,7 +6,7 @@ import {
     exportE2EPublicKey,
     generateE2EIdentity,
 } from "../../src/encryption.ts";
-import { requestReplyAddress, sessionPromptCommandCodec } from "../../src/protocol/index.ts";
+import { sessionPromptCommandCodec } from "../../src/protocol/index.ts";
 
 beforeEach(() => {
     vi.useFakeTimers();
@@ -52,7 +52,6 @@ it("Given distinct prompt request and Turn IDs, when it crosses the encrypted bo
         ).rejects.toMatchObject({ code: "e2e_authentication_failed" });
         const decoded = await sessionPromptCommandCodec.decode(wire, computer, signal);
         expect(decoded).toEqual(message);
-        expect(requestReplyAddress(decoded)).toBe("request-1");
         await expect(
             sessionPromptCommandCodec.encode({ ...message, requestId: undefined }, client, signal),
         ).rejects.toMatchObject({ code: "invalid_protocol_message" });

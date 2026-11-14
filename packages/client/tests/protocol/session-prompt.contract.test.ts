@@ -1,6 +1,5 @@
 import {
     readUndecodedRequestAddress,
-    requestReplyAddress,
     type SessionPromptCommand,
     sessionPromptCommandCodec,
 } from "@morty-build/client/protocol";
@@ -32,7 +31,6 @@ it("Given a prompt, When it crosses the encrypted protocol boundary, Then its re
     });
     const decoded = await sessionPromptCommandCodec.decode(encoded, computer, signal);
     expect(decoded).toEqual(prompt);
-    expect(requestReplyAddress(decoded)).toBe(prompt.requestId);
 });
 
 it("Given a prompt omits requestId, When it is encoded, Then it is rejected", async () => {
@@ -54,7 +52,6 @@ it("Given a prompt with a separate requestId, When it crosses the protocol bound
     const encoded = await sessionPromptCommandCodec.encode(request, client, signal);
     const decoded = await sessionPromptCommandCodec.decode(encoded, computer, signal);
     expect(decoded).toEqual(request);
-    expect(requestReplyAddress(decoded)).toBe("another-request");
 });
 
 it("Given an invalid prompt with a requestId, When its refusal is addressed, Then the reply uses the explicit requestId", () => {

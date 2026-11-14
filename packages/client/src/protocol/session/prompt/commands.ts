@@ -76,7 +76,7 @@ export interface SessionCancelCommand {
  * Cancels only work that has not started; it must never degrade into cancellation of running work. Answered by
  * `session.turn.withdrawn`, or by a `turn_already_started` failure.
  */
-export interface SessionCancelBeforeStartCommand {
+interface SessionCancelBeforeStartCommand {
     readonly commandId: string;
     readonly kind: typeof SESSION_CANCEL_BEFORE_START_KIND;
     readonly requestId: string;
@@ -232,7 +232,7 @@ const sessionTurnStoppedEventSchema = z
     .object({ ...turnReplyFields, kind: z.literal(SESSION_TURN_STOPPED_KIND), stopReason: z.string().min(1).max(128) })
     .readonly();
 
-export type SessionTurnStoppedEvent = z.infer<typeof sessionTurnStoppedEventSchema>;
+type SessionTurnStoppedEvent = z.infer<typeof sessionTurnStoppedEventSchema>;
 
 const sessionTurnWithdrawnEventSchema = z
     .object({ ...turnReplyFields, kind: z.literal(SESSION_TURN_WITHDRAWN_KIND) })
@@ -256,7 +256,6 @@ const sessionCancelBeforeStartCommandPublicRoutingSchema = z.object({
 const sessionCancelBeforeStartCommandRoutingSchema = sessionCancelBeforeStartCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionCancelBeforeStartCommandRouting = z.infer<typeof sessionCancelBeforeStartCommandRoutingSchema>;
 const decodeSessionCancelBeforeStartCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionCancelBeforeStartCommandRoutingSchema);
 export const sessionCancelBeforeStartCommandCodec = encryptedMessageCodec({
@@ -275,7 +274,6 @@ const sessionCancelCommandPublicRoutingSchema = z.object({
 const sessionCancelCommandRoutingSchema = sessionCancelCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionCancelCommandRouting = z.infer<typeof sessionCancelCommandRoutingSchema>;
 const decodeSessionCancelCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionCancelCommandRoutingSchema);
 export const sessionCancelCommandCodec = encryptedMessageCodec({
@@ -294,7 +292,6 @@ const sessionPromptCommandPublicRoutingSchema = z.object({
 const sessionPromptCommandRoutingSchema = sessionPromptCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionPromptCommandRouting = z.infer<typeof sessionPromptCommandRoutingSchema>;
 const decodeSessionPromptCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionPromptCommandRoutingSchema);
 export const sessionPromptCommandCodec = encryptedMessageCodec({
@@ -313,7 +310,6 @@ const sessionPromptDispositionCommandPublicRoutingSchema = z.object({
 const sessionPromptDispositionCommandRoutingSchema = sessionPromptDispositionCommandPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionPromptDispositionCommandRouting = z.infer<typeof sessionPromptDispositionCommandRoutingSchema>;
 const decodeSessionPromptDispositionCommandRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionPromptDispositionCommandRoutingSchema);
 export const sessionPromptDispositionCommandCodec = encryptedMessageCodec({
@@ -332,7 +328,6 @@ const sessionPromptSteeredEventPublicRoutingSchema = z.object({
 const sessionPromptSteeredEventRoutingSchema = sessionPromptSteeredEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionPromptSteeredEventRouting = z.infer<typeof sessionPromptSteeredEventRoutingSchema>;
 const decodeSessionPromptSteeredEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionPromptSteeredEventRoutingSchema);
 export const sessionPromptSteeredEventCodec = encryptedMessageCodec({
@@ -351,7 +346,6 @@ const sessionTurnStoppedEventPublicRoutingSchema = z.object({
 const sessionTurnStoppedEventRoutingSchema = sessionTurnStoppedEventPublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionTurnStoppedEventRouting = z.infer<typeof sessionTurnStoppedEventRoutingSchema>;
 const decodeSessionTurnStoppedEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionTurnStoppedEventRoutingSchema);
 export const sessionTurnStoppedEventCodec = encryptedMessageCodec({
@@ -377,7 +371,6 @@ export function promptWireJsonSchemas() {
         cancelReply: z.toJSONSchema(sessionTurnStoppedEventRoutingSchema),
     };
 }
-export type SessionTurnWithdrawnEventRouting = z.infer<typeof sessionTurnWithdrawnEventRoutingSchema>;
 const decodeSessionTurnWithdrawnEventRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionTurnWithdrawnEventRoutingSchema);
 export const sessionTurnWithdrawnEventCodec = encryptedMessageCodec({
