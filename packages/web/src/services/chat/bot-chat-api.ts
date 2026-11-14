@@ -11,19 +11,9 @@ import {
     computerDiagnosticsResultCodec,
     computerPingCommandCodec,
     computerPongEventCodec,
-    decodeAgentSettingsDiscoverCommand,
-    decodeComputerDiagnosticsRequest,
     decodeNativeSessionEvents,
-    decodeNativeSessionRequest,
     decodeSessionAccessCredential,
-    decodeSessionArchiveCommand,
-    decodeSessionCreateCommand,
-    decodeSessionListCommand,
-    decodeSessionPrepareCommand,
-    decodeSessionPreviewHistoryPageLoad,
     decodeSessionReadyEvent,
-    decodeSessionRestoreCommand,
-    decodeWorkspaceListCommand,
     type Identifier,
     isDirectoryPath,
     isIdentifier,
@@ -49,7 +39,7 @@ import {
 } from "@morty-build/client/protocol";
 import * as v from "valibot";
 import type { ApiResponseSnapshot, ApiTransport } from "../api/api-transport.ts";
-import type { ApiRequest } from "../api/calls/call.ts";
+import type { ApiRequest, CommandCall } from "../api/calls/call.ts";
 import { chatCalls } from "../api/calls/chat.ts";
 import { managementCalls } from "../api/calls/management.ts";
 import { recordBrowserDiagnostic } from "../diagnostics/browser-diagnostics.ts";
@@ -235,11 +225,13 @@ export class BotChatApi {
             // An unpaired Computer has no encryption access yet; report the Worker's authoritative pairing failure.
             await this.computerConfiguration(signal);
         }
-        const request = chatCalls.daemonDiagnostics({ origin: this.#origin, computerId: this.#computerId });
-        const command = decodeComputerDiagnosticsRequest(request.body ?? "");
+        const { endpoint, command } = chatCalls.daemonDiagnostics({
+            origin: this.#origin,
+            computerId: this.#computerId,
+        });
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await computerDiagnosticsRequestCodec.encode(command, encryption, signal);
-        const value = await this.#request({ ...request, body }, signal);
+        const value = await this.#request({ endpoint, body }, signal);
         const result = await computerDiagnosticsResultCodec.decode(JSON.stringify(value), encryption, signal);
         if (result.requestId !== command.requestId) {
             throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid diagnostics response.");
@@ -247,16 +239,15 @@ export class BotChatApi {
         return result;
     };
     readonly networkDiagnostic = async (signal: AbortSignal) => {
-        const request = chatCalls.networkDiagnostic({ origin: this.#origin, computerId: this.#computerId });
-        const command = v.parse(
-            v.object({ kind: v.literal("computer.ping"), requestId: identifier }),
-            JSON.parse(request.body ?? ""),
-        );
+        const { endpoint, command } = chatCalls.networkDiagnostic({
+            origin: this.#origin,
+            computerId: this.#computerId,
+        });
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await computerPingCommandCodec.encode(command, encryption, signal);
         const result = v.parse(
             v.object({ computerLatencyMs: v.pipe(v.number(), v.safeInteger(), v.minValue(0)), reply: v.unknown() }),
-            await this.#request({ ...request, body }, signal),
+            await this.#request({ endpoint, body }, signal),
         );
         const pong = await computerPongEventCodec.decode(JSON.stringify(result.reply), encryption, signal);
         if (pong.requestId !== command.requestId) {
@@ -271,11 +262,14 @@ export class BotChatApi {
             signal,
         );
     };
-    readonly #discoverAgentSettings = async (request: ApiRequest, harness: string, signal: AbortSignal) => {
-        const command = decodeAgentSettingsDiscoverCommand(request.body ?? "");
+    readonly #discoverAgentSettings = async (
+        { endpoint, command }: CommandCall<{ readonly requestId: string }>,
+        harness: string,
+        signal: AbortSignal,
+    ) => {
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await agentSettingsDiscoverCommandCodec.encode(command, encryption, signal);
-        const value = await this.#request({ ...request, body }, signal);
+        const value = await this.#request({ endpoint, body }, signal);
         const kind = v.parse(v.object({ kind: v.string() }), value).kind;
         const encoded = JSON.stringify(value);
         if (kind === "agent.settings.discovery.failed") {
@@ -302,7 +296,7 @@ export class BotChatApi {
         );
         signal.throwIfAborted();
         const operationId = `create_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-        const request = chatCalls.createConversation({
+        const { endpoint, command } = chatCalls.createConversation({
             origin: this.#origin,
             computerId: this.#computerId,
             input: {
@@ -312,10 +306,9 @@ export class BotChatApi {
                 workspaceRef: settings.workspaceRef,
             },
         });
-        const command = decodeSessionCreateCommand(request.body ?? "");
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await sessionCreateCommandCodec.encode(command, encryption, signal);
-        const result = await this.#request({ ...request, body }, signal);
+        const result = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(result);
         if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), result).success) {
             const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
@@ -366,11 +359,10 @@ export class BotChatApi {
         };
     };
     readonly managedSessions = async (signal: AbortSignal) => {
-        const request = chatCalls.managedSessions({ origin: this.#origin, computerId: this.#computerId });
-        const command = decodeSessionListCommand(request.body ?? "");
+        const { endpoint, command } = chatCalls.managedSessions({ origin: this.#origin, computerId: this.#computerId });
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await sessionListCommandCodec.encode(command, encryption, signal);
-        const value = await this.#request({ ...request, body }, signal);
+        const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
         if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
             const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
@@ -398,15 +390,14 @@ export class BotChatApi {
     };
     /** Resolves once the Computer no longer holds the Session; otherwise rejects with the Computer's failure. */
     readonly archiveManagedSession = async (target: NativeSessionTarget, signal: AbortSignal): Promise<void> => {
-        const request = chatCalls.archiveManagedSession({
+        const { endpoint, command } = chatCalls.archiveManagedSession({
             origin: this.#origin,
             computerId: this.#computerId,
             target: v.parse(nativeSessionTargetSchema, target),
         });
-        const command = decodeSessionArchiveCommand(request.body ?? "");
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await sessionArchiveCommandCodec.encode(command, encryption, signal);
-        const value = await this.#request({ ...request, body }, signal);
+        const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
         if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
             const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
@@ -424,15 +415,14 @@ export class BotChatApi {
         }
     };
     readonly managedSession = async (target: NativeSessionTarget, signal: AbortSignal) => {
-        const request = chatCalls.managedSession({
+        const { endpoint, command } = chatCalls.managedSession({
             origin: this.#origin,
             computerId: this.#computerId,
             target: v.parse(nativeSessionTargetSchema, target),
         });
-        const command = decodeSessionRestoreCommand(request.body ?? "");
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await sessionRestoreCommandCodec.encode(command, encryption, signal);
-        const value = await this.#request({ ...request, body }, signal);
+        const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
         if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
             const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
@@ -551,11 +541,14 @@ export class BotChatApi {
             ),
         );
     readonly directory = async (directory: string, signal: AbortSignal) => {
-        const request = chatCalls.directory({ origin: this.#origin, computerId: this.#computerId, directory });
-        const command = decodeWorkspaceListCommand(request.body ?? "");
+        const { endpoint, command } = chatCalls.directory({
+            origin: this.#origin,
+            computerId: this.#computerId,
+            directory,
+        });
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await workspaceListCommandCodec.encode(command, encryption, signal);
-        const value = await this.#request({ ...request, body }, signal);
+        const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
         if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
             const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
@@ -678,11 +671,13 @@ export class BotChatApi {
         }
         return result;
     };
-    readonly #nativeSessionResult = async (request: ApiRequest, signal: AbortSignal) => {
-        const command = decodeNativeSessionRequest(request.body ?? "");
+    readonly #nativeSessionResult = async (
+        { endpoint, command }: CommandCall<{ readonly requestId: string }>,
+        signal: AbortSignal,
+    ) => {
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await nativeSessionCommandCodec.encode(command, encryption, signal);
-        const value = await this.#request({ ...request, body }, signal);
+        const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
         if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
             const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
@@ -706,16 +701,15 @@ export class BotChatApi {
         signal: AbortSignal,
     ) => {
         const { sessionId, ...identity } = input;
-        const request = chatCalls.nativeSession({
+        const { endpoint, command } = chatCalls.nativeSession({
             origin: this.#origin,
             computerId: this.#computerId,
             sessionId: v.parse(identifier, sessionId),
             identity,
         });
-        const command = decodeSessionPreviewHistoryPageLoad(request.body ?? "");
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await sessionPreviewHistoryPageLoadCodec.encode(command, encryption, signal);
-        const value = await this.#request({ ...request, body }, signal);
+        const value = await this.#request({ endpoint, body }, signal);
         const encoded = JSON.stringify(value);
         if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
             const failure = await sessionOperationFailedEventCodec.decode(encoded, encryption, signal);
@@ -744,15 +738,14 @@ export class BotChatApi {
         const readAccess = async (parent: AbortSignal) => {
             for (let attempt = 0; attempt < 2; attempt += 1) {
                 try {
-                    const request = chatCalls.sessionAccess({
+                    const { endpoint, command } = chatCalls.sessionAccess({
                         origin: this.#origin,
                         computerId: this.#computerId,
                         target: v.parse(nativeSessionTargetSchema, target),
                     });
-                    const command = decodeSessionPrepareCommand(request.body ?? "");
                     const encryption = this.#sessionTransport().payloadEncryption;
                     const body = await sessionPrepareCommandCodec.encode(command, encryption, parent);
-                    const value = await this.#request({ ...request, body }, parent);
+                    const value = await this.#request({ endpoint, body }, parent);
                     if (v.safeParse(v.object({ kind: v.literal("session.operation.failed") }), value).success) {
                         const failure = await sessionOperationFailedEventCodec.decode(
                             JSON.stringify(value),

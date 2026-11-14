@@ -5,7 +5,7 @@ import type {
     SessionConfigurationSelection,
 } from "@morty-build/client/protocol";
 import type { ApiRequest, ComputerCallTarget } from "./call.ts";
-import { encodeComputerCall } from "./encode-call.ts";
+import { commandCall, encodeComputerCall } from "./encode-call.ts";
 
 interface AgentDirectory {
     readonly harness: string;
@@ -13,8 +13,8 @@ interface AgentDirectory {
 }
 
 export const chatCalls = Object.freeze({
-    verifyAgent: ({ origin, computerId, harness }: ComputerCallTarget & { readonly harness: string }): ApiRequest =>
-        encodeComputerCall({
+    verifyAgent: ({ origin, computerId, harness }: ComputerCallTarget & { readonly harness: string }) =>
+        commandCall({
             origin,
             computerId,
             path: "setup",
@@ -25,10 +25,10 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: { kind: "agent.settings.discover", requestId: crypto.randomUUID(), harness, directory: "." },
+            command: { kind: "agent.settings.discover", requestId: crypto.randomUUID(), harness, directory: "." },
         }),
-    daemonDiagnostics: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeComputerCall({
+    daemonDiagnostics: ({ origin, computerId }: ComputerCallTarget) =>
+        commandCall({
             origin,
             computerId,
             path: "diagnostics/daemon",
@@ -39,10 +39,10 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: { kind: "computer.diagnostics.read", requestId: crypto.randomUUID() },
+            command: { kind: "computer.diagnostics.read", requestId: crypto.randomUUID() },
         }),
-    networkDiagnostic: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeComputerCall({
+    networkDiagnostic: ({ origin, computerId }: ComputerCallTarget) =>
+        commandCall({
             origin,
             computerId,
             path: "diagnostics/network",
@@ -53,7 +53,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: { kind: "computer.ping", requestId: `ping_${crypto.randomUUID()}` },
+            command: { kind: "computer.ping", requestId: `ping_${crypto.randomUUID()}` },
         }),
     createConversation: ({
         origin,
@@ -66,8 +66,8 @@ export const chatCalls = Object.freeze({
             readonly operationId: string;
             readonly workspaceRef: string;
         };
-    }): ApiRequest =>
-        encodeComputerCall({
+    }) =>
+        commandCall({
             origin,
             computerId,
             path: "managed-sessions/open",
@@ -78,7 +78,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: {
+            command: {
                 kind: "session.create",
                 requestId: crypto.randomUUID(),
                 operationId: input.operationId,
@@ -87,8 +87,8 @@ export const chatCalls = Object.freeze({
                 directory: input.workspaceRef,
             },
         }),
-    managedSessions: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
-        encodeComputerCall({
+    managedSessions: ({ origin, computerId }: ComputerCallTarget) =>
+        commandCall({
             origin,
             computerId,
             path: "managed-sessions",
@@ -99,14 +99,14 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: { kind: "session.list", requestId: crypto.randomUUID(), limit: 500 },
+            command: { kind: "session.list", requestId: crypto.randomUUID(), limit: 500 },
         }),
     archiveManagedSession: ({
         origin,
         computerId,
         target,
-    }: ComputerCallTarget & { readonly target: NativeSessionTarget }): ApiRequest =>
-        encodeComputerCall({
+    }: ComputerCallTarget & { readonly target: NativeSessionTarget }) =>
+        commandCall({
             origin,
             computerId,
             path: "managed-sessions/archive",
@@ -117,14 +117,10 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: { kind: "session.archive", requestId: crypto.randomUUID(), target },
+            command: { kind: "session.archive", requestId: crypto.randomUUID(), target },
         }),
-    managedSession: ({
-        origin,
-        computerId,
-        target,
-    }: ComputerCallTarget & { readonly target: NativeSessionTarget }): ApiRequest =>
-        encodeComputerCall({
+    managedSession: ({ origin, computerId, target }: ComputerCallTarget & { readonly target: NativeSessionTarget }) =>
+        commandCall({
             origin,
             computerId,
             path: "managed-sessions/resolve",
@@ -135,7 +131,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: { kind: "session.restore", requestId: crypto.randomUUID(), target },
+            command: { kind: "session.restore", requestId: crypto.randomUUID(), target },
         }),
     continueNativeSession: ({
         origin,
@@ -149,8 +145,8 @@ export const chatCalls = Object.freeze({
         readonly sessionId: string;
         readonly action: "find" | "import";
         readonly directory: string;
-    }): ApiRequest =>
-        encodeComputerCall({
+    }) =>
+        commandCall({
             origin,
             computerId,
             path: "native-sessions/continue",
@@ -161,7 +157,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: {
+            command: {
                 kind: "native.session.request",
                 requestId: crypto.randomUUID(),
                 action,
@@ -175,8 +171,11 @@ export const chatCalls = Object.freeze({
         computerId,
         harness,
         workspaceRef,
-    }: ComputerCallTarget & { readonly harness: string; readonly workspaceRef: string }): ApiRequest =>
-        encodeComputerCall({
+    }: ComputerCallTarget & {
+        readonly harness: string;
+        readonly workspaceRef: string;
+    }) =>
+        commandCall({
             origin,
             computerId,
             path: "agent-settings",
@@ -187,7 +186,12 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: { kind: "agent.settings.discover", requestId: crypto.randomUUID(), harness, directory: workspaceRef },
+            command: {
+                kind: "agent.settings.discover",
+                requestId: crypto.randomUUID(),
+                harness,
+                directory: workspaceRef,
+            },
         }),
     computerConfiguration: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
         encodeComputerCall({
@@ -202,8 +206,8 @@ export const chatCalls = Object.freeze({
                 watch: "snapshot",
             },
         }),
-    directory: ({ origin, computerId, directory }: ComputerCallTarget & { readonly directory: string }): ApiRequest =>
-        encodeComputerCall({
+    directory: ({ origin, computerId, directory }: ComputerCallTarget & { readonly directory: string }) =>
+        commandCall({
             origin,
             computerId,
             path: "workspace/directory",
@@ -214,7 +218,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: { kind: "workspace.list", requestId: crypto.randomUUID(), directory },
+            command: { kind: "workspace.list", requestId: crypto.randomUUID(), directory },
         }),
     forkNativeSession: ({
         origin,
@@ -226,8 +230,8 @@ export const chatCalls = Object.freeze({
         readonly operationId: string;
         readonly requestId: string;
         readonly input: ForkMortyNativeSessionRequest;
-    }): ApiRequest =>
-        encodeComputerCall({
+    }) =>
+        commandCall({
             origin,
             computerId,
             path: `native-sessions/forks/${encodeURIComponent(operationId)}`,
@@ -238,7 +242,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: { ...input, kind: "native.session.request", action: "fork", requestId },
+            command: { ...input, kind: "native.session.request", action: "fork", requestId },
         }),
     nativeSessions: ({
         origin,
@@ -246,8 +250,8 @@ export const chatCalls = Object.freeze({
         input,
     }: ComputerCallTarget & {
         readonly input: Omit<Extract<NativeSessionRequest, { readonly action: "list" }>, "kind" | "requestId">;
-    }): ApiRequest =>
-        encodeComputerCall({
+    }) =>
+        commandCall({
             origin,
             computerId,
             path: "native-sessions",
@@ -258,15 +262,18 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: { ...input, kind: "native.session.request", requestId: crypto.randomUUID() },
+            command: { ...input, kind: "native.session.request", requestId: crypto.randomUUID() },
         }),
     importNativeSession: ({
         origin,
         computerId,
         sessionId,
         identity,
-    }: ComputerCallTarget & { readonly sessionId: string; readonly identity: AgentDirectory }): ApiRequest =>
-        encodeComputerCall({
+    }: ComputerCallTarget & {
+        readonly sessionId: string;
+        readonly identity: AgentDirectory;
+    }) =>
+        commandCall({
             origin,
             computerId,
             path: `native-sessions/${encodeURIComponent(sessionId)}/import`,
@@ -277,7 +284,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: {
+            command: {
                 ...identity,
                 kind: "native.session.request",
                 action: "import",
@@ -290,8 +297,11 @@ export const chatCalls = Object.freeze({
         computerId,
         sessionId,
         identity,
-    }: ComputerCallTarget & { readonly sessionId: string; readonly identity: AgentDirectory }): ApiRequest =>
-        encodeComputerCall({
+    }: ComputerCallTarget & {
+        readonly sessionId: string;
+        readonly identity: AgentDirectory;
+    }) =>
+        commandCall({
             origin,
             computerId,
             path: `native-sessions/${encodeURIComponent(sessionId)}`,
@@ -302,7 +312,7 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 120_000,
                 watch: "none",
             },
-            body: {
+            command: {
                 kind: "session.preview-history.page.load",
                 requestId: crypto.randomUUID(),
                 target: { harness: identity.harness, sessionId },
@@ -311,12 +321,8 @@ export const chatCalls = Object.freeze({
                 eventLimit: 200,
             },
         }),
-    sessionAccess: ({
-        origin,
-        computerId,
-        target,
-    }: ComputerCallTarget & { readonly target: NativeSessionTarget }): ApiRequest =>
-        encodeComputerCall({
+    sessionAccess: ({ origin, computerId, target }: ComputerCallTarget & { readonly target: NativeSessionTarget }) =>
+        commandCall({
             origin,
             computerId,
             path: "native-sessions/access",
@@ -327,6 +333,6 @@ export const chatCalls = Object.freeze({
                 timeoutMilliseconds: 45_000,
                 watch: "none",
             },
-            body: { kind: "session.prepare", requestId: crypto.randomUUID(), target },
+            command: { kind: "session.prepare", requestId: crypto.randomUUID(), target },
         }),
 });
