@@ -2,7 +2,6 @@ import { AdapterRegistry } from "../../src/engine/acp/adapter/adapter-registry.t
 import type { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
 import type { AdapterResolver } from "../../src/engine/acp/native-history/preview-contract.ts";
 import type {
-    AgentSettingsInspectionOptions,
     SessionConfigurationChange,
     SessionConfigureOptions,
     SessionCreationOptions,
@@ -16,10 +15,10 @@ import { AgentProcessPool } from "../../src/engine/session/process/agent-process
 
 export type TestSessionPrepareOptions = Omit<SessionPrepareOptions, "adapter">;
 
-/** Composes real session resources for direct session scenarios, with Computer owning the adapters. */
 /** `Omit` that keeps each variant of a union apart. */
 type WithoutAdapter<Options> = Options extends unknown ? Omit<Options, "adapter"> : never;
 
+/** Composes real session resources for direct session scenarios, with Computer owning the adapters. */
 export class SessionRuntimeFixture {
     readonly sessions: SessionManager;
     readonly adapters: AdapterRegistry;
@@ -50,12 +49,6 @@ export class SessionRuntimeFixture {
     readonly restoreSession = (options: TestSessionPrepareOptions) =>
         this.sessions.restoreSession({ ...options, adapter: this.adapters.resolve(options.agent) });
 
-    readonly prepareExecutionSession = (options: TestSessionPrepareOptions) =>
-        this.sessions.prepareExecutionSession({ ...options, adapter: this.adapters.resolve(options.agent) });
-
-    readonly ensureSession = (options: TestSessionPrepareOptions) =>
-        this.sessions.ensureSession({ ...options, adapter: this.adapters.resolve(options.agent) });
-
     /** A Session created with the Agent's own settings. */
     readonly createNativeSession = async (options: Omit<SessionCreationOptions, "adapter">) =>
         (
@@ -76,9 +69,6 @@ export class SessionRuntimeFixture {
         ...options,
         target: await this.createNativeSession(options),
     });
-
-    readonly inspectAgentSettings = (options: Omit<AgentSettingsInspectionOptions, "adapter">) =>
-        this.sessions.inspectAgentSettings({ ...options, adapter: this.adapters.resolve(options.agent) });
 
     readonly configureSession = (options: WithoutAdapter<SessionConfigureOptions>) =>
         this.sessions.configureSession({ ...options, adapter: this.adapters.resolve(options.agent) });
@@ -143,8 +133,6 @@ export class SessionRuntimeFixture {
         }
     };
 
-    readonly recordLifecycleEvent = (...args: Parameters<SessionManager["recordLifecycleEvent"]>) =>
-        this.sessions.recordLifecycleEvent(...args);
     readonly renameSession = (...args: Parameters<SessionManager["renameSession"]>) =>
         this.sessions.renameSession(...args);
     readonly cancelPrompt = (...args: Parameters<SessionManager["cancelPrompt"]>) =>
@@ -157,8 +145,6 @@ export class SessionRuntimeFixture {
         this.sessions.archiveSession(...args);
     readonly findSessions = (...args: Parameters<SessionManager["findSessions"]>) =>
         this.sessions.findSessions(...args);
-    readonly sessionStatus = (...args: Parameters<SessionManager["sessionStatus"]>) =>
-        this.sessions.sessionStatus(...args);
     readonly listSessions = (...args: Parameters<SessionManager["listSessions"]>) =>
         this.sessions.listSessions(...args);
 }

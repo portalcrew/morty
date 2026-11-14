@@ -86,7 +86,7 @@ describe("acp interactions", () => {
                     signal,
                     targetCommandId: "running-command",
                 }),
-            ).resolves.toBe("injected");
+            ).resolves.toBeUndefined();
             await expect(running).resolves.toMatchObject({ stopReason: "end_turn" });
             expect(observer.agentText()).toContain("Steered: focus on the requested fix");
         } finally {

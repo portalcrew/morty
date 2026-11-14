@@ -32,8 +32,6 @@ export interface SessionCreationOptions {
 export interface SessionPrepareOptions extends SessionCreationOptions {
     readonly target: NativeSessionTarget;
     readonly origin?: NativeSessionOrigin;
-    /** The prompt's native-history behavior when this preparation starts a Session. */
-    readonly recovery?: SessionRecovery;
 }
 
 /** A Session the Runtime created and holds, with the snapshot of its configured Agent. */

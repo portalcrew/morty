@@ -5,7 +5,7 @@ import type { InstallationDirectory } from "../../engine/storage/installation/in
 import { isNodeError } from "../../engine/util/node-error.ts";
 import { daemonLockExists } from "../../storage/daemon/daemon-lock.ts";
 import { CONTROL_TIMEOUT_MILLISECONDS, sendLocalRequest } from "../control/local-client.ts";
-import { decodeLifecycleResponse, type LifecycleResponse } from "../control/protocol.ts";
+import { decodeLifecycleResponse } from "../control/protocol.ts";
 
 async function spawnDaemon(entry: string, environment: Readonly<NodeJS.ProcessEnv>): Promise<ChildProcess> {
     const child = spawn(process.execPath, [entry, "__daemon"], {
@@ -130,10 +130,7 @@ async function waitForDaemon(
     throw signal.reason;
 }
 
-export async function stopDaemon(
-    stateDirectory: InstallationDirectory,
-    signal: AbortSignal,
-): Promise<Extract<LifecycleResponse, { kind: "stopped" }>> {
+export async function stopDaemon(stateDirectory: InstallationDirectory, signal: AbortSignal): Promise<void> {
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(CONTROL_TIMEOUT_MILLISECONDS)]);
     while (true) {
         deadline.throwIfAborted();
@@ -148,14 +145,14 @@ export async function stopDaemon(
                 throw new Error("The Morty daemon returned an unexpected response");
             }
             await waitForDaemonExit(stateDirectory, deadline);
-            return response;
+            return;
         } catch (cause) {
             deadline.throwIfAborted();
             if (!isNodeError(cause, "ENOENT") && !isNodeError(cause, "ECONNREFUSED")) {
                 throw cause;
             }
             if (!(await daemonLockExists(stateDirectory))) {
-                return { kind: "stopped" };
+                return;
             }
             // The owner may still be copying data or discovering Agents. Its missing
             // socket is not proof of shutdown: wait for control or report the deadline.
