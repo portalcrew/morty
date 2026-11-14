@@ -17,44 +17,32 @@ class UploadCapacityError extends Error implements HttpError {
     });
 }
 
-/** One Computer application's authorized uploads share capacity across all WebSocket connections. */
+/** Bounds the uploads buffered at once. One instance serves a WebSocket connection, another a Computer application. */
 export class WebSocketUploadCapacity {
     #bytes = 0;
     #ordinaryBytes = 0;
     #uploads = 0;
 
-    readonly reserve = ({
-        byteLength,
-        format,
-        signal,
-    }: {
-        readonly byteLength: number;
-        readonly format: "encrypted-content" | "ordinary";
-        readonly signal: AbortSignal;
-    }): void => {
-        signal.throwIfAborted();
+    readonly reserve = (byteLength: number, encryptedUpload: boolean): void => {
         if (
             this.#bytes + byteLength > MAX_PENDING_BYTES ||
-            (format === "ordinary" && this.#ordinaryBytes + byteLength > MAX_BODY_BYTES) ||
+            (!encryptedUpload && this.#ordinaryBytes + byteLength > MAX_BODY_BYTES) ||
             this.#uploads >= MAX_PENDING_UPLOADS
         ) {
             throw new UploadCapacityError();
         }
         this.#bytes += byteLength;
-        if (format === "ordinary") {
+        if (!encryptedUpload) {
             this.#ordinaryBytes += byteLength;
         }
         this.#uploads += 1;
-        signal.addEventListener(
-            "abort",
-            () => {
-                this.#bytes -= byteLength;
-                if (format === "ordinary") {
-                    this.#ordinaryBytes -= byteLength;
-                }
-                this.#uploads -= 1;
-            },
-            { once: true },
-        );
+    };
+
+    readonly release = (byteLength: number, encryptedUpload: boolean): void => {
+        this.#bytes -= byteLength;
+        if (!encryptedUpload) {
+            this.#ordinaryBytes -= byteLength;
+        }
+        this.#uploads -= 1;
     };
 }

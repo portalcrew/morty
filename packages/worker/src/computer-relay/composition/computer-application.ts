@@ -95,14 +95,14 @@ export function createComputerWebSocketApplication(ctx: ComputerRouteContext) {
     const dispatch: WebSocketHttpDispatch = async (operation) => {
         const response = await websocket.fetch(operation.request, { ...ctx.bindings, operation });
         if (operation.kind === "upload-admission" && response.ok) {
-            uploads.reserve({
-                byteLength: operation.byteLength,
-                format:
-                    operation.request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ===
-                    FILE_STREAM_CONTENT_TYPE
-                        ? "encrypted-content"
-                        : "ordinary",
-                signal: operation.request.signal,
+            const { signal } = operation.request;
+            signal.throwIfAborted();
+            const encryptedUpload =
+                operation.request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ===
+                FILE_STREAM_CONTENT_TYPE;
+            uploads.reserve(operation.byteLength, encryptedUpload);
+            signal.addEventListener("abort", () => uploads.release(operation.byteLength, encryptedUpload), {
+                once: true,
             });
         }
         return response;

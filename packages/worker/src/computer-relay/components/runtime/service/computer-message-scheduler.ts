@@ -1,5 +1,5 @@
-const DEFAULT_CONCURRENCY = 8;
-const DEFAULT_PENDING_LIMIT = 512;
+const CONCURRENCY = 8;
+const PENDING_LIMIT = 512;
 
 export class ComputerMessageSchedulerCapacityError extends Error {
     readonly code = "computer_message_queue_full";
@@ -41,20 +41,12 @@ class ComputerMessageSlotWaiter {
 }
 
 class ComputerMessageConcurrency {
-    readonly #limit: number;
     #active = 0;
     readonly #waiters: ComputerMessageSlotWaiter[] = [];
 
-    constructor(limit: number) {
-        if (!Number.isSafeInteger(limit) || limit < 1) {
-            throw new Error("Computer message concurrency must be a positive safe integer");
-        }
-        this.#limit = limit;
-    }
-
     readonly acquire = async (signal: AbortSignal): Promise<ComputerMessageSlot> => {
         signal.throwIfAborted();
-        if (this.#active < this.#limit) {
+        if (this.#active < CONCURRENCY) {
             this.#active += 1;
             return new ComputerMessageSlot(this.#release);
         }
@@ -105,32 +97,20 @@ function waitForComputerMessage(completion: Promise<void>, signal: AbortSignal):
 }
 
 export class ComputerMessageScheduler {
-    readonly #concurrency: ComputerMessageConcurrency;
-    readonly #pendingLimit: number;
+    readonly #concurrency = new ComputerMessageConcurrency();
     readonly #lanes = new Map<string, Promise<void>>();
     readonly #operations = new Set<Promise<void>>();
     #pending = 0;
 
-    constructor(concurrency = DEFAULT_CONCURRENCY, pendingLimit = DEFAULT_PENDING_LIMIT) {
-        if (!Number.isSafeInteger(pendingLimit) || pendingLimit < concurrency) {
-            throw new Error("Computer message pending limit must cover the concurrency limit");
-        }
-        this.#concurrency = new ComputerMessageConcurrency(concurrency);
-        this.#pendingLimit = pendingLimit;
-    }
-
-    /**
-     * Runs `task` after every earlier task that shares one of its lanes, so tasks on a lane run in the order
-     * they were scheduled. A task on several lanes keeps its place in each of them.
-     */
-    readonly run = async (lanes: readonly string[], signal: AbortSignal, task: () => Promise<void>): Promise<void> => {
+    /** Runs `task` after every earlier task on its lane, so tasks on a lane run in the order they were scheduled. */
+    readonly run = async (lane: string, signal: AbortSignal, task: () => Promise<void>): Promise<void> => {
         signal.throwIfAborted();
-        if (this.#pending >= this.#pendingLimit) {
-            throw new ComputerMessageSchedulerCapacityError(this.#pendingLimit);
+        if (this.#pending >= PENDING_LIMIT) {
+            throw new ComputerMessageSchedulerCapacityError(PENDING_LIMIT);
         }
         this.#pending += 1;
 
-        const previous = Promise.all(lanes.map((lane) => this.#lanes.get(lane))).then(() => undefined);
+        const previous = this.#lanes.get(lane) ?? Promise.resolve();
         const operation = (async (): Promise<void> => {
             await waitForComputerMessage(previous, signal);
             const slot = await this.#concurrency.acquire(signal);
@@ -142,9 +122,7 @@ export class ComputerMessageScheduler {
             }
         })();
         const tail = operation.catch(() => undefined);
-        for (const lane of lanes) {
-            this.#lanes.set(lane, tail);
-        }
+        this.#lanes.set(lane, tail);
         this.#operations.add(tail);
 
         try {
@@ -152,10 +130,8 @@ export class ComputerMessageScheduler {
         } finally {
             this.#pending -= 1;
             this.#operations.delete(tail);
-            for (const lane of lanes) {
-                if (this.#lanes.get(lane) === tail) {
-                    this.#lanes.delete(lane);
-                }
+            if (this.#lanes.get(lane) === tail) {
+                this.#lanes.delete(lane);
             }
         }
     };
