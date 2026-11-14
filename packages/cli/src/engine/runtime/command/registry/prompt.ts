@@ -3,13 +3,12 @@ import {
     encodeSessionPromptCommand,
     type SESSION_PROMPT_KIND,
     SessionPromptDisposition,
-    sessionOperationFailedEventCodec,
     sessionPromptAcceptedEventCodec,
 } from "@morty-build/client/protocol";
 import { WebSocket } from "undici";
 import { executePrompt } from "../../../session/prompt/execute-prompt.ts";
 import type { CommandHandler } from "../definition.ts";
-import { send } from "../transport.ts";
+import { replyFailure } from "../transport.ts";
 import { reply, replySettledFailure, settledCommand } from "../turn-replies.ts";
 
 export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = async (
@@ -19,19 +18,12 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
     // A prompt names only its Session; it runs with the Agent and directory of the Session this Runtime holds.
     const session = context.sessions.findSessions([message.target])[0];
     if (session === undefined) {
-        send(
-            context.socket,
-            await sessionOperationFailedEventCodec.encode(
-                {
-                    code: "session_not_found",
-                    requestId: message.requestId,
-                    kind: "session.operation.failed",
-                    message: "The Session was not found",
-                    target: message.target,
-                },
-                context.payloadEncryption,
-                context.signal,
-            ),
+        await replyFailure(
+            context,
+            message.requestId,
+            message.target,
+            "session_not_found",
+            "The Session was not found",
         );
         return;
     }
@@ -49,36 +41,22 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
             context.sessions.acceptsSteering(message.target, message.targetCommandId),
     );
     if (receipt.kind === "refused") {
-        send(
-            context.socket,
-            await sessionOperationFailedEventCodec.encode(
-                {
-                    code: "steering_target_unavailable",
-                    requestId: message.requestId,
-                    kind: "session.operation.failed",
-                    message: "The turn to steer is not running.",
-                    target: message.target,
-                },
-                context.payloadEncryption,
-                context.signal,
-            ),
+        await replyFailure(
+            context,
+            message.requestId,
+            message.target,
+            "steering_target_unavailable",
+            "The turn to steer is not running.",
         );
         return;
     }
     if (receipt.kind === "conflict") {
-        send(
-            context.socket,
-            await sessionOperationFailedEventCodec.encode(
-                {
-                    code: "command_identity_conflict",
-                    requestId: message.requestId,
-                    kind: "session.operation.failed",
-                    message: "This command identifier was already used for a different request.",
-                    target: message.target,
-                },
-                context.payloadEncryption,
-                context.signal,
-            ),
+        await replyFailure(
+            context,
+            message.requestId,
+            message.target,
+            "command_identity_conflict",
+            "This command identifier was already used for a different request.",
         );
         return;
     }
@@ -112,20 +90,12 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
         return;
     }
     if (receipt.kind === "expired") {
-        send(
-            context.socket,
-            await sessionOperationFailedEventCodec.encode(
-                {
-                    code: "command_result_expired",
-                    requestId: message.requestId,
-                    kind: "session.operation.failed",
-                    message:
-                        "This command already started. Its execution result is no longer available; it will not run again.",
-                    target: message.target,
-                },
-                context.payloadEncryption,
-                context.signal,
-            ),
+        await replyFailure(
+            context,
+            message.requestId,
+            message.target,
+            "command_result_expired",
+            "This command already started. Its execution result is no longer available; it will not run again.",
         );
         return;
     }

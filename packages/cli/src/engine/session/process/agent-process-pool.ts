@@ -1,5 +1,6 @@
 import { type ScheduledTask, systemTimer, type Timer } from "../../util/timer.ts";
-import { AcpProcessCapacityLock, waitForAcpProcessCapacity } from "./process-capacity.ts";
+import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
+import { AcpProcessCapacityLock } from "./process-capacity.ts";
 
 const DEFAULT_MAX_ACP_PROCESSES = 1000;
 const MAX_CONCURRENT_STARTS = 8;
@@ -180,7 +181,7 @@ export class AgentProcessPool {
             for (;;) {
                 signal.throwIfAborted();
                 if (this.#starting >= MAX_CONCURRENT_STARTS) {
-                    await waitForAcpProcessCapacity(this.#changed.promise, signal);
+                    await waitForSharedOperation(this.#changed.promise, signal);
                     continue;
                 }
                 if (this.#slots.size < this.#maxProcesses) {
@@ -196,7 +197,7 @@ export class AgentProcessPool {
                     await candidate.retention.retire();
                     continue;
                 }
-                await waitForAcpProcessCapacity(this.#changed.promise, signal);
+                await waitForSharedOperation(this.#changed.promise, signal);
             }
         } finally {
             lease.release();

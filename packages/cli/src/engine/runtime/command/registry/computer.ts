@@ -3,17 +3,17 @@ import {
     COMPUTER_PONG_KIND,
     computerDiagnosticsResultCodec,
     computerPongEventCodec,
-    sessionOperationFailedEventCodec,
 } from "@morty-build/client/protocol";
 import packageMetadata from "../../../../../package.json" with { type: "json" };
 import { runtimeEnvironmentDiagnostics } from "../../observability/environment-diagnostics.ts";
 import type { CommandHandler } from "../definition.ts";
-import { send } from "../transport.ts";
+import { replyFailure, send } from "../transport.ts";
 
 export const handleComputerDiagnostics: CommandHandler<"computer.diagnostics.read"> = async (
-    { config, diagnostics, signal, socket, payloadEncryption },
+    context,
     message,
 ): Promise<void> => {
+    const { config, diagnostics, signal, socket, payloadEncryption } = context;
     try {
         send(
             socket,
@@ -30,18 +30,12 @@ export const handleComputerDiagnostics: CommandHandler<"computer.diagnostics.rea
         );
     } catch {
         signal.throwIfAborted();
-        send(
-            socket,
-            await sessionOperationFailedEventCodec.encode(
-                {
-                    kind: "session.operation.failed",
-                    requestId: message.requestId,
-                    code: "diagnostics_unavailable",
-                    message: "Local diagnostics are unavailable.",
-                },
-                payloadEncryption,
-                signal,
-            ),
+        await replyFailure(
+            context,
+            message.requestId,
+            undefined,
+            "diagnostics_unavailable",
+            "Local diagnostics are unavailable.",
         );
     }
 };

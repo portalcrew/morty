@@ -3,38 +3,12 @@ import {
     type SessionPromptCommand,
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
+import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
 import { ActiveRuntimeTurn, type PromptDispatch } from "./active-turn.ts";
 import type { ExecutionReceipts } from "./execution-receipts.ts";
 
 /** Whether the Session began executing the command and still holds it, as its execution authority answers. */
 export type SessionExecutes = (sessionTarget: NativeSessionTarget, commandId: string) => boolean;
-
-const waitForTurnCompletion = (turn: ActiveRuntimeTurn, waitSignal: AbortSignal): Promise<void> => {
-    waitSignal.throwIfAborted();
-    return new Promise<void>((resolve, reject) => {
-        let settled = false;
-        const finish = (
-            result: { readonly kind: "completed" } | { readonly kind: "failed"; readonly error: unknown },
-        ): void => {
-            if (settled) {
-                return;
-            }
-            settled = true;
-            waitSignal.removeEventListener("abort", onAbort);
-            if (result.kind === "completed") {
-                resolve();
-            } else {
-                reject(result.error);
-            }
-        };
-        const onAbort = (): void => finish({ error: waitSignal.reason, kind: "failed" });
-        waitSignal.addEventListener("abort", onAbort, { once: true });
-        void turn.completion.then(
-            () => finish({ kind: "completed" }),
-            (error: unknown) => finish({ error, kind: "failed" }),
-        );
-    });
-};
 
 /**
  * One session's in-flight turns: FIFO admission, steering, and interaction recording. Admission is the only place
@@ -116,7 +90,7 @@ export class SessionExecutionState {
                 throw new Error("The queued prompt cannot be promoted");
             }
             const decision = await Promise.race([
-                waitForTurnCompletion(first, waitSignal).then(() => "target-completed" as const),
+                waitForSharedOperation(first.completion, waitSignal).then(() => "target-completed" as const),
                 promotion.then(() => "promoted" as const),
             ]);
             if (decision === "promoted") {

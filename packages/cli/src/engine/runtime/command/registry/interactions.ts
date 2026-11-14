@@ -23,8 +23,8 @@ import { SessionError } from "../../../session/api/session-error.ts";
 import { settleAbandonedTurn } from "../../../session/prompt/prompt-lifecycle.ts";
 import type { CommandContext } from "../context.ts";
 import type { CommandHandler } from "../definition.ts";
-import { reportOperationFailure, send } from "../transport.ts";
-import { reply, replyFailure, replySettledFailure, settledCommand } from "../turn-replies.ts";
+import { replyFailure, reportOperationFailure, send } from "../transport.ts";
+import { reply, replySettledFailure, settledCommand } from "../turn-replies.ts";
 
 /** Answers a request that waited for its Turn to end with how the Turn ended. */
 async function replyStopped(

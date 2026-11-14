@@ -122,19 +122,10 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
         if (write.kind === "receiving") {
             release(write);
         }
-        send(
-            context.socket,
-            await fileFailedEventCodec.encode(
-                {
-                    kind: FILE_FAILED_KIND,
-                    requestId,
-                    target: write.command.target,
-                    code: "e2e_store_busy",
-                    message: "The Computer encryption store is busy",
-                },
-                context.payloadEncryption,
-                context.signal,
-            ),
+        await replyFailure(
+            { requestId, target: write.command.target },
+            "e2e_store_busy",
+            "The Computer encryption store is busy",
         );
         return true;
     };

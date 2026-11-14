@@ -72,24 +72,3 @@ export class AcpProcessCapacityLock {
         this.#locked = false;
     };
 }
-
-export async function waitForAcpProcessCapacity(completion: Promise<void>, signal: AbortSignal): Promise<void> {
-    signal.throwIfAborted();
-    const cancelled = Promise.withResolvers<void>();
-    const cancel = (): void => {
-        try {
-            signal.throwIfAborted();
-        } catch (error) {
-            cancelled.reject(error);
-        }
-    };
-    signal.addEventListener("abort", cancel, { once: true });
-    if (signal.aborted) {
-        cancel();
-    }
-    try {
-        await Promise.race([completion, cancelled.promise]);
-    } finally {
-        signal.removeEventListener("abort", cancel);
-    }
-}

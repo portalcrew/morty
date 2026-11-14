@@ -1,14 +1,4 @@
-import type {
-    NativeSessionTarget,
-    SessionConfigReadCommand,
-    SessionConfigureCommand,
-    SessionCreateCommand,
-    SessionPrepareCommand,
-    SessionReadyEvent,
-    SessionRenameCommand,
-    SessionRestoreCommand,
-    WorkspaceListCommand,
-} from "@morty-build/client/protocol";
+import type { NativeSessionTarget, SessionCreateCommand, SessionReadyEvent } from "@morty-build/client/protocol";
 import {
     type SESSION_CONFIG_READ_KIND,
     SESSION_CONFIG_READ_RESULT_KIND,
@@ -31,12 +21,10 @@ import { AccumulatingOperationMetrics } from "../../../infra/operation-metrics.t
 import type { PreparedSession, ResolveAgent, SessionRecovery } from "../../../session/api/session-api.ts";
 import { SessionError } from "../../../session/api/session-error.ts";
 import type { SessionManager } from "../../../session/manager/session-manager.ts";
-import type { NativeSessionService } from "../../../session/native/native-session-browser.ts";
 import { applyCompleteSessionConfiguration } from "../../../session/prompt/apply-session-configuration.ts";
 import { type HeldSession, resolveHeldSession } from "../../../session/record/held-session.ts";
 import { resolveSessionDirectory } from "../../../session/workspace/resolve-session-directory.ts";
 import type { WorkspaceDirectoryService } from "../../../session/workspace/workspace-directory.ts";
-import type { RelayConnectionDiagnostics } from "../../relay/diagnostics.ts";
 import type { CommandContext } from "../context.ts";
 import type { CommandHandler } from "../definition.ts";
 import { reportOperationFailure, send } from "../transport.ts";
@@ -100,13 +88,11 @@ async function prepareSession(
     });
 }
 
-async function executeWorkspaceList(
-    context: CommandContext,
-    command: WorkspaceListCommand,
-    directories: WorkspaceDirectoryService,
-    signal: AbortSignal,
-): Promise<void> {
-    const { socket, payloadEncryption } = context;
+export const handleWorkspaceList: CommandHandler<typeof WORKSPACE_LIST_KIND> = async (
+    context,
+    command,
+): Promise<void> => {
+    const { socket, payloadEncryption, directories, signal } = context;
     try {
         const listing =
             command.view === "metadata"
@@ -135,18 +121,13 @@ async function executeWorkspaceList(
     } catch (error) {
         await reportOperationFailure(context, command.requestId, undefined, error);
     }
-}
+};
 
-async function executeSessionPrepare(
-    context: CommandContext,
-    command: SessionPrepareCommand,
-    resolveAgent: ResolveAgent,
-    directories: WorkspaceDirectoryService,
-    sessions: SessionManager,
-    diagnostics: RelayConnectionDiagnostics,
-    signal: AbortSignal,
-): Promise<void> {
-    const { socket, payloadEncryption } = context;
+export const handleSessionPrepare: CommandHandler<typeof SESSION_PREPARE_KIND> = async (
+    context,
+    command,
+): Promise<void> => {
+    const { socket, payloadEncryption, resolveAgent, directories, sessions, diagnostics, signal } = context;
     const metrics = new AccumulatingOperationMetrics();
     try {
         const readyEvent = await prepareSession(
@@ -180,19 +161,14 @@ async function executeSessionPrepare(
         );
         await reportOperationFailure(context, command.requestId, command.target, error, metrics.snapshot());
     }
-}
+};
 
-async function executeSessionRestore(
-    context: CommandContext,
-    command: SessionRestoreCommand,
-    resolveAgent: ResolveAgent,
-    directories: WorkspaceDirectoryService,
-    sessions: SessionManager,
-    nativeSessions: NativeSessionService,
-    diagnostics: RelayConnectionDiagnostics,
-    signal: AbortSignal,
-): Promise<void> {
-    const { socket, payloadEncryption } = context;
+export const handleSessionRestore: CommandHandler<typeof SESSION_RESTORE_KIND> = async (
+    context,
+    command,
+): Promise<void> => {
+    const { socket, payloadEncryption, resolveAgent, directories, sessions, nativeSessions, diagnostics, signal } =
+        context;
     const metrics = new AccumulatingOperationMetrics();
     try {
         const entry = await metrics.measure("session-lookup", async () => {
@@ -240,18 +216,13 @@ async function executeSessionRestore(
         );
         await reportOperationFailure(context, command.requestId, undefined, error, metrics.snapshot());
     }
-}
+};
 
-async function executeSessionRename(
-    context: CommandContext,
-    command: SessionRenameCommand,
-    resolveAgent: ResolveAgent,
-    directories: WorkspaceDirectoryService,
-    sessions: SessionManager,
-    nativeSessions: NativeSessionService,
-    signal: AbortSignal,
-): Promise<void> {
-    const { socket, payloadEncryption } = context;
+export const handleSessionRename: CommandHandler<typeof SESSION_RENAME_KIND> = async (
+    context,
+    command,
+): Promise<void> => {
+    const { socket, payloadEncryption, resolveAgent, directories, sessions, nativeSessions, signal } = context;
     try {
         const [entry] = await nativeSessions.querySessions([command.target], signal);
         if (entry === undefined) {
@@ -287,17 +258,13 @@ async function executeSessionRename(
         }
         await reportOperationFailure(context, command.requestId, command.target, error);
     }
-}
+};
 
-async function executeSessionConfigure(
-    context: CommandContext,
-    command: SessionConfigureCommand,
-    resolveAgent: ResolveAgent,
-    directories: WorkspaceDirectoryService,
-    sessions: SessionManager,
-    signal: AbortSignal,
-): Promise<void> {
-    const { socket, payloadEncryption } = context;
+export const handleSessionConfigure: CommandHandler<typeof SESSION_CONFIGURE_KIND> = async (
+    context,
+    command,
+): Promise<void> => {
+    const { socket, payloadEncryption, resolveAgent, directories, sessions, signal } = context;
     try {
         const session = await resolveHeldSession(sessions, resolveAgent, directories, command.target, signal);
         const snapshot = await sessions.configureSession({
@@ -325,22 +292,6 @@ async function executeSessionConfigure(
         }
         await reportOperationFailure(context, command.requestId, command.target, error);
     }
-}
-
-export const handleWorkspaceList: CommandHandler<typeof WORKSPACE_LIST_KIND> = (context, message): Promise<void> => {
-    return executeWorkspaceList(context, message, context.directories, context.signal);
-};
-
-export const handleSessionPrepare: CommandHandler<typeof SESSION_PREPARE_KIND> = (context, message): Promise<void> => {
-    return executeSessionPrepare(
-        context,
-        message,
-        context.resolveAgent,
-        context.directories,
-        context.sessions,
-        context.diagnostics,
-        context.signal,
-    );
 };
 
 async function executeSessionCreate(context: CommandContext, command: SessionCreateCommand): Promise<void> {
@@ -439,56 +390,12 @@ export const handleSessionCreate: CommandHandler<typeof SESSION_CREATE_KIND> = (
     });
 };
 
-export const handleSessionConfigure: CommandHandler<typeof SESSION_CONFIGURE_KIND> = (
+export const handleSessionConfigRead: CommandHandler<typeof SESSION_CONFIG_READ_KIND> = async (
     context,
-    message,
+    command,
 ): Promise<void> => {
-    return executeSessionConfigure(
-        context,
-        message,
-        context.resolveAgent,
-        context.directories,
-        context.sessions,
-        context.signal,
-    );
-};
-
-export const handleSessionRestore: CommandHandler<typeof SESSION_RESTORE_KIND> = (context, message): Promise<void> => {
-    return executeSessionRestore(
-        context,
-        message,
-        context.resolveAgent,
-        context.directories,
-        context.sessions,
-        context.nativeSessions,
-        context.diagnostics,
-        context.signal,
-    );
-};
-
-export const handleSessionRename: CommandHandler<typeof SESSION_RENAME_KIND> = (context, message): Promise<void> => {
-    return executeSessionRename(
-        context,
-        message,
-        context.resolveAgent,
-        context.directories,
-        context.sessions,
-        context.nativeSessions,
-        context.signal,
-    );
-};
-
-async function executeSessionConfigRead(
-    context: CommandContext,
-    command: SessionConfigReadCommand,
-    resolveAgent: ResolveAgent,
-    directories: WorkspaceDirectoryService,
-    sessions: SessionManager,
-    nativeSessions: NativeSessionService,
-    diagnostics: RelayConnectionDiagnostics,
-    signal: AbortSignal,
-): Promise<void> {
-    const { socket, payloadEncryption } = context;
+    const { socket, payloadEncryption, resolveAgent, directories, sessions, nativeSessions, diagnostics, signal } =
+        context;
     const metrics = new AccumulatingOperationMetrics();
     try {
         const entry = await metrics.measure("session-lookup", async () => {
@@ -534,20 +441,4 @@ async function executeSessionConfigRead(
         );
         await reportOperationFailure(context, command.requestId, command.target, error, metrics.snapshot());
     }
-}
-
-export const handleSessionConfigRead: CommandHandler<typeof SESSION_CONFIG_READ_KIND> = (
-    context,
-    message,
-): Promise<void> => {
-    return executeSessionConfigRead(
-        context,
-        message,
-        context.resolveAgent,
-        context.directories,
-        context.sessions,
-        context.nativeSessions,
-        context.diagnostics,
-        context.signal,
-    );
 };

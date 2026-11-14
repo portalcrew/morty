@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { decodeSessionReadyEvent, type SessionReadyEvent } from "@morty-build/client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import type { SessionCreationTable } from "../../storage/session/session-creation-table.ts";
+import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
 
 /** Durable operation identity survives response loss without inventing a Session identity. */
 export class SessionCreations {
@@ -30,7 +31,7 @@ export class SessionCreations {
             throw new AcpExecutionError("The creation operation has different inputs", {}, "idempotency_conflict");
         }
         if (running !== undefined) {
-            return this.#wait(running.result, signal);
+            return waitForSharedOperation(running.result, signal);
         }
         if (prior !== undefined) {
             return Promise.resolve(decodeSessionReadyEvent(prior.resultJson));
@@ -63,15 +64,6 @@ export class SessionCreations {
             }
         });
         this.#running.set(operationId, { hash, result });
-        return await this.#wait(result, signal);
+        return await waitForSharedOperation(result, signal);
     };
-
-    async #wait(result: Promise<SessionReadyEvent>, signal: AbortSignal): Promise<SessionReadyEvent> {
-        signal.throwIfAborted();
-        return await new Promise((resolve, reject) => {
-            const aborted = () => reject(signal.reason);
-            signal.addEventListener("abort", aborted, { once: true });
-            void result.then(resolve, reject).finally(() => signal.removeEventListener("abort", aborted));
-        });
-    }
 }

@@ -1,6 +1,4 @@
 import {
-    type decodeSessionHistoryPageLoad,
-    type decodeSessionPreviewHistoryPageLoad,
     ENCRYPTED_MESSAGE_MAX_PLAINTEXT_BYTES,
     ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     type NativeSessionEvents,
@@ -13,15 +11,9 @@ import {
     sessionPreviewHistoryPageLoadedCodec,
 } from "@morty-build/client/protocol";
 import { operationErrorCode } from "../../../infra/operation-error.ts";
-import type { ResolveAgent } from "../../../session/api/session-api.ts";
 import { SessionError } from "../../../session/api/session-error.ts";
 import type { SessionEventPage } from "../../../session/history/session-event-store.ts";
-import type { SessionManager } from "../../../session/manager/session-manager.ts";
-import type { NativeSessionService } from "../../../session/native/native-session-browser.ts";
 import { resolveSessionDirectory } from "../../../session/workspace/resolve-session-directory.ts";
-import type { WorkspaceDirectoryService } from "../../../session/workspace/workspace-directory.ts";
-import type { RelayConnectionDiagnostics } from "../../relay/diagnostics.ts";
-import type { CommandContext } from "../context.ts";
 import type { CommandHandler } from "../definition.ts";
 import { reportOperationFailure, send } from "../transport.ts";
 
@@ -118,17 +110,12 @@ async function loadHistoryPage(
     };
 }
 
-async function executeSessionHistoryPageLoad(
-    context: CommandContext,
-    command: ReturnType<typeof decodeSessionHistoryPageLoad>,
-    resolveAgent: ResolveAgent,
-    directories: WorkspaceDirectoryService,
-    diagnostics: RelayConnectionDiagnostics,
-    sessions: SessionManager,
-    nativeSessions: NativeSessionService,
-    signal: AbortSignal,
-): Promise<void> {
-    const { socket, payloadEncryption } = context;
+export const handleSessionHistoryPageLoad: CommandHandler<typeof SESSION_HISTORY_PAGE_LOAD_KIND> = async (
+    context,
+    command,
+): Promise<void> => {
+    const { socket, payloadEncryption, resolveAgent, directories, diagnostics, sessions, nativeSessions, signal } =
+        context;
     let harness: string | undefined;
     try {
         const [entry] = await nativeSessions.querySessions([command.target], signal);
@@ -181,18 +168,13 @@ async function executeSessionHistoryPageLoad(
             await reportOperationFailure(context, command.requestId, command.target, error);
         }
     }
-}
+};
 
-async function executeSessionPreviewHistoryPageLoad(
-    context: CommandContext,
-    command: ReturnType<typeof decodeSessionPreviewHistoryPageLoad>,
-    resolveAgent: ResolveAgent,
-    directories: WorkspaceDirectoryService,
-    diagnostics: RelayConnectionDiagnostics,
-    nativeSessions: NativeSessionService,
-    signal: AbortSignal,
-): Promise<void> {
-    const { socket, payloadEncryption } = context;
+export const handlePreviewHistoryPageLoad: CommandHandler<typeof SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND> = async (
+    context,
+    command,
+): Promise<void> => {
+    const { socket, payloadEncryption, resolveAgent, directories, diagnostics, nativeSessions, signal } = context;
     try {
         const resolved = await resolveSessionDirectory(directories, command.directory, signal);
         const loadOptions = {
@@ -240,35 +222,4 @@ async function executeSessionPreviewHistoryPageLoad(
             await reportOperationFailure(context, command.requestId, command.target, error);
         }
     }
-}
-
-export const handleSessionHistoryPageLoad: CommandHandler<typeof SESSION_HISTORY_PAGE_LOAD_KIND> = (
-    context,
-    message,
-): Promise<void> => {
-    return executeSessionHistoryPageLoad(
-        context,
-        message,
-        context.resolveAgent,
-        context.directories,
-        context.diagnostics,
-        context.sessions,
-        context.nativeSessions,
-        context.signal,
-    );
-};
-
-export const handlePreviewHistoryPageLoad: CommandHandler<typeof SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND> = (
-    context,
-    message,
-): Promise<void> => {
-    return executeSessionPreviewHistoryPageLoad(
-        context,
-        message,
-        context.resolveAgent,
-        context.directories,
-        context.diagnostics,
-        context.nativeSessions,
-        context.signal,
-    );
 };

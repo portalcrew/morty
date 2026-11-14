@@ -3,10 +3,9 @@ import {
     decodeRelayToDaemonMessage,
     fileFailedEventCodec,
     readUndecodedRequestAddress,
-    sessionOperationFailedEventCodec,
 } from "@morty-build/client/protocol";
 import type { CommandContext } from "../context.ts";
-import { send } from "../transport.ts";
+import { replyFailure, send } from "../transport.ts";
 
 /** Answers only after authentication succeeds but the replay claim cannot be admitted. */
 export async function reportAuthenticatedCapacity(
@@ -75,17 +74,12 @@ export async function reportAuthenticatedCapacity(
         case "session.rename":
         case "session.restore":
         case "workspace.list":
-            send(
-                socket,
-                await sessionOperationFailedEventCodec.encode(
-                    {
-                        kind: "session.operation.failed",
-                        ...reply,
-                        ...(address.target === undefined ? {} : { target: address.target }),
-                    },
-                    payloadEncryption,
-                    deadline,
-                ),
+            await replyFailure(
+                { socket, payloadEncryption, signal },
+                reply.requestId,
+                address.target,
+                reply.code,
+                reply.message,
             );
             return true;
         default:

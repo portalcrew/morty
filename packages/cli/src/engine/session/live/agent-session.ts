@@ -30,6 +30,7 @@ import { unsupportedSessionCapabilities } from "../../acp/protocol/session-capab
 import type { OperationMetrics } from "../../infra/operation-metrics.ts";
 import { SerialTaskQueue } from "../../util/serial-task-queue.ts";
 import { recordsEqual, truncate } from "../../util/value-utils.ts";
+import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
 import { promptCompletion, promptEnd } from "../api/prompt-end.ts";
 import {
     type ElicitationResponseOptions,
@@ -49,7 +50,6 @@ import {
 import type { SessionEventPage } from "../history/session-event-store.ts";
 import { HistoryReplayCapture } from "../history/session-history.ts";
 import { SessionInteractions } from "../interaction/session-interactions.ts";
-import { waitForSharedOperation } from "../manager/operation-drain.ts";
 import { type SessionStore, StoredSession } from "../record/session-store.ts";
 import type { SettledTurn } from "../turn/execution-receipts.ts";
 import { configurationRevision } from "./configuration-revision.ts";
