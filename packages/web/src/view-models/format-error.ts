@@ -4,7 +4,7 @@ import { isApiConnectionError } from "../services/api/worker-api-transport.ts";
 import { isComputerConnectionFailure } from "../services/management/management-api.ts";
 
 /** The copy of a page that failed because the Computer is unreachable. */
-export const computerDisconnectedFailure = {
+const computerDisconnectedFailure = {
     detail: "Start your Morty Computer to reconnect, then try again.",
     title: "Your Morty Computer is disconnected.",
 } as const;
@@ -37,6 +37,24 @@ function splitFailureMessage(
         return undefined;
     }
     return { title: sentence.replace(/[.!?]$/u, ""), content };
+}
+
+/** What a page that failed to load shows: the Computer being unreachable reads as such, any other failure as an error. */
+export type LoadFailureCopy = {
+    readonly kind: "disconnected" | "error";
+    readonly title: string;
+    readonly content: string;
+};
+
+export function describeLoadFailure(failure: PageFailure, fallbackTitle: string): LoadFailureCopy {
+    if (failure.kind === "computer-disconnected") {
+        return {
+            kind: "disconnected",
+            title: computerDisconnectedFailure.title,
+            content: computerDisconnectedFailure.detail,
+        };
+    }
+    return { kind: "error", ...describePageFailure(failure.message, fallbackTitle) };
 }
 
 export function describePageFailure(

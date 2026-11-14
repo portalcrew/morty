@@ -50,7 +50,7 @@ import {
     conversationReadPending,
     pendingConversationPresentation,
 } from "../../view-models/chat/pending-conversation-presentation.ts";
-import type { PageFailure } from "../../view-models/format-error.ts";
+import { describeLoadFailure, type PageFailure } from "../../view-models/format-error.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
 import { OnlineComputerAlternative } from "./computer-switcher.tsx";
@@ -72,7 +72,7 @@ function PreSessionFailure({
 }) {
     return (
         <div className="m-auto grid justify-items-center gap-4 text-center">
-            <SessionLoadFailure failure={failure} />
+            <SessionLoadFailure copy={describeLoadFailure(failure, "Couldn't load this chat")} />
             {/* The recovery and report buttons form one group: stacked, with the group's 8px rhythm. */}
             <div className="grid justify-items-center gap-2">
                 {action}

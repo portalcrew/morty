@@ -74,6 +74,7 @@ import {
     sessionRenderItems,
 } from "../../view-models/chat/session-render-items.ts";
 import { sessionTitle } from "../../view-models/chat/session-titles-store.ts";
+import { describeLoadFailure } from "../../view-models/format-error.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
 import { ChatMessageQueue } from "./chat-message-queue.tsx";
 import { FilePreview } from "./file-preview.tsx";
@@ -693,7 +694,10 @@ function MortySessionPaneBody({
                                     >
                                         <div className="grid w-full max-w-lg justify-items-center gap-4 text-center">
                                             <SessionLoadFailure
-                                                failure={{ kind: "message", message: model.connection.message }}
+                                                copy={describeLoadFailure(
+                                                    { kind: "message", message: model.connection.message },
+                                                    "Couldn't load this chat",
+                                                )}
                                             />
                                             <Button onClick={() => pane.store.getState().retryNow()} variant="outline">
                                                 Reconnect
@@ -1011,7 +1015,8 @@ function MortySessionPaneBody({
                                 viewportLabel="Pending Agent requests"
                             >
                                 <SessionInteractionCards
-                                    answerDrafts={interactions.answerDrafts}
+                                    fieldValues={interactions.fieldValues}
+                                    permissionPresentations={interactions.permissionPresentations}
                                     requiredNotices={interactions.requiredNotices}
                                     onElicitationAccept={(elicitation) =>
                                         interactionModel.acceptElicitation(elicitation, pane.operationsSignal())
