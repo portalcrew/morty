@@ -13,7 +13,7 @@ import { AccessNotice, SidebarAccessNoticeCard, sidebarAccessNoticeActionClassNa
 /** This browser's access card, included in the carousel only while that card has something to say. */
 type SidebarAccessNotice = {
     readonly computerName: string;
-    readonly onOpenDevices: (() => void) | null;
+    readonly onOpenDevices: () => void;
     readonly store: StoreApi<AccessExpiryStore>;
 };
 
@@ -25,7 +25,7 @@ function NewDeviceCard({
 }: {
     readonly acknowledge: () => void;
     readonly device: LinkedDevice;
-    readonly onReviewDevices: (() => void) | null;
+    readonly onReviewDevices: () => void;
 }) {
     return (
         <SidebarAccessNoticeCard
@@ -34,25 +34,19 @@ function NewDeviceCard({
                     <Button className={sidebarAccessNoticeActionClassName} onClick={acknowledge} size="xs">
                         Got it
                     </Button>
-                    {onReviewDevices !== null && (
-                        <Button
-                            className={sidebarAccessNoticeActionClassName}
-                            onClick={onReviewDevices}
-                            size="xs"
-                            variant="outline"
-                        >
-                            Devices
-                        </Button>
-                    )}
+                    <Button
+                        className={sidebarAccessNoticeActionClassName}
+                        onClick={onReviewDevices}
+                        size="xs"
+                        variant="outline"
+                    >
+                        Devices
+                    </Button>
                 </>
             }
             body={<DeviceSummary device={describeLinkedDevice(device, "notice")} layout="notice" />}
             bodyClassName="max-sm:hidden"
-            detail={
-                onReviewDevices === null
-                    ? "Not you? Ask your agent to revoke all link access."
-                    : "Not you? Disconnect it in Devices."
-            }
+            detail="Not you? Disconnect it in Devices."
             detailClassName="max-sm:hidden"
             icon={ShieldAlert}
             label="New device connected"
@@ -62,7 +56,7 @@ function NewDeviceCard({
     );
 }
 
-function deviceCards(acknowledge: () => void, joined: readonly LinkedDevice[], onReviewDevices: (() => void) | null) {
+function deviceCards(acknowledge: () => void, joined: readonly LinkedDevice[], onReviewDevices: () => void) {
     return joined.map((device) => (
         <NewDeviceCard acknowledge={acknowledge} device={device} key={device.id} onReviewDevices={onReviewDevices} />
     ));
@@ -74,30 +68,19 @@ function AccessNoticeCard({ access }: { readonly access: SidebarAccessNotice }) 
     );
 }
 
-/** New-device cards when this page has no access term. */
-function DeviceNotices({
-    onReviewDevices,
-    store,
-}: {
-    readonly onReviewDevices: (() => void) | null;
-    readonly store: StoreApi<LinkedDevicesStore>;
-}) {
-    const { state, acknowledge } = useStore(store);
-    return (
-        <SidebarAccessNoticeCarousel>
-            {deviceCards(acknowledge, newDevicesSince(state.devices, state.seenAt), onReviewDevices)}
-        </SidebarAccessNoticeCarousel>
-    );
-}
-
-/** Subscribes here so the access card joins the carousel only while it has something to say. */
-function DeviceAndAccessNotices({
+/**
+ * Each device that joined since this browser last looked is its own card. The access notice, if any, follows those
+ * cards in the same carousel. Subscribes here so the access card joins only while it has something to say.
+ */
+export function NewDeviceNotice({
     access,
     onReviewDevices,
     store,
 }: {
+    /** This browser's access card. */
     readonly access: SidebarAccessNotice;
-    readonly onReviewDevices: (() => void) | null;
+    /** Opens the devices with access, where any of them can be disconnected. */
+    readonly onReviewDevices: () => void;
     readonly store: StoreApi<LinkedDevicesStore>;
 }) {
     const { state, acknowledge } = useStore(store);
@@ -114,39 +97,4 @@ function DeviceAndAccessNotices({
             {shown !== null ? <AccessNoticeCard access={access} /> : null}
         </SidebarAccessNoticeCarousel>
     );
-}
-
-function AccessOnlyNotices({ access }: { readonly access: SidebarAccessNotice }) {
-    const shown = visibleAccessNotice(useStore(access.store, (model) => model.state));
-    if (shown === null) {
-        return null;
-    }
-    return <AccessNoticeCard access={access} />;
-}
-
-/**
- * Each device that joined since this browser last looked is its own card. The access notice, if any, follows those
- * cards in the same carousel.
- */
-export function NewDeviceNotice({
-    access,
-    onReviewDevices,
-    store,
-}: {
-    /** This browser's access card. Null when this page has no access term to tell. */
-    readonly access: SidebarAccessNotice | null;
-    /** Opens the devices with access, where any of them can be disconnected; null when this page cannot. */
-    readonly onReviewDevices: (() => void) | null;
-    readonly store: StoreApi<LinkedDevicesStore> | null;
-}) {
-    if (store !== null && access !== null) {
-        return <DeviceAndAccessNotices access={access} onReviewDevices={onReviewDevices} store={store} />;
-    }
-    if (store !== null) {
-        return <DeviceNotices onReviewDevices={onReviewDevices} store={store} />;
-    }
-    if (access !== null) {
-        return <AccessOnlyNotices access={access} />;
-    }
-    return null;
 }

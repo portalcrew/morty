@@ -393,33 +393,6 @@ function ManagedSessionDirectoryList({
     );
 }
 
-function ConnectionStatus({
-    status,
-    className,
-    testId,
-}: {
-    readonly status: BotConnectionStatus;
-    readonly className?: string;
-    readonly testId?: string;
-}) {
-    const dot =
-        status.kind === "connected"
-            ? "bg-success"
-            : status.kind === "connecting"
-              ? "animate-pulse bg-amber-500 motion-reduce:animate-none"
-              : "bg-muted-foreground/60";
-    return (
-        <div
-            className={cn("flex shrink-0 items-center gap-2 py-0.5", className)}
-            data-testid={testId}
-            data-connection-status={status.kind}
-        >
-            <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${dot}`} />
-            <span className="min-w-0 truncate text-xs font-normal text-morty-text-3">{status.label}</span>
-        </div>
-    );
-}
-
 export function ConversationSidebar({
     computerId,
     connectionStatus,
@@ -523,27 +496,22 @@ export function ConversationSidebar({
         operationsSignal: workspace.operationsSignal,
     };
     const unreadReplies = hasUnreadConversation(sessions, sessionStatuses, sessionListProps.openPane);
-    const accessNotices =
-        workspace.linkedDevices !== null || workspace.accessExpiry !== null ? (
-            <SidebarAccessNoticeHost
-                attachAccess={workspace.accessExpiry?.getState().onAttach ?? null}
-                attachLinkedDevices={workspace.linkedDevices?.getState().onAttach ?? null}
-            >
-                <NewDeviceNotice
-                    access={
-                        workspace.accessExpiry === null
-                            ? null
-                            : {
-                                  computerName,
-                                  onOpenDevices: deviceAccess?.getState().open ?? null,
-                                  store: workspace.accessExpiry,
-                              }
-                    }
-                    onReviewDevices={deviceAccess?.getState().open ?? null}
-                    store={workspace.linkedDevices}
-                />
-            </SidebarAccessNoticeHost>
-        ) : null;
+    const accessNotices = (
+        <SidebarAccessNoticeHost
+            attachAccess={workspace.accessExpiry.getState().onAttach}
+            attachLinkedDevices={workspace.linkedDevices.getState().onAttach}
+        >
+            <NewDeviceNotice
+                access={{
+                    computerName,
+                    onOpenDevices: deviceAccess.getState().open,
+                    store: workspace.accessExpiry,
+                }}
+                onReviewDevices={deviceAccess.getState().open}
+                store={workspace.linkedDevices}
+            />
+        </SidebarAccessNoticeHost>
+    );
     return (
         <DesktopChatLayout>
             {(desktop) => (
@@ -562,7 +530,6 @@ export function ConversationSidebar({
                                                 className={cn(
                                                     "relative z-[1] flex w-fit shrink-0 items-center gap-2 sm:w-full sm:pl-1",
                                                     desktop &&
-                                                        workspace.computers !== null &&
                                                         // The computer switcher bleeds left with a negative margin; this keeps its
                                                         // mark on the same 16px optical gutter the sidebar had before the
                                                         // outer padding tightened to 10px.
@@ -583,15 +550,13 @@ export function ConversationSidebar({
                                                             dialogs.getState().closeMobilePanel();
                                                         } else {
                                                             dialogs.getState().openMobileNav();
-                                                            if (workspace.computers !== null) {
-                                                                void workspace.computers.refresh();
-                                                            }
+                                                            void workspace.computers.refresh();
                                                         }
                                                     }}
                                                 >
                                                     <MortyLogoMark size={24} />
                                                 </button>
-                                                {desktop && workspace.computers !== null ? (
+                                                {desktop ? (
                                                     <>
                                                         <h1 className="sr-only">Morty</h1>
                                                         {/* The computer scopes everything in the sidebar, so it heads it. */}
@@ -653,7 +618,7 @@ export function ConversationSidebar({
                                             <div
                                                 className={cn(
                                                     "flex min-w-0 shrink items-center justify-end gap-0.5",
-                                                    workspace.computers !== null && "sm:hidden",
+                                                    "sm:hidden",
                                                 )}
                                             >
                                                 <Tooltip.Provider delayDuration={150}>
@@ -688,13 +653,6 @@ export function ConversationSidebar({
                                                         </div>
                                                     )}
                                                 </Tooltip.Provider>
-                                                {workspace.computers === null && (
-                                                    <ConnectionStatus
-                                                        className="max-sm:hidden pr-[10px]"
-                                                        status={connectionStatus}
-                                                        testId={dataTestId.botConnectionStatus}
-                                                    />
-                                                )}
                                             </div>
                                         </header>
                                         {!desktop ? <div className="relative z-[115] pb-3">{accessNotices}</div> : null}
@@ -809,7 +767,7 @@ export function ConversationSidebar({
                                                     viewportClassName="h-full max-h-[inherit]"
                                                 >
                                                     <div className="flex w-full min-w-0 flex-col gap-0 pt-1 sm:mt-auto sm:flex-row sm:items-center sm:justify-between sm:gap-1 sm:pt-3">
-                                                        {!desktop && workspace.computers !== null ? (
+                                                        {!desktop ? (
                                                             <div className={mobileDrawerCardClassName}>
                                                                 <ComputerSwitcher
                                                                     context={executionContext}
@@ -828,7 +786,7 @@ export function ConversationSidebar({
                                                                     mobileDrawerCardClassName,
                                                                     mobileDrawerOptionDividerClassName,
                                                                     "sm:hidden",
-                                                                    workspace.computers !== null && "mt-4",
+                                                                    "mt-4",
                                                                 )}
                                                             >
                                                                 <SidebarSessionOption
@@ -853,21 +811,17 @@ export function ConversationSidebar({
                                                                     "mt-4 sm:hidden",
                                                                 )}
                                                             >
-                                                                {workspace.accessExpiry !== null && (
-                                                                    <AccessTerm
-                                                                        layout="card"
-                                                                        store={workspace.accessExpiry}
-                                                                    />
-                                                                )}
-                                                                {deviceAccess !== null && (
-                                                                    <SidebarSessionOption
-                                                                        disabled={access.state.kind === "loading"}
-                                                                        icon={MonitorSmartphone}
-                                                                        label="Devices"
-                                                                        variant="card"
-                                                                        onClick={deviceAccess.getState().open}
-                                                                    />
-                                                                )}
+                                                                <AccessTerm
+                                                                    layout="card"
+                                                                    store={workspace.accessExpiry}
+                                                                />
+                                                                <SidebarSessionOption
+                                                                    disabled={access.state.kind === "loading"}
+                                                                    icon={MonitorSmartphone}
+                                                                    label="Devices"
+                                                                    variant="card"
+                                                                    onClick={deviceAccess.getState().open}
+                                                                />
                                                                 <SidebarSessionOption
                                                                     disabled={access.state.kind === "loading"}
                                                                     icon={Wifi}
@@ -894,19 +848,17 @@ export function ConversationSidebar({
                                                         {desktop && access.state.kind !== "ended" ? (
                                                             <SidebarUserMenu
                                                                 header={
-                                                                    workspace.accessExpiry === null ? undefined : (
-                                                                        <AccessTerm
-                                                                            layout="menu"
-                                                                            store={workspace.accessExpiry}
-                                                                        />
-                                                                    )
+                                                                    <AccessTerm
+                                                                        layout="menu"
+                                                                        store={workspace.accessExpiry}
+                                                                    />
                                                                 }
                                                                 disabled={access.state.kind === "loading"}
                                                                 endAccessDisabled={
                                                                     access.state.kind === "loading" ||
                                                                     access.state.kind === "ending"
                                                                 }
-                                                                onOpenDevices={deviceAccess?.getState().open ?? null}
+                                                                onOpenDevices={deviceAccess.getState().open}
                                                                 onEndAccess={() => {
                                                                     void access.requestEnd(
                                                                         workspace.operationsSignal(),

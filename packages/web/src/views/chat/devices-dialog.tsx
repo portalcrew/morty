@@ -135,7 +135,7 @@ export function DevicesDialog({
     signal,
     store,
 }: {
-    readonly accessExpiry: StoreApi<AccessExpiryStore> | null;
+    readonly accessExpiry: StoreApi<AccessExpiryStore>;
     readonly computerName: string;
     /** The page's one list of the other devices with access. */
     readonly devices: StoreApi<LinkedDevicesStore>;
@@ -218,11 +218,7 @@ export function DevicesDialog({
                         <h3 className={dialogSectionTitleClassName}>Always here</h3>
                         <div className={deviceGroupCardClassName}>
                             <div className={deviceGroupRowClassName}>
-                                {accessExpiry === null ? (
-                                    <DeviceSummary device={{ name: "This browser", details: [] }} />
-                                ) : (
-                                    <ThisBrowser accessExpiry={accessExpiry} />
-                                )}
+                                <ThisBrowser accessExpiry={accessExpiry} />
                             </div>
                             <div className={cn(deviceGroupDividerClassName, deviceGroupRowClassName)}>
                                 <DeviceSummary

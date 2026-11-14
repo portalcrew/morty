@@ -136,7 +136,7 @@ function JoinedAccessNoticeCard({
     readonly computerName: string;
     readonly expiresAt: string;
     readonly onDismiss: () => void;
-    readonly onOpenDevices: (() => void) | null;
+    readonly onOpenDevices: () => void;
 }) {
     return (
         <SidebarAccessNoticeCard
@@ -145,16 +145,14 @@ function JoinedAccessNoticeCard({
                     <Button className={sidebarAccessNoticeActionClassName} onClick={onDismiss} size="xs">
                         Got it
                     </Button>
-                    {onOpenDevices !== null && (
-                        <Button
-                            className={sidebarAccessNoticeActionClassName}
-                            onClick={onOpenDevices}
-                            size="xs"
-                            variant="outline"
-                        >
-                            Devices
-                        </Button>
-                    )}
+                    <Button
+                        className={sidebarAccessNoticeActionClassName}
+                        onClick={onOpenDevices}
+                        size="xs"
+                        variant="outline"
+                    >
+                        Devices
+                    </Button>
                 </>
             }
             detail="Only devices you add can use your computer. See them, or disconnect any, in Devices."
@@ -200,8 +198,8 @@ export function AccessNotice({
     store,
 }: {
     readonly computerName: string;
-    /** Opens the devices with access; null when this page cannot list them. */
-    readonly onOpenDevices: (() => void) | null;
+    /** Opens the devices with access. */
+    readonly onOpenDevices: () => void;
     readonly store: StoreApi<AccessExpiryStore>;
 }) {
     const { state, dismiss } = useStore(store);

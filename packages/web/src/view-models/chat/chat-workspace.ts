@@ -2,10 +2,10 @@ import { NativeSessionMap, sameNativeSession } from "@morty-build/client/native-
 import type { NativeSessionTarget } from "@morty-build/client/protocol";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
-import type { IdentityTransfer, LinkedDevice, SharingTerms } from "../../services/identity/anonymous-identity-api.ts";
 import { encodeIdentityScope, type IdentityScope } from "../../services/identity/identity-scope-url.ts";
 import { rememberComputerName, rememberComputerVisit } from "../../services/identity/remembered-computers.ts";
 import type { Clock } from "../../services/time/clock.ts";
+import type { IdentityAccess } from "../authentication/identity-access.ts";
 import type { BugReportDialogStore } from "../bug-report-dialog-store.ts";
 import { reportApplicationError } from "../report-error.ts";
 import { type AccessExpiryStore, createAccessExpiryStore } from "./access-expiry-store.ts";
@@ -48,14 +48,14 @@ type WorkspacePane =
 type ChatWorkspacePane = { readonly kind: "none" } | { readonly kind: "open"; readonly model: SessionPaneModel };
 
 export interface ChatWorkspace {
-    readonly computers: ComputerSwitcherModel | null;
+    readonly computers: ComputerSwitcherModel;
     readonly accessNotice: string | null;
     /** The page's one list of the other devices with access, and when this browser last looked at it. */
-    readonly linkedDevices: StoreApi<LinkedDevicesStore> | null;
-    /** When this browser's access ends; null when the page cannot read its own access. */
-    readonly accessExpiry: StoreApi<AccessExpiryStore> | null;
-    /** The devices with access to this computer and the disconnections made from them; null when this page cannot. */
-    readonly deviceAccess: StoreApi<DeviceAccessStore> | null;
+    readonly linkedDevices: StoreApi<LinkedDevicesStore>;
+    /** When this browser's access ends. */
+    readonly accessExpiry: StoreApi<AccessExpiryStore>;
+    /** The devices with access to this computer and the disconnections made from them. */
+    readonly deviceAccess: StoreApi<DeviceAccessStore>;
     /** The chat API this workspace was composed with. */
     readonly requests: BotChatApi;
     /** The application-owned bug-report dialog state, flowing to entry points. */
@@ -128,22 +128,16 @@ export function createChatWorkspace(options: {
     readonly clock: Clock;
     /** Starts the page over once its Computer is paired again after revocation; see the home store's announcement. */
     readonly onComputerReplaced: () => void;
-    readonly rememberedIdentity?: IdentityScope;
-    readonly computers?: ComputerSwitcherModel;
-    readonly accessNotice?: string | null;
-    readonly entry?: "address" | "restore";
+    readonly rememberedIdentity: IdentityScope;
+    readonly computers: ComputerSwitcherModel;
+    readonly accessNotice: string | null;
+    readonly entry: "address" | "restore";
     readonly bugReportDialog: BugReportDialogStore;
     readonly computerId: string;
     readonly requests: BotChatApi;
-    readonly createTransfer?: ((terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>) | undefined;
-    readonly currentAccessToken?: ((signal: AbortSignal) => Promise<string>) | undefined;
-    readonly endRemoteAccess?: ((signal: AbortSignal) => Promise<void>) | undefined;
-    readonly accessExpiresAt?: ((signal: AbortSignal) => Promise<string | null>) | undefined;
-    readonly linkedDevices?: ((signal: AbortSignal) => Promise<readonly LinkedDevice[]>) | undefined;
-    readonly waitForLinkedDevicesChange?: ((signal: AbortSignal) => Promise<void>) | undefined;
-    readonly endOtherBrowserAccess?: ((signal: AbortSignal) => Promise<void>) | undefined;
-    readonly endDeviceAccess?: ((deviceId: string, signal: AbortSignal) => Promise<void>) | undefined;
-    readonly networkDiagnostics?: {
+    /** What this browser may do with its own access and the devices that share it. */
+    readonly access: IdentityAccess;
+    readonly networkDiagnostics: {
         readonly measureBrowserMorty: (signal: AbortSignal) => Promise<number>;
     };
 }): ChatWorkspace {
@@ -153,13 +147,9 @@ export function createChatWorkspace(options: {
     let initialVisitPending = true;
     const recordHome = () => {
         rememberedSessionTarget = null;
-        if (options.rememberedIdentity !== undefined) {
-            rememberComputerVisit(options.rememberedIdentity, options.clock.now(), { kind: "home" });
-        }
+        rememberComputerVisit(options.rememberedIdentity, options.clock.now(), { kind: "home" });
     };
-    const titles: SessionTitlesStore = createSessionTitlesStore(
-        options.rememberedIdentity === undefined ? null : encodeIdentityScope(options.rememberedIdentity),
-    );
+    const titles: SessionTitlesStore = createSessionTitlesStore(encodeIdentityScope(options.rememberedIdentity));
     const computer = createComputerStatusStore(navigator.onLine);
     const follower = createComputerFollower({
         requests,
@@ -178,9 +168,7 @@ export function createChatWorkspace(options: {
                     recordHome();
                 }
             }
-            if (options.rememberedIdentity !== undefined) {
-                rememberComputerName(options.rememberedIdentity, configuration.computer.computerName);
-            }
+            rememberComputerName(options.rememberedIdentity, configuration.computer.computerName);
             computerRecovery.observe(configuration.computer.online, observation);
         },
         onEntered: (outcome) => home.getState().entryAnswered(outcome),
@@ -212,7 +200,7 @@ export function createChatWorkspace(options: {
         onWaitingForComputer: () => computerRecovery.failed(),
         createId: () => crypto.randomUUID(),
         navigation: historyNavigation(recordHome),
-        entry: options.entry ?? "address",
+        entry: options.entry,
         onDraftSelected: () => enterDraft(),
         onRestart: () => startOver(),
         // A selection chosen while the Computer's entry failed starts the page over, as Reconnect would.
@@ -275,38 +263,18 @@ export function createChatWorkspace(options: {
             signal: () => operationsLifetime.signal,
             requests,
             computer: () => computer.getState().computerConfiguration?.computer ?? null,
-            createTransfer: (terms, signal) => {
-                if (options.createTransfer === undefined) {
-                    return Promise.reject(new Error("Identity sharing is unavailable."));
-                }
-                return options.createTransfer(terms, signal);
-            },
+            createTransfer: options.access.createTransfer,
             onOpenSession: (session) => {
                 home.getState().openManaged(session.target);
             },
             onOpenedSession: () => startDirectoryLoad(),
         }),
         remoteAccess: createRemoteAccessStore({
-            currentAccessToken: (signal) => {
-                if (options.currentAccessToken === undefined) {
-                    return Promise.reject(new Error("Remote access is unavailable."));
-                }
-                return options.currentAccessToken(signal);
-            },
-            endRemoteAccess: (signal) => {
-                if (options.endRemoteAccess === undefined) {
-                    return Promise.reject(new Error("Remote access is unavailable."));
-                }
-                return options.endRemoteAccess(signal);
-            },
+            currentAccessToken: options.access.currentAccessToken,
+            endRemoteAccess: options.access.endRemoteAccess,
         }),
         networkDiagnostic: createNetworkDiagnosticStore({
-            measureBrowserMorty: (signal) => {
-                if (options.networkDiagnostics === undefined) {
-                    return Promise.reject(new Error("Network diagnostics are unavailable."));
-                }
-                return options.networkDiagnostics.measureBrowserMorty(signal);
-            },
+            measureBrowserMorty: options.networkDiagnostics.measureBrowserMorty,
             measureServerHops: (signal) => requests.networkDiagnostic(signal),
         }),
     };
@@ -458,10 +426,7 @@ export function createChatWorkspace(options: {
         // the previous pane accumulated.
         closePane();
         const sessionTarget = selection.session.target;
-        if (
-            options.rememberedIdentity !== undefined &&
-            (rememberedSessionTarget === null || !sameNativeSession(rememberedSessionTarget, sessionTarget))
-        ) {
+        if (rememberedSessionTarget === null || !sameNativeSession(rememberedSessionTarget, sessionTarget)) {
             rememberComputerVisit(
                 options.rememberedIdentity,
                 options.clock.now(),
@@ -497,56 +462,43 @@ export function createChatWorkspace(options: {
         model.start();
     };
 
-    const linkedDevices =
-        options.linkedDevices === undefined || options.waitForLinkedDevicesChange === undefined
-            ? null
-            : createLinkedDevicesStore({
-                  computerId: options.computerId,
-                  linkedDevices: options.linkedDevices,
-                  waitForChange: options.waitForLinkedDevicesChange,
-              });
-    const endOtherBrowserAccess = options.endOtherBrowserAccess;
-    const endDeviceAccess = options.endDeviceAccess;
-    const accessExpiry =
-        options.accessExpiresAt === undefined
-            ? null
-            : createAccessExpiryStore({
-                  computerId: options.computerId,
-                  accessExpiresAt: options.accessExpiresAt,
-                  clock: options.clock,
-              });
+    const linkedDevices = createLinkedDevicesStore({
+        computerId: options.computerId,
+        linkedDevices: options.access.linkedDevices,
+        waitForChange: options.access.waitForLinkedDevicesChange,
+    });
+    const accessExpiry = createAccessExpiryStore({
+        computerId: options.computerId,
+        accessExpiresAt: options.access.accessExpiresAt,
+        clock: options.clock,
+    });
     return {
-        computers: options.computers ?? null,
-        accessNotice: options.accessNotice ?? null,
+        computers: options.computers,
+        accessNotice: options.accessNotice,
         linkedDevices,
         accessExpiry,
-        deviceAccess:
-            endOtherBrowserAccess === undefined || endDeviceAccess === undefined || linkedDevices === null
-                ? null
-                : createDeviceAccessStore({
-                      endDeviceAccess,
-                      endOtherBrowserAccess,
-                      readDevices: linkedDevices.getState().refresh,
-                  }),
+        deviceAccess: createDeviceAccessStore({
+            endDeviceAccess: options.access.endDeviceAccess,
+            endOtherBrowserAccess: options.access.endOtherBrowserAccess,
+            readDevices: linkedDevices.getState().refresh,
+        }),
         recordUserActivity: () => {
-            if (options.rememberedIdentity !== undefined) {
-                const selection = home.getState().selection;
-                const destination =
-                    selection.kind === "ready"
-                        ? {
-                              kind: "session" as const,
-                              ...selection.session.target,
-                          }
-                        : selection.kind === "draft"
-                          ? { kind: "home" as const }
-                          : undefined;
-                rememberComputerVisit(
-                    options.rememberedIdentity,
-                    options.clock.now(),
-                    destination,
-                    selection.kind === "ready" ? selection.session.ready.directoryLabel : undefined,
-                );
-            }
+            const selection = home.getState().selection;
+            const destination =
+                selection.kind === "ready"
+                    ? {
+                          kind: "session" as const,
+                          ...selection.session.target,
+                      }
+                    : selection.kind === "draft"
+                      ? { kind: "home" as const }
+                      : undefined;
+            rememberComputerVisit(
+                options.rememberedIdentity,
+                options.clock.now(),
+                destination,
+                selection.kind === "ready" ? selection.session.ready.directoryLabel : undefined,
+            );
         },
         start: () => {
             void directory
@@ -557,7 +509,7 @@ export function createChatWorkspace(options: {
                         reportApplicationError(cause, "conversation-calendar");
                     }
                 });
-            void options.computers?.refresh();
+            void options.computers.refresh();
             if (home.getState().selection.kind === "draft") {
                 enterDraft();
             }
@@ -588,7 +540,7 @@ export function createChatWorkspace(options: {
         chatSignal: () => chatLifetime.signal,
         operationsSignal: () => operationsLifetime.signal,
         dispose: () => {
-            options.computers?.dispose();
+            options.computers.dispose();
             sidebar.dialogs.getState().discardNativeDialog();
             sidebar.dialogs.getState().closeSharing();
             home.getState().composerAttachments.getState().clear();
