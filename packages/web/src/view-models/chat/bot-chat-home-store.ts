@@ -15,7 +15,7 @@ import {
     newConversationUnsentMessagesEntry,
 } from "../../services/session-storage/central-session-storage.ts";
 import type { Clock } from "../../services/time/clock.ts";
-import { formatError } from "../format-error.ts";
+import { formatError, type PageFailure } from "../format-error.ts";
 import { type ComposerAttachmentStore, createComposerAttachmentStore } from "./composer-attachment-store.ts";
 import { returnToComposer } from "./composer-return.ts";
 import { COMPUTER_REVOKED_MESSAGE, type ComputerEntryOutcome } from "./computer-follower.ts";
@@ -58,6 +58,23 @@ export function homeWaitsForComputer(
         (computer.entry.kind === "failed" && computer.entry.failure === "computer") ||
         (selection.kind === "failed" && selection.failure === "computer")
     );
+}
+
+/**
+ * What the page shows when it failed before a Session opened: the Session's own load failure first, otherwise the
+ * Computer entry's. Either one failing because the Computer is unreachable reads as the Computer being disconnected.
+ */
+export function preSessionFailure(
+    home: Pick<BotChatHomeStore, "selection">["selection"],
+    entry: ComputerStatusStore["entry"],
+): PageFailure {
+    const failed = home.kind === "failed" ? home : entry.kind === "failed" ? entry : null;
+    if (failed === null) {
+        return { kind: "message", message: "Chat is unavailable." };
+    }
+    return failed.failure === "computer"
+        ? { kind: "computer-disconnected" }
+        : { kind: "message", message: failed.message };
 }
 
 export interface BotChatNavigation {
