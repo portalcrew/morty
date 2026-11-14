@@ -1,9 +1,22 @@
+import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
+
 type Resource<P> = { readonly kind: "empty" } | { readonly kind: "ready"; readonly runtime: P };
+
+/**
+ * A start in progress, which no one requester owns. Each requester waits for it under its own signal, and the start is
+ * aborted only once the last of them has left, so the first requester's cancellation never fails the others.
+ */
+export interface PendingStart<P> {
+    /** Waits for the start; leaving early, by `signal`, only ends this requester's wait. */
+    readonly wait: (signal: AbortSignal) => Promise<P>;
+    /** The start's own outcome, for work that must see it end whoever else has left. */
+    readonly completion: Promise<P>;
+}
 type Lifecycle<P> =
     | Resource<P>
     | {
           readonly kind: "preparing";
-          readonly completion: Promise<P>;
+          readonly start: PendingStart<P>;
           readonly resource: Resource<P>;
       };
 interface Entry<P> {
@@ -43,9 +56,9 @@ export class RetainedAgentProcesses<P, Key = string> {
         const resource = this.#resource(this.#entry(id));
         return resource.kind === "ready" ? resource.runtime : undefined;
     };
-    readonly pending = (id: Key): Promise<P> | undefined => {
+    readonly pending = (id: Key): PendingStart<P> | undefined => {
         const state = this.#entry(id).lifecycle;
-        return state.kind === "preparing" ? state.completion : undefined;
+        return state.kind === "preparing" ? state.start : undefined;
     };
     readonly isBusy = (id: Key): boolean => {
         const entry = this.#entry(id);
@@ -81,34 +94,53 @@ export class RetainedAgentProcesses<P, Key = string> {
         }
         return result;
     };
-    readonly prepare = (id: Key, start: () => Promise<P>): Promise<P> => {
+    /** Starts, or joins, the start for `id`; `signal` ends only this requester's wait while others still wait. */
+    readonly prepare = (id: Key, start: (signal: AbortSignal) => Promise<P>, signal: AbortSignal): Promise<P> => {
         const pending = this.pending(id);
         if (pending !== undefined) {
-            return pending;
+            return pending.wait(signal);
         }
         const completion = Promise.withResolvers<P>();
+        const controller = new AbortController();
+        let waiting = 0;
+        let settled = false;
+        const started: PendingStart<P> = {
+            completion: completion.promise,
+            wait: async (waiter) => {
+                waiting += 1;
+                try {
+                    waiter.throwIfAborted();
+                    return await waitForSharedOperation(completion.promise, waiter);
+                } finally {
+                    waiting -= 1;
+                    if (waiting === 0 && !settled) {
+                        controller.abort(waiter.reason);
+                    }
+                }
+            },
+        };
         const entry = this.#entry(id);
         this.#write(id, {
             ...entry,
-            lifecycle: {
-                kind: "preparing",
-                completion: completion.promise,
-                resource: this.#resource(entry),
-            },
+            lifecycle: { kind: "preparing", start: started, resource: this.#resource(entry) },
         });
         const run = async (): Promise<P> => {
             try {
-                return await start();
+                return await start(controller.signal);
             } finally {
+                settled = true;
                 const current = this.#entry(id);
-                if (current.lifecycle.kind === "preparing" && current.lifecycle.completion === completion.promise) {
+                if (current.lifecycle.kind === "preparing" && current.lifecycle.start === started) {
                     this.#write(id, { ...current, lifecycle: current.lifecycle.resource });
                 }
                 this.#events.changed();
             }
         };
+        // The requester that began the start is its first waiter, registered before the start can end or be abandoned.
+        const first = started.wait(signal);
+        completion.promise.catch(() => undefined);
         void run().then(completion.resolve, completion.reject);
-        return completion.promise;
+        return first;
     };
     readonly use = async <T>(id: Key, operation: () => Promise<T>): Promise<T> => {
         const entry = this.#entry(id);
