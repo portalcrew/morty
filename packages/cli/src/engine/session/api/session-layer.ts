@@ -61,7 +61,6 @@ export function buildSessionLayer(options: SessionLayerOptions) {
             onSessionEvent: (event) => {
                 operations.record(event);
                 eventProjection.record(event);
-                return Promise.resolve();
             },
         },
         store: sessionStore,
@@ -74,7 +73,7 @@ export function buildSessionLayer(options: SessionLayerOptions) {
     const eventProjection = new PromptLifecycle(
         sink,
         async (sessionTarget, event) => {
-            if (await manager.recordLifecycleEvent(sessionTarget, event)) {
+            if (manager.recordLifecycleEvent(sessionTarget, event)) {
                 return;
             }
             const recorded = events.append(sessionTarget, event);

@@ -92,7 +92,7 @@ export type PromptResult = AgentPromptResponse;
 export interface SessionObserver {
     /** A process's background work started or ended: the pool re-reads which processes are busy. */
     readonly onBackgroundActivity?: () => void;
-    readonly onSessionEvent?: (event: SessionLiveEvent) => Promise<void>;
+    readonly onSessionEvent?: (event: SessionLiveEvent) => void;
 }
 
 export interface SessionConfigurationSnapshot {

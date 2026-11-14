@@ -52,7 +52,7 @@ interface SessionInteractionContext {
     readonly getToolCall: (toolCallId: string) => ProjectedToolCall | undefined;
     readonly commandId: () => string;
     readonly assertNativeSession: (sessionId: string) => void;
-    readonly recordSessionEvent: (event: SessionEventPayload) => Promise<void>;
+    readonly recordSessionEvent: (event: SessionEventPayload) => void;
 }
 export class SessionInteractions {
     // A bounded receipt window for answers in this live Session. Eviction or Session replacement makes an
@@ -77,25 +77,25 @@ export class SessionInteractions {
         this.#context = context;
     }
     readonly #notifyPermissionRequested = async (event: SessionPermissionRequestedEvent): Promise<void> => {
-        await this.#context.recordSessionEvent({
+        this.#context.recordSessionEvent({
             payload: { event, kind: "session.permission.requested" },
             type: "lifecycle-metadata",
         });
     };
     readonly #notifyPermissionResolved = async (event: SessionPermissionResolvedEvent): Promise<void> => {
-        await this.#context.recordSessionEvent({
+        this.#context.recordSessionEvent({
             payload: { event, kind: "session.permission.resolved" },
             type: "lifecycle-metadata",
         });
     };
     readonly #notifyElicitationRequested = async (event: SessionElicitationRequestedEvent): Promise<void> => {
-        await this.#context.recordSessionEvent({
+        this.#context.recordSessionEvent({
             payload: { event, kind: "session.elicitation.requested" },
             type: "lifecycle-metadata",
         });
     };
     readonly #notifyElicitationResolved = async (event: SessionElicitationResolvedEvent): Promise<void> => {
-        await this.#context.recordSessionEvent({
+        this.#context.recordSessionEvent({
             payload: { event, kind: "session.elicitation.resolved" },
             type: "lifecycle-metadata",
         });
