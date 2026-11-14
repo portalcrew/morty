@@ -36,14 +36,13 @@ export type CurrentTurnEvent =
     | { readonly kind: "accepted"; readonly commandId: string; readonly turnId: string; readonly startedAt: number }
     /**
      * The service reports the command running; it replaces any other current command. `startedAt` is when the Computer
-     * started it, or null when the Computer does not say: the turn then keeps its date, or is dated by `observedAt`.
+     * started it.
      */
     | {
           readonly kind: "running";
           readonly commandId: string;
           readonly turnId: string;
-          readonly startedAt: number | null;
-          readonly observedAt: number;
+          readonly startedAt: number;
       }
     /** The Computer handed the command to the native session's owner, which reached `stage` with it at `at`. */
     | { readonly kind: "delegated"; readonly commandId: string; readonly stage: DelegationStage; readonly at: number }
@@ -92,7 +91,7 @@ export function transitionCurrentTurn(turn: CurrentTurn, event: CurrentTurnEvent
                 startedAt:
                     isCurrent(turn, event.commandId) && turn.delegation === "started"
                         ? turn.startedAt
-                        : (event.startedAt ?? (isCurrent(turn, event.commandId) ? turn.startedAt : event.observedAt)),
+                        : event.startedAt,
                 delegation: isCurrent(turn, event.commandId) ? turn.delegation : null,
             };
         case "delegated":

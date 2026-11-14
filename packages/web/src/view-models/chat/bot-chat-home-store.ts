@@ -695,7 +695,7 @@ export const createBotChatHomeStore = (
                 const following = sending.kind === "draft-message-sending" && sending.message.commandId === commandId;
                 let session: OpenMortySession | null = null;
                 if (following) {
-                    session = requests.conversationSession(access, { kind: "idle" }, settings.workspaceLabel, title);
+                    session = requests.conversationSession(access, settings.workspaceLabel, title);
                     options.navigation.showManaged(session.target);
                 }
                 // The Session takes the message and its durable copy in one step, so a reload always finds one.

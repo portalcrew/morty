@@ -145,9 +145,6 @@ interface AgentSettingsResult {
     readonly options: readonly SessionConfigOption[];
     readonly catalog: AgentModelCatalog;
 }
-export type ConversationActiveTurn =
-    | { readonly kind: "idle" }
-    | { readonly kind: "running"; readonly commandId: string; readonly turnId: string };
 const sessionAccessSchema = v.object({
     target: nativeSessionTargetSchema,
     computerId: identifier,
@@ -336,7 +333,6 @@ export class BotChatApi {
     };
     readonly conversationSession = (
         access: ChatAccess,
-        activeTurn: ConversationActiveTurn,
         directoryLabel = access.workspaceRef,
         title = "Untitled session",
     ) => {
@@ -346,7 +342,7 @@ export class BotChatApi {
             target: access.target,
             requestId,
             ready,
-            origin: { kind: "created" as const, access, activeTurn },
+            origin: { kind: "created" as const, access },
             entry: {
                 title,
                 directory: access.workspaceRef,

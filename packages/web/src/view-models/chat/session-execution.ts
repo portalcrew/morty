@@ -75,26 +75,20 @@ type LiveExecutionFact = {
 
 export type SessionExecutionFact =
     /**
-     * A pane starts following the Session, opened while `running` ran, or nothing. Until the pane's first read, the
-     * queue and requests this page last saw may be out of date, and nothing orders live facts.
+     * A pane starts following the Session. Until the pane's first read, the queue and requests this page last saw may be
+     * out of date, and nothing orders live facts.
      */
-    | {
-          readonly kind: "opened";
-          readonly running: { readonly commandId: string; readonly turnId: string } | null;
-          readonly openedAt: number;
-      }
+    | { readonly kind: "opened" }
     | LiveExecutionFact
     /**
      * The Computer's account of the execution through `snapshot.executionPosition`, for a read that began when the
      * state's `executionReadBasis` was `basis`. `deliveryCommandId` names the command whose delivery the read asked for;
-     * `readAt`, when it returned, dates a running turn whose Computer does not report its start.
      */
     | {
           readonly kind: "read";
           readonly snapshot: SessionExecutionSnapshot;
           readonly basis: number;
           readonly deliveryCommandId: string | null;
-          readonly readAt: number;
       }
     /**
      * The service accepted this page's submission of `commandId`, to run now or queued, sent at `startedAt`. An HTTP
@@ -293,7 +287,6 @@ function applyLiveChange(state: SessionExecutionState, change: LiveExecutionChan
                           commandId,
                           turnId: runningTurnId(known.turn, commandId),
                           startedAt,
-                          observedAt: startedAt,
                       }),
             });
         }
@@ -394,7 +387,7 @@ function applyRead(
     state: SessionExecutionState,
     fact: Extract<SessionExecutionFact, { readonly kind: "read" }>,
 ): SessionExecutionTransition {
-    const { snapshot, basis, deliveryCommandId, readAt } = fact;
+    const { snapshot, basis, deliveryCommandId } = fact;
     const { coverage } = state;
     const position = snapshot.executionPosition;
     const held = coverage.kind === "covered" ? [] : coverage.held;
@@ -428,7 +421,6 @@ function applyRead(
             commandId: running.commandId,
             turnId: runningTurnId(turn, running.commandId),
             startedAt: Date.parse(running.startedAt),
-            observedAt: readAt,
         });
         // How far the native session's owner has taken the command is the Computer's account, however this page
         // learned of the turn: live, by this read after a reload, or after a missed event.
@@ -502,21 +494,7 @@ function applyExecutionFact(state: SessionExecutionState, fact: SessionExecution
                 listing: null,
                 interactions: [],
             };
-            const { running } = fact;
-            if (running === null) {
-                return settled({ ...opened, turn: transitionCurrentTurn(opened.turn, { kind: "nothing-running" }) });
-            }
-            const known = learn(opened, [running.commandId], "holds");
-            return settled({
-                ...known,
-                turn: transitionCurrentTurn(known.turn, {
-                    kind: "running",
-                    commandId: running.commandId,
-                    turnId: running.turnId,
-                    startedAt: null,
-                    observedAt: fact.openedAt,
-                }),
-            });
+            return settled({ ...opened, turn: transitionCurrentTurn(opened.turn, { kind: "nothing-running" }) });
         }
         case "live":
             return applyLive(state, fact);
