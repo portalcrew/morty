@@ -31,8 +31,8 @@ export async function authorizeSessionContentUpload(
         );
     }
     try {
-        const access = await sessions.authorizeSession({ computerId, target }, credential, request.signal);
-        return { access, target, contentKey };
+        await sessions.authorizeSession({ computerId, target }, credential, request.signal);
+        return { target };
     } catch (cause) {
         request.signal.throwIfAborted();
         const error = toHttpError(cause);

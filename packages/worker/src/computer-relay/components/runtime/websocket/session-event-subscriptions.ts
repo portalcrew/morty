@@ -27,7 +27,6 @@ export function createSessionEventSubscriptions(ctx: {
         );
         await access.authorize(deadline.signal);
         await services.operations.subscribeSessionEvents(
-            computerId,
             target,
             request.command,
             {

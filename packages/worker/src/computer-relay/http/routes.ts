@@ -98,9 +98,9 @@ export function createComputerHttpRoutes(
                     401,
                 );
             }
-            const access = await services.sessions.authorizeSession(target, credential, context.req.raw.signal);
+            await services.sessions.authorizeSession(target, credential, context.req.raw.signal);
             const command = decodeFileRead(await context.req.text(), target.target);
-            return services.operations.readSessionFile(access.computerId, command, context.req.raw.signal);
+            return services.operations.readSessionFile(command, context.req.raw.signal);
         })
         .all("/morty/api/*", (context) => dispatchHttpRequest(context.req.raw));
 }

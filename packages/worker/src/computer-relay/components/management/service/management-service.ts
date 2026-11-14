@@ -52,7 +52,7 @@ export class ManagementService {
         if (computer === null) {
             throw new ManagementError("BOT_NOT_FOUND", "Computer is unavailable.", 404);
         }
-        return { computerPairing: await this.#relay.readComputerPairing(computer.computerId, signal) };
+        return { computerPairing: await this.#relay.readComputerPairing(signal) };
     };
 
     readonly findComputer = async (computerId: string, signal: AbortSignal) => {
@@ -76,13 +76,13 @@ export class ManagementService {
     };
 
     readonly createComputerPairing = async (computerId: string, idempotencyKey: string, signal: AbortSignal) => {
-        const computer = await this.#requireComputer(computerId, signal);
-        return await this.#relay.createPairing(computer.computerId, idempotencyKey, signal);
+        await this.#requireComputer(computerId, signal);
+        return await this.#relay.createPairing(idempotencyKey, signal);
     };
 
     readonly readComputerPairing = async (computerId: string, signal: AbortSignal) => {
-        const computer = await this.#requireComputer(computerId, signal);
-        return await this.#relay.readPairing(computer.computerId, signal);
+        await this.#requireComputer(computerId, signal);
+        return await this.#relay.readPairing(signal);
     };
 
     /**
@@ -114,7 +114,6 @@ export class ManagementService {
                 409,
             );
         }
-        return computer;
     };
 }
 

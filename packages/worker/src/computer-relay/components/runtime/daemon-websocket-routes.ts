@@ -1,5 +1,5 @@
 import { diagnosticText } from "../../../infra/log-diagnostics.ts";
-import { logger } from "../../../infra/logger.ts";
+import type { logger } from "../../../infra/logger.ts";
 import { CloudflareRelaySocket } from "./gateway/cloudflare-relay-peers.ts";
 import type { RuntimeContext as DurableObjectContext } from "./runtime-context.ts";
 
@@ -18,7 +18,7 @@ export class DaemonWebSocketRoutes {
     readonly #dependencies: DurableObjectContext;
     readonly #logger: typeof logger;
 
-    constructor(dependencies: DurableObjectContext, diagnostics = logger) {
+    constructor(dependencies: DurableObjectContext, diagnostics: typeof logger) {
         this.#dependencies = dependencies;
         this.#logger = diagnostics;
     }

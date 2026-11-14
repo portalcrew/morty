@@ -70,10 +70,6 @@ export const computerControlRegistry = {
     "agent.settings.discover": "agent.settings.discovered",
 } satisfies { readonly [K in ClientControlCommand["kind"]]: keyof typeof computerControlReplyDecoders };
 
-export function computerControlAddress(command: ClientControlCommand): string {
-    return command.requestId;
-}
-
 export function computerControlTarget(command: ClientControlCommand): NativeSessionTarget | undefined {
     switch (command.kind) {
         case "native.session.request":
