@@ -1,14 +1,11 @@
 import type { AcpContentExternalizer } from "../../content/content-externalizer.ts";
 import type { PiAcpClient } from "../../harness/pi/upstream/dist/acp/client.js";
-import { type HarnessCallbackParams, HarnessClientEvents, harnessSessionCallbacks } from "../harness-client-events.ts";
+import { type HarnessCallbackParams, HarnessClientEvents } from "../harness-client-events.ts";
 import type { HarnessLifetime } from "../harness-session.ts";
-
-export type PiCallbackParams = HarnessCallbackParams;
-export const piSessionCallbacks = harnessSessionCallbacks;
 
 /** Pi has no message identifiers; retain its submission boundaries while assigning Morty identities. */
 export function piClientCallbacks(
-    params: PiCallbackParams,
+    params: HarnessCallbackParams,
     externalizer: Pick<AcpContentExternalizer, "update">,
     lifetime: HarnessLifetime,
 ): PiAcpClient & { readonly drained: () => Promise<void> } {
