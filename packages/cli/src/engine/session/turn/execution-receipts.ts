@@ -18,12 +18,9 @@ import type { CommandFate, CommandLedgerTable, LedgerCommand } from "../../stora
 export type RuntimeExecutionReceipt =
     | Readonly<{
           attemptId: string;
-          commandId: string;
           kind: "accepted";
       }>
     | Readonly<{
-          attemptId: string;
-          commandId: string;
           kind: "duplicate";
           // Whether the original command has ended, as its receipt records it.
           state: "settled" | "unsettled";
@@ -559,8 +556,6 @@ export class ExecutionReceipts {
                     return { kind: "conflict" };
                 }
                 return {
-                    attemptId: standing.command.attemptId,
-                    commandId,
                     kind: "duplicate",
                     state: isUnsettled(standing.command.fate) ? "unsettled" : "settled",
                 };
@@ -583,7 +578,7 @@ export class ExecutionReceipts {
         } else {
             this.#ledger.admit(identity);
         }
-        return { attemptId, commandId, kind: "accepted" };
+        return { attemptId, kind: "accepted" };
     };
 
     /** Only commands without a terminal result can still be cancelled. */

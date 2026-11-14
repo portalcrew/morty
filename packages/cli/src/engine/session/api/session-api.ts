@@ -108,7 +108,6 @@ export class PreparedSession {
     readonly capabilities: SessionCapabilities;
     readonly commands: readonly SessionCommand[];
     readonly configOptions: readonly SessionConfigOption[];
-    readonly prompted: boolean;
     readonly restored: boolean;
     readonly configurationRevision: string;
 
@@ -118,7 +117,6 @@ export class PreparedSession {
         capabilities: SessionCapabilities,
         commands: readonly SessionCommand[],
         configOptions: readonly SessionConfigOption[],
-        prompted: boolean,
         restored: boolean,
         configurationRevision: string,
     ) {
@@ -127,7 +125,6 @@ export class PreparedSession {
         this.capabilities = capabilities;
         this.commands = commands;
         this.configOptions = configOptions;
-        this.prompted = prompted;
         this.restored = restored;
         this.configurationRevision = configurationRevision;
     }

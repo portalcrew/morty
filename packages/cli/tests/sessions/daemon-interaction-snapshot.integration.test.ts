@@ -39,7 +39,7 @@ import {
     SessionPromptDisposition,
 } from "@morty-build/client/protocol";
 import { listen, port } from "@morty-build/relay-test-support/websocket";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { RuntimeLocalContext } from "../../src/engine/runtime/config.ts";
 import { runRuntime } from "../../src/engine/runtime/run.ts";
@@ -84,6 +84,9 @@ class Messages {
 }
 
 test("Given a newly created native Session, When its first Turn resolves interactions, Then readiness is recorded and resolved interactions do not appear in its snapshot", async () => {
+    // The Computer dates the Turn by its own start: with the clock fixed the date is exactly the system time.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-07T00:00:00.000Z"));
     const stateDirectory = await mkdtemp(join(tmpdir(), "morty-interaction-snapshot-"));
     const workspace = join(stateDirectory, "workspace");
     await mkdir(workspace);
@@ -142,7 +145,6 @@ test("Given a newly created native Session, When its first Turn resolves interac
             }),
         );
         const sessionTarget = decodeSessionReadyEvent(await messages.nextKind(SESSION_READY_KIND)).target;
-        const submittedAt = Date.now();
         await socket.send(
             encodeSessionPromptCommand({
                 commandId: "interaction_turn",
@@ -183,9 +185,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
             interactionState: { interactions: [permission] },
         });
         // The turn is dated by the Computer's start, not by whoever reads it.
-        const startedAt = running.action === "active-turn" ? Date.parse(running.turn?.startedAt ?? "") : Number.NaN;
-        expect(startedAt).toBeGreaterThanOrEqual(submittedAt);
-        expect(startedAt).toBeLessThanOrEqual(Date.now());
+        expect(running.action === "active-turn" ? running.turn?.startedAt : undefined).toBe("2026-11-07T00:00:00.000Z");
         await socket.send(
             encodeSessionPermissionRespondCommand({
                 interactionId: permission.interactionId,
@@ -260,6 +260,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         await writeFile(join(stateDirectory, "agent", "resume-after-elicitation"), "");
         await messages.nextKind("prompt.completed");
     } finally {
+        vi.useRealTimers();
         cancellation.abort();
         await runtime;
         await gateway.close();

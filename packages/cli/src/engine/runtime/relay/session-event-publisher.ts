@@ -36,13 +36,6 @@ type PublisherConnection =
 interface PendingBatch {
     readonly target: NativeSessionTarget;
     readonly events: SessionLiveEvent[];
-    readonly firstAnswers: {
-        readonly target: NativeSessionTarget;
-        readonly commandId: string;
-        readonly eventId: string;
-        readonly observedAt: number;
-        readonly publishedAt: number;
-    }[];
     bytes: number;
 }
 
@@ -233,23 +226,13 @@ export class RuntimeSessionEventPublisher implements SessionEventSink {
             return;
         }
         if (batch === undefined || newBatch) {
-            batch = { target: event.target, events: [], firstAnswers: [], bytes: envelopeBytes };
+            batch = { target: event.target, events: [], bytes: envelopeBytes };
             this.#pending.push(batch);
         }
         batch.events.push(event);
         batch.bytes += bytes;
         this.#pendingBytes += additionalBytes;
-        const awaiting = this.#awaitingFirstAnswer.get(event.target);
         const firstAnswer = this.#consumeFirstAnswer(event);
-        if (firstAnswer && awaiting !== undefined) {
-            batch.firstAnswers.push({
-                target: event.target,
-                commandId: awaiting.commandId,
-                eventId: event.eventId,
-                observedAt: Date.now(),
-                publishedAt: performance.now(),
-            });
-        }
         if (connection.kind !== "connected" || connection.socket.readyState !== WebSocket.OPEN) {
             return;
         }
@@ -359,19 +342,6 @@ export class RuntimeSessionEventPublisher implements SessionEventSink {
                     this.#pending.splice(this.#pending.indexOf(batch), 1);
                     this.#pendingBytes -= batch.bytes;
                     this.#sendingBatch = null;
-                    for (const answer of batch.firstAnswers) {
-                        console.info(
-                            JSON.stringify({
-                                event: "runtime-first-answer-handoff-timing",
-                                target: answer.target,
-                                commandId: answer.commandId,
-                                eventId: answer.eventId,
-                                observedAt: answer.observedAt,
-                                handedOffAt: Date.now(),
-                                publishToHandoffMs: performance.now() - answer.publishedAt,
-                            }),
-                        );
-                    }
                 }
             } catch (error) {
                 if (!connection.controller.signal.aborted) {

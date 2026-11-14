@@ -100,19 +100,6 @@ export class ComputerEncryptionStore {
             };
         });
 
-    readonly authorizeAccess = async (secret: string, signal: AbortSignal): Promise<void> =>
-        this.lock(signal, async () => {
-            const state = await this.readOrCreate(signal);
-            const supplied = coordinate.safeParse(secret);
-            const expected = await this.accessSecret(state, signal);
-            if (
-                !supplied.success ||
-                !timingSafeEqual(Buffer.from(expected, "base64url"), Buffer.from(supplied.data, "base64url"))
-            ) {
-                throw new E2EError("e2e_access_denied");
-            }
-        });
-
     /** Atomically authorizes and claims a fresh packet before any command may execute. */
     readonly authorizeAndClaim = async (secret: string, claim: PayloadClaim, signal: AbortSignal): Promise<void> =>
         this.lock(signal, async () => {

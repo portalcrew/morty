@@ -16,7 +16,6 @@ import { openMortyInstallation } from "../pairing/pair-local-computer.ts";
 import { surviveUnhandledRejections, type UnhandledRejectionGuard } from "./unhandled-rejection.ts";
 
 class DaemonRuntimeError extends Error {
-    readonly code = "worker_runtime_failed";
     constructor(pairingGeneration: string, cause: unknown) {
         super(`Computer pairing ${pairingGeneration} failed`, { cause });
     }
@@ -103,7 +102,6 @@ async function runDaemonRuntime(
         JSON.stringify({ kind: "daemon_started", pid: process.pid, version, timestamp: new Date().toISOString() }),
     );
     try {
-        const installation = control;
         rejectionGuard.bindStateDirectory(control.stateDirectory);
         let active:
             | {
@@ -119,7 +117,7 @@ async function runDaemonRuntime(
             shutdown.abort(new DaemonRuntimeError(pairingGeneration, cause));
         };
         const reconcile = async (): Promise<void> => {
-            const connection = await installation.currentConnection(combined);
+            const connection = await control.currentConnection(combined);
             if (active !== undefined) {
                 if (connection?.activation === "active" && connection.pairingGeneration === active.pairingGeneration) {
                     return;
@@ -130,7 +128,7 @@ async function runDaemonRuntime(
             }
             if (connection?.activation === "active") {
                 try {
-                    const config = await prepareComputerConnection(installation, connection, combined, process.env);
+                    const config = await prepareComputerConnection(control, connection, combined, process.env);
                     const controller = new AbortController();
                     const processes = new AgentProcessPool();
                     const initialized = Promise.withResolvers<void>();
@@ -163,7 +161,7 @@ async function runDaemonRuntime(
                             console.error(
                                 "Morty disconnected this Computer: its connection key was used somewhere else. Run Morty setup on this computer again to reconnect.",
                             );
-                            await installation
+                            await control
                                 .setConnectionActivation(connection.pairingGeneration, "stopped", combined)
                                 .catch((failure: unknown) => fail(connection.pairingGeneration, failure));
                         },
@@ -244,22 +242,16 @@ async function runDaemonRuntime(
                     timestamp: new Date().toISOString(),
                 }),
             );
-            await serveLocalControl(
-                control.stateDirectory,
-                combined,
-                handle,
-                () => undefined,
-                (response) => {
-                    if (
-                        typeof response === "object" &&
-                        response !== null &&
-                        "kind" in response &&
-                        response.kind === "stopped"
-                    ) {
-                        shutdown.abort();
-                    }
-                },
-            );
+            await serveLocalControl(control.stateDirectory, combined, handle, (response) => {
+                if (
+                    typeof response === "object" &&
+                    response !== null &&
+                    "kind" in response &&
+                    response.kind === "stopped"
+                ) {
+                    shutdown.abort();
+                }
+            });
             if (shutdown.signal.reason instanceof DaemonRuntimeError) {
                 throw shutdown.signal.reason;
             }

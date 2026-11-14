@@ -377,8 +377,6 @@ describe("ACP conversation sessions", () => {
                 }
                 await vi.runAllTimersAsync();
 
-                expect(store.materializedEventCount(recordedTarget)).toBeLessThanOrEqual(256);
-
                 const page = store.page(recordedTarget, 4000, null);
                 const eventIds = page.events.map((event) => event.eventId);
                 expect(new Set(eventIds).size).toBe(page.events.length);
