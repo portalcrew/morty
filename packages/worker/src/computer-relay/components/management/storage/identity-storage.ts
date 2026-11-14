@@ -13,9 +13,9 @@ import {
     linkSharedByOwner,
     ownerCredential,
 } from "../../../schema/computer-relay-do/index.ts";
-import { type AnonymousIdentity, digest, requireIdentityDatabase } from "./identity-storage-common.ts";
+import { type AnonymousIdentity, digest } from "./identity-storage-common.ts";
 
-type IdentityDatabase = ReturnType<typeof requireIdentityDatabase>;
+type IdentityDatabase = DurableObjectDatabase["orm"];
 
 /** A link no device has used yet: it issued no credential. */
 function unusedLink(database: IdentityDatabase, linkId: SQLiteColumn = continueLink.id) {
@@ -235,7 +235,7 @@ export class IdentityStorage {
         const credentialId = `cred_${crypto.randomUUID()}`;
         const tokenHash = await digest(token);
         signal.throwIfAborted();
-        const database = requireIdentityDatabase(this.#database);
+        const database = this.#database.orm;
         await database
             .insert(ownerCredential)
             .values({ id: credentialId, tokenHash })
@@ -263,7 +263,7 @@ export class IdentityStorage {
     ): Promise<StoredCredential | null> => {
         signal.throwIfAborted();
         const tokenHash = await digest(token);
-        const database = requireIdentityDatabase(this.#database);
+        const database = this.#database.orm;
         const owner = await database
             .select({
                 credentialId: ownerCredential.id,
@@ -309,7 +309,7 @@ export class IdentityStorage {
      */
     readonly holdsAccess = async (holder: SessionAccessHolder, now: number, signal: AbortSignal): Promise<boolean> => {
         signal.throwIfAborted();
-        const database = requireIdentityDatabase(this.#database);
+        const database = this.#database.orm;
         const found =
             holder.kind === "device"
                 ? await database
@@ -337,7 +337,7 @@ export class IdentityStorage {
      */
     readonly linkedDevices = async (now: number, signal: AbortSignal) => {
         signal.throwIfAborted();
-        const database = requireIdentityDatabase(this.#database);
+        const database = this.#database.orm;
         const sharedByOwner = alias(linkSharedByOwner, "joined_through_shared_by_owner");
         const sharedByDevice = alias(linkSharedByDevice, "joined_through_shared_by_device");
         const sharerDevice = alias(browserDevice, "sharer_device");
@@ -393,7 +393,7 @@ export class IdentityStorage {
      */
     readonly revokeOtherAccess = async (token: string, now: number, signal: AbortSignal): Promise<boolean> => {
         signal.throwIfAborted();
-        const database = requireIdentityDatabase(this.#database);
+        const database = this.#database.orm;
         const tokenHash = await digest(token);
         const callerHolds = ownerCredentialHolds(database, tokenHash);
         this.#database.batch(
@@ -426,7 +426,7 @@ export class IdentityStorage {
         signal: AbortSignal,
     ): Promise<boolean> => {
         signal.throwIfAborted();
-        const database = requireIdentityDatabase(this.#database);
+        const database = this.#database.orm;
         const tokenHash = await digest(token);
         const successorHash = await digest(successor);
         const localCredential = (hash: string) => and(eq(ownerCredential.tokenHash, hash), ownerAccessHeld());
@@ -481,7 +481,7 @@ export class IdentityStorage {
         signal: AbortSignal,
     ): Promise<boolean> => {
         signal.throwIfAborted();
-        const database = requireIdentityDatabase(this.#database);
+        const database = this.#database.orm;
         const tokenHash = await digest(token);
         const callerHolds = credentialHolds(database, tokenHash, now);
         this.#database.batch(
@@ -518,7 +518,7 @@ export class IdentityStorage {
     > => {
         signal.throwIfAborted();
         // Check the issuing credential in the write itself so ending its access cannot race issuance.
-        const database = requireIdentityDatabase(this.#database);
+        const database = this.#database.orm;
         const parentTokenHash = await digest(parentToken);
         const codeHash = await digest(operation.code);
         const replacesHash = replaces === null ? null : await digest(replaces);
@@ -676,7 +676,7 @@ export class IdentityStorage {
             return null;
         }
         signal.throwIfAborted();
-        const database = requireIdentityDatabase(this.#database);
+        const database = this.#database.orm;
         const codeHash = await digest(code);
         const credentialId = `cred_${crypto.randomUUID()}`;
         const newDeviceId = `device_${crypto.randomUUID()}`;
@@ -783,7 +783,7 @@ export class IdentityStorage {
         signal: AbortSignal,
     ): Promise<boolean> => {
         signal.throwIfAborted();
-        const revoked = await requireIdentityDatabase(this.#database)
+        const revoked = await this.#database.orm
             .update(ownerCredential)
             .set({ revokedAt: now })
             .where(and(eq(ownerCredential.id, credential.credentialId), ownerAccessHeld()))
@@ -807,7 +807,7 @@ export class IdentityStorage {
         signal: AbortSignal,
     ): Promise<{ readonly kind: "ended" } | { readonly kind: "unknown" } | { readonly kind: "callerEnded" }> => {
         signal.throwIfAborted();
-        const database = requireIdentityDatabase(this.#database);
+        const database = this.#database.orm;
         const tokenHash = await digest(token);
         const device = eq(browserDevice.id, deviceId);
         const { meta } = this.#database.run(

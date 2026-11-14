@@ -88,12 +88,6 @@ function createAuthorizedChat(ctx: ManagementRouteContext, timeout: number) {
     });
 }
 
-function privateJson(value: unknown) {
-    const response = json(value);
-    response.headers.set("Cache-Control", "no-store");
-    return response;
-}
-
 export function createBotChatRoutes(ctx: ManagementRouteContext) {
     const authenticatedSession = createAuthenticatedSession(ctx);
     const issuesSessionCredential = createSessionCredentialGuard(ctx);
@@ -101,7 +95,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
     return new Hono<AuthorizedChatEnvironment>()
         .post("/workspace", authenticatedSession, authorizedChat(), async (context) => {
             const application = await applicationForRequest(ctx, context);
-            return privateJson(
+            return json(
                 documented(
                     workspaceResponse,
                     await application.services.chat.computerConfiguration(context.get("chatScope")),
@@ -115,7 +109,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             bodyParser<AuthorizedChatEnvironment, typeof diagnosticsInput>(diagnosticsInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
-                return privateJson(
+                return json(
                     await application.services.chat.daemonDiagnostics(
                         context.get("chatScope"),
                         context.req.valid("json"),
@@ -130,7 +124,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             bodyParser<AuthorizedChatEnvironment, typeof networkDiagnosticInput>(networkDiagnosticInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
-                return privateJson(
+                return json(
                     await application.services.chat.networkDiagnostic(
                         context.get("chatScope"),
                         context.req.valid("json"),
@@ -140,7 +134,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
         )
         .post("/setup/computers", authenticatedSession, authorizedChat(), async (context) => {
             const application = await applicationForRequest(ctx, context);
-            return privateJson(await application.services.chat.setupComputers(context.get("chatScope")));
+            return json(await application.services.chat.setupComputers(context.get("chatScope")));
         })
         .post(
             "/workspace/directory",
@@ -149,7 +143,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             bodyParser<AuthorizedChatEnvironment, typeof directoryInput>(directoryInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
-                return privateJson(
+                return json(
                     await application.services.chat.listDirectory(context.get("chatScope"), context.req.valid("json")),
                 );
             },
@@ -161,7 +155,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             bodyParser<AuthorizedChatEnvironment, typeof managedSessionsInput>(managedSessionsInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
-                return privateJson(
+                return json(
                     await application.services.chat.managedSessions(
                         context.get("chatScope"),
                         context.req.valid("json"),
@@ -197,7 +191,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
                     context.get("chatScope"),
                     context.req.valid("json"),
                 );
-                return privateJson("kind" in result ? result : documented(chatAccessResponse, result));
+                return json("kind" in result ? result : documented(chatAccessResponse, result));
             },
         )
         .post(
@@ -209,9 +203,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const input = context.req.valid("json");
-                return privateJson(
-                    await application.services.chat.nativeSessionAccess(context.get("chatScope"), input),
-                );
+                return json(await application.services.chat.nativeSessionAccess(context.get("chatScope"), input));
             },
         )
         .post(
@@ -222,7 +214,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const input = context.req.valid("json");
-                return privateJson(await application.services.chat.managedSession(context.get("chatScope"), input));
+                return json(await application.services.chat.managedSession(context.get("chatScope"), input));
             },
         )
         .post(
@@ -233,9 +225,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const input = context.req.valid("json");
-                return privateJson(
-                    await application.services.chat.archiveManagedSession(context.get("chatScope"), input),
-                );
+                return json(await application.services.chat.archiveManagedSession(context.get("chatScope"), input));
             },
         )
         .post(
@@ -245,7 +235,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             bodyParser<AuthorizedChatEnvironment, typeof nativeListInput>(nativeListInput),
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
-                return privateJson(
+                return json(
                     await application.services.chat.nativeSessions(context.get("chatScope"), context.req.valid("json")),
                 );
             },
@@ -260,9 +250,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const input = context.req.valid("json");
-                return privateJson(
-                    await application.services.chat.continueNativeSession(context.get("chatScope"), input),
-                );
+                return json(await application.services.chat.continueNativeSession(context.get("chatScope"), input));
             },
         )
         .post(
@@ -273,7 +261,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const sessionId = v.parse(relayIdentifier, context.req.param("sessionId"));
-                return privateJson(
+                return json(
                     await application.services.chat.previewNativeSession(
                         context.get("chatScope"),
                         sessionId,
@@ -290,7 +278,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const sessionId = v.parse(relayIdentifier, context.req.param("sessionId"));
-                return privateJson(
+                return json(
                     await application.services.chat.importNativeSession(
                         context.get("chatScope"),
                         sessionId,
@@ -307,7 +295,7 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
             async (context) => {
                 const application = await applicationForRequest(ctx, context);
                 const operationId = v.parse(relayIdentifier, context.req.param("operationId"));
-                return privateJson(
+                return json(
                     await application.services.chat.recoverableNativeFork(
                         context.get("chatScope"),
                         operationId,

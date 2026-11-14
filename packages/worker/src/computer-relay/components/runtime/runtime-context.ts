@@ -49,14 +49,8 @@ export function createRuntimeContext(cx: {
         utilities: cx.utilities,
     });
     return {
-        doDatabase: cx.doDatabase,
-        gateways: { ...cx.gateways, peers, requests, viewers },
+        gateways: { peers, requests, viewers },
         utilities: cx.utilities,
-        services: {
-            ...cx.services,
-            credentials,
-            connections,
-            runtime,
-        },
+        services: { connections, runtime },
     };
 }

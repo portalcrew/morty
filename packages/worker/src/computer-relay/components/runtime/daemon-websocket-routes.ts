@@ -99,19 +99,14 @@ export class DaemonWebSocketRoutes {
         socket.close(1011, "WebSocket error");
     }
 
-    private readonly withOperationSignal = async <T>(
-        operation: (signal: AbortSignal) => Promise<T>,
-        parentSignal?: AbortSignal,
-    ): Promise<T> => {
+    private readonly withOperationSignal = async <T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> => {
         const controller = new AbortController();
         const timer = setTimeout(
             () => controller.abort(new DOMException("Computer operation timed out", "TimeoutError")),
             30_000,
         );
         try {
-            return await operation(
-                parentSignal === undefined ? controller.signal : AbortSignal.any([parentSignal, controller.signal]),
-            );
+            return await operation(controller.signal);
         } finally {
             clearTimeout(timer);
         }

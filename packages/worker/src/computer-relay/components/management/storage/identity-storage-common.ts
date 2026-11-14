@@ -1,12 +1,6 @@
-import type { DurableObjectDatabase } from "../../../infra/durable-object-database.ts";
-
 export interface AnonymousIdentity {
     readonly computerToken: string;
     readonly computerId: string;
-}
-
-export function requireIdentityDatabase(database: DurableObjectDatabase) {
-    return database.orm;
 }
 
 export function randomSecret(): string {
