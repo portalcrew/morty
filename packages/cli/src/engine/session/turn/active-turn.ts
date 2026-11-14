@@ -8,6 +8,8 @@ import {
     type SessionPromptDispositionCommand,
 } from "@morty-build/client/protocol";
 
+import type { CommandDelegation } from "./execution-receipts.ts";
+
 type ActiveTurnSnapshot = Extract<NativeSessionResult, { readonly action: "active-turn" }>["turn"];
 
 /**
@@ -53,23 +55,27 @@ export class ActiveRuntimeTurn {
     readonly #finished = Promise.withResolvers<void>();
     readonly #started: () => boolean;
     readonly #startedAt: () => string | undefined;
+    readonly #delegation: () => CommandDelegation | null;
     readonly #executing: () => boolean;
     #admission: TurnAdmission = { kind: "waiting" };
 
     /**
-     * `started` and `startedAt` read the command's execution receipt, the single owner of whether and when the command
-     * started. `executing` asks the Session whether it began executing the command.
+     * `started`, `startedAt` and `delegation` read the command's execution receipt, the single owner of whether and when
+     * the command started and how far the native session's owner has taken it. `executing` asks the Session whether it
+     * began executing the command.
      */
     constructor(
         command: SessionPromptCommand,
         started: () => boolean,
         startedAt: () => string | undefined,
+        delegation: () => CommandDelegation | null,
         executing: () => boolean,
     ) {
         this.command = command;
         this.#controller = new AbortController();
         this.#started = started;
         this.#startedAt = startedAt;
+        this.#delegation = delegation;
         this.#executing = executing;
     }
 
@@ -174,6 +180,7 @@ export class ActiveRuntimeTurn {
         return {
             commandId: decodeIdentifier(this.command.commandId),
             startedAt,
+            delegation: this.#delegation(),
         };
     };
 

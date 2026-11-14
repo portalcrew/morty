@@ -68,6 +68,11 @@ export interface SettledTurn {
 
 /** A transition the ledger records for a command: it started, or it settled. */
 export type CommandProgress = "started" | "settled";
+/** How far the native session's owner has taken a command the Computer handed to it, and when it reached that stage. */
+export interface CommandDelegation {
+    readonly stage: "queued" | "started";
+    readonly at: string;
+}
 
 /** What a cancellation before admission found: a cancellation it recorded, or an outcome recorded earlier. */
 export type CancellationBeforeAdmission =
@@ -163,6 +168,8 @@ export class ExecutionReceipts {
      * it never enters the ledger, which keeps the content-free form; clients of this process still read the original.
      */
     readonly #agentOutcomes = new Map<string, string>();
+    /** How far the native session's owner has taken each running command the Computer handed to it, and when. */
+    readonly #delegations = new Map<string, CommandDelegation>();
     /**
      * Settlements reached while this process shuts down. They are artifacts of stopping, not of the commands, so the
      * ledger keeps the commands unsettled and the next process reports that the restart interrupted them.
@@ -211,6 +218,7 @@ export class ExecutionReceipts {
         if (agentOutcome !== undefined) {
             this.#agentOutcomes.set(commandId, agentOutcome);
         }
+        this.#delegations.delete(commandId);
         if (this.#closing) {
             this.#shutdownSettlements.set(commandId, settled);
         } else {
@@ -362,6 +370,13 @@ export class ExecutionReceipts {
                 };
         }
     };
+    /** How far the native session's owner has taken a running command the Computer handed to it; null if none. */
+    readonly delegation = (commandId: string, sessionTarget: NativeSessionTarget): CommandDelegation | null => {
+        const command = this.#read(commandId);
+        return command !== undefined && sameNativeSession(command.target, sessionTarget) && !isUnsettled(command.fate)
+            ? null
+            : (this.#delegations.get(commandId) ?? null);
+    };
     /** When the Session's running command started. */
     readonly startedAt = (commandId: string, sessionTarget: NativeSessionTarget): string | undefined => {
         const command = this.#read(commandId);
@@ -469,6 +484,18 @@ export class ExecutionReceipts {
             // A start reported after settlement does not reopen the execution.
             this.#ledger.start(payload.commandId, event.recordedAt);
             this.#notify(payload.commandId, "started");
+            return;
+        }
+        if (payload.kind === "prompt.delegated") {
+            const fate = this.#read(payload.commandId)?.fate;
+            // The owner never gives a command it started back to its queue, whatever order the reports arrive in.
+            if (
+                fate !== undefined &&
+                isUnsettled(fate) &&
+                this.#delegations.get(payload.commandId)?.stage !== "started"
+            ) {
+                this.#delegations.set(payload.commandId, { stage: payload.stage, at: event.recordedAt });
+            }
             return;
         }
         if (!isPromptTerminal(payload)) {
@@ -597,6 +624,7 @@ export class ExecutionReceipts {
     readonly close = (): void => {
         this.#watchers.clear();
         this.#agentOutcomes.clear();
+        this.#delegations.clear();
         this.#shutdownSettlements.clear();
     };
 }

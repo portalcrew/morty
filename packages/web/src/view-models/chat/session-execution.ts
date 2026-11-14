@@ -430,6 +430,16 @@ function applyRead(
             startedAt: Date.parse(running.startedAt),
             observedAt: readAt,
         });
+        // How far the native session's owner has taken the command is the Computer's account, however this page
+        // learned of the turn: live, by this read after a reload, or after a missed event.
+        if (running.delegation !== null) {
+            turn = transitionCurrentTurn(turn, {
+                kind: "delegated",
+                commandId: running.commandId,
+                stage: running.delegation.stage,
+                at: Date.parse(running.delegation.at),
+            });
+        }
     } else {
         // Only a turn this page learned of before the read began can have ended by the time it was served.
         if (turn.kind === "current" && (state.commands.get(turn.commandId)?.learnedAt ?? -1) < basis) {
