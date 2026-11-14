@@ -30,12 +30,6 @@ export class CloudflareRelayPeers implements Omit<ComputerPeers, "operations" | 
         this.#state = state;
     }
 
-    readonly sockets = () =>
-        this.#state.getWebSockets().map((webSocket) => {
-            const socket = new CloudflareRelaySocket(webSocket);
-            return { socket, identity: socket.identity() };
-        });
-
     readonly daemonConnections: ComputerPeers["daemonConnections"] = () =>
         this.#state.getWebSockets("daemon").map((webSocket) => {
             const socket = new CloudflareRelaySocket(webSocket);

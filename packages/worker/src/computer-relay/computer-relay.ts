@@ -232,7 +232,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         const signingKeyId = await new SessionAccessSigner(this.env.MORTY_SESSION_SIGNING_SECRET).keyId();
         for (const viewer of this.#connectionsForComputer.context.gateways.peers.viewers()) {
             const { identity } = viewer;
-            if (identity.credential?.signingKeyId !== signingKeyId) {
+            if (identity.credential.signingKeyId !== signingKeyId) {
                 viewer.close(1008, "Session signing key rotated");
             } else if (identity.expiresAt <= Date.now()) {
                 viewer.close(1000, "Session access expired");

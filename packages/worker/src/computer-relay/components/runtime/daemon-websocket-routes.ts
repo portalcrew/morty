@@ -70,7 +70,7 @@ export class DaemonWebSocketRoutes {
         const socket = new CloudflareRelaySocket(webSocket);
         try {
             await this.withOperationSignal((signal) =>
-                this.#dependencies.services.runtime.detach(socket.identity(), socket, signal),
+                this.#dependencies.services.runtime.detach(socket.identity(), signal),
             );
         } catch (error) {
             this.#logger.error(

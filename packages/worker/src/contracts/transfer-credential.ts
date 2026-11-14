@@ -13,8 +13,8 @@ export function readTransferCredential(value: unknown) {
     if (!parsed.success) {
         return null;
     }
-    const [kind, computerId] = parsed.output;
-    return { kind, computerId };
+    const [, computerId] = parsed.output;
+    return { computerId };
 }
 
 /** A sharing operation recovers its secret without storing a redeemable credential in the database. */

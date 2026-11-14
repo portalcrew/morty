@@ -302,13 +302,8 @@ export class ComputerRelayActor {
         }
     };
 
-    readonly detachDaemon = (socket: RelaySocket): void => {
-        const anotherDaemonOnline = this.#peers
-            .daemons()
-            .some((candidate) => !candidate.isSame(socket) && candidate.isOpen());
-        if (anotherDaemonOnline) {
-            return;
-        }
+    /** The latest daemon connection closed, so no daemon remains: the Computer is offline. */
+    readonly detachDaemon = (): void => {
         this.failPendingAgentSettingsDiscoveries();
         this.notifyOffline();
     };
@@ -350,15 +345,11 @@ export class ComputerRelayActor {
         socket: RelaySocket,
         message: DaemonToRelayMessage | null,
         signal: AbortSignal,
-        encoded?: string,
+        encoded: string,
     ): Promise<void> => {
         try {
             if (message === null) {
                 this.recordSkipped("unsupported_daemon_message");
-                return;
-            }
-            if (encoded === undefined) {
-                this.recordSkipped("missing_daemon_payload");
                 return;
             }
             if (message.kind === "content.chunk.ack") {
@@ -430,11 +421,10 @@ export class ComputerRelayActor {
 
     readonly receiveOperationMessage = async (
         socket: ComputerOperationSocket,
-        message: unknown,
+        message: string,
         signal: AbortSignal,
     ): Promise<void> => {
         if (
-            typeof message !== "string" ||
             message.length > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES ||
             new TextEncoder().encode(message).byteLength > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES
         ) {

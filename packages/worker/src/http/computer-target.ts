@@ -38,7 +38,7 @@ export async function computerFromTransfer<E extends ComputerTargetEnvironment>(
     const input: unknown = await readJsonBody(context.req.raw.clone());
     const parsed = v.safeParse(v.object({ code: v.unknown() }), input);
     const ticket = parsed.success ? readTransferCredential(parsed.output.code) : null;
-    if (ticket?.kind !== "morty_transfer_v1") {
+    if (ticket === null) {
         throw new ManagementError("TRANSFER_UNAVAILABLE", "This link is unavailable.", 410);
     }
     context.set("computerId", computerIdentifier(ticket.computerId));
