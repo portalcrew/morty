@@ -578,6 +578,44 @@ export class MortyRequestExecutor {
     readonly sendJson = async (endpoint: MortyTransportEndpoint, body: string, signal: AbortSignal): Promise<string> =>
         await this.request(endpoint, body, "application/json", signal);
 
+    /**
+     * Sends one request about a Session and reads the Computer's answer to it. A failure the Computer reports for the
+     * request is thrown; any other answer must be the `reply` codec's, to this request and about this Session, and
+     * `isAnswer` may check what else the request names. Anything else is a protocol error carrying `mismatch`.
+     */
+    readonly exchange = async <Reply extends { readonly requestId: string; readonly target: NativeSessionTarget }>(
+        request: {
+            readonly endpoint: MortyTransportEndpoint;
+            readonly body: string;
+            readonly requestId: string;
+            readonly target: NativeSessionTarget;
+            readonly reply: {
+                readonly decode: (encoded: string, decryptor: PayloadDecryptor, signal: AbortSignal) => Promise<Reply>;
+            };
+            readonly mismatch: string;
+            readonly isAnswer?: (reply: Reply) => boolean;
+        },
+        signal: AbortSignal,
+    ): Promise<Reply> => {
+        const encoded = await this.sendJson(request.endpoint, request.body, signal);
+        if (decodeMessageKind(encoded) === "session.operation.failed") {
+            return throwNativeFailure(
+                await sessionOperationFailedEventCodec.decode(encoded, this.payloadEncryption, signal),
+                request.requestId,
+                request.target,
+            );
+        }
+        const reply = await request.reply.decode(encoded, this.payloadEncryption, signal);
+        if (
+            reply.requestId !== request.requestId ||
+            !sameNativeSession(reply.target, request.target) ||
+            (request.isAnswer !== undefined && !request.isAnswer(reply))
+        ) {
+            throw new MortyProtocolError(request.mismatch);
+        }
+        return reply;
+    };
+
     /** Sends the encrypted file read and returns the file only when every record of the answer answers that read. */
     readonly readFileStream = async (
         endpoint: MortyTransportEndpoint,
@@ -747,77 +785,59 @@ export class MortySessionResources {
         signal: AbortSignal,
     ) => {
         const requestId = crypto.randomUUID();
-        const result = await this.#executor.sendJson(
-            sessionEndpoints.updateConfiguration({ computerId: this.#computerId, target }),
-            await sessionConfigureCommandCodec.encode(
-                { ...request, kind: "session.configure", requestId, target },
-                this.#executor.payloadEncryption,
-                signal,
-            ),
-            signal,
-        );
-        if (decodeMessageKind(result) === "session.operation.failed") {
-            return throwNativeFailure(
-                await sessionOperationFailedEventCodec.decode(result, this.#executor.payloadEncryption, signal),
+        return await this.#executor.exchange(
+            {
+                endpoint: sessionEndpoints.updateConfiguration({ computerId: this.#computerId, target }),
+                body: await sessionConfigureCommandCodec.encode(
+                    { ...request, kind: "session.configure", requestId, target },
+                    this.#executor.payloadEncryption,
+                    signal,
+                ),
                 requestId,
                 target,
-            );
-        }
-        const decoded = await sessionConfigUpdatedEventCodec.decode(result, this.#executor.payloadEncryption, signal);
-        if (decoded.requestId !== requestId || !sameNativeSession(decoded.target, target)) {
-            throw new MortyProtocolError("The Computer returned a response for another request");
-        }
-        return decoded;
+                reply: sessionConfigUpdatedEventCodec,
+                mismatch: "The Computer returned a response for another request",
+            },
+            signal,
+        );
     };
 
     readonly readConfiguration = async (target: NativeSessionTarget, signal: AbortSignal) => {
         const requestId = crypto.randomUUID();
-        const result = await this.#executor.sendJson(
-            sessionEndpoints.readConfiguration({ computerId: this.#computerId, target }),
-            await sessionConfigReadCommandCodec.encode(
-                { kind: "session.config.read", requestId, target },
-                this.#executor.payloadEncryption,
-                signal,
-            ),
-            signal,
-        );
-        if (decodeMessageKind(result) === "session.operation.failed") {
-            return throwNativeFailure(
-                await sessionOperationFailedEventCodec.decode(result, this.#executor.payloadEncryption, signal),
+        return await this.#executor.exchange(
+            {
+                endpoint: sessionEndpoints.readConfiguration({ computerId: this.#computerId, target }),
+                body: await sessionConfigReadCommandCodec.encode(
+                    { kind: "session.config.read", requestId, target },
+                    this.#executor.payloadEncryption,
+                    signal,
+                ),
                 requestId,
                 target,
-            );
-        }
-        const decoded = await sessionConfigReadResultCodec.decode(result, this.#executor.payloadEncryption, signal);
-        if (decoded.requestId !== requestId || !sameNativeSession(decoded.target, target)) {
-            throw new MortyProtocolError("The Computer returned a response for another request");
-        }
-        return decoded;
+                reply: sessionConfigReadResultCodec,
+                mismatch: "The Computer returned a response for another request",
+            },
+            signal,
+        );
     };
 
     readonly rename = async (target: NativeSessionTarget, title: string, signal: AbortSignal) => {
         const requestId = crypto.randomUUID();
-        const result = await this.#executor.sendJson(
-            sessionEndpoints.rename({ computerId: this.#computerId, target }),
-            await sessionRenameCommandCodec.encode(
-                { kind: "session.rename", requestId, target, title },
-                this.#executor.payloadEncryption,
-                signal,
-            ),
-            signal,
-        );
-        if (decodeMessageKind(result) === "session.operation.failed") {
-            return throwNativeFailure(
-                await sessionOperationFailedEventCodec.decode(result, this.#executor.payloadEncryption, signal),
+        return await this.#executor.exchange(
+            {
+                endpoint: sessionEndpoints.rename({ computerId: this.#computerId, target }),
+                body: await sessionRenameCommandCodec.encode(
+                    { kind: "session.rename", requestId, target, title },
+                    this.#executor.payloadEncryption,
+                    signal,
+                ),
                 requestId,
                 target,
-            );
-        }
-        const decoded = await sessionRenamedEventCodec.decode(result, this.#executor.payloadEncryption, signal);
-        if (decoded.requestId !== requestId || !sameNativeSession(decoded.target, target)) {
-            throw new MortyProtocolError("The Computer returned a response for another request");
-        }
-        return decoded;
+                reply: sessionRenamedEventCodec,
+                mismatch: "The Computer returned a response for another request",
+            },
+            signal,
+        );
     };
 
     readonly uploadContent = async (
@@ -980,40 +1000,39 @@ export class MortySessionResources {
         commandId?: string,
     ): Promise<SessionExecution> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.sendJson(
-            sessionEndpoints.readExecution({
-                computerId: this.#computerId,
-                target: sessionTarget,
-                ...(commandId === undefined ? {} : { commandId }),
-            }),
-            await nativeSessionCommandCodec.encode(
-                {
-                    kind: "native.session.request",
-                    action: "active-turn",
-                    requestId,
+        const result = await this.#executor.exchange(
+            {
+                endpoint: sessionEndpoints.readExecution({
+                    computerId: this.#computerId,
                     target: sessionTarget,
-                    ...(commandId === undefined ? {} : { deliveryCommandId: commandId }),
+                    ...(commandId === undefined ? {} : { commandId }),
+                }),
+                body: await nativeSessionCommandCodec.encode(
+                    {
+                        kind: "native.session.request",
+                        action: "active-turn",
+                        requestId,
+                        target: sessionTarget,
+                        ...(commandId === undefined ? {} : { deliveryCommandId: commandId }),
+                    },
+                    this.#executor.payloadEncryption,
+                    signal,
+                ),
+                requestId,
+                target: sessionTarget,
+                reply: {
+                    decode: async (encoded, decryptor, replySignal) => {
+                        const result = await nativeSessionResultCodec.decode(encoded, decryptor, replySignal);
+                        if (result.action !== "active-turn") {
+                            throw new MortyProtocolError("The service returned an invalid active Turn");
+                        }
+                        return result;
+                    },
                 },
-                this.#executor.payloadEncryption,
-                signal,
-            ),
+                mismatch: "The service returned an invalid active Turn",
+            },
             signal,
         );
-        if (decodeMessageKind(encoded) === "session.operation.failed") {
-            return throwNativeFailure(
-                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
-                requestId,
-                sessionTarget,
-            );
-        }
-        const result = await nativeSessionResultCodec.decode(encoded, this.#executor.payloadEncryption, signal);
-        if (
-            result.requestId !== requestId ||
-            result.action !== "active-turn" ||
-            !sameNativeSession(result.target, sessionTarget)
-        ) {
-            throw new MortyProtocolError("The service returned an invalid active Turn");
-        }
         const { action: _action, kind: _kind, requestId: _requestId, target: _target, ...execution } = result;
         return execution;
     };
@@ -1061,22 +1080,17 @@ export class MortyTurnResources {
             }
             throw cause;
         }
-        const result = await this.#executor.sendJson(
-            sessionEndpoints.submitTurn({ computerId: this.#computerId, target: sessionTarget }),
-            encoded,
+        const accepted = await this.#executor.exchange(
+            {
+                endpoint: sessionEndpoints.submitTurn({ computerId: this.#computerId, target: sessionTarget }),
+                body: encoded,
+                requestId,
+                target: sessionTarget,
+                reply: sessionPromptAcceptedEventCodec,
+                mismatch: "The Computer returned an invalid Turn",
+            },
             signal,
         );
-        if (decodeMessageKind(result) === "session.operation.failed") {
-            return throwNativeFailure(
-                await sessionOperationFailedEventCodec.decode(result, this.#executor.payloadEncryption, signal),
-                requestId,
-                sessionTarget,
-            );
-        }
-        const accepted = await sessionPromptAcceptedEventCodec.decode(result, this.#executor.payloadEncryption, signal);
-        if (accepted.requestId !== requestId || !sameNativeSession(accepted.target, sessionTarget)) {
-            throw new MortyProtocolError("The Computer returned an invalid Turn");
-        }
         const acceptedAt = new Date().toISOString();
         const state =
             accepted.state === "running"
@@ -1111,30 +1125,22 @@ export class MortyTurnResources {
         signal: AbortSignal,
     ): Promise<MortyTurnCancellation> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.sendJson(
-            sessionEndpoints.cancelTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
-            await sessionCancelCommandCodec.encode(
-                { kind: "session.cancel", requestId, target: sessionTarget, commandId: turnId },
-                this.#executor.payloadEncryption,
-                signal,
-            ),
+        const result = await this.#executor.exchange(
+            {
+                endpoint: sessionEndpoints.cancelTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
+                body: await sessionCancelCommandCodec.encode(
+                    { kind: "session.cancel", requestId, target: sessionTarget, commandId: turnId },
+                    this.#executor.payloadEncryption,
+                    signal,
+                ),
+                requestId,
+                target: sessionTarget,
+                reply: sessionTurnStoppedEventCodec,
+                mismatch: "The Computer returned an invalid Turn cancellation",
+                isAnswer: (reply) => reply.commandId === turnId,
+            },
             signal,
         );
-        if (decodeMessageKind(encoded) === "session.operation.failed") {
-            return throwNativeFailure(
-                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
-                requestId,
-                sessionTarget,
-            );
-        }
-        const result = await sessionTurnStoppedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal);
-        if (
-            result.requestId !== requestId ||
-            !sameNativeSession(result.target, sessionTarget) ||
-            result.commandId !== turnId
-        ) {
-            throw new MortyProtocolError("The Computer returned an invalid Turn cancellation");
-        }
         return this.#answeredFor(turnId, "Turn cancellation", decodeTurnCancellation, {
             turnId: result.commandId,
             stopReason: result.stopReason,
@@ -1167,30 +1173,26 @@ export class MortyTurnResources {
         signal: AbortSignal,
     ): Promise<void> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.sendJson(
-            sessionEndpoints.cancelQueuedTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
-            await sessionCancelBeforeStartCommandCodec.encode(
-                { kind: "session.cancel-before-start", requestId, target: sessionTarget, commandId: turnId },
-                this.#executor.payloadEncryption,
-                signal,
-            ),
+        const result = await this.#executor.exchange(
+            {
+                endpoint: sessionEndpoints.cancelQueuedTurn({
+                    computerId: this.#computerId,
+                    target: sessionTarget,
+                    turnId,
+                }),
+                body: await sessionCancelBeforeStartCommandCodec.encode(
+                    { kind: "session.cancel-before-start", requestId, target: sessionTarget, commandId: turnId },
+                    this.#executor.payloadEncryption,
+                    signal,
+                ),
+                requestId,
+                target: sessionTarget,
+                reply: sessionTurnWithdrawnEventCodec,
+                mismatch: "The service returned an invalid queued cancellation",
+                isAnswer: (reply) => reply.commandId === turnId,
+            },
             signal,
         );
-        if (decodeMessageKind(encoded) === "session.operation.failed") {
-            return throwNativeFailure(
-                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
-                requestId,
-                sessionTarget,
-            );
-        }
-        const result = await sessionTurnWithdrawnEventCodec.decode(encoded, this.#executor.payloadEncryption, signal);
-        if (
-            result.requestId !== requestId ||
-            !sameNativeSession(result.target, sessionTarget) ||
-            result.commandId !== turnId
-        ) {
-            throw new MortyProtocolError("The service returned an invalid queued cancellation");
-        }
         this.#answeredFor(turnId, "queued cancellation", decodeTurnReference, { turnId: result.commandId });
     };
 
@@ -1200,36 +1202,28 @@ export class MortyTurnResources {
         signal: AbortSignal,
     ): Promise<{ readonly turnId: string }> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.sendJson(
-            sessionEndpoints.steerTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
-            await sessionPromptDispositionCommandCodec.encode(
-                {
-                    kind: "session.prompt.disposition",
-                    requestId,
-                    target: sessionTarget,
-                    commandId: turnId,
-                    disposition: SessionPromptDisposition.Steer,
-                },
-                this.#executor.payloadEncryption,
-                signal,
-            ),
+        const result = await this.#executor.exchange(
+            {
+                endpoint: sessionEndpoints.steerTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
+                body: await sessionPromptDispositionCommandCodec.encode(
+                    {
+                        kind: "session.prompt.disposition",
+                        requestId,
+                        target: sessionTarget,
+                        commandId: turnId,
+                        disposition: SessionPromptDisposition.Steer,
+                    },
+                    this.#executor.payloadEncryption,
+                    signal,
+                ),
+                requestId,
+                target: sessionTarget,
+                reply: sessionPromptSteeredEventCodec,
+                mismatch: "The service returned an invalid steered Turn",
+                isAnswer: (reply) => reply.commandId === turnId,
+            },
             signal,
         );
-        if (decodeMessageKind(encoded) === "session.operation.failed") {
-            return throwNativeFailure(
-                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
-                requestId,
-                sessionTarget,
-            );
-        }
-        const result = await sessionPromptSteeredEventCodec.decode(encoded, this.#executor.payloadEncryption, signal);
-        if (
-            result.requestId !== requestId ||
-            !sameNativeSession(result.target, sessionTarget) ||
-            result.commandId !== turnId
-        ) {
-            throw new MortyProtocolError("The service returned an invalid steered Turn");
-        }
         return this.#answeredFor(turnId, "steered Turn", decodeTurnReference, { turnId: result.commandId });
     };
 }
@@ -1252,52 +1246,45 @@ export class MortyInteractionResources {
         signal: AbortSignal,
     ): Promise<void> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.sendJson(
-            sessionEndpoints.respond({ computerId: this.#computerId, target: sessionTarget, interactionId }),
-            request.kind === "permission"
-                ? await sessionPermissionRespondCommandCodec.encode(
-                      {
-                          ...request.answer,
-                          kind: "session.permission.respond",
-                          requestId,
-                          target: sessionTarget,
-                          interactionId,
-                      },
-                      this.#executor.payloadEncryption,
-                      signal,
-                  )
-                : await sessionElicitationRespondCommandCodec.encode(
-                      {
-                          ...request.answer,
-                          kind: "session.elicitation.respond",
-                          requestId,
-                          target: sessionTarget,
-                          interactionId,
-                      },
-                      this.#executor.payloadEncryption,
-                      signal,
-                  ),
-            signal,
-        );
-        if (decodeMessageKind(encoded) === "session.operation.failed") {
-            return throwNativeFailure(
-                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
+        await this.#executor.exchange(
+            {
+                endpoint: sessionEndpoints.respond({
+                    computerId: this.#computerId,
+                    target: sessionTarget,
+                    interactionId,
+                }),
+                body:
+                    request.kind === "permission"
+                        ? await sessionPermissionRespondCommandCodec.encode(
+                              {
+                                  ...request.answer,
+                                  kind: "session.permission.respond",
+                                  requestId,
+                                  target: sessionTarget,
+                                  interactionId,
+                              },
+                              this.#executor.payloadEncryption,
+                              signal,
+                          )
+                        : await sessionElicitationRespondCommandCodec.encode(
+                              {
+                                  ...request.answer,
+                                  kind: "session.elicitation.respond",
+                                  requestId,
+                                  target: sessionTarget,
+                                  interactionId,
+                              },
+                              this.#executor.payloadEncryption,
+                              signal,
+                          ),
                 requestId,
-                sessionTarget,
-            );
-        }
-        const result = await sessionInteractionAnsweredEventCodec.decode(
-            encoded,
-            this.#executor.payloadEncryption,
+                target: sessionTarget,
+                reply: sessionInteractionAnsweredEventCodec,
+                mismatch: "The service returned an invalid Interaction response",
+                isAnswer: (reply) => reply.interactionId === interactionId,
+            },
             signal,
         );
-        if (
-            result.requestId !== requestId ||
-            !sameNativeSession(result.target, sessionTarget) ||
-            result.interactionId !== interactionId
-        ) {
-            throw new MortyProtocolError("The service returned an invalid Interaction response");
-        }
     };
 }
 
@@ -1508,37 +1495,32 @@ export class MortyEventResources {
         signal: AbortSignal,
     ): Promise<SessionEventLogPage> => {
         const requestId = crypto.randomUUID();
-        const encoded = await this.#executor.sendJson(
-            sessionEndpoints.listEvents({
-                computerId: this.#computerId,
-                target: sessionTarget,
-                limit: page.limit,
-                cursor: page.cursor,
-            }),
-            await sessionHistoryPageLoadCodec.encode(
-                {
-                    kind: "session.live-history.v2.page.load",
-                    requestId,
+        const result = await this.#executor.exchange(
+            {
+                endpoint: sessionEndpoints.listEvents({
+                    computerId: this.#computerId,
                     target: sessionTarget,
-                    eventLimit: page.limit,
-                    cursor: page.cursor.length === 0 ? null : page.cursor,
-                },
-                this.#executor.payloadEncryption,
-                signal,
-            ),
+                    limit: page.limit,
+                    cursor: page.cursor,
+                }),
+                body: await sessionHistoryPageLoadCodec.encode(
+                    {
+                        kind: "session.live-history.v2.page.load",
+                        requestId,
+                        target: sessionTarget,
+                        eventLimit: page.limit,
+                        cursor: page.cursor.length === 0 ? null : page.cursor,
+                    },
+                    this.#executor.payloadEncryption,
+                    signal,
+                ),
+                requestId,
+                target: sessionTarget,
+                reply: sessionHistoryPageLoadedCodec,
+                mismatch: "The Computer returned a response for another request",
+            },
             signal,
         );
-        if (decodeMessageKind(encoded) === "session.operation.failed") {
-            return throwNativeFailure(
-                await sessionOperationFailedEventCodec.decode(encoded, this.#executor.payloadEncryption, signal),
-                requestId,
-                sessionTarget,
-            );
-        }
-        const result = await sessionHistoryPageLoadedCodec.decode(encoded, this.#executor.payloadEncryption, signal);
-        if (result.requestId !== requestId || !sameNativeSession(result.target, sessionTarget)) {
-            throw new MortyProtocolError("The Computer returned a response for another request");
-        }
         return decodeKnownSessionEventLogPage(result.events.events);
     };
 
