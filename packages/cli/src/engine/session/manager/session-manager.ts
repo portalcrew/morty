@@ -13,7 +13,6 @@ import {
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import type { NativeSessionOrigin } from "../../acp/protocol/native-session.ts";
 import { unsupportedSessionCapabilities } from "../../acp/protocol/session-capabilities.ts";
-import { type OperationMetrics, unmeasuredOperationMetrics } from "../../infra/operation-metrics.ts";
 import type { Timer } from "../../util/timer.ts";
 import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
 import { AgentSession, type SessionExecutionRecord } from "../live/agent-session.ts";
@@ -237,23 +236,15 @@ export class SessionManager {
         return runtime;
     }
 
-    async #startPreparation(
-        options: SessionPrepareOptions,
-        recovery: SessionRecovery,
-        metrics: OperationMetrics = unmeasuredOperationMetrics,
-    ): Promise<AgentSession> {
+    async #startPreparation(options: SessionPrepareOptions, recovery: SessionRecovery): Promise<AgentSession> {
         return await this.#executionProcesses.prepare(
             options.target,
-            async () => await this.#startSession(options, recovery, metrics),
+            async () => await this.#startSession(options, recovery),
         );
     }
 
     /** Starts the Session's process, which the Runtime retains until the Session is stopped or retired. */
-    async #startSession(
-        options: SessionPrepareOptions,
-        recovery: SessionRecovery,
-        metrics: OperationMetrics = unmeasuredOperationMetrics,
-    ): Promise<AgentSession> {
+    async #startSession(options: SessionPrepareOptions, recovery: SessionRecovery): Promise<AgentSession> {
         return await this.#startRetainedSessionProcess(
             options,
             async (capabilities) =>
@@ -263,7 +254,6 @@ export class SessionManager {
                     this.#observer,
                     this.#executionRecord,
                     this.#store,
-                    metrics,
                     options.adapter,
                     capabilities,
                 ),
@@ -328,31 +318,21 @@ export class SessionManager {
         });
     }
 
-    async #prepareSession(
-        options: SessionPrepareOptions,
-        recovery: SessionRecovery,
-        metrics: OperationMetrics = unmeasuredOperationMetrics,
-    ): Promise<PreparedSession> {
+    async #prepareSession(options: SessionPrepareOptions, recovery: SessionRecovery): Promise<PreparedSession> {
         return await this.#executionProcesses.use(options.target, async () =>
             this.#operations.run(options, async (options) => {
                 await this.#admit(options.target, { kind: "prepare" }, options.signal, () => undefined);
                 const pending = this.#executionProcesses.pending(options.target);
                 if (pending !== undefined) {
-                    const runtime = await metrics.measure(
-                        "session-preparation-wait",
-                        async () => await waitForSharedOperation(pending, options.signal),
-                    );
+                    const runtime = await waitForSharedOperation(pending, options.signal);
                     if (runtime.runsIn(options.cwd)) {
                         this.#executionProcesses.touch(options.target, runtime);
                         if (recovery.kind === "history-required") {
-                            await metrics.measure(
-                                "session-load",
-                                async () => await runtime.ensureHistoryLoaded(options.signal),
-                            );
+                            await runtime.ensureHistoryLoaded(options.signal);
                         }
                         return runtime.prepared();
                     }
-                    return await this.#prepareSession(options, recovery, metrics);
+                    return await this.#prepareSession(options, recovery);
                 }
                 const existing = this.#executionProcesses.get(options.target);
                 if (existing !== undefined) {
@@ -360,10 +340,7 @@ export class SessionManager {
                         const runtime = await this.#currentSessionProcess(existing, options, recovery);
                         this.#executionProcesses.touch(options.target, runtime);
                         if (recovery.kind === "history-required") {
-                            await metrics.measure(
-                                "session-load",
-                                async () => await runtime.ensureHistoryLoaded(options.signal),
-                            );
+                            await runtime.ensureHistoryLoaded(options.signal);
                         }
                         return runtime.prepared();
                     }
@@ -373,16 +350,14 @@ export class SessionManager {
                         "session_identity_mismatch",
                     );
                 }
-                const runtime = await this.#startPreparation(options, recovery, metrics);
+                const runtime = await this.#startPreparation(options, recovery);
                 return runtime.prepared();
             }),
         );
     }
 
-    readonly prepareSession = async (
-        options: SessionPrepareOptions,
-        metrics: OperationMetrics = unmeasuredOperationMetrics,
-    ): Promise<PreparedSession> => await this.#prepareSession(options, { kind: "interactive-only" }, metrics);
+    readonly prepareSession = async (options: SessionPrepareOptions): Promise<PreparedSession> =>
+        await this.#prepareSession(options, { kind: "interactive-only" });
 
     /**
      * Creates a Session with the settings `configure` applies, and answers with its configured snapshot. The Runtime
@@ -396,14 +371,7 @@ export class SessionManager {
         this.#operations.run(options, async (options) => {
             const runtime = await this.#processes.startUnretained(
                 options.signal,
-                async () =>
-                    await AgentSession.create(
-                        options,
-                        this.#observer,
-                        this.#executionRecord,
-                        this.#store,
-                        unmeasuredOperationMetrics,
-                    ),
+                async () => await AgentSession.create(options, this.#observer, this.#executionRecord, this.#store),
             );
             const target = await this.#retainCreated(runtime);
             const creation = Promise.withResolvers<void>();
@@ -458,10 +426,8 @@ export class SessionManager {
         }
     }
 
-    readonly restoreSession = async (
-        options: SessionPrepareOptions,
-        metrics: OperationMetrics = unmeasuredOperationMetrics,
-    ): Promise<PreparedSession> => await this.#prepareSession(options, { kind: "history-required" }, metrics);
+    readonly restoreSession = async (options: SessionPrepareOptions): Promise<PreparedSession> =>
+        await this.#prepareSession(options, { kind: "history-required" });
 
     /**
      * Opens a short-lived native ACP session only to read the local Agent's
@@ -478,7 +444,6 @@ export class SessionManager {
                         this.#agentSettingsObserver,
                         { agentCommand: () => undefined, settledTurns: () => [] },
                         new MemorySessionStore(),
-                        unmeasuredOperationMetrics,
                     ),
                 async (runtime) => {
                     const prepared = runtime.prepared();
@@ -1031,7 +996,6 @@ export class SessionManager {
                             this.#observer,
                             this.#executionRecord,
                             this.#store,
-                            unmeasuredOperationMetrics,
                         ),
                 );
                 let retained = false;

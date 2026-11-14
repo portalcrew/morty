@@ -802,8 +802,6 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
                 requestId: "restore_request",
                 target: sessionTarget,
             });
-            expect(restoredEvent.ready.runtimeTimings?.map((timing) => timing.name)).toContain("session-load");
-            expect(restoredEvent.ready.runtimeTimings?.map((timing) => timing.name)).not.toContain("session-resume");
 
             await restored.socket.send(
                 encodeSessionHistoryPageLoad({

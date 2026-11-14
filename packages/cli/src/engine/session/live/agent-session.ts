@@ -27,7 +27,6 @@ import type {
 } from "../../acp/native-history/preview-contract.ts";
 import type { NativeSessionOrigin } from "../../acp/protocol/native-session.ts";
 import { unsupportedSessionCapabilities } from "../../acp/protocol/session-capabilities.ts";
-import type { OperationMetrics } from "../../infra/operation-metrics.ts";
 import { SerialTaskQueue } from "../../util/serial-task-queue.ts";
 import { recordsEqual, truncate } from "../../util/value-utils.ts";
 import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
@@ -132,7 +131,6 @@ export class AgentSession {
     readonly #agentCommand: () => string | undefined;
     readonly #settledTurns: () => readonly SettledTurn[];
     readonly #interactions: SessionInteractions;
-    readonly #metrics: OperationMetrics;
     readonly #store: SessionStore;
     #agentName = "";
     #agentVersion = "";
@@ -156,7 +154,6 @@ export class AgentSession {
         observer: SessionObserver,
         execution: SessionExecutionRecord,
         store: SessionStore,
-        metrics: OperationMetrics,
         adapter: Adapter,
         externalize: SessionPrepareOptions["externalizeSessionUpdate"],
     ) {
@@ -168,7 +165,6 @@ export class AgentSession {
         this.#cwd = cwd;
         this.#environment = agent.environment;
         this.#identity = identity;
-        this.#metrics = metrics;
         this.#store = store;
         this.#observer = observer;
         this.#interactions = new SessionInteractions({
@@ -230,28 +226,19 @@ export class AgentSession {
         execution: SessionExecutionRecord,
         store: SessionStore,
         initialize: (runtime: AgentSession) => Promise<void>,
-        metrics: OperationMetrics,
         adapter: Adapter,
     ): Promise<AgentSession> {
         for (let attempt = 1; attempt <= 2; attempt += 1) {
-            await metrics.measure(
-                "executable-validation",
-                async () => await validateAgentRuntime(options.agent, options.signal),
-            );
-            const runtime = metrics.measureSync(
-                "process-spawn",
-                () =>
-                    new AgentSession(
-                        options.agent,
-                        options.cwd,
-                        identity,
-                        observer,
-                        execution,
-                        store,
-                        metrics,
-                        adapter,
-                        options.externalizeSessionUpdate,
-                    ),
+            await validateAgentRuntime(options.agent, options.signal);
+            const runtime = new AgentSession(
+                options.agent,
+                options.cwd,
+                identity,
+                observer,
+                execution,
+                store,
+                adapter,
+                options.externalizeSessionUpdate,
             );
             try {
                 await initialize(runtime);
@@ -287,7 +274,6 @@ export class AgentSession {
         observer: SessionObserver,
         execution: SessionExecutionRecord,
         store: SessionStore,
-        metrics: OperationMetrics,
         adapter: Adapter,
         capabilities: SessionCapabilities = unsupportedSessionCapabilities(),
     ): Promise<AgentSession> =>
@@ -303,7 +289,6 @@ export class AgentSession {
                     async () => await runtime.#restore(options.signal, recovery, options.origin),
                 );
             },
-            metrics,
             adapter,
         );
 
@@ -312,7 +297,6 @@ export class AgentSession {
         observer: SessionObserver,
         execution: SessionExecutionRecord,
         store: SessionStore,
-        metrics: OperationMetrics,
     ): Promise<AgentSession> =>
         await AgentSession.#start(
             options,
@@ -329,7 +313,6 @@ export class AgentSession {
                 runtime.#applySessionOpened(opened);
                 options.signal.throwIfAborted();
             },
-            metrics,
             options.adapter,
         );
 
@@ -340,7 +323,6 @@ export class AgentSession {
         observer: SessionObserver,
         execution: SessionExecutionRecord,
         store: SessionStore,
-        metrics: OperationMetrics,
     ): Promise<AgentSession> =>
         await AgentSession.#start(
             options,
@@ -374,7 +356,6 @@ export class AgentSession {
                 options.signal.throwIfAborted();
                 runtime.writeStoredSession(new Date().toISOString());
             },
-            metrics,
             options.adapter,
         );
 
@@ -594,23 +575,20 @@ export class AgentSession {
         recovery: SessionRecovery,
         origin: NativeSessionOrigin | undefined,
     ): Promise<void> => {
-        const conversation = this.#metrics.measureSync("session-state-read", () =>
-            restoredConversation(
-                origin === undefined ? this.#store.read(this.target) : undefined,
-                this.target,
-                this.#cwd,
-                origin,
-                new Date().toISOString(),
-            ),
+        const conversation = restoredConversation(
+            origin === undefined ? this.#store.read(this.target) : undefined,
+            this.target,
+            this.#cwd,
+            origin,
+            new Date().toISOString(),
         );
         this.#bind(conversation.target, "reopened", conversation.prompted);
         this.#sessionTitle = conversation.title;
         const opening = restoreOpening(recovery, this.#capabilities);
-        const opened = await this.#metrics.measure("session-load", async () =>
+        const opened =
             opening === "replay"
                 ? await this.#replayHistory(signal)
-                : await this.#adapter.openSession({ ...this.#sessionParams(signal), sessionId: this.target.sessionId }),
-        );
+                : await this.#adapter.openSession({ ...this.#sessionParams(signal), sessionId: this.target.sessionId });
         if (opened.sessionId !== conversation.sessionId) {
             throw new AcpExecutionError(
                 "The harness restored a different native Session",
