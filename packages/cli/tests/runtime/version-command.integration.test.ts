@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -6,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import cliPackage from "../../package.json" with { type: "json" };
 import { sendLocalRequest } from "../../src/daemon/control/local-client.ts";
 import { openMortyInstallation } from "../../src/daemon/pairing/pair-local-computer.ts";
+import { runCli } from "../support/cli-command.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -14,33 +14,6 @@ afterEach(async () => {
         temporaryDirectories.splice(0).map(async (directory) => await rm(directory, { force: true, recursive: true })),
     );
 });
-
-async function runCli(
-    arguments_: readonly string[],
-    environment: Readonly<NodeJS.ProcessEnv>,
-    signal: AbortSignal,
-): Promise<{ readonly code: number | null; readonly stderr: string; readonly stdout: string }> {
-    const child = spawn(process.execPath, [resolve(import.meta.dirname, "../../dist/cli.js"), ...arguments_], {
-        env: environment,
-        signal,
-        stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-        stdout += chunk;
-    });
-    child.stderr.on("data", (chunk: string) => {
-        stderr += chunk;
-    });
-    const code = await new Promise<number | null>((resolve_, reject) => {
-        child.once("error", reject);
-        child.once("exit", resolve_);
-    });
-    return { code, stderr, stdout };
-}
 
 describe("Morty version command", () => {
     it("Given no running daemon, When the user asks for the version, Then the CLI reports its own version and that no daemon is running", async () => {

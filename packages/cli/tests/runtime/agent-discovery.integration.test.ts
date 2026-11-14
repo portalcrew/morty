@@ -7,10 +7,7 @@ import { discoverLocalAgentInventory } from "../../src/engine/agent/discovery/di
 import { resolveAgentExecutables } from "../../src/engine/agent/discovery/executable-discovery.ts";
 import { CodexAgentSpecification } from "../../src/engine/agent/specification/vendors/codex-agent.ts";
 import { PiAgentSpecification } from "../../src/engine/agent/specification/vendors/pi-agent.ts";
-
-function executableSource(source: string): string {
-    return `#!${process.execPath}\n${source}`;
-}
+import { executableSource } from "../support/agents/executable.ts";
 
 describe("local Agent discovery", () => {
     beforeEach(() => {

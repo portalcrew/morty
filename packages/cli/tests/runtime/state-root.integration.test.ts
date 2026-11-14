@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import packageMetadata from "../../package.json" with { type: "json" };
+import { runCli } from "../support/cli-command.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -12,32 +12,6 @@ afterEach(async () => {
         temporaryDirectories.splice(0).map(async (directory) => await rm(directory, { force: true, recursive: true })),
     );
 });
-
-async function runCli(
-    arguments_: readonly string[],
-    environment: Readonly<NodeJS.ProcessEnv>,
-): Promise<{ readonly code: number | null; readonly stderr: string; readonly stdout: string }> {
-    const child = spawn(process.execPath, [resolve(import.meta.dirname, "../../dist/cli.js"), ...arguments_], {
-        env: environment,
-        signal: AbortSignal.timeout(60_000),
-        stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-        stdout += chunk;
-    });
-    child.stderr.on("data", (chunk: string) => {
-        stderr += chunk;
-    });
-    const code = await new Promise<number | null>((resolve_, reject) => {
-        child.once("error", reject);
-        child.once("exit", resolve_);
-    });
-    return { code, stderr, stdout };
-}
 
 /** A state root initialized by a real daemon, and the daemon data directory it created inside it. */
 async function openedStateRoot(): Promise<{
@@ -50,10 +24,10 @@ async function openedStateRoot(): Promise<{
     const root = join(home, "state");
     const env = environment(home, root);
     try {
-        const started = await runCli(["start"], env);
+        const started = await runCli(["start"], env, AbortSignal.timeout(60_000));
         expect(started.code, started.stderr).toBe(0);
     } finally {
-        const stopped = await runCli(["quit"], env);
+        const stopped = await runCli(["quit"], env, AbortSignal.timeout(60_000));
         expect(stopped.code, stopped.stderr).toBe(0);
     }
     const application = join(root, "computer");
@@ -77,13 +51,13 @@ describe("Morty state root", () => {
             await symlink(target, join(root, "computer"), process.platform === "win32" ? "junction" : "dir");
             const env = environment(home, root);
             try {
-                const result = await runCli([command], env);
+                const result = await runCli([command], env, AbortSignal.timeout(60_000));
 
                 expect(result.code).not.toBe(0);
                 expect(await readdir(target)).toEqual([]);
             } finally {
                 if (command === "start") {
-                    await runCli(["quit"], env);
+                    await runCli(["quit"], env, AbortSignal.timeout(60_000));
                 }
             }
         },
@@ -95,11 +69,11 @@ describe("Morty state root", () => {
             const home = await mkdtemp(join(tmpdir(), "morty-version-container-"));
             temporaryDirectories.push(home);
             const root = join(home, "state");
-            await runCli(["release"], environment(home, root));
+            await runCli(["release"], environment(home, root), AbortSignal.timeout(60_000));
             const versionDirectory = join(root, "computer");
             await chmod(versionDirectory, 0o777);
 
-            const listed = await runCli(["release"], environment(home, root));
+            const listed = await runCli(["release"], environment(home, root), AbortSignal.timeout(60_000));
 
             expect(listed.code, listed.stderr).toBe(0);
             expect((await stat(versionDirectory)).mode & 0o777).toBe(0o700);
@@ -110,7 +84,7 @@ describe("Morty state root", () => {
         const { root, installation, home } = await openedStateRoot();
         const before = await readdir(installation);
 
-        const listed = await runCli(["release"], environment(home, installation));
+        const listed = await runCli(["release"], environment(home, installation), AbortSignal.timeout(60_000));
 
         expect(listed.code).toBe(78);
         expect(listed.stderr).toContain(`MORTY_STATE_DIRECTORY=${root}`);
@@ -121,7 +95,7 @@ describe("Morty state root", () => {
         const { root, installation, home } = await openedStateRoot();
         await mkdir(join(installation, "computer"), { recursive: true, mode: 0o700 });
 
-        const listed = await runCli(["release"], environment(home, installation));
+        const listed = await runCli(["release"], environment(home, installation), AbortSignal.timeout(60_000));
 
         expect(listed.code).toBe(78);
         expect(listed.stderr).toContain(`MORTY_STATE_DIRECTORY=${root}`);
@@ -135,7 +109,7 @@ describe("Morty state root", () => {
             mode: 0o600,
         });
 
-        const listed = await runCli(["release"], environment(home, installation));
+        const listed = await runCli(["release"], environment(home, installation), AbortSignal.timeout(60_000));
 
         expect(listed.code).not.toBe(0);
         expect(await readFile(join(installation, "current-data.txt"), "utf8")).toBe(

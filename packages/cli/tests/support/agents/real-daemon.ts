@@ -501,6 +501,23 @@ export async function nextPromptSettlement(peer: DaemonConnectionPeer, commandId
     }
 }
 
+/** Waits for the answer to one native Session request; a failed operation ends the wait with its message. */
+export async function nextNativeSessionResult(peer: DaemonConnectionPeer, requestId: string) {
+    for (;;) {
+        const message = await peer.nextMessage();
+        const kind = decodeMessageKind(message);
+        if (kind === "session.operation.failed") {
+            throw new Error(message);
+        }
+        if (kind === "native.session.result") {
+            const result = decodeNativeSessionResult(message);
+            if (result.requestId === requestId) {
+                return result;
+            }
+        }
+    }
+}
+
 /** Opens an Agent-owned conversation through the same discovery and import boundary as the browser. */
 export async function importRealSession(
     peer: DaemonConnectionPeer,
@@ -512,24 +529,9 @@ export async function importRealSession(
         harness,
         directory: ".",
     } as const;
-    const receive = async (requestId: string) => {
-        for (;;) {
-            const message = await peer.nextMessage();
-            const kind = decodeMessageKind(message);
-            if (kind === "session.operation.failed") {
-                throw new Error(message);
-            }
-            if (kind === "native.session.result") {
-                const result = decodeNativeSessionResult(message);
-                if (result.requestId === requestId) {
-                    return result;
-                }
-            }
-        }
-    };
     const findId = randomUUID();
     peer.send(encodeNativeSessionCommand({ ...identity, action: "find", requestId: findId, sessionId }));
-    const found = await receive(findId);
+    const found = await nextNativeSessionResult(peer, findId);
     if (found.action !== "find") {
         throw new Error("Expected a native Session discovery");
     }
@@ -543,7 +545,7 @@ export async function importRealSession(
             requestId: importId,
         }),
     );
-    const imported = await receive(importId);
+    const imported = await nextNativeSessionResult(peer, importId);
     if (imported.action !== "import") {
         throw new Error("Expected a native Session import");
     }

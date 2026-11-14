@@ -11,13 +11,10 @@ import {
 } from "@morty-build/client/protocol";
 import { expect, test } from "vitest";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
+import { executableSource } from "../support/agents/executable.ts";
 import { withControlledDaemonConnection as withRealDaemon } from "../support/agents/real-daemon.ts";
 
 const fakeAgentPath = fileURLToPath(new URL("./fixtures/acp-peer.ts", import.meta.url));
-
-function executableSource(source: string): string {
-    return `#!${process.execPath}\n${source}`;
-}
 
 test("Given an ACP Agent repeatedly fails Computer initialization, When a conversation is created, Then the public failure has a correlated local diagnostic with the sanitized cause chain", async () => {
     const directory = await mkdtemp(join(tmpdir(), "morty-prepare-diagnostics-"));

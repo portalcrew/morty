@@ -6,10 +6,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { runBoundedProcess } from "../../src/engine/util/process/executable.ts";
-
-function executableSource(source: string): string {
-    return `#!${process.execPath}\n${source}`;
-}
+import { executableSource } from "../support/agents/executable.ts";
 
 function waitForMarker(directory: string, marker: string): Promise<void> {
     return new Promise((resolveMarker) => {
