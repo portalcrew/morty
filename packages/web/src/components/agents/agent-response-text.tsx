@@ -1,7 +1,6 @@
 import { memo, useState } from "react";
 import { textLinkClassName } from "../ui/text-link.ts";
 import { AgentMarkdown, type MarkdownImageReader } from "./agent-markdown.tsx";
-import type { SessionResourceStoreFactory } from "./resource-reader.ts";
 
 const PREVIEW_CHARACTERS = 32_000;
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
@@ -9,8 +8,6 @@ const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 type ResponseProps = {
     readonly text: string;
     readonly streaming: boolean;
-    /** The view-model resource store factory; without it remote images render as unavailable. */
-    readonly createResourceStore?: SessionResourceStoreFactory | undefined;
     readonly openLocalFile: (path: string) => void;
     readonly readImage?: MarkdownImageReader | undefined;
 };
@@ -19,7 +16,6 @@ type MarkdownPreviewProps = ResponseProps & { readonly sourceCharacters: number 
 
 const MarkdownPreview = memo(function MarkdownPreview({
     text,
-    createResourceStore,
     openLocalFile,
     readImage,
     sourceCharacters,
@@ -27,7 +23,6 @@ const MarkdownPreview = memo(function MarkdownPreview({
 }: MarkdownPreviewProps) {
     return (
         <AgentMarkdown
-            createResourceStore={createResourceStore}
             markdown={text}
             openLocalFile={openLocalFile}
             readImage={readImage}
@@ -37,7 +32,7 @@ const MarkdownPreview = memo(function MarkdownPreview({
     );
 });
 
-export function AgentResponseText({ text, createResourceStore, openLocalFile, readImage, streaming }: ResponseProps) {
+export function AgentResponseText({ text, openLocalFile, readImage, streaming }: ResponseProps) {
     const [visibleCharacters, setVisibleCharacters] = useState(PREVIEW_CHARACTERS);
     // Expand one document, rather than independent fragments: the Markdown parser
     // retains list, table, quote and code context across every expansion.
@@ -55,7 +50,6 @@ export function AgentResponseText({ text, createResourceStore, openLocalFile, re
         <div>
             <MarkdownPreview
                 text={beginning}
-                createResourceStore={createResourceStore}
                 openLocalFile={openLocalFile}
                 readImage={readImage}
                 sourceCharacters={text.length}

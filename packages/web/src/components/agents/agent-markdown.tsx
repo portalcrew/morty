@@ -19,7 +19,7 @@ import { MermaidCodeBlock } from "../../components/agents/mermaid-code-block.tsx
 import { remarkMermaidCompletion } from "../../components/agents/remark-mermaid-completion.ts";
 import { textLinkClassName } from "../ui/text-link.ts";
 import { RemoteImageConsent, type RemoteImageConsentModel } from "./remote-image-consent.tsx";
-import type { SessionResourceReader as MarkdownImageReader, SessionResourceStoreFactory } from "./resource-reader.ts";
+import type { SessionResourceReader as MarkdownImageReader } from "./resource-reader.ts";
 import { SessionResource } from "./session-resource.tsx";
 
 export type { SessionResourceReader as MarkdownImageReader } from "./resource-reader.ts";
@@ -212,9 +212,7 @@ function remarkLocalMarkdownTargets() {
 
 const STREAMDOWN_REMARK_PLUGINS = [...Object.values(defaultRemarkPlugins), remarkLocalMarkdownTargets];
 
-const MarkdownResources = createContext<
-    Pick<AgentMarkdownProps, "openLocalFile" | "createResourceStore" | "readImage">
->({});
+const MarkdownResources = createContext<Pick<AgentMarkdownProps, "openLocalFile" | "readImage">>({});
 
 function AgentMarkdownLink({ children, href }: ComponentProps<"a">) {
     const { openLocalFile } = useContext(MarkdownResources);
@@ -310,7 +308,7 @@ function ConsentedRemoteImage({
 }
 
 function AgentMarkdownImage({ alt, className, src, title }: ComponentProps<"img">) {
-    const { createResourceStore, readImage } = useContext(MarkdownResources);
+    const { readImage } = useContext(MarkdownResources);
     const origin = typeof src === "string" ? imageOrigin(src) : null;
     const requestedSource = typeof src === "string" ? (localFilePath(src) ?? src) : "";
     if (origin?.kind === "remote") {
@@ -327,16 +325,11 @@ function AgentMarkdownImage({ alt, className, src, title }: ComponentProps<"img"
             />
         );
     }
-    if (createResourceStore === undefined || readImage === undefined) {
+    if (readImage === undefined) {
         return <span className="text-xs text-muted-foreground">Image not available</span>;
     }
     return (
-        <SessionResource
-            inline
-            createStore={createResourceStore}
-            request={{ kind: "image", path: requestedSource }}
-            read={readImage}
-        >
+        <SessionResource inline request={{ kind: "image", path: requestedSource }} read={readImage}>
             {(state) => {
                 if (state.kind === "loading") {
                     return <span className="text-xs text-muted-foreground">Loading image…</span>;
@@ -361,8 +354,6 @@ function AgentMarkdownImage({ alt, className, src, title }: ComponentProps<"img"
 
 export interface AgentMarkdownProps {
     readonly className?: string;
-    /** The view-model resource store factory; without it remote images render as unavailable. */
-    readonly createResourceStore?: SessionResourceStoreFactory | undefined;
     readonly markdown: string;
     readonly openLocalFile?: ((path: string) => void) | undefined;
     readonly readImage?: MarkdownImageReader | undefined;
@@ -380,7 +371,6 @@ interface AgentMarkdownContentProps extends AgentMarkdownProps {
 
 export function AgentMarkdownContent({
     className,
-    createResourceStore,
     markdown,
     mathPlugin,
     openLocalFile,
@@ -396,10 +386,7 @@ export function AgentMarkdownContent({
         ];
         return [completion, ...STREAMDOWN_REMARK_PLUGINS];
     }, [streaming]);
-    const resources = useMemo(
-        () => ({ openLocalFile, readImage, createResourceStore }),
-        [openLocalFile, readImage, createResourceStore],
-    );
+    const resources = useMemo(() => ({ openLocalFile, readImage }), [openLocalFile, readImage]);
     const plugins = useMemo(
         () => (mathPlugin === undefined ? STREAMDOWN_PLUGINS : { ...STREAMDOWN_PLUGINS, math: mathPlugin }),
         [mathPlugin],

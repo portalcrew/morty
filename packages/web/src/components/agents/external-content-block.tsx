@@ -7,20 +7,18 @@ import { ScrollArea } from "../ui/scroll-area.tsx";
 import { textLinkClassName } from "../ui/text-link.ts";
 import type { MarkdownImageReader } from "./agent-markdown.tsx";
 import { isDisplayableImageType } from "./displayable-image-type.ts";
-import type { SessionResourceRequest, SessionResourceState, SessionResourceStoreFactory } from "./resource-reader.ts";
+import type { SessionResourceRequest, SessionResourceState } from "./resource-reader.ts";
 import { SessionResource } from "./session-resource.tsx";
 
 const SAFE_AUDIO_MIME = /^audio\/(?:aac|mpeg|mp4|ogg|wav|webm)$/u;
 
 export function LinkedResourceBlock({
-    createResourceStore,
     mediaType,
     name,
     path,
     readContent,
     speaker,
 }: {
-    readonly createResourceStore: SessionResourceStoreFactory;
     readonly mediaType: string;
     readonly name: string;
     readonly path: string;
@@ -32,7 +30,7 @@ export function LinkedResourceBlock({
         [mediaType, path],
     );
     return (
-        <SessionResource createStore={createResourceStore} inline request={request} read={readContent}>
+        <SessionResource inline request={request} read={readContent}>
             {(state) => {
                 if (state.kind === "loading") {
                     return speaker === "user" && mediaType === "image/svg+xml" ? (
@@ -75,13 +73,10 @@ export function LinkedResourceBlock({
  */
 export function ExternalContentBlock({
     content,
-    createResourceStore,
     readContent,
     speaker,
 }: {
     readonly content: MortyExternalContentBlock;
-    /** The view-model resource store factory that owns the load. */
-    readonly createResourceStore: SessionResourceStoreFactory;
     readonly readContent?: MarkdownImageReader | undefined;
     readonly speaker: "assistant" | "user";
 }) {
@@ -90,7 +85,7 @@ export function ExternalContentBlock({
         [content],
     );
     return (
-        <SessionResource createStore={createResourceStore} inline request={request} read={readContent}>
+        <SessionResource inline request={request} read={readContent}>
             {(state) => renderContent(content, state, speaker)}
         </SessionResource>
     );

@@ -5,7 +5,6 @@ import { ToolTextPreview } from "../../components/chat/tool-text-preview.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
 import { AgentRichContent } from "../agents/agent-rich-content.tsx";
-import type { SessionResourceStoreFactory } from "../agents/resource-reader.ts";
 import { FollowLatestScrollArea } from "../utils/follow-latest-scroll-area.tsx";
 import { useScrollClippedEdges } from "../utils/use-scroll-clipped-edges.ts";
 import { type DisclosureChoice, disclosureOpen } from "./disclosure-choice.ts";
@@ -114,21 +113,13 @@ function ReasoningDisclosure({ active, entry }: { readonly active: boolean; read
 
 function ToolCall({
     entry,
-    createResourceStore,
     readImage,
 }: {
     readonly entry: SessionToolPresentation;
-    readonly createResourceStore?: SessionResourceStoreFactory | undefined;
     readonly readImage?: MarkdownImageReader | undefined;
 }) {
     const registered = renderRegisteredTool(entry);
-    const supplementalContent = (
-        <AgentRichContent
-            contents={toolRichContent(entry.content)}
-            createResourceStore={createResourceStore}
-            readImage={readImage}
-        />
-    );
+    const supplementalContent = <AgentRichContent contents={toolRichContent(entry.content)} readImage={readImage} />;
     if (registered !== null) {
         return <ToolCallSupplementalContent value={supplementalContent}>{registered}</ToolCallSupplementalContent>;
     }
@@ -163,13 +154,10 @@ function ToolCall({
 
 export function AgentThinking({
     active,
-    createResourceStore,
     entries,
     readImage,
 }: {
     readonly active: boolean;
-    /** The view-model resource store factory; without it remote images render as links. */
-    readonly createResourceStore?: SessionResourceStoreFactory | undefined;
     readonly entries: readonly AgentThinkingEntry[];
     readonly readImage?: MarkdownImageReader | undefined;
 }) {
@@ -223,12 +211,7 @@ export function AgentThinking({
                         key={`reasoning:${item.entry.id}`}
                     />
                 ) : (
-                    <ToolCall
-                        createResourceStore={createResourceStore}
-                        entry={item.entry}
-                        key={`tool:${item.entry.id}`}
-                        readImage={readImage}
-                    />
+                    <ToolCall entry={item.entry} key={`tool:${item.entry.id}`} readImage={readImage} />
                 ),
             )}
         </div>

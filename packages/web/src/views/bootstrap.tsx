@@ -2,6 +2,7 @@ import { ErrorBoundary, reactErrorHandler } from "@sentry/react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RemoteImageConsentProvider } from "../components/agents/remote-image-consent.tsx";
+import { SessionResourceStoreProvider } from "../components/agents/session-resource.tsx";
 import { ImageDownloadProvider } from "../components/images/image-download.tsx";
 import { ImageViewerProvider } from "../components/images/image-gallery.tsx";
 import { ToastProvider } from "../components/ui/toast.tsx";
@@ -10,6 +11,7 @@ import type { ApiTransport } from "../services/api/api-transport.ts";
 import type { SetupHandoff } from "../services/device/setup-handoff.ts";
 import type { Clock } from "../services/time/clock.ts";
 import { createImageDownloadStore } from "../view-models/chat/image-download-store.ts";
+import { createSessionResourceStore } from "../view-models/chat/session-resource-store.ts";
 import { createMortyApplication, type MortyApplication } from "../view-models/morty-application.ts";
 import { MortyApplicationProvider } from "./application/application-context.tsx";
 import { MortyCrashFallback } from "./application/crash-fallback.tsx";
@@ -52,19 +54,21 @@ export function assembleMorty(options: {
     const element = (
         <MortyApplicationProvider application={application}>
             <ImageDownloadProvider createStore={createImageDownloadStore}>
-                <ToastProvider>
-                    <ErrorBoundary fallback={<MortyCrashFallback dialog={application.bugReportDialog} />}>
-                        <ImageViewerProvider>
-                            <RemoteImageConsentProvider store={application.remoteImages}>
-                                <SessionApplication
-                                    application={application}
-                                    signedInRouter={signedInRouter}
-                                    continuationRouter={continuationRouter}
-                                />
-                            </RemoteImageConsentProvider>
-                        </ImageViewerProvider>
-                    </ErrorBoundary>
-                </ToastProvider>
+                <SessionResourceStoreProvider createStore={createSessionResourceStore}>
+                    <ToastProvider>
+                        <ErrorBoundary fallback={<MortyCrashFallback dialog={application.bugReportDialog} />}>
+                            <ImageViewerProvider>
+                                <RemoteImageConsentProvider store={application.remoteImages}>
+                                    <SessionApplication
+                                        application={application}
+                                        signedInRouter={signedInRouter}
+                                        continuationRouter={continuationRouter}
+                                    />
+                                </RemoteImageConsentProvider>
+                            </ImageViewerProvider>
+                        </ErrorBoundary>
+                    </ToastProvider>
+                </SessionResourceStoreProvider>
             </ImageDownloadProvider>
         </MortyApplicationProvider>
     );
