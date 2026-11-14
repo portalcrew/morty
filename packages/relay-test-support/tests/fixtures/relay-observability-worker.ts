@@ -1,7 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { Hono } from "hono";
 import { ComputerRelay as RelayComputerRelay } from "../../../worker/src/computer-relay/computer-relay.ts";
-import { computerObjectName } from "../../../worker/src/contracts/computer-id.ts";
 import type { ConfiguredRelayBindings } from "../../../worker/src/contracts/relay-bindings.ts";
 import { errorMiddleware, rethrowHonoError } from "../../../worker/src/http/error-middleware.ts";
 import relay from "../../src/worker-entry.ts";
@@ -54,14 +53,6 @@ export class ComputerRelay extends RelayComputerRelay {
         ) {
             throw Object.assign(new Error("Computer DO overloaded"), { overloaded: true });
         }
-        if (new URL(request.url).pathname.endsWith("/inject-websocket-error")) {
-            const socket = this.ctx.getWebSockets("daemon")[0];
-            if (socket === undefined) {
-                throw new Error("Expected a connected daemon");
-            }
-            this.webSocketError(socket, failure("nested"));
-            return new Response(null, { status: 204 });
-        }
         return await super.fetch(request);
     }
 }
@@ -86,12 +77,7 @@ const application = new Hono<{ Bindings: TestBindings }>()
     .onError(rethrowHonoError)
     .post("/failure/:kind", (context) => {
         throw failure(context.req.param("kind"));
-    })
-    .all("/computers/:computerId/*", (context) =>
-        context.env.COMPUTER_RELAY.getByName(computerObjectName(context.req.param("computerId"))).fetch(
-            context.req.raw,
-        ),
-    );
+    });
 
 export default {
     fetch: (request: Request, environment: TestBindings) => {
