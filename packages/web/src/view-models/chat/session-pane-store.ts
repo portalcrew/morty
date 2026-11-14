@@ -448,12 +448,6 @@ export function createSessionPaneModel(options: {
     // Session only where the user changes them: the others are the Agent's and its directory's, which the draft reads
     // for itself.
     centralLocalStorage.write(lastHarnessEntry(computerId), sessionTarget.harness);
-    const openedAt = Date.now();
-    // The turn the Session was opened with, which this pane follows from its start.
-    const openedRunning =
-        session.origin.kind === "created" && session.origin.activeTurn.kind === "running"
-            ? { commandId: session.origin.activeTurn.commandId, turnId: session.origin.activeTurn.turnId }
-            : null;
     // The connection is one state machine; its transitions are made only by `dispatchConnection`, and the store's
     // `connection` is what that state shows.
     let connectionState: SessionConnectionState = initialSessionConnection;
@@ -627,11 +621,7 @@ export function createSessionPaneModel(options: {
                 deliveryCommandId ?? undefined,
             );
             signal.throwIfAborted();
-            await observeExecution(
-                { kind: "read", snapshot, basis, deliveryCommandId, readAt: Date.now() },
-                connected,
-                signal,
-            );
+            await observeExecution({ kind: "read", snapshot, basis, deliveryCommandId }, connected, signal);
         };
         /** Applies a fact to the Session's execution, and performs the read it asks for through `connected`. */
         const observeExecution = async (
@@ -1332,10 +1322,10 @@ export function createSessionPaneModel(options: {
             return;
         }
         phase = "started";
-        // This pane now follows the Session for the page: it shows the settings and the running turn the Session was
-        // opened with, and carries the Session's operations on its connection. What the user asked the Session stays.
+        // This pane now follows the Session for the page: it shows the settings the Session was opened with, and
+        // carries the Session's operations on its connection. What the user asked the Session stays.
         settings.getState().opened(session.ready);
-        execution.getState().apply({ kind: "opened", running: openedRunning, openedAt });
+        execution.getState().apply({ kind: "opened" });
         follower = options.sessionPage.connection.follow({
             connection: () => store.getState().connection,
             failedThrough,

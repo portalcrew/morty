@@ -1,5 +1,5 @@
 import type { NativeSessionEntry, NativeSessionTarget, SessionReadyBody } from "@morty-build/client/protocol";
-import type { ChatAccess, ConversationActiveTurn } from "../../services/chat/bot-chat-api.ts";
+import type { ChatAccess } from "../../services/chat/bot-chat-api.ts";
 
 /**
  * A Session the page has open. `target` is its identity, stated once: everything else describes that Session.
@@ -13,12 +13,8 @@ export interface OpenMortySession {
     readonly entry: SessionEntry;
     readonly origin:
         | { readonly kind: "opened" }
-        /** The page just created it, so it holds the Session credential and the turn the Computer is running. */
-        | {
-              readonly kind: "created";
-              readonly access: ChatAccess;
-              readonly activeTurn: ConversationActiveTurn;
-          };
+        /** The page just created it, so it holds the Session credential. */
+        | { readonly kind: "created"; readonly access: ChatAccess };
 }
 
 /** What the page shows of a Session beyond its identity. */
