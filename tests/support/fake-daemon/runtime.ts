@@ -20,7 +20,7 @@ import { acpAdapters } from "../../../packages/cli/tests/support/acp-adapters.ts
 import { memoryComputerCredentials } from "../../../packages/cli/tests/support/computer-credentials.ts";
 import { createOwnerApi } from "../owner-api.ts";
 import { createInteractionAgent } from "./interaction-agent.ts";
-import { createSettingsAgent, createUnavailableAgent } from "./settings-agent.ts";
+import { createSettingsAgent } from "./settings-agent.ts";
 import { createToolLifecycleAgent } from "./tool-lifecycle-agent.ts";
 
 type TestServerApp = { readonly request: (request: Request) => Response | Promise<Response> };
@@ -155,12 +155,6 @@ export function createMortyFakeDaemon(behavior: ControlledAgentBehavior, workspa
                 createSettingsAgent("model", undefined, behavior.beforeSessionCreated, behavior.beforeSessionsListed),
             ],
         };
-    }
-    if (behavior.harness === "signed-out-test") {
-        return { ...harness, agents: [createUnavailableAgent("signed-out-test", "Signed-out Agent", "signed-out")] };
-    }
-    if (behavior.harness === "broken-test") {
-        return { ...harness, agents: [createUnavailableAgent("broken-test", "Broken Agent", "broken")] };
     }
     return harness;
 }

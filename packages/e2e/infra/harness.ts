@@ -224,22 +224,6 @@ export class E2EHarness {
         return child;
     }
 
-    async terminate(name: string) {
-        const processIndex = this.children.findIndex((candidate) => candidate.name === name);
-        const processRecord = this.children[processIndex];
-        if (
-            processRecord === undefined ||
-            processRecord.child.pid === undefined ||
-            processRecord.child.exitCode !== null ||
-            processRecord.child.signalCode !== null
-        ) {
-            throw new Error(`${name} is not running`);
-        }
-        await stopProcessTree(processRecord.child);
-        this.children.splice(processIndex, 1);
-        closeSync(processRecord.output);
-    }
-
     async checkHttp(
         url: string,
         description: string,
