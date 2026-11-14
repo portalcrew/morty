@@ -3,7 +3,8 @@ import { SESSION_CLOSED_ERROR_CODE } from "@morty-build/client/protocol";
 import { isApiConnectionError } from "../services/api/worker-api-transport.ts";
 import { isComputerConnectionFailure } from "../services/management/management-api.ts";
 
-const computerDisconnectedFailure = {
+/** The copy of a page that failed because the Computer is unreachable. */
+export const computerDisconnectedFailure = {
     detail: "Start your Morty Computer to reconnect, then try again.",
     title: "Your Morty Computer is disconnected.",
 } as const;
@@ -11,14 +12,13 @@ const computerDisconnectedFailure = {
 /** How a failure because the Computer cannot be reached reads everywhere. */
 export const computerDisconnectedMessage = `${computerDisconnectedFailure.title} ${computerDisconnectedFailure.detail}`;
 
-export function describeSessionFailureMessage(
-    message: string,
-): Readonly<{ readonly title: string; readonly detail?: string }> {
-    if (message === computerDisconnectedMessage) {
-        return computerDisconnectedFailure;
-    }
-    return { title: message };
-}
+/**
+ * What a page that failed to load tells the user: the Computer being unreachable reads one way everywhere, and any
+ * other failure keeps its own message.
+ */
+export type PageFailure =
+    | { readonly kind: "computer-disconnected" }
+    | { readonly kind: "message"; readonly message: string };
 
 const failureTitleLimit = 80;
 
@@ -43,10 +43,6 @@ export function describePageFailure(
     message: string,
     title: string,
 ): Readonly<{ readonly title: string; readonly content: string }> {
-    const described = describeSessionFailureMessage(message);
-    if (described.detail !== undefined) {
-        return { title: described.title, content: described.detail };
-    }
     return splitFailureMessage(message) ?? { title, content: message };
 }
 

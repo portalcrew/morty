@@ -30,6 +30,7 @@ import {
     type BotChatHomeStore,
     homeCanStartConversation,
     newConversationPresentation,
+    preSessionFailure,
 } from "../../view-models/chat/bot-chat-home-store.ts";
 import { chatDiagnostics } from "../../view-models/chat/chat-diagnostics.ts";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
@@ -46,6 +47,7 @@ import { selectedConversationTarget } from "../../view-models/chat/conversation-
 import type { DraftControlsStore } from "../../view-models/chat/draft-controls-store.ts";
 import { activeHarnessMark, pendingExecutionContext } from "../../view-models/chat/execution-context.ts";
 import { pendingConversationPresentation } from "../../view-models/chat/pending-conversation-presentation.ts";
+import type { PageFailure } from "../../view-models/format-error.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
 import { OnlineComputerAlternative } from "./computer-switcher.tsx";
@@ -58,16 +60,16 @@ import { PairingInstruction } from "./pairing-instruction.tsx";
 /** The centered pre-session failure block: card, grouped action buttons and the report entry. */
 function PreSessionFailure({
     action,
-    message,
+    failure,
     report,
 }: {
     readonly action: ReactNode;
-    readonly message: string;
+    readonly failure: PageFailure;
     readonly report: ReactNode;
 }) {
     return (
         <div className="m-auto grid justify-items-center gap-4 text-center">
-            <SessionLoadFailure message={message} />
+            <SessionLoadFailure failure={failure} />
             {/* The recovery and report buttons form one group: stacked, with the group's 8px rhythm. */}
             <div className="grid justify-items-center gap-2">
                 {action}
@@ -328,13 +330,7 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                                     ) : computer.entry.kind === "failed" || model.selection.kind === "failed" ? (
                                         <PreSessionFailure
                                             action={<Button onClick={store.getState().retry}>Reconnect</Button>}
-                                            message={
-                                                model.selection.kind === "failed"
-                                                    ? model.selection.message
-                                                    : computer.entry.kind === "failed"
-                                                      ? computer.entry.message
-                                                      : "Chat is unavailable."
-                                            }
+                                            failure={preSessionFailure(model.selection, computer.entry)}
                                             report={reportEntry}
                                         />
                                     ) : queuedInitialMessage !== null && creationStatus !== null ? (

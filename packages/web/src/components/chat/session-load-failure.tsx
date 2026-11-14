@@ -1,11 +1,13 @@
 import { CircleAlert, Unplug } from "lucide-react";
 
 import { dataTestId } from "@/data-testid";
-import { describePageFailure, describeSessionFailureMessage } from "@/view-models/format-error";
+import { computerDisconnectedFailure, describePageFailure, type PageFailure } from "@/view-models/format-error";
 
-export function SessionLoadFailure({ message }: Readonly<{ message: string }>) {
-    const disconnected = describeSessionFailureMessage(message).detail !== undefined;
-    const copy = describePageFailure(message, "Couldn't load this chat");
+export function SessionLoadFailure({ failure }: Readonly<{ failure: PageFailure }>) {
+    const disconnected = failure.kind === "computer-disconnected";
+    const copy = disconnected
+        ? { title: computerDisconnectedFailure.title, content: computerDisconnectedFailure.detail }
+        : describePageFailure(failure.message, "Couldn't load this chat");
     const Icon = disconnected ? Unplug : CircleAlert;
 
     return (

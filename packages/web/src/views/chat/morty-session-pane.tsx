@@ -692,7 +692,9 @@ function MortySessionPaneBody({
                                         className={`${chatSessionMessageColumnClassName} flex min-h-full items-center justify-center`}
                                     >
                                         <div className="grid w-full max-w-lg justify-items-center gap-4 text-center">
-                                            <SessionLoadFailure message={model.connection.message} />
+                                            <SessionLoadFailure
+                                                failure={{ kind: "message", message: model.connection.message }}
+                                            />
                                             <Button onClick={() => pane.store.getState().retryNow()} variant="outline">
                                                 Reconnect
                                             </Button>
