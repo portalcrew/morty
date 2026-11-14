@@ -89,12 +89,9 @@ it("Given a browser connection, When it requests a retired private Computer API,
                 body: "",
             }),
         );
-        expect(JSON.parse(await answer)).toMatchObject({
-            kind: "http.error",
-            requestId: "retired-private-computer",
-            code: "invalid_target",
-            status: 400,
-        });
+        const frame = JSON.parse(await answer);
+        expect(frame).toMatchObject({ kind: "http.response", requestId: "retired-private-computer", status: 400 });
+        expect(JSON.parse(frame.body)).toMatchObject({ error: { code: "invalid_target" } });
     } finally {
         socket.close(1000, "Test complete");
     }
@@ -102,8 +99,8 @@ it("Given a browser connection, When it requests a retired private Computer API,
 
 it.each([
     { operation: "unknown-command", kind: "http.response", status: 404, code: "not_found" },
-    { operation: "access-credentials", kind: "http.error", status: 400, code: "invalid_target" },
-    { operation: "access-credentials/unknown-command", kind: "http.error", status: 400, code: "invalid_target" },
+    { operation: "access-credentials", kind: "http.response", status: 404, code: "not_found" },
+    { operation: "access-credentials/unknown-command", kind: "http.response", status: 404, code: "not_found" },
 ])(
     "Given a browser connection, When it requests Session operation $operation, Then the owning route preserves its existing $status rejection",
     async ({ operation, kind, status, code }) => {

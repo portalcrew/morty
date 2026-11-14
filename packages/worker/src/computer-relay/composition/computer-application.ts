@@ -8,6 +8,7 @@ import {
 } from "../../contracts/websocket-http-dispatch.ts";
 import { errorHandler } from "../../http/error-middleware.ts";
 import { RequestDeadline } from "../../http/request-deadline.ts";
+import { createAgentSetupRoutes } from "../components/chat/http/bot-chat-routes.ts";
 import { createTransferRedemptionRoutes } from "../components/management/http/authentication-routes.ts";
 import { createManagementApplication } from "../components/management/http/index.ts";
 import type { ManagementHttpEnvironment } from "../components/management/http/management-http-environment.ts";
@@ -38,7 +39,10 @@ export function createComputerHttpApplication(ctx: ComputerRouteContext): (reque
     const management = managementRouteContext(ctx);
     const http = new Hono<ManagementHttpEnvironment>()
         .onError(errorHandler)
-        .route("/morty/api/v1/computers/:computerId", createManagementApplication(management))
+        .route(
+            "/morty/api/v1/computers/:computerId",
+            createManagementApplication(management).route("/", createAgentSetupRoutes(management)),
+        )
         .route("/morty/api/v1", createTransferRedemptionRoutes(management))
         .notFound(() =>
             Response.json(
@@ -70,10 +74,6 @@ export function createComputerWebSocketApplication(ctx: ComputerRouteContext) {
         return;
     };
     const management = new Hono<WebSocketApplicationEnvironment>()
-        // CLI/Runtime and private endpoints are not browser Computer operations.
-        .on("ALL", ["/setup", "/catalog", "/pairing/redeem", "/daemon/*", "/transport", "/harnesses/*"], () => {
-            throw new WebSocketDispatchError();
-        })
         .use("*", prepareApplicationRequest)
         .route("/", createManagementApplication(managementContext));
     const websocket = new Hono<WebSocketApplicationEnvironment>()

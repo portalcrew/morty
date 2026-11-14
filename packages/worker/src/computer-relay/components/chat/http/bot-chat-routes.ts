@@ -315,22 +315,26 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
                     ),
                 );
             },
-        )
-        .post(
-            "/setup",
-            localSession(ctx, "verifyAgent"),
-            authorizedChat(),
-            bodyParser<AuthorizedChatEnvironment, typeof setupInput>(setupInput),
-            async (context) => {
-                const application = await applicationForRequest(ctx, context);
-                const result = await application.services.chat.verifyAgent(
-                    context.get("chatScope"),
-                    context.req.valid("json"),
-                );
-                return new Response(result, {
-                    status: 202,
-                    headers: { "cache-control": "no-store", "content-type": "application/json" },
-                });
-            },
         );
+}
+
+/** Agent setup belongs to the CLI: only the HTTP application mounts it, never the browser's WebSocket transport. */
+export function createAgentSetupRoutes(ctx: ManagementRouteContext) {
+    return new Hono<AuthorizedChatEnvironment>().post(
+        "/setup",
+        localSession(ctx, "verifyAgent"),
+        createAuthorizedChat(ctx, 45000),
+        bodyParser<AuthorizedChatEnvironment, typeof setupInput>(setupInput),
+        async (context) => {
+            const application = await applicationForRequest(ctx, context);
+            const result = await application.services.chat.verifyAgent(
+                context.get("chatScope"),
+                context.req.valid("json"),
+            );
+            return new Response(result, {
+                status: 202,
+                headers: { "cache-control": "no-store", "content-type": "application/json" },
+            });
+        },
+    );
 }

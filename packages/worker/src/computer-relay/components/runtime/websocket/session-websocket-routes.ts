@@ -160,9 +160,6 @@ export function createSessionWebSocketRoutes(ctx: {
             });
         })
         .notFound(notFound)
-        .all(`${sessionPath}/access-credentials/*`, () => {
-            throw new WebSocketDispatchError();
-        })
         .use(`${sessionPath}/*`, authorizeTarget)
         .put(`${sessionPath}/content/:contentKey`, admitContentUpload, authenticateUpload, (context) =>
             uploadContent(context.req.raw, ctx.services.forComputer(context.var.computerId), {

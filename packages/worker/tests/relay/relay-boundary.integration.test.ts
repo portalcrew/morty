@@ -720,12 +720,9 @@ describe.sequential("Relay Session-only boundary", () => {
                     body: "",
                 }),
             );
-            expect(JSON.parse(await transportMessages.next())).toMatchObject({
-                kind: "http.error",
-                requestId: "runtime-agents",
-                code: "invalid_target",
-                status: 400,
-            });
+            const runtimeAgents = record(JSON.parse(await transportMessages.next()));
+            expect(runtimeAgents).toMatchObject({ kind: "http.response", requestId: "runtime-agents", status: 400 });
+            expect(JSON.parse(text(runtimeAgents, "body"))).toMatchObject({ error: { code: "invalid_target" } });
             daemon.send(answer);
             expect(JSON.parse(await transportMessages.next())).toMatchObject({
                 data: answer,
