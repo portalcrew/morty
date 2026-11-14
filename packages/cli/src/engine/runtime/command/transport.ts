@@ -14,7 +14,6 @@ import {
 import { WebSocket } from "undici";
 
 import { operationErrorCode, operationErrorMessage } from "../../infra/operation-error.ts";
-import type { DurationMetric } from "../../infra/operation-metrics.ts";
 import type { CommandContext } from "./context.ts";
 import type { DaemonCommand } from "./definition.ts";
 
@@ -68,7 +67,6 @@ export async function replyFailure(
     target: NativeSessionTarget | undefined,
     code: string,
     message: string,
-    runtimeTimings: readonly DurationMetric[] = [],
 ): Promise<void> {
     if (socket.readyState !== WebSocket.OPEN) {
         return;
@@ -79,7 +77,6 @@ export async function replyFailure(
             kind: "session.operation.failed",
             message,
             requestId,
-            ...(runtimeTimings.length === 0 ? {} : { runtimeTimings }),
             ...(target === undefined ? {} : { target }),
         },
         payloadEncryption,
@@ -96,14 +93,6 @@ export async function reportOperationFailure(
     requestId: string,
     target: NativeSessionTarget | undefined,
     error: unknown,
-    runtimeTimings: readonly DurationMetric[] = [],
 ): Promise<void> {
-    await replyFailure(
-        context,
-        requestId,
-        target,
-        operationErrorCode(error),
-        operationErrorMessage(error),
-        runtimeTimings,
-    );
+    await replyFailure(context, requestId, target, operationErrorCode(error), operationErrorMessage(error));
 }

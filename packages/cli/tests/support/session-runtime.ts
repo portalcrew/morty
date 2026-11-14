@@ -1,7 +1,6 @@
 import { AdapterRegistry } from "../../src/engine/acp/adapter/adapter-registry.ts";
 import type { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
 import type { AdapterResolver } from "../../src/engine/acp/native-history/preview-contract.ts";
-import type { OperationMetrics } from "../../src/engine/infra/operation-metrics.ts";
 import type {
     AgentSettingsInspectionOptions,
     SessionConfigurationChange,
@@ -45,11 +44,11 @@ export class SessionRuntimeFixture {
         adapter: this.adapters.resolve(agent),
     });
 
-    readonly prepareSession = (options: TestSessionPrepareOptions, metrics?: OperationMetrics) =>
-        this.sessions.prepareSession({ ...options, adapter: this.adapters.resolve(options.agent) }, metrics);
+    readonly prepareSession = (options: TestSessionPrepareOptions) =>
+        this.sessions.prepareSession({ ...options, adapter: this.adapters.resolve(options.agent) });
 
-    readonly restoreSession = (options: TestSessionPrepareOptions, metrics?: OperationMetrics) =>
-        this.sessions.restoreSession({ ...options, adapter: this.adapters.resolve(options.agent) }, metrics);
+    readonly restoreSession = (options: TestSessionPrepareOptions) =>
+        this.sessions.restoreSession({ ...options, adapter: this.adapters.resolve(options.agent) });
 
     readonly prepareExecutionSession = (options: TestSessionPrepareOptions) =>
         this.sessions.prepareExecutionSession({ ...options, adapter: this.adapters.resolve(options.agent) });

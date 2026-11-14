@@ -17,14 +17,12 @@ import {
     workspaceEntriesEventCodec,
 } from "@morty-build/client/protocol";
 import { operationErrorCode } from "../../../infra/operation-error.ts";
-import { AccumulatingOperationMetrics } from "../../../infra/operation-metrics.ts";
-import type { PreparedSession, ResolveAgent, SessionRecovery } from "../../../session/api/session-api.ts";
+import type { PreparedSession, SessionRecovery } from "../../../session/api/session-api.ts";
 import { SessionError } from "../../../session/api/session-error.ts";
 import type { SessionManager } from "../../../session/manager/session-manager.ts";
 import { applyCompleteSessionConfiguration } from "../../../session/prompt/apply-session-configuration.ts";
 import { type HeldSession, resolveHeldSession } from "../../../session/record/held-session.ts";
 import { resolveSessionDirectory } from "../../../session/workspace/resolve-session-directory.ts";
-import type { WorkspaceDirectoryService } from "../../../session/workspace/workspace-directory.ts";
 import type { CommandContext } from "../context.ts";
 import type { CommandHandler } from "../definition.ts";
 import { reportOperationFailure, send } from "../transport.ts";
@@ -33,20 +31,6 @@ import { reportOperationFailure, send } from "../transport.ts";
 interface SessionPreparationRequest {
     readonly requestId: string;
 }
-
-/** Resolves the Session this Computer holds for `target`, measured as part of the preparation. */
-const resolveMeasuredHeldSession = async (
-    target: NativeSessionTarget,
-    resolveAgent: ResolveAgent,
-    directories: WorkspaceDirectoryService,
-    sessions: SessionManager,
-    metrics: AccumulatingOperationMetrics,
-    signal: AbortSignal,
-): Promise<HeldSession> =>
-    await metrics.measure(
-        "workspace-resolve",
-        async () => await resolveHeldSession(sessions, resolveAgent, directories, target, signal),
-    );
 
 /** What a client is told of a Session whose Agent is prepared. */
 function readyEvent(
@@ -76,16 +60,13 @@ async function prepareSession(
     session: HeldSession,
     recovery: SessionRecovery,
     sessions: SessionManager,
-    metrics: AccumulatingOperationMetrics,
 ): Promise<SessionReadyEvent> {
-    return await metrics.measure("prepare-total", async () => {
-        const preparation = session.options;
-        const prepared =
-            recovery.kind === "history-required"
-                ? await sessions.restoreSession(preparation, metrics)
-                : await sessions.prepareSession(preparation, metrics);
-        return readyEvent(command, preparation.target, prepared, session);
-    });
+    const preparation = session.options;
+    const prepared =
+        recovery.kind === "history-required"
+            ? await sessions.restoreSession(preparation)
+            : await sessions.prepareSession(preparation);
+    return readyEvent(command, preparation.target, prepared, session);
 }
 
 export const handleWorkspaceList: CommandHandler<typeof WORKSPACE_LIST_KIND> = async (
@@ -128,26 +109,14 @@ export const handleSessionPrepare: CommandHandler<typeof SESSION_PREPARE_KIND> =
     command,
 ): Promise<void> => {
     const { socket, payloadEncryption, resolveAgent, directories, sessions, diagnostics, signal } = context;
-    const metrics = new AccumulatingOperationMetrics();
     try {
         const readyEvent = await prepareSession(
             command,
-            await resolveMeasuredHeldSession(command.target, resolveAgent, directories, sessions, metrics, signal),
+            await resolveHeldSession(sessions, resolveAgent, directories, command.target, signal),
             { kind: "interactive-only" },
             sessions,
-            metrics,
         );
-        send(
-            socket,
-            await sessionReadyEventCodec.encode(
-                {
-                    ...readyEvent,
-                    runtimeTimings: metrics.snapshot(),
-                },
-                payloadEncryption,
-                signal,
-            ),
-        );
+        send(socket, await sessionReadyEventCodec.encode(readyEvent, payloadEncryption, signal));
     } catch (error) {
         diagnostics.daemonDiagnostic(
             "session_prepare_failed",
@@ -159,7 +128,7 @@ export const handleSessionPrepare: CommandHandler<typeof SESSION_PREPARE_KIND> =
             },
             error,
         );
-        await reportOperationFailure(context, command.requestId, command.target, error, metrics.snapshot());
+        await reportOperationFailure(context, command.requestId, command.target, error);
     }
 };
 
@@ -169,22 +138,17 @@ export const handleSessionRestore: CommandHandler<typeof SESSION_RESTORE_KIND> =
 ): Promise<void> => {
     const { socket, payloadEncryption, resolveAgent, directories, sessions, nativeSessions, diagnostics, signal } =
         context;
-    const metrics = new AccumulatingOperationMetrics();
     try {
-        const entry = await metrics.measure("session-lookup", async () => {
-            const stored = sessions.findSessions([command.target])[0];
-            const [found] = await nativeSessions.querySessions(stored === undefined ? [] : [stored.target], signal);
-            if (found === undefined) {
-                throw new SessionError("session_not_found", "The Session was not found");
-            }
-            return found;
-        });
+        const stored = sessions.findSessions([command.target])[0];
+        const [entry] = await nativeSessions.querySessions(stored === undefined ? [] : [stored.target], signal);
+        if (entry === undefined) {
+            throw new SessionError("session_not_found", "The Session was not found");
+        }
         const ready = await prepareSession(
             command,
-            await resolveMeasuredHeldSession(entry.target, resolveAgent, directories, sessions, metrics, signal),
+            await resolveHeldSession(sessions, resolveAgent, directories, entry.target, signal),
             { kind: "history-required" },
             sessions,
-            metrics,
         );
         // The restored Session is named once, by the reply's target.
         const { target: _entryTarget, ...record } = entry;
@@ -196,7 +160,7 @@ export const handleSessionRestore: CommandHandler<typeof SESSION_RESTORE_KIND> =
                     entry: record,
                     target: command.target,
                     kind: "session.restored",
-                    ready: { ...body, runtimeTimings: metrics.snapshot() },
+                    ready: body,
                     requestId: command.requestId,
                 },
                 payloadEncryption,
@@ -214,7 +178,7 @@ export const handleSessionRestore: CommandHandler<typeof SESSION_RESTORE_KIND> =
             },
             error,
         );
-        await reportOperationFailure(context, command.requestId, undefined, error, metrics.snapshot());
+        await reportOperationFailure(context, command.requestId, undefined, error);
     }
 };
 
@@ -312,26 +276,21 @@ async function executeSessionCreate(context: CommandContext, command: SessionCre
             const resolved = await resolveSessionDirectory(context.directories, command.directory, signal);
             const agent = await context.resolveAgent(command.harness, signal);
             return await context.sessionCreations.run(command.operationId, input, signal, async () => {
-                const metrics = new AccumulatingOperationMetrics();
                 // A Session being created starts with exactly the settings it states, by the rule a Turn's settings use.
                 const created = await context.sessions.createSession(
                     { ...agent, cwd: resolved.cwd, signal },
                     async ({ target, prepared }, creationSignal) =>
-                        await metrics.measure(
-                            "configuration",
-                            async () =>
-                                await applyCompleteSessionConfiguration(
-                                    context.sessions,
-                                    prepared.configOptions,
-                                    command.configurations,
-                                    "refuse",
-                                    agent.agent,
-                                    agent.adapter,
-                                    resolved.cwd,
-                                    command.requestId,
-                                    target,
-                                    creationSignal,
-                                ),
+                        await applyCompleteSessionConfiguration(
+                            context.sessions,
+                            prepared.configOptions,
+                            command.configurations,
+                            "refuse",
+                            agent.agent,
+                            agent.adapter,
+                            resolved.cwd,
+                            command.requestId,
+                            target,
+                            creationSignal,
                         ),
                 );
                 // A created Session reports the directory its creation named.
@@ -396,24 +355,19 @@ export const handleSessionConfigRead: CommandHandler<typeof SESSION_CONFIG_READ_
 ): Promise<void> => {
     const { socket, payloadEncryption, resolveAgent, directories, sessions, nativeSessions, diagnostics, signal } =
         context;
-    const metrics = new AccumulatingOperationMetrics();
     try {
-        const entry = await metrics.measure("session-lookup", async () => {
-            const [found] = await nativeSessions.querySessions([command.target], signal);
-            if (found === undefined) {
-                throw new SessionError("session_not_found", "The Session was not found");
-            }
-            return found;
-        });
+        const [entry] = await nativeSessions.querySessions([command.target], signal);
+        if (entry === undefined) {
+            throw new SessionError("session_not_found", "The Session was not found");
+        }
         const ready = await prepareSession(
             command,
-            await resolveMeasuredHeldSession(entry.target, resolveAgent, directories, sessions, metrics, signal),
+            await resolveHeldSession(sessions, resolveAgent, directories, entry.target, signal),
             // A settings read must not force history loading: Agents without
             // load support would fail even with a live process whose config is
             // already readable, and prepare reuses the current configuration.
             { kind: "interactive-only" },
             sessions,
-            metrics,
         );
         send(
             socket,
@@ -439,6 +393,6 @@ export const handleSessionConfigRead: CommandHandler<typeof SESSION_CONFIG_READ_
             },
             error,
         );
-        await reportOperationFailure(context, command.requestId, command.target, error, metrics.snapshot());
+        await reportOperationFailure(context, command.requestId, command.target, error);
     }
 };
