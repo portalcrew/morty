@@ -4,15 +4,12 @@ import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
 import { ANONYMOUS_CREDENTIAL_KEY_NAME } from "../src/services/identity/anonymous-identity-api.ts";
 import { encodeIdentityScope } from "../src/services/identity/identity-scope-url.ts";
-import { sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { TestApiTransport } from "./support/test-api-transport.ts";
 
 async function startConversation(app: TestApp, prompt: string): Promise<string> {
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     if (!(composer instanceof HTMLTextAreaElement)) {
         throw new Error("Expected the message composer");
     }

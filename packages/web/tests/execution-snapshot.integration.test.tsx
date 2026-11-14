@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./support/chat-worker.ts";
@@ -99,10 +99,7 @@ test("Given a completed execution snapshot, When a buffered start event precedes
         // The real Computer has recorded completion before this held request is sent to it.
         releaseExecution();
         executionReleased = true;
-        await viewer.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        await readyComposer(viewer);
         // Seeing this later real output establishes that the buffered start has also been processed.
         await viewer.waitForView(() =>
             expect(

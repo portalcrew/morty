@@ -1,6 +1,7 @@
 import { getByLabelText, getByRole, getByText, queryByRole } from "@testing-library/dom";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
+import { readyComposer } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 
 function answered(app: TestApp, text: string): boolean {
@@ -8,10 +9,7 @@ function answered(app: TestApp, text: string): boolean {
 }
 
 async function editableComposer(app: TestApp): Promise<HTMLTextAreaElement> {
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     if (!(composer instanceof HTMLTextAreaElement)) {
         throw new Error("Expected the message composer");
     }

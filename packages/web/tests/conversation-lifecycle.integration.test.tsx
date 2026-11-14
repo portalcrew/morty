@@ -11,7 +11,7 @@ import {
 import { flushSync } from "react-dom";
 import { expect, onTestFinished, test, vi } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { openAgentModelPicker, sendPrompt } from "./infra/application-scenario.ts";
+import { openAgentModelPicker, readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 
@@ -285,10 +285,7 @@ test("Given a saved-session entry is still loading, When the user selects New Se
             connectAgent: true,
             page: { kind: "managed-session", harness: "claude", sessionId: "chat_missing_session" },
         });
-        const composer = await app.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        const composer = await readyComposer(app);
         expect(selectedDraft).toBe(true);
         await sendPrompt(app, composer, "A fresh draft after leaving the pending session");
         await app.waitForView(() =>
@@ -531,10 +528,7 @@ test("Given another Session is selected, When the user closes a background Sessi
         ).toBe(true),
     );
     const currentSessionId = new URL(window.location.href).searchParams.get("sessionId");
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     await app.user.click(composer);
     await app.user.paste("Keep this draft");
     const background = await app.waitForView(() => {

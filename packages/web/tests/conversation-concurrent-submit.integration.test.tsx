@@ -2,7 +2,7 @@ import { fireEvent, getByLabelText, getByRole, queryByRole } from "@testing-libr
 import { act } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 
 test("Given two idle viewers with drafts and attachments, When both submit before receiving live updates, Then the Computer runs both messages with their attachments and refuses neither", {
@@ -30,10 +30,7 @@ test("Given two idle viewers with drafts and attachments, When both submit befor
         [app, "First viewer follow-up", "first.json"],
         [viewer, "Second viewer follow-up", "second.json"],
     ] as const) {
-        const composer = await current.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        const composer = await readyComposer(current);
         if (!(composer instanceof HTMLTextAreaElement) || composer.form === null) {
             throw new Error("Expected the message composer form");
         }
@@ -106,10 +103,7 @@ test("Given two attachments in a message, When an attachment is removed while su
         ).toBe(true),
     );
     await app.waitForView(() => expect(app.optionalElementByTestId(dataTestId.sessionStatus)).toBeNull());
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     if (!(composer instanceof HTMLTextAreaElement) || composer.form === null) {
         throw new Error("Expected composer form");
     }

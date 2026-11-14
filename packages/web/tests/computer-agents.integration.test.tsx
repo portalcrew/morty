@@ -1,7 +1,7 @@
 import { getByRole } from "@testing-library/dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { openExecutionDetails, sendPrompt } from "./infra/application-scenario.ts";
+import { openExecutionDetails, readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 
@@ -21,10 +21,7 @@ test("Given an open conversation, When its Agent is renamed on the computer, The
     if (daemon === null) {
         throw new Error("Expected a connected controlled Agent Runtime");
     }
-    const draft = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const draft = await readyComposer(app);
     await sendPrompt(app, draft, "Work on Codex");
     await app.waitForView(() =>
         expect(
@@ -53,10 +50,7 @@ test("Given a new conversation draft, When its Agent is renamed on the computer,
     if (daemon === null) {
         throw new Error("Expected a connected controlled Agent Runtime");
     }
-    await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    await readyComposer(app);
     const details = await openExecutionDetails(app);
     // The draft names its agent once its settings load.
     await app.waitForView(() => expect(details.textContent).toContain("Codex"));

@@ -1,6 +1,7 @@
 import { getByRole, queryByRole } from "@testing-library/dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
+import { readyComposer } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 
 async function openFirstSession() {
@@ -26,10 +27,7 @@ test("Given a first session handoff, When the original session opens, Then a dis
     expect(queryByRole(document.body, "region", { name: "Continue your work here" })).toBeNull();
 
     const reloaded = await app.reload();
-    await reloaded.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    await readyComposer(reloaded);
     expect(queryByRole(document.body, "region", { name: "Continue your work here" })).toBeNull();
 });
 

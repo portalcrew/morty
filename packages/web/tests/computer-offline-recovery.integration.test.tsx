@@ -2,7 +2,7 @@ import { fireEvent, getByLabelText, getByRole, queryAllByRole, queryByRole } fro
 import { act } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { refreshSessions, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
+import { readyComposer, refreshSessions, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 
@@ -30,13 +30,6 @@ function entryStatus(app: TestApp, title: string): string | null {
     return entry?.querySelector(`[data-testid="${dataTestId.sessionStatus}"]`)?.getAttribute("aria-label") ?? null;
 }
 
-async function readyComposer(app: TestApp): Promise<HTMLElement> {
-    return await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
-}
-
 function agentAnswered(app: TestApp, text: string): boolean {
     return app.elementsByTestId(dataTestId.agentResponse).some((message) => message.textContent?.includes(text));
 }
@@ -49,10 +42,7 @@ test("Given a saved conversation, When reloading it while its Computer is offlin
     if (daemon === null) {
         throw new Error("Expected a connected controlled Agent Runtime");
     }
-    const draft = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const draft = await readyComposer(app);
     await sendPrompt(app, draft, "Keep this conversation");
     await app.waitForView(() => expect(agentAnswered(app, "Codex turn 1: Keep this conversation")).toBe(true));
 

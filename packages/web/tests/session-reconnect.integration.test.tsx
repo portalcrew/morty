@@ -10,7 +10,7 @@ import {
 import { act } from "@testing-library/react";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./support/chat-worker.ts";
@@ -352,10 +352,7 @@ test("Given an offline Computer, When the retry deadline elapses, Then the count
 });
 
 async function openSavedConversation(app: TestApp, prompt: string): Promise<HTMLTextAreaElement> {
-    const draft = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const draft = await readyComposer(app);
     if (!(draft instanceof HTMLTextAreaElement)) {
         throw new Error("Expected the draft composer");
     }
@@ -382,10 +379,7 @@ async function openSavedConversation(app: TestApp, prompt: string): Promise<HTML
     await app.waitForView(() =>
         expect(queryByRole(document.body, "heading", { level: 2, name: prompt })).not.toBeNull(),
     );
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     if (!(composer instanceof HTMLTextAreaElement)) {
         throw new Error("Expected the saved conversation composer");
     }
@@ -511,10 +505,7 @@ test("Given an unavailable Computer and an editable draft, When automatic retrie
     expect(retryLink).not.toBeNull();
     // An attachment failure takes over the headline too, so the connection state has
     // to fold into that single alert instead of nesting a second assertive region.
-    const liveComposer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const liveComposer = await readyComposer(app);
     if (!(liveComposer instanceof HTMLTextAreaElement) || liveComposer.form === null) {
         throw new Error("Expected the live composer form");
     }
@@ -622,10 +613,7 @@ test("Given an active turn and an unsent follow-up, When connection freshness is
         getByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" }),
     );
     expect(reconnectStatusText(app)).toBeNull();
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     await app.user.type(composer, "Keep my follow-up");
     expect(composer).toHaveProperty("value", "Keep my follow-up");
     await app.waitForView(() => expect(app.elementByTestId(dataTestId.sendMessage)).toHaveProperty("disabled", false));

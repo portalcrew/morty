@@ -1,7 +1,7 @@
 import { getByRole, getByText, queryByRole } from "@testing-library/dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
+import { readyComposer, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 
@@ -15,20 +15,14 @@ for (const agent of [
     }, async () => {
         const clock = new TestClock("2026-10-28T08:00:00Z");
         const app = await createTestApp({ connectAgent: true, agent, clock });
-        const initialComposer = await app.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        const initialComposer = await readyComposer(app);
         await sendPrompt(app, initialComposer, "require agent authentication");
         const notice = await app.waitForView(() => {
             const alert = getByRole(getByRole(document.body, "log", { name: "Messages" }), "alert");
             expect(alert.textContent).toContain(agent.title);
             return alert;
         });
-        const composer = await app.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        const composer = await readyComposer(app);
         expect(notice.textContent).toContain("Controlled Agent Runtime");
         expect(queryByRole(composer.closest("form") ?? document.body, "alert")).toBeNull();
         const details = getByText(notice, "Technical details").closest("details");
@@ -68,10 +62,7 @@ for (const agent of [
             expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "Keep my next message");
         }
         const reloaded = await app.reload();
-        const restoredComposer = await reloaded.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        const restoredComposer = await readyComposer(reloaded);
         expect(restoredComposer).toHaveProperty("value", "Keep my next message");
         const messages = getByRole(document.body, "log", { name: "Messages" });
         expect(messages.textContent).not.toContain("Keep my next message");

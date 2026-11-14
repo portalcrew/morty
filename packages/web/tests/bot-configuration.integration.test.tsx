@@ -5,7 +5,7 @@ import { getAllByRole, getByRole, queryAllByRole, queryByRole } from "@testing-l
 import type { DetachedWindowAPI } from "happy-dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { openAgentModelPicker, sendPrompt } from "./infra/application-scenario.ts";
+import { openAgentModelPicker, readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 
 declare global {
@@ -600,10 +600,7 @@ test("Given a paired Bot on mobile, When the user opens Agent configuration, The
     let app: TestApp | null = null;
     try {
         app = await createTestApp({ connectAgent: true });
-        await app.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        await readyComposer(app);
 
         const navigationButton = getByRole(document.body, "button", { name: "Recent sessions" });
         await app.user.click(await app.queryElementByTestId(dataTestId.agentConfiguration));

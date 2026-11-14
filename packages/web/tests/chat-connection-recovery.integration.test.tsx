@@ -2,7 +2,7 @@ import { getByRole, queryByRole } from "@testing-library/dom";
 import { act } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { openExecutionDetails, recoverChat, sendPrompt } from "./infra/application-scenario.ts";
+import { openExecutionDetails, readyComposer, recoverChat, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 
@@ -11,10 +11,7 @@ test("Given a connected Chat with an unsent draft, When its network drops and re
 }, async () => {
     const clock = new TestClock("2026-10-23T08:00:00Z");
     const app = await createTestApp({ connectAgent: true, clock });
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     if (!(composer instanceof HTMLTextAreaElement) || app.daemon === null) {
         throw new Error("Expected the connected Chat and Computer");
     }
@@ -53,10 +50,7 @@ test("Given a draft on an open Chat, When its bridge repeatedly disconnects and 
 }, async () => {
     const clock = new TestClock("2026-10-23T08:00:00Z");
     const app = await createTestApp({ connectAgent: true, clock });
-    const composer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const composer = await readyComposer(app);
     if (!(composer instanceof HTMLTextAreaElement)) {
         throw new Error("Expected the draft composer");
     }
@@ -80,10 +74,7 @@ test("Given a running task and an unsent draft, When Chat disconnects while the 
 }, async () => {
     const clock = new TestClock("2026-10-23T08:00:00Z");
     const app = await createTestApp({ connectAgent: true, clock });
-    const initialComposer = await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    const initialComposer = await readyComposer(app);
     if (!(initialComposer instanceof HTMLTextAreaElement) || app.daemon === null) {
         throw new Error("Expected a connected Chat and Computer");
     }

@@ -2,7 +2,7 @@ import { getByRole, queryByRole } from "@testing-library/dom";
 import type { DetachedWindowAPI } from "happy-dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { openExecutionDetails, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
+import { openExecutionDetails, readyComposer, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 
@@ -33,10 +33,7 @@ test("Given a connected computer, When the user views a conversation, Then its h
     timeout: 30_000,
 }, async () => {
     const app = await createTestApp({ connectAgent: true });
-    await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    await readyComposer(app);
     const computer = getByRole(document.body, "button", { name: /Switch computer/ });
     // The computer heads the sidebar with its status in words, not only as a colored dot.
     expect(computer.getAttribute("aria-label")).toMatch(/, Online$/u);
@@ -56,10 +53,7 @@ test("Given a connected computer on mobile, When the user views the conversation
     let app: TestApp | null = null;
     try {
         app = await createTestApp({ connectAgent: true });
-        await app.queryElementByTestId(
-            dataTestId.messageComposer,
-            (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-        );
+        await readyComposer(app);
         const newSession = getByRole(document.body, "button", { name: "New Session" });
         const header = newSession.closest("header");
         expect(header).not.toBeNull();
@@ -84,10 +78,7 @@ test("Given a connected Computer, When a saved conversation disconnects and reco
 }, async () => {
     const clock = new TestClock("2026-10-21T08:00:00Z");
     const app = await createTestApp({ connectAgent: true, clock });
-    await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    await readyComposer(app);
     await selectCodexHarness(app);
     const directoryName = await readDirectory(app);
     await sendPrompt(app, app.elementByTestId(dataTestId.messageComposer), "Remember this execution context");
@@ -135,10 +126,7 @@ test("Given a saved conversation and a different draft directory, When the user 
     timeout: 30_000,
 }, async () => {
     const app = await createTestApp({ connectAgent: true });
-    await app.queryElementByTestId(
-        dataTestId.messageComposer,
-        (element) => element instanceof HTMLTextAreaElement && !element.disabled,
-    );
+    await readyComposer(app);
     await selectCodexHarness(app);
     const originalDirectory = await readDirectory(app);
     expect(getByRole(document.body, "button", { name: /Switch computer/ }).textContent).toContain(

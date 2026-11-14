@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { refreshSessions, sendPrompt } from "./infra/application-scenario.ts";
+import { readyComposer, refreshSessions, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 
 const ARCHIVED = "This Session was archived.";
@@ -15,19 +15,12 @@ function sendButtonLabel(app: TestApp): string | null {
     return app.elementByTestId(dataTestId.sendMessage).getAttribute("aria-label");
 }
 
-function readyComposer(element: HTMLElement): boolean {
-    return element instanceof HTMLTextAreaElement && !element.disabled;
-}
-
 async function openSavedConversation(app: TestApp): Promise<string> {
     const daemon = app.daemon;
     if (daemon === null) {
         throw new Error("Expected a connected controlled Agent Runtime");
     }
-    const draft = await app.queryElementByTestId(dataTestId.messageComposer, readyComposer);
-    if (!(draft instanceof HTMLTextAreaElement)) {
-        throw new Error("Expected the draft composer");
-    }
+    const draft = await readyComposer(app);
     await sendPrompt(app, draft, HELD_PROMPT);
     await app.waitForView(() =>
         expect(
@@ -54,7 +47,7 @@ async function openSavedConversation(app: TestApp): Promise<string> {
         throw new Error("Expected the saved conversation");
     }
     await app.user.click(conversation);
-    await app.queryElementByTestId(dataTestId.messageComposer, readyComposer);
+    await readyComposer(app);
     return sessionId;
 }
 
@@ -65,7 +58,7 @@ test("Given a running reply, When another window archives the Session, Then this
     if (daemon === null) {
         throw new Error("Expected a connected controlled Agent Runtime");
     }
-    const composer = await app.queryElementByTestId(dataTestId.messageComposer, readyComposer);
+    const composer = await readyComposer(app);
     if (!(composer instanceof HTMLTextAreaElement)) {
         throw new Error("Expected the composer");
     }
