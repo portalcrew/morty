@@ -18,6 +18,7 @@ import {
     SESSION_EVENTS_SUBSCRIBE_KIND,
     type SESSION_HISTORY_PAGE_LOAD_KIND,
     type SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND,
+    type SessionEventEnvelopeRouting,
     type SessionEventsSubscribeCommandRouting,
     sessionEventsSubscribeCommandCodec,
     WORKER_REQUEST_REJECTED_KIND,
@@ -25,7 +26,6 @@ import {
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import type { SessionViewer } from "../../../../contracts/session-event-subscription.ts";
 import { logger } from "../../../../infra/logger.ts";
-import { SessionLiveEventRelay } from "./session-live-event-relay.ts";
 
 type OperationRouting = Exclude<ClientToRelayMessage, { readonly kind: typeof SESSION_EVENTS_SUBSCRIBE_KIND }>;
 
@@ -161,7 +161,6 @@ export class ComputerRelayActor {
     };
     readonly #peers: RelayPeers;
     readonly #computerId: string;
-    readonly #liveEvents: SessionLiveEventRelay;
 
     private readonly clientOperation = <K extends OperationRouting["kind"]>(kind: K) =>
         clientHandler(kind, (socket, command, encoded) => this.forwardControl(socket, command, encoded));
@@ -222,7 +221,7 @@ export class ComputerRelayActor {
 
     readonly #daemonHandlers = {
         "session.event.v2": daemonHandler("session.event.v2", (message, encoded) =>
-            this.#liveEvents.receive(message, encoded),
+            this.deliverLiveEvents(message, encoded),
         ),
         "session.close.notice": daemonHandler("session.close.notice", (message, encoded) => {
             for (const viewer of this.#peers.viewers()) {
@@ -293,7 +292,6 @@ export class ComputerRelayActor {
         const { peers } = cx.gateways;
         this.#peers = peers;
         this.#computerId = computerId;
-        this.#liveEvents = new SessionLiveEventRelay(peers);
     }
 
     readonly attachDaemon = async (replacedExistingConnection: boolean, _signal: AbortSignal): Promise<void> => {
@@ -704,6 +702,24 @@ export class ComputerRelayActor {
             this.#peers.operations().map(({ socket }) => socket),
             encodeComputerStatusEvent({ kind: COMPUTER_STATUS_KIND, online, computerId: this.#computerId }),
         );
+    };
+
+    /** Hands an encrypted event batch, unread, to every viewer of its Session; an expired viewer is closed instead. */
+    private readonly deliverLiveEvents = (routing: SessionEventEnvelopeRouting, encoded: string): void => {
+        for (const viewer of this.#peers.viewers()) {
+            if (viewer.identity.expiresAt <= Date.now()) {
+                viewer.close(1000, "Session access expired");
+                continue;
+            }
+            if (!sameNativeSession(viewer.identity.sessionFilter, routing.target)) {
+                continue;
+            }
+            try {
+                viewer.message(encoded);
+            } catch {
+                viewer.close(1013, "Session subscription backpressure");
+            }
+        }
     };
 
     private readonly broadcast = (sockets: readonly RelaySocket[], message: string): void => {

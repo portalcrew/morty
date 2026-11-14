@@ -41,7 +41,7 @@ export function createComputerPairingRoutes(ctx: RelayProtocolRouteContext) {
                 const body = context.req.valid("json");
                 const agents = validateAgents(body.agents);
                 const services = ctx.services.forComputer(context.var.computerId).services;
-                const redeemed = await services.computerPairings.redeemComputerPairing(
+                const redeemed = await services.pairings.redeemComputerPairing(
                     validateIdentifier(context.req.param("computerId"), "computer_id"),
                     validatePairingCode(body.pairingCode),
                     validateDisplayName(body.computerName, "computer_name"),

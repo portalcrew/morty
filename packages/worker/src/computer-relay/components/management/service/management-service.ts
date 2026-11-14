@@ -43,8 +43,7 @@ export class ManagementService {
         origin: BootstrapOrigin,
     ) => {
         const token = await bootstrapToken(this.#credentialKey, computer.computerId, origin, signal);
-        const identity = await this.#authentication.createComputer(computer.computerId, signal, token);
-        return identity;
+        return await this.#authentication.createComputer(computer.computerId, signal, token);
     };
 
     /** The owner's Computer: where its Runtime pairing stands, read from the Relay that owns it. */
@@ -78,8 +77,7 @@ export class ManagementService {
 
     readonly createComputerPairing = async (computerId: string, idempotencyKey: string, signal: AbortSignal) => {
         const computer = await this.#requireComputer(computerId, signal);
-        const pairing = await this.#relay.createPairing(computer.computerId, idempotencyKey, signal);
-        return pairing;
+        return await this.#relay.createPairing(computer.computerId, idempotencyKey, signal);
     };
 
     readonly readComputerPairing = async (computerId: string, signal: AbortSignal) => {
@@ -104,11 +102,7 @@ export class ManagementService {
             ["morty-transfer-redemption-v1", code, redemptionKey ?? randomSecret()],
             signal,
         );
-        const identity = await this.#authentication.redeemTransfer(code, replaces, joining, token, signal);
-        if (identity === null) {
-            return null;
-        }
-        return identity;
+        return await this.#authentication.redeemTransfer(code, replaces, joining, token, signal);
     };
 
     readonly #requireComputer = async (computerId: string, signal: AbortSignal) => {

@@ -122,6 +122,11 @@ function refused(access: { readonly kind: "unauthenticated" | "revoked" | "forbi
 
 export class AuthenticationService {
     private readonly identities: IdentityStorage;
+    /**
+     * Applies an identity change that may end access to the computer. Every request reads the identities, so once the
+     * change commits nothing it ended is authorized again; the result is the committed change alone, and the computer
+     * closes the live connections it ended.
+     */
     readonly #commitAccessEnd: IdentityOperations["commitAccessEnd"];
     readonly #computerId: string;
 
@@ -321,7 +326,9 @@ export class AuthenticationService {
             return refused(access);
         }
         if (
-            !(await this.#endAccess(() => this.identities.revokeAllAccess(access.token, successor, Date.now(), signal)))
+            !(await this.#commitAccessEnd(() =>
+                this.identities.revokeAllAccess(access.token, successor, Date.now(), signal),
+            ))
         ) {
             return { kind: "unauthenticated" };
         }
@@ -340,7 +347,7 @@ export class AuthenticationService {
         if (access.kind !== "authorized") {
             return refused(access);
         }
-        if (!(await this.#endAccess(() => this.identities.revokeOtherAccess(access.token, Date.now(), signal)))) {
+        if (!(await this.#commitAccessEnd(() => this.identities.revokeOtherAccess(access.token, Date.now(), signal)))) {
             return { kind: "unauthenticated" };
         }
         return { kind: "revoked" };
@@ -360,7 +367,7 @@ export class AuthenticationService {
         }
         const kept = access.credential.kind === "browser" ? access.credential.deviceId : null;
         if (
-            !(await this.#endAccess(() =>
+            !(await this.#commitAccessEnd(() =>
                 this.identities.endOtherBrowserAccess(access.token, kept, Date.now(), signal),
             ))
         ) {
@@ -400,7 +407,7 @@ export class AuthenticationService {
         signal: AbortSignal,
     ): Promise<Awaited<ReturnType<IdentityStorage["endDeviceAccess"]>>> => {
         const written: { result?: Awaited<ReturnType<IdentityStorage["endDeviceAccess"]>> } = {};
-        await this.#endAccess(async () => {
+        await this.#commitAccessEnd(async () => {
             written.result = await this.identities.endDeviceAccess(token, deviceId, Date.now(), signal);
             return written.result.kind === "ended";
         });
@@ -408,15 +415,6 @@ export class AuthenticationService {
             throw new Error("The device access change did not run");
         }
         return written.result;
-    };
-
-    /**
-     * Applies an identity change that may end access to the computer. Every request reads the identities, so once the
-     * change commits nothing it ended is authorized again; the result is the committed change alone, and the computer
-     * closes the live connections it ended.
-     */
-    readonly #endAccess = async (change: () => Promise<boolean>): Promise<boolean> => {
-        return await this.#commitAccessEnd(change);
     };
 
     readonly endBrowserAccess = async (token: string | undefined, signal: AbortSignal): Promise<EndAccessResult> => {
@@ -438,7 +436,9 @@ export class AuthenticationService {
             return refused(access);
         }
         return {
-            kind: (await this.#endAccess(() => this.identities.revokeCredential(access.credential, Date.now(), signal)))
+            kind: (await this.#commitAccessEnd(() =>
+                this.identities.revokeCredential(access.credential, Date.now(), signal),
+            ))
                 ? "ended"
                 : "unauthenticated",
         };
