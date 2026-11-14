@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { identifierStringSchema } from "../../shared/identifier.ts";
-import { decodeZodValue, ProtocolMessageError } from "../../shared/message-codec.ts";
+import { ProtocolMessageError } from "../../shared/message-codec.ts";
 import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
 
 const SESSION_ACCESS_PATTERN = /^msession_([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{43})$/u;
@@ -26,9 +26,6 @@ const sessionAccessGrantSchema = z
     .readonly();
 
 export type SessionAccessGrant = z.infer<typeof sessionAccessGrantSchema>;
-
-export const decodeSessionAccessGrant = (value: unknown): SessionAccessGrant =>
-    decodeZodValue(value, sessionAccessGrantSchema);
 
 const claimsSchema = z
     .object({

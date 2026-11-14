@@ -1,5 +1,5 @@
+import type { SessionViewerIdentity } from "../../../../contracts/session-event-subscription.ts";
 import type { ComputerAccessService } from "../../management/service/computer-access-service.ts";
-import type { ComputerSocketIdentity } from "./computer-service.ts";
 
 type Access = (computerId: string) => Pick<ComputerAccessService, "activeGeneration" | "grantsSessionCredential">;
 
@@ -21,7 +21,7 @@ export class ComputerCredentialService {
     };
 
     readonly authorizeViewer = async (
-        identity: Extract<ComputerSocketIdentity, { readonly role: "viewer" }>,
+        identity: SessionViewerIdentity,
         signal: AbortSignal,
     ): Promise<"granted" | "revoked"> =>
         (await this.#access(identity.computerId).grantsSessionCredential(

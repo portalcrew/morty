@@ -1,44 +1,16 @@
-import { decodeSessionAccessGrant, isIdentifier } from "@morty-build/client/protocol";
 import * as v from "valibot";
 import type { RelaySocket } from "../service/computer-relay-actor.ts";
 import type {
     ComputerPeers,
     ComputerSocket,
-    ComputerSocketIdentity,
     DaemonHeartbeat,
+    DaemonSocketIdentity,
 } from "../service/computer-service.ts";
 
-const targetSchema = v.object({
-    harness: v.pipe(
-        v.string(),
-        v.check((value: string) => isIdentifier(value)),
-    ),
-    sessionId: v.pipe(
-        v.string(),
-        v.check((value: string) => isIdentifier(value)),
-    ),
+const attachmentSchema = v.object({
+    connectionEpoch: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
+    computerId: v.string(),
 });
-const attachmentSchema = v.union([
-    v.object({
-        role: v.literal("viewer"),
-        expiresAt: v.number(),
-        credential: v.object({
-            signingKeyId: v.string(),
-            grant: v.pipe(v.unknown(), v.transform(decodeSessionAccessGrant)),
-        }),
-        computerId: v.string(),
-        sessionFilter: targetSchema,
-        subscriptionId: v.pipe(
-            v.string(),
-            v.check((value: string) => isIdentifier(value)),
-        ),
-    }),
-    v.object({
-        role: v.literal("daemon"),
-        connectionEpoch: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
-        computerId: v.string(),
-    }),
-]);
 
 export class CloudflareRelaySocket implements ComputerSocket {
     readonly #socket: WebSocket;
@@ -47,7 +19,7 @@ export class CloudflareRelaySocket implements ComputerSocket {
         this.#socket = socket;
     }
 
-    readonly identity = (): ComputerSocketIdentity => v.parse(attachmentSchema, this.#socket.deserializeAttachment());
+    readonly identity = (): DaemonSocketIdentity => v.parse(attachmentSchema, this.#socket.deserializeAttachment());
 
     readonly close = (code: number, reason: string): void => this.#socket.close(code, reason);
     readonly isOpen = (): boolean => this.#socket.readyState === WebSocket.OPEN;
@@ -56,7 +28,7 @@ export class CloudflareRelaySocket implements ComputerSocket {
     readonly send = (message: string | ArrayBuffer): void => this.#socket.send(message);
 }
 
-export class CloudflareRelayPeers implements Omit<ComputerPeers, "operations" | "daemons"> {
+export class CloudflareRelayPeers implements Omit<ComputerPeers, "operations" | "daemons" | "viewers"> {
     readonly #state: DurableObjectState;
 
     constructor(state: DurableObjectState) {
@@ -78,24 +50,11 @@ export class CloudflareRelayPeers implements Omit<ComputerPeers, "operations" | 
             return { heartbeat, identity: socket.identity(), socket };
         });
 
-    readonly viewers = () =>
-        this.sockets().flatMap(({ socket, identity }) =>
-            identity.role === "viewer" && socket.isOpen()
-                ? [
-                      {
-                          identity,
-                          message: socket.send,
-                          close: socket.close,
-                      },
-                  ]
-                : [],
-        );
-
     readonly accept: ComputerPeers["accept"] = (identity) => {
         const pair = new WebSocketPair();
         const server = pair[1];
         server.serializeAttachment(identity);
-        this.#state.acceptWebSocket(server, [identity.role]);
+        this.#state.acceptWebSocket(server, ["daemon"]);
         return {
             socket: new CloudflareRelaySocket(server),
             response: new Response(null, { status: 101, webSocket: pair[0] }),

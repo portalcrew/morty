@@ -34,25 +34,23 @@ const DAEMON_HEARTBEAT_SILENCE_LIMIT_MILLISECONDS = 35_000;
 /** Whether a heartbeat on a daemon connection has been answered, and when it last was. */
 export type DaemonHeartbeat = { readonly kind: "none" } | { readonly kind: "received"; readonly at: number };
 
-export type ComputerSocketIdentity =
-    | SessionViewerIdentity
-    | {
-          readonly role: "daemon";
-          readonly connectionEpoch: number;
-          readonly computerId: string;
-      };
+/** What a daemon socket carries across Durable Object hibernation: which Computer, and which connection of it. */
+export interface DaemonSocketIdentity {
+    readonly connectionEpoch: number;
+    readonly computerId: string;
+}
 
 export type ComputerSocket = RelaySocket;
 
 export interface ComputerPeers extends RelayPeers {
-    readonly sockets: () => readonly { readonly identity: ComputerSocketIdentity; readonly socket: ComputerSocket }[];
+    readonly sockets: () => readonly { readonly identity: DaemonSocketIdentity; readonly socket: ComputerSocket }[];
     /** Daemon connections with the time each one's heartbeat was last answered by the host. */
     readonly daemonConnections: () => readonly {
-        readonly identity: ComputerSocketIdentity;
+        readonly identity: DaemonSocketIdentity;
         readonly socket: ComputerSocket;
         readonly heartbeat: DaemonHeartbeat;
     }[];
-    readonly accept: (identity: ComputerSocketIdentity) => {
+    readonly accept: (identity: DaemonSocketIdentity) => {
         readonly socket: ComputerSocket;
         readonly response: Response;
     };
@@ -79,8 +77,6 @@ export type ComputerAdmission =
     | { readonly kind: "accepted"; readonly response: Response };
 
 export type ComputerConnectionOperations = Pick<ComputerService, "acceptDaemon" | "revokeComputer" | "readStatus">;
-
-type DaemonSocketIdentity = Extract<ComputerSocketIdentity, { readonly role: "daemon" }>;
 
 export class ComputerService {
     readonly #cx: RuntimeContext;
@@ -169,9 +165,7 @@ export class ComputerService {
                 socket.close(1000, "Previous daemon disconnected");
             }
         }
-        const previous = this.#cx.gateways.peers
-            .sockets()
-            .filter(({ identity, socket }) => identity.role === "daemon" && socket.isOpen());
+        const previous = this.#cx.gateways.peers.sockets().filter(({ socket }) => socket.isOpen());
         for (const attachment of this.#attachments) {
             if (attachment.identity.computerId === computerId) {
                 attachment.controller.abort(new DOMException("Computer connection replaced", "AbortError"));
@@ -182,7 +176,7 @@ export class ComputerService {
             socket.close(1012, "Daemon connection replaced");
         }
         const connection = this.#cx.services.connections.next(computerId);
-        const identity: DaemonSocketIdentity = { ...connection, role: "daemon" };
+        const identity: DaemonSocketIdentity = connection;
         const accepted = this.#cx.gateways.peers.accept(identity);
         this.#cx.services.connections.connected(connection, generation, Date.now());
         logger.info({ ...identity, event: "computer_websocket_accepted" }, "Computer WebSocket accepted");
@@ -265,9 +259,7 @@ export class ComputerService {
             if (identity.computerId !== computerId) {
                 continue;
             }
-            if (identity.role === "daemon") {
-                socket.close(1008, "Computer revoked");
-            }
+            socket.close(1008, "Computer revoked");
         }
         for (const viewer of this.#cx.gateways.peers.viewers()) {
             if (viewer.identity.computerId === computerId) {
@@ -306,10 +298,7 @@ export class ComputerService {
     readonly currentDaemon = (): ComputerPeer | undefined =>
         this.#cx.gateways.peers
             .sockets()
-            .find(
-                ({ identity, socket }) =>
-                    identity.role === "daemon" && socket.isOpen() && this.#cx.services.connections.isCurrent(identity),
-            );
+            .find(({ identity, socket }) => socket.isOpen() && this.#cx.services.connections.isCurrent(identity));
 
     readonly registerSessionSubscription = async (
         computerId: string,
@@ -408,22 +397,13 @@ export class ComputerService {
     };
 
     readonly receiveMessage = async (
-        identity: ComputerSocketIdentity,
+        identity: DaemonSocketIdentity,
         socket: ComputerSocket,
         message: unknown,
         signal: AbortSignal,
     ): Promise<void> => {
         signal.throwIfAborted();
         const computerId = identity.computerId;
-        if (identity.role === "viewer") {
-            const silentDaemons = this.closeSilentDaemons();
-            try {
-                socket.close(1008, "A live subscription cannot send commands");
-                return;
-            } finally {
-                await this.detachDaemons(silentDaemons);
-            }
-        }
         if (typeof message !== "string") {
             try {
                 await this.#daemonMessages.run(["runtime"], signal, async () => {
@@ -572,19 +552,14 @@ export class ComputerService {
     };
 
     readonly detach = async (
-        identity: ComputerSocketIdentity,
+        identity: DaemonSocketIdentity,
         socket: RelaySocket,
         signal: AbortSignal,
     ): Promise<void> => {
-        if (identity.role === "viewer") {
-            this.detachViewer(identity);
-            return;
-        }
         // The latest connection detaches once it closes, also after its generation ended: what was sent into it
         // must still be released.
-        const latest = () =>
-            identity.role === "daemon" && this.#cx.services.connections.standing(identity) !== "replaced";
-        if (identity.role !== "daemon" || !latest()) {
+        const latest = () => this.#cx.services.connections.standing(identity) !== "replaced";
+        if (!latest()) {
             return;
         }
         for (const attachment of this.#attachments) {
@@ -607,7 +582,7 @@ export class ComputerService {
         const now = Date.now();
         const silent: ComputerPeer[] = [];
         for (const { identity, socket, heartbeat } of this.#cx.gateways.peers.daemonConnections()) {
-            if (identity.role !== "daemon" || !socket.isOpen()) {
+            if (!socket.isOpen()) {
                 continue;
             }
             // The host answers heartbeats without running the Relay, so a superseded connection that

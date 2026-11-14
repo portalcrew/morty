@@ -16,7 +16,7 @@ export function createRuntimeContext(cx: {
         readonly access: (computerId: string) => ComputerAccessService;
     };
     readonly gateways: {
-        readonly peers: Omit<ComputerPeers, "operations" | "daemons">;
+        readonly peers: Omit<ComputerPeers, "operations" | "daemons" | "viewers">;
     };
     readonly utilities: {
         readonly waitUntil: (operation: Promise<void>) => void;
@@ -34,7 +34,7 @@ export function createRuntimeContext(cx: {
             const daemon = runtime.currentDaemon();
             return daemon === undefined ? [] : [daemon.socket];
         },
-        viewers: () => [...source.viewers(), ...viewers.viewers()],
+        viewers: viewers.viewers,
         operations: requests.routes,
     };
     const credentials = new ComputerCredentialService(cx.services.access);

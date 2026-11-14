@@ -356,7 +356,6 @@ it("records overload close details and connection epochs without logging healthy
             closeCode: 1013,
             closeReason: "Service overloaded; retry later.",
             wasClean: true,
-            role: "daemon",
             computerId,
             durableObjectId: expect.any(String),
             connectionEpoch: 1,
@@ -404,7 +403,6 @@ it("retains a relay WebSocket error and connection identity before closing the s
         expect(logs.slice(start)).toContainEqual(
             expect.objectContaining({
                 event: "computer_websocket_error",
-                role: "daemon",
                 connectionEpoch: expect.any(Number),
                 computerId,
                 durableObjectId: expect.any(String),

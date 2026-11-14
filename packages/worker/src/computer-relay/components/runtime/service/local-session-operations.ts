@@ -139,7 +139,6 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
             // The viewer is registered before the Computer is told, so events that arrive while it admits are buffered.
             const release = cx.gateways.viewers.open(
                 {
-                    role: "viewer",
                     computerId,
                     sessionFilter: sessionTarget,
                     subscriptionId: subscription.subscriptionId,

@@ -5,16 +5,11 @@ import type { RuntimeContext as DurableObjectContext } from "./runtime-context.t
 
 function socketLogContext(webSocket: WebSocket) {
     try {
-        const identity = new CloudflareRelaySocket(webSocket).identity();
-        const { computerId, role } = identity;
-        return {
-            computerId,
-            role,
-            ...("connectionEpoch" in identity ? { connectionEpoch: identity.connectionEpoch } : {}),
-        };
+        const { computerId, connectionEpoch } = new CloudflareRelaySocket(webSocket).identity();
+        return { computerId, connectionEpoch };
     } catch {
         // A socket can fail before it has a valid attachment.
-        return { role: "unknown" };
+        return {};
     }
 }
 
@@ -57,7 +52,7 @@ export class DaemonWebSocketRoutes {
         webSocket: WebSocket,
         close: { readonly code: number; readonly reason: string; readonly wasClean: boolean },
     ): Promise<void> {
-        // Complete the peer's close handshake, including viewers consumed inside this same DO.
+        // Complete the peer's close handshake.
         webSocket.close(1000, "Computer connection closed");
         const context = socketLogContext(webSocket);
         const details = {
@@ -69,7 +64,7 @@ export class DaemonWebSocketRoutes {
         };
         if (!close.wasClean || (close.code !== 1000 && close.code !== 1001)) {
             this.#logger.warn(details, "Computer WebSocket closed");
-        } else if (context.role === "daemon") {
+        } else if ("connectionEpoch" in context) {
             this.#logger.info(details, "Computer WebSocket closed");
         }
         const socket = new CloudflareRelaySocket(webSocket);
