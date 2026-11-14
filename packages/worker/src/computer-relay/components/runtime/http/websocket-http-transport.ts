@@ -26,9 +26,8 @@ import type { SubscribeSessionEvents } from "../../../../contracts/session-event
 import { WebSocketDispatchError, type WebSocketHttpDispatch } from "../../../../contracts/websocket-http-dispatch.ts";
 import { diagnosticText } from "../../../../infra/log-diagnostics.ts";
 import { logger } from "../../../../infra/logger.ts";
+import { WebSocketUploadCapacity } from "../service/websocket-upload-capacity.ts";
 
-const MAX_PENDING_BINARY_BYTES = CONTENT_UPLOAD_MAX_ENCODED_BYTES;
-const MAX_PENDING_BINARY_REQUESTS = 16;
 const BINARY_REQUEST_TIMEOUT_MILLISECONDS = 30_000;
 const IDLE_TIMEOUT_MILLISECONDS = 60_000;
 const MAX_SUBSCRIPTION_DIAGNOSTICS = 8;
@@ -95,36 +94,6 @@ function isEncryptedContentUpload(request: Request): boolean {
     );
 }
 
-/** Bounds buffering on this connection while the application admits each upload. */
-class ConnectionUploadBudget {
-    #bytes = 0;
-    #ordinaryBytes = 0;
-    #requests = 0;
-
-    readonly reserve = (bytes: number, encryptedUpload: boolean): void => {
-        if (
-            this.#bytes + bytes > MAX_PENDING_BINARY_BYTES ||
-            (!encryptedUpload && this.#ordinaryBytes + bytes > MAX_BODY_BYTES) ||
-            this.#requests >= MAX_PENDING_BINARY_REQUESTS
-        ) {
-            throw transportError("request_capacity_exceeded");
-        }
-        this.#bytes += bytes;
-        if (!encryptedUpload) {
-            this.#ordinaryBytes += bytes;
-        }
-        this.#requests += 1;
-    };
-
-    readonly release = (bytes: number, encryptedUpload: boolean): void => {
-        this.#bytes -= bytes;
-        if (!encryptedUpload) {
-            this.#ordinaryBytes -= bytes;
-        }
-        this.#requests -= 1;
-    };
-}
-
 class PendingBinaryUpload {
     readonly chunks: Uint8Array[] = [];
     receivedBytes = 0;
@@ -137,14 +106,14 @@ class PendingBinaryUpload {
 
     readonly byteLength: number;
     readonly message: Readonly<Record<string, unknown>>;
-    readonly #connectionBudget: ConnectionUploadBudget;
+    readonly #connectionBudget: WebSocketUploadCapacity;
     readonly #encryptedUpload: boolean;
     readonly #onFailure: (cause: unknown) => Promise<void>;
 
     constructor(
         byteLength: number,
         message: Readonly<Record<string, unknown>>,
-        connectionBudget: ConnectionUploadBudget,
+        connectionBudget: WebSocketUploadCapacity,
         encryptedUpload: boolean,
         onFailure: (cause: unknown) => Promise<void>,
     ) {
@@ -433,7 +402,7 @@ export function acceptWebSocketHttpTransport({
         | { readonly kind: "pending"; readonly controller: AbortController }
         | { readonly kind: "open"; readonly controller: AbortController }
     >();
-    const connectionUploads = new ConnectionUploadBudget();
+    const connectionUploads = new WebSocketUploadCapacity();
     const binaryRequests = new Map<string, PendingBinaryUpload>();
     const requests = new Map<string, AbortController>();
     const browserOrigin = request.headers.get("origin");

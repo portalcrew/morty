@@ -388,7 +388,7 @@ export class ComputerService {
         const computerId = identity.computerId;
         if (typeof message !== "string") {
             try {
-                await this.#daemonMessages.run(["runtime"], signal, async () => {
+                await this.#daemonMessages.run("runtime", signal, async () => {
                     signal.throwIfAborted();
                     if (!(await this.authorizeDaemonMessage(identity, socket, signal))) {
                         return;
@@ -419,9 +419,9 @@ export class ComputerService {
             this.relay(computerId).recordSkipped("invalid_daemon_message");
             return;
         }
-        const lanes = daemonMessage === null ? ["runtime"] : this.daemonMessageLanes(daemonMessage);
+        const lane = daemonMessage === null ? "runtime" : this.daemonMessageLane(daemonMessage);
         try {
-            await this.#daemonMessages.run(lanes, signal, async () => {
+            await this.#daemonMessages.run(lane, signal, async () => {
                 signal.throwIfAborted();
                 if (!(await this.authorizeDaemonMessage(identity, socket, signal))) {
                     return;
@@ -496,11 +496,11 @@ export class ComputerService {
     /**
      * Each event batch declares one Session. Its public target selects the ordering lane without reading events.
      */
-    private readonly daemonMessageLanes = (message: DaemonToRelayMessage): readonly string[] => {
+    private readonly daemonMessageLane = (message: DaemonToRelayMessage): string => {
         if (message.kind === SESSION_EVENT_KIND) {
-            return [`session:${nativeSessionKey(message.target)}`];
+            return `session:${nativeSessionKey(message.target)}`;
         }
-        return ["runtime"];
+        return "runtime";
     };
 
     private readonly relay = (computerId: string): ComputerRelayActor => {
