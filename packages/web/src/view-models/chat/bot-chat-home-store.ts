@@ -105,9 +105,7 @@ function initialSelection(urlValue: string, createId: () => string): Conversatio
         harness: parameters.get("harness"),
         sessionId: parameters.get("sessionId"),
     });
-    return target !== null
-        ? { kind: "pending", target: { kind: "session", identity: target } }
-        : { kind: "draft", key: createId() };
+    return target !== null ? { kind: "pending", target } : { kind: "draft", key: createId() };
 }
 
 /** Setup is a projection of its owning workflows, not a second stored configuration snapshot. */
@@ -251,7 +249,7 @@ export const createBotChatHomeStore = (
     const computer = options.computer;
     const titles = options.titles;
     const selection = initialSelection(options.url, options.createId);
-    let restoredTarget = options.entry === "restore" && selection.kind === "pending" ? selection.target.identity : null;
+    let restoredTarget = options.entry === "restore" && selection.kind === "pending" ? selection.target : null;
     const {
         onRestart,
         onSelectionChanged,
@@ -405,11 +403,11 @@ export const createBotChatHomeStore = (
                         return;
                     }
                     const current = get().selection;
-                    if (current.kind !== "loading" || current.target.kind !== "session") {
+                    if (current.kind !== "loading") {
                         return;
                     }
                     const target = current.target;
-                    const session = await requests.managedSession(target.identity, signal);
+                    const session = await requests.managedSession(target, signal);
                     signal.throwIfAborted();
                     acceptLoadedSelection({ kind: "session-loaded", session, target }, startedWith);
                 } catch (cause) {
@@ -431,9 +429,7 @@ export const createBotChatHomeStore = (
                     if (
                         restoredTarget !== null &&
                         (failedTarget.kind === "pending" || failedTarget.kind === "loading") &&
-                        failedTarget.target.kind === "session" &&
-                        failedTarget.target.identity.harness === restoredTarget.harness &&
-                        failedTarget.target.identity.sessionId === restoredTarget.sessionId &&
+                        sameNativeSession(failedTarget.target, restoredTarget) &&
                         cause instanceof CloudApiError &&
                         ["NOT_FOUND", "session_not_found"].includes(cause.code)
                     ) {
@@ -571,7 +567,7 @@ export const createBotChatHomeStore = (
                 set((current) => ({
                     selection: transitionConversationSelection(current.selection, {
                         kind: "target-selected",
-                        target: { kind: "session", identity: target },
+                        target,
                     }),
                     creation: transitionConversationCreation(current.creation, { kind: "reset" }),
                     scrollFollowRevision: current.scrollFollowRevision + 1,
@@ -717,7 +713,6 @@ export const createBotChatHomeStore = (
                     announceSelection();
                 }
                 onDirectoryRefreshed();
-                return;
             },
             takeNextDraft: (sessionTarget) => {
                 const handoff = get().draftHandoff;

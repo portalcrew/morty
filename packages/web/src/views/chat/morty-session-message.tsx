@@ -10,6 +10,7 @@ import { AgentResponseText } from "../../components/agents/agent-response-text.t
 import { isDisplayableImageType } from "../../components/agents/displayable-image-type.ts";
 import { ExternalContentBlock, LinkedResourceBlock } from "../../components/agents/external-content-block.tsx";
 import { loadDiagramRenderer } from "../../components/agents/mermaid-code-block.tsx";
+import { isSafeAudioType } from "../../components/agents/safe-audio-type.ts";
 import { AgentThinking } from "../../components/chat/agent-thinking.tsx";
 import { AttemptFailure } from "../../components/chat/attempt-failure.tsx";
 import { AuthenticationNotice } from "../../components/chat/authentication-notice.tsx";
@@ -43,8 +44,6 @@ if (typeof requestIdleCallback === "function") {
 } else {
     setTimeout(warmRichRenderers, 2_000);
 }
-
-const SAFE_AUDIO_MIME = /^audio\/(?:aac|mpeg|mp4|ogg|wav|webm)$/u;
 
 function safeRemoteUrl(value: string): string | null {
     try {
@@ -99,7 +98,7 @@ function MessageContentBlock({
                 <p className="text-sm text-muted-foreground">Image content could not be displayed safely.</p>
             );
         case "audio":
-            return SAFE_AUDIO_MIME.test(content.mimeType) && content.data.length > 0 ? (
+            return isSafeAudioType(content.mimeType) && content.data.length > 0 ? (
                 <audio controls src={`data:${content.mimeType};base64,${content.data}`}>
                     <track kind="captions" />
                 </audio>

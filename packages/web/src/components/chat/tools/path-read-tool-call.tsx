@@ -1,6 +1,7 @@
 import * as v from "valibot";
 import { HighlightedCode, languageForPath } from "../highlighted-code.tsx";
 import { isOversizedToolText, ToolTextPreview } from "../tool-text-preview.tsx";
+import { parseJson } from "./parse-json.ts";
 import {
     type NumberedCodeLine,
     NumberedCodeLines,
@@ -31,14 +32,6 @@ interface ParsedOutput {
     readonly continuationLabel: string;
     readonly lines: readonly NumberedCodeLine[] | null;
     readonly rangeLabel: string;
-}
-
-function parseJson(value: string): unknown {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return null;
-    }
 }
 
 function responseText(value: string): string {

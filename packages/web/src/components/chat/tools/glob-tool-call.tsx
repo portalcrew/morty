@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { parseJson } from "./parse-json.ts";
 import { SearchToolPresentation } from "./search-tool-presentation.tsx";
 import type { ToolRendererProps } from "./tool-renderer.ts";
 
@@ -11,14 +12,6 @@ const requestSchema = v.pipe(
     }),
     v.readonly(),
 );
-
-function parseJson(value: string): unknown {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return null;
-    }
-}
 
 export function matchesGlobToolCall({ input }: ToolRendererProps["entry"]): boolean {
     return v.safeParse(requestSchema, parseJson(input)).success;

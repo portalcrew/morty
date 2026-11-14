@@ -1,4 +1,4 @@
-import { expect, test, vi } from "vitest";
+import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
 import { sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
@@ -45,10 +45,8 @@ test("Given a configured session, When the Agent removes every configurable opti
 
     // An explicit empty config_option_update is real agent state: the panel
     // must clear instead of retaining the removed options.
-    await vi.waitFor(
-        () => {
-            expect(app.elementByTestId(dataTestId.agentConfiguration).textContent).not.toContain("Test Small");
-        },
-        { interval: 250, timeout: 30_000 },
+    await app.waitForView(
+        () => expect(app.elementByTestId(dataTestId.agentConfiguration).textContent).not.toContain("Test Small"),
+        30_000,
     );
 });

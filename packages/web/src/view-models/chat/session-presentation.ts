@@ -339,7 +339,7 @@ function compactionSummary(summary: readonly ContentBlock[]): SessionText | null
     // A terminal summary may span several text blocks; they read as one summary,
     // so aggregate them in order before applying the retention limit.
     const text = summary
-        .flatMap((block) => (block?.type === "text" && block.text.length > 0 ? [block.text] : []))
+        .flatMap((block) => (block.type === "text" && block.text.length > 0 ? [block.text] : []))
         .join("");
     return text.length > 0 ? initialSessionText(text, COMPACTION_CHARACTER_LIMIT) : null;
 }

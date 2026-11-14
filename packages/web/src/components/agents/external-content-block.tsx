@@ -8,9 +8,8 @@ import { textLinkClassName } from "../ui/text-link.ts";
 import type { MarkdownImageReader } from "./agent-markdown.tsx";
 import { isDisplayableImageType } from "./displayable-image-type.ts";
 import type { SessionResourceRequest, SessionResourceState } from "./resource-reader.ts";
+import { isSafeAudioType } from "./safe-audio-type.ts";
 import { SessionResource } from "./session-resource.tsx";
-
-const SAFE_AUDIO_MIME = /^audio\/(?:aac|mpeg|mp4|ogg|wav|webm)$/u;
 
 export function LinkedResourceBlock({
     mediaType,
@@ -143,7 +142,7 @@ function renderContent(
                 <p className="text-sm text-muted-foreground">Image content could not be displayed safely.</p>
             );
         case "external_audio":
-            return SAFE_AUDIO_MIME.test(content.mimeType) && state.kind === "media" ? (
+            return isSafeAudioType(content.mimeType) && state.kind === "media" ? (
                 <audio controls src={state.source}>
                     <track kind="captions" />
                 </audio>

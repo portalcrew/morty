@@ -1,5 +1,6 @@
 import * as v from "valibot";
 import { EditToolPresentation, FileDiffList, fileDiffsWithoutRichContent } from "./edit-tool-presentation.tsx";
+import { parseJson } from "./parse-json.ts";
 import type { ToolRendererProps } from "./tool-renderer.ts";
 
 const inputSchema = v.pipe(
@@ -11,14 +12,6 @@ const inputSchema = v.pipe(
     }),
     v.readonly(),
 );
-
-function parseJson(value: string): unknown {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return null;
-    }
-}
 
 export function matchesFilePathEditToolCall({ input }: ToolRendererProps["entry"]): boolean {
     return v.safeParse(inputSchema, parseJson(input)).success;

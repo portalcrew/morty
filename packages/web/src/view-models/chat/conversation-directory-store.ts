@@ -26,8 +26,8 @@ type ConversationDirectoryState =
 
 type ArchiveOperation =
     | { readonly kind: "idle" }
-    | { readonly kind: "archiving"; readonly sessionTarget: NativeSessionTarget }
-    | { readonly kind: "failed"; readonly message: string; readonly sessionTarget: NativeSessionTarget };
+    | { readonly kind: "archiving" }
+    | { readonly kind: "failed"; readonly message: string };
 
 export interface ConversationDirectoryStore {
     readonly state: ConversationDirectoryState;
@@ -99,7 +99,7 @@ export const createConversationDirectoryStore = (
                 }
             },
             archiveSession: async (sessionTarget, signal) => {
-                set({ archive: { kind: "archiving", sessionTarget } });
+                set({ archive: { kind: "archiving" } });
                 try {
                     const state = get().state;
                     const session =
@@ -160,7 +160,6 @@ export const createConversationDirectoryStore = (
                         set({
                             archive: {
                                 kind: "failed",
-                                sessionTarget,
                                 message: formatError(cause, "The session could not be archived."),
                             },
                         });

@@ -83,7 +83,7 @@ export type FilePreviewState =
                     readonly document: HtmlPreviewDocument;
                     readonly diagnostic:
                         | { readonly kind: "none" }
-                        | { readonly kind: "failed"; readonly code: HtmlPreviewFailure; readonly message: string };
+                        | { readonly kind: "failed"; readonly message: string };
                 };
       }
     | {
@@ -95,7 +95,6 @@ export type FilePreviewState =
       }
     | {
           readonly kind: "failed";
-          readonly code: "timeout" | "offline" | "unavailable";
           readonly message: string;
           readonly path: string;
       };
@@ -191,19 +190,17 @@ const HTML_FAILURE_MESSAGES: Readonly<Record<HtmlPreviewFailure, string>> = {
 function readFailure(cause: unknown, timedOut: boolean, path: string): Extract<FilePreviewState, { kind: "failed" }> {
     const code = cause instanceof MortyError ? cause.code : null;
     if (timedOut || code === "operation_timeout") {
-        return { kind: "failed", code: "timeout", path, message: "The local file preview timed out. Try reloading." };
+        return { kind: "failed", path, message: "The local file preview timed out. Try reloading." };
     }
     if (code === "computer_offline" || code === "session_not_connected") {
         return {
             kind: "failed",
-            code: "offline",
             path,
             message: "Your computer is offline or disconnected. Reconnect it, then reload the file.",
         };
     }
     return {
         kind: "failed",
-        code: "unavailable",
         path,
         message: "The local file could not be opened. Check that it is available, then reload.",
     };
@@ -349,7 +346,7 @@ export function createBrowserFilePreviewStore(read: (path: string, signal: Abort
                         ...state,
                         view: {
                             ...state.view,
-                            diagnostic: { kind: "failed", code, message: HTML_FAILURE_MESSAGES[code] },
+                            diagnostic: { kind: "failed", message: HTML_FAILURE_MESSAGES[code] },
                         },
                     },
                 });

@@ -1,6 +1,7 @@
 import * as v from "valibot";
 import { isOversizedToolText } from "../tool-text-preview.tsx";
 import { EditToolPresentation } from "./edit-tool-presentation.tsx";
+import { parseJson } from "./parse-json.ts";
 import type { ToolRendererProps } from "./tool-renderer.ts";
 
 const changesSchema = v.pipe(
@@ -9,14 +10,6 @@ const changesSchema = v.pipe(
     }),
     v.readonly(),
 );
-
-function parseJson(value: string): unknown {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return null;
-    }
-}
 
 function parseChanges(entry: ToolRendererProps["entry"]): v.InferOutput<typeof changesSchema> | null {
     for (const candidate of [entry.input, entry.output]) {
