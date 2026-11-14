@@ -49,9 +49,9 @@ Morty does not assign an independent conversation or Session identity. The nativ
 identity is scoped to the selected Agent and Runtime on an authorized Computer;
 the same native value elsewhere does not identify or authorize the same work.
 
-### New Chat draft
+### New Session draft
 
-New Chat is a browser-only draft containing the user's selected Agent, workspace,
+A New Session draft is a browser-only draft containing the user's selected Agent, workspace,
 settings, prompt, and attachments. Opening or abandoning it creates neither an
 Agent session nor a managed conversation record.
 
@@ -121,7 +121,7 @@ Agent and workspace context, receives turns and control operations, and publishe
 events to Morty. This is the Session Morty's browser connects to and the Session
 stored in the managed conversation directory.
 
-The first send from a New Chat draft creates a real Agent session before submitting
+The first send from a New Session draft creates a real Agent session before submitting
 the prompt. Morty uses the returned Native Session ID for the resulting execution
 scope and managed conversation. Opening existing Agent history uses its existing
 native identity rather than allocating a Morty-specific one.

@@ -50,8 +50,8 @@ You may install missing prerequisites and pair this machine.
 打开 Agent 返回的链接，或用手机扫描二维码。无需安装手机 App。
 
 安装过程是一份你的 Agent 会读的文档，不是黑盒：
-[setup.md](https://morty.build/doc/setup.md) 完全公开，并且要求 Agent 把安装脚本下载到
-私有临时目录、运行前先检查一遍。粘贴提示词之前，建议你自己也读一遍。
+[setup.md](https://morty.build/doc/setup.md) 完全公开，并且要求 Agent 直接运行 Morty CLI
+（已安装的，或通过 `npx`），不会下载或运行单独的安装脚本。粘贴提示词之前，建议你自己也读一遍。
 
 ## 运行条件
 

@@ -119,8 +119,8 @@ cannot be undone by restoring a Worker.
 Release versions are derived from a committed stable-version baseline and the
 number of first-parent main commits since its recorded source revision. The same
 commit therefore always selects the same version, including after a failed run.
-The package manifest in source records the baseline; release builds apply the
-computed version without a bot commit or protected-branch bypass. Failed or
+A committed baseline records it; release builds apply the computed version
+without a bot commit or protected-branch bypass. Failed or
 non-published commits can leave patch-number gaps. Minor/major changes require a
 reviewed baseline update, and do not authorize protocol incompatibility.
 
