@@ -111,19 +111,6 @@ export class ControlledSetupRuntime implements SetupRuntime {
     };
 
     /**
-     * Installs other Agents on the computer. Like the manager after an install, running connections restart and
-     * publish the new catalog once they reconnect; later connections offer the same Agents.
-     */
-    readonly installAgents = async (
-        agents: Pick<ControlledAgentBehavior, "additionalAgents" | "harness" | "agentName">,
-    ): Promise<void> => {
-        this.#options = { ...this.#options, ...agents };
-        for (const daemon of this.#active.values()) {
-            await daemon.restartWithAgents(agents);
-        }
-    };
-
-    /**
      * Like the manager's daemon, a connection runs in the background: the command that starts it can be cancelled,
      * but only `disconnect` stops the daemon once it runs.
      */

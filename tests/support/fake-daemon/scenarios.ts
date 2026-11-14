@@ -159,14 +159,6 @@ export function mortyReply(prompt: string, turnNumber: number, mode: "prompt" | 
             };
         case "wait for steering":
             return { outcome: "hold", output: [{ kind: "text", text: "Waiting for steering" }] };
-        case "compact the conversation":
-            return {
-                outcome: "complete",
-                output: [
-                    { kind: "compaction", summary: "The user explored the session timeline.\nContext was summarized." },
-                    { kind: "text", text: "Context compacted; continuing with the summary." },
-                ],
-            };
         case "compact with summary blocks":
             return {
                 outcome: "complete",
@@ -275,16 +267,6 @@ export function mortyReply(prompt: string, turnNumber: number, mode: "prompt" | 
                     { kind: "text", text: "Reply before the interleaved compaction." },
                     { kind: "compaction-start" },
                     { kind: "text", text: "Message between compaction start and settle." },
-                ],
-            };
-        case "interleaved compaction finish":
-            return {
-                outcome: "complete",
-                output: [
-                    {
-                        kind: "compaction-finish",
-                        summary: "First half of the interleaved summary.\nSecond half of the interleaved summary.",
-                    },
                 ],
             };
         case "interleave padding one":
@@ -428,43 +410,6 @@ export function mortyReply(prompt: string, turnNumber: number, mode: "prompt" | 
             return {
                 outcome: "complete",
                 output: [{ kind: "text", text: "[Open picture](file:///workspace/generated-picture.png)" }],
-            };
-        case "show live output in order":
-            return {
-                outcome: "complete",
-                output: [
-                    { kind: "text", text: "First live message" },
-                    {
-                        kind: "activity",
-                        activityType: "tool",
-                        content: [],
-                        title: "Later live tool",
-                        output: "Later live tool output",
-                    },
-                    { kind: "text", text: "Final live message" },
-                ],
-            };
-        case "change several files":
-            return {
-                outcome: "complete",
-                output: [
-                    {
-                        kind: "activity",
-                        activityType: "tool",
-                        content: [
-                            {
-                                newText: "export const status = 'after';\n",
-                                oldText: "export const status = 'before';\n",
-                                path: "/workspace/app.js",
-                                type: "diff",
-                            },
-                        ],
-                        title: "/workspace/app.js, /workspace/index.html, /workspace/styles.css",
-                        output: JSON.stringify({
-                            changes: ["/workspace/app.js", "/workspace/index.html", "/workspace/styles.css"],
-                        }),
-                    },
-                ],
             };
         case "show generic file edit":
             return {
