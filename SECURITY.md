@@ -92,7 +92,7 @@ In scope:
 
 - this repository and the deployed application at `morty.build`
 - pairing, sharing links, access revocation, and session authorization
-- the setup instructions served at `morty.build/setup.md`
+- the setup instructions served at `morty.build/doc/setup.md`
 
 The internal client library, relay and local Runtime are part of this product and
 use the same reporting channel.

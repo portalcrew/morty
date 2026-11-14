@@ -70,7 +70,6 @@ Continuing a real Agent conversation requires that Agent to be installed and
 configured. See [the local-stack guide](../.agents/skills/chat-local-full-dev/SKILL.md)
 for connecting it to the isolated stack. Runtime, protocol, client, and server
 sources belong to the same Morty workspace.
-Runtime configuration is described in [deployment](deployment.md).
 
 Before proposing a change, run `pnpm lint`, `pnpm typecheck`, and the relevant
 commands in [TESTING.md](TESTING.md). New behavior starts with an acceptance scenario
