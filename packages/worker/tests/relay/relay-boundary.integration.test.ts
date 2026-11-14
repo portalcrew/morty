@@ -61,17 +61,13 @@ import {
 } from "@morty-build/client/protocol";
 import { afterAll, afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";
-import { DaemonWebSocketRoutes } from "../../src/computer-relay/components/runtime/daemon-websocket-routes.ts";
-import { createRuntimeContext } from "../../src/computer-relay/components/runtime/runtime-context.ts";
-import { createRelayDurableObjectContext } from "../../src/computer-relay/composition/relay-durable-object-context.ts";
 import { ComputerRelay as RelayComputerRelay } from "../../src/computer-relay/computer-relay.ts";
-import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-object-database.ts";
 import { computerObjectName } from "../../src/contracts/computer-id.ts";
 import { RelayAuthenticationConfiguration } from "../../src/contracts/relay/computer-management.ts";
 import type { RelayBindings } from "../../src/contracts/relay-bindings.ts";
 import { browserOperationHeaders, closeBrowserSocket, requestBrowserOperation } from "./browser-session.ts";
 import { computerBackend, createOwner, issueSession, ownerRequest } from "./owner-fixture.ts";
-import { computerAccess, revokeTestComputer } from "./registered-computer.ts";
+import { revokeTestComputer } from "./registered-computer.ts";
 
 const nativeTarget = (sessionId: string): NativeSessionTarget => ({ harness: "codex", sessionId });
 
@@ -1229,36 +1225,7 @@ it.each(["text", "binary"])(
             }
         });
         const deliver = (message: string | Uint8Array) =>
-            runInDurableObject(
-                env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)),
-                async (_instance, state) => {
-                    const pending: Promise<void>[] = [];
-                    const database = new DurableObjectDatabase(state.storage);
-                    const { access } = computerAccess(runtime.computerId, state.storage);
-                    const context = createRelayDurableObjectContext(state, { database, access: () => access });
-                    const relay = new DaemonWebSocketRoutes(
-                        createRuntimeContext({
-                            doDatabase: database,
-                            services: context.services,
-                            gateways: context.gateways,
-                            utilities: {
-                                waitUntil: (operation) => {
-                                    pending.push(operation);
-                                },
-                            },
-                        }),
-                    );
-                    const daemon = state.getWebSockets("daemon")[0];
-                    if (daemon === undefined) {
-                        throw new Error("Expected the accepted Computer connection");
-                    }
-                    await relay.webSocketMessage(
-                        daemon,
-                        typeof message === "string" ? message : new Uint8Array(message).buffer,
-                    );
-                    await Promise.all(pending);
-                },
-            );
+            runtime.daemon.send(typeof message === "string" ? message : new Uint8Array(message).buffer);
         try {
             const signal = new AbortController().signal;
             const before = await sessionEventEnvelopeCodec.encode(
@@ -1288,7 +1255,7 @@ it.each(["text", "binary"])(
                     },
                 );
             }
-            await deliver(
+            deliver(
                 format === "text"
                     ? await sessionEventEnvelopeCodec.encode(
                           JSON.parse(liveEvent(runtime.sessionTarget, "after revocation")),
@@ -2442,16 +2409,15 @@ describe.sequential("Relay Turn submission", () => {
             runtime.daemon.close(1000, "Test complete");
         }
     });
-    it("Given an open Session view, When the Relay signing secret rotates, Then the connection check closes the old view and only new credentials reconnect", async () => {
+    it("Given a paired Computer, When the Relay signing secret rotates, Then old credentials are rejected and only new credentials can subscribe", async () => {
         const runtime = await connectComputerDaemon("signing-key-rotation");
-        const { socket: view, messages } = await runtime.subscribe();
         try {
             const signingSecret = "rotated-test-only-session-signing-secret";
             const reissued = await runtime.resignCredential(async () => await relaySigningKey(signingSecret));
             const statuses = await runInDurableObject(
                 env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)),
                 async (_instance, state) => {
-                    // Reconstruct the production object with the same persisted sockets and a newly deployed binding.
+                    // A new deployment retains the daemon attachment, not the old browser transport's in-memory listeners.
                     const rotated = new RelayComputerRelay(state, {
                         ...bindings(),
                         MORTY_ALLOWED_ORIGINS: '["*"]',
@@ -2486,9 +2452,7 @@ describe.sequential("Relay Turn submission", () => {
                 old: { kind: "session.events.error", status: 401 },
                 current: { kind: "session.events.ready" },
             });
-            expect(JSON.parse(await messages.next())).toMatchObject({ kind: "session.events.end" });
         } finally {
-            view.close(1000, "Test complete");
             runtime.daemon.close(1000, "Test complete");
         }
     });

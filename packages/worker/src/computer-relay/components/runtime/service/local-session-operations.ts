@@ -12,6 +12,7 @@ import {
 } from "@morty-build/client/protocol";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
+import type { SessionEventObserver } from "../../../../contracts/session-event-subscription.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import type { RuntimeContext } from "../runtime-context.ts";
 import type { ClientControlCommand } from "./computer-control-registry.ts";
@@ -109,7 +110,7 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
                 signal,
             );
         },
-        openPublicSessionEvents: async (
+        subscribeSessionEvents: async (
             requestedComputerId: string,
             sessionTarget: NativeSessionTarget,
             subscription: SessionEventsSubscribeCommandRouting,
@@ -118,8 +119,9 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
                 readonly grant: SessionAccessGrant;
                 readonly expiresAt: number;
             },
+            observer: SessionEventObserver,
             signal: AbortSignal,
-        ): Promise<Response> => {
+        ): Promise<void> => {
             checkTarget(requestedComputerId);
             signal.throwIfAborted();
             await cx.services.runtime.expireSilentDaemons();
@@ -129,30 +131,31 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
             }
             if (
                 cx.gateways.peers
-                    .sockets()
-                    .some(
-                        ({ identity }) =>
-                            identity.role === "viewer" && identity.subscriptionId === subscription.subscriptionId,
-                    )
+                    .viewers()
+                    .some(({ identity }) => identity.subscriptionId === subscription.subscriptionId)
             ) {
                 throw new PairingDirectoryError("invalid_request", "The subscription identifier is already in use");
             }
-            const viewer = cx.gateways.peers.accept({
-                role: "viewer",
-                computerId,
-                sessionFilter: sessionTarget,
-                subscriptionId: subscription.subscriptionId,
-                expiresAt: credential.expiresAt,
-                credential: {
-                    signingKeyId: credential.signingKeyId,
-                    grant: credential.grant,
+            // The viewer is registered before the Computer is told, so events that arrive while it admits are buffered.
+            const release = cx.gateways.viewers.open(
+                {
+                    role: "viewer",
+                    computerId,
+                    sessionFilter: sessionTarget,
+                    subscriptionId: subscription.subscriptionId,
+                    expiresAt: credential.expiresAt,
+                    credential: {
+                        signingKeyId: credential.signingKeyId,
+                        grant: credential.grant,
+                    },
                 },
-            });
+                observer,
+                signal,
+            );
             try {
                 await cx.services.runtime.registerSessionSubscription(computerId, sessionTarget, subscription, signal);
-                return viewer.response;
             } catch (cause) {
-                viewer.socket.close(1008, "Session subscription failed");
+                release();
                 throw cause;
             }
         },

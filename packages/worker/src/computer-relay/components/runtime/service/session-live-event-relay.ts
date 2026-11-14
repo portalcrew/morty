@@ -11,17 +11,17 @@ export class SessionLiveEventRelay {
 
     readonly receive = (routing: SessionEventEnvelopeRouting, encoded: string): void => {
         for (const viewer of this.#peers.viewers()) {
-            if (viewer.expiresAt <= Date.now()) {
-                viewer.socket.close(1000, "Session access expired");
+            if (viewer.identity.expiresAt <= Date.now()) {
+                viewer.close(1000, "Session access expired");
                 continue;
             }
-            if (!sameNativeSession(viewer.target, routing.target)) {
+            if (!sameNativeSession(viewer.identity.sessionFilter, routing.target)) {
                 continue;
             }
             try {
-                viewer.socket.send(encoded);
+                viewer.message(encoded);
             } catch {
-                viewer.socket.close(1013, "Session subscription backpressure");
+                viewer.close(1013, "Session subscription backpressure");
             }
         }
     };

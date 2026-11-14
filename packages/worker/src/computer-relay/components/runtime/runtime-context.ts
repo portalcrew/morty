@@ -5,6 +5,7 @@ import { ComputerRelayActor } from "./service/computer-relay-actor.ts";
 import { type ComputerPeers, ComputerService } from "./service/computer-service.ts";
 import { DaemonConnectionService } from "./service/daemon-connection-service.ts";
 import { LocalComputerRequests } from "./service/local-computer-requests.ts";
+import { LocalSessionViewers } from "./service/local-session-viewers.ts";
 import { ComputerConnectionStorage } from "./storage/computer-connection-storage.ts";
 
 export type RuntimeContext = ReturnType<typeof createRuntimeContext>;
@@ -22,13 +23,14 @@ export function createRuntimeContext(cx: {
     };
 }) {
     const requests = new LocalComputerRequests(cx.utilities.waitUntil);
+    const viewers = new LocalSessionViewers((identity) => runtime.detachViewer(identity));
     const source = cx.gateways.peers;
     const peers: ComputerPeers = {
         accept: source.accept,
         sockets: source.sockets,
         daemonConnections: source.daemonConnections,
         daemons: source.daemons,
-        viewers: source.viewers,
+        viewers: () => [...source.viewers(), ...viewers.viewers()],
         operations: requests.routes,
     };
     const credentials = new ComputerCredentialService(cx.services.access);
@@ -44,7 +46,7 @@ export function createRuntimeContext(cx: {
     });
     return {
         doDatabase: cx.doDatabase,
-        gateways: { ...cx.gateways, peers, requests },
+        gateways: { ...cx.gateways, peers, requests, viewers },
         utilities: cx.utilities,
         services: {
             ...cx.services,
