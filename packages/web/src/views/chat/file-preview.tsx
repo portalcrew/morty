@@ -10,23 +10,6 @@ import { dataTestId } from "../../data-testid.ts";
 import type { FilePreviewLayout, FilePreviewState } from "../../view-models/chat/file-preview-store.ts";
 import { describePageFailure } from "../../view-models/format-error.ts";
 
-function CodeLineNumbers({ code }: { readonly code: string }) {
-    const lineCount = code.split("\n").length;
-    return (
-        <div
-            aria-hidden="true"
-            className="sticky left-0 z-10 self-stretch border-r border-border/70 bg-surface-subtle px-3 py-4 text-right font-mono text-xs leading-4 text-muted-foreground select-none"
-            data-testid={dataTestId.filePreviewLineNumbers}
-        >
-            {Array.from({ length: lineCount }, (_, index) => (
-                <span className="block h-4" data-line-number="" key={index.toString()}>
-                    {index + 1}
-                </span>
-            ))}
-        </div>
-    );
-}
-
 function PreviewSource({ name, text }: { readonly name: string; readonly text: string }) {
     return (
         <ScrollArea
@@ -38,12 +21,7 @@ function PreviewSource({ name, text }: { readonly name: string; readonly text: s
             tabIndex={0}
             viewportClassName="h-full"
         >
-            <div className="flex min-w-0 items-start">
-                <CodeLineNumbers code={text} />
-                <div className="min-w-0 flex-1 [&_pre]:leading-4">
-                    <HighlightedCode bare code={text} language={languageForPath(name)} />
-                </div>
-            </div>
+            <HighlightedCode bare lineNumbers code={text} language={languageForPath(name)} />
         </ScrollArea>
     );
 }
