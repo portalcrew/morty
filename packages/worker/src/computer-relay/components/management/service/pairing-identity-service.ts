@@ -25,8 +25,8 @@ export class ComputerIdentityService {
     }
 
     readonly authenticate = async (credential: ComputerIdentityCredential, signal: AbortSignal): Promise<void> => {
-        const identity = await this.#readIdentity(credential, signal);
-        const active = await this.#accounts.isActive(identity.computerId, signal);
+        await this.#requireHeld(credential, signal);
+        const active = await this.#accounts.isActive(this.#computerId, signal);
         signal.throwIfAborted();
         if (!active) {
             throw unmatchedCredential(credential);
@@ -83,7 +83,7 @@ export class ComputerIdentityService {
         }
     };
 
-    readonly #readIdentity = async (credential: ComputerIdentityCredential, signal: AbortSignal) => {
+    readonly #requireHeld = async (credential: ComputerIdentityCredential, signal: AbortSignal): Promise<void> => {
         signal.throwIfAborted();
         try {
             // A daemon credential names its Computer; it must be this one.
@@ -98,7 +98,6 @@ export class ComputerIdentityService {
             if (!held) {
                 throw unmatchedCredential(credential);
             }
-            return { computerId: this.#computerId };
         } catch (cause) {
             signal.throwIfAborted();
             if (cause instanceof PairingDirectoryError) {

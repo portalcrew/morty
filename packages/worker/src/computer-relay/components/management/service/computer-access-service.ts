@@ -1,9 +1,6 @@
 import type { SessionAccessGrant, SessionAccessHolder } from "@morty-build/client/protocol";
 import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
-import {
-    type ComputerAccess,
-    ComputerAuthenticationError,
-} from "../../../../contracts/relay/computer-authentication.ts";
+import { ComputerAuthenticationError } from "../../../../contracts/relay/computer-authentication.ts";
 import { validateIdentifier } from "../../../../contracts/relay/pairing.ts";
 import type { ComputerRelayStore } from "../storage/computer-relay-store.ts";
 import type { DurableComputerAccount } from "../storage/durable-computer-account.ts";
@@ -50,11 +47,11 @@ export class ComputerAccessService {
         return active ? await this.#store.readActiveGeneration(signal) : null;
     };
 
-    readonly authorizeComputer = async (computerId: string, signal: AbortSignal): Promise<ComputerAccess> => {
+    /** Refuses unless the computer is active; the computer is the one the caller named, which `isActive` checked. */
+    readonly authorizeComputer = async (computerId: string, signal: AbortSignal): Promise<void> => {
         if (!(await this.isActive(computerId, signal))) {
             throw new ComputerAuthenticationError("computer_access_denied", "The computer is unavailable");
         }
-        return { computerId };
     };
 
     /** The active pairing under which the holder can receive a Session credential. */
@@ -75,15 +72,14 @@ export class ComputerAccessService {
         computerId: string,
         grant: SessionAccessGrant,
         signal: AbortSignal,
-    ): Promise<ComputerAccess> => {
-        const [access, generation] = await Promise.all([
+    ): Promise<void> => {
+        const [, generation] = await Promise.all([
             this.authorizeComputer(computerId, signal),
             this.currentSessionGeneration(computerId, grant.holder, signal),
         ]);
         if (generation !== grant.generation) {
             throw new ComputerAuthenticationError("credential_revoked", "The Session credential has been revoked");
         }
-        return access;
     };
 
     readonly grantsSessionCredential = async (
