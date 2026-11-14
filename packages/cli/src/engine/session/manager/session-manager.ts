@@ -991,24 +991,14 @@ export class SessionManager {
                             this.#store,
                         ),
                 );
-                let retained = false;
+                const target = await this.#retainCreated(runtime);
                 try {
-                    const target = runtime.target;
-                    if (this.#executionProcesses.get(target) !== undefined) {
-                        throw new AcpExecutionError(
-                            "The harness returned an existing fork",
-                            {},
-                            "invalid_native_session_response",
-                        );
-                    }
-                    this.#executionProcesses.retain(target, runtime);
-                    this.#processes.retain(runtime, this.#retention(target));
-                    retained = true;
+                    options.signal.throwIfAborted();
+                    runtime.hold();
                     return { target, prepared: runtime.prepared() };
-                } finally {
-                    if (!retained) {
-                        await this.#processes.retire(runtime, () => runtime.closeProcess());
-                    }
+                } catch (error) {
+                    await this.#discardCreatedSession(target, runtime);
+                    throw error;
                 }
             } finally {
                 this.#lifecycles.endNativeOperation(source);

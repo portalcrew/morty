@@ -274,7 +274,6 @@ export class NativeSessionService {
                     : { kind: "import", sessionId: target.info.sessionId, title },
                 this.#resolveAgent,
             );
-            signal.throwIfAborted();
             return {
                 agentName: opened.prepared.agentName,
                 agentVersion: opened.prepared.agentVersion,

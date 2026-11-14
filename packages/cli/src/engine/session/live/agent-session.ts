@@ -120,9 +120,9 @@ export class AgentSession {
     #identity: NativeIdentity;
     /**
      * Whether the Runtime holds this Session: its record exists, so it is listed and its target can be used. A Session
-     * being created is not held until its creation completes, so one that fails midway leaves no record behind.
+     * being created or forked is not held until its creation completes, so one that fails midway leaves no record behind.
      */
-    #holding: "held" | "unheld" = "held";
+    #holding: "held" | "unheld";
     readonly #adapter: Adapter;
     readonly #harness: string;
     readonly #cwd: string;
@@ -164,6 +164,7 @@ export class AgentSession {
         this.#cwd = cwd;
         this.#environment = agent.environment;
         this.#identity = identity;
+        this.#holding = identity.kind === "awaiting" ? "unheld" : "held";
         this.#store = store;
         this.#observer = observer;
         this.#interactions = new SessionInteractions({
@@ -304,7 +305,6 @@ export class AgentSession {
             execution,
             store,
             async (runtime) => {
-                runtime.#holding = "unheld";
                 const opened = await runtime.#writeNativeHistory(
                     async () => await runtime.#adapter.createSession(runtime.#sessionParams(options.signal)),
                 );
@@ -353,7 +353,6 @@ export class AgentSession {
                     await runtime.#restoreStoredConfigurations(source, options.signal, "fork");
                 }
                 options.signal.throwIfAborted();
-                runtime.writeStoredSession(new Date().toISOString());
             },
             options.adapter,
         );
