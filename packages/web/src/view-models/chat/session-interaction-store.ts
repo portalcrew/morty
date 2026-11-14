@@ -200,7 +200,33 @@ export function sessionInteractionPresentation(
     const visibleIds = new Set([...permissions, ...elicitations].map((interaction) => interaction.interactionId));
     return {
         permissions,
-        answerDrafts: model.answerDrafts,
+        permissionPresentations: new Map(
+            permissions.map((permission) => [permission.interactionId, permissionPresentation(permission)] as const),
+        ),
+        // What each field of a pending question shows: the user's answer so far, or the Agent's default.
+        fieldValues: new Map(
+            elicitations.flatMap((elicitation) =>
+                elicitation.mode === "form"
+                    ? [
+                          [
+                              elicitation.interactionId,
+                              new Map(
+                                  elicitation.fields.map(
+                                      (field) =>
+                                          [
+                                              field.name,
+                                              elicitationFieldValue(
+                                                  field,
+                                                  model.answerDrafts.get(elicitation.interactionId) ?? {},
+                                              ),
+                                          ] as const,
+                                  ),
+                              ),
+                          ] as const,
+                      ]
+                    : [],
+            ),
+        ),
         fileChanges: new Map(
             permissions.map((permission) => [
                 permission.interactionId,
@@ -232,7 +258,9 @@ export function sessionInteractionPresentation(
     };
 }
 
-export function permissionPresentation(permission: PermissionInteraction) {
+export type PermissionPresentation = ReturnType<typeof permissionPresentation>;
+
+function permissionPresentation(permission: PermissionInteraction) {
     return {
         cwd: permission.details.cwd,
         input:

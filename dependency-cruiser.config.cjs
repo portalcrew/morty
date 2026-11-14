@@ -126,6 +126,8 @@ module.exports = {
     options: {
         doNotFollow: { path: "node_modules" },
         tsPreCompilationDeps: true,
+        // Resolves the web package's `@/` alias, so a rule sees an aliased import as the file it names.
+        tsConfig: { fileName: "tsconfig.json" },
         enhancedResolveOptions: { exportsFields: ["exports"], conditionNames: ["import", "types", "default"] },
     },
 };

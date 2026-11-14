@@ -9,11 +9,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { textLinkClassName } from "@/components/ui/text-link";
 import { useWrappedButtonRadius } from "@/components/utils/use-wrapped-button-radius";
 import { cn } from "@/lib/utils";
-import { type ElicitationFieldValue, elicitationFieldValue } from "@/services/chat/elicitation-form";
-import {
-    type FormElicitation,
-    type PermissionFileChange,
-    permissionPresentation,
+import type { ElicitationFieldValue } from "@/services/chat/elicitation-form";
+import type {
+    FormElicitation,
+    PermissionFileChange,
+    PermissionPresentation,
 } from "@/view-models/chat/session-interaction-store";
 import type {
     ElicitationInteraction,
@@ -334,16 +334,17 @@ function PermissionCard({
     busy,
     fileChanges,
     permission,
+    presentation,
     respond,
     stop,
 }: {
     readonly busy: boolean;
     readonly fileChanges: readonly PermissionFileChange[];
     readonly permission: PermissionInteraction;
+    readonly presentation: PermissionPresentation;
     readonly stop: () => void;
     readonly respond: (response: PermissionInteractionResponse) => void;
 }) {
-    const presentation = permissionPresentation(permission);
     const preview = permissionPreview(permission, fileChanges);
     const [detailsOpen, setDetailsOpen] = useState(false);
     const detailsContentId = useId();
@@ -493,7 +494,7 @@ function answeredNote(state: Exclude<ElicitationInteraction["state"], { readonly
 function ElicitationCard({
     busy,
     elicitation,
-    draft,
+    fieldValues,
     requiredNotice,
     respond,
     accept,
@@ -501,8 +502,8 @@ function ElicitationCard({
 }: {
     readonly busy: boolean;
     readonly elicitation: ElicitationInteraction;
-    /** What the user typed into this question so far. */
-    readonly draft: Readonly<Record<string, ElicitationFieldValue>>;
+    /** What each field shows now: the user's answer so far, or the Agent's default. */
+    readonly fieldValues: ReadonlyMap<string, ElicitationFieldValue>;
     /** Why the question cannot be accepted yet, once the user tried; empty otherwise. */
     readonly requiredNotice: string;
     readonly respond: (response: ElicitationInteractionResponse) => void;
@@ -622,7 +623,7 @@ function ElicitationCard({
                                     disabled={busy || answered}
                                     field={field}
                                     key={field.name}
-                                    value={elicitationFieldValue(field, draft)}
+                                    value={fieldValues.get(field.name) ?? ""}
                                     onChange={(value) => editAnswer(field.name, value)}
                                 />
                             ))}
@@ -663,11 +664,12 @@ function ElicitationCard({
     );
 }
 
-const NO_ANSWERS: Readonly<Record<string, ElicitationFieldValue>> = {};
+const NO_VALUES: ReadonlyMap<string, ElicitationFieldValue> = new Map();
 
 export function SessionInteractionCards({
     elicitations,
-    answerDrafts,
+    fieldValues,
+    permissionPresentations,
     requiredNotices,
     onElicitationAnswer,
     onElicitationAccept,
@@ -680,8 +682,10 @@ export function SessionInteractionCards({
     error,
 }: {
     readonly elicitations: readonly ElicitationInteraction[];
-    /** What the user typed into each pending question, by interaction id. */
-    readonly answerDrafts: ReadonlyMap<string, Readonly<Record<string, ElicitationFieldValue>>>;
+    /** What each field of each pending question shows, by interaction id and then field name. */
+    readonly fieldValues: ReadonlyMap<string, ReadonlyMap<string, ElicitationFieldValue>>;
+    /** What each permission card shows of its request, by interaction id. */
+    readonly permissionPresentations: ReadonlyMap<string, PermissionPresentation>;
     /** Why a question cannot be accepted yet, by interaction id, once the user tried. */
     readonly requiredNotices: ReadonlyMap<string, string>;
     readonly onElicitationAnswer: (interactionId: string, fieldName: string, value: ElicitationFieldValue) => void;
@@ -700,21 +704,27 @@ export function SessionInteractionCards({
     }
     return (
         <div className="grid w-full gap-3">
-            {permissions.map((permission) => (
-                <PermissionCard
-                    busy={busyInteractionIds.has(permission.interactionId)}
-                    fileChanges={fileChanges.get(permission.interactionId) ?? []}
-                    key={permission.interactionId}
-                    permission={permission}
-                    respond={onPermissionResponse}
-                    stop={onStop}
-                />
-            ))}
+            {permissions.flatMap((permission) => {
+                const presentation = permissionPresentations.get(permission.interactionId);
+                return presentation === undefined
+                    ? []
+                    : [
+                          <PermissionCard
+                              busy={busyInteractionIds.has(permission.interactionId)}
+                              fileChanges={fileChanges.get(permission.interactionId) ?? []}
+                              key={permission.interactionId}
+                              permission={permission}
+                              presentation={presentation}
+                              respond={onPermissionResponse}
+                              stop={onStop}
+                          />,
+                      ];
+            })}
             {elicitations.map((elicitation) => (
                 <ElicitationCard
                     busy={busyInteractionIds.has(elicitation.interactionId)}
                     accept={onElicitationAccept}
-                    draft={answerDrafts.get(elicitation.interactionId) ?? NO_ANSWERS}
+                    fieldValues={fieldValues.get(elicitation.interactionId) ?? NO_VALUES}
                     requiredNotice={requiredNotices.get(elicitation.interactionId) ?? ""}
                     editAnswer={(fieldName, value) => onElicitationAnswer(elicitation.interactionId, fieldName, value)}
                     elicitation={elicitation}
