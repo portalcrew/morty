@@ -41,28 +41,6 @@ export type AgentSetting = z.infer<typeof agentSettingSchema>;
 
 const agentSettingsSchema = z.array(agentSettingSchema).max(128).readonly();
 
-export const AGENT_MODEL_EFFORT_RESOLUTION_COMPLETE = "complete";
-export const AGENT_MODEL_EFFORT_RESOLUTION_ON_MODEL_SELECTION = "on_model_selection";
-export const AGENT_MODEL_EFFORT_RESOLUTION_UNAVAILABLE = "unavailable";
-
-const agentModelEffortResolutionSchema = z.enum([
-    AGENT_MODEL_EFFORT_RESOLUTION_COMPLETE,
-    AGENT_MODEL_EFFORT_RESOLUTION_ON_MODEL_SELECTION,
-    AGENT_MODEL_EFFORT_RESOLUTION_UNAVAILABLE,
-]);
-
-const agentModelEffortSchema = z
-    .object({
-        effortSettingId: z.string().max(128),
-        modelSettingId: z.string().max(128),
-        resolution: agentModelEffortResolutionSchema,
-        unsupportedModelIds: z.array(z.string().min(1).max(500)).max(500).readonly(),
-        valuesByModel: z.record(z.string().min(1).max(500), z.array(configValueSchema).max(500).readonly()).readonly(),
-    })
-    .readonly();
-
-export type AgentModelEffort = z.infer<typeof agentModelEffortSchema>;
-
 const agentSettingsDiscoverCommandSchema = z
     .object({
         harness: IDENTIFIER,
@@ -84,7 +62,6 @@ const agentSettingsDiscoveredEventSchema = z
         // The directory actually inspected.
         directory: DIRECTORY_PATH,
         kind: z.literal(AGENT_SETTINGS_DISCOVERED_KIND),
-        modelEffort: agentModelEffortSchema,
         requestId: IDENTIFIER,
         settings: agentSettingsSchema,
         settingsRevision: z.string().regex(/^[a-f0-9]{64}$/),

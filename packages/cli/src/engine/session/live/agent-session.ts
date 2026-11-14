@@ -1,7 +1,6 @@
 import { conversationTitleFromText } from "@morty-build/client";
 import { sameNativeSession } from "@morty-build/client/native-session";
 import {
-    type AgentModelEffort,
     isIdentifier,
     type NativeSessionTarget,
     type SessionCapabilities,
@@ -16,6 +15,7 @@ import { RetryableAcpInitializationError, validateAgentRuntime } from "../../acp
 import type { NativeSessionEvent, NativeSessionSubscriber } from "../../acp/adapter/native-session-event.ts";
 import type { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
 import type { BackgroundActivity } from "../../acp/agent/agent-lifecycle.ts";
+import type { AgentModelEffort } from "../../acp/agent/model-effort.ts";
 import { validatePromptContent } from "../../acp/client/prompt-content.ts";
 import type {
     Adapter,

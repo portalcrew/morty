@@ -254,11 +254,6 @@ describe("daemon session configuration boundary", () => {
                 }),
             );
             const discovered = await readAgentSettings(frames, requestId);
-            expect(discovered.modelEffort).toMatchObject({
-                resolution: "complete",
-                unsupportedModelIds: ["test-large"],
-                valuesByModel: { "test-small": expect.any(Array) },
-            });
             const model = discovered.settings.find((setting) => setting.id === "model");
             expect(model).toMatchObject({ type: "select", values: [expect.objectContaining({ value: "test-small" })] });
         } finally {
@@ -347,13 +342,6 @@ describe("daemon session configuration boundary", () => {
                 }),
             );
             const withoutEffort = await readAgentSettings(frames, noEffortRequestId);
-            expect(withoutEffort.modelEffort).toEqual({
-                effortSettingId: "",
-                modelSettingId: "model",
-                resolution: "on_model_selection",
-                unsupportedModelIds: [],
-                valuesByModel: { "test-small": [] },
-            });
             expect(withoutEffort.settings).not.toEqual(
                 expect.arrayContaining([expect.objectContaining({ id: "reasoning_effort" })]),
             );
@@ -557,13 +545,6 @@ describe("daemon session configuration boundary", () => {
                 }),
             );
             const withoutEffort = await readAgentSettings(frames, noEffortRequestId);
-            expect(withoutEffort.modelEffort).toEqual({
-                effortSettingId: "",
-                modelSettingId: "model",
-                resolution: "on_model_selection",
-                unsupportedModelIds: [],
-                valuesByModel: { "test-small": [] },
-            });
             expect(withoutEffort.settings).not.toEqual(
                 expect.arrayContaining([expect.objectContaining({ id: "reasoning_effort" })]),
             );
@@ -658,15 +639,6 @@ describe("daemon session configuration boundary", () => {
                     }),
                 ]),
             );
-            expect(discovered.modelEffort).toEqual({
-                effortSettingId: "reasoning_effort",
-                modelSettingId: "model",
-                resolution: "on_model_selection",
-                unsupportedModelIds: [],
-                valuesByModel: {
-                    "test-small": expect.arrayContaining([expect.objectContaining({ value: "medium" })]),
-                },
-            });
         } finally {
             cancellation.abort();
             await runtime;

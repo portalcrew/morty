@@ -1,5 +1,4 @@
 import type {
-    AgentModelEffort,
     PromptMetadata,
     PromptUsage,
     SessionCapabilities,
@@ -10,6 +9,7 @@ import type {
 import type { AgentProcessPool } from "../../session/process/agent-process-pool.ts";
 import type { NativeSessionSubscriber } from "../adapter/native-session-event.ts";
 import type { AcpAgentDefinition } from "../agent/agent-definition.ts";
+import type { AgentModelEffort } from "../agent/model-effort.ts";
 import type { PromptContent } from "../client/prompt-content.ts";
 import type { AcpContentExternalizer, ExternalizeSessionUpdate } from "../content/content-externalizer.ts";
 import type { NativeSessionInfo, NativeSessionPage } from "../protocol/native-session.ts";

@@ -1,10 +1,6 @@
 import { createHash } from "node:crypto";
 import {
-    AGENT_MODEL_EFFORT_RESOLUTION_COMPLETE,
-    AGENT_MODEL_EFFORT_RESOLUTION_ON_MODEL_SELECTION,
-    AGENT_MODEL_EFFORT_RESOLUTION_UNAVAILABLE,
     AGENT_SETTINGS_DISCOVERED_KIND,
-    type AgentModelEffort,
     type AgentSetting,
     type AgentSettingsDiscoverCommand,
     type AgentSettingsDiscoveredEvent,
@@ -13,6 +9,12 @@ import {
 } from "@morty-build/client/protocol";
 import { AcpConfigurationValueUnavailableError, AcpExecutionError } from "../../acp/acp-error.ts";
 import type { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
+import {
+    AGENT_MODEL_EFFORT_RESOLUTION_COMPLETE,
+    AGENT_MODEL_EFFORT_RESOLUTION_ON_MODEL_SELECTION,
+    AGENT_MODEL_EFFORT_RESOLUTION_UNAVAILABLE,
+    type AgentModelEffort,
+} from "../../acp/agent/model-effort.ts";
 import { operationErrorCode } from "../../infra/operation-error.ts";
 import type { AgentSettingsModelEffort, ResolveAgent } from "../api/session-api.ts";
 import type { SessionManager } from "../manager/session-manager.ts";
@@ -147,7 +149,6 @@ export async function discoverAgentSettings(
             agentVersion: selectedSnapshot.agentVersion,
             directory,
             kind: AGENT_SETTINGS_DISCOVERED_KIND,
-            modelEffort,
             requestId: command.requestId,
             settings,
             settingsRevision: settingsRevision(agent, baseSnapshot.agentVersion, baseSettings, modelEffort),

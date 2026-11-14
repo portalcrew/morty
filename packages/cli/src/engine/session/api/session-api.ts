@@ -1,5 +1,4 @@
 import type {
-    AgentModelEffort,
     AgentPromptResponse,
     ContentBlock,
     NativeSessionTarget,
@@ -15,6 +14,7 @@ import type {
     SessionPermissionRespondCommand,
 } from "@morty-build/client/protocol";
 import type { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
+import type { AgentModelEffort } from "../../acp/agent/model-effort.ts";
 import type { PromptImageInput, PromptResourceInput } from "../../acp/client/prompt-content.ts";
 import type { AcpContentExternalizer } from "../../acp/content/content-externalizer.ts";
 import type { Adapter } from "../../acp/native-history/preview-contract.ts";

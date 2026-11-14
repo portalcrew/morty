@@ -52,16 +52,12 @@ export type {
 export { decodeSessionAccessCredential } from "./session/access/index.ts";
 export { MAX_LOCAL_AGENT_DIRECTORY_ENTRIES } from "./session/agent/directory.ts";
 export type {
-    AgentModelEffort,
     AgentSetting,
     AgentSettingsDiscoverCommand,
     AgentSettingsDiscoverCommandRouting,
     AgentSettingsDiscoveredEvent,
 } from "./session/agent/settings.ts";
 export {
-    AGENT_MODEL_EFFORT_RESOLUTION_COMPLETE,
-    AGENT_MODEL_EFFORT_RESOLUTION_ON_MODEL_SELECTION,
-    AGENT_MODEL_EFFORT_RESOLUTION_UNAVAILABLE,
     AGENT_SETTINGS_DISCOVER_KIND,
     AGENT_SETTINGS_DISCOVERED_KIND,
     AGENT_SETTINGS_DISCOVERY_FAILED_KIND,

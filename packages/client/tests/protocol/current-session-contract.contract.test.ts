@@ -31,21 +31,10 @@ it("Given Agent settings without the inspected directory, When a client decodes 
         requestId: "request-1",
         settings: [],
         settingsRevision: "a".repeat(64),
-        modelEffort: {
-            effortSettingId: "",
-            modelSettingId: "",
-            resolution: "unavailable",
-            unsupportedModelIds: [],
-            valuesByModel: {},
-        },
     };
     expect(() => decodeAgentSettingsDiscoveredEvent(JSON.stringify(settings))).toThrow();
     const current = { ...settings, directory: "." };
     expect(decodeAgentSettingsDiscoveredEvent(JSON.stringify(current))).toEqual(current);
-    const { unsupportedModelIds: _, ...retiredEffort } = current.modelEffort;
-    expect(() =>
-        decodeAgentSettingsDiscoveredEvent(JSON.stringify({ ...current, modelEffort: retiredEffort })),
-    ).toThrow();
 });
 
 it("Given history holding a turn's lifecycle, When a client decodes it, Then the lifecycle stays in page order", () => {
