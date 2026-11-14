@@ -15,6 +15,10 @@ test.describe("message composer resizing", () => {
         const fades = composerSurface.locator('div.relative > [aria-hidden="true"]');
         const fadeOpacities = async () =>
             await fades.evaluateAll((elements) => elements.map((element) => getComputedStyle(element).opacity));
+        const expectFadeOpacities = async (first: string, second: string) => {
+            await expect(fades.nth(0)).toHaveCSS("opacity", first);
+            await expect(fades.nth(1)).toHaveCSS("opacity", second);
+        };
 
         await composer.fill("short draft");
         await expect(composer).toHaveCSS("margin-bottom", "8px");
@@ -34,17 +38,17 @@ test.describe("message composer resizing", () => {
         expect(grown.height).toBe(composerMaxHeightPx);
         expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
         await expect.poll(() => scrollViewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-        await expect.poll(fadeOpacities).toEqual(["1", "0"]);
+        await expectFadeOpacities("1", "0");
 
         await scrollViewport.evaluate((element) => {
             element.scrollTop = 0;
         });
-        await expect.poll(fadeOpacities).toEqual(["0", "1"]);
+        await expectFadeOpacities("0", "1");
 
         await scrollViewport.evaluate((element) => {
             element.scrollTop = element.scrollHeight;
         });
-        await expect.poll(fadeOpacities).toEqual(["1", "0"]);
+        await expectFadeOpacities("1", "0");
 
         await expect(scrollArea.locator('[data-slot="scroll-area-scrollbar"]')).toHaveAttribute(
             "data-state",

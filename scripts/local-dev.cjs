@@ -360,26 +360,6 @@ async function ensureMortyDependencies() {
     }
 }
 
-async function _httpJson(url, options = {}) {
-    const response = await fetch(url, {
-        method: options.method ?? (options.body === undefined ? "GET" : "POST"),
-        headers: options.headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
-        signal: AbortSignal.timeout(options.timeoutMilliseconds ?? 20_000),
-    });
-    const text = await response.text();
-    let value = {};
-    try {
-        value = text.length === 0 ? {} : JSON.parse(text);
-    } catch {
-        throw new Error(`${url} returned non-JSON (${response.status}): ${text.slice(0, 300)}`);
-    }
-    if (!response.ok) {
-        throw new Error(`${url} failed (${response.status}): ${text.slice(0, 300)}`);
-    }
-    return value;
-}
-
 function readStack(stateDir) {
     const file = path.join(stateDir, "stack.json");
     if (!fs.existsSync(file)) {

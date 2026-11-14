@@ -56,4 +56,4 @@ export function createFakeDaemon(options: FakeAgentHarnessOptions) {
 }
 
 export type { FakeAgentHarnessOptions, HarnessOutput, HarnessReplyPlan } from "./fake-harness/model.ts";
-export { fakeHarnessCapabilities as fakeDaemonCapabilities };
+export { fakeHarnessCapabilities };

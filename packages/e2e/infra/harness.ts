@@ -20,9 +20,7 @@ interface ErrorRecord {
     readonly cause?: ErrorRecord;
 }
 interface ProcessOptions {
-    readonly cwd?: string;
     readonly env?: Readonly<Record<string, string>>;
-    readonly label?: string;
 }
 interface ProcessRecord {
     readonly child: ChildProcess;
@@ -45,6 +43,7 @@ type BrowserState =
       };
 
 const execute = promisify(execFile);
+const REPOSITORY_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 
 async function localLaunch(command: string, args: readonly string[]) {
     const executable = isAbsolute(command)
@@ -78,7 +77,6 @@ export class E2EHarness {
     readonly startedAt: number;
     readonly children: ProcessRecord[];
     readonly stages: Stage[];
-    readonly metadata: Record<string, unknown>;
     readonly browserEvents: unknown[];
     browserState: BrowserState = { kind: "none" };
     result:
@@ -113,16 +111,11 @@ export class E2EHarness {
         this.startedAt = Date.now();
         this.children = [];
         this.stages = [];
-        this.metadata = {};
         this.browserEvents = [];
     }
 
     log(message: string) {
         process.stdout.write(`[${this.name}] ${message}\n`);
-    }
-
-    record(name: string, value: unknown) {
-        this.metadata[name] = value;
     }
 
     async stage<T>(name: string, action: () => Promise<T>): Promise<T> {
@@ -151,10 +144,10 @@ export class E2EHarness {
     }
 
     async run(command: string, args: readonly string[], options: ProcessOptions = {}) {
-        this.log(`RUN ${options.label ?? `${command} ${args.join(" ")}`}`);
+        this.log(`RUN ${command} ${args.join(" ")}`);
         const launch = await localLaunch(command, args);
         return await execute(launch.command, launch.arguments, {
-            cwd: options.cwd ?? fileURLToPath(new URL("../../..", import.meta.url)),
+            cwd: REPOSITORY_ROOT,
             env: { ...process.env, ...options.env },
             maxBuffer: 16 * 1024 * 1024,
             signal: this.signal,
@@ -162,14 +155,14 @@ export class E2EHarness {
         });
     }
 
-    async startWorker(name: string, command: string, args: readonly string[], options: ProcessOptions = {}) {
+    async startWorker(name: string, command: string, args: readonly string[]) {
         const launch = await localLaunch(command, args);
         const logPath = join(this.artifactDirectory, `${name}.log`);
         const output = openSync(logPath, "a", 0o600);
         const child = spawnProcess(launch.command, launch.arguments, {
-            cwd: options.cwd ?? fileURLToPath(new URL("../../..", import.meta.url)),
+            cwd: REPOSITORY_ROOT,
             detached: true,
-            env: { ...process.env, ...options.env },
+            env: process.env,
             stdio: ["ignore", output, output, "ipc"],
             windowsHide: true,
         });
@@ -377,7 +370,6 @@ export class E2EHarness {
                     ...(this.result.kind === "running"
                         ? {}
                         : { durationMilliseconds: this.result.finishedAt - this.startedAt }),
-                    metadata: this.metadata,
                     stages: this.stages,
                     ...(this.failure === undefined ? {} : { failure: this.failure }),
                 },

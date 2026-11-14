@@ -167,13 +167,13 @@ export async function createTestRuntime(
             },
             followInstructions: async (
                 instructionUrl: string,
-                sessionId?: string,
+                sessionId: string,
                 maximumWaitMilliseconds?: number,
                 workspace?: string,
                 replaceComputer?: string,
             ) => {
                 const url = new URL(instructionUrl, stack.chatOrigin);
-                if (sessionId !== undefined && harness !== "claude") {
+                if (harness !== "claude") {
                     throw new Error(`No harness session variable is modeled for the ${harness} agent`);
                 }
                 setupClockTime = setupClockStart;
@@ -199,7 +199,7 @@ export async function createTestRuntime(
                     runtime,
                     ...(replaceComputer === undefined ? {} : { replaceComputer }),
                     // A Claude Code shell exposes its current session; the controlled peer stands in for Claude Code.
-                    agentEnvironment: sessionId === undefined ? {} : { CLAUDE_CODE_SESSION_ID: sessionId },
+                    agentEnvironment: { CLAUDE_CODE_SESSION_ID: sessionId },
                 });
                 return {
                     computerId: text(result.ready["computerId"], "ready computer"),
@@ -208,7 +208,6 @@ export async function createTestRuntime(
                     url: text(result.ready["url"], "Chat URL"),
                     qrPath: typeof result.ready["qrPath"] === "string" ? result.ready["qrPath"] : null,
                     workspace: text(result.ready["workspace"], "Runtime working directory"),
-                    message: text(result.ready["message"], "ready message"),
                     identity: result.identity,
                 };
             },

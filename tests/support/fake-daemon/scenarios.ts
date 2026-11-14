@@ -24,10 +24,6 @@ export const mortyFiles = new Map<string, { readonly content: string | Uint8Arra
         },
     ],
     [
-        "/workspace/unsupported.svg",
-        { content: '<svg xmlns="http://www.w3.org/2000/svg"/>', mediaType: "image/svg+xml" },
-    ],
-    [
         "/workspace/generated-picture.png",
         {
             content: Buffer.from(

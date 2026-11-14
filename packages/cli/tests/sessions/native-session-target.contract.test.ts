@@ -25,7 +25,6 @@ it("Given two harnesses create conversations, When I restore each conversation, 
 
                     configurations: [],
                     directory: ".",
-                    computerId: runtime.computerId,
                     operationId: crypto.randomUUID(),
                 },
                 signal,
@@ -64,7 +63,6 @@ it("Given a harness announces its title during creation, When the caller creates
 
                 configurations: [],
                 directory: ".",
-                computerId: runtime.computerId,
                 operationId: crypto.randomUUID(),
             },
             signal,

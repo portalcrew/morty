@@ -6,7 +6,7 @@ import {
     ControlledEndpointConnection,
     type ControlledSessionUpdate,
     controlledSessionUpdates,
-    fakeDaemonCapabilities,
+    fakeHarnessCapabilities,
 } from "@morty-build/runtime-test-support/fake-daemon";
 import type { AcpAgentDefinition } from "../../../packages/cli/src/engine/acp/agent/agent-definition.ts";
 import type { AgentTermination } from "../../../packages/cli/src/engine/acp/agent/agent-lifecycle.ts";
@@ -43,7 +43,7 @@ const defineAgent = (
         process.execPath,
         {},
         version,
-        fakeDaemonCapabilities,
+        fakeHarnessCapabilities,
     );
 
 /**
