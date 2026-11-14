@@ -26,5 +26,6 @@ break; a version bump alone is not authorization.
 ## Review checklist
 
 - [ ] I read `docs/CONTRIBUTING.md`, `AGENTS.md`, and `docs/CODE_REVIEW.md`.
+- [ ] New or changed state, computation and interfaces follow the design priorities in `AGENTS.md`: state that can be computed is not stored, independent lifecycles and rules each have one owner, rules are functions of explicit inputs, and operations are dedicated with stated guarantees.
 - [ ] Markdown changes are in a separate documentation-only PR.
 - [ ] Reports and logs contain no credentials or private conversation data.
