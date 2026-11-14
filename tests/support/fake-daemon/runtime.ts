@@ -360,7 +360,6 @@ export async function createControlledAgentRuntime(options: {
         origin: options.origin,
         computerId: pairing.computerId,
         encryptionAccess: await connected.encryptionAccess(options.signal),
-        request: async (request) => await options.server.request(request),
     });
     return {
         ...connected,

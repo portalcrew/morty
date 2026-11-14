@@ -8,7 +8,6 @@ export function createOwnerApi(options: {
     readonly origin: string;
     readonly computerId: string;
     readonly credential: string;
-    readonly request: (request: Request) => Promise<Response>;
     readonly encryptionAccess?: ComputerEncryptionAccess;
 }) {
     const transport = new WorkerApiTransport(options.origin, (computerId) =>

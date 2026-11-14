@@ -101,7 +101,6 @@ test.each([
             origin: bindings.origin,
             computerId: owner.computerId,
             credential: owner.computerToken,
-            request: (request) => fetch(request),
             encryptionAccess: await runtime.encryptionAccess(signal),
         });
         try {

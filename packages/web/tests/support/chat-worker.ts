@@ -34,7 +34,6 @@ export async function createChatWorkerEnvironment(
         listenOnLoopback: true,
         ...(loseTurnResponses ? { loseTurnResponses: true as const } : {}),
         ...(delayExecutionReads ? { delayExecutionReads: true as const } : {}),
-        relayAllowedOrigins: new Set(["*"]),
         workerEntryPoint: resolve(process.cwd(), "../worker/tests/support/credential-storage-worker.ts"),
     });
     const sharingNetwork = loseSharingResponses ? await createResponseLossProxy(cloud.origin) : null;

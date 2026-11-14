@@ -170,7 +170,6 @@ export class ChatApi {
             origin: this.origin,
             computerId: identity.computerId,
             credential: identity.token,
-            request: (request) => fetch(request),
             ...(encryptionAccess === undefined ? {} : { encryptionAccess }),
         });
     }

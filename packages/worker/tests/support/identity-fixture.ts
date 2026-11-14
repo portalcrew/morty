@@ -30,7 +30,6 @@ type IdentityFixtureOptions = {
     readonly listenOnLoopback?: true;
     readonly loseTurnResponses?: true;
     readonly delayExecutionReads?: true;
-    readonly relayAllowedOrigins?: ReadonlySet<string>;
     readonly workerEntryPoint?: string;
 };
 
@@ -51,10 +50,7 @@ async function startIdentityFixture(
     options: IdentityFixtureOptions,
     createBindings: Awaited<ReturnType<typeof prepareTestMortyRelayBindings>>,
 ) {
-    const relay = await startTestRelay(
-        options.relayAllowedOrigins === undefined ? {} : { allowedOrigins: options.relayAllowedOrigins },
-        createBindings,
-    );
+    const relay = await startTestRelay(createBindings);
     const executionNetwork =
         options.delayExecutionReads === true ? await createSessionExecutionProxy(relay.baseUrl) : null;
     const network =
@@ -149,7 +145,6 @@ async function startIdentityFixture(
             dispatchFetch: cloudflare.dispatchFetch.bind(cloudflare),
             environment,
             origin: ready.origin,
-            directOrigin: relay.baseUrl,
             changeAppOrigin: async (origin: string) => {
                 baseConfiguration.APP_ORIGIN = origin;
                 await reconfigure();

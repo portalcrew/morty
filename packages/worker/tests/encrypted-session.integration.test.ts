@@ -61,7 +61,6 @@ test("Given an attachment within the supported plaintext limit, when its encrypt
         origin: network.origin,
         computerId: owner.computerId,
         credential: owner.computerToken,
-        request: async (request) => await fetch(request),
         encryptionAccess,
     });
     const transport = new WsTransport();
@@ -175,7 +174,6 @@ test("Given an attachment within the supported plaintext limit, when its encrypt
                     origin: network.origin,
                     computerId: owner.computerId,
                     credential: owner.computerToken,
-                    request: async (request) => await fetch(request),
                     encryptionAccess: await replacement.encryptionAccess(signal),
                 });
                 try {
@@ -231,7 +229,6 @@ test("Given interrupted content uploads, when their request identities are reuse
         computerId: owner.computerId,
         credential: owner.computerToken,
         encryptionAccess,
-        request: (request) => fetch(request),
     });
     const transport = new WsTransport();
     try {
@@ -400,7 +397,6 @@ test("Given a paired Computer, when its owner selects an Agent, then setup recei
         origin: bindings.origin,
         computerId: owner.computerId,
         credential: owner.computerToken,
-        request: async (request) => await fetch(request),
         encryptionAccess: await runtime.encryptionAccess(signal),
     });
     try {
@@ -480,7 +476,6 @@ test("Given a locally paired encrypted client, when it submits a prompt and read
         origin: network.origin,
         computerId: owner.computerId,
         credential: owner.computerToken,
-        request: async (request) => await fetch(request),
         encryptionAccess: await runtime.encryptionAccess(signal),
     });
     onTestFinished(() => ownerClient.close());

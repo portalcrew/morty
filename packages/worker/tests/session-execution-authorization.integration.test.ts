@@ -43,7 +43,6 @@ test("Given Session access and Computer encryption access, When a caller sends a
         origin: bindings.origin,
         computerId: owner.computerId,
         credential: owner.computerToken,
-        request: async (request) => await fetch(request),
         encryptionAccess,
     });
     const encryption = await createClientPayloadEncryption(encryptionAccess, signal);

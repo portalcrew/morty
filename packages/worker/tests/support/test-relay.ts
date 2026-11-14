@@ -4,12 +4,11 @@ import { mortyFiles, mortyReply } from "../../../../tests/support/fake-daemon/sc
 
 /** Starts the production Relay boundary with isolated local Cloudflare storage. */
 export async function startTestRelay(
-    options: { readonly allowedOrigins?: ReadonlySet<string> } = {},
     createBindings: typeof createTestMortyRelayBindings = createTestMortyRelayBindings,
 ) {
     const cancellation = new AbortController();
     const runtimes: AsyncDisposable[] = [];
-    const bindings = await createBindings(options.allowedOrigins);
+    const bindings = await createBindings();
     try {
         const app = { request: bindings.request };
         const close = async (): Promise<void> => {
