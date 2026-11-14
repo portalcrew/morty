@@ -1,6 +1,6 @@
 import { MortyValidationError } from "@morty-build/client";
 import { isIdentifier } from "@morty-build/client/protocol";
-import type { ApiEndpoint, ApiRequest, ComputerCallTarget, WorkerCallTarget } from "./call.ts";
+import type { ApiEndpoint, ApiRequest, CommandCall, ComputerCallTarget, WorkerCallTarget } from "./call.ts";
 
 export interface CallDefinition {
     readonly method: ApiEndpoint["method"];
@@ -17,21 +17,32 @@ export interface ComputerCallEncoding extends ComputerCallTarget {
     readonly body?: unknown;
 }
 
-export function encodeComputerCall({ origin, computerId, path, definition, body }: ComputerCallEncoding): ApiRequest {
+function computerEndpoint({ origin, computerId, path, definition }: Omit<ComputerCallEncoding, "body">): ApiEndpoint {
     if (!isIdentifier(computerId)) {
         throw new MortyValidationError("The Computer identifier is invalid");
     }
     return {
-        endpoint: {
-            ...definition,
-            target: { kind: "computer", computerId },
-            url: new URL(
-                `/morty/api/v1/computers/${encodeURIComponent(computerId)}${path === "" ? "" : `/${path}`}`,
-                origin,
-            ),
-        },
+        ...definition,
+        target: { kind: "computer", computerId },
+        url: new URL(
+            `/morty/api/v1/computers/${encodeURIComponent(computerId)}${path === "" ? "" : `/${path}`}`,
+            origin,
+        ),
+    };
+}
+
+export function encodeComputerCall({ body, ...call }: ComputerCallEncoding): ApiRequest {
+    return {
+        endpoint: computerEndpoint(call),
         body: body === undefined ? null : JSON.stringify(body),
     };
+}
+
+export function commandCall<Command>({
+    command,
+    ...call
+}: Omit<ComputerCallEncoding, "body"> & { readonly command: Command }): CommandCall<Command> {
+    return { endpoint: computerEndpoint(call), command };
 }
 
 export function encodeWorkerCall({

@@ -32,6 +32,12 @@ export interface ApiRequest {
     readonly body?: string | null;
 }
 
+/** A call whose body is a Computer command: the caller encrypts the typed command for that Computer. */
+export interface CommandCall<Command> {
+    readonly endpoint: ApiEndpoint;
+    readonly command: Command;
+}
+
 export interface ApiCall extends ApiRequest {
     readonly headers: Readonly<Record<string, string>>;
     readonly signal: AbortSignal;
