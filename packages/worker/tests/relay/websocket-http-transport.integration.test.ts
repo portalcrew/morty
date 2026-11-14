@@ -10,7 +10,7 @@ import {
 import { expect, it, vi } from "vitest";
 import { acceptWebSocketHttpTransport } from "../../src/computer-relay/components/runtime/http/websocket-http-transport.ts";
 import { SessionRuntimeError } from "../../src/contracts/relay/session.ts";
-import type { SessionEventObserver, SubscribeSessionEvents } from "../../src/contracts/session-event-subscription.ts";
+import type { SubscribeSessionEvents } from "../../src/contracts/session-event-subscription.ts";
 import type { WebSocketHttpOperation } from "../../src/contracts/websocket-http-dispatch.ts";
 import { createOwner, issueSession, ownerOrigin, ownerRequest, pairComputer } from "./owner-fixture.ts";
 
@@ -385,7 +385,7 @@ class MultipleSubscriptionDaemonBoundary {
     readonly fetch = (_operation: WebSocketHttpOperation): Promise<Response> => {
         throw new Error("Subscriptions must not be dispatched as HTTP requests");
     };
-    readonly subscribe = async (request: Request, observer: SessionEventObserver): Promise<void> => {
+    readonly subscribe: SubscribeSessionEvents = async (request, _subscription, observer) => {
         this.downstreams.push({
             send: (data) => {
                 if (!request.signal.aborted) {
@@ -689,6 +689,7 @@ it("Given binary requests, when their declared sizes exceed their owning limits,
     const response = acceptWebSocketHttpTransport({
         request: new Request("https://relay.test/morty/api/v1/transport", { headers: { Upgrade: "websocket" } }),
         dispatch: daemon.fetch,
+        subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
     const socket = response.webSocket;
     if (socket === null) {

@@ -8,7 +8,9 @@ import {
     ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     encodeComputerLivenessReadyEvent,
     encodeComputerStatusEvent,
+    type NativeSessionTarget,
     SESSION_EVENT_KIND,
+    type SessionEventsSubscribeCommandRouting,
 } from "@morty-build/client/protocol";
 import { ComputerStatus } from "../../../../contracts/relay/computer-status.ts";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
@@ -217,6 +219,10 @@ export class ComputerService {
                 }
                 const ready: ComputerLivenessReadyEvent = { kind: COMPUTER_LIVENESS_READY_KIND };
                 socket.send(encodeComputerLivenessReadyEvent(ready));
+                // The readiness frame is the daemon's first; ending the old subscriptions tells it about each after.
+                if (replaced) {
+                    this.relay(computerId).endSubscriptions();
+                }
             } catch (error) {
                 if (!attachment.controller.signal.aborted) {
                     logger.error(
@@ -572,35 +578,41 @@ export class ComputerService {
         return this.#channel.actor;
     };
 
+    /** A viewer left: the Computer's daemon, if one is connected, stops delivering that subscription. */
+    readonly detachViewer = (identity: SessionViewerIdentity): void => {
+        const daemon = this.#cx.gateways.peers
+            .sockets()
+            .find(
+                ({ identity: candidate, socket: peer }) =>
+                    candidate.role === "daemon" &&
+                    candidate.computerId === identity.computerId &&
+                    peer.isOpen() &&
+                    this.#cx.services.connections.isCurrent(candidate),
+            );
+        if (daemon === undefined) {
+            return;
+        }
+        try {
+            this.relay(identity.computerId).forwardSessionUnsubscribe(
+                daemon.socket,
+                identity.subscriptionId,
+                identity.sessionFilter,
+            );
+        } catch (error) {
+            logger.warn(
+                { err: error, event: "session_subscription_cleanup_failed" },
+                "Session subscription cleanup failed",
+            );
+        }
+    };
+
     readonly detach = async (
         identity: ComputerSocketIdentity,
         socket: RelaySocket,
         signal: AbortSignal,
     ): Promise<void> => {
         if (identity.role === "viewer") {
-            const daemon = this.#cx.gateways.peers
-                .sockets()
-                .find(
-                    ({ identity: candidate, socket: peer }) =>
-                        candidate.role === "daemon" &&
-                        candidate.computerId === identity.computerId &&
-                        peer.isOpen() &&
-                        this.#cx.services.connections.isCurrent(candidate),
-                );
-            if (daemon !== undefined) {
-                try {
-                    this.relay(identity.computerId).forwardSessionUnsubscribe(
-                        daemon.socket,
-                        identity.subscriptionId,
-                        identity.sessionFilter,
-                    );
-                } catch (error) {
-                    logger.warn(
-                        { err: error, event: "session_subscription_cleanup_failed" },
-                        "Session subscription cleanup failed",
-                    );
-                }
-            }
+            this.detachViewer(identity);
             return;
         }
         // The latest connection detaches once it closes, also after its generation ended: what was sent into it

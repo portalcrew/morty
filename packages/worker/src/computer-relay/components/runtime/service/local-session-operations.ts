@@ -12,6 +12,7 @@ import {
 } from "@morty-build/client/protocol";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
+import type { SessionEventObserver } from "../../../../contracts/session-event-subscription.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import type { RuntimeContext } from "../runtime-context.ts";
 import type { ClientControlCommand } from "./computer-control-registry.ts";
@@ -129,7 +130,9 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
                 throw new PairingDirectoryError("computer_offline", "The Computer is offline");
             }
             if (
-                cx.gateways.peers.viewers().some(({ identity }) => identity.subscriptionId === subscription.subscriptionId)
+                cx.gateways.peers
+                    .viewers()
+                    .some(({ identity }) => identity.subscriptionId === subscription.subscriptionId)
             ) {
                 throw new PairingDirectoryError("invalid_request", "The subscription identifier is already in use");
             }

@@ -225,15 +225,14 @@ export class ComputerRelayActor {
             this.#liveEvents.receive(message, encoded),
         ),
         "session.close.notice": daemonHandler("session.close.notice", (message, encoded) => {
-            this.broadcast(
-                this.#peers
-                    .viewers()
-                    .filter(
-                        (viewer) => viewer.expiresAt > Date.now() && sameNativeSession(viewer.target, message.target),
-                    )
-                    .map((viewer) => viewer.socket),
-                encoded,
-            );
+            for (const viewer of this.#peers.viewers()) {
+                if (
+                    viewer.identity.expiresAt > Date.now() &&
+                    sameNativeSession(viewer.identity.sessionFilter, message.target)
+                ) {
+                    viewer.message(encoded);
+                }
+            }
         }),
         "agent.settings.discovered": daemonHandler("agent.settings.discovered", (message, encoded) =>
             this.returnAgentSettingsDiscoveryResult(message.requestId, message.harness, encoded),
@@ -300,13 +299,18 @@ export class ComputerRelayActor {
     readonly attachDaemon = async (replacedExistingConnection: boolean, _signal: AbortSignal): Promise<void> => {
         if (replacedExistingConnection) {
             this.failPendingAgentSettingsDiscoveries();
-            // The new daemon has no live subscription registry. Clients must
-            // establish fresh encrypted subscriptions themselves.
-            for (const { socket } of this.#peers.viewers()) {
-                socket.close(1012, "Daemon connection replaced");
-            }
         }
         this.broadcastComputerStatus(true);
+    };
+
+    /**
+     * The new daemon has no live subscription registry, so every subscription opened against the one it replaced ends.
+     * Clients establish fresh encrypted subscriptions themselves.
+     */
+    readonly endSubscriptions = (): void => {
+        for (const viewer of this.#peers.viewers()) {
+            viewer.close(1012, "Daemon connection replaced");
+        }
     };
 
     readonly failTransfersOwnedBy = (daemon: RelaySocket): void => {

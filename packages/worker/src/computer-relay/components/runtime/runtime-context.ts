@@ -23,7 +23,7 @@ export function createRuntimeContext(cx: {
     };
 }) {
     const requests = new LocalComputerRequests(cx.utilities.waitUntil);
-    const viewers = new LocalSessionViewers();
+    const viewers = new LocalSessionViewers((identity) => runtime.detachViewer(identity));
     const source = cx.gateways.peers;
     const peers: ComputerPeers = {
         accept: source.accept,

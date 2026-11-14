@@ -7,16 +7,25 @@ import type {
 /** Direct subscriptions participate in the same expiry and revocation checks as retained viewers. */
 export class LocalSessionViewers {
     readonly #viewers = new Set<SessionViewer>();
+    /** Runs once for every viewer the Computer subscribed that leaves, whatever ended it. */
+    readonly #removed: (identity: SessionViewerIdentity) => void;
     readonly viewers = () => [...this.#viewers];
 
-    /** Registers the viewer for the subscription's lifetime; the returned function drops it without notifying. */
+    constructor(removed: (identity: SessionViewerIdentity) => void) {
+        this.#removed = removed;
+    }
+
+    /**
+     * Registers the viewer for the subscription's lifetime. The returned function drops a viewer whose subscription the
+     * Computer never received, so there is nothing to cancel there and its observer is not told.
+     */
     readonly open = (
         identity: SessionViewerIdentity,
         observer: SessionEventObserver,
         signal: AbortSignal,
     ): (() => void) => {
         signal.throwIfAborted();
-        const release = (): boolean => {
+        const remove = (): boolean => {
             if (!this.#viewers.delete(viewer)) {
                 return false;
             }
@@ -24,7 +33,8 @@ export class LocalSessionViewers {
             return true;
         };
         const close = (code: number, reason: string): void => {
-            if (release()) {
+            if (remove()) {
+                this.#removed(identity);
                 observer.close(code, reason);
             }
         };
@@ -41,7 +51,7 @@ export class LocalSessionViewers {
         this.#viewers.add(viewer);
         signal.addEventListener("abort", abort, { once: true });
         return () => {
-            release();
+            remove();
         };
     };
 }

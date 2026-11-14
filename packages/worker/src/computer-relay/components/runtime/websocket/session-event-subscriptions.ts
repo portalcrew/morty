@@ -10,7 +10,7 @@ export function createSessionEventSubscriptions(ctx: {
     readonly services: { readonly forComputer: (computerId: string) => SessionWebSocketServices };
     readonly connectionOpened: () => Promise<void>;
 }): SubscribeSessionEvents {
-    return async (request, observer) => {
+    return async (request, subscription, observer) => {
         const path = new URL(request.url).pathname;
         const prefix = `${MORTY_API_PREFIX}/v1/computers/`;
         let parts: string[];
@@ -52,6 +52,7 @@ export function createSessionEventSubscriptions(ctx: {
         await services.operations.subscribeSessionEvents(
             computerId,
             target,
+            subscription,
             {
                 signingKeyId: access.signingKeyId,
                 grant: access.grant,
