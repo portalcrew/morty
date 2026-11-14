@@ -46,7 +46,10 @@ import {
 import { selectedConversationTarget } from "../../view-models/chat/conversation-selection-machine.ts";
 import type { DraftControlsStore } from "../../view-models/chat/draft-controls-store.ts";
 import { activeHarnessMark, pendingExecutionContext } from "../../view-models/chat/execution-context.ts";
-import { pendingConversationPresentation } from "../../view-models/chat/pending-conversation-presentation.ts";
+import {
+    conversationReadPending,
+    pendingConversationPresentation,
+} from "../../view-models/chat/pending-conversation-presentation.ts";
 import type { PageFailure } from "../../view-models/format-error.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
@@ -268,9 +271,7 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                         >
                             <MortySessionPane workspace={workspace} />
                         </div>
-                    ) : (model.selection.kind === "loading" ||
-                          (model.selection.kind === "pending" && computer.entry.kind === "loading")) &&
-                      pendingConversation.recovery === null ? (
+                    ) : conversationReadPending(model.selection, computer) && pendingConversation.recovery === null ? (
                         <MortySessionPaneLoading
                             footer={
                                 <BotChatComposer
@@ -325,7 +326,7 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                                             </div>
                                             <Button onClick={store.getState().retry}>Reconnect</Button>
                                         </div>
-                                    ) : model.selection.kind === "loading" || computer.entry.kind === "loading" ? (
+                                    ) : computer.entry.kind === "loading" ? (
                                         <SessionMessageListSkeleton />
                                     ) : computer.entry.kind === "failed" || model.selection.kind === "failed" ? (
                                         <PreSessionFailure
