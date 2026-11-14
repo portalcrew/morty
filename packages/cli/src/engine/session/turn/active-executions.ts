@@ -8,7 +8,13 @@ import type { NativeSessionTarget, SessionStatus } from "@morty-build/client/pro
  */
 type ExecutionPhase = "preparing" | "started" | "settled";
 
-type Cancellation = { readonly kind: "none" } | { readonly kind: "requested"; readonly completion: Promise<void> };
+/**
+ * One try at ending a cancelled execution. A stop that fails leaves the cancellation requested but nothing stopping,
+ * so the next cancellation tries again instead of inheriting the failure.
+ */
+type StopAttempt = { readonly kind: "stopping"; readonly completion: Promise<void> } | { readonly kind: "failed" };
+
+type Cancellation = { readonly kind: "none" } | { readonly kind: "requested"; readonly attempt: StopAttempt };
 
 interface Execution {
     readonly commandId: string;
@@ -62,9 +68,18 @@ export class ActiveExecutions {
         return execution?.commandId === commandId && execution.cancellation.kind === "requested";
     };
 
+    /**
+     * Settles when the stop under way ends, however it ends: whoever asked for it is told its outcome, and the
+     * execution being cancelled only waits for it.
+     */
     readonly cancellation = (sessionTarget: NativeSessionTarget): Promise<void> | undefined => {
         const cancellation = this.#entries.get(sessionTarget)?.cancellation;
-        return cancellation?.kind === "requested" ? cancellation.completion : undefined;
+        return cancellation?.kind === "requested" && cancellation.attempt.kind === "stopping"
+            ? cancellation.attempt.completion.then(
+                  () => undefined,
+                  () => undefined,
+              )
+            : undefined;
     };
 
     /** Begins the command's execution and returns the signal its preparation runs under. */
@@ -102,7 +117,8 @@ export class ActiveExecutions {
     };
 
     /**
-     * Records a cancellation of the named execution at once and asks `stop` to end it once. Another command's
+     * Records a cancellation of the named execution at once and asks `stop` to end it, one attempt at a time: a
+     * cancellation while a stop is under way shares it, and one after a stop failed asks again. Another command's
      * cancellation, or one for an idle Session, has nothing to stop. A cancelled execution that has not started never
      * starts, and its preparation is aborted.
      */
@@ -115,19 +131,38 @@ export class ActiveExecutions {
         if (execution?.commandId !== commandId) {
             return Promise.resolve();
         }
-        if (execution.cancellation.kind === "requested") {
-            return execution.cancellation.completion;
+        if (execution.cancellation.kind === "requested" && execution.cancellation.attempt.kind === "stopping") {
+            return execution.cancellation.attempt.completion;
         }
         const completion = Promise.withResolvers<void>();
         this.#entries.set(sessionTarget, {
             ...execution,
-            cancellation: { kind: "requested", completion: completion.promise },
+            cancellation: { kind: "requested", attempt: { kind: "stopping", completion: completion.promise } },
         });
         if (execution.phase === "preparing") {
             execution.preparation.abort(new Error("The Agent turn was cancelled before it started"));
         }
-        void (async () => await stop())().then(completion.resolve, completion.reject);
+        void (async () => await stop())().then(completion.resolve, (error: unknown) => {
+            this.#stopFailed(sessionTarget, commandId, completion.promise);
+            completion.reject(error);
+        });
         return completion.promise;
+    };
+
+    /** Marks the attempt failed, unless the execution has moved on, so the next cancellation asks again. */
+    readonly #stopFailed = (sessionTarget: NativeSessionTarget, commandId: string, attempt: Promise<void>): void => {
+        const execution = this.#entries.get(sessionTarget);
+        if (
+            execution?.commandId === commandId &&
+            execution.cancellation.kind === "requested" &&
+            execution.cancellation.attempt.kind === "stopping" &&
+            execution.cancellation.attempt.completion === attempt
+        ) {
+            this.#entries.set(sessionTarget, {
+                ...execution,
+                cancellation: { kind: "requested", attempt: { kind: "failed" } },
+            });
+        }
     };
 
     readonly finish = (sessionTarget: NativeSessionTarget, commandId: string): void => {
