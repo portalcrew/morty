@@ -34,7 +34,7 @@ const attachmentSchema = v.union([
         ),
     }),
     v.object({
-        role: v.picklist(["daemon", "replaced-daemon"]),
+        role: v.literal("daemon"),
         connectionEpoch: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
         computerId: v.string(),
     }),
@@ -54,17 +54,9 @@ export class CloudflareRelaySocket implements ComputerSocket {
     readonly isSame = (socket: RelaySocket): boolean =>
         socket instanceof CloudflareRelaySocket && socket.#socket === this.#socket;
     readonly send = (message: string | ArrayBuffer): void => this.#socket.send(message);
-    readonly replaceDaemon = (): void => {
-        const identity = this.identity();
-        if (identity.role !== "daemon" && identity.role !== "replaced-daemon") {
-            throw new Error("Only a daemon socket can replace a daemon");
-        }
-        this.#socket.serializeAttachment({ ...identity, role: "replaced-daemon" });
-        this.#socket.close(1012, "Daemon connection replaced");
-    };
 }
 
-export class CloudflareRelayPeers implements Omit<ComputerPeers, "operations"> {
+export class CloudflareRelayPeers implements Omit<ComputerPeers, "operations" | "daemons"> {
     readonly #state: DurableObjectState;
 
     constructor(state: DurableObjectState) {
@@ -85,11 +77,6 @@ export class CloudflareRelayPeers implements Omit<ComputerPeers, "operations"> {
                 answeredAt === undefined ? { kind: "none" } : { kind: "received", at: answeredAt };
             return { heartbeat, identity: socket.identity(), socket };
         });
-
-    readonly daemons = (): readonly RelaySocket[] =>
-        this.sockets()
-            .filter(({ identity }) => identity.role === "daemon")
-            .map(({ socket }) => socket);
 
     readonly viewers = () =>
         this.sockets().flatMap(({ socket, identity }) =>

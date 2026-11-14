@@ -37,14 +37,12 @@ export type DaemonHeartbeat = { readonly kind: "none" } | { readonly kind: "rece
 export type ComputerSocketIdentity =
     | SessionViewerIdentity
     | {
-          readonly role: "daemon" | "replaced-daemon";
+          readonly role: "daemon";
           readonly connectionEpoch: number;
           readonly computerId: string;
       };
 
-export interface ComputerSocket extends RelaySocket {
-    readonly replaceDaemon: () => void;
-}
+export type ComputerSocket = RelaySocket;
 
 export interface ComputerPeers extends RelayPeers {
     readonly sockets: () => readonly { readonly identity: ComputerSocketIdentity; readonly socket: ComputerSocket }[];
@@ -82,9 +80,7 @@ export type ComputerAdmission =
 
 export type ComputerConnectionOperations = Pick<ComputerService, "acceptDaemon" | "revokeComputer" | "readStatus">;
 
-type DaemonSocketIdentity = Extract<ComputerSocketIdentity, { readonly role: "daemon" | "replaced-daemon" }> & {
-    readonly role: "daemon";
-};
+type DaemonSocketIdentity = Extract<ComputerSocketIdentity, { readonly role: "daemon" }>;
 
 export class ComputerService {
     readonly #cx: RuntimeContext;
@@ -183,7 +179,7 @@ export class ComputerService {
         }
         for (const { socket } of previous) {
             this.relay(computerId).failTransfersOwnedBy(socket);
-            socket.replaceDaemon();
+            socket.close(1012, "Daemon connection replaced");
         }
         const connection = this.#cx.services.connections.next(computerId);
         const identity: DaemonSocketIdentity = { ...connection, role: "daemon" };
@@ -300,10 +296,20 @@ export class ComputerService {
         await this.detachDaemons(this.closeSilentDaemons());
     };
 
-    readonly isOnline = (): boolean => {
-        const current = this.#cx.services.connections.current();
-        return current !== null && this.#cx.gateways.peers.daemons().length > 0;
-    };
+    readonly isOnline = (): boolean => this.currentDaemon() !== undefined;
+
+    /**
+     * The open daemon socket that is this Computer's current connection. Whether a connection is current is the
+     * connection record's fact alone; commands, subscriptions and presence all go to the socket it names, never to
+     * one the socket's own attachment says is a daemon.
+     */
+    readonly currentDaemon = (): ComputerPeer | undefined =>
+        this.#cx.gateways.peers
+            .sockets()
+            .find(
+                ({ identity, socket }) =>
+                    identity.role === "daemon" && socket.isOpen() && this.#cx.services.connections.isCurrent(identity),
+            );
 
     readonly registerSessionSubscription = async (
         computerId: string,
@@ -315,16 +321,8 @@ export class ComputerService {
         if (!sameNativeSession(routing.target, target)) {
             throw new PairingDirectoryError("invalid_request", "The subscription does not match its Session");
         }
-        const daemon = this.#cx.gateways.peers
-            .sockets()
-            .find(
-                ({ identity, socket }) =>
-                    identity.role === "daemon" &&
-                    identity.computerId === computerId &&
-                    socket.isOpen() &&
-                    this.#cx.services.connections.isCurrent(identity),
-            );
-        if (daemon === undefined) {
+        const daemon = this.currentDaemon();
+        if (daemon === undefined || daemon.identity.computerId !== computerId) {
             throw new PairingDirectoryError("computer_offline", "The Computer is offline");
         }
         signal.throwIfAborted();
@@ -346,14 +344,7 @@ export class ComputerService {
         signal.throwIfAborted();
         const silent = this.closeSilentDaemons();
         try {
-            const daemon = this.#cx.gateways.peers
-                .sockets()
-                .find(
-                    ({ identity, socket: peer }) =>
-                        identity.role === "daemon" &&
-                        peer.isOpen() &&
-                        this.#cx.services.connections.isCurrent(identity),
-                );
+            const daemon = this.currentDaemon();
             if (daemon !== undefined && daemon.identity.computerId !== computerId) {
                 throw new PairingDirectoryError("computer_access_denied", "The selected Computer is unavailable");
             }
@@ -413,17 +404,8 @@ export class ComputerService {
         if (original === null) {
             return null;
         }
-        const daemon = this.#cx.gateways.peers
-            .sockets()
-            .find(
-                ({ identity, socket }) =>
-                    identity.role === "daemon" &&
-                    identity.computerId === computerId &&
-                    socket.isOpen() &&
-                    socket.isSame(original) &&
-                    this.#cx.services.connections.isCurrent(identity),
-            );
-        if (daemon === undefined) {
+        const daemon = this.currentDaemon();
+        if (daemon === undefined || daemon.identity.computerId !== computerId || !daemon.socket.isSame(original)) {
             return null;
         }
         signal.throwIfAborted();
@@ -504,14 +486,10 @@ export class ComputerService {
     };
 
     private readonly authorizeDaemonMessage = async (
-        identity: Extract<ComputerSocketIdentity, { readonly role: "daemon" | "replaced-daemon" }>,
+        identity: DaemonSocketIdentity,
         socket: ComputerSocket,
         signal: AbortSignal,
     ): Promise<boolean> => {
-        if (identity.role === "replaced-daemon") {
-            socket.close(1012, "Daemon connection replaced");
-            return false;
-        }
         if (this.fenceDaemon(identity, socket)) {
             return false;
         }
@@ -548,7 +526,7 @@ export class ComputerService {
             case "current":
                 return false;
             case "replaced":
-                socket.replaceDaemon();
+                socket.close(1012, "Daemon connection replaced");
                 return true;
             case "ended":
                 socket.close(1008, "Computer revoked");
@@ -580,16 +558,8 @@ export class ComputerService {
 
     /** A viewer left: the Computer's daemon, if one is connected, stops delivering that subscription. */
     readonly detachViewer = (identity: SessionViewerIdentity): void => {
-        const daemon = this.#cx.gateways.peers
-            .sockets()
-            .find(
-                ({ identity: candidate, socket: peer }) =>
-                    candidate.role === "daemon" &&
-                    candidate.computerId === identity.computerId &&
-                    peer.isOpen() &&
-                    this.#cx.services.connections.isCurrent(candidate),
-            );
-        if (daemon === undefined) {
+        const daemon = this.currentDaemon();
+        if (daemon === undefined || daemon.identity.computerId !== identity.computerId) {
             return;
         }
         try {
