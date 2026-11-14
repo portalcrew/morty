@@ -59,13 +59,13 @@ function nextForkTitle(sourceTitle: string, sessions: readonly StoredSession[]):
     return `${sourceTitle.slice(0, MAXIMUM_SESSION_TITLE_LENGTH - suffix.length)}${suffix}`;
 }
 
-/** Only client intent identifies a Fork; native metadata is mutable execution input. */
 /** A Session's preparation without the identity the reply carrying it already states. */
 function readyBody(ready: SessionReadyEvent): SessionReadyBody {
     const { kind: _kind, requestId: _requestId, target: _target, ...body } = ready;
     return body;
 }
 
+/** Only client intent identifies a Fork; native metadata is mutable execution input. */
 function forkIntent(command: Extract<NativeSessionCommand, { readonly action: "fork" | "import" }>) {
     return { action: "fork", harness: command.harness, sessionId: command.sessionId, directory: command.directory };
 }

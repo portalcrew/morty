@@ -57,7 +57,6 @@ export async function executePrompt({
         if (dispatch.kind === "steer" && !sessions.acceptsSteering(command.target, dispatch.targetCommandId)) {
             throw new AcpExecutionError("The steering target is unavailable", {}, "steering_target_unavailable");
         }
-        const recovery = { kind: "interactive-only" } as const;
         const preparation = {
             adapter,
             ...(externalizeSessionUpdate === undefined ? {} : { externalizeSessionUpdate }),
@@ -65,7 +64,6 @@ export async function executePrompt({
             cwd: resolved.cwd,
             target: command.target,
             signal,
-            recovery,
         };
         let prepared = await sessions.prepareExecutionSession(preparation);
         // Steering cannot reconfigure a running Agent, so a steered Turn's snapshot is never
@@ -136,7 +134,6 @@ export async function executePrompt({
                 resources: attachments.resources,
                 target: command.target,
                 signal,
-                recovery,
             });
             end = promptEnd(result.stopReason);
         }

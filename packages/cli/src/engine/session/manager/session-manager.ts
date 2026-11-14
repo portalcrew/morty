@@ -272,7 +272,7 @@ export class SessionManager {
 
     async #replaceExecutionPreparation(existing: AgentSession, options: SessionPrepareOptions): Promise<AgentSession> {
         const desiredConfigOptions = existing.prepared().configOptions;
-        const recovery: SessionRecovery = options.recovery ?? { kind: "interactive-only" };
+        const recovery: SessionRecovery = { kind: "interactive-only" };
         return await this.#executionProcesses.prepare(options.target, async () => {
             await this.#retireSessionProcess(options.target, existing, async () => await existing.close());
             const runtime = await this.#startSession(options, recovery);
@@ -519,7 +519,7 @@ export class SessionManager {
 
     readonly prepareExecutionSession = async (options: SessionPrepareOptions): Promise<PreparedSession> =>
         this.#operations.run(options, async (options) => {
-            const recovery: SessionRecovery = options.recovery ?? { kind: "interactive-only" };
+            const recovery: SessionRecovery = { kind: "interactive-only" };
             this.#admitNow(options.target, { kind: "prepare-execution" });
             const pending = this.#executionProcesses.pending(options.target);
             if (pending !== undefined) {
@@ -635,7 +635,7 @@ export class SessionManager {
     readonly acceptsSteering = (target: NativeSessionTarget, targetCommandId: string): boolean =>
         this.#executions.acceptsSteering(target, targetCommandId);
 
-    readonly steerPrompt = async (options: SessionSteerOptions): Promise<string> =>
+    readonly steerPrompt = async (options: SessionSteerOptions): Promise<void> =>
         this.#operations.run(options, async (options) => {
             if (!this.acceptsSteering(options.target, options.targetCommandId)) {
                 throw new AcpExecutionError("The target turn is no longer active", {}, "steering_target_unavailable");
@@ -666,7 +666,7 @@ export class SessionManager {
             );
             deadline.unref();
             try {
-                return await runtime.steer({
+                await runtime.steer({
                     ...options,
                     signal: AbortSignal.any([options.signal, deadlineController.signal]),
                 });
@@ -917,15 +917,11 @@ export class SessionManager {
                         "session_identity_mismatch",
                     );
                 }
-                const runtime = await this.#currentSessionProcess(
-                    existing,
-                    options,
-                    options.recovery ?? { kind: "interactive-only" },
-                );
+                const runtime = await this.#currentSessionProcess(existing, options, { kind: "interactive-only" });
                 this.#executionProcesses.touch(options.target, runtime);
                 return runtime;
             }
-            await this.#prepareSession(options, options.recovery ?? { kind: "interactive-only" });
+            await this.#prepareSession(options, { kind: "interactive-only" });
             const started = this.#executionProcesses.get(options.target);
             if (started === undefined) {
                 throw new AcpExecutionError("ACP session did not start");

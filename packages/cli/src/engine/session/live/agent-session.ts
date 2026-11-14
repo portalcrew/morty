@@ -164,7 +164,6 @@ export class AgentSession {
         this.#settledTurns = () => execution.settledTurns(this.target);
         this.#adapter = adapter;
         this.#harness = agent.harness;
-        this.#commands = [];
         this.#cwd = cwd;
         this.#environment = agent.environment;
         this.#identity = identity;
@@ -909,7 +908,7 @@ export class AgentSession {
      * Adds a steering prompt to the prompt the Agent holds. Precondition: the Session's execution authority accepts
      * steering into `options.targetCommandId`.
      */
-    readonly steer = async (options: SessionSteerOptions): Promise<string> => {
+    readonly steer = async (options: SessionSteerOptions): Promise<void> => {
         if (!this.#capabilities.steering) {
             throw new AcpExecutionError(
                 "The selected agent does not support mid-turn steering",
@@ -950,14 +949,11 @@ export class AgentSession {
                         completion: { kind: "steered" },
                         kind: "prompt.completed",
                         // The steering's own user message, so a reloaded history shows it inside the turn it joined.
-                        ...(outcome.outcome === "injected" && outcome.messageId !== undefined
-                            ? { messageId: outcome.messageId }
-                            : {}),
+                        ...(outcome.messageId === undefined ? {} : { messageId: outcome.messageId }),
                     },
                     type: "lifecycle-metadata",
                 });
             }
-            return outcome.outcome;
         } catch (error) {
             const failure =
                 error instanceof AcpExecutionError

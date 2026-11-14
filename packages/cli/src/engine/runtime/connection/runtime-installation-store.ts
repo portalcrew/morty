@@ -258,19 +258,20 @@ export class RuntimeInstallationStore {
         pairingGeneration: string,
         activation: ComputerConnectionActivation,
         signal: AbortSignal,
-    ): Promise<SavedComputerConnection> => {
-        return await this.changePairing(async () => {
+    ): Promise<void> => {
+        await this.changePairing(async () => {
             const connection = await this.readConnection(pairingGeneration, signal);
-            const updated = new SavedComputerConnection(
-                activation,
-                connection.pairingGeneration,
-                connection.computerId,
-                connection.defaultWorkspace,
-                connection.relayOrigin,
-                connection.credentials,
+            await this.overwriteConnection(
+                new SavedComputerConnection(
+                    activation,
+                    connection.pairingGeneration,
+                    connection.computerId,
+                    connection.defaultWorkspace,
+                    connection.relayOrigin,
+                    connection.credentials,
+                ),
+                signal,
             );
-            await this.overwriteConnection(updated, signal);
-            return updated;
         });
     };
 

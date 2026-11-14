@@ -66,12 +66,10 @@ export class RetainedAgentProcesses<P, Key = string> {
     readonly retain = (id: Key, runtime: P): void => {
         this.#setResource(id, { kind: "ready", runtime });
     };
-    readonly detach = (id: Key, expected: P): boolean => {
-        if (this.get(id) !== expected) {
-            return false;
+    readonly detach = (id: Key, expected: P): void => {
+        if (this.get(id) === expected) {
+            this.#setResource(id, { kind: "empty" });
         }
-        this.#setResource(id, { kind: "empty" });
-        return true;
     };
     readonly entries = (): readonly (readonly [Key, P])[] => {
         const result: (readonly [Key, P])[] = [];
