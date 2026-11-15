@@ -119,14 +119,14 @@ async function runDaemonRuntime(
         const reconcile = async (): Promise<void> => {
             const connection = await control.currentConnection(combined);
             if (active !== undefined) {
-                if (connection?.activation === "active" && connection.pairingGeneration === active.pairingGeneration) {
+                if (connection?.revoked === false && connection.pairingGeneration === active.pairingGeneration) {
                     return;
                 }
                 active.controller.abort();
                 await active.completion;
                 active = undefined;
             }
-            if (connection?.activation === "active") {
+            if (connection?.revoked === false) {
                 try {
                     const config = await prepareComputerConnection(control, connection, combined, process.env);
                     const controller = new AbortController();
@@ -162,7 +162,7 @@ async function runDaemonRuntime(
                                 "Morty disconnected this Computer: its connection key was used somewhere else. Run Morty setup on this computer again to reconnect.",
                             );
                             await control
-                                .setConnectionActivation(connection.pairingGeneration, "stopped", combined)
+                                .recordRevocation(connection.pairingGeneration, combined)
                                 .catch((failure: unknown) => fail(connection.pairingGeneration, failure));
                         },
                     );

@@ -33,10 +33,8 @@ it("Given an explicit data directory, When a host saves a connection and reopens
         const reopened = await RuntimeInstallationStore.open(params.dataDirectory, signal);
         expect(await reopened.readConnection(connection.pairingGeneration, signal)).toEqual(connection);
         expect(await reopened.currentConnection(signal)).toEqual(connection);
-        await reopened.setConnectionActivation(connection.pairingGeneration, "stopped", signal);
-        expect(await store.readConnection(connection.pairingGeneration, signal)).toMatchObject({
-            activation: "stopped",
-        });
+        await reopened.recordRevocation(connection.pairingGeneration, signal);
+        expect(await store.readConnection(connection.pairingGeneration, signal)).toMatchObject({ revoked: true });
     } finally {
         await rm(directory, { recursive: true, force: true });
     }

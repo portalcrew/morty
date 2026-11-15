@@ -64,9 +64,9 @@ test("Given a running credential rotation, When the pairing is replaced concurre
         expect(replacement.pairingGeneration).not.toBe(old.pairingGeneration);
         await expect(credentials.held(signal)).rejects.toMatchObject({ code: "connection_not_found" });
         await expect(credentials.prepare(signal)).rejects.toMatchObject({ code: "connection_not_found" });
-        await expect(
-            installation.setConnectionActivation(old.pairingGeneration, "stopped", signal),
-        ).rejects.toMatchObject({ code: "connection_not_found" });
+        await expect(installation.recordRevocation(old.pairingGeneration, signal)).rejects.toMatchObject({
+            code: "connection_not_found",
+        });
         expect(await installation.currentConnection(signal)).toEqual(replacement);
         expect((await current.held(signal)).current === replacementInput.computerCredential).toBe(true);
         if (rotation.status === "fulfilled") {
@@ -77,9 +77,8 @@ test("Given a running credential rotation, When the pairing is replaced concurre
             expect(rotation.reason).toMatchObject({ code: "pairing_busy" });
         }
         const next = await current.prepare(signal);
-        await installation.setConnectionActivation(replacement.pairingGeneration, "stopped", signal);
+        await installation.recordRevocation(replacement.pairingGeneration, signal);
         await current.complete(next, signal);
-        await installation.setConnectionActivation(replacement.pairingGeneration, "active", signal);
         const reopened = await RuntimeInstallationStore.open(root, signal);
         expect(
             (await reopened.computerCredentials(replacement.pairingGeneration).held(signal)).current === next.successor,
