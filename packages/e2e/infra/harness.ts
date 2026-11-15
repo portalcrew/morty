@@ -42,6 +42,103 @@ type BrowserState =
           readonly page: Page;
       };
 
+/** A failed journey keeps the newest input observations; older ones are counted, not kept. */
+const INPUT_EVENT_LIMIT = 1_000;
+const INPUT_EVENT_BINDING = "__mortyE2eInputEvent";
+
+/**
+ * Observes, in the page, where focus and text selection are and what text controls hold, so a failure that loses
+ * typed text shows whether focus moved, the control was disabled, or its value was set and then replaced. It only adds
+ * listeners and an observer; it changes nothing the page does.
+ */
+function observeTextInput(binding: string): void {
+    if (window !== window.top) {
+        return;
+    }
+    const send = (record: Readonly<Record<string, unknown>>): void => {
+        const deliver: unknown = Reflect.get(window, binding);
+        if (typeof deliver === "function") {
+            void deliver({ ...record, time: Date.now() });
+        }
+    };
+    const describe = (node: EventTarget | null): string | null => {
+        if (!(node instanceof Element)) {
+            return node === null ? null : String(node);
+        }
+        const name =
+            node.getAttribute("aria-label") ??
+            node.getAttribute("data-testid") ??
+            node.getAttribute("id") ??
+            node.textContent?.trim() ??
+            "";
+        return `${node.tagName.toLowerCase()}[${name.slice(0, 60)}]${node.isConnected ? "" : " detached"}`;
+    };
+    const textControl = (node: Element | null): node is HTMLTextAreaElement | HTMLInputElement =>
+        node instanceof HTMLTextAreaElement || node instanceof HTMLInputElement;
+    const value = (text: string): string => (text.length > 120 ? `${text.slice(0, 120)}…` : text);
+    let textareas = "";
+    const sampleTextareas = (): void => {
+        const states = Array.from(document.querySelectorAll("textarea"), (textarea) => ({
+            textarea: describe(textarea),
+            value: value(textarea.value),
+            disabled: textarea.disabled,
+            focused: document.activeElement === textarea,
+        }));
+        const signature = JSON.stringify(states);
+        if (signature !== textareas) {
+            textareas = signature;
+            send({ type: "textareas", states });
+        }
+    };
+    for (const type of ["focusin", "focusout"]) {
+        document.addEventListener(
+            type,
+            (event) => {
+                send({
+                    type,
+                    target: describe(event.target),
+                    related: describe(event instanceof FocusEvent ? event.relatedTarget : null),
+                    pageFocused: document.hasFocus(),
+                });
+                sampleTextareas();
+            },
+            true,
+        );
+    }
+    for (const type of ["beforeinput", "input"]) {
+        document.addEventListener(
+            type,
+            (event) => {
+                const target = event.target instanceof Element ? event.target : null;
+                send({
+                    type,
+                    target: describe(target),
+                    inputType: event instanceof InputEvent ? event.inputType : null,
+                    value: textControl(target) ? value(target.value) : null,
+                });
+                sampleTextareas();
+            },
+            true,
+        );
+    }
+    document.addEventListener("selectionchange", () => {
+        const active = document.activeElement;
+        send({
+            type: "selectionchange",
+            active: describe(active),
+            selection: textControl(active) ? [active.selectionStart, active.selectionEnd] : null,
+        });
+    });
+    // A controlled value replaced without an input event changes no attribute of its own, but the controls that
+    // follow it do, so every DOM change samples the text controls again.
+    new MutationObserver(sampleTextareas).observe(document, {
+        attributes: true,
+        attributeFilter: ["disabled", "aria-disabled", "aria-label"],
+        childList: true,
+        subtree: true,
+    });
+}
+
 const execute = promisify(execFile);
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 
@@ -78,6 +175,8 @@ export class E2EHarness {
     readonly children: ProcessRecord[];
     readonly stages: Stage[];
     readonly browserEvents: unknown[];
+    readonly #inputEvents: unknown[] = [];
+    #droppedInputEvents = 0;
     browserState: BrowserState = { kind: "none" };
     result:
         | { readonly kind: "running" }
@@ -244,6 +343,15 @@ export class E2EHarness {
                 failure: request.failure(),
             }),
         );
+        await context.exposeBinding(INPUT_EVENT_BINDING, (_source, record: unknown) => {
+            this.#inputEvents.push({ type: "text-input", record });
+            if (this.#inputEvents.length > INPUT_EVENT_LIMIT) {
+                this.#inputEvents.shift();
+                this.#droppedInputEvents += 1;
+            }
+        });
+        // Documents loaded from now on are observed; attach before the journey navigates.
+        await context.addInitScript(observeTextInput, INPUT_EVENT_BINDING);
         await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
         this.browserState = { kind: "recording", browser, context, page };
     }
@@ -256,7 +364,17 @@ export class E2EHarness {
                 () =>
                     writeFile(
                         join(this.artifactDirectory, "browser-events.json"),
-                        `${JSON.stringify(this.browserEvents, null, 2)}\n`,
+                        `${JSON.stringify(
+                            [
+                                ...this.browserEvents,
+                                ...(this.#droppedInputEvents === 0
+                                    ? []
+                                    : [{ type: "text-input-dropped", count: this.#droppedInputEvents }]),
+                                ...this.#inputEvents,
+                            ],
+                            null,
+                            2,
+                        )}\n`,
                     ),
             ],
             [
