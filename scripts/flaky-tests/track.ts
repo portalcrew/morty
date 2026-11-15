@@ -10,7 +10,6 @@ import { type FlakyTest, parseFlakyTestRecord } from "./record.ts";
 
 // flaky-tests.yml downloads the run's records here.
 const ARTIFACTS_DIRECTORY = fileURLToPath(new URL("../../test-results/flaky-test-artifacts", import.meta.url));
-const GITHUB_API = "https://api.github.com";
 const REPOSITORY = /^[\w.-]+\/[\w.-]+$/;
 const LABEL = "flaky-test";
 const MAX_RECORD_BYTES = 256 * 1024;
@@ -74,7 +73,7 @@ function createGitHub(repository: string, token: string) {
         throw new Error("GITHUB_REPOSITORY must name one repository as owner/name.");
     }
     return async (method: "GET" | "POST" | "PATCH", path: string, body?: unknown): Promise<unknown> => {
-        const response = await fetch(`${GITHUB_API}/repos/${repository}${path}`, {
+        const response = await fetch(`https://api.github.com/repos/${repository}${path}`, {
             method,
             headers: {
                 Accept: "application/vnd.github+json",
