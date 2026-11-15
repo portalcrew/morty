@@ -289,22 +289,21 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
         await socketsClosed;
         await expect(composer).toBeEnabled();
         await expect(page.getByTestId(dataTestId.sendMessage)).toBeDisabled();
-        await runtime.clock.runFor(12000);
+        // The outage holds every new connection, so its deadlines expire in virtual time.
+        await runtime.clock.runFor(12000, { transport: "held" });
         if (recovery === "manual") {
             const retry = page.getByRole("button", { name: "Retry now", exact: true });
-            let advanced = 0;
-            await expect(async () => {
-                if (advanced < 300_000) {
-                    await runtime.clock.runFor(1000);
-                    advanced += 1000;
-                }
-                expect(await retry.isVisible()).toBe(true);
-            }).toPass({ intervals: [0], timeout: test.info().project.use.actionTimeout ?? 30_000 });
+            await runtime.clock.advanceUntil(
+                async () => {
+                    expect(await retry.isVisible()).toBe(true);
+                },
+                { transport: "held" },
+            );
             // Restoring during an in-flight automatic attempt can recover before the click and remove Retry now.
             // The visible action and paused clock put the user in control of the next Session attempt.
         } else if (recovery === "online") {
             // Spend the bounded reconnect retry budget before an explicit wakeup.
-            await runtime.clock.runFor(300000);
+            await runtime.clock.runFor(300000, { transport: "held" });
             // Hold time while the network returns, so only the wakeup reconnects: an automatic retry still scheduled
             // would otherwise recover first. Restoring ends any attempt still waiting on the outage.
             await runtime.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
@@ -316,18 +315,11 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
             await page.getByRole("button", { name: "Retry now", exact: true }).click();
         }
         const send = page.getByRole("button", { name: "Send message", exact: true });
-        // Spend the existing action wait budget in virtual time: a real network failure can schedule
-        // another retry after the preceding clock advance has returned.
-        const recoveryBudget = test.info().project.use.actionTimeout ?? 30_000;
-        let advanced = 0;
-        await expect(async () => {
-            // Retain the existing bounded retry window as an additional virtual-time safety limit.
-            if (advanced < 300_000) {
-                await runtime.clock.runFor(1000);
-                advanced += 1000;
-            }
+        // A real network failure can schedule another retry after a clock advance has returned, so drive time until
+        // the user can send; it waits while the restored network answers the page.
+        await runtime.clock.advanceUntil(async () => {
             expect(await send.isEnabled()).toBe(true);
-        }).toPass({ intervals: [0], timeout: recoveryBudget });
+        });
         await expect(composer).toBeEnabled();
         await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
         await expect(composer).toHaveValue("Preserve my unsent draft.");
@@ -360,6 +352,7 @@ for (const route of ["session", "suspended"] as const) {
         );
         await composer.fill("Continue after resuming.");
         network.blackhole();
+        runtime.clock.holdOpenTransports();
         if (route === "suspended") {
             // Resume overdue timers once, as after a long browser suspension.
             await runtime.clock.fastForward(120000);
@@ -414,6 +407,7 @@ test("Given a silently stalled session without a lifecycle event, when its liven
     );
     await composer.fill("Preserve this draft until transport recovery.");
     network.blackhole();
+    runtime.clock.holdOpenTransports();
     // The SDK pings every 20 seconds and drops a tunnel that leaves a ping unanswered for 10; the Session then
     // reconnects on a new tunnel.
     await runtime.clock.runFor(30000);
@@ -455,6 +449,7 @@ test("Given a live Session stream with stalled requests, when foreground hints p
     await composer.fill("Keep this draft on the live connection.");
     const before = connections;
     network.stallSessionRequests();
+    runtime.clock.holdOpenTransports();
     await page.evaluate(() => {
         document.dispatchEvent(new Event("resume"));
         window.dispatchEvent(new Event("online"));
@@ -467,7 +462,7 @@ test("Given a live Session stream with stalled requests, when foreground hints p
     // The stalled tunnel cannot carry the SDK's 20-second ping, so it is dropped once that ping goes unanswered for
     // 10 seconds and the Session continues on a new connection.
     await runtime.clock.runFor(30000);
-    // Advance retry deadlines together with both payload clocks while the real handshake completes.
+    // Advance retry deadlines together with both payload clocks; each step waits for the real handshake.
     await runtime.clock.runFor(5000);
     await expect.poll(() => connections).toBeGreaterThan(before);
     await expect(page.getByTestId(dataTestId.sendMessage)).toBeEnabled();

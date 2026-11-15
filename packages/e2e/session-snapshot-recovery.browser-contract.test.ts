@@ -288,15 +288,10 @@ for (const schedule of ["before-snapshot", "after-snapshot", "after-recovery"] a
             });
         });
         const advanceUntil = async (ready: () => boolean): Promise<void> => {
-            let advanced = 0;
-            await expect(async () => {
+            await runtime.clock.advanceUntil(async () => {
                 await observations;
-                if (!ready() && advanced < 300_000) {
-                    await runtime.clock.runFor(1000);
-                    advanced += 1000;
-                }
                 expect(ready()).toBe(true);
-            }).toPass({ intervals: [0], timeout: testInfo.project.use.actionTimeout ?? 30_000 });
+            });
         };
         try {
             await page.goto(connected.url);
@@ -316,11 +311,8 @@ for (const schedule of ["before-snapshot", "after-snapshot", "after-recovery"] a
             network.interrupt();
             if (gate !== null) {
                 try {
-                    let reached = false;
-                    void gate.reached.then(() => {
-                        reached = true;
-                    });
-                    await advanceUntil(() => reached);
+                    // The gate holds a real reply the page awaits: virtual time stays still until the gate is reached.
+                    await runtime.clock.advanceUntil(gate.reached);
                     await runtime.continueReply("wait for steering", {
                         outcome: "hold",
                         output: [{ kind: "text", text: "|B|" }],
@@ -398,14 +390,9 @@ test("Given a partial reply, when it finishes while the browser is disconnected,
         output: [{ kind: "text", text: "|OFFLINE_END|" }],
     });
     // Network callbacks can schedule backoff after a clock advance returns. Drive time until the user sees recovery.
-    let advanced = 0;
-    await expect(async () => {
-        if (advanced < 300_000) {
-            await runtime.clock.runFor(1000);
-            advanced += 1000;
-        }
+    await runtime.clock.advanceUntil(async () => {
         expect(await responses.textContent()).toContain("Waiting for steering|OFFLINE_END|");
-    }).toPass({ intervals: [0], timeout: test.info().project.use.actionTimeout ?? 30_000 });
+    });
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
     await expect(composer).toHaveValue("Preserve this draft.");
     await expect(page.getByRole("button", { name: "Stop agent output" })).toBeHidden();
