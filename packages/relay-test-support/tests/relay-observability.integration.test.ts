@@ -92,16 +92,7 @@ async function api(
 }
 
 async function provisionComputer() {
-    const owner = await api(
-        "/v1/computers",
-        {
-            method: "POST",
-            body: JSON.stringify({
-                creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-            }),
-        },
-        201,
-    );
+    const owner = await api("/v1/computers", { method: "POST" }, 201);
     return { computerId: text(owner, "computerId"), appCredential: text(owner, "computerToken") };
 }
 
@@ -150,6 +141,26 @@ async function httpFailure(kind: string): Promise<Record<string, unknown>> {
     expect(JSON.stringify(log)).not.toMatch(/QUERY_CANARY|HEADER_CANARY|BODY_CANARY|PROPERTY_CANARY/);
     return log;
 }
+
+it("Given a request whose credential field is malformed, When the Relay logs the rejected request, Then the log names the field but never its value", async () => {
+    const { computerId, appCredential } = await provisionComputer();
+    const canary = "CREDENTIAL-CANARY-not-a-valid-successor";
+    const start = logs.length;
+    const response = await api(
+        `/v1/computers/${computerId}/identity/revoke-all-access`,
+        {
+            method: "POST",
+            headers: { authorization: `Bearer ${appCredential}` },
+            body: JSON.stringify({ successor: canary }),
+        },
+        400,
+    );
+    expect(response).toEqual({ error: { code: "INVALID_REQUEST", message: "The request is invalid." } });
+    await expect.poll(() => logs.slice(start).find((log) => log["msg"] === "Morty request failed")).toBeDefined();
+    const logged = JSON.stringify(logs.slice(start));
+    expect(logged).toContain("successor");
+    expect(logged).not.toContain(canary);
+});
 
 // @no-uc: Technical regression; unusual throws must not break failure responses or bounded diagnostic collection.
 it.each(["primitive", "object", "circular", "deep", "long", "secrets", "getter"])(

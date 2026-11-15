@@ -1,12 +1,12 @@
 import * as v from "valibot";
 import { computerManagementSchema, relayIdentifier } from "./computer-management.ts";
 
-/** A client-held secret binding the created user's identity and its initial computer credential. */
-export const anonymousCreationKey = v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{43}$/u));
-
-/** The credential bootstrap issues, derived from its origin so a repeated bootstrap issues the same one. */
+/**
+ * Why a computer is bootstrapped. A created computer is bootstrapped once, by the request that created it; a replacement
+ * may be repeated, so its credential derives from the predecessor that names it.
+ */
 const bootstrapOrigin = v.variant("kind", [
-    v.pipe(v.object({ kind: v.literal("created"), creationKey: anonymousCreationKey }), v.readonly()),
+    v.pipe(v.object({ kind: v.literal("created") }), v.readonly()),
     // Only the internal replacement path supplies the authenticated predecessor identity.
     v.pipe(
         v.object({

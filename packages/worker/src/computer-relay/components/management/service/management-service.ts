@@ -34,8 +34,8 @@ export class ManagementService {
     }
 
     /**
-     * Every step reuses what an earlier attempt committed, and the credential derives from the bootstrap's origin, so
-     * repeating the same bootstrap completes it and returns the same identity instead of creating another.
+     * Every step reuses what an earlier attempt committed. A replacement's credential derives from its origin, so
+     * repeating the same replacement completes it and returns the same identity instead of creating another.
      */
     readonly initializeComputer = async (
         computer: ComputerManagement,
@@ -117,22 +117,21 @@ export class ManagementService {
     };
 }
 
-/** The credential a bootstrap issues, derived so that repeating the same bootstrap issues it again. */
+/**
+ * The credential a bootstrap issues. A created computer is bootstrapped only by the request that created it, so its
+ * credential is new; a replacement's derives from its origin, so repeating the replacement issues it again.
+ */
 async function bootstrapToken(
     serverKey: IdentityOperations["credentialKey"],
     computerId: string,
     origin: BootstrapOrigin,
     signal: AbortSignal,
 ) {
-    // The versions and input encodings are part of the persisted retry contract; keep them stable.
     switch (origin.kind) {
         case "created":
-            return await derivedToken(
-                serverKey,
-                ["morty-computer-bootstrap-v1", computerId, origin.creationKey],
-                signal,
-            );
+            return `morty_computer_v1_${randomSecret()}`;
         case "replacement":
+            // The version and input encoding are part of the persisted retry contract; keep them stable.
             return await derivedToken(
                 serverKey,
                 ["morty-computer-replacement-v1", origin.previousComputerId, computerId, origin.token],

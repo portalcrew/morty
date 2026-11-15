@@ -97,9 +97,7 @@ async function request(path: string, status: number, token?: string, body?: obje
 
 const owner = v.parse(
     v.object({ computerToken: v.string(), computerId: v.string() }),
-    await request("/morty/api/v1/computers", 201, undefined, {
-        creationKey: randomBytes(32).toString("base64url"),
-    }),
+    await request("/morty/api/v1/computers", 201, undefined, {}),
 );
 const pairing = v.parse(
     v.object({ pairingCode: v.string() }),

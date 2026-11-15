@@ -143,10 +143,6 @@ test("Given the generated agent API description, When a peer sends every documen
     const created = await bindings.request(
         new Request(`${bindings.origin}/morty/api/v1/computers`, {
             method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-                creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-            }),
             signal,
         }),
     );

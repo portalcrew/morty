@@ -1,7 +1,7 @@
 import * as v from "valibot";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import worker from "../src/worker/application.ts";
-import { APP_ORIGIN, anonymousCreationKey, createIdentityFixture } from "./support/identity-fixture.ts";
+import { APP_ORIGIN, createIdentityFixture } from "./support/identity-fixture.ts";
 
 let fixture: Awaited<ReturnType<typeof createIdentityFixture>>;
 
@@ -14,22 +14,17 @@ afterAll(async () => {
 });
 
 test("Given a new Computer, When setup creates and shares its access, Then each response contains only its Computer ID and Computer token and cannot open another Computer", async () => {
-    const create = async (creationKey: string) => {
+    const create = async () => {
         const response = await worker.fetch(
-            new Request(`${APP_ORIGIN}/morty/api/v1/computers`, {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ creationKey }),
-            }),
+            new Request(`${APP_ORIGIN}/morty/api/v1/computers`, { method: "POST" }),
             fixture.environment(),
         );
         expect(response.status).toBe(201);
         return v.parse(v.strictObject({ computerId: v.string(), computerToken: v.string() }), await response.json());
     };
-    const key = anonymousCreationKey();
-    const first = await create(key);
-    expect((await create(key)).computerId).not.toBe(first.computerId);
-    const second = await create(anonymousCreationKey());
+    const first = await create();
+    const second = await create();
+    expect(second.computerId).not.toBe(first.computerId);
     const session = (computerId: string) =>
         worker.fetch(
             new Request(`${APP_ORIGIN}/morty/api/v1/computers/${computerId}/session`, {

@@ -36,10 +36,6 @@ test("Given an attachment within the supported plaintext limit, when its encrypt
     const signal = AbortSignal.timeout(150_000);
     const created = await fetch(new URL("/morty/api/v1/computers", network.origin), {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-        }),
         signal,
     });
     expect(created.status).toBe(201);
@@ -203,10 +199,6 @@ test("Given interrupted content uploads, when their request identities are reuse
     const signal = AbortSignal.timeout(75_000);
     const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-        }),
         signal,
     });
     expect(created.status).toBe(201);
@@ -373,10 +365,6 @@ test("Given a paired Computer, when its owner selects an Agent, then setup recei
     const signal = AbortSignal.timeout(35_000);
     const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-        }),
         signal,
     });
     expect(created.status).toBe(201);
@@ -450,9 +438,7 @@ test("Given a locally paired encrypted client, when it submits a prompt and read
     };
     const owner = v.parse(
         v.object({ computerId: v.string(), computerToken: v.string() }),
-        await request("/computers", {
-            creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-        }),
+        await request("/computers", {}),
     );
     await using runtime = await createControlledAgentRuntime({
         behavior: {

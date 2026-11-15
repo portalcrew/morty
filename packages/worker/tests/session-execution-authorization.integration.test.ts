@@ -18,10 +18,6 @@ test("Given Session access and Computer encryption access, When a caller sends a
     const signal = AbortSignal.timeout(60_000);
     const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-        }),
         signal,
     });
     expect(created.status).toBe(201);

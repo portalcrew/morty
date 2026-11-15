@@ -1,7 +1,7 @@
 import * as v from "valibot";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import worker, { fetchPublicApplication } from "../src/worker/application.ts";
-import { APP_ORIGIN, accountRequest, anonymousCreationKey, createIdentityFixture } from "./support/identity-fixture.ts";
+import { APP_ORIGIN, accountRequest, createIdentityFixture, randomRedemptionKey } from "./support/identity-fixture.ts";
 
 function sharingRequest(): RequestInit {
     return {
@@ -21,19 +21,12 @@ afterAll(async () => {
     await fixture.close();
 });
 
-/** Declares its length as HTTP clients do, so the request keeps Cloudflare's location metadata. */
 function creationRequest(headers: Readonly<Record<string, string>> = {}): Request {
-    const body = JSON.stringify({ creationKey: anonymousCreationKey() });
-    return new Request(`${APP_ORIGIN}/morty/api/v1/computers`, {
-        method: "POST",
-        headers: { ...headers, "content-type": "application/json", "content-length": String(body.length) },
-        body,
-    });
+    return new Request(`${APP_ORIGIN}/morty/api/v1/computers`, { method: "POST", headers });
 }
 
 test("Given no D1 binding, When a user creates Computers and later links saved Computer credentials after a Worker restart, Then each creation is new and the saved credentials still open their Computer", async () => {
     let environment = fixture.environment();
-    const creationKey = anonymousCreationKey();
     class RegionalRequest extends Request {
         override readonly cf: { readonly continent: string; readonly country: string };
         constructor(request: Request, continent: string, country: string) {
@@ -42,19 +35,7 @@ test("Given no D1 binding, When a user creates Computers and later links saved C
         }
     }
     const create = async (continent: string, country: string) => {
-        const body = JSON.stringify({ creationKey });
-        const response = await worker.fetch(
-            new RegionalRequest(
-                new Request(`${APP_ORIGIN}/morty/api/v1/computers`, {
-                    method: "POST",
-                    headers: { "content-type": "application/json", "content-length": String(body.length) },
-                    body,
-                }),
-                continent,
-                country,
-            ),
-            environment,
-        );
+        const response = await worker.fetch(new RegionalRequest(creationRequest(), continent, country), environment);
         expect(response.status).toBe(201);
         return v.parse(
             v.object({
@@ -137,8 +118,6 @@ test("Given the computer creation API, When a client calls the retired anonymous
     const response = await worker.fetch(
         new Request(`${APP_ORIGIN}/morty/api/identity/anonymous-users`, {
             method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ creationKey: anonymousCreationKey() }),
         }),
         fixture.environment(),
     );
@@ -181,10 +160,10 @@ test("Given a device that opened a link and opens the next one, When the reply i
         expect(response.status).toBe(200);
         return v.parse(v.object({ computerToken: v.string() }), await response.json()).computerToken;
     };
-    const held = await token(await redeem(await share(), anonymousCreationKey()));
+    const held = await token(await redeem(await share(), randomRedemptionKey()));
 
     const next = await share();
-    const redemptionKey = anonymousCreationKey();
+    const redemptionKey = randomRedemptionKey();
     const lost = await token(await redeem(next, redemptionKey, held));
     const repeated = await token(await redeem(next, redemptionKey, held));
 
@@ -194,7 +173,7 @@ test("Given a device that opened a link and opens the next one, When the reply i
     const listed = await request("/identity/devices", owner.token);
     expect(v.parse(v.object({ devices: v.array(v.unknown()) }), await listed.json()).devices).toHaveLength(1);
     // The link still adds one device: another browser's redemption is refused.
-    expect((await redeem(next, anonymousCreationKey())).status).toBe(410);
+    expect((await redeem(next, randomRedemptionKey())).status).toBe(410);
 });
 
 test("Given a device that shared links before and after renewing its credential, When the owner removes it, Then its unused links cannot restore access while other devices and fresh invitations still work", async () => {
@@ -214,7 +193,7 @@ test("Given a device that shared links before and after renewing its credential,
         expect(response.status).toBe(201);
         return new URL(v.parse(v.object({ url: v.string() }), await response.json()).url).hash.slice(6);
     };
-    const redeem = (code: string, redemptionKey = anonymousCreationKey(), replaces?: string) =>
+    const redeem = (code: string, redemptionKey = randomRedemptionKey(), replaces?: string) =>
         worker.fetch(
             new Request(`${APP_ORIGIN}/morty/api/v1/identity/transfers/redeem`, {
                 method: "POST",
@@ -238,10 +217,10 @@ test("Given a device that shared links before and after renewing its credential,
     }
     const unusedBeforeRenewal = await share(original);
     const openedAfterRenewal = await share(original);
-    const renewed = await tokenOf(await redeem(await share(owner.token), anonymousCreationKey(), original));
+    const renewed = await tokenOf(await redeem(await share(owner.token), randomRedemptionKey(), original));
     expect((await request("/session", original)).status).toBe(401);
     // Credential replacement does not end the sharing device's access or invalidate its invitations.
-    const childRedemptionKey = anonymousCreationKey();
+    const childRedemptionKey = randomRedemptionKey();
     const child = await tokenOf(await redeem(openedAfterRenewal, childRedemptionKey));
     const unusedAfterRenewal = await share(renewed);
     const independentInvitation = await share(owner.token);
@@ -258,7 +237,7 @@ test("Given a device that shared links before and after renewing its credential,
     expect((await request("/session", child)).status).toBe(200);
     expect(await tokenOf(await redeem(openedAfterRenewal, childRedemptionKey))).toBe(child);
     expect((await request("/session", await tokenOf(await redeem(independentInvitation)))).status).toBe(200);
-    const rejoined = await tokenOf(await redeem(await share(owner.token), anonymousCreationKey(), renewed));
+    const rejoined = await tokenOf(await redeem(await share(owner.token), randomRedemptionKey(), renewed));
     expect((await request("/session", rejoined)).status).toBe(200);
     expect((await redeem(unusedBeforeRenewal)).status).toBe(410);
     expect((await redeem(unusedAfterRenewal)).status).toBe(410);
@@ -291,7 +270,7 @@ test("Given a device that shared a link and then renewed its credential, When it
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({
                     code,
-                    redemptionKey: anonymousCreationKey(),
+                    redemptionKey: randomRedemptionKey(),
                     ...(replaces === undefined ? {} : { replaces }),
                 }),
             }),
@@ -334,7 +313,7 @@ test("Given links shared by the computer's own credential, When that credential 
             new Request(`${APP_ORIGIN}/morty/api/v1/identity/transfers/redeem`, {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ code, redemptionKey: anonymousCreationKey() }),
+                body: JSON.stringify({ code, redemptionKey: randomRedemptionKey() }),
             }),
             environment,
         );

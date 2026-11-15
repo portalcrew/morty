@@ -23,10 +23,6 @@ test("Given large valid history events, When the client reads all pages, Then ev
     const signal = AbortSignal.timeout(90_000);
     const created = await fetch(new URL("/morty/api/v1/computers", network.origin), {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-        }),
         signal,
     });
     expect(created.status).toBe(201);
