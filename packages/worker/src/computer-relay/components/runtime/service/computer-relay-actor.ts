@@ -13,13 +13,13 @@ import {
     type NativeSessionTarget,
     ProtocolMessageError,
     SESSION_EVENTS_SUBSCRIBE_KIND,
-    type SessionEventEnvelopeRouting,
     type SessionEventsSubscribeCommandRouting,
     sessionEventsSubscribeCommandCodec,
 } from "@morty-build/client/protocol";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import type { SessionViewer } from "../../../../contracts/session-event-subscription.ts";
 import { logger } from "../../../../infra/logger.ts";
+import { sessionViewerAccess } from "../entity/session-viewer-access.ts";
 
 type OperationRouting = Exclude<ClientToRelayMessage, { readonly kind: typeof SESSION_EVENTS_SUBSCRIBE_KIND }>;
 
@@ -207,18 +207,11 @@ export class ComputerRelayActor {
 
     readonly #daemonHandlers = {
         "session.event.v2": daemonHandler("session.event.v2", (message, encoded) =>
-            this.deliverLiveEvents(message, encoded),
+            this.deliverToViewers(message.target, encoded),
         ),
-        "session.close.notice": daemonHandler("session.close.notice", (message, encoded) => {
-            for (const viewer of this.#peers.viewers()) {
-                if (
-                    viewer.identity.expiresAt > Date.now() &&
-                    sameNativeSession(viewer.identity.sessionFilter, message.target)
-                ) {
-                    viewer.message(encoded);
-                }
-            }
-        }),
+        "session.close.notice": daemonHandler("session.close.notice", (message, encoded) =>
+            this.deliverToViewers(message.target, encoded),
+        ),
         "agent.settings.discovered": daemonHandler("agent.settings.discovered", (message, encoded) =>
             this.returnAgentSettingsDiscoveryResult(message.requestId, message.harness, encoded),
         ),
@@ -598,14 +591,18 @@ export class ComputerRelayActor {
         }
     };
 
-    /** Hands an encrypted event batch, unread, to every viewer of its Session; an expired viewer is closed instead. */
-    private readonly deliverLiveEvents = (routing: SessionEventEnvelopeRouting, encoded: string): void => {
+    /**
+     * Hands an encrypted Session message, unread, to every viewer of its Session. A viewer whose access ended is closed
+     * instead, whichever Session the message is for.
+     */
+    private readonly deliverToViewers = (target: NativeSessionTarget, encoded: string): void => {
         for (const viewer of this.#peers.viewers()) {
-            if (viewer.identity.expiresAt <= Date.now()) {
-                viewer.close(1000, "Session access expired");
+            const access = sessionViewerAccess(viewer.identity, Date.now(), "granted");
+            if (access.kind === "ended") {
+                viewer.close(access.code, access.reason);
                 continue;
             }
-            if (!sameNativeSession(viewer.identity.sessionFilter, routing.target)) {
+            if (!sameNativeSession(viewer.identity.sessionFilter, target)) {
                 continue;
             }
             try {

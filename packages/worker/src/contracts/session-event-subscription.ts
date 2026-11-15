@@ -5,11 +5,10 @@ import type {
 } from "@morty-build/client/protocol";
 
 export interface SessionViewerIdentity {
+    /** When the viewer's Session credential ends. */
     readonly expiresAt: number;
-    readonly credential: {
-        readonly signingKeyId: string;
-        readonly grant: SessionAccessGrant;
-    };
+    /** The holder and pairing generation the viewer's Session credential carries. */
+    readonly grant: SessionAccessGrant;
     readonly computerId: string;
     readonly sessionFilter: NativeSessionTarget;
     readonly subscriptionId: string;

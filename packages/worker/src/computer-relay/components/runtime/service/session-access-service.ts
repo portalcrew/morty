@@ -17,7 +17,6 @@ export interface SessionAccessTarget {
 
 /** A verified Session credential: the Session it selects, and the authorization of each operation on it. */
 export interface SessionAccess {
-    readonly signingKeyId: string;
     readonly issuedAtEpochMilliseconds: number;
     /** The holder and pairing generation the credential carries. */
     readonly grant: SessionAccessGrant;
@@ -121,7 +120,6 @@ export class SessionAccessService {
         signal.throwIfAborted();
         const computerId = target.computerId;
         return {
-            signingKeyId: await this.#signer.keyId(),
             issuedAtEpochMilliseconds: claims.issuedAtEpochMilliseconds,
             grant: claims.grant,
             expiresAtEpochMilliseconds: claims.expiresAtEpochMilliseconds,

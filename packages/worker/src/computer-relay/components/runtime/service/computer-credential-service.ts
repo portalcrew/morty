@@ -24,11 +24,7 @@ export class ComputerCredentialService {
         identity: SessionViewerIdentity,
         signal: AbortSignal,
     ): Promise<"granted" | "revoked"> =>
-        (await this.#access(identity.computerId).grantsSessionCredential(
-            identity.computerId,
-            identity.credential.grant,
-            signal,
-        ))
+        (await this.#access(identity.computerId).grantsSessionCredential(identity.computerId, identity.grant, signal))
             ? "granted"
             : "revoked";
 }

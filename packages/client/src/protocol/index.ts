@@ -107,7 +107,6 @@ export type {
     PromptExecutionContext,
     PromptTerminalLifecycle,
     SessionEvent,
-    SessionEventEnvelopeRouting,
     SessionEventLogPage,
     SessionEventPayload,
     SessionEventsSubscribeCommand,

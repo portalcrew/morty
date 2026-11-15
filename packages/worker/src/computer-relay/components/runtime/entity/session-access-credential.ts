@@ -42,17 +42,6 @@ export class SessionAccessSigner {
         this.#secret = secret;
     }
 
-    /** Non-secret generation fingerprint for invalidating persisted live views after key rotation. Never a signing key. */
-    readonly keyId = async (): Promise<string> =>
-        encodeBase64Url(
-            new Uint8Array(
-                await crypto.subtle.digest(
-                    "SHA-256",
-                    new TextEncoder().encode(`morty.session-access.key-id.v1:${this.#secret}`),
-                ),
-            ),
-        );
-
     readonly issue = async (claims: SessionAccessClaims): Promise<string> => {
         const lifetimeMilliseconds = claims.expiresAtEpochMilliseconds - claims.issuedAtEpochMilliseconds;
         if (lifetimeMilliseconds <= 0 || lifetimeMilliseconds > MAXIMUM_LIFETIME_MILLISECONDS) {
