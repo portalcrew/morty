@@ -12,13 +12,11 @@ export interface AgentProcess {
 export interface AgentProcessRetention<P extends AgentProcess> {
     readonly isBusy: () => boolean;
     readonly retire: (runtime: P) => Promise<void>;
-    readonly retireIdle: (runtime: P) => Promise<void>;
 }
 
 interface RetainedProcessPolicy {
     readonly isBusy: () => boolean;
     readonly retire: () => Promise<void>;
-    readonly retireIdle: () => Promise<void>;
 }
 
 type ProcessSlot =
@@ -82,7 +80,7 @@ export class AgentProcessPool {
             return;
         }
         this.#cancelIdleTimeout(id);
-        const retirement = slot.retention.retireIdle();
+        const retirement = slot.retention.retire();
         this.#idleRetirements.add(retirement);
         try {
             await retirement;
@@ -146,7 +144,6 @@ export class AgentProcessPool {
             retention: {
                 isBusy: retention.isBusy,
                 retire: () => retention.retire(runtime),
-                retireIdle: () => retention.retireIdle(runtime),
             },
         } satisfies ProcessSlot;
         this.#slots.set(id, slot);

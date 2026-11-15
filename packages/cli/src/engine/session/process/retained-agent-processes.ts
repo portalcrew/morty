@@ -1,6 +1,13 @@
 import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
 
-type Resource<P> = { readonly kind: "empty" } | { readonly kind: "ready"; readonly runtime: P };
+/**
+ * The id's process: none, one that serves it, or one still being retired. A retiring process may still own what the
+ * id's next process needs, such as its native writer, so the next start waits for the retirement to end.
+ */
+type Resource<P> =
+    | { readonly kind: "empty" }
+    | { readonly kind: "ready"; readonly runtime: P }
+    | { readonly kind: "retiring"; readonly ended: Promise<void> };
 
 /**
  * A start in progress, which no one requester owns. Each requester waits for it under its own signal, and the start is
@@ -79,9 +86,31 @@ export class RetainedAgentProcesses<P, Key = string> {
     readonly retain = (id: Key, runtime: P): void => {
         this.#setResource(id, { kind: "ready", runtime });
     };
-    readonly detach = (id: Key, expected: P): void => {
-        if (this.get(id) === expected) {
-            this.#setResource(id, { kind: "empty" });
+    /** Settles once the id's retiring process has ended, however it ended; the id's next process starts after it. */
+    readonly retiring = (id: Key): Promise<void> | undefined => {
+        const resource = this.#resource(this.#entry(id));
+        return resource.kind === "retiring" ? resource.ended : undefined;
+    };
+    /**
+     * Retires `expected`: it stops serving the id before `retire` begins and is the id's retiring process until
+     * `retire` settles, whose failure is the caller's. A process that no longer serves the id is retired without
+     * affecting the id's current process.
+     */
+    readonly retire = async (id: Key, expected: P, retire: () => Promise<void>): Promise<void> => {
+        if (this.get(id) !== expected) {
+            await retire();
+            return;
+        }
+        const ended = Promise.withResolvers<void>();
+        const retiring: Resource<P> = { kind: "retiring", ended: ended.promise };
+        this.#setResource(id, retiring);
+        try {
+            await retire();
+        } finally {
+            if (this.#resource(this.#entry(id)) === retiring) {
+                this.#setResource(id, { kind: "empty" });
+            }
+            ended.resolve();
         }
     };
     readonly entries = (): readonly (readonly [Key, P])[] => {

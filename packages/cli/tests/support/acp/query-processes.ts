@@ -33,8 +33,11 @@ export class AgentQueryProcesses {
         key: NativeSessionQueryKey,
         runtime: AcpQuerySession,
     ): Promise<void> => {
-        readers.detach(key, runtime);
-        await this.#processes.retire(runtime, () => runtime.closeProcess());
+        await readers.retire(
+            key,
+            runtime,
+            async () => await this.#processes.retire(runtime, () => runtime.closeProcess()),
+        );
     };
 
     async #ensure(
@@ -64,7 +67,6 @@ export class AgentQueryProcesses {
                     {
                         isBusy: () => readers.isBusy(key),
                         retire: (runtime) => this.retire(readers, key, runtime),
-                        retireIdle: (runtime) => this.retire(readers, key, runtime),
                     },
                 );
                 readers.retain(key, runtime);

@@ -466,7 +466,7 @@ test("Given a canonical native Session is idle, When its process is reclaimed, T
     });
 });
 
-class RetiringIdleAgentSpecification extends ControlledReadinessSpecification {
+class RetiringAgentSpecification extends ControlledReadinessSpecification {
     readonly agentExecutable = "node";
     readonly harness = "claude";
     readonly label = "Controlled retiring Agent";
@@ -480,7 +480,7 @@ class RetiringIdleAgentSpecification extends ControlledReadinessSpecification {
 }
 
 test("Given idle process teardown is still releasing the native writer, When a new prompt arrives, Then it waits before starting a replacement process", async () => {
-    const specification = new RetiringIdleAgentSpecification();
+    const specification = new RetiringAgentSpecification();
     const timer = new IdleTimeoutTimer();
     vi.useFakeTimers({ now: new Date("2026-10-22T00:00:00Z"), toFake: ["Date"] });
     await withRealDaemon(
@@ -509,6 +509,55 @@ test("Given idle process teardown is still releasing the native writer, When a n
                 await readTurn(peer);
                 // Recovery starts one capability reader and one replacement execution process.
                 expect(specification.sessions.endpointCount()).toBe(endpointsBeforeRetirement + 2);
+            } finally {
+                specification.sessions.releaseAll();
+            }
+        },
+        "embedded",
+        undefined,
+        timer,
+    );
+});
+
+test("Given a failed turn's process is still releasing the native writer, When another client prepares the Session, Then no replacement process starts before the old one exits", async () => {
+    const specification = new RetiringAgentSpecification();
+    const timer = new IdleTimeoutTimer();
+    vi.useFakeTimers({ now: new Date("2026-10-22T00:00:00Z"), toFake: ["Date"] });
+    await withRealDaemon(
+        specification,
+        { MORTY_TEST_RETIRING_IDLE_PATH: process.execPath },
+        async (peer) => {
+            try {
+                const sessionTarget = peer.target;
+                await prompt(peer, sessionTarget, "Before the failed turn");
+                const endpointsBeforeFailure = specification.sessions.endpointCount();
+                const held = specification.sessions.closes.hold();
+                specification.sessions.failNextPrompt();
+                sendPrompt(peer, sessionTarget, "This turn fails");
+                await held.entered;
+                peer.send(
+                    encodeSessionPrepareCommand({
+                        kind: "session.prepare",
+                        requestId: crypto.randomUUID(),
+                        target: sessionTarget,
+                    }),
+                );
+                peer.send(
+                    encodeSessionQueryCommand({
+                        kind: "session.query",
+                        requestId: crypto.randomUUID(),
+                        targets: [sessionTarget],
+                    }),
+                );
+                await nextResponse(peer, "session.queried");
+                // Neither discovery nor a replacement writer may start before teardown finishes.
+                expect(specification.sessions.endpointCount()).toBe(endpointsBeforeFailure);
+                held.release();
+                expect(decodeSessionReadyEvent(await nextResponse(peer, "session.ready")).target).toEqual(
+                    sessionTarget,
+                );
+                // Recovery starts one capability reader and one replacement execution process.
+                expect(specification.sessions.endpointCount()).toBe(endpointsBeforeFailure + 2);
             } finally {
                 specification.sessions.releaseAll();
             }

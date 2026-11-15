@@ -76,6 +76,9 @@ export class ControlledSessionEndpoint implements ControlledAcpPeer {
             })
             .onRequest(methods.agent.session.prompt, (context) => {
                 record(methods.agent.session.prompt, context.params.sessionId);
+                if (agent.takePromptFailure()) {
+                    throw new Error("The controlled Agent failed the turn");
+                }
                 return { stopReason: "end_turn" as const };
             })
             .onRequest(methods.agent.session.close, (context) => {
@@ -104,6 +107,20 @@ export class ControlledSessionAgent {
     /** Holds the end of process teardown, so a close stays in flight. */
     readonly closes = new RequestGate();
     readonly #endpoints: ControlledSessionEndpoint[] = [];
+    #promptFailures = 0;
+
+    /** The next turn any of its processes runs fails. */
+    readonly failNextPrompt = (): void => {
+        this.#promptFailures += 1;
+    };
+
+    readonly takePromptFailure = (): boolean => {
+        if (this.#promptFailures === 0) {
+            return false;
+        }
+        this.#promptFailures -= 1;
+        return true;
+    };
 
     readonly createEndpoint = (): ControlledAcpPeer => {
         const endpoint = new ControlledSessionEndpoint(this.#endpoints.length, this);
