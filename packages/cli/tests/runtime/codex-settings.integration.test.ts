@@ -9,9 +9,11 @@ import { CodexAgentSpecification } from "../../src/engine/agent/specification/ve
 import { ControlledCodexFixture } from "../support/agents/controlled-codex.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 
-test("Given an owned Codex session, When Codex changes collaboration mode during a turn, Then the user receives the updated Plan selection before completion", async () => {
+test("Given an owned Codex session, When Codex changes collaboration mode during a turn, Then the user receives the updated Plan selection before completion", async ({
+    signal,
+}) => {
     await using codex = await ControlledCodexFixture.create();
-    await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
         const commandId = randomUUID();
         peer.send(
             encodeSessionPromptCommand({

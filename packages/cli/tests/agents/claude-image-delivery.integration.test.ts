@@ -39,14 +39,16 @@ function imageKeys(events: readonly (SessionEvent | SessionLiveEvent)[]): readon
     });
 }
 
-test("Given real Claude reads an image, When its reply streams and native history reopens, Then clients retrieve identical bytes without base64 in tool output and can continue chatting", async () => {
+test("Given real Claude reads an image, When its reply streams and native history reopens, Then clients retrieve identical bytes without base64 in tool output and can continue chatting", async ({
+    signal,
+}) => {
     const imagePrompt = "Use the read tool to inspect picture.png, then reply";
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "IMAGE_REPLY", {
         readPath: "picture.png",
         toolPrompt: imagePrompt,
     });
     await using agent = await ClaudeFixture.create(provider);
-    await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
         const key = createHash("sha256").update(image).digest("hex");
         await writeFile(join(peer.workspace, "picture.png"), image);
         const sendPrompt = (commandId: string, prompt: string): void =>

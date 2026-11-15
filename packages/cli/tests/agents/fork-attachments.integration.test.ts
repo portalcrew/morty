@@ -25,9 +25,9 @@ import { uploadPromptContent } from "../support/agents/upload-prompt-content.ts"
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test.each(["pi", "claude", "codex"] as const)(
+test.for(["pi", "claude", "codex"] as const)(
     "Given real %s saved uploaded text files and an image, When two independent forks reload their history, Then original downloads and images remain readable without changing the source",
-    async (harness) => {
+    async (harness, { signal }) => {
         await using provider =
             harness === "claude"
                 ? await FakeAnthropicProvider.start("claude-sonnet-4-6", "ATTACHMENTS_SAVED")
@@ -47,7 +47,7 @@ test.each(["pi", "claude", "codex"] as const)(
                 : harness === "claude"
                   ? new ClaudeCodeAgentSpecification()
                   : new CodexAgentSpecification();
-        await withRealDaemon(specification, agent.environment, async (peer) => {
+        await withRealDaemon(signal, specification, agent.environment, async (peer) => {
             const identity = {
                 harness,
                 directory: ".",

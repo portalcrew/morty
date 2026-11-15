@@ -17,11 +17,14 @@ import { withControlledDaemon as withRealDaemon } from "../support/agents/real-d
 import { writeControlledAcpExecutable } from "../support/controlled-acp-executable.ts";
 
 // @no-uc: Technical regression; a failed turn must leave a correlated local trace without persisting Agent free text.
-test("Given an Agent rejects a turn, When the turn fails, Then the failure event carries the reason to the user while neither the local log nor the exported report persists it", async () => {
+test("Given an Agent rejects a turn, When the turn fails, Then the failure event carries the reason to the user while neither the local log nor the exported report persists it", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-prompt-diagnostics-"));
     const executableDirectory = await writeControlledAcpExecutable(directory);
     try {
         await withRealDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent-state"),

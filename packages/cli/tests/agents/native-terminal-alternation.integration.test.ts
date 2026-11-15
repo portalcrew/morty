@@ -139,9 +139,9 @@ async function historyInMorty(peer: DaemonConnectionPeer, sessionTarget: NativeS
     }
 }
 
-test.each(["claude", "pi"] as const)(
+test.for(["claude", "pi"] as const)(
     "Given a real %s Session alternates between its terminal and Morty, When either side continues it, Then each side shows and sends every earlier message",
-    async (harness) => {
+    async (harness, { signal }) => {
         const conversations: string[] = [];
         const definition = agents[harness];
         const { provider, agent, specification } = await definition.start(conversations);
@@ -152,7 +152,7 @@ test.each(["claude", "pi"] as const)(
         const sentWith = (marker: string): readonly string[] =>
             conversations.filter((conversation) => conversation.includes(marker));
 
-        await withRealDaemonConnection(specification, agent.environment, async (peer) => {
+        await withRealDaemonConnection(signal, specification, agent.environment, async (peer) => {
             const terminal = async (prompt: string, first = false): Promise<void> =>
                 await continueInTerminal(
                     agent.executable,

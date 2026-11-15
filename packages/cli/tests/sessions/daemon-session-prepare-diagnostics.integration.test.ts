@@ -16,7 +16,9 @@ import { withControlledDaemonConnection as withRealDaemon } from "../support/age
 
 const fakeAgentPath = fileURLToPath(new URL("./fixtures/acp-peer.ts", import.meta.url));
 
-test("Given an ACP Agent repeatedly fails Computer initialization, When a conversation is created, Then the public failure has a correlated local diagnostic with the sanitized cause chain", async () => {
+test("Given an ACP Agent repeatedly fails Computer initialization, When a conversation is created, Then the public failure has a correlated local diagnostic with the sanitized cause chain", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-prepare-diagnostics-"));
     const executableDirectory = join(directory, "bin");
     const executable = join(executableDirectory, "controlled-acp");
@@ -44,6 +46,7 @@ if (process.argv.includes("--version")) {
     await chmod(executable, 0o700);
     try {
         await withRealDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_ALWAYS_FAIL_RUNTIME_INITIALIZATION: "1",

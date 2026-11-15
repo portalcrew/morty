@@ -10,11 +10,14 @@ import { withControlledDaemonConnection } from "../support/agents/real-daemon.ts
 import { writeControlledAcpExecutable } from "../support/controlled-acp-executable.ts";
 
 // @no-uc: Technical regression; process lifecycle logs must reach Computer bug reports.
-test("Given a daemon, When a bug report is read through the Computer, Then it carries the daemon startup and readiness records", async () => {
+test("Given a daemon, When a bug report is read through the Computer, Then it carries the daemon startup and readiness records", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-lifecycle-diagnostics-"));
     const executableDirectory = await writeControlledAcpExecutable(directory);
     try {
         await withControlledDaemonConnection(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent-state"),
@@ -72,11 +75,14 @@ test("Given a daemon, When a bug report is read through the Computer, Then it ca
     }
 }, 180_000);
 
-test("Given a discovered executable with a known version, When diagnostics are requested through the public Computer protocol, Then the current inventory reports its version without paths or environment values", async () => {
+test("Given a discovered executable with a known version, When diagnostics are requested through the public Computer protocol, Then the current inventory reports its version without paths or environment values", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-inventory-diagnostics-"));
     const executableDirectory = await writeControlledAcpExecutable(directory);
     try {
         await withControlledDaemonConnection(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent-state"),

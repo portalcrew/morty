@@ -43,17 +43,23 @@ class ClosableAgentSpecification extends ControlledReadinessSpecification {
 }
 
 async function withClosableDaemon(
+    signal: AbortSignal,
     specification: ClosableAgentSpecification,
     scenario: (peer: RealDaemonPeer) => Promise<void>,
 ): Promise<void> {
-    await withRealDaemon(specification, { MORTY_TEST_CONTROLLED_CLOSABLE_PATH: process.execPath }, async (peer) => {
-        try {
-            await scenario(peer);
-        } finally {
-            // A scenario that fails while a teardown is held must not keep the daemon from stopping.
-            specification.sessions.releaseAll();
-        }
-    });
+    await withRealDaemon(
+        signal,
+        specification,
+        { MORTY_TEST_CONTROLLED_CLOSABLE_PATH: process.execPath },
+        async (peer) => {
+            try {
+                await scenario(peer);
+            } finally {
+                // A scenario that fails while a teardown is held must not keep the daemon from stopping.
+                specification.sessions.releaseAll();
+            }
+        },
+    );
 }
 
 /** The next message of `kind`; unrelated traffic such as status changes is skipped. */
@@ -120,9 +126,11 @@ function sendArchive(peer: RealDaemonPeer, sessionTarget: RealDaemonPeer["target
     return requestId;
 }
 
-test("Given a client archives a Session, When the Computer stops its Agent process, Then the Computer announces the closing and why before it answers the archive request", async () => {
+test("Given a client archives a Session, When the Computer stops its Agent process, Then the Computer announces the closing and why before it answers the archive request", async ({
+    signal,
+}) => {
     const specification = new ClosableAgentSpecification();
-    await withClosableDaemon(specification, async (peer) => {
+    await withClosableDaemon(signal, specification, async (peer) => {
         const sessionTarget = await prepareNewRealSession(peer, NATIVE_HARNESS);
         const endpointsBeforeClose = specification.sessions.endpointCount();
         const requestId = sendArchive(peer, sessionTarget);
@@ -156,9 +164,11 @@ test("Given a client archives a Session, When the Computer stops its Agent proce
     });
 });
 
-test("Given a Session whose Agent process is still stopping, When a client sends a prompt, Then the Computer reports session_closed without waiting for the process", async () => {
+test("Given a Session whose Agent process is still stopping, When a client sends a prompt, Then the Computer reports session_closed without waiting for the process", async ({
+    signal,
+}) => {
     const specification = new ClosableAgentSpecification();
-    await withClosableDaemon(specification, async (peer) => {
+    await withClosableDaemon(signal, specification, async (peer) => {
         const sessionTarget = await prepareNewRealSession(peer, NATIVE_HARNESS);
         const teardown = specification.sessions.closes.hold();
         sendArchive(peer, sessionTarget);
@@ -177,15 +187,15 @@ test("Given a Session whose Agent process is still stopping, When a client sends
     });
 });
 
-test.each([
+test.for([
     { prompt: "Plan the release", title: "Plan the release" },
     { prompt: "\n> ## Plan   the release\nAdditional instructions", title: "Plan the release" },
     { prompt: `# ${"\u{1f680}".repeat(45)}\nAdditional instructions`, title: `${"\u{1f680}".repeat(41)}\u2026` },
 ])(
     "Given a first prompt $prompt, When a client continues the Session, Then its readable fallback title survives",
-    async ({ prompt: firstPrompt, title }) => {
+    async ({ prompt: firstPrompt, title }, { signal }) => {
         const specification = new ClosableAgentSpecification();
-        await withClosableDaemon(specification, async (peer) => {
+        await withClosableDaemon(signal, specification, async (peer) => {
             const sessionTarget = await prepareNewRealSession(peer, NATIVE_HARNESS);
             await prompt(peer, sessionTarget, firstPrompt);
 

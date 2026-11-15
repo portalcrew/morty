@@ -52,6 +52,7 @@ const peerUrl = new URL("./fixtures/acp-peer.ts", import.meta.url).href;
 afterEach(() => vi.useRealTimers());
 
 async function withIdleDaemon(
+    signal: AbortSignal,
     recovery: "resume" | "load",
     scenario: (peer: RealDaemonPeer, native: string, timer: IdleTimeoutTimer) => Promise<void>,
 ): Promise<void> {
@@ -78,6 +79,7 @@ if (process.argv.includes("--version")) {
     try {
         const timer = new IdleTimeoutTimer();
         await withRealDaemon(
+            signal,
             new IdleAgentSpecification(),
             {
                 MORTY_FAKE_ACP_STATE_DIRECTORY: native,
@@ -105,8 +107,8 @@ async function processId(native: string): Promise<string> {
     return await readFile(join(native, writer), "utf8");
 }
 
-async function expire(native: string, pid: string, timer: IdleTimeoutTimer): Promise<void> {
-    const exit = waitForAgentFile(join(native, `${pid}.process`), false);
+async function expire(native: string, pid: string, timer: IdleTimeoutTimer, signal: AbortSignal): Promise<void> {
+    const exit = waitForAgentFile(join(native, `${pid}.process`), false, signal);
     timer.advance(1);
     await exit;
 }
@@ -166,16 +168,16 @@ async function nextResponse(peer: RealDaemonPeer, kind: string): Promise<string>
     }
 }
 
-test.each(["resume", "load"] as const)(
+test.for(["resume", "load"] as const)(
     "Given a retained %s conversation below capacity, When it is idle for two hours, Then its process exits and the same native conversation continues",
-    async (recovery) => {
-        await withIdleDaemon(recovery, async (peer, native, timer) => {
+    async (recovery, { signal }) => {
+        await withIdleDaemon(signal, recovery, async (peer, native, timer) => {
             const sessionTarget = peer.target;
             expect(await prompt(peer, sessionTarget, "Remember the first turn")).toContain("turn 1:");
             const original = await processId(native);
             timer.advance(twoHours - 1);
             expect(await processId(native)).toBe(original);
-            await expire(native, original, timer);
+            await expire(native, original, timer, signal);
             expect((await readdir(native)).filter((file) => file.endsWith(".writer"))).toEqual([]);
             expect(await prompt(peer, sessionTarget, "Continue after idle reclamation")).toContain("turn 2:");
             expect(await processId(native)).not.toBe(original);
@@ -195,15 +197,15 @@ test.each(["resume", "load"] as const)(
     },
 );
 
-test.each(["resume", "load"] as const)(
+test.for(["resume", "load"] as const)(
     "Given a reclaimed %s conversation, When an existing client renames it, Then both directories retain the new title after continuing",
-    async (recovery) => {
-        await withIdleDaemon(recovery, async (peer, native, timer) => {
+    async (recovery, { signal }) => {
+        await withIdleDaemon(signal, recovery, async (peer, native, timer) => {
             const sessionTarget = peer.target;
             await prompt(peer, sessionTarget, "Original native title");
             const original = await processId(native);
             timer.advance(twoHours - 1);
-            await expire(native, original, timer);
+            await expire(native, original, timer, signal);
 
             // Exercise the native-pair request independently of the current encoder.
             peer.send(
@@ -253,8 +255,10 @@ test.each(["resume", "load"] as const)(
     },
 );
 
-test("Given a client read a conversation's settings before its idle process exited, When it changes a setting with the revision it read, Then the change applies", async () => {
-    await withIdleDaemon("resume", async (peer, native, timer) => {
+test("Given a client read a conversation's settings before its idle process exited, When it changes a setting with the revision it read, Then the change applies", async ({
+    signal,
+}) => {
+    await withIdleDaemon(signal, "resume", async (peer, native, timer) => {
         const sessionTarget = peer.target;
         expect(await prompt(peer, sessionTarget, "Remember the first turn")).toContain("turn 1:");
         const readId = crypto.randomUUID();
@@ -273,7 +277,7 @@ test("Given a client read a conversation's settings before its idle process exit
         }
         const original = await processId(native);
         timer.advance(twoHours - 1);
-        await expire(native, original, timer);
+        await expire(native, original, timer, signal);
 
         const configureId = crypto.randomUUID();
         peer.send(
@@ -301,8 +305,10 @@ test("Given a client read a conversation's settings before its idle process exit
     });
 });
 
-test("Given a retained conversation is used again, When its original idle deadline passes, Then it stays alive until two hours after the latest turn", async () => {
-    await withIdleDaemon("resume", async (peer, native, timer) => {
+test("Given a retained conversation is used again, When its original idle deadline passes, Then it stays alive until two hours after the latest turn", async ({
+    signal,
+}) => {
+    await withIdleDaemon(signal, "resume", async (peer, native, timer) => {
         const sessionTarget = peer.target;
         await prompt(peer, sessionTarget, "First turn");
         const original = await processId(native);
@@ -310,16 +316,18 @@ test("Given a retained conversation is used again, When its original idle deadli
         await prompt(peer, sessionTarget, "Refresh the idle deadline");
         timer.advance(twoHours - 1);
         expect(await processId(native)).toBe(original);
-        await expire(native, original, timer);
+        await expire(native, original, timer, signal);
     });
 });
 
-test("Given a turn lasts longer than the idle timeout, When three hours pass, Then it completes in the same process and receives a full idle window afterwards", async () => {
-    await withIdleDaemon("resume", async (peer, native, timer) => {
+test("Given a turn lasts longer than the idle timeout, When three hours pass, Then it completes in the same process and receives a full idle window afterwards", async ({
+    signal,
+}) => {
+    await withIdleDaemon(signal, "resume", async (peer, native, timer) => {
         const sessionTarget = peer.target;
         const original = await processId(native);
         timer.advance(twoHours / 2);
-        const paused = waitForAgentFile(join(native, "prompt-paused"), true);
+        const paused = waitForAgentFile(join(native, "prompt-paused"), true, signal);
         sendPrompt(peer, sessionTarget, "release before first delta");
         await paused;
         timer.advance(3 * 60 * 60 * 1_000);
@@ -328,12 +336,14 @@ test("Given a turn lasts longer than the idle timeout, When three hours pass, Th
         expect(await readTurn(peer)).toContain("turn 1:");
         timer.advance(twoHours - 1);
         expect(await processId(native)).toBe(original);
-        await expire(native, original, timer);
+        await expire(native, original, timer, signal);
     });
 });
 
-test("Given a retained native session browser, When two idle hours pass, Then its process exits and browsing can start again", async () => {
-    await withIdleDaemon("resume", async (peer, native, timer) => {
+test("Given a retained native session browser, When two idle hours pass, Then its process exits and browsing can start again", async ({
+    signal,
+}) => {
+    await withIdleDaemon(signal, "resume", async (peer, native, timer) => {
         const sessionTarget = peer.target;
         await prompt(peer, sessionTarget, "Persist a listed conversation");
         const execution = await processId(native);
@@ -354,7 +364,7 @@ test("Given a retained native session browser, When two idle hours pass, Then it
         const processes = (await readdir(native)).filter((file) => file.endsWith(".process"));
         expect(processes).toHaveLength(2);
         timer.advance(twoHours - 1);
-        const exits = processes.map((file) => waitForAgentFile(join(native, file), false));
+        const exits = processes.map((file) => waitForAgentFile(join(native, file), false, signal));
         timer.advance(1);
         await Promise.all(exits);
         expect(existsSync(join(native, `${execution}.process`))).toBe(false);
@@ -362,8 +372,10 @@ test("Given a retained native session browser, When two idle hours pass, Then it
     });
 });
 
-test("Given an old retained process and a daemon restart, When its deadline passes, Then a newly prepared process gets its own full idle window", async () => {
-    await withIdleDaemon("resume", async (peer, native, timer) => {
+test("Given an old retained process and a daemon restart, When its deadline passes, Then a newly prepared process gets its own full idle window", async ({
+    signal,
+}) => {
+    await withIdleDaemon(signal, "resume", async (peer, native, timer) => {
         const sessionTarget = peer.target;
         await prompt(peer, sessionTarget, "Before restart");
         timer.advance(twoHours / 2);
@@ -379,12 +391,14 @@ test("Given an old retained process and a daemon restart, When its deadline pass
         const replacement = await processId(native);
         timer.advance(twoHours - 1);
         expect(await processId(native)).toBe(replacement);
-        await expire(native, replacement, timer);
+        await expire(native, replacement, timer, signal);
     });
 });
 
-test("Given native history is loading in a retained process, When three hours pass, Then the load completes and a new idle window starts", async () => {
-    await withIdleDaemon("resume", async (peer, native, timer) => {
+test("Given native history is loading in a retained process, When three hours pass, Then the load completes and a new idle window starts", async ({
+    signal,
+}) => {
+    await withIdleDaemon(signal, "resume", async (peer, native, timer) => {
         const sessionTarget = peer.target;
         await prompt(peer, sessionTarget, "History before a long load");
         // A restarted daemon starts the Session in a new process.
@@ -410,7 +424,7 @@ test("Given native history is loading in a retained process, When three hours pa
             throw new Error("Missing persisted native identity");
         }
         await writeFile(join(native, "pause-load"), "*");
-        const paused = waitForAgentFile(join(native, "load-paused"), true);
+        const paused = waitForAgentFile(join(native, "load-paused"), true, signal);
         peer.send(
             encodeSessionRestoreCommand({
                 kind: "session.restore",
@@ -431,12 +445,14 @@ test("Given native history is loading in a retained process, When three hours pa
         await restored;
         timer.advance(twoHours - 1);
         expect(await processId(native)).toBe(original);
-        await expire(native, original, timer);
+        await expire(native, original, timer, signal);
     });
 });
 
-test("Given a canonical native Session is idle, When its process is reclaimed, Then it stays queryable before any process is restarted", async () => {
-    await withIdleDaemon("resume", async (peer, native, timer) => {
+test("Given a canonical native Session is idle, When its process is reclaimed, Then it stays queryable before any process is restarted", async ({
+    signal,
+}) => {
+    await withIdleDaemon(signal, "resume", async (peer, native, timer) => {
         const sessionTarget = peer.target;
         await prompt(peer, sessionTarget, "Native title before idle");
         peer.send(
@@ -450,7 +466,7 @@ test("Given a canonical native Session is idle, When its process is reclaimed, T
         await nextResponse(peer, "session.renamed");
         const original = await processId(native);
         timer.advance(twoHours - 1);
-        await expire(native, original, timer);
+        await expire(native, original, timer, signal);
         peer.send(
             encodeSessionQueryCommand({
                 kind: "session.query",
@@ -479,11 +495,14 @@ class RetiringAgentSpecification extends ControlledReadinessSpecification {
     }
 }
 
-test("Given idle process teardown is still releasing the native writer, When a new prompt arrives, Then it waits before starting a replacement process", async () => {
+test("Given idle process teardown is still releasing the native writer, When a new prompt arrives, Then it waits before starting a replacement process", async ({
+    signal,
+}) => {
     const specification = new RetiringAgentSpecification();
     const timer = new IdleTimeoutTimer();
     vi.useFakeTimers({ now: new Date("2026-10-22T00:00:00Z"), toFake: ["Date"] });
     await withRealDaemon(
+        signal,
         specification,
         { MORTY_TEST_RETIRING_IDLE_PATH: process.execPath },
         async (peer) => {
@@ -519,11 +538,14 @@ test("Given idle process teardown is still releasing the native writer, When a n
     );
 });
 
-test("Given a failed turn's process is still releasing the native writer, When another client prepares the Session, Then no replacement process starts before the old one exits", async () => {
+test("Given a failed turn's process is still releasing the native writer, When another client prepares the Session, Then no replacement process starts before the old one exits", async ({
+    signal,
+}) => {
     const specification = new RetiringAgentSpecification();
     const timer = new IdleTimeoutTimer();
     vi.useFakeTimers({ now: new Date("2026-10-22T00:00:00Z"), toFake: ["Date"] });
     await withRealDaemon(
+        signal,
         specification,
         { MORTY_TEST_RETIRING_IDLE_PATH: process.execPath },
         async (peer) => {

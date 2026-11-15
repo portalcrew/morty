@@ -68,7 +68,9 @@ async function launchCount(path: string): Promise<number> {
     }
 }
 
-test("Given Codex publishes complete model settings and defaults to Full access, When a user discovers settings and runs a tool, Then discovery uses one process and the turn completes without approval", async () => {
+test("Given Codex publishes complete model settings and defaults to Full access, When a user discovers settings and runs a tool, Then discovery uses one process and the turn completes without approval", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "SETTINGS_REPLY", {
         patch: "*** Begin Patch\n*** Add File: full-access-check.txt\n+full access\n*** End Patch",
     });
@@ -82,7 +84,7 @@ test("Given Codex publishes complete model settings and defaults to Full access,
     await writeTurnPolicyRecorder(codex, launcher, recording, launches);
     const environment = { ...codex.environment, MORTY_CODEX_PATH: launcher };
     try {
-        await withRealDaemon(new CodexAgentSpecification(), environment, async (peer) => {
+        await withRealDaemon(signal, new CodexAgentSpecification(), environment, async (peer) => {
             const launchesBeforeSettings = await launchCount(launches);
             const requestId = randomUUID();
             peer.send(
@@ -174,11 +176,13 @@ test("Given Codex publishes complete model settings and defaults to Full access,
     }
 });
 
-test("Given Codex starts with a configured model outside its catalog, When Agent settings are discovered, Then the configured model remains the default", async () => {
+test("Given Codex starts with a configured model outside its catalog, When Agent settings are discovered, Then the configured model remains the default", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-custom-model", "CUSTOM_MODEL_REPLY");
     await using codex = await CodexFixture.create(provider, { configuredModel: provider.model });
 
-    await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
         const requestId = randomUUID();
         peer.send(encodeAgentSettingsDiscoverCommand({ kind: "agent.settings.discover", harness: "codex", requestId }));
 

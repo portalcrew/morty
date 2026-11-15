@@ -17,7 +17,9 @@ import { writeCodexFaultLauncher } from "../support/agents/codex-process-fault.t
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given an existing real Codex conversation, When the process exits or its transport is corrupted, Then the daemon reports a typed failure and can continue that conversation", async () => {
+test("Given an existing real Codex conversation, When the process exits or its transport is corrupted, Then the daemon reports a typed failure and can continue that conversation", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "RECOVERED_REPLY");
     await using codex = await CodexFixture.create(provider);
     const directory = await mkdtemp(join(tmpdir(), "morty-codex-fault-"));
@@ -26,6 +28,7 @@ test("Given an existing real Codex conversation, When the process exits or its t
     try {
         await writeCodexFaultLauncher(codex, launcher, faultPath);
         await withRealDaemon(
+            signal,
             new CodexAgentSpecification(),
             { ...codex.environment, MORTY_CODEX_PATH: launcher },
             async (peer) => {
@@ -95,7 +98,9 @@ test("Given an existing real Codex conversation, When the process exits or its t
     }
 });
 
-test("Given a real Codex conversation in Plan mode, When its process recovers before Go, Then the resumed settings still show Plan mode", async () => {
+test("Given a real Codex conversation in Plan mode, When its process recovers before Go, Then the resumed settings still show Plan mode", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "PLAN_RECOVERY_REPLY");
     await using codex = await CodexFixture.create(provider, { configuredModel: provider.model });
     const directory = await mkdtemp(join(tmpdir(), "morty-codex-plan-recovery-"));
@@ -104,6 +109,7 @@ test("Given a real Codex conversation in Plan mode, When its process recovers be
     try {
         await writeCodexFaultLauncher(codex, launcher, faultPath);
         await withRealDaemon(
+            signal,
             new CodexAgentSpecification(),
             { ...codex.environment, MORTY_CODEX_PATH: launcher },
             async (peer) => {

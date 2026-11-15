@@ -17,9 +17,9 @@ import { CodexFixture } from "../support/agents/codex.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test.each(["foreground", "background"] as const)(
+test.for(["foreground", "background"] as const)(
     "Given a real Codex %s command awaits a write, When the user stops the turn, Then it cannot write and the conversation can continue",
-    async (phase) => {
+    async (phase, { signal }) => {
         const connected = Promise.withResolvers<Socket>();
         const effect = Promise.withResolvers<"written" | "closed">();
         const sockets = new Set<Socket>();
@@ -63,7 +63,7 @@ test.each(["foreground", "background"] as const)(
         });
         await using codex = await CodexFixture.create(provider);
         try {
-            await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+            await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
                 const prompt = (text: string): string => {
                     const commandId = randomUUID();
                     peer.send(

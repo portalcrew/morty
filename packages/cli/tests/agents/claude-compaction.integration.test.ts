@@ -10,10 +10,12 @@ import { ClaudeFixture } from "../support/agents/claude.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 
-test("Given Claude Code compacts a conversation with content, When the daemon relays the turn, Then the client receives ID-addressed compaction updates instead of text banners", async () => {
+test("Given Claude Code compacts a conversation with content, When the daemon relays the turn, Then the client receives ID-addressed compaction updates instead of text banners", async ({
+    signal,
+}) => {
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "REAL_CLAUDE_REPLY");
     await using agent = await ClaudeFixture.create(provider);
-    await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
         const sendPrompt = (prompt: string): void => {
             const commandId = randomUUID();
             peer.send(

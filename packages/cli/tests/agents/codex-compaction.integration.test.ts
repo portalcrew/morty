@@ -10,12 +10,14 @@ import { CodexFixture } from "../support/agents/codex.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given Codex auto-compacts a conversation, When the daemon relays the turns, Then the client receives the compaction lifecycle", async () => {
+test("Given Codex auto-compacts a conversation, When the daemon relays the turns, Then the client receives the compaction lifecycle", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "REAL_CODEX_REPLY");
     // An auto-compact limit below the fixture session's footprint makes Codex
     // compact during a turn instead of waiting for a real context window to fill.
     await using codex = await CodexFixture.create(provider, { autoCompactTokenLimit: 1 });
-    await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
         const compactionStatuses: string[] = [];
         const compactionIds: string[] = [];
         for (const prompt of [

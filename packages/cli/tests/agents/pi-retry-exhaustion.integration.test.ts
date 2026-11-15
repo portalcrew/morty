@@ -10,7 +10,9 @@ import { PiFixture } from "../support/agents/pi.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given real pi exhausts its automatic model retries, When the last attempt still fails, Then the turn reports the real model error instead of claiming a resume, and a follow-up turn still runs", async () => {
+test("Given real pi exhausts its automatic model retries, When the last attempt still fails, Then the turn reports the real model error instead of claiming a resume, and a follow-up turn still runs", async ({
+    signal,
+}) => {
     // Every request for the marked prompt fails with HTTP 500, which pi classifies
     // as a retryable provider error, so its automatic retry loop runs and exhausts.
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "RETRY_RECOVERY_REPLY", {
@@ -20,7 +22,7 @@ test("Given real pi exhausts its automatic model retries, When the last attempt 
     await using agent = await PiFixture.create(provider);
     // Keep the retry loop real but fast: one retry, then exhaustion.
     await agent.overrideSettings({ retry: { baseDelayMs: 10, maxRetries: 1 } });
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const sendPrompt = (prompt: string): string => {
             const commandId = randomUUID();
             peer.send(
@@ -106,7 +108,9 @@ test("Given real pi exhausts its automatic model retries, When the last attempt 
     });
 });
 
-test("Given a pi turn's first model call fails retryably, When pi's automatic retry recovers within the same turn, Then the turn settles end_turn with the answer instead of failing on the earlier error", async () => {
+test("Given a pi turn's first model call fails retryably, When pi's automatic retry recovers within the same turn, Then the turn settles end_turn with the answer instead of failing on the earlier error", async ({
+    signal,
+}) => {
     // The marked prompt fails its first request with a retryable HTTP 500; pi's
     // automatic retry re-issues it and the provider then answers normally. The
     // recovery happens inside one ACP turn, so a mid-run retry failure must not
@@ -118,7 +122,7 @@ test("Given a pi turn's first model call fails retryably, When pi's automatic re
     });
     await using agent = await PiFixture.create(provider);
     await agent.overrideSettings({ retry: { baseDelayMs: 10, maxRetries: 1 } });
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const commandId = randomUUID();
         peer.send(
             encodeSessionPromptCommand({

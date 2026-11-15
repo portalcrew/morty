@@ -51,16 +51,16 @@ const questionExtension = `export default function (pi) {
     });
 }`;
 
-test.each(["new", "imported"] as const)(
+test.for(["new", "imported"] as const)(
     "Given a real Pi session (%s) asks native questions, When the user selects, confirms, types, edits and cancels through the daemon, Then the same tool receives the exact answers",
-    async (origin) => {
+    async (origin, { signal }) => {
         await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_QUESTIONS_COMPLETE", {
             toolPrompt: "Ask all the native questions",
             toolSequence: [{ name: "ask_questions", input: "{}" }],
         });
         await using agent = await PiFixture.create(provider);
         await agent.installExtension("questions.js", questionExtension);
-        await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
             const sessionTarget = origin === "imported" ? await importSavedSession(peer, agent) : peer.target;
             const commandId = randomUUID();
             peer.send(
@@ -240,7 +240,9 @@ function sendQuestionPrompt(peer: RealDaemonPeer, sessionTarget: RealDaemonPeer[
 }
 
 for (const ending of ["stop", "timeout"] as const) {
-    test(`Given a real Pi question is pending, When the ${ending === "stop" ? "user stops its turn" : "question deadline expires"}, Then the card is cancelled and a late answer cannot affect a follow-up`, async () => {
+    test(`Given a real Pi question is pending, When the ${ending === "stop" ? "user stops its turn" : "question deadline expires"}, Then the card is cancelled and a late answer cannot affect a follow-up`, async ({
+        signal,
+    }) => {
         const prompt = "Ask one native question";
         await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_FOLLOWUP_COMPLETE", {
             toolPrompt: prompt,
@@ -271,6 +273,7 @@ for (const ending of ["stop", "timeout"] as const) {
         };
         try {
             await withRealDaemon(
+                signal,
                 new PiAgentSpecification(),
                 agent.environment,
                 async (peer) => {
@@ -406,7 +409,9 @@ for (const ending of ["stop", "timeout"] as const) {
     });
 }
 
-test("Given real Pi asks a question before a daemon disconnect, When the daemon reconnects and the user continues, Then the interrupted question cannot consume the new answer", async () => {
+test("Given real Pi asks a question before a daemon disconnect, When the daemon reconnects and the user continues, Then the interrupted question cannot consume the new answer", async ({
+    signal,
+}) => {
     const prompt = "Ask before disconnect";
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_RECONNECTED", {
         toolPrompt: prompt,
@@ -425,7 +430,7 @@ test("Given real Pi asks a question before a daemon disconnect, When the daemon 
         });
     }`,
     );
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const interruptedCommandId = sendQuestionPrompt(peer, peer.target, prompt);
         let interactionId = "";
         for (;;) {
@@ -490,7 +495,9 @@ test("Given real Pi asks a question before a daemon disconnect, When the daemon 
     });
 });
 
-test("Given real Pi is waiting for an answer, When its process exits unexpectedly, Then the daemon reports failure and removes the pending question", async () => {
+test("Given real Pi is waiting for an answer, When its process exits unexpectedly, Then the daemon reports failure and removes the pending question", async ({
+    signal,
+}) => {
     const prompt = "Ask before the process exits";
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_MUST_NOT_SUCCEED", {
         toolPrompt: prompt,
@@ -511,7 +518,7 @@ test("Given real Pi is waiting for an answer, When its process exits unexpectedl
             });
         }`,
     );
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const commandId = sendQuestionPrompt(peer, peer.target, prompt);
         let interactionId = "";
         let resolved = 0;
@@ -547,7 +554,9 @@ test("Given real Pi is waiting for an answer, When its process exits unexpectedl
     });
 });
 
-test("Given real Pi requests fields outside the supported bounds, When the question reaches the daemon, Then the user sees a clear failure and Pi receives cancellation instead of truncated content", async () => {
+test("Given real Pi requests fields outside the supported bounds, When the question reaches the daemon, Then the user sees a clear failure and Pi receives cancellation instead of truncated content", async ({
+    signal,
+}) => {
     const prompt = "Ask oversized native questions";
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_BOUNDS_COMPLETE", {
         toolPrompt: prompt,
@@ -566,7 +575,7 @@ test("Given real Pi requests fields outside the supported bounds, When the quest
         });
     }`,
     );
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const commandId = sendQuestionPrompt(peer, peer.target, prompt);
         let text = "";
         let result = "";
@@ -610,7 +619,7 @@ test("Given real Pi requests fields outside the supported bounds, When the quest
 
 test("Given real Pi asks dialogs with empty titles or confirmation bodies, When the user answers them, Then every question has a displayable message and returns the exact answer", {
     timeout: 30_000,
-}, async () => {
+}, async ({ signal }) => {
     const prompt = "Ask blank-title questions";
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_BLANK_COMPLETE", {
         toolPrompt: prompt,
@@ -629,7 +638,7 @@ test("Given real Pi asks dialogs with empty titles or confirmation bodies, When 
         });
     }`,
     );
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         sendQuestionPrompt(peer, peer.target, prompt);
         const answers = ["yes", "no", "B", "", ""];
         let requests = 0;
@@ -667,9 +676,9 @@ test("Given real Pi asks dialogs with empty titles or confirmation bodies, When 
     });
 });
 
-test.each(["answer", "stop"] as const)(
+test.for(["answer", "stop"] as const)(
     "Given a real Pi extension asks before manual compaction, When the user chooses %s, Then the operation settles and the next turn can continue",
-    async (outcome) => {
+    async (outcome, { signal }) => {
         await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_COMPACT_COMPLETE");
         await using agent = await PiFixture.create(provider);
         await agent.overrideSettings({ compaction: { keepRecentTokens: 1 } });
@@ -684,7 +693,7 @@ test.each(["answer", "stop"] as const)(
         });
     }`,
         );
-        await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
             for (const topic of ["archaeology", "bicycles", "coffee"]) {
                 sendQuestionPrompt(peer, peer.target, `Talk about ${topic} with some detail`);
                 for (;;) {

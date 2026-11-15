@@ -17,7 +17,9 @@ import { CodexFixture } from "../support/agents/codex.ts";
 import { nextNativeSessionResult, withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given a borrowed Codex conversation with queued input, When the user stops it, Then the input is withdrawn and the native owner can finish", async () => {
+test("Given a borrowed Codex conversation with queued input, When the user stops it, Then the input is withdrawn and the native owner can finish", async ({
+    signal,
+}) => {
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "OWNER_FINISHED", {
@@ -28,7 +30,7 @@ test("Given a borrowed Codex conversation with queued input, When the user stops
         },
     });
     await using codex = await CodexFixture.create(provider, { configuredModel: "morty-test-model" });
-    await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
         const queued = Promise.withResolvers<void>();
         const completed = Promise.withResolvers<unknown>();
         using _abort = addAbortListener(peer.signal, () => {

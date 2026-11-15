@@ -64,11 +64,14 @@ const lifecycle =
         (commandId === undefined ||
             ("commandId" in frame.event.payload && frame.event.payload.commandId === commandId));
 
-test("Given a running prompt, When clients append messages and steer a turn that is not running, Then every message is queued and runs in order and the refused steer leaves its identifier unused", async () => {
+test("Given a running prompt, When clients append messages and steer a turn that is not running, Then every message is queued and runs in order and the refused steer leaves its identifier unused", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-prompt-acknowledgement-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executableDirectory },
             async (peer) => {

@@ -23,11 +23,14 @@ import { withControlledDaemon } from "../support/agents/real-daemon.ts";
 
 afterEach(() => vi.useRealTimers());
 
-test("Given a resumed conversation with a configuration edit awaiting the Agent, When its first history load is rejected as busy, Then the edit still commits and survives restart", async () => {
+test("Given a resumed conversation with a configuration edit awaiting the Agent, When its first history load is rejected as busy, Then the edit still commits and survives restart", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ now: new Date("2026-10-29T00:00:00Z"), toFake: ["Date"] });
     const directory = await mkdtemp(join(tmpdir(), "morty-configuration-history-"));
     try {
         await withControlledDaemon(
+            signal,
             new UpdatingSettingsAgent("configuration"),
             {
                 MORTY_TEST_SESSION_STATE_PATH: process.execPath,
@@ -85,7 +88,7 @@ test("Given a resumed conversation with a configuration edit awaiting the Agent,
                 await peer.restart();
                 const ready = await prepare();
                 await writeFile(join(directory, "pause-configuration"), "");
-                const paused = waitForAgentFile(join(directory, "configuration-paused"), true);
+                const paused = waitForAgentFile(join(directory, "configuration-paused"), true, signal);
                 const configureId = crypto.randomUUID();
                 peer.send(
                     encodeSessionConfigureCommand({
@@ -157,11 +160,12 @@ class UpdatingSettingsAgent extends ControlledAcpSpecification {
     }
 }
 
-test.each(["opening", "configuration"] as const)(
+test.for(["opening", "configuration"] as const)(
     "Given an Agent updates settings before its %s response, When the client operation completes, Then the returned settings preserve the newer model, mode, and speed",
-    async (stage) => {
+    async (stage, { signal }) => {
         vi.useFakeTimers({ now: new Date("2026-10-29T00:00:00Z"), toFake: ["Date"] });
         await withControlledDaemon(
+            signal,
             new UpdatingSettingsAgent(stage),
             { MORTY_TEST_SESSION_STATE_PATH: process.execPath },
             async (peer) => {

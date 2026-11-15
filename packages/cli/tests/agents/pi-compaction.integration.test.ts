@@ -17,14 +17,16 @@ import { PiFixture } from "../support/agents/pi.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given pi compacts the conversation, When the daemon relays the turn, Then the client receives the compaction lifecycle and the retained summary", async () => {
+test("Given pi compacts the conversation, When the daemon relays the turn, Then the client receives the compaction lifecycle and the retained summary", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "REAL_PI_REPLY");
     await using agent = await PiFixture.create(provider);
     // pi keeps the most recent `keepRecentTokens` tokens out of compaction
     // (default 20 000 — more than this whole session). Shrink it so a couple of
     // seeded turns leave something to summarize.
     await agent.overrideSettings({ compaction: { keepRecentTokens: 1 } });
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const sendPrompt = (prompt: string): void => {
             const commandId = randomUUID();
             peer.send(
@@ -140,12 +142,12 @@ test("Given pi compacts the conversation, When the daemon relays the turn, Then 
     });
 });
 
-test.each([false, true])(
+test.for([false, true])(
     "Given native Pi bash execution with compacted=%s and a split tool turn, When history is previewed, Then the full active branch and retained compactions remain visible",
-    async (compacted) => {
+    async (compacted, { signal }) => {
         await using provider = await FakeOpenAiProvider.start("gpt-4.1", "UNUSED_REPLY");
         await using agent = await PiFixture.create(provider);
-        await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
             const sessionId = randomUUID();
             const directory = join(agent.environment["HOME"] ?? "", ".pi", "agent", "sessions");
             await mkdir(directory, { recursive: true });

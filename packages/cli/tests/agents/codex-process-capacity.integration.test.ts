@@ -60,52 +60,63 @@ async function promptRealSession(
     }
 }
 
-test("Given a real Codex conversation, When more Sessions are opened than the daemon can retain, Then the original native Session continues with its history intact", async () => {
+test("Given a real Codex conversation, When more Sessions are opened than the daemon can retain, Then the original native Session continues with its history intact", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "RESTORED_REPLY");
     await using agent = await CodexFixture.create(provider);
-    await withRealDaemon(new CodexAgentSpecification(), evictingEnvironment(agent.environment), async (peer) => {
-        const sessionTarget = await prepareNewRealSession(peer, "codex");
-        await promptRealSession(peer, sessionTarget, "Original conversation before opening other Sessions");
-        for (let index = 0; index < 11; index += 1) {
-            await prepareNewRealSession(peer, "codex");
-        }
-        await promptRealSession(peer, sessionTarget, "Continue the original conversation after opening other Sessions");
-        peer.send(
-            encodeSessionHistoryPageLoad({
-                kind: "session.live-history.v2.page.load",
-                requestId: randomUUID(),
-                target: sessionTarget,
-                cursor: null,
-                eventLimit: 200,
-            }),
-        );
-        for (;;) {
-            const message = await peer.nextMessage();
-            if (decodeMessageKind(message) === "session.operation.failed") {
-                throw new Error(message);
+    await withRealDaemon(
+        signal,
+        new CodexAgentSpecification(),
+        evictingEnvironment(agent.environment),
+        async (peer) => {
+            const sessionTarget = await prepareNewRealSession(peer, "codex");
+            await promptRealSession(peer, sessionTarget, "Original conversation before opening other Sessions");
+            for (let index = 0; index < 11; index += 1) {
+                await prepareNewRealSession(peer, "codex");
             }
-            if (decodeMessageKind(message) !== "session.live-history.v2.page.loaded") {
-                continue;
-            }
-            const page = decodeSessionHistoryPageLoaded(message).events.events;
-            const updates = page.events.flatMap((event) => (event.type === "acp" ? [event.payload] : []));
-            const userText = [
-                ...new Set(
-                    page.events.flatMap((event) => {
-                        return event.type === "acp" &&
-                            event.payload.sessionUpdate === "user_message_chunk" &&
-                            event.payload.content.type === "text"
-                            ? [event.payload.content.text]
-                            : [];
-                    }),
-                ),
-            ];
-            expect(userText).toEqual([
-                "Original conversation before opening other Sessions",
+            await promptRealSession(
+                peer,
+                sessionTarget,
                 "Continue the original conversation after opening other Sessions",
-            ]);
-            expect(updates.filter((update) => update.sessionUpdate === "agent_message_chunk")).toHaveLength(2);
-            break;
-        }
-    });
+            );
+            peer.send(
+                encodeSessionHistoryPageLoad({
+                    kind: "session.live-history.v2.page.load",
+                    requestId: randomUUID(),
+                    target: sessionTarget,
+                    cursor: null,
+                    eventLimit: 200,
+                }),
+            );
+            for (;;) {
+                const message = await peer.nextMessage();
+                if (decodeMessageKind(message) === "session.operation.failed") {
+                    throw new Error(message);
+                }
+                if (decodeMessageKind(message) !== "session.live-history.v2.page.loaded") {
+                    continue;
+                }
+                const page = decodeSessionHistoryPageLoaded(message).events.events;
+                const updates = page.events.flatMap((event) => (event.type === "acp" ? [event.payload] : []));
+                const userText = [
+                    ...new Set(
+                        page.events.flatMap((event) => {
+                            return event.type === "acp" &&
+                                event.payload.sessionUpdate === "user_message_chunk" &&
+                                event.payload.content.type === "text"
+                                ? [event.payload.content.text]
+                                : [];
+                        }),
+                    ),
+                ];
+                expect(userText).toEqual([
+                    "Original conversation before opening other Sessions",
+                    "Continue the original conversation after opening other Sessions",
+                ]);
+                expect(updates.filter((update) => update.sessionUpdate === "agent_message_chunk")).toHaveLength(2);
+                break;
+            }
+        },
+    );
 });

@@ -18,7 +18,9 @@ import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 import { fakeProviderPrompts } from "../support/llm/scenarios.ts";
 
-test("Given real Codex has accepted a steering prompt, When V2 recovery reloads the working Session, Then the steered user message remains visible", async () => {
+test("Given real Codex has accepted a steering prompt, When V2 recovery reloads the working Session, Then the steered user message remains visible", async ({
+    signal,
+}) => {
     const activeEntered = Promise.withResolvers<void>();
     const releaseActive = Promise.withResolvers<void>();
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "STEERED_REPLY", {
@@ -29,7 +31,7 @@ test("Given real Codex has accepted a steering prompt, When V2 recovery reloads 
     });
     await using codex = await CodexFixture.create(provider);
     try {
-        await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+        await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
             const activeCommandId = randomUUID();
             const steeringCommandId = randomUUID();
             const steeringPrompt = "Use the recovered steering requirement";
@@ -165,7 +167,9 @@ test("Given real Codex has accepted a steering prompt, When V2 recovery reloads 
     }
 });
 
-test("Given real Codex advances between repeated prompts, When V2 recovery paginates the active stream, Then both user messages remain distinct and projected events stay ordered", async () => {
+test("Given real Codex advances between repeated prompts, When V2 recovery paginates the active stream, Then both user messages remain distinct and projected events stay ordered", async ({
+    signal,
+}) => {
     const activeEntered = Promise.withResolvers<void>();
     const queuedEntered = Promise.withResolvers<void>();
     const releaseActive = Promise.withResolvers<void>();
@@ -185,7 +189,7 @@ test("Given real Codex advances between repeated prompts, When V2 recovery pagin
     });
     await using codex = await CodexFixture.create(provider);
     try {
-        await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+        await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
             const active = randomUUID();
             const queued = randomUUID();
             const repeatedPrompt = fakeProviderPrompts.twoTools;
@@ -315,7 +319,9 @@ test("Given real Codex advances between repeated prompts, When V2 recovery pagin
     }
 });
 
-test("Given real Codex with an active turn, When three follow-ups are accepted and the middle one is cancelled, Then the remaining prompts execute in FIFO order without depending on the original turn", async () => {
+test("Given real Codex with an active turn, When three follow-ups are accepted and the middle one is cancelled, Then the remaining prompts execute in FIFO order without depending on the original turn", async ({
+    signal,
+}) => {
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "FIFO_REPLY", {
@@ -326,7 +332,7 @@ test("Given real Codex with an active turn, When three follow-ups are accepted a
     });
     await using codex = await CodexFixture.create(provider);
     try {
-        await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+        await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
             const active = randomUUID();
             const first = randomUUID();
             const cancelled = randomUUID();

@@ -20,10 +20,12 @@ import { IdleTimeoutTimer } from "../support/idle-timeout-timer.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 import { fakeProviderPrompts } from "../support/llm/scenarios.ts";
 
-test("Given native task notifications and user-pasted notification text, When Claude history is previewed, Then native outcomes update the original tools and only actual user text is a user message", async () => {
+test("Given native task notifications and user-pasted notification text, When Claude history is previewed, Then native outcomes update the original tools and only actual user text is a user message", async ({
+    signal,
+}) => {
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "UNUSED_HISTORY_PROVIDER");
     await using agent = await ClaudeFixture.create(provider);
-    await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
         const home = agent.environment["CLAUDE_CONFIG_DIR"];
         if (home === undefined) {
             throw new Error("Missing isolated Claude home");
@@ -177,7 +179,9 @@ test("Given native task notifications and user-pasted notification text, When Cl
     });
 });
 
-test("Given Claude is running a background command, When two idle hours pass and the daemon later restarts, Then the task survives idle reclamation and its interrupted recovery updates the tool without a fake user message", async () => {
+test("Given Claude is running a background command, When two idle hours pass and the daemon later restarts, Then the task survives idle reclamation and its interrupted recovery updates the tool without a fake user message", async ({
+    signal,
+}) => {
     const entered = Promise.withResolvers<number>();
     const release = Promise.withResolvers<void>();
     const server = createServer(async (request, response) => {
@@ -201,6 +205,7 @@ test("Given Claude is running a background command, When two idle hours pass and
         const timer = new IdleTimeoutTimer();
         vi.useFakeTimers({ now: new Date("2026-10-26T00:00:00Z"), toFake: ["Date"] });
         await withRealDaemon(
+            signal,
             new ClaudeCodeAgentSpecification(),
             agent.environment,
             async (peer) => {

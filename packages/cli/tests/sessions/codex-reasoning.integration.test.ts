@@ -116,7 +116,9 @@ it("Given Codex streams detailed reasoning and a summary, When Morty forwards th
     ).toBe("Detailed chain of thought");
 });
 
-it("Given saved Codex history contains commentary and detailed reasoning, When Morty previews it, Then commentary stays assistant output and detailed reasoning becomes Thinking", async () => {
+it("Given saved Codex history contains commentary and detailed reasoning, When Morty previews it, Then commentary stays assistant output and detailed reasoning becomes Thinking", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-codex-history-summary-"));
     const executable = join(directory, "codex.mjs");
     const sessionId = "native-codex";
@@ -157,7 +159,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     );
     const agent = testAgentDefinition("codex", "Codex", executable);
     try {
-        const page = await previewCodexHistory(agent, directory, sessionId);
+        const page = await previewCodexHistory(agent, directory, sessionId, signal);
         const updates = page.events.flatMap((event) => (event.type === "acp" ? [event.payload] : []));
         expect(
             updates.filter((update) => update.sessionUpdate === "agent_message_chunk").map((update) => update.content),

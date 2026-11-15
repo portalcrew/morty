@@ -15,7 +15,9 @@ import { CodexFixture } from "../support/agents/codex.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given desktop Codex owns the Session, When Morty imports it and receives stale steering, Then steering is unsupported and queued input completes without interrupting the owner", async () => {
+test("Given desktop Codex owns the Session, When Morty imports it and receives stale steering, Then steering is unsupported and queued input completes without interrupting the owner", async ({
+    signal,
+}) => {
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     let hold = false;
@@ -28,7 +30,7 @@ test("Given desktop Codex owns the Session, When Morty imports it and receives s
         },
     });
     await using fixture = await CodexFixture.create(provider);
-    await withRealDaemon(new CodexAgentSpecification(), fixture.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), fixture.environment, async (peer) => {
         let completed = Promise.withResolvers<void>();
         const owner = new CodexAppServerClient({
             command: fixture.executable,

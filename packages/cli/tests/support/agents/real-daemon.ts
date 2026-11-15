@@ -75,6 +75,7 @@ export interface RealDaemonPeer extends DaemonConnectionPeer {
 
 /** Controlled ACP harness registered explicitly, without changing real-Agent compatibility wiring. */
 export const withControlledDaemon = (
+    signal: AbortSignal,
     specification: LocalAgentSpecification,
     environment: Readonly<Record<string, string>>,
     scenario: (peer: RealDaemonPeer) => Promise<void>,
@@ -82,7 +83,7 @@ export const withControlledDaemon = (
     workspaceDirectory?: string,
     timer: Timer = systemTimer,
 ): Promise<void> =>
-    withRealDaemon(specification, environment, scenario, launch, workspaceDirectory, timer, acpAdapters);
+    withRealDaemon(signal, specification, environment, scenario, launch, workspaceDirectory, timer, acpAdapters);
 
 /**
  * Scenarios own time: the relay heartbeat's wall-clock deadlines never expire, so a slow host cannot close the
@@ -99,6 +100,7 @@ function withoutRelayLivenessDeadlines(timer: Timer): Timer {
 
 /** Production daemon and discovery; the peer only sends and observes the public protocol. */
 export async function withRealDaemon(
+    signal: AbortSignal,
     specification: LocalAgentSpecification,
     environment: Readonly<Record<string, string>>,
     scenario: (peer: RealDaemonPeer) => Promise<void>,
@@ -108,6 +110,7 @@ export async function withRealDaemon(
     adapters: AdapterResolver = harnessAdapters,
 ): Promise<void> {
     await withDaemonConnection(
+        signal,
         specification,
         environment,
         async (connection) => {
@@ -122,22 +125,26 @@ export async function withRealDaemon(
 }
 
 export const withControlledDaemonConnection = (
+    signal: AbortSignal,
     specification: LocalAgentSpecification,
     environment: Readonly<Record<string, string>>,
     scenario: (peer: DaemonConnectionPeer) => Promise<void>,
     launch: "embedded" | "managed" = "embedded",
 ): Promise<void> =>
-    withDaemonConnection(specification, environment, scenario, launch, undefined, systemTimer, acpAdapters);
+    withDaemonConnection(signal, specification, environment, scenario, launch, undefined, systemTimer, acpAdapters);
 
 export const withRealDaemonConnection = (
+    signal: AbortSignal,
     specification: LocalAgentSpecification,
     environment: Readonly<Record<string, string>>,
     scenario: (peer: DaemonConnectionPeer) => Promise<void>,
     launch: "embedded" | "managed" = "embedded",
 ): Promise<void> =>
-    withDaemonConnection(specification, environment, scenario, launch, undefined, systemTimer, harnessAdapters);
+    withDaemonConnection(signal, specification, environment, scenario, launch, undefined, systemTimer, harnessAdapters);
 
+/** The daemon and its connection live until the scenario ends or the caller's signal (the test's) aborts. */
 async function withDaemonConnection(
+    testSignal: AbortSignal,
     specification: LocalAgentSpecification,
     environment: Readonly<Record<string, string>>,
     scenario: (peer: DaemonConnectionPeer) => Promise<void>,
@@ -149,7 +156,7 @@ async function withDaemonConnection(
     const directory = await mkdtemp(join(tmpdir(), `morty-real-${specification.harness}-`));
     const workspace = workspaceDirectory ?? join(directory, "workspace");
     const controller = new AbortController();
-    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(90_000)]);
+    const signal = AbortSignal.any([controller.signal, testSignal]);
     const catalogs = new Map<string, string>();
     const relay = createServer((request, response) => {
         if (request.method === "PUT" && request.url?.endsWith("/catalog")) {

@@ -20,7 +20,9 @@ import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
 for (const harness of ["codex", "claude", "pi"] as const) {
-    test(`Given real ${harness} is answering, When a client loads history before and after its reply, Then each snapshot identifies the live events it covers`, async () => {
+    test(`Given real ${harness} is answering, When a client loads history before and after its reply, Then each snapshot identifies the live events it covers`, async ({
+        signal,
+    }) => {
         const entered = Promise.withResolvers<void>();
         const release = Promise.withResolvers<void>();
         let holdResponse = false;
@@ -50,7 +52,7 @@ for (const harness of ["codex", "claude", "pi"] as const) {
                   ? new PiAgentSpecification()
                   : new CodexAgentSpecification();
         try {
-            await withRealDaemon(specification, agent.environment, async (peer) => {
+            await withRealDaemon(signal, specification, agent.environment, async (peer) => {
                 const sessionTarget = await prepareNewRealSession(peer, harness);
                 holdResponse = true;
                 const observed: SessionLiveEvent[] = [];

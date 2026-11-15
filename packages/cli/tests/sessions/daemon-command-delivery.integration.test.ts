@@ -67,11 +67,14 @@ const readExecution = async (peer: RealDaemonPeer, commandId?: string) => {
 };
 
 // @no-uc: Compatibility; a reconnecting client recovers an unconfirmed submission from the Computer's execution receipt.
-test("Given commands the Computer finished, failed, is running or never received, When a client reads the Session execution naming each command, Then the Computer reports whether it received each command, also after a restart", async () => {
+test("Given commands the Computer finished, failed, is running or never received, When a client reads the Session execution naming each command, Then the Computer reports whether it received each command, also after a restart", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-command-delivery-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"),
@@ -119,12 +122,15 @@ test("Given commands the Computer finished, failed, is running or never received
     }
 }, 90_000);
 
-test("Given a running turn and a later queued command, When the clock moves backwards and the daemon restarts twice, Then both reads report the queued command's restart failure", async () => {
+test("Given a running turn and a later queued command, When the clock moves backwards and the daemon restarts twice, Then both reads report the queued command's restart failure", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ now: new Date("2026-10-28T10:00:00Z"), toFake: ["Date"] });
     const directory = await mkdtemp(join(tmpdir(), "morty-last-turn-order-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executableDirectory },
             async (peer) => {
@@ -189,11 +195,14 @@ test("Given a running turn and a later queued command, When the clock moves back
 }, 90_000);
 
 // @no-uc: Compatibility; a client that missed a turn's live outcome recovers it from the Computer's execution receipts.
-test("Given turns that complete, fail, run or are interrupted by a restart, When a client reads the Session execution, Then it reports how the last started turn ended until a newer turn replaces it", async () => {
+test("Given turns that complete, fail, run or are interrupted by a restart, When a client reads the Session execution, Then it reports how the last started turn ended until a newer turn replaces it", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-last-turn-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"),
@@ -266,7 +275,7 @@ test("Given turns that complete, fail, run or are interrupted by a restart, When
 }, 90_000);
 
 // @no-uc: Compatibility; a steering prompt folds into the turn it steers, so that turn's outcome is the last turn.
-test.each([
+test.for([
     {
         ending: "completes",
         instruction: "Apply the steering instruction",
@@ -289,11 +298,13 @@ test.each([
     },
 ])(
     "Given a running turn steered by a queued prompt, When the turn $ending and a client reads the Session execution, Then it reports how the steered turn ended, also after a restart",
-    async ({ instruction, live, restored }) => {
+    { timeout: 90_000 },
+    async ({ instruction, live, restored }, { signal }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-last-turn-steered-"));
         try {
             const executableDirectory = await writeControlledAcpExecutable(directory);
             await withControlledDaemon(
+                signal,
                 new ControlledAcpAgentSpecification(),
                 {
                     MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"),
@@ -353,5 +364,4 @@ test.each([
             await rm(directory, { recursive: true, force: true });
         }
     },
-    90_000,
 );

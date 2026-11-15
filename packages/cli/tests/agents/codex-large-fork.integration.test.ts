@@ -16,10 +16,12 @@ import { CodexFixture } from "../support/agents/codex.ts";
 import { prepareNewRealSession, withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given real Codex saved more than 32 MiB of answers, When a user forks through the daemon, Then the copy opens, recent history is readable and a new prompt completes", async () => {
+test("Given real Codex saved more than 32 MiB of answers, When a user forks through the daemon, Then the copy opens, recent history is readable and a new prompt completes", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "Large saved answer. ".repeat(45_000));
     await using agent = await CodexFixture.create(provider);
-    await withRealDaemon(new CodexAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), agent.environment, async (peer) => {
         const sourceSessionId = await prepareNewRealSession(peer, "codex");
         expect(Buffer.byteLength(provider.response) * 40).toBeGreaterThan(32 * 1024 * 1024);
         for (let turn = 0; turn < 40; turn++) {

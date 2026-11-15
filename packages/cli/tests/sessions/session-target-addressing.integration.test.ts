@@ -62,11 +62,12 @@ const answer = async (peer: DaemonConnectionPeer, requestId: string) => {
     }
 };
 
-const withAgent = async (scenario: (peer: RealDaemonPeer) => Promise<void>): Promise<void> => {
+const withAgent = async (signal: AbortSignal, scenario: (peer: RealDaemonPeer) => Promise<void>): Promise<void> => {
     const directory = await mkdtemp(join(tmpdir(), "morty-session-target-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executableDirectory },
             scenario,
@@ -76,8 +77,10 @@ const withAgent = async (scenario: (peer: RealDaemonPeer) => Promise<void>): Pro
     }
 };
 
-test("Given a Session whose prompt is running, When a client prompts it and reads its execution naming only the Session, Then the Computer runs the prompt in the Session's own Agent and directory and reports the running turn", async () => {
-    await withAgent(async (peer) => {
+test("Given a Session whose prompt is running, When a client prompts it and reads its execution naming only the Session, Then the Computer runs the prompt in the Session's own Agent and directory and reports the running turn", async ({
+    signal,
+}) => {
+    await withAgent(signal, async (peer) => {
         const commandId = randomUUID();
         prompt(peer, peer.target, commandId, "hold after first delta");
         for (;;) {
@@ -103,8 +106,10 @@ test("Given a Session whose prompt is running, When a client prompts it and read
     });
 }, 90_000);
 
-test("Given a native Session the Computer does not hold, When a client prompts it or reads its execution, Then the Computer refuses both as session_not_found", async () => {
-    await withAgent(async (peer) => {
+test("Given a native Session the Computer does not hold, When a client prompts it or reads its execution, Then the Computer refuses both as session_not_found", async ({
+    signal,
+}) => {
+    await withAgent(signal, async (peer) => {
         const unknown = { harness: peer.target.harness, sessionId: randomUUID() };
         const commandId = randomUUID();
         prompt(peer, unknown, commandId, "This Session does not exist");

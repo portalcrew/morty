@@ -52,10 +52,12 @@ function openedImageKeys(events: readonly SessionEvent[]): readonly string[] {
     });
 }
 
-test("Given saved Codex image generation, When the real daemon reopens it through Codex, Then history opens the tool, retrieves its image without base64 and can continue chatting", async () => {
+test("Given saved Codex image generation, When the real daemon reopens it through Codex, Then history opens the tool, retrieves its image without base64 and can continue chatting", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "IMAGE_REPLY");
     await using agent = await CodexFixture.create(provider);
-    await withRealDaemon(new CodexAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), agent.environment, async (peer) => {
         const sessionId = "01a11f74-cbc4-7112-9c63-df87608c81c0";
         const timestamp = "2026-10-09T06:58:30.487Z";
         const turnId = "01a11f74-d697-70d3-94a2-e232d358e56d";

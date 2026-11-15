@@ -13,10 +13,12 @@ import { CodexFixture } from "../support/agents/codex.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given a real Codex conversation, When the user sends slash-prefixed text other than /compact, Then it follows the ordinary prompt path and the conversation continues", async () => {
+test("Given a real Codex conversation, When the user sends slash-prefixed text other than /compact, Then it follows the ordinary prompt path and the conversation continues", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "REAL_PROMPT_REPLY");
     await using codex = await CodexFixture.create(provider);
-    await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
         for (const prompt of ["Hello", "/not-a-command", "Continue the conversation"]) {
             const commandId = randomUUID();
             peer.send(
@@ -60,10 +62,12 @@ test("Given a real Codex conversation, When the user sends slash-prefixed text o
     });
 });
 
-test("Given a real Codex conversation with content, When the user sends /compact, Then Codex runs a manual compaction and reports its lifecycle", async () => {
+test("Given a real Codex conversation with content, When the user sends /compact, Then Codex runs a manual compaction and reports its lifecycle", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "REAL_PROMPT_REPLY");
     await using codex = await CodexFixture.create(provider);
-    await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
         const sendPrompt = (prompt: string): void => {
             const commandId = randomUUID();
             peer.send(
@@ -142,12 +146,14 @@ test("Given a real Codex conversation with content, When the user sends /compact
     });
 });
 
-test("Given a real Codex conversation with content, When the manual /compact's summarization call fails, Then the opened compaction settles failed under the same id and the prompt fails", async () => {
+test("Given a real Codex conversation with content, When the manual /compact's summarization call fails, Then the opened compaction settles failed under the same id and the prompt fails", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "REAL_PROMPT_REPLY", {
         failPromptContaining: "CONTEXT CHECKPOINT COMPACTION",
     });
     await using codex = await CodexFixture.create(provider);
-    await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
         const sendPrompt = (prompt: string): void => {
             const commandId = randomUUID();
             peer.send(

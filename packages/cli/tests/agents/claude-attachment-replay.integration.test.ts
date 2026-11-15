@@ -135,10 +135,12 @@ test("Given real Claude saves text and four resources, When its ACP history is r
     }
 });
 
-test("Given an old Claude transcript contains large attachments and ambiguous context-like text, When the daemon loads its history, Then all context remains text and images are externalized", async () => {
+test("Given an old Claude transcript contains large attachments and ambiguous context-like text, When the daemon loads its history, Then all context remains text and images are externalized", async ({
+    signal,
+}) => {
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "UNUSED_ATTACHMENT_HISTORY_PROVIDER");
     await using fixture = await ClaudeFixture.create(provider);
-    await withRealDaemon(new ClaudeCodeAgentSpecification(), fixture.environment, async (peer) => {
+    await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), fixture.environment, async (peer) => {
         const home = fixture.environment["CLAUDE_CONFIG_DIR"];
         if (home === undefined) {
             throw new Error("Expected an isolated Claude configuration directory");

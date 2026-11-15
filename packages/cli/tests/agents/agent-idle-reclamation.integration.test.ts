@@ -23,9 +23,9 @@ import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
 afterEach(() => vi.useRealTimers());
 
-test.each(["codex", "claude"] as const)(
+test.for(["codex", "claude"] as const)(
     "Given a real %s conversation, When it is reclaimed after two idle hours, Then its process exits and its original history continues in a new process",
-    async (harness) => {
+    async (harness, { signal }) => {
         await using provider =
             harness === "codex"
                 ? await FakeOpenAiProvider.start("morty-test-model", "IDLE_RECOVERY_REPLY")
@@ -43,6 +43,7 @@ test.each(["codex", "claude"] as const)(
         vi.useFakeTimers({ now: new Date("2026-10-22T00:00:00Z"), toFake: ["Date"] });
         try {
             await withRealDaemon(
+                signal,
                 harness === "codex" ? new CodexAgentSpecification() : new ClaudeCodeAgentSpecification(),
                 { ...agent.environment, [harness === "codex" ? "MORTY_CODEX_PATH" : "MORTY_CLAUDE_PATH"]: launcher },
                 async (peer) => {
@@ -56,7 +57,7 @@ test.each(["codex", "claude"] as const)(
                     }
                     timer.advance(2 * 60 * 60 * 1_000 - 1);
                     expect(existsSync(join(processes, original))).toBe(true);
-                    const exited = waitForAgentFile(join(processes, original), false);
+                    const exited = waitForAgentFile(join(processes, original), false, signal);
                     timer.advance(1);
                     await exited;
                     // Browsing re-establishes the workspace reader independently of execution.
@@ -109,7 +110,7 @@ test.each(["codex", "claude"] as const)(
                         }
                     }
                     // Both the query reader and the replacement execution must be reclaimable.
-                    const exits = resumed.map((name) => waitForAgentFile(join(processes, name), false));
+                    const exits = resumed.map((name) => waitForAgentFile(join(processes, name), false, signal));
                     timer.advance(2 * 60 * 60 * 1_000);
                     await Promise.all(exits);
                     expect((await readdir(processes)).filter((name) => name.endsWith(".process"))).toEqual([]);

@@ -27,11 +27,16 @@ export function codexHistoryAdapter(agent: AcpAgentDefinition) {
 }
 
 /** Exercises the production preview boundary against a controlled app-server executable. */
-export async function previewCodexHistory(agent: AcpAgentDefinition, cwd: string, sessionId: string) {
+export async function previewCodexHistory(
+    agent: AcpAgentDefinition,
+    cwd: string,
+    sessionId: string,
+    signal: AbortSignal,
+) {
     const { adapter, processes } = codexHistoryAdapter(agent);
     try {
         return await adapter.readSessionHistory({
-            query: { agent, cwd, signal: AbortSignal.timeout(30_000) },
+            query: { agent, cwd, signal },
             request: {
                 sessionId,
                 eventLimit: 500,
@@ -45,12 +50,11 @@ export async function previewCodexHistory(agent: AcpAgentDefinition, cwd: string
 }
 
 /** Reads through the normal ACP session/load lifecycle for parity assertions. */
-export async function loadCodexHistory(agent: AcpAgentDefinition, cwd: string, sessionId: string) {
+export async function loadCodexHistory(agent: AcpAgentDefinition, cwd: string, sessionId: string, signal: AbortSignal) {
     const { adapter, processes } = codexHistoryAdapter(agent);
     const events = new MemorySessionEventStore();
     const sessionTarget = { harness: agent.harness, sessionId };
     try {
-        const signal = AbortSignal.timeout(30_000);
         await validateAgentRuntime(agent, signal);
         const rejectInteraction = async (): Promise<never> => {
             throw new Error("History replay must not request interaction");

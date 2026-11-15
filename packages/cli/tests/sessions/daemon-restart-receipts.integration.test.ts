@@ -13,11 +13,14 @@ import { withControlledDaemon as withRealDaemon } from "../support/agents/real-d
 import { writeControlledAcpExecutable } from "../support/controlled-acp-executable.ts";
 
 // @no-uc: Compatibility; restart receipts distinguish started, queued and completed commands through the daemon wire protocol.
-test("Given running and queued prompts, When the daemon restarts, Then it reports restart outcomes and only unstarted commands can be resubmitted", async () => {
+test("Given running and queued prompts, When the daemon restarts, Then it reports restart outcomes and only unstarted commands can be resubmitted", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-restart-receipts-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withRealDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"),

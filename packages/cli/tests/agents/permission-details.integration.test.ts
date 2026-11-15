@@ -20,9 +20,9 @@ import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test.each(["allow_once", "reject_once"] as const)(
+test.for(["allow_once", "reject_once"] as const)(
     "Given real Codex requests command approval, When the user selects %s, Then complete permission details survive recovery and the turn finishes",
-    async (decision) => {
+    async (decision, { signal }) => {
         const prompt = "Run the approval verification command, then report its result.";
         const command = `node -e "require('node:fs').writeFileSync('permission-result.txt', 'permission approved')"`;
         await using provider = await FakeOpenAiProvider.start("morty-test-model", "PERMISSION_DETAILS_DONE", {
@@ -35,7 +35,7 @@ test.each(["allow_once", "reject_once"] as const)(
             ],
         });
         await using agent = await CodexFixture.create(provider, { approvalPolicy: "on-request" });
-        await withRealDaemon(new CodexAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new CodexAgentSpecification(), agent.environment, async (peer) => {
             const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
@@ -139,9 +139,9 @@ test.each(["allow_once", "reject_once"] as const)(
     },
 );
 
-test.each(["allow_once", "reject_once"] as const)(
+test.for(["allow_once", "reject_once"] as const)(
     "Given real Claude requests an external file, When the user selects %s, Then its original input and directory survive recovery and the decision reaches the Agent",
-    async (decision) => {
+    async (decision, { signal }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-permission-file-"));
         const file = join(await realpath(directory), "approval-target.txt");
         await writeFile(file, "PERMISSION_FILE_CONTENT");
@@ -152,7 +152,7 @@ test.each(["allow_once", "reject_once"] as const)(
                 toolPrompt: prompt,
             });
             await using agent = await ClaudeFixture.create(provider);
-            await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+            await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
                 const commandId = randomUUID();
                 peer.send(
                     encodeSessionPromptCommand({

@@ -14,7 +14,9 @@ import { uploadPromptContent } from "../support/agents/upload-prompt-content.ts"
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 import { fakeProviderPrompts } from "../support/llm/scenarios.ts";
 
-test("Given real Pi receives a file attachment, When the Agent reads its local link, Then the attachment text is returned by the tool and the turn completes", async () => {
+test("Given real Pi receives a file attachment, When the Agent reads its local link, Then the attachment text is returned by the tool and the turn completes", async ({
+    signal,
+}) => {
     const toolPrompt = "Use the read tool to inspect the attached file, then reply";
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_ATTACHMENT_REPLY", {
         toolPrompt,
@@ -27,7 +29,7 @@ test("Given real Pi receives a file attachment, When the Agent reads its local l
         },
     });
     await using agent = await PiFixture.create(provider);
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const commandId = randomUUID();
         const attachment = await uploadPromptContent(peer, {
             bytes: new TextEncoder().encode(fakeProviderPrompts.successfulTool),

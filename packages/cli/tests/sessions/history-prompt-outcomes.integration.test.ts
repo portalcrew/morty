@@ -88,11 +88,14 @@ async function historyPage(
     }
 }
 
-test("Given a failed turn and a completed turn, When a client reads the replayed Session history, Then each turn's start and ending surround its own user message", async () => {
+test("Given a failed turn and a completed turn, When a client reads the replayed Session history, Then each turn's start and ending surround its own user message", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "history-outcomes-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory, { loadSession: true });
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executableDirectory },
             async (peer) => {
@@ -138,11 +141,14 @@ test("Given a failed turn and a completed turn, When a client reads the replayed
     }
 }, 120_000);
 
-test("Given a turn steered by a queued prompt, When a client reads the Session history, Then the steering sits inside the turn it joined", async () => {
+test("Given a turn steered by a queued prompt, When a client reads the Session history, Then the steering sits inside the turn it joined", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "history-steered-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory, { loadSession: true });
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executableDirectory },
             async (peer) => {

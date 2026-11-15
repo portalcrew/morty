@@ -22,7 +22,9 @@ const INNER_REPORT = "SUBAGENT_REPORT: shell verified";
 /** The fixture's answer prefix, used to count assistant deliveries. */
 const ANSWER_PREFIX = "CLAUDE_SUBAGENT_DONE";
 
-test("Given Claude Code dispatches a subagent that runs tools, When the turn streams through the daemon, Then only the Agent dispatch call surfaces", async () => {
+test("Given Claude Code dispatches a subagent that runs tools, When the turn streams through the daemon, Then only the Agent dispatch call surfaces", async ({
+    signal,
+}) => {
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", ANSWER_PREFIX, {
         subagent: {
             dispatchDescription: "Verify via helper",
@@ -32,7 +34,7 @@ test("Given Claude Code dispatches a subagent that runs tools, When the turn str
         },
     });
     await using agent = await ClaudeFixture.create(provider);
-    await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
         const commandId = randomUUID();
         peer.send(
             encodeSessionPromptCommand({

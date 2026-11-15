@@ -7,8 +7,10 @@ import { codexFixture } from "../support/agents/codex-native.ts";
 import { previewCodexHistory } from "../support/codex-history-preview.ts";
 import { fakeProviderPrompts } from "../support/llm/scenarios.ts";
 
-it("Given multiple Codex rollout files share an indexed session identity, When the native session directory is listed, Then the conversation appears only once", async () => {
-    const f = await codexFixture();
+it("Given multiple Codex rollout files share an indexed session identity, When the native session directory is listed, Then the conversation appears only once", async ({
+    signal,
+}) => {
+    const f = await codexFixture(signal);
     try {
         const sessionId = await f.seed("Indexed conversation");
         const home = f.agent.environment["CODEX_HOME"];
@@ -39,8 +41,10 @@ it("Given multiple Codex rollout files share an indexed session identity, When t
     }
 });
 
-it("Given a saved Codex conversation with an active writer, When it is previewed, Then history keeps the harness message identities and the writer can continue", async () => {
-    const f = await codexFixture("PREVIEW_REPLY", {}, harnessAdapters);
+it("Given a saved Codex conversation with an active writer, When it is previewed, Then history keeps the harness message identities and the writer can continue", async ({
+    signal,
+}) => {
+    const f = await codexFixture(signal, "PREVIEW_REPLY", {}, harnessAdapters);
     try {
         const id = await f.seed("Preview this conversation");
         const options = {
@@ -95,8 +99,10 @@ it("Given a saved Codex conversation with an active writer, When it is previewed
     }
 });
 
-it("Given saved Codex threads, When its directory is listed through the in-process Agent, Then every thread opens without a synthesized submitted-prompt echo", async () => {
-    const f = await codexFixture();
+it("Given saved Codex threads, When its directory is listed through the in-process Agent, Then every thread opens without a synthesized submitted-prompt echo", async ({
+    signal,
+}) => {
+    const f = await codexFixture(signal);
     try {
         await f.seed("Thread from the Codex CLI");
         const result = await f.list();
@@ -144,8 +150,10 @@ it("Given saved Codex threads, When its directory is listed through the in-proce
     }
 });
 
-it("Given a saved Codex thread with a long preview, When its directory is listed, Then the thread has a bounded title", async () => {
-    const f = await codexFixture();
+it("Given a saved Codex thread with a long preview, When its directory is listed, Then the thread has a bounded title", async ({
+    signal,
+}) => {
+    const f = await codexFixture(signal);
     try {
         const preview = "Long Codex preview ".repeat(30);
         await f.seed(preview);
@@ -159,10 +167,10 @@ it("Given a saved Codex thread with a long preview, When its directory is listed
     }
 });
 
-it.each(["import", "fork"] satisfies readonly ("import" | "fork")[])(
+it.for(["import", "fork"] satisfies readonly ("import" | "fork")[])(
     "Given Computer uses native Session identities, When Chat requests %s, Then Codex returns its own destination pair without returning native history",
-    async (action) => {
-        const f = await codexFixture();
+    async (action, { signal }) => {
+        const f = await codexFixture(signal);
         try {
             const sourceId = await f.seed("Selected source conversation");
             const entry = (await f.list()).entries[0];
@@ -193,8 +201,10 @@ it.each(["import", "fork"] satisfies readonly ("import" | "fork")[])(
     },
 );
 
-it("Given an open Codex conversation with fifteen turns, When history is read while the writer stays open, Then full history reaches the first turn and the writer can continue", async () => {
-    const f = await codexFixture();
+it("Given an open Codex conversation with fifteen turns, When history is read while the writer stays open, Then full history reaches the first turn and the writer can continue", async ({
+    signal,
+}) => {
+    const f = await codexFixture(signal);
     try {
         const id = await f.seed("Question 1");
         for (let turn = 2; turn <= 15; turn++) {
@@ -204,7 +214,7 @@ it("Given an open Codex conversation with fifteen turns, When history is read wh
         if (entry === undefined) {
             throw new Error("Missing native conversation");
         }
-        const history = await previewCodexHistory(f.agent, f.workspace, id);
+        const history = await previewCodexHistory(f.agent, f.workspace, id, signal);
         expect(history.nextCursor).toBeNull();
         expect(
             history.events.flatMap((event) =>
@@ -216,7 +226,7 @@ it("Given an open Codex conversation with fifteen turns, When history is read wh
             ),
         ).toEqual(Array.from({ length: 15 }, (_, index) => `Question ${index + 1}`));
         await f.prompt({ harness: "codex", sessionId: id }, "Continue after history preview");
-        const resumed = await previewCodexHistory(f.agent, f.workspace, id);
+        const resumed = await previewCodexHistory(f.agent, f.workspace, id, signal);
         expect(resumed.events).toContainEqual(
             expect.objectContaining({
                 type: "acp",
@@ -231,12 +241,14 @@ it("Given an open Codex conversation with fifteen turns, When history is read wh
     }
 });
 
-it("Given Codex saved tools and a large reply, When history is previewed, Then the complete reply and tool activities remain available as when opened", async () => {
+it("Given Codex saved tools and a large reply, When history is previewed, Then the complete reply and tool activities remain available as when opened", async ({
+    signal,
+}) => {
     const answer = "Large reply ".repeat(30_000);
-    const f = await codexFixture(answer);
+    const f = await codexFixture(signal, answer);
     try {
         const id = await f.seed(fakeProviderPrompts.twoTools);
-        const history = await previewCodexHistory(f.agent, f.workspace, id);
+        const history = await previewCodexHistory(f.agent, f.workspace, id, signal);
         expect(history.nextCursor).toBeNull();
         const updates = history.events.flatMap((event) => (event.type === "acp" ? [event.payload] : []));
         const tools = updates.filter((update) => update.sessionUpdate === "tool_call");
@@ -254,16 +266,18 @@ it("Given Codex saved tools and a large reply, When history is previewed, Then t
     }
 });
 
-it("Given real Codex applies a patch, When saved history is read, Then the file change precedes the final reply", async () => {
+it("Given real Codex applies a patch, When saved history is read, Then the file change precedes the final reply", async ({
+    signal,
+}) => {
     const prompt = "Use a tool to create the requested file";
-    const f = await codexFixture("PATCH_REPLY", {
+    const f = await codexFixture(signal, "PATCH_REPLY", {
         patch: "*** Begin Patch\n*** Add File: result.txt\n+created by Codex\n*** End Patch",
         toolPrompt: prompt,
     });
     try {
         const id = await f.seed(prompt);
         expect(await readFile(join(f.workspace, "result.txt"), "utf8")).toBe("created by Codex\n");
-        const history = await previewCodexHistory(f.agent, f.workspace, id);
+        const history = await previewCodexHistory(f.agent, f.workspace, id, signal);
         const updates = history.events.flatMap((event) => (event.type === "acp" ? [event.payload] : []));
         const changeIndex = updates.findIndex(
             (update) => update.sessionUpdate === "tool_call" && JSON.stringify(update).includes("result.txt"),

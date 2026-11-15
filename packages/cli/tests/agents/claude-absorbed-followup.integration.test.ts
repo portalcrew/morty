@@ -67,7 +67,9 @@ function respond(response: ServerResponse, model: string, content: JsonObject, s
     response.end();
 }
 
-test("Given Claude is answering a background notification, When it absorbs a new user prompt, Then that prompt completes and the next prompt can run", async () => {
+test("Given Claude is answering a background notification, When it absorbs a new user prompt, Then that prompt completes and the next prompt can run", async ({
+    signal,
+}) => {
     const mainEntered = Promise.withResolvers<void>();
     const subagentEntered = Promise.withResolvers<void>();
     const followupEntered = Promise.withResolvers<void>();
@@ -184,7 +186,7 @@ test("Given Claude is answering a background notification, When it absorbs a new
             join(config, "settings.json"),
             JSON.stringify({ permissions: { defaultMode: "bypassPermissions" } }),
         );
-        await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
             const abort = () => failed.reject(peer.signal.reason);
             peer.signal.addEventListener("abort", abort, { once: true });
             const wait = <T>(promise: Promise<T>) => Promise.race([promise, failed.promise]);

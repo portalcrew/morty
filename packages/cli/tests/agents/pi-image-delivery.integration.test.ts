@@ -16,14 +16,16 @@ import { verifyImageDelivery } from "../support/agents/verify-image-delivery.ts"
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
 for (const side of [128, 500]) {
-    test(`Given real Pi reads a ${side}px image, When its reply streams and native history reopens, Then clients retrieve identical bytes without base64 fragments and can continue chatting`, async () => {
+    test(`Given real Pi reads a ${side}px image, When its reply streams and native history reopens, Then clients retrieve identical bytes without base64 fragments and can continue chatting`, async ({
+        signal,
+    }) => {
         const prompt = "Use the read tool to inspect picture.png, then reply";
         await using provider = await FakeOpenAiProvider.start("gpt-4.1", "IMAGE_REPLY", {
             readPath: "picture.png",
             toolPrompt: prompt,
         });
         await using agent = await PiFixture.create(provider);
-        await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
             const image = imageFixture(side);
             await writeFile(join(peer.workspace, "picture.png"), image);
             await verifyImageDelivery(peer, {
@@ -36,10 +38,12 @@ for (const side of [128, 500]) {
     });
 }
 
-test("Given real Pi creates a session containing an SVG file, When a remote client reads the image, Then the daemon returns SVG media type and the original bytes", async () => {
+test("Given real Pi creates a session containing an SVG file, When a remote client reads the image, Then the daemon returns SVG media type and the original bytes", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "READY");
     await using agent = await PiFixture.create(provider);
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const svg =
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="orange"/></svg>';
         await writeFile(join(peer.workspace, "picture.svg"), svg);

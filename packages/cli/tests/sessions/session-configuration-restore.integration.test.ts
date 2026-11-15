@@ -31,10 +31,13 @@ class ModelDependentSettingsAgent extends ControlledAcpSpecification {
     }
 }
 
-test("Given effort was chosen before the model it depends on, When the conversation reopens in a new Agent process, Then both settings are restored", async () => {
+test("Given effort was chosen before the model it depends on, When the conversation reopens in a new Agent process, Then both settings are restored", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-config-restore-"));
     try {
         await withControlledDaemon(
+            signal,
             new ModelDependentSettingsAgent(),
             {
                 MORTY_TEST_MODEL_DEPENDENT_SETTINGS_PATH: process.execPath,
@@ -64,10 +67,13 @@ test("Given effort was chosen before the model it depends on, When the conversat
     }
 });
 
-test("Given a setting was chosen before the first prompt, When the daemon restarts and the Session reopens, Then the setting is kept", async () => {
+test("Given a setting was chosen before the first prompt, When the daemon restarts and the Session reopens, Then the setting is kept", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-config-restore-"));
     try {
         await withControlledDaemon(
+            signal,
             new ModelDependentSettingsAgent(),
             {
                 MORTY_TEST_MODEL_DEPENDENT_SETTINGS_PATH: process.execPath,

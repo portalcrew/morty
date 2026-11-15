@@ -11,9 +11,10 @@ import { type RealDaemonPeer, withRealDaemon } from "../support/agents/real-daem
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test.each(["pi", "claude", "codex"] as const)(
+test.for(["pi", "claude", "codex"] as const)(
     "Given real %s is replying, When a queued message is withdrawn and revised, Then only the revision executes and the original reply completes",
-    async (harness) => {
+    { timeout: 90_000 },
+    async (harness, { signal }) => {
         vi.useFakeTimers({ toFake: ["Date"] });
         vi.setSystemTime(new Date("2026-10-29T00:00:00Z"));
         const entered = Promise.withResolvers<void>();
@@ -136,7 +137,7 @@ test.each(["pi", "claude", "codex"] as const)(
                     { beforeFirstText: async (_scenario, signal) => beforeFirstText(signal) },
                 );
                 await using agent = await ClaudeFixture.create(provider);
-                await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, scenario);
+                await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, scenario);
             } else {
                 await using provider = await FakeOpenAiProvider.start(
                     harness === "pi" ? "gpt-4.1" : "morty-test-model",
@@ -145,10 +146,10 @@ test.each(["pi", "claude", "codex"] as const)(
                 );
                 if (harness === "pi") {
                     await using agent = await PiFixture.create(provider);
-                    await withRealDaemon(new PiAgentSpecification(), agent.environment, scenario);
+                    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, scenario);
                 } else {
                     await using agent = await CodexFixture.create(provider);
-                    await withRealDaemon(new CodexAgentSpecification(), agent.environment, scenario);
+                    await withRealDaemon(signal, new CodexAgentSpecification(), agent.environment, scenario);
                 }
             }
         } finally {
@@ -156,5 +157,4 @@ test.each(["pi", "claude", "codex"] as const)(
             vi.useRealTimers();
         }
     },
-    90_000,
 );

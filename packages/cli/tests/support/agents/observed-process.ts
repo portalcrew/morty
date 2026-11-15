@@ -32,12 +32,12 @@ child.once("exit", code => {
     );
 }
 
-/** File events observe process exit; the deadline only bounds a broken scenario. */
-export async function waitForAgentFile(path: string, present: boolean): Promise<void> {
+/** File events observe process exit; the caller's signal (the test's) ends a broken scenario. */
+export async function waitForAgentFile(path: string, present: boolean, signal: AbortSignal): Promise<void> {
     if (existsSync(path) === present) {
         return;
     }
-    const signal = AbortSignal.timeout(5_000);
+    signal.throwIfAborted();
     await new Promise<void>((resolve, reject) => {
         const watcher = watch(dirname(path), () => {
             if (existsSync(path) === present) {

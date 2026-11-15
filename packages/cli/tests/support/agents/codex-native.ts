@@ -25,6 +25,7 @@ import { UnretainedExternalContentStore } from "../unretained-external-content-s
 import { CodexFixture } from "./codex.ts";
 
 export async function codexFixture(
+    signal: AbortSignal,
     answer = "REAL_CODEX_REPLY",
     providerOptions: Parameters<typeof FakeOpenAiProvider.start>[2] = {},
     adapters: AdapterResolver = harnessAdapters,
@@ -97,20 +98,20 @@ export async function codexFixture(
             prompt: text,
             images: [],
             resources: [],
-            signal: AbortSignal.timeout(30_000),
+            signal,
         });
     };
     const seed = async (title: string): Promise<string> => {
         const sessionTarget = await sessions.createNativeSession({
             agent,
             cwd: workspace,
-            signal: AbortSignal.timeout(30_000),
+            signal,
         });
         await prompt(sessionTarget, title);
         return sessionTarget.sessionId;
     };
     const list = async (cursor: string | null = null) => {
-        const result = await service.execute({ ...identity, action: "list", cursor }, AbortSignal.timeout(30_000));
+        const result = await service.execute({ ...identity, action: "list", cursor }, signal);
         if (result.action !== "list") {
             throw new Error("Expected a native session list");
         }

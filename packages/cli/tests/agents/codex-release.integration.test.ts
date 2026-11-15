@@ -74,7 +74,9 @@ async function continueInTerminal(fixture: CodexFixture, cwd: string, args: read
     return output;
 }
 
-test("Given Morty continued a real Codex Session, When the user runs morty release, Then the Codex terminal continues it and Morty sees that turn next", async () => {
+test("Given Morty continued a real Codex Session, When the user runs morty release, Then the Codex terminal continues it and Morty sees that turn next", async ({
+    signal,
+}) => {
     const conversations: string[] = [];
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "RELEASE_REPLY", {
         beforeFirstText: async (_signal, conversation) => {
@@ -85,6 +87,7 @@ test("Given Morty continued a real Codex Session, When the user runs morty relea
     const sentWith = (marker: string): readonly string[] =>
         conversations.filter((conversation) => conversation.includes(marker));
     await withRealDaemonConnection(
+        signal,
         new CodexAgentSpecification(),
         fixture.environment,
         async (peer) => {

@@ -33,11 +33,14 @@ class PromptMediaAgent extends ControlledAcpSpecification {
     }
 }
 
-test("Given a persisted native conversation, When a client prompts after restart without preparing first, Then its generated image is readable under the same native pair", async () => {
+test("Given a persisted native conversation, When a client prompts after restart without preparing first, Then its generated image is readable under the same native pair", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ now: new Date("2026-10-29T00:00:00Z"), toFake: ["Date"] });
     const directory = await mkdtemp(join(tmpdir(), "morty-prompt-media-"));
     try {
         await withRealDaemon(
+            signal,
             new PromptMediaAgent(),
             {
                 MORTY_TEST_PROMPT_MEDIA_PATH: process.execPath,
@@ -112,8 +115,8 @@ interface FileReadResult {
 
 /** Reads one file through the daemon's public file.read protocol boundary. */
 async function readSessionFile(
-    peer: Parameters<Parameters<typeof withRealDaemon>[2]>[0],
-    sessionTarget: Parameters<Parameters<typeof withRealDaemon>[2]>[0]["target"],
+    peer: Parameters<Parameters<typeof withRealDaemon>[3]>[0],
+    sessionTarget: Parameters<Parameters<typeof withRealDaemon>[3]>[0]["target"],
     path: string,
 ): Promise<FileReadResult> {
     const requestId = `read-${path.replaceAll(/[^a-zA-Z0-9]/gu, "-")}`;
@@ -152,7 +155,9 @@ async function readSessionFile(
     }
 }
 
-test("Given a session with a working directory, When a client reads a root-relative or bare-relative file reference, Then the daemon resolves it against the session directory before the computer root", async () => {
+test("Given a session with a working directory, When a client reads a root-relative or bare-relative file reference, Then the daemon resolves it against the session directory before the computer root", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-session-file-read-"));
     const executableDirectory = join(directory, "bin");
     const executable = join(executableDirectory, "controlled-acp");
@@ -190,6 +195,7 @@ if (process.argv.includes("--version")) {
     await writeFile(join(decoyDirectory, "absent.html"), "<!doctype html>\n<title>Decoy</title>\n");
     try {
         await withRealDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { PATH: executableDirectory },
             async (peer) => {
@@ -250,7 +256,9 @@ if (process.argv.includes("--version")) {
     }
 });
 
-test("Given a session with a file, When a file read arrives without the Computer's encryption access, Then the daemon streams nothing for it and still serves the read that has it", async () => {
+test("Given a session with a file, When a file read arrives without the Computer's encryption access, Then the daemon streams nothing for it and still serves the read that has it", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-unsealed-file-read-"));
     const executableDirectory = join(directory, "bin");
     const executable = join(executableDirectory, "controlled-acp");
@@ -278,6 +286,7 @@ if (process.argv.includes("--version")) {
     await writeFile(join(workspace, "index.html"), "<!doctype html>\n<title>Todo</title>\n");
     try {
         await withRealDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { PATH: executableDirectory },
             async (peer) => {

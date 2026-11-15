@@ -12,10 +12,12 @@ import { ClaudeFixture } from "../support/agents/claude.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 
-test("Given Claude history contains an interrupted Write and completed Writes, When previewed through the daemon, Then incomplete input stays visible without a fabricated diff and completed content is preserved", async () => {
+test("Given Claude history contains an interrupted Write and completed Writes, When previewed through the daemon, Then incomplete input stays visible without a fabricated diff and completed content is preserved", async ({
+    signal,
+}) => {
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "UNUSED_HISTORY_PROVIDER");
     await using agent = await ClaudeFixture.create(provider);
-    await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
         const home = agent.environment["CLAUDE_CONFIG_DIR"];
         if (home === undefined) {
             throw new Error("Missing isolated Claude home");

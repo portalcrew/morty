@@ -19,9 +19,9 @@ import { CodexFixture } from "../support/agents/codex.ts";
 import { nextNativeSessionResult, withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test.each(["owned", "borrowed"])(
+test.for(["owned", "borrowed"])(
     "Given a real %s Codex conversation in Plan mode, When it completes a proposed plan and is reopened, Then its full body appears once with the same native identity",
-    async (ownership) => {
+    async (ownership, { signal }) => {
         const body =
             "# PLAN_BODY\n\n1. Preserve the default addition behavior.\n2. Add division and verify zero-divisor handling.";
         await using provider = await FakeOpenAiProvider.start(
@@ -29,7 +29,7 @@ test.each(["owned", "borrowed"])(
             `<proposed_plan>\n${body}\n</proposed_plan>\n`,
         );
         await using codex = await CodexFixture.create(provider, { configuredModel: "morty-test-model" });
-        await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+        await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
             const seeded = Promise.withResolvers<void>();
             const native =
                 ownership === "borrowed"

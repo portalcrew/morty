@@ -50,11 +50,14 @@ async function queriedStatus(
     }
 }
 
-test("Given a Session whose last turn failed, When a client that did not watch it reads its status, Then the Session reports the failure until another turn completes", async () => {
+test("Given a Session whose last turn failed, When a client that did not watch it reads its status, Then the Session reports the failure until another turn completes", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "failed-status-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory, { loadSession: true });
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executableDirectory },
             async (peer) => {

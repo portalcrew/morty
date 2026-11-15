@@ -12,12 +12,12 @@ import { ClaudeFixture } from "../support/agents/claude.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 
-test.each(["auto", "multiple", "preservedSegment", "preservedMessages", "missingParent", "cycle"])(
+test.for(["auto", "multiple", "preservedSegment", "preservedMessages", "missingParent", "cycle"])(
     "Given a native Claude transcript with %s compaction, When history is loaded before and after daemon restart, Then full history or the malformed-chain SDK fallback is replayed",
-    async (variant) => {
+    async (variant, { signal }) => {
         await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "UNUSED_HISTORY_PROVIDER");
         await using agent = await ClaudeFixture.create(provider);
-        await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
             const home = agent.environment["CLAUDE_CONFIG_DIR"];
             if (home === undefined) {
                 throw new Error("Missing isolated Claude home");

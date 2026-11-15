@@ -14,7 +14,9 @@ import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 import { fakeProviderPrompts } from "../support/llm/scenarios.ts";
 
-test("Given native Claude is installed outside PATH, When two prompts execute through the daemon, Then discovery finds it and both streamed replies arrive", async () => {
+test("Given native Claude is installed outside PATH, When two prompts execute through the daemon, Then discovery finds it and both streamed replies arrive", async ({
+    signal,
+}) => {
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "REAL_CLAUDE_REPLY");
     await using agent = await ClaudeFixture.create(provider);
     const home = agent.environment["HOME"];
@@ -44,7 +46,7 @@ test("Given native Claude is installed outside PATH, When two prompts execute th
             join(systemRoot, "System32", "WindowsPowerShell", "v1.0"),
         ].join(delimiter);
     }
-    await withRealDaemon(new ClaudeCodeAgentSpecification(), environment, async (peer) => {
+    await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), environment, async (peer) => {
         for (const turn of [0, 1]) {
             const prompt =
                 turn === 0 ? fakeProviderPrompts.successfulTool : "Continue the conversation with another reply";
@@ -114,12 +116,12 @@ test("Given native Claude is installed outside PATH, When two prompts execute th
 
 test.skipIf(process.platform !== "darwin")(
     "Given Claude Code receives a transient provider error, When its production adapter retries, Then the successful reply reaches the client without failing the turn",
-    async () => {
+    async ({ signal }) => {
         await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "CLAUDE_RECOVERED", {
             disconnectsBeforeSuccess: 1,
         });
         await using agent = await ClaudeFixture.create(provider);
-        await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
             const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({

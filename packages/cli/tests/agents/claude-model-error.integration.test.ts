@@ -11,7 +11,9 @@ import { ClaudeFixture } from "../support/agents/claude.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 
 // @no-uc: A typed provider failure must settle the public prompt lifecycle, even without a result trailer.
-test("Given Claude receives a model-not-found response, When I send a prompt, Then it fails without treating the diagnostic as an answer", async () => {
+test("Given Claude receives a model-not-found response, When I send a prompt, Then it fails without treating the diagnostic as an answer", async ({
+    signal,
+}) => {
     const server = createServer((request, response) => {
         request.resume();
         if (request.url?.includes("count_tokens")) {
@@ -35,7 +37,7 @@ test("Given Claude receives a model-not-found response, When I send a prompt, Th
             origin: `http://127.0.0.1:${address.port}`,
             model: "claude-sonnet-4-6",
         });
-        await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
             const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({
