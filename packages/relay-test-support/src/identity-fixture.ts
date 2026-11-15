@@ -6,16 +6,9 @@ export async function createTestOwner(
     origin: string,
     signal: AbortSignal,
 ) {
-    const bytes = crypto.getRandomValues(new Uint8Array(32));
-    const creationKey = btoa(String.fromCharCode(...bytes))
-        .replaceAll("+", "-")
-        .replaceAll("/", "_")
-        .replace(/=+$/u, "");
     const response = await request(
         new Request(`${origin}/morty/api/v1/computers`, {
             method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ creationKey }),
             signal,
         }),
     );

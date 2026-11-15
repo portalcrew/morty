@@ -7,8 +7,8 @@ import { createSessionExecutionProxy } from "../../../../tests/support/session-e
 import { computerObjectName } from "../../src/contracts/computer-id.ts";
 import worker from "../../src/worker/application.ts";
 
-/** A fresh client-held key naming one anonymous user creation. */
-export const anonymousCreationKey = (): string =>
+/** A fresh client-held key naming one transfer redemption, so a retry of it is recognized. */
+export const randomRedemptionKey = (): string =>
     Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
 
 import { startTestRelay } from "./test-relay.ts";
@@ -113,8 +113,6 @@ async function startIdentityFixture(
             const response = await worker.fetch(
                 new Request(`${APP_ORIGIN}/morty/api/v1/computers`, {
                     method: "POST",
-                    headers: { "content-type": "application/json" },
-                    body: JSON.stringify({ creationKey: anonymousCreationKey() }),
                 }),
                 environment(),
             );

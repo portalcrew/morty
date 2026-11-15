@@ -19,7 +19,6 @@ import { validateLocalPath } from "../engine/util/filesystem/private-path.ts";
 import { readStateDirectory } from "../storage/state-directory.ts";
 import { StateRootError, validateStateRoot } from "../storage/state-root.ts";
 import {
-    type CreatingIdentity,
     decodeSavedState,
     encodeSavedState,
     type IdentityState,
@@ -580,7 +579,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
     }
 
     /** Replaces the saved state atomically; every write follows an explicit identity transition. */
-    async function writeSavedState(location: StateLocation, identity: CreatingIdentity | ReadyIdentity) {
+    async function writeSavedState(location: StateLocation, identity: ReadyIdentity) {
         const temporary = join(location.directory, `.config-${crypto.randomUUID()}`);
         try {
             await writePrivateFile(
@@ -832,26 +831,9 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
             return { kind: "setup", context: { ...location, identity: saved }, computer: "reused" };
         }
         progress("identity", "Creating the standalone identity and Computer.");
-        // Keep the creation secret across failures. Until a reply supplies the computerId, each attempt
-        // creates a new computer; once the pair is saved, subsequent runs link that exact pair instead.
-        let creating: CreatingIdentity;
-        if (saved.kind === "creating") {
-            creating = saved;
-        } else {
-            creating = {
-                kind: "creating",
-                creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-            };
-            await writeSavedState(location, creating);
-        }
-        const created = await send(
-            location.base,
-            "/computers",
-            {},
-            {
-                creationKey: creating.creationKey,
-            },
-        );
+        // Until a reply supplies the computerId, each attempt creates a new computer; once the pair is saved, later
+        // runs link that exact pair instead.
+        const created = await send(location.base, "/computers", {}, {});
         const identity = createdIdentity({
             computerToken: credential(created["computerToken"]),
             computerId: identifier(created["computerId"]),

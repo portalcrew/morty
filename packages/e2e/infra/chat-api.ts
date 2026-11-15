@@ -29,11 +29,6 @@ export function text(value: unknown, name: string): string {
     return value;
 }
 
-/** A fresh client-held key naming one anonymous user creation. */
-function anonymousCreationKey(): string {
-    return Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
-}
-
 export async function jsonRequest(origin: string, path: string, { body, computer, token, signal }: RequestOptions) {
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (token !== undefined) {
@@ -75,7 +70,7 @@ export class ChatApi {
     /** Creates an anonymous Computer through the public boundary and holds its credential for later requests. */
     async createIdentity() {
         const created = await jsonRequest(this.origin, "/morty/api/v1/computers", {
-            body: { creationKey: anonymousCreationKey() },
+            body: {},
             signal: this.signal,
         });
         this.identity = {

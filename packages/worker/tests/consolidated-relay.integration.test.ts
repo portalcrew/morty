@@ -23,10 +23,6 @@ test("Given canonical Computer paths, When an owner manages identity and pairing
     const created = await bindings.request(
         new Request(`${bindings.origin}/morty/api/v1/computers`, {
             method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-                creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-            }),
             signal,
         }),
     );
@@ -129,11 +125,7 @@ test.each(["http", "websocket"] as const)(
                 },
                 ...(body === undefined ? {} : { body: JSON.stringify(body) }),
             });
-        const created = await bindings.request(
-            operation("/v1/computers", undefined, {
-                creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-            }),
-        );
+        const created = await bindings.request(operation("/v1/computers", undefined, {}));
         expect(created.status).toBe(201);
         expect(created.headers.has("server-timing")).toBe(false);
         const owner = v.parse(
@@ -314,10 +306,6 @@ test.each(["http", "websocket"] as const)(
             const audienceEndpoint = await bindings.request(
                 new Request(`${bindings.origin}/morty/api/web/computers`, {
                     method: "POST",
-                    body: JSON.stringify({
-                        creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-                    }),
-                    headers: { "content-type": "application/json" },
                     signal,
                 }),
             );

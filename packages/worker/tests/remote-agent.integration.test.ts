@@ -24,10 +24,6 @@ test.each([
     const signal = AbortSignal.timeout(75_000);
     const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-        }),
         signal,
     });
     const owner = v.parse(v.object({ computerId: v.string(), computerToken: v.string() }), await created.json());
@@ -185,10 +181,6 @@ test.each(["short", "long"])(
         const signal = AbortSignal.timeout(45_000);
         const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
             method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-                creationKey: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-            }),
             signal,
         });
         const owner = v.parse(v.object({ computerId: v.string(), computerToken: v.string() }), await created.json());

@@ -44,22 +44,18 @@ export default class extends WorkerEntrypoint {
             ],
         }),
     );
-    const creationKey = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
-    const body = JSON.stringify({ creationKey });
     try {
         // An upstream configuration failure still consumes admission, without needing to create disposable Computers.
         const first = await runtime.dispatchFetch("https://chat.test/morty/api/v1/computers", {
             method: "POST",
-            headers: { "content-type": "application/json", "CF-Connecting-IP": "192.0.2.10" },
-            body,
+            headers: { "CF-Connecting-IP": "192.0.2.10" },
         });
         expect(first.status).toBe(503);
         expect(await first.json()).toMatchObject({ error: { code: "RELAY_UNAVAILABLE" } });
         for (const address of ["192.0.2.10", "192.0.2.10", "192.0.2.11"]) {
             const response = await runtime.dispatchFetch("https://chat.test/morty/api/v1/computers", {
                 method: "POST",
-                headers: { "content-type": "application/json", "CF-Connecting-IP": address },
-                body,
+                headers: { "CF-Connecting-IP": address },
             });
             expect(response.status).toBe(address === "192.0.2.10" ? 429 : 503);
         }

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "vitest";
 import worker from "../src/worker/application.ts";
-import { APP_ORIGIN, anonymousCreationKey, createIdentityFixture } from "./support/identity-fixture.ts";
+import { APP_ORIGIN, createIdentityFixture } from "./support/identity-fixture.ts";
 
 // A stateful external admission service: tests control quota explicitly rather than waiting for a clock window.
 class CreationBudget {
@@ -21,11 +21,7 @@ afterAll(async () => {
 });
 
 function creation(headers: Readonly<Record<string, string>> = {}): Request {
-    return new Request(`${APP_ORIGIN}/morty/api/v1/computers`, {
-        method: "POST",
-        headers: { "content-type": "application/json", ...headers },
-        body: JSON.stringify({ creationKey: anonymousCreationKey() }),
-    });
+    return new Request(`${APP_ORIGIN}/morty/api/v1/computers`, { method: "POST", headers });
 }
 
 test("Given an anonymous visitor's creation allowance, When it is exhausted, Then another identity is refused with retry guidance while a different visitor can continue", async () => {

@@ -21,12 +21,6 @@ export interface IssuedIdentity {
     readonly computerId: string;
 }
 
-/** The user creation secret, saved before requesting a new computer. */
-export interface CreatingIdentity {
-    readonly kind: "creating";
-    readonly creationKey: string;
-}
-
 type PairingIntent = { readonly kind: "none" } | { readonly kind: "requesting"; readonly requestKey: string };
 
 /**
@@ -47,12 +41,12 @@ export interface ReadyIdentity extends IssuedIdentity {
  * What this computer's setup holds for the one Morty service its state directory belongs to. Only setup's intent is
  * kept here; the Computer owns its pairings and connections in its own state.
  */
-export type IdentityState = { readonly kind: "none" } | CreatingIdentity | ReadyIdentity;
+export type IdentityState = { readonly kind: "none" } | ReadyIdentity;
 
 /** The saved setup state. The service origin is part of the identity, never a setting that selects another one. */
 export interface SavedState {
     readonly base: string;
-    readonly identity: CreatingIdentity | ReadyIdentity;
+    readonly identity: ReadyIdentity;
 }
 
 /** Version of the saved state's representation; any other representation is refused, never converted. */
@@ -111,18 +105,15 @@ const savedReplacement = z.discriminatedUnion("kind", [
     }),
 ]);
 
-const savedIdentity = z.discriminatedUnion("kind", [
-    z.strictObject({ kind: z.literal("creating"), creation_key: z.string().regex(/^[A-Za-z0-9_-]{43}$/u) }),
-    z.strictObject({
-        kind: z.literal("ready"),
-        computer_token: savedCredential,
-        computer_id: savedIdentifier,
-        pairing: savedPairing,
-        replacement: savedReplacement,
-        // Present only while a rotation is requested; a state without one keeps its representation.
-        credential_rotation: z.strictObject({ successor_token: savedCredential }).optional(),
-    }),
-]);
+const savedIdentity = z.strictObject({
+    kind: z.literal("ready"),
+    computer_token: savedCredential,
+    computer_id: savedIdentifier,
+    pairing: savedPairing,
+    replacement: savedReplacement,
+    // Present only while a rotation is requested; a state without one keeps its representation.
+    credential_rotation: z.strictObject({ successor_token: savedCredential }).optional(),
+});
 
 const savedState = z.strictObject({
     version: z.literal(SAVED_STATE_VERSION),
@@ -181,33 +172,20 @@ function decodeReplacement(saved: SavedReplacement): ReplacementState {
 
 export function encodeSavedState(state: SavedState): SavedRepresentation {
     const identity = state.identity;
-    switch (identity.kind) {
-        case "creating":
-            return {
-                version: SAVED_STATE_VERSION,
-                base_url: state.base,
-                identity: { kind: "creating", creation_key: identity.creationKey },
-            };
-        case "ready":
-            return {
-                version: SAVED_STATE_VERSION,
-                base_url: state.base,
-                identity: {
-                    kind: "ready",
-                    computer_token: identity.computerToken,
-                    computer_id: identity.computerId,
-                    pairing: identity.pairing,
-                    replacement: encodeReplacement(identity.replacement),
-                    ...(identity.rotation.kind === "requested"
-                        ? { credential_rotation: { successor_token: identity.rotation.successor } }
-                        : {}),
-                },
-            };
-        default: {
-            const exhaustive: never = identity;
-            return exhaustive;
-        }
-    }
+    return {
+        version: SAVED_STATE_VERSION,
+        base_url: state.base,
+        identity: {
+            kind: "ready",
+            computer_token: identity.computerToken,
+            computer_id: identity.computerId,
+            pairing: identity.pairing,
+            replacement: encodeReplacement(identity.replacement),
+            ...(identity.rotation.kind === "requested"
+                ? { credential_rotation: { successor_token: identity.rotation.successor } }
+                : {}),
+        },
+    };
 }
 
 /** The saved state `value` holds, or null when it is not exactly the representation setup writes. */
@@ -217,28 +195,19 @@ export function decodeSavedState(value: unknown): SavedState | null {
         return null;
     }
     const saved = decoded.data;
-    const base = saved.base_url;
-    switch (saved.identity.kind) {
-        case "creating":
-            return { base, identity: { kind: "creating", creationKey: saved.identity.creation_key } };
-        case "ready": {
-            const ready = saved.identity;
-            return {
-                base,
-                identity: {
-                    kind: "ready",
-                    computerToken: ready.computer_token,
-                    computerId: ready.computer_id,
-                    pairing: ready.pairing,
-                    replacement: decodeReplacement(ready.replacement),
-                    rotation:
-                        ready.credential_rotation === undefined
-                            ? { kind: "none" }
-                            : { kind: "requested", successor: ready.credential_rotation.successor_token },
-                },
-            };
-        }
-        default:
-            return saved.identity satisfies never;
-    }
+    const ready = saved.identity;
+    return {
+        base: saved.base_url,
+        identity: {
+            kind: "ready",
+            computerToken: ready.computer_token,
+            computerId: ready.computer_id,
+            pairing: ready.pairing,
+            replacement: decodeReplacement(ready.replacement),
+            rotation:
+                ready.credential_rotation === undefined
+                    ? { kind: "none" }
+                    : { kind: "requested", successor: ready.credential_rotation.successor_token },
+        },
+    };
 }

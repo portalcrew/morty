@@ -1,5 +1,5 @@
 import { once } from "node:events";
-import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { createServer, request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -65,7 +65,7 @@ test("Given setup and a lost creation response without a known computer, When se
     let loseResponse = true;
     let original: v.InferOutput<typeof identitySchema> | undefined;
     let completedIdentity: v.InferOutput<typeof identitySchema> | undefined;
-    const creationKeys: string[] = [];
+    let creations = 0;
     const failures: unknown[] = [];
     let origin = "";
     // A real HTTP relay loses one successful response after the production Worker commits it.
@@ -90,9 +90,7 @@ test("Given setup and a lost creation response without a known computer, When se
             });
             const creation = new URL(request.url).pathname === "/morty/api/v1/computers";
             if (creation) {
-                creationKeys.push(
-                    v.parse(v.object({ creationKey: v.string() }), JSON.parse(body.toString())).creationKey,
-                );
+                creations += 1;
             }
             const response = await worker.fetch(request, {
                 ...fixture.environment(origin),
@@ -202,19 +200,21 @@ test("Given setup and a lost creation response without a known computer, When se
             JSON.parse(await readFile(join(state, "config.json"), "utf8")),
         ).identity;
     {
+        // Until a reply names the computer, setup has nothing to save.
+        const unsaved = async () =>
+            await expect(access(join(state, "config.json"))).rejects.toMatchObject({ code: "ENOENT" });
         expect((await run()).code).toBe(1);
-        const pending = await configuration();
-        expect(pending).toEqual({ kind: "creating", creation_key: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/u) });
+        await unsaved();
         expect(original).toBeDefined();
         const limited = await run();
         expect(limited.code).toBe(1);
         expect(limited.events.at(-1)).toMatchObject({ error: { code: "IDENTITY_CREATION_RATE_LIMITED" } });
-        expect(await configuration()).toEqual(pending);
+        await unsaved();
         available = false;
         const unavailable = await run();
         expect(unavailable.code).toBe(1);
         expect(unavailable.events.at(-1)).toMatchObject({ error: { code: "IDENTITY_CREATION_UNAVAILABLE" } });
-        expect(await configuration()).toEqual(pending);
+        await unsaved();
         available = true;
         budget.remaining = 1;
         const completed = await run();
@@ -227,15 +227,14 @@ test("Given setup and a lost creation response without a known computer, When se
             computer_token: identity.computerToken,
             computer_id: identity.computerId,
         });
-        expect(new Set(creationKeys)).toEqual(new Set([pending["creation_key"]]));
         const session = await fetch(`${origin}/morty/api/v1/computers/${identity.computerId}/session`, {
             headers: { authorization: `Bearer ${identity.computerToken}` },
         });
         expect(session.status).toBe(200);
         expect(await session.json()).toMatchObject({ computerId: identity.computerId });
-        const creationCount = creationKeys.length;
+        const creationCount = creations;
         expect((await run()).code).toBe(0);
-        expect(creationKeys).toHaveLength(creationCount);
+        expect(creations).toBe(creationCount);
         expect(await configuration()).toMatchObject({ computer_id: identity.computerId });
         expect(failures).toEqual([]);
     }

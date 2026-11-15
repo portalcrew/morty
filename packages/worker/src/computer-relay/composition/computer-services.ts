@@ -81,7 +81,7 @@ export class ComputerServices {
                     stored,
                 );
             }
-            // Independent server entropy keeps a creation key or a retired predecessor token from deriving its
+            // Independent server entropy keeps a retired predecessor token or a redemption key from deriving its
             // credential offline.
             // This key survives restarts, deployment credential rotation, and retries; no bearer token is stored.
             const key = crypto.getRandomValues(new Uint8Array(32));
