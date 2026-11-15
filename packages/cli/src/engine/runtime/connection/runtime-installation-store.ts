@@ -77,17 +77,7 @@ function pairingGeneration(): string {
     return `mcn_${randomUUID().replaceAll("-", "")}`;
 }
 
-/** A pairing saved by an earlier release recorded its revocation as `activation: "stopped"`; its next write saves it anew. */
-function currentConnectionRecord(value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
-    if (!Object.hasOwn(value, "activation") || Object.hasOwn(value, "revoked")) {
-        return value;
-    }
-    const { activation, ...rest } = value;
-    return { ...rest, revoked: activation === "stopped" ? true : activation === "active" ? false : activation };
-}
-
-function decodeSavedConnection(stored: Readonly<Record<string, unknown>>): SavedComputerConnection {
-    const value = currentConnectionRecord(stored);
+function decodeSavedConnection(value: Readonly<Record<string, unknown>>): SavedComputerConnection {
     if (!hasExactKeys(value, CONNECTION_KEYS)) {
         throw new RuntimeInstallationStoreError("invalid_connection", "The saved Runtime connection is invalid");
     }
