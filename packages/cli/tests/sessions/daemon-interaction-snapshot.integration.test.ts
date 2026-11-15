@@ -232,7 +232,8 @@ test("Given a newly created native Session, When its first Turn resolves interac
             encodeSessionQueryCommand({ kind: "session.query", requestId: "metadata-time", targets: [sessionTarget] }),
         );
         expect(decodeSessionsQueriedEvent(await messages.nextKind(SESSION_QUERIED_KIND))).toMatchObject({
-            entries: [expect.objectContaining({ target: sessionTarget, updatedAt: "2026-09-04T00:01:00.000Z" })],
+            // The Agent reports older times than the Turn the Computer just ran, which is the latest change.
+            entries: [expect.objectContaining({ target: sessionTarget, updatedAt: "2026-11-07T00:00:00.000Z" })],
         });
         await writeFile(join(stateDirectory, "agent", "resume-after-permission"), "");
         const elicitation = decodeSessionElicitationRequestedEvent(

@@ -58,6 +58,18 @@ import { restoredConversation, restoreOpening } from "./session-restore.ts";
 /** Attributes Agent requests that arrive while the Agent holds no prompt of this Session. */
 const SESSION_CONTROL_COMMAND_ID = "session-control";
 
+/** The latest of the given modification times, in canonical form; a time that does not parse is no modification. */
+function latestModification(...times: readonly (string | null | undefined)[]): string | null {
+    let latest: number | null = null;
+    for (const time of times) {
+        const parsed = time === null || time === undefined ? Number.NaN : Date.parse(time);
+        if (!Number.isNaN(parsed) && (latest === null || parsed > latest)) {
+            latest = parsed;
+        }
+    }
+    return latest === null ? null : new Date(latest).toISOString();
+}
+
 /** What the Session's execution authority tells its Agent session. */
 export interface SessionExecutionRecord {
     /** The command whose prompt the Session's Agent holds. */
@@ -144,8 +156,6 @@ export class AgentSession {
     #sessionLoad: SessionLoadState = { kind: "not-requested" };
     /** The Session's title; empty until the Agent reports one or the first prompt names it. */
     #sessionTitle = "";
-    /** The modification time the Agent reported; null until it reports one. */
-    #sessionUpdatedAt: string | null = null;
 
     private constructor(
         agent: AcpAgentDefinition,
@@ -366,10 +376,15 @@ export class AgentSession {
     /** The Runtime now holds this Session: its record is written, and every later change updates it. */
     readonly hold = (): void => {
         this.#holding = "held";
-        this.writeStoredSession(new Date().toISOString());
+        this.#writeStoredSession(new Date().toISOString());
     };
 
-    readonly writeStoredSession = (updatedAt: string): void => {
+    /**
+     * Records the Session's current facts. Its modification time is the latest change anyone observed: a change at
+     * `modifiedAt` moves it forward, an earlier one (such as an Agent restating an older time) never moves it back, and
+     * `null` records facts that are no change to the conversation, such as an Agent reporting its settings.
+     */
+    readonly #writeStoredSession = (modifiedAt: string | null): void => {
         if (this.#holding === "unheld") {
             return;
         }
@@ -379,8 +394,7 @@ export class AgentSession {
                 this.#cwd,
                 this.#prompted(),
                 this.#sessionTitle,
-                // Agent metadata owns modification time; local activity is only a fallback until it reports one.
-                this.#sessionUpdatedAt ?? updatedAt,
+                latestModification(this.#store.read(this.target)?.updatedAt, modifiedAt) ?? new Date().toISOString(),
                 this.#sessionConfigurations.stored(),
             ),
         );
@@ -421,7 +435,7 @@ export class AgentSession {
     readonly #captureSelectedConfigurationValues = (): void => {
         this.#sessionConfigurations.capture(this.#configOptions);
         if (this.#identity.kind === "bound") {
-            this.writeStoredSession(new Date().toISOString());
+            this.#writeStoredSession(null);
         }
     };
 
@@ -597,7 +611,7 @@ export class AgentSession {
         this.#applySessionOpened(opened);
         await this.#restoreStoredConfigurations(conversation, signal);
         signal.throwIfAborted();
-        this.writeStoredSession(conversation.updatedAt);
+        this.#writeStoredSession(conversation.updatedAt);
     };
 
     /**
@@ -739,7 +753,7 @@ export class AgentSession {
             throw new AcpExecutionError("The requested ACP configuration option is unavailable");
         }
         this.#sessionConfigurations.select(applied);
-        this.writeStoredSession(new Date().toISOString());
+        this.#writeStoredSession(new Date().toISOString());
         return {
             configOptions: this.#configOptions,
             configurationRevision: configurationRevision(this.#configOptions),
@@ -802,7 +816,7 @@ export class AgentSession {
             this.#sessionTitle = conversationTitleFromText(options.prompt);
         }
         this.#identity = { ...this.#bound(), prompted: true };
-        this.writeStoredSession(new Date().toISOString());
+        this.#writeStoredSession(new Date().toISOString());
         const lifecycle = options.lifecycle;
         if (lifecycle !== undefined) {
             this.recordLifecycleEvent({
@@ -834,7 +848,7 @@ export class AgentSession {
                     this.#delegableCommandId = null;
                 }
             });
-            this.writeStoredSession(new Date().toISOString());
+            this.#writeStoredSession(new Date().toISOString());
             if (lifecycle !== undefined) {
                 const messageId = result._meta?.messageId;
                 this.recordLifecycleEvent({
@@ -1072,20 +1086,20 @@ export class AgentSession {
             case "mode":
                 return;
             case "info": {
+                // A reported title alone is no change: an Agent restates it whenever the conversation is opened.
+                let modifiedAt: string | null = null;
                 for (const change of event.changes) {
                     switch (change.kind) {
                         case "title":
                             this.#sessionTitle = change.value;
                             break;
                         case "updated-at":
-                            // An empty time is the Agent clearing it.
-                            this.#sessionUpdatedAt = change.value.length > 0 ? change.value : null;
+                            modifiedAt = change.value;
                             break;
                     }
                 }
-                const updatedAt = this.#sessionUpdatedAt ?? new Date().toISOString();
                 if (this.#identity.kind === "bound") {
-                    this.writeStoredSession(updatedAt);
+                    this.#writeStoredSession(modifiedAt);
                 }
                 return;
             }
