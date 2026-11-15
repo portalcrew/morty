@@ -1,7 +1,6 @@
 import type { Logger } from "pino";
 import type { CloudBindings } from "../../contracts/cloud-bindings.ts";
 import { logger } from "../../infra/logger.ts";
-import type { ManagedSessionOperations } from "../components/chat/infra/managed-session-operations.ts";
 import { ChatService } from "../components/chat/service/chat-service.ts";
 import type { ComputerBackendService } from "../components/computer/service/computer-backend-service.ts";
 import type { ComputerIdentity } from "../components/management/entity/computer-identity.ts";
@@ -31,14 +30,12 @@ export function createApplicationDependencies(local: {
     readonly computer: ComputerBackendService;
     readonly identity: ComputerIdentity;
     readonly identities: IdentityStorage;
-    readonly sessionOperations: ManagedSessionOperations;
     readonly identityOperations: IdentityOperations;
 }): ApplicationContext {
     const cx = {
         config: { bindings: local.bindings },
         identity: local.identity,
         identityOperations: local.identityOperations,
-        sessionOperations: local.sessionOperations,
         storages: { identities: local.identities },
         logger,
     };

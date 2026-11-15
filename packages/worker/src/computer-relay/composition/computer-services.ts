@@ -2,7 +2,6 @@ import * as v from "valibot";
 import type { CloudBindings } from "../../contracts/cloud-bindings.ts";
 import { computerCreation } from "../../contracts/computer-creation.ts";
 import { ComputerManagementError, relayIdentifier } from "../../contracts/computer-management.ts";
-import { ManagedSessionOperations } from "../components/chat/infra/managed-session-operations.ts";
 import type { ComputerBackendService } from "../components/computer/service/computer-backend-service.ts";
 import type { IdentityOperations } from "../components/management/service/identity-operations.ts";
 import { createComputer } from "../components/management/service/management-service.ts";
@@ -38,8 +37,6 @@ export class ComputerServices {
         this.#commitCreation = commitCreation;
     }
 
-    readonly #sessionOperations = new ManagedSessionOperations();
-
     /** The computer this object holds; a request naming another is refused with the answer every boundary gives. */
     readonly #own = (computerId: string): string => {
         const validated = v.parse(relayIdentifier, computerId);
@@ -74,7 +71,6 @@ export class ComputerServices {
             computer: this.#runtime(computerId),
             identity: { computerId },
             identities: new IdentityStorage(this.#database(), computerId),
-            sessionOperations: this.#sessionOperations,
             identityOperations: { commitAccessEnd: this.#endAccess, credentialKey: this.#credentialKey },
         });
 }

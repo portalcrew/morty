@@ -1,10 +1,8 @@
-import { nativeSessionKey } from "@morty-build/client/native-session";
 import type {
     AgentSettingsDiscoverCommandRouting,
     ComputerDiagnosticsRequestRouting,
     ComputerPingCommandRouting,
     NativeSessionCommandRouting,
-    NativeSessionTarget,
     SessionAccessHolder,
     SessionArchiveCommandRouting,
     SessionCreateCommandRouting,
@@ -18,7 +16,6 @@ import { ComputerManagementError } from "../../../../contracts/computer-manageme
 import { computerRevoked } from "../../../../contracts/computer-pairing.ts";
 import type { ComputerIdentity } from "../../management/entity/computer-identity.ts";
 import type { LocalComputerService } from "../../management/service/local-computer-service.ts";
-import type { ManagedSessionOperations } from "../infra/managed-session-operations.ts";
 
 const OPENED_SESSION_CREDENTIAL_SECONDS = 900;
 const RENEWED_SESSION_CREDENTIAL_SECONDS = 600;
@@ -60,16 +57,13 @@ async function scopedNativeForkOperationId(computerId: string, key: string): Pro
 export class ChatService {
     readonly #computerId: string;
     readonly #relay: LocalComputerService;
-    readonly #sessionOperations: ManagedSessionOperations;
 
     constructor(cx: {
-        readonly sessionOperations: ManagedSessionOperations;
         readonly services: { readonly computers: LocalComputerService };
         readonly identity: ComputerIdentity;
     }) {
         this.#computerId = cx.identity.computerId;
         this.#relay = cx.services.computers;
-        this.#sessionOperations = cx.sessionOperations;
     }
 
     readonly authorize = async (
@@ -133,16 +127,6 @@ export class ChatService {
         }
     };
 
-    /**
-     * Runs an operation on an existing Session after every earlier one on that Session has finished, so archival cannot
-     * overtake a reopen that has already found the Session.
-     */
-    readonly #withSession = <Result>(
-        scope: ChatScope,
-        target: NativeSessionTarget,
-        operation: () => Promise<Result>,
-    ): Promise<Result> => this.#sessionOperations.run(nativeSessionKey(target), scope.signal, operation);
-
     readonly #requireComputerAgent = async (scope: ChatScope, harness: string) => {
         const computer = await this.#relay.getChatComputerAgents(scope.signal);
         if (!computer.agents.some((agent) => agent.harness === harness)) {
@@ -181,25 +165,21 @@ export class ChatService {
     /** Issues a credential for a Session the Computer holds. */
     readonly nativeSessionAccess = async (scope: ChatScope, command: SessionPrepareCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        return await this.#withSession(scope, command.target, async () => {
-            const ready = await this.#relay.clientControl(command, scope.signal);
-            if (ready.kind === "session.operation.failed") {
-                return ready;
-            }
-            return await this.#relay.nativeSessionAccess(
-                command.target,
-                sessionCredentialLifetime(RENEWED_SESSION_CREDENTIAL_SECONDS, scope.accessExpiresAt),
-                scope.holder,
-                scope.signal,
-            );
-        });
+        const ready = await this.#relay.clientControl(command, scope.signal);
+        if (ready.kind === "session.operation.failed") {
+            return ready;
+        }
+        return await this.#relay.nativeSessionAccess(
+            command.target,
+            sessionCredentialLifetime(RENEWED_SESSION_CREDENTIAL_SECONDS, scope.accessExpiresAt),
+            scope.holder,
+            scope.signal,
+        );
     };
 
     readonly managedSession = async (scope: ChatScope, command: SessionRestoreCommandRouting) => {
-        return await this.#withSession(scope, command.target, async () => {
-            await this.#requirePairedComputer(scope);
-            return await this.#relay.clientControl(command, scope.signal);
-        });
+        await this.#requirePairedComputer(scope);
+        return await this.#relay.clientControl(command, scope.signal);
     };
 
     /**
@@ -209,11 +189,7 @@ export class ChatService {
      */
     readonly archiveManagedSession = async (scope: ChatScope, command: SessionArchiveCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        return await this.#withSession(
-            scope,
-            command.target,
-            async () => await this.#relay.clientControl(command, scope.signal),
-        );
+        return await this.#relay.clientControl(command, scope.signal);
     };
 
     readonly nativeSessions = async (
