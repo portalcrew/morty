@@ -37,3 +37,16 @@ export function agentQuestionAnswer(questions: readonly AgentQuestion[], choices
         ? (answered[0]?.answer ?? null)
         : answered.map((entry) => `${entry.question}\n${entry.answer ?? ""}`).join("\n\n");
 }
+
+/**
+ * What a question card shows: the answers picked for it while its questions are open, and whether they make a complete
+ * answer to send. An answered card shows no pick: its answer is the user's message that follows it.
+ */
+export function agentQuestionCard(
+    questions: readonly AgentQuestion[],
+    answerable: boolean,
+    choices: AgentQuestionChoices | undefined,
+): { readonly choices: AgentQuestionChoices; readonly ready: boolean } {
+    const picked = answerable ? (choices ?? {}) : {};
+    return { choices: picked, ready: answerable && agentQuestionAnswer(questions, picked) !== null };
+}

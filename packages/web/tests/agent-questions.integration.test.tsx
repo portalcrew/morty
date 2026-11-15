@@ -8,7 +8,7 @@ import { createTestApp } from "./infra/test-app.tsx";
 const PROMPT = "Draft the page update";
 const QUESTION = "Append the five sections to the existing page?";
 
-test("Given the Agent asks me a question while it keeps working, When I pick a suggested answer, leave and return, and send it, Then the answer becomes my next message and the question takes no further answers", async () => {
+test("Given the Agent asks me a question while it keeps working, When I pick a suggested answer, leave and return, and send it, Then the answer becomes my next message and the answered question keeps no pick and takes no further answers", async () => {
     const app = await createTestApp({
         connectAgent: true,
         agent: {
@@ -78,5 +78,14 @@ test("Given the Agent asks me a question while it keeps working, When I pick a s
         expect(getByRole(answered, "radio", { name: "Not now" })).toHaveProperty("disabled", true);
         expect(getByRole(answered, "button", { name: "Send answer" })).toHaveProperty("disabled", true);
     });
-    await app.close();
+    // The answer is the message that follows the question; the answered card keeps no pick of its own.
+    const answered = getByRole(document.body, "region", { name: "Agent question" });
+    expect(getByRole(answered, "radio", { name: "Update the page" })).toHaveProperty("checked", false);
+    const reloaded = await app.reload();
+    await reloaded.waitForView(() => {
+        const card = getByRole(document.body, "region", { name: "Agent question" });
+        expect(getByRole(card, "radio", { name: "Not now" })).toHaveProperty("disabled", true);
+        expect(getByRole(card, "radio", { name: "Update the page" })).toHaveProperty("checked", false);
+    });
+    await reloaded.close();
 });
