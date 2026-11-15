@@ -176,7 +176,7 @@ test("Given a valid large tool event, When it is published live, Then the client
                     { content: "other", attachments: [], idempotencyKey: "other-turn" },
                     signal,
                 );
-                expect(turn.turnId).toBe("other-turn");
+                expect(["queued", "running", "settled"]).toContain(turn);
                 await other.sessions.readConfiguration(otherTarget, signal);
             } finally {
                 live.close();

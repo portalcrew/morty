@@ -209,12 +209,12 @@ export async function createChatWorkerEnvironment(
                     }
                 },
                 /** Requests steering through another authorized client's real Computer API. */
-                steerTurn: async (sessionId: string, turnId: string): Promise<void> => {
+                steerTurn: async (sessionId: string, commandId: string): Promise<void> => {
                     const signal = AbortSignal.timeout(30_000);
                     const target = { harness: agents[0]?.harness ?? "codex", sessionId };
                     const client = await sessionClient(target, signal);
                     try {
-                        await client.turns.steer(target, turnId, signal);
+                        await client.turns.steer(target, commandId, signal);
                     } finally {
                         client.close();
                     }

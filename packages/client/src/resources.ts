@@ -2,8 +2,8 @@ import type {
     PromptAttachment,
     SessionConfigurationSelection,
     SessionElicitationFormContent,
+    SessionPromptAcceptedEvent,
     SessionPromptDisposition,
-    TurnCancellation,
 } from "@morty-build/client/protocol";
 
 import { MortyValidationError } from "./errors.ts";
@@ -27,8 +27,14 @@ export type SubmitMortyTurnRequest = SubmitMortyTurnContent &
         | { readonly disposition: typeof SessionPromptDisposition.Steer; readonly targetCommandId: string }
     );
 
+/**
+ * How the Computer admitted a submitted prompt: it entered the Session's queue, started running, or had already
+ * settled before this answer (withdrawn before it started, or a retry of a prompt that finished).
+ */
+export type MortyTurnAdmission = SessionPromptAcceptedEvent["state"];
+
 /** How a cancelled Turn ended: `cancelled`, or the Agent's stop reason when the Turn finished first. */
-export type MortyTurnCancellation = TurnCancellation;
+export type MortyTurnCancellation = { readonly stopReason: string };
 
 /** The user's answer to an Agent's permission request. */
 export type MortyPermissionAnswer =

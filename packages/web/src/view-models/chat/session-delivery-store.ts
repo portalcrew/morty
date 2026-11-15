@@ -4,6 +4,7 @@ import {
     type MortyClient,
     MortyError,
     MortyOperationError,
+    type MortyTurnAdmission,
     MortyValidationError,
 } from "@morty-build/client";
 import type { PromptAttachment } from "@morty-build/client/protocol";
@@ -15,9 +16,8 @@ import { formatError } from "../format-error.ts";
 import { runtimeCoversMessage, runtimeHoldsCommand, type SessionExecutionState } from "./session-execution.ts";
 
 type SubmitRequest = Parameters<MortyClient["turns"]["submit"]>[1];
-/** The service took the message: it runs now, or the Computer queued it behind the Session's earlier work. */
-type AcceptedTurn = { readonly turnId: string; readonly queued: boolean };
-export type SubmitTurn = (request: SubmitRequest, signal: AbortSignal) => Promise<AcceptedTurn>;
+/** The Computer took the message: it runs now, waits behind the Session's earlier work, or already settled. */
+export type SubmitTurn = (request: SubmitRequest, signal: AbortSignal) => Promise<MortyTurnAdmission>;
 /**
  * How one attempt reaches the Session through the request access it started with. Preparation uploads the message's
  * files and freezes the request that delivery then owns through submission and recovery.
@@ -299,7 +299,7 @@ export const createSessionDeliveryStore = (options: {
             return;
         }
         try {
-            const accepted = await submit(
+            const admission = await submit(
                 {
                     ...journal.request,
                     idempotencyKey: journal.commandId,
@@ -307,7 +307,7 @@ export const createSessionDeliveryStore = (options: {
                 signal,
             );
             signal.throwIfAborted();
-            confirm(journal, accepted.queued ? "queue" : "turn", set, get);
+            confirm(journal, admission === "queued" ? "queue" : "turn", set, get);
         } catch (cause) {
             if (signal.aborted || cause instanceof MortyCancellationError) {
                 // The Session's lifetime on this page ended first. Losing the attempt's connection does not discard

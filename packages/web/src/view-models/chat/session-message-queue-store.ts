@@ -16,7 +16,6 @@ interface QueuedMessageValue {
     readonly attachments: QueuedMessageAttachments;
     readonly prompt: string;
     readonly summary: string;
-    readonly turnId: string;
 }
 
 export type ChatQueuedMessage =
@@ -97,7 +96,6 @@ export function queuedMessages(
         return [
             {
                 commandId: message.commandId,
-                turnId: message.commandId,
                 summary: message.prompt || attachments?.map((attachment) => attachment.name).join(", ") || "",
                 prompt: message.prompt,
                 attachments:
@@ -176,8 +174,7 @@ export const createSessionMessageQueueStore = (options: {
         const withdraw = async (message: ChatQueuedMessage, signal: AbortSignal): Promise<QueueRequestOutcome> => {
             const { commandId } = message;
             const outcome = await send(
-                (client, requestSignal) =>
-                    client.turns.cancelQueued(options.sessionTarget, message.turnId, requestSignal),
+                (client, requestSignal) => client.turns.cancelQueued(options.sessionTarget, commandId, requestSignal),
                 signal,
             );
             if (outcome.kind === "done") {
@@ -240,7 +237,7 @@ export const createSessionMessageQueueStore = (options: {
                 }
                 const { commandId } = message;
                 const outcome = await send(
-                    (client, requestSignal) => client.turns.steer(options.sessionTarget, message.turnId, requestSignal),
+                    (client, requestSignal) => client.turns.steer(options.sessionTarget, commandId, requestSignal),
                     signal,
                 );
                 if (outcome.kind === "done") {

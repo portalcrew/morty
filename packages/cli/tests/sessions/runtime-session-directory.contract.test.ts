@@ -201,16 +201,17 @@ it("Given a Session in a selected workspace, When the App prompts it and reads i
         const session = await runtime.sessionClient(sessionTarget, signal);
         onTestFinished(() => session.close());
 
-        const turn = await session.turns.submit(
+        const commandId = `turn-${crypto.randomUUID()}`;
+        await session.turns.submit(
             sessionTarget,
             {
                 attachments: [],
                 content: "Remember the selected workspace",
-                idempotencyKey: `turn-${crypto.randomUUID()}`,
+                idempotencyKey: commandId,
             },
             signal,
         );
-        await expect(session.sessions.readSessionExecution(sessionTarget, signal, turn.turnId)).resolves.toHaveProperty(
+        await expect(session.sessions.readSessionExecution(sessionTarget, signal, commandId)).resolves.toHaveProperty(
             "command",
         );
 
