@@ -1,4 +1,4 @@
-import type { MortyClient } from "@morty-build/client";
+import type { MortyClient, MortyTurnAdmission } from "@morty-build/client";
 import { createStore } from "zustand/vanilla";
 import type { SessionActivityState } from "./session-activity-machine.ts";
 import {
@@ -91,14 +91,13 @@ export type SessionExecutionFact =
           readonly deliveryCommandId: string | null;
       }
     /**
-     * The service accepted this page's submission of `commandId`, to run now or queued, sent at `startedAt`. An HTTP
+     * The Computer admitted this page's submission of `commandId`, sent at `startedAt`, as `admission` says. An HTTP
      * answer has no position in the Session's log.
      */
     | {
           readonly kind: "acknowledged";
           readonly commandId: string;
-          readonly turnId: string;
-          readonly queued: boolean;
+          readonly admission: MortyTurnAdmission;
           readonly startedAt: number;
       }
     /** This page submits a new turn, so the failure reported for an earlier one no longer describes the Session. */
@@ -202,12 +201,6 @@ function commandEnded(state: Pick<SessionExecutionState, "commands">, commandId:
     return state.commands.get(commandId)?.ended === true;
 }
 
-/** The turn id of a command the service reports running: the one it accepted this page's submission under, if any. */
-function runningTurnId(turn: CurrentTurn, commandId: string): string {
-    const accepted = acceptedTurn(turn);
-    return accepted?.commandId === commandId ? accepted.turnId : commandId;
-}
-
 function interactionId(interaction: SessionInteraction): string {
     return interaction.kind === "permission"
         ? interaction.permission.interactionId
@@ -285,7 +278,6 @@ function applyLiveChange(state: SessionExecutionState, change: LiveExecutionChan
                     : transitionCurrentTurn(known.turn, {
                           kind: "running",
                           commandId,
-                          turnId: runningTurnId(known.turn, commandId),
                           startedAt,
                       }),
             });
@@ -419,7 +411,6 @@ function applyRead(
         turn = transitionCurrentTurn(turn, {
             kind: "running",
             commandId: running.commandId,
-            turnId: runningTurnId(turn, running.commandId),
             startedAt: Date.parse(running.startedAt),
         });
         // How far the native session's owner has taken the command is the Computer's account, however this page
@@ -502,9 +493,10 @@ function applyExecutionFact(state: SessionExecutionState, fact: SessionExecution
             return applyRead(state, fact);
         case "acknowledged": {
             const known = learn(state, [fact.commandId], "holds");
-            // A queued message starts no turn yet, and a terminal live event can precede the acceptance response: the
-            // turn it ended stays ended.
-            if (fact.queued || commandEnded(state, fact.commandId)) {
+            // Only a message the Computer started running is a turn. A queued one starts none yet, and a settled one
+            // ended before this answer, its outcome is the Session's account; a terminal live event can also precede
+            // the answer, and the turn it ended stays ended.
+            if (fact.admission !== "running" || commandEnded(state, fact.commandId)) {
                 return settled(known);
             }
             return settled({
@@ -512,7 +504,6 @@ function applyExecutionFact(state: SessionExecutionState, fact: SessionExecution
                 turn: transitionCurrentTurn(known.turn, {
                     kind: "accepted",
                     commandId: fact.commandId,
-                    turnId: fact.turnId,
                     startedAt: fact.startedAt,
                 }),
             });

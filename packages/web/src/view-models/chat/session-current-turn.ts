@@ -1,8 +1,8 @@
 import { decodeIdentifier } from "@morty-build/client/protocol";
 import type { DelegationStage } from "./session-lifecycle.ts";
 
-// The turn the Session treats as current: the command the service reported running or accepted from this page, its
-// turn id and when its work started, or how the last reported turn ended. It records only what the service reported.
+// The turn the Session treats as current: the command the service reported running or accepted from this page and
+// when its work started, or how the last reported turn ended. It records only what the service reported.
 // Which report is newer than another is decided by the Session's execution state (`session-execution.ts`); these
 // transitions only say what one report does to the turn.
 
@@ -17,7 +17,6 @@ export type CurrentTurn =
     | {
           readonly kind: "current";
           readonly commandId: string;
-          readonly turnId: string;
           readonly startedAt: number;
           /**
            * How far the native session's owner has taken the command when the Computer handed it there instead of
@@ -33,7 +32,7 @@ export type CurrentTurnEvent =
      * The service accepted this page's submission of a new turn, dated by `startedAt`, when this browser sent it,
      * until the Computer reports when the turn started.
      */
-    | { readonly kind: "accepted"; readonly commandId: string; readonly turnId: string; readonly startedAt: number }
+    | { readonly kind: "accepted"; readonly commandId: string; readonly startedAt: number }
     /**
      * The service reports the command running; it replaces any other current command. `startedAt` is when the Computer
      * started it.
@@ -41,7 +40,6 @@ export type CurrentTurnEvent =
     | {
           readonly kind: "running";
           readonly commandId: string;
-          readonly turnId: string;
           readonly startedAt: number;
       }
     /** The Computer handed the command to the native session's owner, which reached `stage` with it at `at`. */
@@ -71,14 +69,13 @@ export function transitionCurrentTurn(turn: CurrentTurn, event: CurrentTurnEvent
         case "new-turn-submitted":
             return turn.kind === "idle" && turn.failure !== null ? { ...turn, failure: null } : turn;
         case "accepted":
-            // Another command the service reports running stays current.
+            // A command the service already reports current, this one or another, stays as reported.
             if (turn.kind === "current") {
-                return turn.commandId === event.commandId ? { ...turn, turnId: decodeIdentifier(event.turnId) } : turn;
+                return turn;
             }
             return {
                 kind: "current",
                 commandId: event.commandId,
-                turnId: decodeIdentifier(event.turnId),
                 startedAt: event.startedAt,
                 delegation: null,
             };
@@ -86,7 +83,6 @@ export function transitionCurrentTurn(turn: CurrentTurn, event: CurrentTurnEvent
             return {
                 kind: "current",
                 commandId: decodeIdentifier(event.commandId),
-                turnId: decodeIdentifier(event.turnId),
                 // A command the native session's owner runs started when the owner took it.
                 startedAt:
                     isCurrent(turn, event.commandId) && turn.delegation === "started"
@@ -140,7 +136,7 @@ export function workingIndicator(turn: CurrentTurn, waitingForInput: boolean): W
         : { kind: "working", startedAt: turn.startedAt, inOwner: turn.delegation === "started" };
 }
 
-/** The command the service accepted as the running turn, with that turn's id. */
-export function acceptedTurn(turn: CurrentTurn): { readonly commandId: string; readonly turnId: string } | null {
-    return turn.kind === "current" ? { commandId: turn.commandId, turnId: turn.turnId } : null;
+/** The command the service accepted as the running turn. */
+export function acceptedTurn(turn: CurrentTurn): { readonly commandId: string } | null {
+    return turn.kind === "current" ? { commandId: turn.commandId } : null;
 }

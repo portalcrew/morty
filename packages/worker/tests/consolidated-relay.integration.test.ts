@@ -293,7 +293,7 @@ test.each(["http", "websocket"] as const)(
                 },
                 signal,
             );
-            expect(accepted).toMatchObject({ turnId: "entrypoint-turn", target: access.target });
+            expect(["queued", "running", "settled"]).toContain(accepted);
             const live = await client.events.subscribeLive(
                 access.target,
                 { receive: async () => true, reconcile: async () => undefined },

@@ -219,6 +219,7 @@ export type {
     SessionMetadata,
     SessionOperationFailedEvent,
     SessionPrepareCommandRouting,
+    SessionPromptAcceptedEvent,
     SessionReadyBody,
     SessionReadyEvent,
     SessionRestoreCommandRouting,
@@ -355,12 +356,6 @@ export {
     type NativeSessionTarget,
     readNativeSessionTarget,
 } from "./session/shared/native-session-target.ts";
-export type {
-    Turn,
-    TurnCancellation,
-    TurnReference,
-} from "./session/turn/index.ts";
-export { decodeTurn, decodeTurnCancellation, decodeTurnReference } from "./session/turn/index.ts";
 export type {
     WorkspaceEntriesEvent,
     WorkspaceListCommandRouting,

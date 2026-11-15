@@ -7,7 +7,6 @@ import type { SessionOperationConnection } from "./session-operation-connection.
 /** The turn the service reports running, as the Session's execution state holds it. */
 export interface RunningTurn {
     readonly commandId: string;
-    readonly turnId: string;
 }
 
 type TaskControlFeedback =
@@ -69,7 +68,7 @@ export const createSessionTaskControlsStore = (options: {
             set({ feedback: { kind: "none" }, stopRequest: request });
             try {
                 await options.connection.send(async (client, requestSignal) => {
-                    await client.turns.cancel(options.sessionTarget, running.turnId, requestSignal);
+                    await client.turns.cancel(options.sessionTarget, running.commandId, requestSignal);
                 }, signal);
             } catch (cause) {
                 if (signal.aborted && parent.aborted) {

@@ -484,8 +484,7 @@ export function createSessionPaneModel(options: {
                 throw new Error("The Session is not connected.");
             }
             try {
-                const turn = await connected.turns.submit(sessionTarget, request, signal);
-                return { turnId: turn.turnId, queued: turn.state.kind === "queued" };
+                return await connected.turns.submit(sessionTarget, request, signal);
             } catch (cause) {
                 failedThrough(connected, cause);
                 throw cause;
@@ -543,21 +542,15 @@ export function createSessionPaneModel(options: {
          * Submits `commandId` through `connected`. The service's acceptance is a fact about the Session's execution: a
          * message the Computer runs at once becomes the current turn, dated by `startedAt`, when this browser sent it,
          * until the Computer reports its start; until then the turn is its delivery's. A message the Computer queued
-         * starts no turn yet.
+         * starts no turn yet, and one that already settled starts none at all.
          */
         const submitCommand =
             (connected: MortyClient | null, commandId: string, startedAt: number): SubmitTurn =>
             async (request, signal) => {
-                const accepted = await submitTurn(connected)(request, signal);
+                const admission = await submitTurn(connected)(request, signal);
                 signal.throwIfAborted();
-                execution.getState().apply({
-                    kind: "acknowledged",
-                    commandId,
-                    turnId: accepted.turnId,
-                    queued: accepted.queued,
-                    startedAt,
-                });
-                return accepted;
+                execution.getState().apply({ kind: "acknowledged", commandId, admission, startedAt });
+                return admission;
             };
         let historyLoadController: AbortController | null = null;
         /**

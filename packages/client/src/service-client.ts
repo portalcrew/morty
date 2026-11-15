@@ -6,9 +6,6 @@ import {
     decodeKnownSessionLiveEventBatch,
     decodeMessageKind,
     decodePromptAttachment,
-    decodeTurn,
-    decodeTurnCancellation,
-    decodeTurnReference,
     type ExternalAudioContentBlock,
     type ExternalImageContentBlock,
     type ExternalResourceContentBlock,
@@ -23,8 +20,6 @@ import {
     type SessionLiveEventBatch,
     type SessionOperationFailedEvent,
     SessionPromptDisposition,
-    type Turn,
-    type TurnReference,
 } from "@morty-build/client/protocol";
 import type { MortyTransportEndpoint } from "./calls/call.ts";
 import { sessionEndpoints } from "./calls/session.ts";
@@ -97,6 +92,7 @@ import {
 import type {
     MortyInteractionResponseRequest,
     MortyPageRequest,
+    MortyTurnAdmission,
     MortyTurnCancellation,
     SubmitMortyTurnRequest,
 } from "./resources.ts";
@@ -1047,11 +1043,12 @@ export class MortyTurnResources {
         this.#computerId = computerId;
     }
 
+    /** Submits a prompt and returns the Computer's admission of it, as the Computer answered. */
     readonly submit = async (
         sessionTarget: NativeSessionTarget,
         request: SubmitMortyTurnRequest,
         signal: AbortSignal,
-    ): Promise<Turn> => {
+    ): Promise<MortyTurnAdmission> => {
         const commandId = request.idempotencyKey;
         const requestId = commandId;
         signal.throwIfAborted();
@@ -1091,45 +1088,24 @@ export class MortyTurnResources {
             },
             signal,
         );
-        const acceptedAt = new Date().toISOString();
-        const state =
-            accepted.state === "running"
-                ? { kind: "running", startedAt: acceptedAt }
-                : accepted.state === "queued"
-                  ? { kind: "queued" }
-                  : {
-                        kind: "indeterminate",
-                        reconciliation: { detectedAt: acceptedAt, reason: "dispatch_indeterminate" },
-                    };
-        const turn = decodeTurn({
-            acceptedAt,
-            idempotencyKey: commandId,
-            turnId: commandId,
-            target: sessionTarget,
-            request: {
-                kind: "prompt",
-                content: request.content,
-                sessionConfigurations: request.sessionConfigurations ?? [],
-            },
-            state,
-        });
-        if (turn === null) {
-            throw new MortyProtocolError("The service returned an invalid Turn");
-        }
-        return turn;
+        return accepted.state;
     };
 
     readonly cancel = async (
         sessionTarget: NativeSessionTarget,
-        turnId: string,
+        commandId: string,
         signal: AbortSignal,
     ): Promise<MortyTurnCancellation> => {
         const requestId = crypto.randomUUID();
         const result = await this.#executor.exchange(
             {
-                endpoint: sessionEndpoints.cancelTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
+                endpoint: sessionEndpoints.cancelTurn({
+                    computerId: this.#computerId,
+                    target: sessionTarget,
+                    commandId,
+                }),
                 body: await sessionCancelCommandCodec.encode(
-                    { kind: "session.cancel", requestId, target: sessionTarget, commandId: turnId },
+                    { kind: "session.cancel", requestId, target: sessionTarget, commandId },
                     this.#executor.payloadEncryption,
                     signal,
                 ),
@@ -1137,51 +1113,29 @@ export class MortyTurnResources {
                 target: sessionTarget,
                 reply: sessionTurnStoppedEventCodec,
                 mismatch: "The Computer returned an invalid Turn cancellation",
-                isAnswer: (reply) => reply.commandId === turnId,
+                isAnswer: (reply) => reply.commandId === commandId,
             },
             signal,
         );
-        return this.#answeredFor(turnId, "Turn cancellation", decodeTurnCancellation, {
-            turnId: result.commandId,
-            stopReason: result.stopReason,
-        });
-    };
-
-    /** The Relay's answer, decoded by its protocol schema, and checked to be about the Turn the call named. */
-    readonly #answeredFor = <Answer extends TurnReference>(
-        turnId: string,
-        what: string,
-        decode: (value: unknown) => Answer,
-        value: unknown,
-    ): Answer => {
-        let answer: Answer;
-        try {
-            answer = decode(value);
-        } catch (cause) {
-            throw new MortyProtocolError(`The service returned an invalid ${what}`, { cause });
-        }
-        if (answer.turnId !== turnId) {
-            throw new MortyProtocolError(`The service returned an invalid ${what}`);
-        }
-        return answer;
+        return { stopReason: result.stopReason };
     };
 
     /** Withdraws a queued prompt only when the Computer confirms it did not execute. */
     readonly cancelQueued = async (
         sessionTarget: NativeSessionTarget,
-        turnId: string,
+        commandId: string,
         signal: AbortSignal,
     ): Promise<void> => {
         const requestId = crypto.randomUUID();
-        const result = await this.#executor.exchange(
+        await this.#executor.exchange(
             {
                 endpoint: sessionEndpoints.cancelQueuedTurn({
                     computerId: this.#computerId,
                     target: sessionTarget,
-                    turnId,
+                    commandId,
                 }),
                 body: await sessionCancelBeforeStartCommandCodec.encode(
-                    { kind: "session.cancel-before-start", requestId, target: sessionTarget, commandId: turnId },
+                    { kind: "session.cancel-before-start", requestId, target: sessionTarget, commandId },
                     this.#executor.payloadEncryption,
                     signal,
                 ),
@@ -1189,28 +1143,32 @@ export class MortyTurnResources {
                 target: sessionTarget,
                 reply: sessionTurnWithdrawnEventCodec,
                 mismatch: "The service returned an invalid queued cancellation",
-                isAnswer: (reply) => reply.commandId === turnId,
+                isAnswer: (reply) => reply.commandId === commandId,
             },
             signal,
         );
-        this.#answeredFor(turnId, "queued cancellation", decodeTurnReference, { turnId: result.commandId });
     };
 
+    /** Steers a queued prompt into the running Turn, once the Computer confirms the prompt started. */
     readonly steer = async (
         sessionTarget: NativeSessionTarget,
-        turnId: string,
+        commandId: string,
         signal: AbortSignal,
-    ): Promise<{ readonly turnId: string }> => {
+    ): Promise<void> => {
         const requestId = crypto.randomUUID();
-        const result = await this.#executor.exchange(
+        await this.#executor.exchange(
             {
-                endpoint: sessionEndpoints.steerTurn({ computerId: this.#computerId, target: sessionTarget, turnId }),
+                endpoint: sessionEndpoints.steerTurn({
+                    computerId: this.#computerId,
+                    target: sessionTarget,
+                    commandId,
+                }),
                 body: await sessionPromptDispositionCommandCodec.encode(
                     {
                         kind: "session.prompt.disposition",
                         requestId,
                         target: sessionTarget,
-                        commandId: turnId,
+                        commandId,
                         disposition: SessionPromptDisposition.Steer,
                     },
                     this.#executor.payloadEncryption,
@@ -1220,11 +1178,10 @@ export class MortyTurnResources {
                 target: sessionTarget,
                 reply: sessionPromptSteeredEventCodec,
                 mismatch: "The service returned an invalid steered Turn",
-                isAnswer: (reply) => reply.commandId === turnId,
+                isAnswer: (reply) => reply.commandId === commandId,
             },
             signal,
         );
-        return this.#answeredFor(turnId, "steered Turn", decodeTurnReference, { turnId: result.commandId });
     };
 }
 

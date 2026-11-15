@@ -3962,7 +3962,7 @@ describe("Computer prompt acknowledgements", () => {
                     signal,
                 ),
             );
-            expect((await first).turnId).toBe("retried-command");
+            expect(await first).toBe("running");
             runtime.daemon.send(
                 await sessionEventEnvelopeCodec.encode(
                     JSON.parse(
@@ -4001,13 +4001,13 @@ describe("Computer prompt acknowledgements", () => {
                     signal,
                 ),
             );
-            expect(await retry).toMatchObject({ turnId: "retried-command" });
+            expect(await retry).toBe("settled");
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
     }, 30_000);
 
-    it("Given a prompt that already settled, When it is retried with the same idempotency key, Then the Turn is reported indeterminate instead of running", async () => {
+    it("Given a prompt that already settled, When it is retried with the same idempotency key, Then the submission is answered settled instead of running", async () => {
         const runtime = await connectComputerDaemon("settled-retry");
         try {
             const signal = new AbortController().signal;
@@ -4040,13 +4040,7 @@ describe("Computer prompt acknowledgements", () => {
                     signal,
                 ),
             );
-            expect(await retry).toMatchObject({
-                state: {
-                    kind: "indeterminate",
-                    reconciliation: { detectedAt: "2026-09-18T00:00:00.000Z", reason: "dispatch_indeterminate" },
-                },
-                turnId: "settled-command",
-            });
+            expect(await retry).toBe("settled");
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
@@ -4111,10 +4105,7 @@ describe("Computer prompt acknowledgements", () => {
             );
 
             expect(await cancel).toMatchObject({ stopReason: "cancelled" });
-            expect(await submission).toMatchObject({
-                state: { kind: "indeterminate", reconciliation: { reason: "dispatch_indeterminate" } },
-                turnId: "preparing-command",
-            });
+            expect(await submission).toBe("settled");
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }

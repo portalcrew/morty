@@ -138,39 +138,39 @@ export const sessionEndpoints = Object.freeze({
     cancelTurn: ({
         computerId,
         target,
-        turnId,
-    }: SessionCallTarget & { readonly turnId: string }): MortyTransportEndpoint =>
+        commandId,
+    }: SessionCallTarget & { readonly commandId: string }): MortyTransportEndpoint =>
         endpoint({
             computerId,
             target,
             method: "POST",
-            resource: `turns/${encodeURIComponent(turnId)}/cancel`,
+            resource: `turns/${encodeURIComponent(commandId)}/cancel`,
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
     cancelQueuedTurn: ({
         computerId,
         target,
-        turnId,
-    }: SessionCallTarget & { readonly turnId: string }): MortyTransportEndpoint =>
+        commandId,
+    }: SessionCallTarget & { readonly commandId: string }): MortyTransportEndpoint =>
         endpoint({
             computerId,
             target,
             method: "POST",
-            resource: `turns/${encodeURIComponent(turnId)}/cancel-before-start`,
+            resource: `turns/${encodeURIComponent(commandId)}/cancel-before-start`,
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
     steerTurn: ({
         computerId,
         target,
-        turnId,
-    }: SessionCallTarget & { readonly turnId: string }): MortyTransportEndpoint =>
+        commandId,
+    }: SessionCallTarget & { readonly commandId: string }): MortyTransportEndpoint =>
         endpoint({
             computerId,
             target,
             method: "PUT",
-            resource: `turns/${encodeURIComponent(turnId)}/disposition`,
+            resource: `turns/${encodeURIComponent(commandId)}/disposition`,
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
