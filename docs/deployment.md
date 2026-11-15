@@ -68,10 +68,6 @@ secret before expiry and verify a deployment before revoking the replaced token;
 never use a personal User API Token or a Global API key as a fallback.
 Never log credentials.
 
-Morty enforces identity, sharing, pairing and authorization at the owning execution
-boundary. Preserve active computer and Agent data; the migration history of every
-bound database is immutable.
-
 Deployment checks account authority, artifact identity, required secrets and the
 destination resources before writes. Production refuses to activate an installer until the exact
 Morty npm version exists with the accepted archive integrity. Upload immutable assets before changing the Worker.

@@ -11,7 +11,8 @@ metadata:
 This guide is for developing Morty itself. To connect your Agent and use Morty,
 start with the [README](../README.md) and [usage guide](GUIDE.md). Contributors should
 use the [glossary](GLOSSARY.md) for Morty's application and Session terminology. See
-[AGENTS.md](../AGENTS.md) for engineering rules and [TESTING.md](TESTING.md) for verification.
+[AGENTS.md](../AGENTS.md) for engineering rules, [CODE_REVIEW.md](CODE_REVIEW.md) for review, and
+[TESTING.md](TESTING.md) for test commands and release acceptance.
 
 ## Issues and pull requests
 
@@ -21,14 +22,6 @@ Pull requests from outside the maintainer team are reviewed and merged slowly. W
 recommend opening an issue describing the problem or the outcome you need; the
 maintainers decide whether and how to implement it.
 
-Compatibility is mandatory unless the human user or maintainer explicitly requires
-the particular breaking change. Follow the engineering rules and
-[CODE_REVIEW.md](CODE_REVIEW.md). For a changed external contract, include the
-affected peers, both mixed-version verification results, and rollout/recovery
-consequences in the PR; cite the explicit instruction for any intentional break.
-An explicitly authorized Morty contract change does not authorize deletion of
-Agent-owned data.
-
 - Write issue titles and descriptions in English.
 - Write pull request titles and descriptions in English.
 - Write code comments in English.
@@ -37,10 +30,7 @@ Agent-owned data.
   no scope is needed, for example `chore: update dependencies`.
 - Describe the problem, expected behavior, and relevant reproduction steps in
   issues. For feature requests, describe the user need and desired outcome.
-- In pull requests, explain the change, link related issues, and include relevant
-  verification results and any limitations.
-- Keep Markdown changes in documentation-only pull requests, separate from code,
-  configuration, dependencies, and submodule updates.
+- Fill in the pull request template.
 
 ## Local development
 
@@ -71,10 +61,8 @@ configured. See [the local-stack guide](../.agents/skills/chat-local-full-dev/SK
 for connecting it to the isolated stack. Runtime, protocol, client, and server
 sources belong to the same Morty workspace.
 
-Before proposing a change, run `pnpm lint`, `pnpm typecheck`, and the relevant
-commands in [TESTING.md](TESTING.md). New behavior starts with an acceptance scenario
-through a supported product boundary. Documentation-only changes do not need new
-behavior tests. Follow the [Code of Conduct](../CODE_OF_CONDUCT.md); use
+Before proposing a change, verify it as [AGENTS.md](../AGENTS.md#verification)
+describes. Follow the [Code of Conduct](../CODE_OF_CONDUCT.md); use
 [Support](../SUPPORT.md) to choose the right channel for questions and reports.
 
 ## Build and artifact operations

@@ -8,6 +8,9 @@ metadata:
 
 # Testing
 
+What to test and through which boundary is defined in [AGENTS.md](../AGENTS.md#delivery);
+when to run which checks is defined in [AGENTS.md](../AGENTS.md#verification).
+
 ## Commands
 
 ```sh
@@ -16,30 +19,10 @@ pnpm typecheck
 pnpm test:web
 pnpm test:worker
 pnpm test:e2e
+pnpm ci:check
 ```
 
-Run only related suites during development. `pnpm ci:check` reproduces combined
-static validation and client tests when diagnosing CI.
-
-## Test boundaries
-
-Web tests exercise visible user workflows in happy-dom. Worker tests enter through
-production HTTP, WebSocket, and storage boundaries. Browser E2E covers happy-path
-conversation and setup journeys.
-
-Morty Web, Worker, and browser suites run the production daemon through the real
-Morty WebSocket endpoint. Tests inject a stateful controlled ACP harness through
-the daemon's Agent dependency argument; the single Worker, internal clients, daemon behavior,
-and transports remain real. Each fixture owns pairing and cleanup of the
-resources it creates.
-
-Follow [AGENTS.md](../AGENTS.md) for scenario and fake-provider rules. Exercise visible
-controls in Web tests and production HTTP/WebSocket boundaries in Worker tests.
-The controlled ACP harness establishes Morty behavior across the production daemon,
-not compatibility with a named Agent. Real Agent compatibility requires the real
-executable and production adapter; a controlled provider can supply deterministic
-model responses without coding-plan credentials. Do not infer compatibility from an
-Agent label on a controlled peer.
+## Manual checks
 
 Visual layout checks remain manual. Record manual verification
 results in the relevant pull request and attach screenshots there. Do not commit
