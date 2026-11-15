@@ -1,9 +1,16 @@
-import { eq } from "drizzle-orm";
+import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { sessionLiveEventPositionAllocation } from "../../schema/acp-session-store/index.ts";
 import type { LocalSqliteDatabase } from "../sqlite/local-sqlite-database.ts";
 
 const allocationRowSchema = z.object({ allocatedPosition: z.number().int().safe().nonnegative() });
+
+const ofSession = (target: NativeSessionTarget) =>
+    and(
+        eq(sessionLiveEventPositionAllocation.harness, target.harness),
+        eq(sessionLiveEventPositionAllocation.sessionId, target.sessionId),
+    );
 
 /** The highest live event position reserved for each session. */
 export class LiveEventPositionTable {
@@ -15,24 +22,27 @@ export class LiveEventPositionTable {
 
     readonly transaction = <Result>(operation: () => Result): Result => this.#database.transaction(operation);
 
-    readonly read = (sessionId: string): number | undefined => {
+    readonly read = (target: NativeSessionTarget): number | undefined => {
         const persisted = this.#database.orm
             .select({ allocatedPosition: sessionLiveEventPositionAllocation.allocatedPosition })
             .from(sessionLiveEventPositionAllocation)
-            .where(eq(sessionLiveEventPositionAllocation.sessionId, sessionId))
+            .where(ofSession(target))
             .get();
         return persisted === undefined ? undefined : allocationRowSchema.parse(persisted).allocatedPosition;
     };
 
-    readonly insert = (sessionId: string, allocatedPosition: number): void => {
-        this.#database.orm.insert(sessionLiveEventPositionAllocation).values({ sessionId, allocatedPosition }).run();
+    readonly insert = (target: NativeSessionTarget, allocatedPosition: number): void => {
+        this.#database.orm
+            .insert(sessionLiveEventPositionAllocation)
+            .values({ harness: target.harness, sessionId: target.sessionId, allocatedPosition })
+            .run();
     };
 
-    readonly update = (sessionId: string, allocatedPosition: number): void => {
+    readonly update = (target: NativeSessionTarget, allocatedPosition: number): void => {
         this.#database.orm
             .update(sessionLiveEventPositionAllocation)
             .set({ allocatedPosition })
-            .where(eq(sessionLiveEventPositionAllocation.sessionId, sessionId))
+            .where(ofSession(target))
             .run();
     };
 }

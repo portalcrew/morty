@@ -1,4 +1,4 @@
-import { NativeSessionMap, nativeSessionKey } from "@morty-build/client/native-session";
+import { NativeSessionMap } from "@morty-build/client/native-session";
 import type { NativeSessionTarget } from "@morty-build/client/protocol";
 import type { LiveEventPositionTable } from "../../storage/session/live-event-position-table.ts";
 
@@ -36,7 +36,7 @@ export class SqliteSessionLiveEventPosition implements SessionLiveEventPosition 
     // unused suffix rather than reusing positions, without a synchronous transaction per chunk.
     readonly #reserve = (sessionTarget: NativeSessionTarget): PositionReservation =>
         this.#table.transaction(() => {
-            const persisted = this.#table.read(nativeSessionKey(sessionTarget));
+            const persisted = this.#table.read(sessionTarget);
             const allocatedPosition = persisted ?? INITIAL_POSITION - 1;
             if (allocatedPosition === Number.MAX_SAFE_INTEGER) {
                 throw new Error("The live Session event position allocation is exhausted");
@@ -44,9 +44,9 @@ export class SqliteSessionLiveEventPosition implements SessionLiveEventPosition 
             const next = allocatedPosition + 1;
             const end = next + Math.min(POSITION_RESERVATION_SIZE - 1, Number.MAX_SAFE_INTEGER - next);
             if (persisted === undefined) {
-                this.#table.insert(nativeSessionKey(sessionTarget), end);
+                this.#table.insert(sessionTarget, end);
             } else {
-                this.#table.update(nativeSessionKey(sessionTarget), end);
+                this.#table.update(sessionTarget, end);
             }
             return { next, end };
         });

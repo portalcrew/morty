@@ -134,6 +134,20 @@
             "when": 1794706044716,
             "tag": "0018_closed_shard",
             "breakpoints": true
+        },
+        {
+            "idx": 19,
+            "version": "6",
+            "when": 1794749822569,
+            "tag": "0019_drop_session_key_tables",
+            "breakpoints": true
+        },
+        {
+            "idx": 20,
+            "version": "6",
+            "when": 1794749826751,
+            "tag": "0020_session_key_columns",
+            "breakpoints": true
         }
     ]
 }

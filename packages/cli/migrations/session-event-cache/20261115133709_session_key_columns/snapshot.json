@@ -1,0 +1,106 @@
+{
+    "version": "7",
+    "dialect": "sqlite",
+    "id": "ee2d9a58-3473-43f3-a6a7-6653e3de430d",
+    "prevIds": ["2753ff43-d78e-4563-9917-730a3fbf6c42"],
+    "ddl": [
+        {
+            "name": "session_event_cache",
+            "entityType": "tables"
+        },
+        {
+            "type": "text",
+            "notNull": true,
+            "autoincrement": false,
+            "default": null,
+            "generated": null,
+            "name": "event_id",
+            "entityType": "columns",
+            "table": "session_event_cache"
+        },
+        {
+            "type": "text",
+            "notNull": true,
+            "autoincrement": false,
+            "default": null,
+            "generated": null,
+            "name": "event_json",
+            "entityType": "columns",
+            "table": "session_event_cache"
+        },
+        {
+            "type": "text",
+            "notNull": true,
+            "autoincrement": false,
+            "default": null,
+            "generated": null,
+            "name": "generation_id",
+            "entityType": "columns",
+            "table": "session_event_cache"
+        },
+        {
+            "type": "text",
+            "notNull": true,
+            "autoincrement": false,
+            "default": null,
+            "generated": null,
+            "name": "harness",
+            "entityType": "columns",
+            "table": "session_event_cache"
+        },
+        {
+            "type": "integer",
+            "notNull": true,
+            "autoincrement": false,
+            "default": null,
+            "generated": null,
+            "name": "position",
+            "entityType": "columns",
+            "table": "session_event_cache"
+        },
+        {
+            "type": "text",
+            "notNull": true,
+            "autoincrement": false,
+            "default": null,
+            "generated": null,
+            "name": "session_id",
+            "entityType": "columns",
+            "table": "session_event_cache"
+        },
+        {
+            "columns": ["harness", "session_id", "event_id"],
+            "nameExplicit": false,
+            "name": "session_event_cache_pk",
+            "entityType": "pks",
+            "table": "session_event_cache"
+        },
+        {
+            "columns": [
+                {
+                    "value": "generation_id",
+                    "isExpression": false
+                },
+                {
+                    "value": "harness",
+                    "isExpression": false
+                },
+                {
+                    "value": "session_id",
+                    "isExpression": false
+                },
+                {
+                    "value": "position",
+                    "isExpression": false
+                }
+            ],
+            "isUnique": false,
+            "where": null,
+            "origin": "manual",
+            "name": "session_event_cache_generation_session_position_index",
+            "entityType": "indexes",
+            "table": "session_event_cache"
+        }
+    ],
+    "renames": []
+}
