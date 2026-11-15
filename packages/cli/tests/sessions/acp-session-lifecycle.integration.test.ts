@@ -123,7 +123,7 @@ describe("ACP conversation sessions", () => {
         }
     });
 
-    it("Given an inactive existing conversation, When it is reopened, Then its directory activity time stays unchanged", async () => {
+    it("Given a conversation whose Agent reported an older modification time, When it is reopened and then prompted, Then reopening keeps its activity time and the prompt makes it the latest", async () => {
         vi.useFakeTimers({ toFake: ["Date"] });
         const store = new MemorySessionStore();
         const temporaryDirectory = await mkdtemp(join(tmpdir(), "morty-acp-activity-time-"));
@@ -186,6 +186,7 @@ describe("ACP conversation sessions", () => {
             if (initial === undefined) {
                 throw new Error("Expected the conversation to be stored");
             }
+            expect(initial.updatedAt).toBe("2026-10-01T12:00:00.000Z");
             await firstManager.close();
 
             vi.setSystemTime(new Date("2026-10-14T12:00:00.000Z"));
@@ -236,8 +237,8 @@ describe("ACP conversation sessions", () => {
                 if (active === undefined) {
                     throw new Error("Expected the active conversation to remain stored");
                 }
-                // Activity preserves the Agent's reported modification time rather than the Computer clock.
-                expect(active.updatedAt).toBe("2026-09-05T00:00:00Z");
+                // The Agent restates its older modification time; the prompt the Computer just ran is the latest change.
+                expect(active.updatedAt).toBe("2026-10-14T12:00:00.000Z");
             } finally {
                 await reopenedManager.close();
             }

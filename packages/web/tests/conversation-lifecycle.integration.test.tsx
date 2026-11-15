@@ -308,32 +308,21 @@ test("Given conversations updated across recent dates, When the directory loads,
 }, async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
-        vi.setSystemTime(new Date("2026-10-10T12:00:00+08:00"));
+        // The user's activity only moves forward in time, starting with the September conversation.
+        vi.setSystemTime(new Date("2026-09-08T12:00:00+08:00"));
         const conversations = [
-            { title: "Today conversation", updatedAt: "2026-10-10T12:00:00+08:00" },
-            { title: "September conversation", updatedAt: "2026-09-02T12:00:00+08:00" },
+            { title: "September conversation", updatedAt: "2026-09-08T12:00:00+08:00" },
             { title: "Previous 30 days conversation", updatedAt: "2026-10-02T12:00:00+08:00" },
             { title: "Previous 7 days conversation", updatedAt: "2026-10-06T12:00:00+08:00" },
             { title: "Yesterday conversation", updatedAt: "2026-10-09T12:00:00+08:00" },
+            { title: "Today conversation", updatedAt: "2026-10-10T12:00:00+08:00" },
         ] as const;
         const app = await createTestApp({
             connectAgent: true,
             agent: {
                 harness: "codex",
                 label: "Codex",
-                reply: (prompt) => {
-                    const conversation = conversations.find(({ title }) => title === prompt);
-                    if (conversation === undefined) {
-                        throw new Error("Expected a conversation with controlled activity metadata");
-                    }
-                    return {
-                        outcome: "complete",
-                        output: [
-                            { kind: "session-updated-at", updatedAt: conversation.updatedAt },
-                            { kind: "text", text: conversation.title },
-                        ],
-                    };
-                },
+                reply: (prompt) => ({ outcome: "complete", output: [{ kind: "text", text: prompt }] }),
             },
         });
         await app.queryElementByTestId(
@@ -341,6 +330,8 @@ test("Given conversations updated across recent dates, When the directory loads,
             (element) => element.getAttribute("data-connection-status") === "connected",
         );
         for (const [index, conversation] of conversations.entries()) {
+            // Each conversation's latest activity is the prompt the user sends it on that date.
+            vi.setSystemTime(new Date(conversation.updatedAt));
             if (index > 0) {
                 await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
             }
@@ -362,6 +353,8 @@ test("Given conversations updated across recent dates, When the directory loads,
             });
         }
 
+        // The user returns to the page on the last day, so the directory reads the dates against that day.
+        window.dispatchEvent(new Event("focus"));
         await app.user.click(getByRole(document.body, "button", { name: "Refresh sessions" }));
 
         await app.waitForView(() => {
