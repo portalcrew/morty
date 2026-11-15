@@ -45,8 +45,7 @@ test("Given a configured session, When the Agent removes every configurable opti
 
     // An explicit empty config_option_update is real agent state: the panel
     // must clear instead of retaining the removed options.
-    await app.waitForView(
-        () => expect(app.elementByTestId(dataTestId.agentConfiguration).textContent).not.toContain("Test Small"),
-        30_000,
+    await app.waitForView(() =>
+        expect(app.elementByTestId(dataTestId.agentConfiguration).textContent).not.toContain("Test Small"),
     );
 });

@@ -30,6 +30,9 @@ export async function createChatWorkerEnvironment(
     loseSharingResponses = false,
 ) {
     const observers = new Set<PayloadEncryptionConnection>();
+    // Connecting a Computer waits for the environment's services, not for a wall-clock deadline that a slow host would
+    // miss; closing the environment ends those waits, and the test's timeout bounds a test that hangs in one.
+    const lifetime = new AbortController();
     const cloud = await createIdentityFixture({
         listenOnLoopback: true,
         ...(loseTurnResponses ? { loseTurnResponses: true as const } : {}),
@@ -75,7 +78,7 @@ export async function createChatWorkerEnvironment(
         >();
         const connect = async (agents: readonly ControlledAgent[], sessionIds?: ReadonlySet<string>) => {
             const runtime = await cloud.connectAgent(identity.computerId, identity.token, agents, sessionIds);
-            const access = await runtime.encryptionAccess(AbortSignal.timeout(30_000));
+            const access = await runtime.encryptionAccess(lifetime.signal);
             rememberComputerEncryption(access);
             const claims = new Set<string>();
             submissionObserver = await createComputerPayloadEncryption(
@@ -87,11 +90,11 @@ export async function createChatWorkerEnvironment(
                     }
                     claims.add(claim.fingerprint);
                 },
-                AbortSignal.timeout(30_000),
+                lifetime.signal,
             );
             observers.add(submissionObserver);
             if (cloud.executionNetwork !== null) {
-                const encryption = await createClientPayloadEncryption(access, AbortSignal.timeout(30_000));
+                const encryption = await createClientPayloadEncryption(access, lifetime.signal);
                 observers.add(encryption);
                 const terminalEvents = new Map<string, Promise<boolean>>();
                 cloud.executionNetwork.observeComputer(identity.computerId, {
@@ -138,7 +141,7 @@ export async function createChatWorkerEnvironment(
                     },
                 });
             }
-            await runtime.api.verifyAgent(agents[0]?.harness ?? "codex", AbortSignal.timeout(120_000));
+            await runtime.api.verifyAgent(agents[0]?.harness ?? "codex", lifetime.signal);
             // The second client reaches the same Worker directly; only the browser uses the failing network.
             const sessionClient = async (
                 target: { readonly harness: string; readonly sessionId: string },
@@ -162,15 +165,14 @@ export async function createChatWorkerEnvironment(
                         signal,
                     ),
                 /** Archives a Session the way another browser window of this Computer would. */
-                archiveSession: async (sessionId: string): Promise<void> => {
+                archiveSession: async (sessionId: string, signal: AbortSignal): Promise<void> => {
                     await runtime.api.archiveManagedSession(
                         { harness: agents[0]?.harness ?? "codex", sessionId },
-                        AbortSignal.timeout(30_000),
+                        signal,
                     );
                 },
                 /** Applies another client's explicit model edit through the public Relay contract. */
-                selectModel: async (sessionId: string, value: string): Promise<void> => {
-                    const signal = AbortSignal.timeout(30_000);
+                selectModel: async (sessionId: string, value: string, signal: AbortSignal): Promise<void> => {
                     const target = { harness: agents[0]?.harness ?? "codex", sessionId };
                     const client = await sessionClient(target, signal);
                     try {
@@ -193,9 +195,9 @@ export async function createChatWorkerEnvironment(
                 submitTurn: async (
                     sessionId: string,
                     content: string,
+                    signal: AbortSignal,
                     idempotencyKey: string = crypto.randomUUID(),
                 ): Promise<void> => {
-                    const signal = AbortSignal.timeout(30000);
                     const target = { harness: agents[0]?.harness ?? "codex", sessionId };
                     const client = await sessionClient(target, signal);
                     try {
@@ -205,8 +207,7 @@ export async function createChatWorkerEnvironment(
                     }
                 },
                 /** Requests steering through another authorized client's real Computer API. */
-                steerTurn: async (sessionId: string, commandId: string): Promise<void> => {
-                    const signal = AbortSignal.timeout(30_000);
+                steerTurn: async (sessionId: string, commandId: string, signal: AbortSignal): Promise<void> => {
                     const target = { harness: agents[0]?.harness ?? "codex", sessionId };
                     const client = await sessionClient(target, signal);
                     try {
@@ -237,16 +238,15 @@ export async function createChatWorkerEnvironment(
                     });
                 },
                 /** Reads the current title through a separate client's production Computer API. */
-                readSessionTitle: async (sessionId: string) => {
+                readSessionTitle: async (sessionId: string, signal: AbortSignal) => {
                     const session = await runtime.api.managedSession(
                         { harness: agents[0]?.harness ?? "codex", sessionId },
-                        AbortSignal.timeout(30000),
+                        signal,
                     );
                     return session.entry.title;
                 },
                 /** Renames a Session through the Relay, the way another Morty client of this Computer would. */
-                renameSession: async (sessionId: string, title: string): Promise<void> => {
-                    const signal = AbortSignal.timeout(30000);
+                renameSession: async (sessionId: string, title: string, signal: AbortSignal): Promise<void> => {
                     const target = { harness: agents[0]?.harness ?? "codex", sessionId };
                     const client = await sessionClient(target, signal);
                     try {
@@ -265,7 +265,7 @@ export async function createChatWorkerEnvironment(
         return {
             computerId,
             /** Reads recorded real traffic with this Computer's local authority; retries retain intent, not ciphertext. */
-            readSubmission: async (encoded: string | undefined, signal = AbortSignal.timeout(10_000)) => {
+            readSubmission: async (encoded: string | undefined, signal: AbortSignal) => {
                 if (encoded === undefined || submissionObserver === null) {
                     throw new Error("Expected recorded traffic and the connected Computer's encryption access");
                 }
@@ -315,6 +315,7 @@ export async function createChatWorkerEnvironment(
     return {
         createApplication,
         close: async () => {
+            lifetime.abort(new Error("The Chat Worker environment closed"));
             try {
                 await sharingNetwork?.close();
             } finally {

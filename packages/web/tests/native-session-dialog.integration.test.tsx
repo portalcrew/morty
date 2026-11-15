@@ -257,7 +257,7 @@ test("Given Open Session was opened while the Computer was offline, When the Com
 
 test("Given an old native preview response, When the selected Agent changes, Then the old preview cannot appear under the new Agent", {
     timeout: 60_000,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(false, true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({
@@ -282,7 +282,7 @@ test("Given an old native preview response, When the selected Agent changes, The
     await act(async () => {
         release();
         // Complete a real HTTP round trip after forwarding the held response.
-        const response = await fetch(app.origin, { signal: AbortSignal.timeout(10_000) });
+        const response = await fetch(app.origin, { signal: signal });
         await response.text();
     });
     expect(queryByRole(dialog, "heading", { name: "Native previous-agent-session" })).toBeNull();

@@ -40,6 +40,8 @@ type Application = Awaited<ReturnType<Environment["createApplication"]>>;
 
 const environment = createChatWorkerEnvironment();
 const activeApps = new Set<TestApp>();
+/** The last unmet expectation of every view wait that has not settled. */
+const pendingViews = new Set<{ readonly lastFailure: () => unknown }>();
 
 export interface TestApp extends Application {
     readonly reload: () => Promise<TestApp>;
@@ -55,7 +57,11 @@ export interface TestApp extends Application {
         testId: string | RegExp,
         accept?: (element: HTMLElement) => boolean,
     ) => Promise<HTMLElement>;
-    readonly waitForView: <T>(read: () => T, timeoutMs?: number) => Promise<T>;
+    /**
+     * Resolves with the first successful read of the view. It has no deadline of its own: the test's timeout bounds
+     * it, and a test that fails while it waits reports its last unmet expectation.
+     */
+    readonly waitForView: <T>(read: () => T) => Promise<T>;
     readonly user: UserEvent;
 }
 
@@ -173,16 +179,19 @@ export async function createTestApp(
     const lifetime = new AbortController();
     // Use RTL's async boundary to settle external updates and pending microtasks.
     // DOM observation keeps this wait event-driven rather than polling the network.
-    const waitForView = <T,>(read: () => T, timeoutMs = 12_000): Promise<T> =>
+    // The wait ends when the view appears or the application closes, which the test's cleanup does; it never ends at
+    // a wall-clock deadline, which a slow host would miss while the application is still correct.
+    const waitForView = <T,>(read: () => T): Promise<T> =>
         getConfig().asyncWrapper(
             () =>
                 new Promise<T>((resolve, reject) => {
-                    let lastFailure: unknown;
+                    let lastFailure: unknown = new Error("The expected view did not appear.");
+                    const pending = { lastFailure: () => lastFailure };
                     const cleanup = () => {
                         observer.disconnect();
                         window.removeEventListener("hashchange", check);
-                        clearTimeout(deadline);
                         lifetime.signal.removeEventListener("abort", abort);
+                        pendingViews.delete(pending);
                     };
                     const abort = () => {
                         cleanup();
@@ -198,15 +207,12 @@ export async function createTestApp(
                         }
                     };
                     const observer = new MutationObserver(check);
-                    const deadline = setTimeout(() => {
-                        cleanup();
-                        reject(lastFailure ?? new Error("The expected view did not appear."));
-                    }, timeoutMs);
                     if (lifetime.signal.aborted) {
                         abort();
                         return;
                     }
                     lifetime.signal.addEventListener("abort", abort, { once: true });
+                    pendingViews.add(pending);
                     observer.observe(document.body, {
                         attributes: true,
                         characterData: true,
@@ -334,13 +340,22 @@ async function closeTestEnvironment(): Promise<void> {
     await (await environment).close();
 }
 
-afterEach(async () => {
+afterEach(async ({ task }) => {
+    // A test that times out fails before its pending view waits settle, so their last unmet expectations are read
+    // before closing the applications ends those waits.
+    const unmet = task.result?.state === "fail" ? [...pendingViews].map((pending) => pending.lastFailure()) : [];
     await closeTestApps();
     document.body.replaceChildren();
     document.documentElement.removeAttribute("data-input-modality");
     window.sessionStorage.clear();
     window.localStorage.clear();
     window.history.replaceState(null, "", "/");
+    if (unmet.length > 0) {
+        throw new AggregateError(
+            unmet,
+            "The test failed while waiting for the view; each error is the last unmet expectation of one wait.",
+        );
+    }
 });
 
 afterAll(async () => {

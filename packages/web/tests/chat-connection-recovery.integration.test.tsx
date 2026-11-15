@@ -39,7 +39,7 @@ test("Given a connected Chat with an unsent draft, When its network drops and re
 
     // This needs the restored configuration watch, not merely an open socket.
     await app.daemon.disconnect();
-    await app.waitForView(() => expect(document.body.textContent).toContain("Computer is offline"), 30_000);
+    await app.waitForView(() => expect(document.body.textContent).toContain("Computer is offline"));
     expect(app.elementByTestId(dataTestId.messageComposer)).toBe(composer);
     expect(composer.value).toBe("Keep this draft unsent");
     expect(queryByRole(document.body, "dialog")).toBeNull();

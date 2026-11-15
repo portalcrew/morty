@@ -41,7 +41,7 @@ const CLOCK_ORIGIN = "2026-10-13T08:00:00Z";
 
 test("Given native operation capacity is occupied, When I reopen a saved Session and capacity clears, Then its connection recovers automatically and I can keep chatting", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const release = Promise.withResolvers<void>();
     onTestFinished(() => release.resolve());
     let holding = false;
@@ -81,7 +81,6 @@ test("Given native operation capacity is occupied, When I reopen a saved Session
         throw new Error("Expected the real Computer");
     }
     holding = true;
-    const signal = AbortSignal.timeout(30_000);
     // The first four real operations occupy admission; only the surplus request can settle before the ACP gate opens.
     const reads = Array.from({ length: 5 }, () =>
         daemon.readNativeSessions(signal).then(
@@ -101,7 +100,7 @@ test("Given native operation capacity is occupied, When I reopen a saved Session
         outcome: "unknown",
     });
     const reloaded = await app.reload();
-    await clock.waitForSleep(1000, AbortSignal.timeout(10_000));
+    await clock.waitForSleep(1000, signal);
     await reloaded.user.click(await reloaded.queryElementByTestId(dataTestId.messageComposer));
     await reloaded.user.paste("Continue after capacity clears");
     expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", true);
@@ -584,12 +583,10 @@ test("Given an open conversation whose automatic retries are exhausted, When the
         await act(async () => clock.advanceBy(seconds * 1000));
     }
     await app.waitForView(() => expect(getByRole(document.body, "alert").textContent).toContain("Couldn’t reconnect"));
-    await app.waitForView(
-        () =>
-            expect(app.elementByTestId(dataTestId.botConnectionStatus).getAttribute("data-connection-status")).toBe(
-                "disconnected",
-            ),
-        20_000,
+    await app.waitForView(() =>
+        expect(app.elementByTestId(dataTestId.botConnectionStatus).getAttribute("data-connection-status")).toBe(
+            "disconnected",
+        ),
     );
     await app.daemon.reconnect();
     await app.waitForView(() =>

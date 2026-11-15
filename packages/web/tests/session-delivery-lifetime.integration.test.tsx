@@ -52,7 +52,7 @@ test("Given a running message whose admission response was lost, When Chat recon
 for (const message of ["first", "subsequent"] as const) {
     test(`Given an unconfirmed ${message} message with an attachment, When Chat remounts and I retry, Then the original submission is delivered once`, {
         timeout: dedicatedEnvironmentTimeout,
-    }, async () => {
+    }, async ({ signal }) => {
         const environment = await createChatWorkerEnvironment(true);
         onTestFinished(() => environment.close());
         const clock = new TestClock("2026-10-28T08:00:00Z");
@@ -83,7 +83,7 @@ for (const message of ["first", "subsequent"] as const) {
         await app.waitForView(() =>
             getByRole(document.body, "button", { name: "Retry message with unknown delivery" }),
         );
-        const original = await app.readSubmission(network.submissions.at(-1));
+        const original = await app.readSubmission(network.submissions.at(-1), signal);
         const submissions = network.submissions.length;
         await showReconnectNotice(app, clock);
         network.reconnect();
@@ -113,7 +113,7 @@ for (const message of ["first", "subsequent"] as const) {
             expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
         });
         expect(network.submissions).toHaveLength(submissions + 1);
-        expect(await app.readSubmission(network.submissions.at(-1))).toEqual(original);
+        expect(await app.readSubmission(network.submissions.at(-1), signal)).toEqual(original);
         expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "Next draft survives retry");
         expect(queryByRole(document.body, "button", { name: "Retry message with unknown delivery" })).toBeNull();
     });
@@ -121,7 +121,7 @@ for (const message of ["first", "subsequent"] as const) {
 
 test("Given a message on its way to the Computer, When Chat remounts, Then it is delivered once and its reply arrives without asking to retry", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({ environment, connectAgent: true });
@@ -135,9 +135,9 @@ test("Given a message on its way to the Computer, When Chat remounts, Then it is
         expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
     });
     network.holdNextTurn();
-    const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
+    const arriving = network.nextSubmission(signal);
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Survive the remount");
-    expect((await app.readSubmission(await arriving)).prompt).toBe("Survive the remount");
+    expect((await app.readSubmission(await arriving, signal)).prompt).toBe("Survive the remount");
     const submissions = network.submissions.length;
 
     app.remount();
@@ -169,7 +169,7 @@ function sessionEntry(app: TestApp, title: string): HTMLElement {
 
 test("Given another client used my pending message identity, When the Computer refuses steering and my submission, Then retry creates a new message identity instead of recovering unknown delivery", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(true, true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({ environment, connectAgent: true });
@@ -187,13 +187,13 @@ test("Given another client used my pending message identity, When the Computer r
         throw new Error("Expected an open Session");
     }
     network.holdNextTurn();
-    const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
+    const arriving = network.nextSubmission(signal);
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "My pending instruction");
-    const original = await app.readSubmission(await arriving);
+    const original = await app.readSubmission(await arriving, signal);
     const releaseEvents = executionNetwork.holdSessionEvents();
     try {
-        await daemon.submitTurn(sessionId, "wait for steering", original.commandId);
-        await expect(daemon.steerTurn(sessionId, original.commandId)).rejects.toMatchObject({
+        await daemon.submitTurn(sessionId, "wait for steering", signal, original.commandId);
+        await expect(daemon.steerTurn(sessionId, original.commandId, signal)).rejects.toMatchObject({
             name: "MortyOperationError",
             code: "turn_already_started",
             outcome: "refused",
@@ -212,7 +212,7 @@ test("Given another client used my pending message identity, When the Computer r
         expect(app.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain("My pending instruction");
         expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
     });
-    const retried = await app.readSubmission(network.submissions.at(-1));
+    const retried = await app.readSubmission(network.submissions.at(-1), signal);
     expect(retried.commandId).not.toBe(original.commandId);
     expect(retried.prompt).toBe(original.prompt);
     expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "My next draft");
@@ -225,7 +225,7 @@ test("Given another client used my pending message identity, When the Computer r
 
 test("Given completed Sessions on one Computer, When I switch between them and New Session, Then one browser connection carries Computer requests, history and new replies", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({ environment, connectAgent: true });
@@ -244,7 +244,7 @@ test("Given completed Sessions on one Computer, When I switch between them and N
             expect(app.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain(title);
             expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
         });
-        await network.waitForBrowserConnections(1, AbortSignal.timeout(10_000));
+        await network.waitForBrowserConnections(1, signal);
         expect(network.browserConnectionsOpened).toBe(1);
         await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     }
@@ -267,12 +267,12 @@ test("Given completed Sessions on one Computer, When I switch between them and N
     });
     expect(network.browserConnectionsOpened).toBe(1);
     await app.close();
-    await network.waitForBrowserConnections(0, AbortSignal.timeout(10_000));
+    await network.waitForBrowserConnections(0, signal);
 });
 
 test("Given a message the network has not delivered yet, When I switch to another Session, it finishes in the background and I switch back, Then it shows once with its reply and I can keep chatting", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({ environment, connectAgent: true });
@@ -287,9 +287,9 @@ test("Given a message the network has not delivered yet, When I switch to anothe
         expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
     });
     network.holdNextTurn();
-    const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
+    const arriving = network.nextSubmission(signal);
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "hold after first delta");
-    expect((await app.readSubmission(await arriving)).prompt).toBe("hold after first delta");
+    expect((await app.readSubmission(await arriving, signal)).prompt).toBe("hold after first delta");
     const submissions = network.submissions.length;
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));

@@ -12,7 +12,7 @@ function directoryTitles(app: TestApp): readonly string[] {
 
 test("Given an open session renamed by another client, When its directory refreshes, Then the header and title editor use the same current title", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(false, true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({ environment, connectAgent: true });
@@ -31,7 +31,7 @@ test("Given an open session renamed by another client, When its directory refres
     // The list read can arrive before a live title event. Keep the real event in transit until after the assertions.
     const releaseEvents = app.executionNetwork.holdSessionEvents();
     onTestFinished(releaseEvents);
-    await app.daemon.renameSession(sessionId, renamed);
+    await app.daemon.renameSession(sessionId, renamed, signal);
     await app.user.click(getByRole(document.body, "button", { name: "Refresh sessions" }));
     await app.waitForView(() => getByRole(document.body, "button", { name: `Open ${renamed}` }));
     await app.waitForView(() => getByRole(document.body, "heading", { name: renamed }));
@@ -41,7 +41,7 @@ test("Given an open session renamed by another client, When its directory refres
 
 test("Given a selected session renamed elsewhere, When the user selects it again and later reloads offline, Then the title learned by the re-read survives", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(false, true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({ environment, connectAgent: true, clock: new TestClock("2026-10-29T00:00:00Z") });
@@ -59,7 +59,7 @@ test("Given a selected session renamed elsewhere, When the user selects it again
     }
     const releaseEvents = app.executionNetwork.holdSessionEvents();
     onTestFinished(releaseEvents);
-    await app.daemon.renameSession(sessionId, renamed);
+    await app.daemon.renameSession(sessionId, renamed, signal);
     await app.user.click(app.elementByTestId(dataTestId.managedConversation));
     await app.waitForView(() => getByRole(document.body, "heading", { name: renamed }));
     await app.daemon.disconnect();
@@ -69,7 +69,7 @@ test("Given a selected session renamed elsewhere, When the user selects it again
 
 test("Given a conversation this page created, When another client renames it, Then the directory shows the new name once it reloads", {
     timeout: 30_000,
-}, async () => {
+}, async ({ signal }) => {
     const firstPrompt = "Name this conversation from the first prompt";
     const renamed = "Renamed by another client";
     const app = await createTestApp({ connectAgent: true });
@@ -100,7 +100,7 @@ test("Given a conversation this page created, When another client renames it, Th
     }
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
-    await daemon.renameSession(sessionId, renamed);
+    await daemon.renameSession(sessionId, renamed, signal);
     // Starting another conversation reloads the directory.
     await sendPrompt(app, await readyComposer(app), "Start another conversation");
 
@@ -114,7 +114,7 @@ test("Given a conversation this page created, When another client renames it, Th
 
 test("Given a saved title differs from the native session listing, When reopening Chat and selecting it in Open Session, Then the listing and preview use the recent session title", {
     timeout: 30_000,
-}, async () => {
+}, async ({ signal }) => {
     const title = "Agent generated title";
     const app = await createTestApp({ connectAgent: true, sessionIds: new Set(["title-review"]) });
     await app.user.click(await app.waitForView(() => getByRole(document.body, "button", { name: "Open Session" })));
@@ -171,7 +171,7 @@ test("Given a saved title differs from the native session listing, When reopenin
     if (app.daemon === null || sessionId === null) {
         throw new Error("Expected an open Session on the connected Computer");
     }
-    await app.daemon.renameSession(sessionId, "Renamed while the dialog is open");
+    await app.daemon.renameSession(sessionId, "Renamed while the dialog is open", signal);
     await reopened.waitForView(() => getByRole(renamedDialog, "button", { name: "Renamed while the dialog is open" }));
     await reopened.waitForView(() => getByRole(renamedDialog, "heading", { name: "Renamed while the dialog is open" }));
 });
@@ -218,14 +218,12 @@ test("Given a conversation is being reopened, When the title has not loaded yet,
     }
     await app.user.click(reopened);
     // The title is stated only once the same read that loads the messages has settled.
-    await app.waitForView(
-        () =>
-            expect(
-                document.querySelector(
-                    'section[aria-label="Conversation"] header [aria-label="Loading conversation title"]',
-                ),
-            ).toBeNull(),
-        30_000,
+    await app.waitForView(() =>
+        expect(
+            document.querySelector(
+                'section[aria-label="Conversation"] header [aria-label="Loading conversation title"]',
+            ),
+        ).toBeNull(),
     );
     observer.disconnect();
     expect(statedTitles).toEqual([]);

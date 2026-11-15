@@ -51,7 +51,9 @@ async function openSavedConversation(app: TestApp): Promise<string> {
     return sessionId;
 }
 
-test("Given a running reply, When another window archives the Session, Then this page closes it without a failed reply", async () => {
+test("Given a running reply, When another window archives the Session, Then this page closes it without a failed reply", async ({
+    signal,
+}) => {
     const app = await createTestApp({ connectAgent: true });
     const sessionId = await openSavedConversation(app);
     const daemon = app.daemon;
@@ -72,7 +74,7 @@ test("Given a running reply, When another window archives the Session, Then this
         ).toHaveLength(2),
     );
 
-    await daemon.archiveSession(sessionId);
+    await daemon.archiveSession(sessionId, signal);
 
     await app.waitForView(() => expect(closedNoticeText(app)).toContain(ARCHIVED));
     await app.waitForView(() => expect(sendButtonLabel(app)).toBe("Send message"));

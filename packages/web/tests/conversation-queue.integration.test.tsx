@@ -51,7 +51,7 @@ test("Given a running turn, When I queue a message before the Computer receives 
 for (const eventOrder of ["before refusal", "after refusal"] as const) {
     test(`Given a released Computer starts queued work before a delayed steer arrives, When its lifecycle arrives ${eventOrder}, Then the completed reply has no stale queue error`, {
         timeout: dedicatedEnvironmentTimeout,
-    }, async () => {
+    }, async ({ signal }) => {
         const environment = await createChatWorkerEnvironment(false, true);
         onTestFinished(() => environment.close());
         const app = await createTestApp({ environment, connectAgent: true });
@@ -82,7 +82,6 @@ for (const eventOrder of ["before refusal", "after refusal"] as const) {
                 v.object({ kind: v.literal("http.response"), status: v.literal(200), body: v.string() }),
                 await release(),
             );
-            const signal = AbortSignal.timeout(10_000);
             const encryption = await createClientPayloadEncryption(await daemon.encryptionAccess(signal), signal);
             try {
                 expect(await sessionOperationFailedEventCodec.decode(response.body, encryption, signal)).toMatchObject({

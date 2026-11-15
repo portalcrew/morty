@@ -26,8 +26,8 @@ export default defineConfig({
         // Each file owns real Chat and Relay isolates. Bound their concurrent startup.
         maxWorkers: 2,
         include: ["tests/**/*.integration.test.tsx"],
-        // Scenarios start real isolates, and the harness waits up to 12 s for a view (`waitForView`) and 10 s for the
-        // WebSocket bridge. The test budget must outlast those waits so a stuck wait fails with what it waited for.
+        // Scenarios start real isolates. View waits have no deadline of their own, so this budget bounds a stuck
+        // wait, and a view wait still pending when the test fails reports its last unmet expectation.
         testTimeout: 30_000,
     },
 });

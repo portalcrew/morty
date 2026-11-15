@@ -8,7 +8,7 @@ import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./supp
 
 test("Given another client changes settings before my delayed edit arrives, When the Computer refuses my stale revision, Then the current model refreshes and my next edit succeeds", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(false, true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({
@@ -36,7 +36,7 @@ test("Given another client changes settings before my delayed edit arrives, When
     const release = await held;
     const releaseEvents = executionNetwork.holdSessionEvents();
     try {
-        await daemon.selectModel(sessionId, "test-large");
+        await daemon.selectModel(sessionId, "test-large", signal);
         await release();
         await app.waitForView(() => {
             expect(getByRole(document.body, "alert").textContent).toBeTruthy();
@@ -99,7 +99,7 @@ test("Given two clients of the current Computer, When one changes the model and 
 for (const delivery of ["before-acceptance", "after-acceptance"] as const) {
     test(`Given delivery is unknown ${delivery}, When settings change and I recover, Then retries preserve intent and completed turns are not rerun`, {
         timeout: dedicatedEnvironmentTimeout,
-    }, async () => {
+    }, async ({ signal }) => {
         const environment = await createChatWorkerEnvironment(true);
         onTestFinished(() => environment.close());
         const clock = new TestClock("2026-10-28T08:00:00Z");
@@ -129,7 +129,7 @@ for (const delivery of ["before-acceptance", "after-acceptance"] as const) {
         if (sessionId === null || first.daemon === null) {
             throw new Error("Expected the shared Session");
         }
-        await first.daemon.selectModel(sessionId, "test-large");
+        await first.daemon.selectModel(sessionId, "test-large", signal);
         await showReconnectNotice(first, clock);
         network.reconnect();
         await first.user.click(
@@ -149,11 +149,11 @@ for (const delivery of ["before-acceptance", "after-acceptance"] as const) {
         );
         expect(network.submissions).toHaveLength(delivery === "before-acceptance" ? 3 : 2);
         if (delivery === "before-acceptance") {
-            expect(await first.readSubmission(network.submissions[2])).toEqual(
-                await first.readSubmission(network.submissions[1]),
+            expect(await first.readSubmission(network.submissions[2], signal)).toEqual(
+                await first.readSubmission(network.submissions[1], signal),
             );
         }
-        expect((await first.readSubmission(network.submissions[1])).sessionConfigurations).toEqual([]);
+        expect((await first.readSubmission(network.submissions[1], signal)).sessionConfigurations).toEqual([]);
         expect(
             first
                 .elementsByTestId(dataTestId.agentResponse)

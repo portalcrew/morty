@@ -159,7 +159,7 @@ function entryStatus(app: TestApp, title: string): string | null {
 
 test("Given a turn that fails while I am in another Session, When I return, Then I see its failure, the sidebar agrees, and my next message clears the Session's failure", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({ environment, connectAgent: true });
@@ -173,9 +173,9 @@ test("Given a turn that fails while I am in another Session, When I return, Then
         expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
     });
     network.holdNextTurn();
-    const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
+    const arriving = network.nextSubmission(signal);
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "fail this turn explicitly");
-    expect((await app.readSubmission(await arriving)).prompt).toBe("fail this turn explicitly");
+    expect((await app.readSubmission(await arriving, signal)).prompt).toBe("fail this turn explicitly");
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     network.releaseHeldTurn();
@@ -230,7 +230,7 @@ test("Given a Session whose last turn failed, When I reload the page, Then the s
 
 test("Given my last turn completed while I was away after an earlier failure, When I return, Then the earlier turn keeps its failure and the Session is not shown failed", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({ environment, connectAgent: true });
@@ -243,9 +243,9 @@ test("Given my last turn completed while I was away after an earlier failure, Wh
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "fail this turn explicitly");
     await app.waitForView(() => expect(entryStatus(app, "Established session")).toBe("Session failed"));
     network.holdNextTurn();
-    const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
+    const arriving = network.nextSubmission(signal);
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Finish while away");
-    expect((await app.readSubmission(await arriving)).prompt).toBe("Finish while away");
+    expect((await app.readSubmission(await arriving, signal)).prompt).toBe("Finish while away");
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     network.releaseHeldTurn();

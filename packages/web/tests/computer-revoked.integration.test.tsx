@@ -16,9 +16,8 @@ test("Given a connected computer, When Morty revokes its Computer, Then the page
 
     await app.daemon.revoke();
 
-    await app.waitForView(
-        () => expect(document.body.textContent).toContain("This computer was disconnected for your security"),
-        30_000,
+    await app.waitForView(() =>
+        expect(document.body.textContent).toContain("This computer was disconnected for your security"),
     );
     expect(document.body.textContent).toContain("Run the Morty setup prompt on that computer again to reconnect it.");
     expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", true);

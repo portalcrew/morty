@@ -7,7 +7,7 @@ import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./supp
 
 test("Given a committed rename with a delayed reply, When I leave and another client renames before I return, Then returning keeps the newest title without resending the rename", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(false, true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({ environment, connectAgent: true });
@@ -27,10 +27,10 @@ test("Given a committed rename with a delayed reply, When I leave and another cl
     await app.user.click(getByRole(document.body, "button", { name: "Save title" }));
     const release = await held;
     onTestFinished(release);
-    expect(await app.daemon.readSessionTitle(sessionId)).toBe("Earlier rename");
+    expect(await app.daemon.readSessionTitle(sessionId, signal)).toBe("Earlier rename");
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
-    await app.daemon.renameSession(sessionId, "Newest title");
-    expect(await app.daemon.readSessionTitle(sessionId)).toBe("Newest title");
+    await app.daemon.renameSession(sessionId, "Newest title", signal);
+    expect(await app.daemon.readSessionTitle(sessionId, signal)).toBe("Newest title");
     await app.user.click(getByRole(document.body, "button", { name: "Refresh sessions" }));
     await app.waitForView(() => getByRole(document.body, "button", { name: "Open Newest title" }));
     await app.user.click(getByRole(document.body, "button", { name: "Open Newest title" }));
@@ -45,12 +45,12 @@ test("Given a committed rename with a delayed reply, When I leave and another cl
         "Recent sessions",
         "Newest title",
     ]);
-    expect(await app.daemon.readSessionTitle(sessionId)).toBe("Newest title");
+    expect(await app.daemon.readSessionTitle(sessionId, signal)).toBe("Newest title");
 });
 
 test("Given a newer live title, When an older rename acknowledgement arrives, Then the current title stays newer", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(false, true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({ environment, connectAgent: true });
@@ -70,7 +70,7 @@ test("Given a newer live title, When an older rename acknowledgement arrives, Th
     await app.user.click(getByRole(document.body, "button", { name: "Save title" }));
     const release = await held;
     onTestFinished(release);
-    await app.daemon.renameSession(sessionId, "Newest observed title");
+    await app.daemon.renameSession(sessionId, "Newest observed title", signal);
     await app.waitForView(() => getByRole(document.body, "button", { name: "Open Newest observed title" }));
     release();
     await app.waitForView(() =>

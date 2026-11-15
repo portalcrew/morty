@@ -6,9 +6,6 @@ import { readyComposer, refreshSessions, sendPrompt, showReconnectNotice } from 
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 
-// The Worker checks the Computer every 5 s and retries a failed check 5 s later, so one change can take two checks.
-const COMPUTER_CHANGE_TIMEOUT_MS = 20_000;
-
 function connectionStatus(app: TestApp): string | null {
     return app.elementByTestId(dataTestId.botConnectionStatus).getAttribute("data-connection-status");
 }
@@ -70,7 +67,7 @@ test("Given a saved conversation, When reloading it while its Computer is offlin
             "History is temporarily unavailable. It will load when the connection returns.",
         );
         expect(document.body.textContent).not.toContain("Your Morty Computer is disconnected.");
-    }, COMPUTER_CHANGE_TIMEOUT_MS);
+    });
 
     // Connection and history recover independently. Every rendered recovery snapshot
     // must agree with the sidebar, including while the session read is still pending.
@@ -98,7 +95,7 @@ test("Given a saved conversation, When reloading it while its Computer is offlin
             expect(getByRole(document.body, "log", { name: "Messages" }).textContent).not.toContain(
                 "Keep this follow-up unsent",
             );
-        }, COMPUTER_CHANGE_TIMEOUT_MS);
+        });
         expect(contradictoryNotices).toEqual([]);
     } finally {
         observer.disconnect();
@@ -126,14 +123,14 @@ test("Given a saved conversation, When a new-session page opens while the Comput
         expect(sidebarAlerts()).toEqual([]);
         expect(document.body.textContent).toContain("Computer is offline. Sessions will appear when it reconnects.");
         expect(directoryTitles(reopened)).toHaveLength(0);
-    }, COMPUTER_CHANGE_TIMEOUT_MS);
+    });
 
     await daemon.reconnect();
     await reopened.waitForView(() => {
         expect(connectionStatus(reopened)).toBe("connected");
         expect(directoryTitles(reopened).some((title) => title.includes("Keep this conversation"))).toBe(true);
         expect(sidebarAlerts()).toEqual([]);
-    }, COMPUTER_CHANGE_TIMEOUT_MS);
+    });
 });
 
 test("Given a background reply is running when the Computer goes offline, When the Computer comes back, Then the sidebar shows that reply no longer working", {
@@ -174,15 +171,12 @@ test("Given a background reply is running when the Computer goes offline, When t
     await viewer.close();
 
     await daemon.disconnect();
-    await app.waitForView(() => expect(connectionStatus(app)).toBe("disconnected"), COMPUTER_CHANGE_TIMEOUT_MS);
+    await app.waitForView(() => expect(connectionStatus(app)).toBe("disconnected"));
     await daemon.reconnect();
-    await app.waitForView(() => expect(connectionStatus(app)).toBe("connected"), COMPUTER_CHANGE_TIMEOUT_MS);
+    await app.waitForView(() => expect(connectionStatus(app)).toBe("connected"));
 
     await refreshSessions(app);
-    await app.waitForView(
-        () => expect(entryStatus(app, "Background conversation")).not.toBe("Session working"),
-        COMPUTER_CHANGE_TIMEOUT_MS,
-    );
+    await app.waitForView(() => expect(entryStatus(app, "Background conversation")).not.toBe("Session working"));
 });
 
 for (const context of ["missing", "malformed", "different-session", "different-identity"] as const) {
@@ -223,11 +217,10 @@ for (const context of ["missing", "malformed", "different-session", "different-i
             expect(getByRole(document.body, "log", { name: "Messages" }).textContent).toContain(
                 "History is temporarily unavailable. It will load when the connection returns.",
             );
-        }, COMPUTER_CHANGE_TIMEOUT_MS);
+        });
         await daemon.reconnect();
-        await reopened.waitForView(
-            () => expect(agentAnswered(reopened, "Codex turn 1: Private saved conversation")).toBe(true),
-            COMPUTER_CHANGE_TIMEOUT_MS,
+        await reopened.waitForView(() =>
+            expect(agentAnswered(reopened, "Codex turn 1: Private saved conversation")).toBe(true),
         );
     });
 }
@@ -275,7 +268,7 @@ test("Given an open conversation, When its computer goes offline, Then the notic
         const element = app.elementByTestId(dataTestId.sessionReconnectNotice);
         expect(element.textContent).toContain("Computer is offline");
         return element;
-    }, COMPUTER_CHANGE_TIMEOUT_MS);
+    });
     expect(getByRole(notice, "code").textContent).toBe("npx @morty-build/cli@latest start");
     await app.user.click(getByRole(notice, "button", { name: "Copy command" }));
     expect(await navigator.clipboard.readText()).toBe("npx @morty-build/cli@latest start");
@@ -291,10 +284,7 @@ test("Given the New Session page while the computer is offline, When an attachme
     }
     await daemon.disconnect();
     const reopened = await app.reload();
-    await reopened.waitForView(
-        () => expect(connectionStatus(reopened)).toBe("disconnected"),
-        COMPUTER_CHANGE_TIMEOUT_MS,
-    );
+    await reopened.waitForView(() => expect(connectionStatus(reopened)).toBe("disconnected"));
     const composer = await readyComposer(reopened);
     if (!(composer instanceof HTMLTextAreaElement) || composer.form === null) {
         throw new Error("Expected the New Session composer form");

@@ -4,16 +4,26 @@ import { dataTestId } from "../../src/data-testid.ts";
 import type { TestApp } from "./test-app.tsx";
 import type { TestClock } from "./test-clock.ts";
 
+function processSummaries(): HTMLElement[] {
+    return getAllByRole(document.body, "button").filter((button) => /^\d+ steps?/.test(button.textContent ?? ""));
+}
+
+function isCollapsed(summary: HTMLElement): boolean {
+    return summary.getAttribute("aria-expanded") === "false";
+}
+
+function collapsedProcessSummaries(): HTMLElement[] {
+    return processSummaries().filter(isCollapsed);
+}
+
 /** Expands every collapsed process segment summary so its tool and reasoning rows can be inspected. */
 export async function expandProcessSections(app: TestApp): Promise<void> {
     const summaries = await app.waitForView(() => {
-        const buttons = getAllByRole(document.body, "button").filter((button) =>
-            /^\d+ steps?/.test(button.textContent ?? ""),
-        );
+        const buttons = processSummaries();
         if (buttons.length === 0) {
             throw new Error("Missing process segment summary");
         }
-        return buttons.filter((button) => button.getAttribute("aria-expanded") === "false");
+        return buttons.filter(isCollapsed);
     });
     for (const summary of summaries) {
         await app.user.click(summary);
@@ -23,18 +33,26 @@ export async function expandProcessSections(app: TestApp): Promise<void> {
 /**
  * Keeps every process segment expanded while waiting for a row-level read, so
  * segments that stream in or remount after the previous expansion (for example
- * when merged history pages rekey a segment) cannot hide their rows.
+ * when merged history pages rekey a segment) cannot hide their rows. Each wait
+ * ends when the read succeeds or a collapsed segment appears, which is then expanded.
  */
 export async function withExpandedProcess<T>(app: TestApp, read: () => T): Promise<T> {
-    const deadline = Date.now() + 30_000;
     for (;;) {
         await expandProcessSections(app);
-        try {
-            return await app.waitForView(read, 1_000);
-        } catch (cause) {
-            if (Date.now() >= deadline) {
-                throw cause;
-            }
+        const outcome = await app.waitForView(
+            (): { readonly kind: "read"; readonly value: T } | { readonly kind: "collapsed" } => {
+                try {
+                    return { kind: "read", value: read() };
+                } catch (cause) {
+                    if (collapsedProcessSummaries().length > 0) {
+                        return { kind: "collapsed" };
+                    }
+                    throw cause;
+                }
+            },
+        );
+        if (outcome.kind === "read") {
+            return outcome.value;
         }
     }
 }

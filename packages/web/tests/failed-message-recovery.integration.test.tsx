@@ -85,18 +85,17 @@ test("Given Session creation failed for my first message, When the computer goes
     await app.waitForView(() => getByRole(document.body, "button", { name: "Retry message" }));
     await daemon.disconnect();
     // The Worker checks the Computer every 5 s and retries a failed check 5 s later, so one change can take two checks.
-    await app.waitForView(
-        () => expect(getByRole(document.body, "button", { name: "Retry message" })).toHaveProperty("disabled", true),
-        20_000,
+    await app.waitForView(() =>
+        expect(getByRole(document.body, "button", { name: "Retry message" })).toHaveProperty("disabled", true),
     );
     await daemon.reconnect();
     const retry = await app.waitForView(() => {
         const button = getByRole(document.body, "button", { name: "Retry message" });
         expect(button).toHaveProperty("disabled", false);
         return button;
-    }, 20_000);
+    });
     await app.user.click(retry);
-    await app.waitForView(() => expect(answered(app, "Retry once the computer returns")).toBe(true), 20_000);
+    await app.waitForView(() => expect(answered(app, "Retry once the computer returns")).toBe(true));
 });
 
 test("Given Session creation failed for my first message and I wrote a next draft, When the page reloads, Then the first message returns to the composer ahead of the draft", {

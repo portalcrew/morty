@@ -286,8 +286,7 @@ test("Given a remembered computer, When I connect another computer, Then setup r
     );
 });
 
-async function revokeAccess(app: TestApp): Promise<void> {
-    const signal = AbortSignal.timeout(10_000);
+async function revokeAccess(app: TestApp, signal: AbortSignal): Promise<void> {
     const response = await app.transport.request(
         new Request(`${app.origin}/morty/api/v1/computers/${app.identity.computerId}/identity/local-credential`, {
             method: "DELETE",
@@ -300,13 +299,13 @@ async function revokeAccess(app: TestApp): Promise<void> {
 
 test("Given the last computer's access ended, When I return through the plain address, Then the next valid computer opens", {
     timeout: 30_000,
-}, async () => {
+}, async ({ signal }) => {
     const first = await createTestApp({ connectAgent: true });
     const firstSession = await startConversation(first, "The remaining computer");
     await first.close();
     const second = await createTestApp({ connectAgent: true });
     await startConversation(second, "The revoked computer");
-    await revokeAccess(second);
+    await revokeAccess(second, signal);
     window.location.href = `${second.origin}/`;
     const returned = await second.reload();
     await returned.waitForView(() =>
@@ -324,13 +323,13 @@ test("Given the last computer's access ended, When I return through the plain ad
 
 test("Given a revoked explicit computer link and another saved computer, When I open the link, Then only a deliberate fallback is offered", {
     timeout: 30_000,
-}, async () => {
+}, async ({ signal }) => {
     const first = await createTestApp({ connectAgent: true });
     await startConversation(first, "Another valid computer");
     await first.close();
     const second = await createTestApp({ connectAgent: true });
     await startConversation(second, "Explicit revoked computer");
-    await revokeAccess(second);
+    await revokeAccess(second, signal);
     const returned = await second.reload();
     await returned.waitForView(() =>
         expect(getByRole(document.body, "status").textContent).toContain("Current access ended"),
@@ -341,10 +340,10 @@ test("Given a revoked explicit computer link and another saved computer, When I 
 
 test("Given an open conversation, When its access is revoked elsewhere and I start a new conversation, Then Morty explains that the current access ended", {
     timeout: 30_000,
-}, async () => {
+}, async ({ signal }) => {
     const app = await createTestApp({ connectAgent: true });
     await startConversation(app, "Before revocation");
-    await revokeAccess(app);
+    await revokeAccess(app, signal);
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
 
@@ -522,14 +521,14 @@ test("Given another saved computer, When a transfer link cannot be redeemed, The
 
 test("Given the remembered conversation was closed elsewhere, When I return, Then the same computer opens at chat home while an explicit stale conversation link still reports failure", {
     timeout: 30_000,
-}, async () => {
+}, async ({ signal }) => {
     const app = await createTestApp({ connectAgent: true });
     const sessionId = await startConversation(app, "Conversation closed on another device");
     const explicit = window.location.href;
     if (app.daemon === null) {
         throw new Error("Expected the connected Computer");
     }
-    await app.daemon.archiveSession(sessionId);
+    await app.daemon.archiveSession(sessionId, signal);
     window.location.href = `${app.origin}/`;
     const restored = await app.reload();
     await restored.waitForView(() => getByRole(document.body, "textbox", { name: "Message" }));
@@ -602,7 +601,7 @@ test("Given a computer I keep using, When ten more computers are saved in this b
 
 test("Given a computer whose remembered conversation was closed elsewhere, When I switch to it from another computer, Then it opens at its chat home", {
     timeout: 30_000,
-}, async () => {
+}, async ({ signal }) => {
     const first = await createTestApp({ connectAgent: true });
     const closedSession = await startConversation(first, "Closed on another device");
     const firstScope = encodeIdentityScope({
@@ -611,7 +610,7 @@ test("Given a computer whose remembered conversation was closed elsewhere, When 
     if (first.daemon === null) {
         throw new Error("Expected the connected Computer");
     }
-    await first.daemon.archiveSession(closedSession);
+    await first.daemon.archiveSession(closedSession, signal);
     await first.close();
     const second = await createTestApp({ connectAgent: true });
     await startConversation(second, "Work on the other computer");
@@ -639,13 +638,13 @@ test("Given a computer whose remembered conversation was closed elsewhere, When 
 
 test("Given a switch to a computer whose remembered conversation is gone, When opening the computer fails once and I retry, Then it still opens at its chat home", {
     timeout: 30_000,
-}, async () => {
+}, async ({ signal }) => {
     const first = await createTestApp({ connectAgent: true });
     const closedSession = await startConversation(first, "Closed before a failed switch");
     if (first.daemon === null) {
         throw new Error("Expected the connected Computer");
     }
-    await first.daemon.archiveSession(closedSession);
+    await first.daemon.archiveSession(closedSession, signal);
     await first.close();
     const second = await createTestApp({ connectAgent: true });
     await startConversation(second, "Work before the failed switch");
