@@ -23,7 +23,7 @@ export interface SessionComposerStore {
     readonly filesRestoreNotice: boolean;
     /** The title being edited; null while the editor is closed. */
     readonly titleDraft: string | null;
-    /** The suggested answers picked for the questions Agent messages ask, by message. */
+    /** The suggested answers picked for the questions Agent messages still ask, by message: the unsent answers. */
     readonly answerChoices: ReadonlyMap<string, AgentQuestionChoices>;
     readonly setDraft: (draft: string) => void;
     /** The composer's message left as a submission: its text, files and notice go with it. */
@@ -45,6 +45,8 @@ export interface SessionComposerStore {
         questionIndex: number,
         answer: string,
     ) => void;
+    /** The user sent a message, which answers or supersedes every open question: their picked answers go with it. */
+    readonly questionsClosed: () => void;
 }
 
 /**
@@ -112,6 +114,10 @@ export function createSessionComposerStore(
                 choices.set(messageId, { ...choices.get(messageId), [questionIndex.toString()]: answer });
                 centralSessionStorage.write(answerChoicesEntry, Object.fromEntries(choices));
                 set({ answerChoices: choices });
+            },
+            questionsClosed: () => {
+                centralSessionStorage.remove(answerChoicesEntry);
+                set({ answerChoices: new Map() });
             },
         };
     });

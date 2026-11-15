@@ -844,10 +844,11 @@ export function createSessionPaneModel(options: {
                     return await submitCommand(deliveryClient, commandId, sentAt)(request, signal);
                 },
             });
-            // Only a message taken from the composer leaves it.
+            // Only a message taken from the composer leaves it; every message closes the questions asked before it.
             if (source === "composer") {
                 composer.getState().sent();
             }
+            composer.getState().questionsClosed();
             if (placement === "turn") {
                 execution.getState().apply({ kind: "turn-submitted" });
             }

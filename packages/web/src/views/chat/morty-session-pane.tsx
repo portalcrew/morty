@@ -47,7 +47,7 @@ import { DesktopChatLayout } from "../../components/utils/desktop-chat-layout.ts
 import { FollowLatestScrollArea } from "../../components/utils/follow-latest-scroll-area.tsx";
 import { ScrollEdgeFade } from "../../components/utils/scroll-edge-fade.tsx";
 import { cn } from "../../lib/utils.ts";
-import { type AgentQuestionChoices, agentQuestionAnswer } from "../../view-models/chat/agent-question-answer.ts";
+import { type AgentQuestionChoices, agentQuestionCard } from "../../view-models/chat/agent-question-answer.ts";
 import { agentReplyCopyText, agentReplyMessageGroups } from "../../view-models/chat/agent-reply-copy.ts";
 import { authenticationGuidance } from "../../view-models/chat/authentication-guidance.ts";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
@@ -140,16 +140,16 @@ function SessionRenderItemContent({
     if (item.kind === "assistant-text" && item.messageId !== null && item.questions.length > 0) {
         // The message text only restates the questions for readers that cannot show them.
         const messageId = item.messageId;
-        const choices = answerChoices.get(messageId) ?? {};
+        const card = agentQuestionCard(item.questions, item.answerable, answerChoices.get(messageId));
         return (
             <AgentQuestions
                 answerable={item.answerable}
-                choices={choices}
+                choices={card.choices}
                 disabled={presentation.answerDisabled}
                 onAnswer={() => onAnswer(messageId)}
                 onChoose={(questionIndex, answer) => onChooseAnswer(messageId, questionIndex, answer)}
                 questions={item.questions}
-                ready={agentQuestionAnswer(item.questions, choices) !== null}
+                ready={card.ready}
             />
         );
     }
