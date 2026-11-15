@@ -20,7 +20,7 @@ const envelope = z.discriminatedUnion("kind", [
 ]);
 
 /** Stateful Worker wire contract: Computer APIs are WebSocket-only; bootstrap remains HTTP. */
-async function computerPeer() {
+async function computerPeer(signal: AbortSignal) {
     let access: "active" | "revoked" = "active";
     const waiting = new Set<string>();
     const pending = Promise.withResolvers<void>();
@@ -132,17 +132,19 @@ async function computerPeer() {
             origin: new URL(origin),
             headers: { authorization: "Bearer owner" },
             body: null,
-            signal: init.signal ?? AbortSignal.timeout(10_000),
+            signal: init.signal ?? signal,
         }),
     };
 }
 
-it("Given a Computer credential, When a client reads access and ends browser access, Then it uses WebSocket and preserves the empty 204 and subsequent authentication rejection", async () => {
+it("Given a Computer credential, When a client reads access and ends browser access, Then it uses WebSocket and preserves the empty 204 and subsequent authentication rejection", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-12T00:00:00Z") });
     onTestFinished(() => {
         vi.useRealTimers();
     });
-    const peer = await computerPeer();
+    const peer = await computerPeer(signal);
     const transport = new WsTransport();
     onTestFinished(transport.close);
     const session = await transport.fetch(peer.request("/v1/computers/computer-1/session"));
@@ -173,12 +175,14 @@ it("Given a Computer credential, When a client reads access and ends browser acc
     expect(await download.text()).toBe("Downloaded over HTTP");
 });
 
-it("Given an in-flight Computer API request, When its caller cancels, Then the peer receives cancellation and the connection still serves later requests", async () => {
+it("Given an in-flight Computer API request, When its caller cancels, Then the peer receives cancellation and the connection still serves later requests", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-12T00:00:00Z") });
     onTestFinished(() => {
         vi.useRealTimers();
     });
-    const peer = await computerPeer();
+    const peer = await computerPeer(signal);
     const transport = new WsTransport();
     onTestFinished(transport.close);
     const controller = new AbortController();

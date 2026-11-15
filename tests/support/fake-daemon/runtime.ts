@@ -208,9 +208,9 @@ export async function connectControlledAgentRuntime(options: {
                 unexpectedFailure.reject(cause);
             }
         });
-        const readinessSignal = AbortSignal.any([signal, AbortSignal.timeout(10_000)]);
-        const abortReadiness = (): void => ready.reject(readinessSignal.reason);
-        readinessSignal.addEventListener("abort", abortReadiness, { once: true });
+        // Readiness ends with the caller's signal; the caller's test timeout bounds a daemon that never connects.
+        const abortReadiness = (): void => ready.reject(signal.reason);
+        signal.addEventListener("abort", abortReadiness, { once: true });
         const stop = async (): Promise<void> => {
             cancellation.abort(new Error("Controlled Agent Runtime stopped"));
             await daemon.catch(() => undefined);
@@ -222,7 +222,7 @@ export async function connectControlledAgentRuntime(options: {
             await stop();
             throw cause;
         } finally {
-            readinessSignal.removeEventListener("abort", abortReadiness);
+            signal.removeEventListener("abort", abortReadiness);
         }
     };
     const initial = await start().catch(async (cause: unknown) => {
