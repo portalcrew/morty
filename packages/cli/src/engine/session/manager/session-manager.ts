@@ -7,7 +7,7 @@ import {
     type SessionCapabilities,
     type SessionCloseNoticeEvent,
     type SessionEventPayload,
-    type SessionInteractionSnapshot,
+    type SessionPendingInteractions,
     type SessionStatus,
 } from "@morty-build/client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
@@ -840,15 +840,10 @@ export class SessionManager {
     readonly listSessions = (limit: number) => this.#store.list().slice(0, limit);
 
     /** The actionable requests of the Session this Runtime holds for `target`; a target it does not hold is refused. */
-    readonly interactionSnapshot = (target: NativeSessionTarget): SessionInteractionSnapshot => {
+    readonly pendingInteractions = (target: NativeSessionTarget): SessionPendingInteractions => {
         const session = this.heldSession(target);
-        const runtime = this.#executionProcesses.get(session.target);
-        if (runtime !== undefined) {
-            return runtime.interactionSnapshot();
-        }
         // No live Agent owns an actionable request after its session process has gone away.
-        const { sessionGenerationId, throughPosition } = this.#store.events.livePosition(session.target);
-        return { sessionGenerationId, throughPosition, interactions: [] };
+        return this.#executionProcesses.get(session.target)?.pendingInteractions() ?? [];
     };
 
     readonly ensureSession = async (options: SessionPrepareOptions): Promise<AgentSession> =>

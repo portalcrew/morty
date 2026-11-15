@@ -59,7 +59,7 @@ describe("Session execution read contracts", () => {
         executionPosition: { sessionGenerationId: "generation-1", throughPosition: "4" },
         kind: "native.session.result",
         queued: [],
-        interactionState: null,
+        interactions: [],
         requestId: "request-execution-1",
         target: { harness: "claude", sessionId: "session-1" },
         turn: null,
@@ -82,7 +82,7 @@ describe("Session execution read contracts", () => {
     });
 
     it("Given an execution missing current interaction recovery, When it crosses the launch protocol boundary, Then an older snapshot cannot silently clear pending requests", () => {
-        const { interactionState: _interactionState, ...oldSnapshot } = execution;
+        const { interactions: _interactions, ...oldSnapshot } = execution;
         expect(() => decodeNativeSessionResult(JSON.stringify(oldSnapshot))).toThrow();
     });
 

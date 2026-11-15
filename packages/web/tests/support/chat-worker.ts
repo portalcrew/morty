@@ -123,7 +123,6 @@ export async function createChatWorkerEnvironment(
                             turn: snapshot.turn?.commandId ?? null,
                             lastTurn: snapshot.lastTurn?.commandId ?? null,
                             lastTurnState: snapshot.lastTurn?.state ?? null,
-                            interactionPosition: snapshot.interactionState?.throughPosition ?? null,
                         };
                     },
                     terminal: (encoded, signal) => {

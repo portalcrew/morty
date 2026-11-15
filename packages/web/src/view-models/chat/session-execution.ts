@@ -445,10 +445,7 @@ function applyRead(
                 turn,
                 queued: snapshot.queued,
                 listing: { queued: new Set(queued), basis },
-                interactions:
-                    snapshot.interactionState === null
-                        ? []
-                        : snapshot.interactionState.interactions.map(requestedInteraction),
+                interactions: snapshot.interactions.map(requestedInteraction),
                 observations: [
                     // A report of another log generation no longer describes the log this one continues.
                     ...next.observations.filter(

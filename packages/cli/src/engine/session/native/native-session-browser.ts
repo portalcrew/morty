@@ -296,7 +296,6 @@ export class NativeSessionService {
                 directoryLabel: target.directoryLabel,
                 kind: "session.ready",
                 requestId: command.requestId,
-                restored: true,
                 target: opened.target,
             };
         };

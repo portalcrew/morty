@@ -16,7 +16,7 @@ import {
     encodeContentChunkFrame,
     encodeContentCommitCommand,
     encodeContentWriteCommand,
-    encodeNativeSessionRequest,
+    encodeNativeSessionCommand,
     encodeSessionCancelCommand,
     encodeSessionCreateCommand,
     encodeSessionHistoryPageLoad,
@@ -406,7 +406,7 @@ async function history(
 async function activeTurn(fixture: Fixture, command: SessionPromptCommand) {
     await sendText(
         fixture.socket,
-        encodeNativeSessionRequest({
+        encodeNativeSessionCommand({
             action: "active-turn",
             kind: "native.session.request",
             requestId: "active",

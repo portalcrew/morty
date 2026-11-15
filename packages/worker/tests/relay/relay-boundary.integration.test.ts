@@ -1473,7 +1473,7 @@ it("Given Chat reads the Session execution naming an unconfirmed command, When t
                     queued: [],
                     delivery: { commandId: "unconfirmed-command", state: "received" },
                     executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
-                    interactionState: null,
+                    interactions: [],
                 },
                 encryption.computer,
                 signal,
@@ -1534,7 +1534,7 @@ it("Given Chat reads the Session execution after missing a turn's outcome, When 
                     turn: null,
                     queued: [],
                     executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
-                    interactionState: null,
+                    interactions: [],
                     lastTurn: {
                         code: "model_unavailable",
                         commandId: "failed-command",
@@ -1548,7 +1548,7 @@ it("Given Chat reads the Session execution after missing a turn's outcome, When 
         );
         const routed = await responseJson(await response, 200);
         expect(await nativeSessionResultCodec.decode(JSON.stringify(routed), encryption.client, signal)).toMatchObject({
-            interactionState: null,
+            interactions: [],
             lastTurn: { commandId: "failed-command", state: "failed", code: "model_unavailable" },
         });
     } finally {
@@ -2229,7 +2229,7 @@ describe.sequential("Relay Turn submission", () => {
                         kind: "native.session.result",
                         queued: [],
                         executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
-                        interactionState: null,
+                        interactions: [],
                         requestId: command.requestId,
                         target: runtime.sessionTarget,
                         turn: null,
@@ -3270,7 +3270,6 @@ function forkResult(requestId: string, target: NativeSessionTarget) {
             harness: "codex",
             agentName: "Codex",
             agentVersion: "1.0.0",
-            restored: true,
             directory: ".",
             directoryLabel: "Workspace",
             configurationRevision: "revision-1",

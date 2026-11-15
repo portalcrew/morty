@@ -1,6 +1,6 @@
 import type { ForkMortyNativeSessionRequest } from "@morty-build/client";
 import type {
-    NativeSessionRequest,
+    NativeSessionCommand,
     NativeSessionTarget,
     SessionConfigurationSelection,
 } from "@morty-build/client/protocol";
@@ -249,7 +249,7 @@ export const chatCalls = Object.freeze({
         computerId,
         input,
     }: ComputerCallTarget & {
-        readonly input: Omit<Extract<NativeSessionRequest, { readonly action: "list" }>, "kind" | "requestId">;
+        readonly input: Omit<Extract<NativeSessionCommand, { readonly action: "list" }>, "kind" | "requestId">;
     }) =>
         commandCall({
             origin,

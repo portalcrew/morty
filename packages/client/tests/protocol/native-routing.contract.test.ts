@@ -9,7 +9,7 @@ import {
 import {
     decodeClientToRelayMessage,
     decodeDaemonToRelayMessage,
-    decodeNativeSessionRequest,
+    decodeNativeSessionCommand,
     decodeNativeSessionResult,
     type NativeSessionCommandRouting,
     type NativeSessionResultRouting,
@@ -92,7 +92,7 @@ describe("Native Session routing", () => {
         "Given a $message.action request, when it crosses the relay, then only its authorization route is visible",
         async ({ message, routing }) => {
             const { client, computer, signal } = await endpoints();
-            const expected = decodeNativeSessionRequest(JSON.stringify(message));
+            const expected = decodeNativeSessionCommand(JSON.stringify(message));
             const wire = await nativeSessionCommandCodec.encode(expected, client, signal);
             const route = decodeClientToRelayMessage(wire);
             expect(route).toEqual({
@@ -187,7 +187,6 @@ const ready = {
     configurationRevision: "rev-1",
     directory: "/private/workspace",
     directoryLabel: "workspace",
-    restored: false,
 };
 const entry = {
     sessionId: "session-1",
@@ -205,7 +204,7 @@ const results = [
             target,
             queued: [],
             queuedCancellation: "before-start",
-            interactionState: null,
+            interactions: [],
             turn: null,
             executionPosition: { sessionGenerationId: "generation-1", throughPosition: "0" },
         },

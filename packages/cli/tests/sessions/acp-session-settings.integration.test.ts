@@ -289,7 +289,6 @@ it("Given ACP exposes select and boolean settings, When a user configures the co
             resumeSession: true,
             steering: true,
         },
-        restored: false,
     });
     expect(prepared.configOptions).toEqual(
         expect.arrayContaining([

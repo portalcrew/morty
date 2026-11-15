@@ -57,7 +57,6 @@ export function sessionReady(
         directoryLabel: location.directoryLabel,
         kind: "session.ready",
         requestId,
-        restored: prepared.restored,
         target,
     };
 }

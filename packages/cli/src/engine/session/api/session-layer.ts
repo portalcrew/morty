@@ -91,12 +91,12 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         manager,
         sessionCreations,
         (request): SessionExecution => {
-            const interactionState = manager.interactionSnapshot(request.target);
+            const interactions = manager.pendingInteractions(request.target);
             const { turn, queued } = activeSessions.executionSnapshot(request.target);
             const read = {
                 queued,
                 executionPosition: events.livePosition(request.target),
-                interactionState,
+                interactions,
                 ...(request.deliveryCommandId === undefined
                     ? {}
                     : { delivery: operations.delivery(request.deliveryCommandId, request.target) }),

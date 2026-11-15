@@ -281,7 +281,6 @@ test("Given a real Pi native Session was previewed, When the user imports it, Th
                 continue;
             }
             expect(result.target).toEqual(sourceSessionId);
-            expect(result.ready.restored).toBe(true);
             break;
         }
     });
@@ -380,7 +379,6 @@ test("Given a saved real Pi native Session, When the user forks it, Then its his
             forkedSessionTarget = result.target;
             expect(result.target).toEqual(forkedSessionTarget);
             expect(forkedSessionTarget.sessionId).not.toBe(sourceSessionId.sessionId);
-            expect(result.ready.restored).toBe(true);
             break;
         }
 

@@ -90,7 +90,7 @@ test.for(["allow_once", "reject_once"] as const)(
                         }
                         expect(snapshot).toMatchObject({
                             action: "active-turn",
-                            interactionState: { interactions: [permission] },
+                            interactions: [permission],
                         });
                         break;
                     }
@@ -201,7 +201,7 @@ test.for(["allow_once", "reject_once"] as const)(
                             }
                             expect(snapshot).toMatchObject({
                                 action: "active-turn",
-                                interactionState: { interactions: [permission] },
+                                interactions: [permission],
                             });
                             break;
                         }

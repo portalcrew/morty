@@ -106,7 +106,6 @@ export class PreparedSession {
     readonly capabilities: SessionCapabilities;
     readonly commands: readonly SessionCommand[];
     readonly configOptions: readonly SessionConfigOption[];
-    readonly restored: boolean;
     readonly configurationRevision: string;
 
     constructor(
@@ -115,7 +114,6 @@ export class PreparedSession {
         capabilities: SessionCapabilities,
         commands: readonly SessionCommand[],
         configOptions: readonly SessionConfigOption[],
-        restored: boolean,
         configurationRevision: string,
     ) {
         this.agentName = agentName;
@@ -123,7 +121,6 @@ export class PreparedSession {
         this.capabilities = capabilities;
         this.commands = commands;
         this.configOptions = configOptions;
-        this.restored = restored;
         this.configurationRevision = configurationRevision;
     }
 }

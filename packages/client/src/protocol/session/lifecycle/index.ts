@@ -149,18 +149,6 @@ const decodeSessionCreateCommand = (encoded: string): SessionCreateCommand =>
 export const encodeSessionCreateCommand = (message: SessionCreateCommand): string =>
     encode(message, sessionCreateCommandSchema);
 
-const runtimeTimingsSchema = z
-    .array(
-        z
-            .object({
-                durationMilliseconds: z.number().finite().nonnegative().max(120_000),
-                name: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/),
-            })
-            .readonly(),
-    )
-    .max(16)
-    .readonly();
-
 /** What a Session's preparation tells a client, apart from which Session and which request it answers. */
 const sessionReadyFields = {
     agentName: z.string().max(255),
@@ -171,8 +159,6 @@ const sessionReadyFields = {
     configurationRevision: IDENTIFIER,
     directory: DIRECTORY_PATH,
     directoryLabel: z.string().min(1).max(MAX_WORKSPACE_PATH_LENGTH),
-    restored: z.boolean(),
-    runtimeTimings: runtimeTimingsSchema.optional(),
 };
 export const sessionReadyBodySchema = z.object(sessionReadyFields).readonly();
 export type SessionReadyBody = z.infer<typeof sessionReadyBodySchema>;
@@ -233,7 +219,6 @@ const sessionOperationFailedEventSchema = z
         kind: z.literal(SESSION_OPERATION_FAILED_KIND),
         message: z.string().min(1).max(500),
         requestId: IDENTIFIER,
-        runtimeTimings: runtimeTimingsSchema.optional(),
         target: nativeSessionTargetSchema.optional(),
     })
     .readonly();

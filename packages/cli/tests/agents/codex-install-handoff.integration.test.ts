@@ -96,7 +96,6 @@ test("Given setup runs in a real Codex exec conversation, When its native sessio
         const imported = await nextResult(importRequestId);
         expect(imported).toMatchObject({
             action: "import",
-            ready: { restored: true },
             target: { harness: "codex", sessionId },
         });
         if (imported.action !== "import") {

@@ -16,7 +16,7 @@ import {
     decodeSessionReadyEvent,
     decodeSessionRestoredEvent,
     decodeSessionsQueriedEvent,
-    encodeNativeSessionRequest,
+    encodeNativeSessionCommand,
     encodeSessionCreateCommand,
     encodeSessionElicitationRespondCommand,
     encodeSessionHistoryPageLoad,
@@ -162,7 +162,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         await messages.nextKind("session.prompt.accepted");
         const snapshot = async (requestId: string) => {
             await socket.send(
-                encodeNativeSessionRequest({
+                encodeNativeSessionCommand({
                     action: "active-turn",
                     kind: "native.session.request",
                     requestId,
@@ -184,7 +184,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         const running = await snapshot("permission_snapshot");
         expect(running).toMatchObject({
             action: "active-turn",
-            interactionState: { interactions: [permission] },
+            interactions: [permission],
         });
         // The turn is dated by the Computer's start, not by whoever reads it.
         expect(running.action === "active-turn" ? running.turn?.startedAt : undefined).toBe("2026-11-07T00:00:00.000Z");
@@ -201,7 +201,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         await messages.nextKind(SESSION_PERMISSION_RESOLVED_KIND);
         expect(await snapshot("resolved_permission_snapshot")).toMatchObject({
             action: "active-turn",
-            interactionState: { interactions: [] },
+            interactions: [],
         });
         // A caller that lost the first reply can repeat its answer, but cannot overwrite it.
         const repeatedAnswer = {
@@ -243,7 +243,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         );
         expect(await snapshot("elicitation_snapshot")).toMatchObject({
             action: "active-turn",
-            interactionState: { interactions: [elicitation] },
+            interactions: [elicitation],
         });
         await socket.send(
             encodeSessionElicitationRespondCommand({
@@ -258,7 +258,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
         await messages.nextKind(SESSION_ELICITATION_RESOLVED_KIND);
         expect(await snapshot("resolved_elicitation_snapshot")).toMatchObject({
             action: "active-turn",
-            interactionState: { interactions: [] },
+            interactions: [],
         });
         await writeFile(join(stateDirectory, "agent", "resume-after-elicitation"), "");
         await messages.nextKind("prompt.completed");
@@ -799,7 +799,6 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
                     title: "Persist this Session",
                 },
                 kind: SESSION_RESTORED_KIND,
-                ready: { restored: true },
                 requestId: "restore_request",
                 target: sessionTarget,
             });
@@ -936,7 +935,7 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
             }
         }
         socket.send(
-            encodeNativeSessionRequest({
+            encodeNativeSessionCommand({
                 action: "active-turn",
                 kind: "native.session.request",
                 requestId: "session_snapshot",
