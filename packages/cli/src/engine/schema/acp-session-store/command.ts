@@ -10,6 +10,7 @@ export const command = sqliteTable(
     "command",
     {
         commandId: text("command_id").primaryKey(),
+        harness: text("harness").notNull(),
         sessionId: text("session_id").notNull(),
         commandHash: text("command_hash").notNull(),
         attemptId: text("attempt_id").notNull(),
@@ -29,7 +30,7 @@ export const command = sqliteTable(
     },
     (table) => [
         uniqueIndex("command_admission_order_idx").on(table.admissionOrder),
-        index("command_session_idx").on(table.sessionId, table.admissionOrder),
+        index("command_session_idx").on(table.harness, table.sessionId, table.admissionOrder),
         check(
             "command_fate",
             sql`${table.fate} IN ('pending', 'started', 'cancelled', 'interrupted-before-start', 'settled-before-start', 'settled-after-start')`,

@@ -1,4 +1,4 @@
-import { NativeSessionSet, nativeSessionKey } from "@morty-build/client/native-session";
+import { NativeSessionSet } from "@morty-build/client/native-session";
 import { decodeSessionEvent, type NativeSessionTarget, type SessionEvent } from "@morty-build/client/protocol";
 import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { NodeSQLiteDatabase } from "drizzle-orm/node-sqlite";
@@ -8,6 +8,9 @@ import type { LocalSqliteDatabase } from "../sqlite/local-sqlite-database.ts";
 
 const cachedEventRowSchema = z.object({ eventJson: z.string() });
 const cachedEventOrdinalRowSchema = z.object({ eventJson: z.string(), ordinal: z.number().int().positive() });
+
+const ofSession = (target: NativeSessionTarget) =>
+    and(eq(sessionEvent.harness, target.harness), eq(sessionEvent.sessionId, target.sessionId));
 
 interface SessionEventCacheBatch {
     readonly events: readonly { readonly event: SessionEvent; readonly ordinal: number }[];
@@ -54,7 +57,8 @@ export class SessionEventCacheTable {
                 eventId: event.eventId,
                 generationId: batch.sessionGenerationId,
                 ordinal,
-                sessionId: nativeSessionKey(batch.sessionTarget),
+                harness: batch.sessionTarget.harness,
+                sessionId: batch.sessionTarget.sessionId,
             })),
         );
         if (values.length === 0) {
@@ -67,7 +71,7 @@ export class SessionEventCacheTable {
                         .insert(sessionEvent)
                         .values(values.slice(offset, offset + 200))
                         .onConflictDoUpdate({
-                            target: [sessionEvent.sessionId, sessionEvent.eventId],
+                            target: [sessionEvent.harness, sessionEvent.sessionId, sessionEvent.eventId],
                             set: { eventJson: sql`excluded.event_json` },
                         })
                         .run();
@@ -101,7 +105,7 @@ export class SessionEventCacheTable {
                 .where(
                     and(
                         eq(sessionEvent.generationId, sessionGenerationId),
-                        eq(sessionEvent.sessionId, nativeSessionKey(sessionTarget)),
+                        ofSession(sessionTarget),
                         inArray(sessionEvent.eventId, eventIds),
                     ),
                 )
@@ -138,7 +142,7 @@ export class SessionEventCacheTable {
             .where(
                 and(
                     eq(sessionEvent.generationId, sessionGenerationId),
-                    eq(sessionEvent.sessionId, nativeSessionKey(sessionTarget)),
+                    ofSession(sessionTarget),
                     gte(sessionEvent.ordinal, startOrdinal),
                     lte(sessionEvent.ordinal, endOrdinal),
                 ),
@@ -161,11 +165,8 @@ export class SessionEventCacheTable {
                 .delete(sessionEvent)
                 .where(
                     sessionGenerationId === undefined
-                        ? eq(sessionEvent.sessionId, nativeSessionKey(sessionTarget))
-                        : and(
-                              eq(sessionEvent.generationId, sessionGenerationId),
-                              eq(sessionEvent.sessionId, nativeSessionKey(sessionTarget)),
-                          ),
+                        ? ofSession(sessionTarget)
+                        : and(eq(sessionEvent.generationId, sessionGenerationId), ofSession(sessionTarget)),
                 )
                 .run();
             this.#ignoredPersistedSessions.delete(sessionTarget);
