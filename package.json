@@ -16,7 +16,7 @@
         "check:no-chinese": "node scripts/check-no-chinese.ts",
         "check:store-subscribe": "node scripts/check-store-subscribe.ts",
         "check:view-hooks": "node scripts/check-view-hooks.ts",
-        "lint": "biome ci --error-on-warnings && pnpm check:no-chinese && pnpm check:store-subscribe && pnpm check:view-hooks && pnpm check:architecture",
+        "lint": "biome ci --error-on-warnings && pnpm check:no-chinese && pnpm check:store-subscribe && pnpm check:view-hooks && pnpm check:architecture && pnpm knip",
         "test:worker": "pnpm --dir packages/worker test",
         "test:web": "pnpm --dir packages/web test",
         "test:e2e": "pnpm --filter @morty-build/e2e test",
@@ -39,7 +39,7 @@
         "test:relay-support": "vitest run packages/relay-test-support/tests"
     },
     "simple-git-hooks": {
-        "pre-commit": "pnpm typecheck && pnpm check:no-chinese && pnpm check:view-hooks && pnpm biome check --error-on-warnings --staged --files-ignore-unknown=true --no-errors-on-unmatched && pnpm check:architecture"
+        "pre-commit": "pnpm typecheck && pnpm check:no-chinese && pnpm check:view-hooks && pnpm biome check --error-on-warnings --staged --files-ignore-unknown=true --no-errors-on-unmatched && pnpm check:architecture && pnpm knip"
     },
     "devDependencies": {
         "@agentclientprotocol/sdk": "catalog:",
