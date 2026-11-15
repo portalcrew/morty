@@ -192,7 +192,6 @@ export function createChatWorkspace(options: {
         connectionAvailable: () =>
             connectionPresentation(computer.getState(), home.getState().selection, null).available,
         clock: options.clock,
-        computerEntry: follower.entry,
         computerEntered: follower.entered,
         onComputerInterrupted: follower.interrupted,
         onComputerRevokedByOperation: follower.revokedByOperation,
@@ -203,7 +202,7 @@ export function createChatWorkspace(options: {
         onDraftSelected: () => enterDraft(),
         onRestart: () => startOver(),
         // A selection chosen while the Computer's entry failed starts the page over, as Reconnect would.
-        onSelectionChanged: () => (follower.entry()?.kind === "failed" ? startOver() : startHomeLoad()),
+        onSelectionChanged: () => (computer.getState().entry.kind === "failed" ? startOver() : startHomeLoad()),
         onDirectoryRefreshed: () => startDirectoryLoad(),
         onFirstMessage: (sessionTarget, message) =>
             sessionState(sessionTarget).delivery.getState().awaitConnection(message),
