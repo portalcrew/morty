@@ -43,6 +43,9 @@ jobs:
     if: ${{ !inputs.markdown-only }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # A test that passes only when retried fails its job and is recorded here; flaky-tests.yml tracks it.
+      MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -57,6 +60,12 @@ jobs:
       - run: pnpm test:relay-support
       - run: pnpm test:relay
       - run: pnpm test:worker
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: flaky-tests-${{ github.run_attempt }}-services
+          path: test-results/flaky-tests/
+          if-no-files-found: ignore
 
   runtime:
     if: ${{ !inputs.markdown-only }}
@@ -66,6 +75,9 @@ jobs:
         shard: [1, 2]
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # A test that passes only when retried fails its job and is recorded here; flaky-tests.yml tracks it.
+      MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -77,6 +89,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:cli
       - run: pnpm test:runtime --shard=${{ matrix.shard }}/2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: flaky-tests-${{ github.run_attempt }}-runtime-${{ matrix.shard }}
+          path: test-results/flaky-tests/
+          if-no-files-found: ignore
 
   web:
     if: ${{ !inputs.markdown-only }}
@@ -86,6 +104,9 @@ jobs:
         shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # A test that passes only when retried fails its job and is recorded here; flaky-tests.yml tracks it.
+      MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -97,6 +118,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:cli
       - run: pnpm test:web --shard=${{ matrix.shard }}/4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: flaky-tests-${{ github.run_attempt }}-web-${{ matrix.shard }}
+          path: test-results/flaky-tests/
+          if-no-files-found: ignore
 
   browser:
     if: ${{ !inputs.markdown-only }}
@@ -128,6 +155,8 @@ jobs:
           # A failed journey keeps its trace, page, screenshot and process logs here for the failure artifact. The path
           # is relative to the suite in packages/e2e: in a container job, runner paths name the host, not the container.
           MORTY_E2E_ARTIFACT_ROOT: e2e-diagnostics
+          # A journey that passes only when retried fails the job and is recorded here; flaky-tests.yml tracks it.
+          MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
@@ -135,6 +164,12 @@ jobs:
           path: |
             packages/e2e/test-results
             packages/e2e/e2e-diagnostics
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: flaky-tests-${{ github.run_attempt }}-browser-${{ matrix.shard }}
+          path: test-results/flaky-tests/
           if-no-files-found: ignore
 
   # Packing does not depend on test results, so the archive is built and accepted
