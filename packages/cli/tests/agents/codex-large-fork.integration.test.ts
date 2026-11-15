@@ -104,7 +104,7 @@ test("Given real Codex saved more than 32 MiB of answers, When a user forks thro
         expect(forked).toMatchObject({
             action: "fork",
             target: forked.target,
-            ready: { restored: true, target: forked.target },
+            ready: { target: forked.target },
         });
         const historyId = randomUUID();
         peer.send(

@@ -152,7 +152,7 @@ export async function fixture(
             turn: null,
             queued: [],
             executionPosition: { sessionGenerationId: "fixture-generation", throughPosition: "0" },
-            interactionState: null,
+            interactions: [],
         }),
     );
     const identity = {
@@ -269,7 +269,7 @@ export async function fixture(
                     turn: null,
                     queued: [],
                     executionPosition: { sessionGenerationId: "fixture-generation", throughPosition: "0" },
-                    interactionState: null,
+                    interactions: [],
                 }),
             );
         },

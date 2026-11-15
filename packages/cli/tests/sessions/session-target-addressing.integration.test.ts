@@ -7,7 +7,7 @@ import {
     decodeNativeSessionResult,
     decodeSessionLiveEvent,
     decodeSessionOperationFailedEvent,
-    encodeNativeSessionRequest,
+    encodeNativeSessionCommand,
     encodeSessionPromptCommand,
     NATIVE_SESSION_RESULT_KIND,
     type NativeSessionTarget,
@@ -34,7 +34,7 @@ const prompt = (peer: DaemonConnectionPeer, target: NativeSessionTarget, command
 
 const readExecution = (peer: DaemonConnectionPeer, target: NativeSessionTarget, requestId: string): void =>
     peer.send(
-        encodeNativeSessionRequest({
+        encodeNativeSessionCommand({
             action: "active-turn",
             kind: "native.session.request",
             requestId,

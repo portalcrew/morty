@@ -79,7 +79,6 @@ test.for(["request", "result"] as const)(
         if (loss === "result") {
             expect(first.target).toEqual(lost);
         }
-        expect(first.ready).toMatchObject({ restored: true });
         expect(await fork()).toEqual(first);
         const sessions = await runtime.api.managedSessions(signal);
         expect(sessions).toHaveLength(1);

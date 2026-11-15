@@ -712,7 +712,6 @@ it("Given an authorized native Fork, When the Computer returns a new Session, Th
                     configurationRevision: "revision-1",
                     directory: ".",
                     directoryLabel: "Workspace",
-                    restored: false,
                 },
             },
             encryption.sender,

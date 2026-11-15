@@ -11,7 +11,7 @@ import {
     decodeSessionOperationFailedEvent,
     decodeSessionPromptAcceptedEvent,
     decodeSessionReadyEvent,
-    encodeNativeSessionRequest,
+    encodeNativeSessionCommand,
     encodeSessionCreateCommand,
     encodeSessionPermissionRespondCommand,
     encodeSessionPromptCommand,
@@ -218,7 +218,7 @@ test("Given a completed foreground turn, When its Agent requests background perm
         expect(requested.payload.event.commandId).toBe("session-control");
         const snapshot = async (requestId: string) => {
             await send(
-                encodeNativeSessionRequest({
+                encodeNativeSessionCommand({
                     action: "active-turn",
                     kind: "native.session.request",
                     requestId,
@@ -235,11 +235,11 @@ test("Given a completed foreground turn, When its Agent requests background perm
         expect(await snapshot("pending")).toMatchObject({
             action: "active-turn",
             turn: null,
-            interactionState: {
+            executionPosition: {
                 sessionGenerationId: requested.sessionGenerationId,
                 throughPosition: requested.position,
-                interactions: [requested.payload.event],
             },
+            interactions: [requested.payload.event],
         });
         await send(
             encodeSessionPermissionRespondCommand({
@@ -255,11 +255,11 @@ test("Given a completed foreground turn, When its Agent requests background perm
         const resolved = await live("session.permission.resolved");
         expect(await snapshot("resolved")).toMatchObject({
             turn: null,
-            interactionState: {
+            executionPosition: {
                 sessionGenerationId: resolved.sessionGenerationId,
                 throughPosition: resolved.position,
-                interactions: [],
             },
+            interactions: [],
         });
     } finally {
         cancellation.abort();

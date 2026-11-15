@@ -15,7 +15,6 @@ export async function createSessionExecutionProxy(upstream: string) {
                 readonly turn: string | null;
                 readonly lastTurn: string | null;
                 readonly lastTurnState: string | null;
-                readonly interactionPosition: string | null;
             } | null>;
             readonly terminal: (encoded: string, signal: AbortSignal) => Promise<boolean>;
         }
@@ -41,7 +40,6 @@ export async function createSessionExecutionProxy(upstream: string) {
         readonly turn: string | null;
         readonly lastTurn: string | null;
         readonly lastTurnState: string | null;
-        readonly interactionPosition: string | null;
     }[] = [];
     const server = createServer((incoming, outgoing) => {
         const heldResponse = takeResponseHold(new URL(incoming.url ?? "/", upstream).pathname);

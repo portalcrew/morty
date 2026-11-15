@@ -1,7 +1,7 @@
 import type { ComputerEncryptionAccess, ForkMortyNativeSessionRequest } from "@morty-build/client";
 import { MortyClient, type WsTransport } from "@morty-build/client";
 import { sameNativeSession } from "@morty-build/client/native-session";
-import type { NativeSessionRequest } from "@morty-build/client/protocol";
+import type { NativeSessionCommand } from "@morty-build/client/protocol";
 import {
     type AgentSetting,
     agentSettingsDiscoverCommandCodec,
@@ -642,9 +642,9 @@ export class BotChatApi {
 
     readonly nativeSessions = async (
         input:
-            | Omit<Extract<NativeSessionRequest, { readonly action: "list" }>, "kind" | "requestId">
+            | Omit<Extract<NativeSessionCommand, { readonly action: "list" }>, "kind" | "requestId">
             | (Omit<
-                  Extract<NativeSessionRequest, { readonly action: "import" | "fork" }>,
+                  Extract<NativeSessionCommand, { readonly action: "import" | "fork" }>,
                   "kind" | "requestId" | "action"
               > & { readonly action: "import" }),
         signal: AbortSignal,

@@ -45,7 +45,6 @@ describe("native session authorization", () => {
                     action: "import",
                     target: { harness: f.agent.harness, sessionId: entry.sessionId },
                     ready: {
-                        restored: true,
                         directory: entry.directory,
                         directoryLabel: entry.directoryLabel,
                         capabilities: {

@@ -28,22 +28,16 @@ export const NATIVE_SESSION_CANCEL_KIND = "native.session.cancel";
 const envelope = {
     requestId: identifier,
 };
-const sessionInteractionSnapshotSchema = z
-    .object({
-        sessionGenerationId: identifier,
-        throughPosition: z.string().regex(/^(0|[1-9][0-9]*)$/),
-        interactions: z
-            .array(
-                z.discriminatedUnion("kind", [
-                    sessionPermissionRequestedEventSchema,
-                    sessionElicitationRequestedEventSchema,
-                    sessionElicitationAwaitingCompletionEventSchema,
-                ]),
-            )
-            .readonly(),
-    })
+const sessionPendingInteractionsSchema = z
+    .array(
+        z.discriminatedUnion("kind", [
+            sessionPermissionRequestedEventSchema,
+            sessionElicitationRequestedEventSchema,
+            sessionElicitationAwaitingCompletionEventSchema,
+        ]),
+    )
     .readonly();
-export type SessionInteractionSnapshot = z.infer<typeof sessionInteractionSnapshotSchema>;
+export type SessionPendingInteractions = z.infer<typeof sessionPendingInteractionsSchema>;
 
 const activeTurnSnapshotSchema = z
     .object({
@@ -105,35 +99,6 @@ const agentDirectory = {
     directory,
 };
 
-const nativeSessionRequestSchema = z.discriminatedUnion("action", [
-    z
-        .object({
-            ...requestEnvelope,
-            action: z.literal("active-turn"),
-            // Asks the Computer for this command's delivery alongside the execution snapshot. It is not
-            // named `commandId`, which routes a request as the command it names.
-            deliveryCommandId: identifier.optional(),
-            // The Computer reads the Session it holds for this target.
-            target: nativeSessionTargetSchema,
-        })
-        .readonly(),
-    z.object({ ...agentDirectory, action: z.literal("find"), sessionId: identifier }).readonly(),
-    z
-        .object({
-            ...agentDirectory,
-            action: z.literal("list"),
-            cursor: identifier.nullable(),
-        })
-        .readonly(),
-    z
-        .object({
-            ...agentDirectory,
-            action: z.enum(["import", "fork"]),
-            sessionId: identifier,
-        })
-        .readonly(),
-]);
-export type NativeSessionRequest = z.infer<typeof nativeSessionRequestSchema>;
 const nativeSessionCommandSchema = z.discriminatedUnion("action", [
     z
         .object({
@@ -201,8 +166,8 @@ const executionReadFields = {
             throughPosition: z.string().regex(/^(0|[1-9][0-9]*)$/),
         })
         .readonly(),
-    // Null when this Computer has no retained Session for the requested identity.
-    interactionState: sessionInteractionSnapshotSchema.nullable(),
+    // The requests the Session's Agent is waiting on an answer to, as of `executionPosition`.
+    interactions: sessionPendingInteractionsSchema,
     // The delivery of the command the request named; present exactly when the request named one.
     delivery: commandDeliverySchema.optional(),
 };
@@ -267,14 +232,10 @@ function decode<T>(schema: z.ZodType<T>, encoded: string): T {
     }
 }
 
-const decodeNativeSessionCommand = (encoded: string): NativeSessionCommand =>
+export const decodeNativeSessionCommand = (encoded: string): NativeSessionCommand =>
     decode(nativeSessionCommandSchema, encoded);
 export const encodeNativeSessionCommand = (value: NativeSessionCommand): string =>
     JSON.stringify(nativeSessionCommandSchema.parse(value));
-export const decodeNativeSessionRequest = (encoded: string): NativeSessionRequest =>
-    decode(nativeSessionRequestSchema, encoded);
-export const encodeNativeSessionRequest = (value: NativeSessionRequest): string =>
-    JSON.stringify(nativeSessionRequestSchema.parse(value));
 export const decodeNativeSessionResult = (encoded: string): NativeSessionResult =>
     decode(nativeSessionResultSchema, encoded);
 const decodeNativeSessionCancel = (encoded: string): NativeSessionCancel => decode(nativeSessionCancelSchema, encoded);

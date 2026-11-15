@@ -8,7 +8,7 @@ import {
     type SessionConfigOption,
     type SessionConfigurationSelection,
     type SessionEventPayload,
-    type SessionInteractionSnapshot,
+    type SessionPendingInteractions,
 } from "@morty-build/client/protocol";
 import { AcpExecutionError, AcpPromptExecutionError } from "../../acp/acp-error.ts";
 import { RetryableAcpInitializationError, validateAgentRuntime } from "../../acp/adapter/agent-initialization.ts";
@@ -500,7 +500,6 @@ export class AgentSession {
             this.#capabilities,
             this.#commands,
             this.#configOptions,
-            this.#identity.kind === "bound" && this.#identity.origin !== "created",
             configurationRevision(this.#configOptions),
         );
 
@@ -983,10 +982,7 @@ export class AgentSession {
         return "retained";
     };
 
-    readonly interactionSnapshot = (): SessionInteractionSnapshot => {
-        const { sessionGenerationId, throughPosition } = this.#store.events.livePosition(this.target);
-        return { sessionGenerationId, throughPosition, interactions: this.#interactions.snapshot() };
-    };
+    readonly pendingInteractions = (): SessionPendingInteractions => this.#interactions.snapshot();
 
     readonly respondPermission = async (options: PermissionResponseOptions): Promise<void> => {
         await this.#interactions.respondPermission(options);

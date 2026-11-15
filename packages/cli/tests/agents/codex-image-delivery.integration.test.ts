@@ -194,7 +194,7 @@ test("Given saved Codex image generation, When the real daemon reopens it throug
         }
         expect(imported).toMatchObject({
             action: "import",
-            ready: { restored: true, target: { harness: "codex", sessionId: sessionId } },
+            ready: { target: { harness: "codex", sessionId: sessionId } },
             target: { harness: "codex", sessionId: sessionId },
         });
         const key = createHash("sha256").update(image).digest("hex");

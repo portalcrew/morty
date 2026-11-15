@@ -72,12 +72,8 @@ async function journey(peer: RealDaemonPeer, harness: string, reply: string): Pr
         if (kind === "session.operation.failed") {
             throw new Error(message);
         }
-        if (kind === "session.ready") {
-            const ready = decodeSessionReadyEvent(message);
-            if (ready.requestId === requestId) {
-                expect(ready.restored).toBe(true);
-                break;
-            }
+        if (kind === "session.ready" && decodeSessionReadyEvent(message).requestId === requestId) {
+            break;
         }
     }
     const historyId = randomUUID();
@@ -220,7 +216,6 @@ async function interruptedJourney(
                 throw new Error(message);
             }
             if (kind === "session.ready" && decodeSessionReadyEvent(message).requestId === requestId) {
-                expect(decodeSessionReadyEvent(message).restored).toBe(true);
                 break;
             }
         }

@@ -217,7 +217,6 @@ async function importSavedSession(peer: RealDaemonPeer, agent: PiFixture): Promi
         }
         const result = decodeNativeSessionResult(message);
         if (result.action === "import" && result.requestId === importId) {
-            expect(result.ready.restored).toBe(true);
             return result.target;
         }
     }
