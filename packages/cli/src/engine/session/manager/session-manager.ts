@@ -1,4 +1,4 @@
-import { NativeSessionMap, nativeSessionKey } from "@morty-build/client/native-session";
+import { nativeSessionKey } from "@morty-build/client/native-session";
 import {
     isIdentifier,
     type LastTurnOutcome,
@@ -74,7 +74,6 @@ export class SessionManager {
     readonly #lastTurn: (target: NativeSessionTarget) => LastTurnOutcome | undefined;
     readonly #agentSettingsObserver: SessionObserver = {};
     readonly #lifecycles = new SessionLifecycles();
-    readonly #sessionRetirements = new NativeSessionMap<Promise<void>>();
     readonly #store: SessionStore;
     readonly #onSessionClosed: (event: SessionCloseNoticeEvent) => void;
     readonly #timer: Timer;
@@ -166,39 +165,21 @@ export class SessionManager {
                 this.#executionProcesses.isBusy(target) ||
                 this.#lifecycles.isCreating(target) ||
                 this.#lifecycles.managesNativeSession(target),
-            retire: (runtime) => this.#retireSessionProcess(target, runtime, () => runtime.close()),
-            retireIdle: (runtime) => this.#stopSessionProcess(target, runtime),
+            retire: (runtime) => this.#retireSessionProcess(target, runtime),
         };
     }
 
     /**
-     * Retires a Session's process. The stored Session outlives it, whatever ended the process: only an operation
-     * that ends the Session itself removes its title, settings and native identity.
+     * Retires a Session's process, whatever ended it: the Session's next process starts only once this one has
+     * exited. The stored Session outlives it: only an operation that ends the Session itself removes its title,
+     * settings and native identity.
      */
-    async #retireSessionProcess(
-        target: NativeSessionTarget,
-        runtime: AgentSession,
-        close: () => Promise<void>,
-    ): Promise<void> {
-        this.#executionProcesses.detach(target, runtime);
-        await this.#processes.retire(runtime, close);
-    }
-
-    /**
-     * Releases a closed or idle Session's process while keeping its title, settings and native
-     * identity available for the next preparation. This does not mark the Session closed.
-     */
-    async #stopSessionProcess(target: NativeSessionTarget, runtime: AgentSession): Promise<void> {
-        this.#executionProcesses.detach(target, runtime);
-        const retirement = this.#processes.retire(runtime, () => runtime.close());
-        this.#sessionRetirements.set(target, retirement);
-        try {
-            await retirement;
-        } finally {
-            if (this.#sessionRetirements.get(target) === retirement) {
-                this.#sessionRetirements.delete(target);
-            }
-        }
+    async #retireSessionProcess(target: NativeSessionTarget, runtime: AgentSession): Promise<void> {
+        await this.#executionProcesses.retire(
+            target,
+            runtime,
+            async () => await this.#processes.retire(runtime, () => runtime.close()),
+        );
     }
 
     #isKnownSession(target: NativeSessionTarget): boolean {
@@ -213,7 +194,7 @@ export class SessionManager {
         options: SessionPrepareOptions,
         start: (capabilities: SessionCapabilities) => Promise<AgentSession>,
     ): Promise<AgentSession> {
-        const retiring = this.#sessionRetirements.get(options.target);
+        const retiring = this.#executionProcesses.retiring(options.target);
         if (retiring !== undefined) {
             // The old process may still own the native writer while graceful teardown runs.
             await waitForSharedOperation(retiring, options.signal);
@@ -265,7 +246,7 @@ export class SessionManager {
             options.target,
             async (signal) => {
                 const shared = { ...options, signal };
-                await this.#retireSessionProcess(options.target, existing, async () => await existing.close());
+                await this.#retireSessionProcess(options.target, existing);
                 const runtime = await this.#startSession(shared, recovery);
                 try {
                     await replaySessionConfigurations(
@@ -281,7 +262,7 @@ export class SessionManager {
                         signal,
                     );
                 } catch (error) {
-                    await this.#retireSessionProcess(options.target, runtime, async () => await runtime.close());
+                    await this.#retireSessionProcess(options.target, runtime);
                     throw error;
                 }
                 return runtime;
@@ -318,7 +299,7 @@ export class SessionManager {
         return await this.#executionProcesses.prepare(
             options.target,
             async (signal) => {
-                await this.#stopSessionProcess(options.target, existing);
+                await this.#retireSessionProcess(options.target, existing);
                 return await this.#startSession({ ...options, signal }, recovery);
             },
             options.signal,
@@ -426,7 +407,7 @@ export class SessionManager {
 
     async #discardCreatedSession(target: NativeSessionTarget, runtime: AgentSession): Promise<void> {
         try {
-            await this.#retireSessionProcess(target, runtime, async () => await runtime.close());
+            await this.#retireSessionProcess(target, runtime);
         } finally {
             // The events a creation recorded leave with it.
             this.#store.remove(target);
@@ -588,7 +569,7 @@ export class SessionManager {
                         case "closed":
                             // Preserve the native conversation and effective settings for
                             // the next prompt, but never reuse a cancelled endpoint.
-                            await this.#stopSessionProcess(target, runtime);
+                            await this.#retireSessionProcess(target, runtime);
                             break;
                         default: {
                             const unreachable: never = outcome;
@@ -694,11 +675,7 @@ export class SessionManager {
             } catch (error) {
                 const failedRuntime = this.#executionProcesses.get(options.target);
                 if (failedRuntime !== undefined) {
-                    await this.#retireSessionProcess(
-                        options.target,
-                        failedRuntime,
-                        async () => await failedRuntime.close(),
-                    );
+                    await this.#retireSessionProcess(options.target, failedRuntime);
                 }
                 if (cancelled()) {
                     return { stopReason: "cancelled" };
@@ -775,7 +752,7 @@ export class SessionManager {
                     }
                 } finally {
                     // A failed Agent cancellation must still release the closed Session's resources.
-                    const retiring = this.#sessionRetirements.get(options.target);
+                    const retiring = this.#executionProcesses.retiring(options.target);
                     if (retiring !== undefined) {
                         await retiring;
                     }
@@ -783,7 +760,7 @@ export class SessionManager {
                     const runtime =
                         pending === undefined ? this.#executionProcesses.get(options.target) : await pending.completion;
                     if (runtime !== undefined) {
-                        await this.#stopSessionProcess(options.target, runtime);
+                        await this.#retireSessionProcess(options.target, runtime);
                     }
                 }
             } finally {
@@ -818,10 +795,7 @@ export class SessionManager {
             await retiring;
             const sessions = [...this.#executionProcesses.entries()];
             await Promise.all([
-                ...sessions.map(
-                    async ([target, runtime]) =>
-                        await this.#retireSessionProcess(target, runtime, async () => await runtime.close()),
-                ),
+                ...sessions.map(async ([target, runtime]) => await this.#retireSessionProcess(target, runtime)),
                 ...this.#lifecycles.closings(),
             ]);
         });
