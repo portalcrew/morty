@@ -1,18 +1,17 @@
 import * as v from "valibot";
 import type { CloudBindings } from "../../contracts/cloud-bindings.ts";
-import { computerBootstrap } from "../../contracts/computer-bootstrap.ts";
+import { computerCreation } from "../../contracts/computer-creation.ts";
 import { ComputerManagementError, relayIdentifier } from "../../contracts/computer-management.ts";
-import { computerNotFound } from "../../contracts/management-error.ts";
 import { ManagedSessionOperations } from "../components/chat/infra/managed-session-operations.ts";
 import type { ComputerBackendService } from "../components/computer/service/computer-backend-service.ts";
 import type { IdentityOperations } from "../components/management/service/identity-operations.ts";
-import type { DurableComputerAccount } from "../components/management/storage/durable-computer-account.ts";
+import { createComputer } from "../components/management/service/management-service.ts";
 import { IdentityStorage } from "../components/management/storage/identity-storage.ts";
 import type { DurableObjectDatabase } from "../infra/durable-object-database.ts";
 import { type ApplicationContext, createApplicationDependencies } from "./application-context.ts";
 
 /**
- * One computer's storage. Only the computer's bootstrap binds the object and creates its schema; a request for an computer
+ * One computer's storage. Only the computer's creation binds the object and creates its schema; a request for a computer
  * the object does not hold leaves no storage behind.
  */
 export class ComputerServices {
@@ -21,7 +20,7 @@ export class ComputerServices {
     readonly #credentialKey: IdentityOperations["credentialKey"];
     readonly #runtime: (computerId: string) => ComputerBackendService;
     readonly #database: () => DurableObjectDatabase;
-    readonly #account: Pick<DurableComputerAccount, "isActive">;
+    readonly #commitCreation: <Value>(write: (database: DurableObjectDatabase) => Value) => Value;
     /** Commits access changes with their connection checks inside the owning object. */
     constructor(
         owns: (id: string) => boolean,
@@ -29,14 +28,14 @@ export class ComputerServices {
         credentialKey: IdentityOperations["credentialKey"],
         runtime: (computerId: string) => ComputerBackendService,
         database: () => DurableObjectDatabase,
-        account: Pick<DurableComputerAccount, "isActive">,
+        commitCreation: <Value>(write: (database: DurableObjectDatabase) => Value) => Value,
     ) {
         this.#owns = owns;
         this.#endAccess = endAccess;
         this.#credentialKey = credentialKey;
         this.#runtime = runtime;
         this.#database = database;
-        this.#account = account;
+        this.#commitCreation = commitCreation;
     }
 
     readonly #sessionOperations = new ManagedSessionOperations();
@@ -50,31 +49,27 @@ export class ComputerServices {
         return validated;
     };
 
-    readonly forComputer = async (
-        computerId: string,
-        env: CloudBindings,
-        signal: AbortSignal,
-    ): Promise<ApplicationContext> => {
+    readonly forComputer = (computerId: string, env: CloudBindings): ApplicationContext =>
+        this.#application(this.#own(computerId), env);
+
+    /** Creates the computer `computerId` names with its owner, who is answered; a replacement may be repeated. */
+    readonly create = async (computerId: string, input: unknown, signal: AbortSignal) => {
         signal.throwIfAborted();
-        return await this.#application(this.#own(computerId), env, signal);
+        const owned = this.#own(computerId);
+        const { origin } = v.parse(computerCreation, input);
+        return await createComputer(
+            this.#credentialKey,
+            (tokenHash) =>
+                this.#commitCreation((database) => new IdentityStorage(database, owned).createOwner(tokenHash)),
+            owned,
+            origin,
+            signal,
+        );
     };
 
-    readonly bootstrap = async (input: unknown, env: CloudBindings, signal: AbortSignal) => {
-        signal.throwIfAborted();
-        const parsed = v.parse(computerBootstrap, input);
-        const dependencies = await this.#application(this.#own(parsed.computer.computerId), env, signal);
-        return await dependencies.services.management.initializeComputer(parsed.computer, signal, parsed.origin);
-    };
-
-    readonly #application = async (
-        computerId: string,
-        env: CloudBindings,
-        signal: AbortSignal,
-    ): Promise<ApplicationContext> => {
-        if (!(await this.#account.isActive(signal))) {
-            throw computerNotFound();
-        }
-        return createApplicationDependencies({
+    /** The computer's storage refuses a computer the object does not hold, before any service reads it. */
+    readonly #application = (computerId: string, env: CloudBindings): ApplicationContext =>
+        createApplicationDependencies({
             bindings: env,
             computer: this.#runtime(computerId),
             identity: { computerId },
@@ -82,5 +77,4 @@ export class ComputerServices {
             sessionOperations: this.#sessionOperations,
             identityOperations: { commitAccessEnd: this.#endAccess, credentialKey: this.#credentialKey },
         });
-    };
 }

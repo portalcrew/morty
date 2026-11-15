@@ -47,7 +47,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             "/identity/link",
             bodyParser<ManagementHttpEnvironment, typeof computerLinkInput>(computerLinkInput),
             async (context) => {
-                const application = await applicationForRequest(ctx, context);
+                const application = applicationForRequest(ctx, context);
                 using deadline = new RequestDeadline(context.req.raw.signal, 15_000);
                 const result = await application.services.authentication.linkComputer(
                     context.req.valid("json").computerId,
@@ -76,7 +76,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             },
         )
         .all("/session", async (context) => {
-            const application = await applicationForRequest(ctx, context);
+            const application = applicationForRequest(ctx, context);
             const request = context.req.raw;
             if (request.method !== "GET") {
                 throw new ManagementError("METHOD_NOT_ALLOWED", "Method not allowed.", 405, {
@@ -110,7 +110,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             "/identity/transfers",
             bodyParser<ManagementHttpEnvironment, typeof shareInput>(shareInput),
             async (context) => {
-                const application = await applicationForRequest(ctx, context);
+                const application = applicationForRequest(ctx, context);
                 const input = context.req.valid("json");
                 const transfer = await application.services.authentication.createTransfer(
                     readBearerToken(context.req.raw),
@@ -142,7 +142,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             },
         )
         .get("/identity/devices", async (context) => {
-            const application = await applicationForRequest(ctx, context);
+            const application = applicationForRequest(ctx, context);
             const result = await application.services.authentication.linkedDevices(
                 readBearerToken(context.req.raw),
                 context.req.raw.signal,
@@ -169,7 +169,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             "/identity/revoke-all-access",
             bodyParser<ManagementHttpEnvironment, typeof revokeAllAccessInput>(revokeAllAccessInput),
             async (context) => {
-                const application = await applicationForRequest(ctx, context);
+                const application = applicationForRequest(ctx, context);
                 const result = await application.services.authentication.revokeAllAccess(
                     readBearerToken(context.req.raw),
                     context.req.valid("json").successor,
@@ -190,7 +190,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             },
         )
         .delete("/identity/other-browser-access", async (context) => {
-            const application = await applicationForRequest(ctx, context);
+            const application = applicationForRequest(ctx, context);
             const result = await application.services.authentication.endOtherBrowserAccess(
                 readBearerToken(context.req.raw),
                 context.req.raw.signal,
@@ -209,7 +209,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             }
         })
         .delete("/identity/devices/:deviceId", async (context) => {
-            const application = await applicationForRequest(ctx, context);
+            const application = applicationForRequest(ctx, context);
             const result = await application.services.authentication.endDeviceAccess(
                 readBearerToken(context.req.raw),
                 context.req.param("deviceId"),
@@ -237,7 +237,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             }
         })
         .delete(credentialRevocationPaths.browser, async (context) => {
-            const application = await applicationForRequest(ctx, context);
+            const application = applicationForRequest(ctx, context);
             return endAccessResponse(
                 await application.services.authentication.endBrowserAccess(
                     readBearerToken(context.req.raw),
@@ -246,7 +246,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             );
         })
         .delete(credentialRevocationPaths.local, async (context) => {
-            const application = await applicationForRequest(ctx, context);
+            const application = applicationForRequest(ctx, context);
             return endAccessResponse(
                 await application.services.authentication.retireLocalCredential(
                     readBearerToken(context.req.raw),
@@ -264,7 +264,7 @@ export function createTransferRedemptionRoutes(ctx: ManagementRouteContext) {
         controlBodyLimit,
         bodyParser<ManagementHttpEnvironment, typeof transferRedemptionInput>(transferRedemptionInput),
         async (context) => {
-            const application = await applicationForRequest(ctx, context);
+            const application = applicationForRequest(ctx, context);
             const input = context.req.valid("json");
             const identity = await application.services.management.redeemTransfer(
                 input.code,

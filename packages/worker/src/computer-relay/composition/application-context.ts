@@ -10,7 +10,6 @@ import type { IdentityOperations } from "../components/management/service/identi
 import { LocalComputerService } from "../components/management/service/local-computer-service.ts";
 import { ManagementService } from "../components/management/service/management-service.ts";
 import type { IdentityStorage } from "../components/management/storage/identity-storage.ts";
-import { accountProvisioner } from "../gateway/computer-relay.ts";
 
 export interface ApplicationContext {
     readonly config: { readonly bindings: CloudBindings };
@@ -51,7 +50,7 @@ export function createApplicationDependencies(local: {
         chat: new ChatService({ ...cx, services: { computers } }),
         management: new ManagementService({
             ...cx,
-            services: { authentication, computers, provisionAccount: accountProvisioner(local.bindings) },
+            services: { authentication, computers },
         }),
     });
     return Object.freeze({ ...cx, services });

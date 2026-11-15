@@ -3,7 +3,6 @@ import { PairingDirectoryError, validateIdentifier } from "../../../../contracts
 import type { ComputerIdentityCredential } from "../../../../contracts/relay/pairing-identity.ts";
 import { DatabaseError } from "../../../../infra/sql-database.ts";
 import type { ComputerRelayStore } from "../storage/computer-relay-store.ts";
-import type { ComputerAccessService } from "./computer-access-service.ts";
 
 /** A credential that matches nothing, including one stored for a Computer that is no longer served. */
 function unmatchedCredential(credential: ComputerIdentityCredential): PairingDirectoryError {
@@ -17,21 +16,10 @@ function unmatchedCredential(credential: ComputerIdentityCredential): PairingDir
 export class ComputerIdentityService {
     readonly #computerId: string;
     readonly #store: ComputerRelayStore;
-    readonly #accounts: Pick<ComputerAccessService, "isActive">;
-    constructor(computerId: string, store: ComputerRelayStore, accounts: Pick<ComputerAccessService, "isActive">) {
+    constructor(computerId: string, store: ComputerRelayStore) {
         this.#computerId = computerId;
         this.#store = store;
-        this.#accounts = accounts;
     }
-
-    readonly authenticate = async (credential: ComputerIdentityCredential, signal: AbortSignal): Promise<void> => {
-        await this.#requireHeld(credential, signal);
-        const active = await this.#accounts.isActive(this.#computerId, signal);
-        signal.throwIfAborted();
-        if (!active) {
-            throw unmatchedCredential(credential);
-        }
-    };
 
     /**
      * Presents a daemon credential with its successor. The Computer store rotates the credential; a retired credential
@@ -59,15 +47,9 @@ export class ComputerIdentityService {
                 default:
                     return rotation satisfies never;
             }
-            const computerId = this.#computerId;
-            const active = await this.#accounts.isActive(computerId, signal);
-            signal.throwIfAborted();
-            if (!active) {
-                throw new PairingDirectoryError("unauthorized", "A valid Computer credential is required");
-            }
             return {
                 kind: rotation.kind,
-                access: { computerId },
+                access: { computerId: this.#computerId },
             };
         } catch (cause) {
             signal.throwIfAborted();
@@ -83,7 +65,7 @@ export class ComputerIdentityService {
         }
     };
 
-    readonly #requireHeld = async (credential: ComputerIdentityCredential, signal: AbortSignal): Promise<void> => {
+    readonly authenticate = async (credential: ComputerIdentityCredential, signal: AbortSignal): Promise<void> => {
         signal.throwIfAborted();
         try {
             // A daemon credential names its Computer; it must be this one.

@@ -51,7 +51,7 @@ export default class extends WorkerEntrypoint {
             headers: { "CF-Connecting-IP": "192.0.2.10" },
         });
         expect(first.status).toBe(503);
-        expect(await first.json()).toMatchObject({ error: { code: "RELAY_UNAVAILABLE" } });
+        expect(await first.json()).toMatchObject({ error: { code: "COMPUTER_OBJECT_UNAVAILABLE" } });
         for (const address of ["192.0.2.10", "192.0.2.10", "192.0.2.11"]) {
             const response = await runtime.dispatchFetch("https://chat.test/morty/api/v1/computers", {
                 method: "POST",

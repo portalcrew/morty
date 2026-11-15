@@ -53,17 +53,11 @@ export function createComputerHttpRoutes(
     return (
         new Hono<ComputerRouteHttpEnvironment>()
             .use("*", errorMiddleware)
-            .post(
-                `${COMPUTER_INTERNAL_PREFIX}/:computerId/account`,
-                timeout,
-                computerFromPath,
-                authorizeTarget,
-                async (context) => {
-                    const computerId = context.var.computerId;
-                    await ctx.services.accounts.create(context.req.raw.signal);
-                    return context.json({ computerId });
-                },
-            )
+            .post(`${COMPUTER_INTERNAL_PREFIX}/:computerId`, computerFromPath, authorizeTarget, async (context) => {
+                using deadline = new RequestDeadline(context.req.raw.signal, 45_000);
+                const input: unknown = await context.req.json();
+                return json(await ctx.services.browser.create(context.var.computerId, input, deadline.signal), 201);
+            })
             // A request for a computer that was never created is refused here, before any route accepts a connection or
             // opens storage for it. A CORS preflight asks for nothing, so it is answered either way.
             .use("*", async (context, next) => {
@@ -73,11 +67,6 @@ export function createComputerHttpRoutes(
                 await next();
             })
             .route("/", createRelayProtocolRoutes({ services: { forComputer: ctx.services.relay } }))
-            .post("/__computer/bootstrap", async (context) => {
-                using deadline = new RequestDeadline(context.req.raw.signal, 45_000);
-                const input: unknown = await context.req.json();
-                return json(await ctx.services.browser.bootstrap(input, ctx.bindings, deadline.signal), 201);
-            })
             .get(
                 `${MORTY_API_PREFIX}/v1/computers/:computerId/transport`,
                 timeout,

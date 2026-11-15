@@ -223,33 +223,24 @@ export class IdentityStorage {
         this.#computerId = computerId;
     }
 
-    readonly createComputer = async (
-        computerId: string,
-        signal: AbortSignal,
-        token: string,
-    ): Promise<AnonymousIdentity | null> => {
-        signal.throwIfAborted();
-        if (computerId !== this.#computerId) {
-            return null;
-        }
-        const credentialId = `cred_${crypto.randomUUID()}`;
-        const tokenHash = await digest(token);
-        signal.throwIfAborted();
+    /**
+     * Stores the owner's credential the token hash names and reports whether it holds access. Synchronous, so the
+     * computer's creation commits it in the same transaction as the computer's existence. A retry reuses the committed
+     * row, including its revocation; it never resets or replaces it.
+     */
+    readonly createOwner = (tokenHash: string): boolean => {
         const database = this.#database.orm;
-        await database
+        database
             .insert(ownerCredential)
-            .values({ id: credentialId, tokenHash })
+            .values({ id: `cred_${crypto.randomUUID()}`, tokenHash })
             .onConflictDoNothing({ target: ownerCredential.tokenHash })
             .run();
-        signal.throwIfAborted();
-        // A retry reuses the committed row, including its revocation; it never resets or replaces it.
-        const credential = await database
+        const credential = database
             .select({ id: ownerCredential.id })
             .from(ownerCredential)
             .where(and(eq(ownerCredential.tokenHash, tokenHash), ownerAccessHeld()))
             .get();
-        signal.throwIfAborted();
-        return credential === undefined ? null : { computerToken: token, computerId };
+        return credential !== undefined;
     };
 
     /**

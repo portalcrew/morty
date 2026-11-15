@@ -54,7 +54,6 @@ export class SessionAccessService {
         if (!Number.isSafeInteger(expiresInSeconds) || expiresInSeconds < 60 || expiresInSeconds > 900) {
             throw new ComputerAuthenticationError("invalid_request", "The Session credential lifetime is invalid");
         }
-        await this.#control.authorizeComputer(target.computerId, signal);
         const generation = await this.#control.currentSessionGeneration(target.computerId, holder, signal);
         if (generation === null) {
             throw new ComputerAuthenticationError("credential_revoked", "The Session access has ended");
