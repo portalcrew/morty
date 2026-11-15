@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
 import {
     createFakeDaemon,
@@ -262,6 +264,21 @@ export async function connectControlledAgentRuntime(options: {
         },
         writeFiles: async (files: NonNullable<ControlledAgentBehavior["files"]>): Promise<void> =>
             await writeWorkspaceFiles(files, workspace, options.signal),
+        /**
+         * Holds the Computer's encryption store the way another of its processes does mid-admission, so packets the
+         * Computer receives meanwhile cannot be admitted until the returned hold is released.
+         */
+        holdEncryptionStore: (): Disposable => {
+            const name = createHash("sha256").update(connection.computerId).digest("hex");
+            const ledger = new DatabaseSync(join(directory, `encryption.${name}.replay.sqlite`));
+            ledger.exec("BEGIN IMMEDIATE");
+            return {
+                [Symbol.dispose]: () => {
+                    ledger.exec("ROLLBACK");
+                    ledger.close();
+                },
+            };
+        },
         disconnect,
         reconnect: async (): Promise<void> => {
             if (state.kind === "disposed") {

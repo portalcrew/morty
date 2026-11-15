@@ -393,6 +393,51 @@ test("Given a paired Computer, when its owner selects an Agent, then setup recei
     }
 });
 
+test("Given a paired Computer whose encryption store another of its processes holds, when its owner runs the Computer and network checks, then each fails with the Computer's own busy code and succeeds once the store is free", {
+    timeout: 45_000,
+}, async ({ signal }) => {
+    await using bindings = await createBindings();
+    await bindings.configure({ APP_ORIGIN: bindings.origin });
+    const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
+        method: "POST",
+        signal,
+    });
+    expect(created.status).toBe(201);
+    const owner = v.parse(v.object({ computerId: v.string(), computerToken: v.string() }), await created.json());
+    await using runtime = await createControlledAgentRuntime({
+        behavior: {
+            harness: "codex",
+            agentName: "Controlled Codex",
+            reply: () => ({ outcome: "complete", output: [] }),
+        },
+        credential: owner.computerToken,
+        computerId: owner.computerId,
+        origin: bindings.origin,
+        server: { request: async (input) => await fetch(input) },
+        signal,
+    });
+    const client = createOwnerApi({
+        origin: bindings.origin,
+        computerId: owner.computerId,
+        credential: owner.computerToken,
+        encryptionAccess: await runtime.encryptionAccess(signal),
+    });
+    try {
+        {
+            using _held = runtime.holdEncryptionStore();
+            await expect(client.api.daemonDiagnostics(signal)).rejects.toMatchObject({ code: "e2e_store_busy" });
+            await expect(client.api.networkDiagnostic(signal)).rejects.toMatchObject({ code: "e2e_store_busy" });
+        }
+        await expect(client.api.daemonDiagnostics(signal)).resolves.toMatchObject({
+            kind: "computer.diagnostics.result",
+        });
+        const diagnostic = await client.api.networkDiagnostic(signal);
+        expect(diagnostic.computerLatencyMs).toBeGreaterThanOrEqual(0);
+    } finally {
+        client.close();
+    }
+});
+
 test("Given a locally paired encrypted client, when it submits a prompt and reads the answer, then the real daemon executes it while both relay legs carry only ciphertext", {
     timeout: 90_000,
 }, async ({ signal }) => {

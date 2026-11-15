@@ -106,19 +106,12 @@ export class LocalComputerService {
                 const started = performance.now();
                 const reply = await computer.clientControl(command, signal);
                 const computerLatencyMs = Math.max(0, Math.round(performance.now() - started));
-                if (reply.kind !== "computer.pong" || reply.requestId !== command.requestId) {
-                    throw new ComputerManagementError(
-                        "RELAY_INVALID_RESPONSE",
-                        "Morty returned an invalid Computer response.",
-                        502,
-                    );
-                }
                 return { computerLatencyMs, reply };
             },
             15_000,
         );
     /** Sends a client's command to the Computer and returns its reply. */
-    readonly clientControl = async (command: ClientControlCommand, signal: AbortSignal) =>
+    readonly clientControl = async <Command extends ClientControlCommand>(command: Command, signal: AbortSignal) =>
         await this.#run(signal, (computer, signal) => computer.clientControl(command, signal));
     readonly discoverChatAgentSettings = async (command: AgentSettingsDiscoverCommandRouting, signal: AbortSignal) =>
         await this.#run(signal, (computer, signal) => computer.settings(command, signal));
@@ -132,13 +125,6 @@ export class LocalComputerService {
             const ready = await computer.clientControl(command, signal);
             if (ready.kind === "session.operation.failed") {
                 return ready;
-            }
-            if (ready.kind !== "session.ready" || ready.target.harness !== command.harness) {
-                throw new ComputerManagementError(
-                    "RELAY_INVALID_RESPONSE",
-                    "The Computer returned an invalid Session route.",
-                    502,
-                );
             }
             return {
                 ...(await computer.issueSessionAccess(ready.target, lifetime, holder, signal)),

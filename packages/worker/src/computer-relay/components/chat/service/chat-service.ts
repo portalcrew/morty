@@ -1,4 +1,4 @@
-import { nativeSessionKey, sameNativeSession } from "@morty-build/client/native-session";
+import { nativeSessionKey } from "@morty-build/client/native-session";
 import type {
     AgentSettingsDiscoverCommandRouting,
     ComputerDiagnosticsRequestRouting,
@@ -98,11 +98,7 @@ export class ChatService {
 
     readonly daemonDiagnostics = async (scope: ChatScope, command: ComputerDiagnosticsRequestRouting) => {
         await this.#requirePairedComputer(scope);
-        const result = await this.#relay.readComputerDiagnostics(command, scope.signal);
-        if (result.kind !== "computer.diagnostics.result") {
-            throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned invalid diagnostics.", 502);
-        }
-        return result;
+        return await this.#relay.readComputerDiagnostics(command, scope.signal);
     };
 
     readonly networkDiagnostic = async (scope: ChatScope, command: ComputerPingCommandRouting) => {
@@ -116,11 +112,7 @@ export class ChatService {
 
     readonly listDirectory = async (scope: ChatScope, command: WorkspaceListCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        const listing = await this.#relay.clientControl(command, scope.signal);
-        if (listing.kind !== "workspace.entries" && listing.kind !== "session.operation.failed") {
-            throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned an invalid directory.", 502);
-        }
-        return listing;
+        return await this.#relay.clientControl(command, scope.signal);
     };
 
     /**
@@ -165,11 +157,7 @@ export class ChatService {
     /** The Sessions the Computer holds, most recently updated first. */
     readonly managedSessions = async (scope: ChatScope, command: SessionListCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        const result = await this.#relay.clientControl(command, scope.signal);
-        if (result.kind !== "session.listed" && result.kind !== "session.operation.failed") {
-            throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned an invalid Session list.", 502);
-        }
-        return result;
+        return await this.#relay.clientControl(command, scope.signal);
     };
 
     /** The settings a new Session of this Agent starts with in the draft's directory. */
@@ -198,13 +186,6 @@ export class ChatService {
             if (ready.kind === "session.operation.failed") {
                 return ready;
             }
-            if (ready.kind !== "session.ready" || !sameNativeSession(ready.target, command.target)) {
-                throw new ComputerManagementError(
-                    "RELAY_INVALID_RESPONSE",
-                    "Morty returned an invalid Session route.",
-                    502,
-                );
-            }
             return await this.#relay.nativeSessionAccess(
                 command.target,
                 sessionCredentialLifetime(RENEWED_SESSION_CREDENTIAL_SECONDS, scope.accessExpiresAt),
@@ -217,18 +198,7 @@ export class ChatService {
     readonly managedSession = async (scope: ChatScope, command: SessionRestoreCommandRouting) => {
         return await this.#withSession(scope, command.target, async () => {
             await this.#requirePairedComputer(scope);
-            const restored = await this.#relay.clientControl(command, scope.signal);
-            if (restored.kind === "session.operation.failed") {
-                return restored;
-            }
-            if (restored.kind !== "session.restored" || !sameNativeSession(restored.target, command.target)) {
-                throw new ComputerManagementError(
-                    "RELAY_INVALID_RESPONSE",
-                    "Morty restored a different managed Session.",
-                    502,
-                );
-            }
-            return restored;
+            return await this.#relay.clientControl(command, scope.signal);
         });
     };
 
@@ -239,16 +209,11 @@ export class ChatService {
      */
     readonly archiveManagedSession = async (scope: ChatScope, command: SessionArchiveCommandRouting) => {
         await this.#requirePairedComputer(scope);
-        return await this.#withSession(scope, command.target, async () => {
-            const archived = await this.#relay.clientControl(command, scope.signal);
-            if (archived.kind === "session.operation.failed") {
-                return archived;
-            }
-            if (archived.kind !== "session.archived" || !sameNativeSession(archived.target, command.target)) {
-                throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty archived a different Session.", 502);
-            }
-            return archived;
-        });
+        return await this.#withSession(
+            scope,
+            command.target,
+            async () => await this.#relay.clientControl(command, scope.signal),
+        );
     };
 
     readonly nativeSessions = async (
@@ -256,18 +221,7 @@ export class ChatService {
         input: Extract<NativeSessionCommandRouting, { readonly action: "list" }>,
     ) => {
         await this.#requirePairedComputer(scope);
-        const result = await this.#relay.clientControl(input, scope.signal);
-        if (
-            result.kind !== "session.operation.failed" &&
-            (result.kind !== "native.session.result" || result.action !== "list")
-        ) {
-            throw new ComputerManagementError(
-                "RELAY_INVALID_RESPONSE",
-                "The agent returned an invalid session directory.",
-                502,
-            );
-        }
-        return result;
+        return await this.#relay.clientControl(input, scope.signal);
     };
 
     /** Imports the native session a setup handoff names, found by its native identifier in the default workspace. */
@@ -283,16 +237,7 @@ export class ChatService {
         if (computer === undefined || agent === undefined) {
             throw new ComputerManagementError("HARNESS_UNAVAILABLE", "The handoff harness is unavailable.", 409);
         }
-        const result = await this.#relay.clientControl(input, scope.signal);
-        if (
-            result.kind !== "session.operation.failed" &&
-            (result.kind !== "native.session.result" ||
-                result.action !== input.action ||
-                (result.action === "import" && !sameNativeSession(result.target, input.target)))
-        ) {
-            throw new ComputerManagementError("IMPORT_UNAVAILABLE", "The original session could not be opened.", 409);
-        }
-        return result;
+        return await this.#relay.clientControl(input, scope.signal);
     };
 
     readonly previewNativeSession = async (
@@ -308,18 +253,7 @@ export class ChatService {
                 400,
             );
         }
-        const events = await this.#relay.clientControl(input, scope.signal);
-        if (
-            events.kind !== "session.operation.failed" &&
-            (events.kind !== "session.preview-history.page.loaded" || !sameNativeSession(events.target, input.target))
-        ) {
-            throw new ComputerManagementError(
-                "RELAY_INVALID_RESPONSE",
-                "Morty returned an invalid Session preview.",
-                502,
-            );
-        }
-        return events;
+        return await this.#relay.clientControl(input, scope.signal);
     };
 
     readonly importNativeSession = async (
@@ -335,20 +269,7 @@ export class ChatService {
                 400,
             );
         }
-        const result = await this.#relay.clientControl(input, scope.signal);
-        if (
-            result.kind !== "session.operation.failed" &&
-            (result.kind !== "native.session.result" ||
-                result.action !== "import" ||
-                !sameNativeSession(result.target, input.target))
-        ) {
-            throw new ComputerManagementError(
-                "IMPORT_UNAVAILABLE",
-                "This agent cannot import the selected local session.",
-                409,
-            );
-        }
-        return result;
+        return await this.#relay.clientControl(input, scope.signal);
     };
 
     readonly recoverableNativeFork = async (
@@ -362,17 +283,7 @@ export class ChatService {
         if (input.requestId !== scopedOperationId) {
             throw new ComputerManagementError("INVALID_REQUEST", "The fork operation does not match the route.", 400);
         }
-        const result = await this.#relay.clientControl(input, scope.signal);
-        if (
-            result.kind !== "session.operation.failed" &&
-            (result.kind !== "native.session.result" ||
-                result.action !== "fork" ||
-                result.target.harness !== input.target.harness ||
-                result.target.sessionId === input.target.sessionId)
-        ) {
-            throw new ComputerManagementError("RELAY_INVALID_RESPONSE", "Morty returned an invalid fork.", 502);
-        }
-        return result;
+        return await this.#relay.clientControl(input, scope.signal);
     };
 
     /**
