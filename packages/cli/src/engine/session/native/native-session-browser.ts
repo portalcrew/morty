@@ -17,6 +17,7 @@ import { sessionIdSchema } from "../../acp/protocol/native-session.ts";
 import type { ResolveAgent, SessionCreationOptions } from "../api/session-api.ts";
 import { RuntimeOperations } from "../manager/operation-drain.ts";
 import type { SessionManager } from "../manager/session-manager.ts";
+import { prepareHeldSession, resolveHeldSession } from "../record/held-session.ts";
 import type { SessionCreations } from "../record/session-creations.ts";
 import type { StoredSession } from "../record/session-store.ts";
 import { LocalAuthorizationError } from "../workspace/local-authorization-error.ts";
@@ -125,11 +126,11 @@ export class NativeSessionService {
             return await this.#executeNew(command, signal);
         }
         // The receipt answers the original intent before consulting the Agent or its mutable native directory.
-        const recovered = this.#creations.recover(command.requestId, forkIntent(command), signal);
-        if (recovered === null) {
+        const created = this.#creations.created(command.requestId, forkIntent(command), signal);
+        if (created === null) {
             return await this.#executeNew(command, signal);
         }
-        const ready = await recovered;
+        const ready = await this.#currentReady(command.requestId, await created, signal);
         return {
             kind: "native.session.result",
             requestId: command.requestId,
@@ -291,7 +292,9 @@ export class NativeSessionService {
         };
         const ready =
             action === "fork"
-                ? await this.#creations.run(command.requestId, forkIntent(command), signal, open)
+                ? await this.#creations.run(command.requestId, forkIntent(command), signal, open, (created) =>
+                      this.#currentReady(command.requestId, created, signal),
+                  )
                 : await open();
         return {
             ...envelope,
@@ -301,6 +304,19 @@ export class NativeSessionService {
             title: this.#sessions.findSessions([ready.target])[0]?.title ?? title,
         };
     };
+
+    /** A Session an earlier run of an operation created, as this Runtime holds it now. */
+    readonly #currentReady = async (
+        requestId: string,
+        target: NativeSessionTarget,
+        signal: AbortSignal,
+    ): Promise<SessionReadyEvent> =>
+        await prepareHeldSession(
+            this.#sessions,
+            requestId,
+            await resolveHeldSession(this.#sessions, this.#resolveAgent, this.#directories, target, signal),
+            { kind: "interactive-only" },
+        );
 
     readonly listSessions = async (limit: number, signal: AbortSignal): Promise<readonly SessionMetadata[]> => {
         signal.throwIfAborted();

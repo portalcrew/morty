@@ -75,7 +75,7 @@ async function createChatFixture(
     };
 }
 
-test("Given an archived conversation, When the original creation request is retried, Then its receipt cannot restore the archived Session", async ({
+test("Given an archived conversation, When the original creation request is retried, Then the retry is refused and the archived Session stays archived", async ({
     cloud,
 }) => {
     await using fixture = await createChatFixture(cloud);
@@ -97,7 +97,9 @@ test("Given an archived conversation, When the original creation request is retr
     await expect(refusedBeforeReplay).rejects.toThrow(
         'This session is not in Morty Recent sessions. If you closed it in Morty, use "Open Session" to import or fork it again.',
     );
-    expect((await fixture.runtime.api.createConversation(key, settings, signal)).target).toEqual(target);
+    await expect(fixture.runtime.api.createConversation(key, settings, signal)).rejects.toMatchObject({
+        code: "session_not_found",
+    });
     expect(await fixture.runtime.api.managedSessions(signal)).toEqual([]);
     await expect(fixture.runtime.api.managedSession(target, signal)).rejects.toMatchObject({
         code: "NOT_FOUND",

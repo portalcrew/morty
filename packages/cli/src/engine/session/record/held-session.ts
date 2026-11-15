@@ -1,5 +1,5 @@
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
-import type { ResolveAgent, SessionPrepareOptions } from "../api/session-api.ts";
+import type { NativeSessionTarget, SessionReadyEvent } from "@morty-build/client/protocol";
+import type { PreparedSession, ResolveAgent, SessionPrepareOptions, SessionRecovery } from "../api/session-api.ts";
 import type { SessionManager } from "../manager/session-manager.ts";
 import { resolveSessionDirectory } from "../workspace/resolve-session-directory.ts";
 import type { WorkspaceDirectoryService } from "../workspace/workspace-directory.ts";
@@ -37,4 +37,42 @@ export async function resolveHeldSession(
         directory: session.cwd,
         directoryLabel: resolved.directoryLabel,
     };
+}
+
+/** What a client is told of a Session whose Agent is prepared. */
+export function sessionReady(
+    requestId: string,
+    target: NativeSessionTarget,
+    prepared: PreparedSession,
+    location: { readonly directory: string; readonly directoryLabel: string },
+): SessionReadyEvent {
+    return {
+        agentName: prepared.agentName,
+        agentVersion: prepared.agentVersion,
+        capabilities: prepared.capabilities,
+        commands: prepared.commands,
+        configOptions: prepared.configOptions,
+        configurationRevision: prepared.configurationRevision,
+        directory: location.directory,
+        directoryLabel: location.directoryLabel,
+        kind: "session.ready",
+        requestId,
+        restored: prepared.restored,
+        target,
+    };
+}
+
+/** Prepares a held Session's Agent and answers the Session as it stands now. */
+export async function prepareHeldSession(
+    sessions: Pick<SessionManager, "prepareSession" | "restoreSession">,
+    requestId: string,
+    session: HeldSession,
+    recovery: SessionRecovery,
+): Promise<SessionReadyEvent> {
+    const preparation = session.options;
+    const prepared =
+        recovery.kind === "history-required"
+            ? await sessions.restoreSession(preparation)
+            : await sessions.prepareSession(preparation);
+    return sessionReady(requestId, preparation.target, prepared, session);
 }

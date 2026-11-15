@@ -66,3 +66,49 @@ it("Given two clients holding one configuration revision, When they edit concurr
         cancellation.abort();
     }
 });
+
+it("Given a created Session whose settings changed, When its creation is retried after a lost reply, Then the retry answers the Session's current settings and they can be edited", async () => {
+    const cancellation = new AbortController();
+    await using relay = await startTestRelay();
+    try {
+        const owner = await relay.createOwner();
+        const runtime = await relay.connectAgent(owner.computerId);
+        const creation = {
+            harness: "claude",
+            configurations: [],
+            directory: ".",
+            operationId: crypto.randomUUID(),
+        };
+        const created = await runtime.createSession(creation, cancellation.signal);
+        const client = await runtime.sessionClient(created.target, cancellation.signal);
+        const changed = await client.sessions.updateConfiguration(
+            created.target,
+            {
+                configId: "model",
+                expectedConfigurationRevision: created.configurationRevision,
+                value: "test-large",
+                type: "select",
+            },
+            cancellation.signal,
+        );
+
+        const retried = await runtime.createSession(creation, cancellation.signal);
+
+        expect(retried.target).toEqual(created.target);
+        expect(retried.configurationRevision).toBe(changed.configurationRevision);
+        expect(retried.configOptions).toEqual(changed.configOptions);
+        const edited = await client.sessions.updateConfiguration(
+            retried.target,
+            {
+                configId: "model",
+                expectedConfigurationRevision: retried.configurationRevision,
+                value: "test-small",
+                type: "select",
+            },
+            cancellation.signal,
+        );
+        expect(edited.configurationRevision).not.toBe(changed.configurationRevision);
+    } finally {
+        cancellation.abort();
+    }
+});

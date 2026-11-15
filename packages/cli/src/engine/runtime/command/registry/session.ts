@@ -1,4 +1,4 @@
-import type { NativeSessionTarget, SessionCreateCommand, SessionReadyEvent } from "@morty-build/client/protocol";
+import type { NativeSessionTarget, SessionCreateCommand } from "@morty-build/client/protocol";
 import {
     type SESSION_CONFIG_READ_KIND,
     SESSION_CONFIG_READ_RESULT_KIND,
@@ -17,57 +17,13 @@ import {
     workspaceEntriesEventCodec,
 } from "@morty-build/client/protocol";
 import { operationErrorCode } from "../../../infra/operation-error.ts";
-import type { PreparedSession, SessionRecovery } from "../../../session/api/session-api.ts";
 import { SessionError } from "../../../session/api/session-error.ts";
-import type { SessionManager } from "../../../session/manager/session-manager.ts";
 import { applyCompleteSessionConfiguration } from "../../../session/prompt/apply-session-configuration.ts";
-import { type HeldSession, resolveHeldSession } from "../../../session/record/held-session.ts";
+import { prepareHeldSession, resolveHeldSession, sessionReady } from "../../../session/record/held-session.ts";
 import { resolveSessionDirectory } from "../../../session/workspace/resolve-session-directory.ts";
 import type { CommandContext } from "../context.ts";
 import type { CommandHandler } from "../definition.ts";
 import { reportOperationFailure, send } from "../transport.ts";
-
-/** What a preparation of a Session asks for, apart from the Session itself. */
-interface SessionPreparationRequest {
-    readonly requestId: string;
-}
-
-/** What a client is told of a Session whose Agent is prepared. */
-function readyEvent(
-    command: SessionPreparationRequest,
-    target: NativeSessionTarget,
-    prepared: PreparedSession,
-    location: { readonly directory: string; readonly directoryLabel: string },
-): SessionReadyEvent {
-    return {
-        agentName: prepared.agentName,
-        agentVersion: prepared.agentVersion,
-        capabilities: prepared.capabilities,
-        commands: prepared.commands,
-        configOptions: prepared.configOptions,
-        configurationRevision: prepared.configurationRevision,
-        directory: location.directory,
-        directoryLabel: location.directoryLabel,
-        kind: "session.ready",
-        requestId: command.requestId,
-        restored: prepared.restored,
-        target,
-    };
-}
-
-async function prepareSession(
-    command: SessionPreparationRequest,
-    session: HeldSession,
-    recovery: SessionRecovery,
-    sessions: SessionManager,
-): Promise<SessionReadyEvent> {
-    const preparation = session.options;
-    const prepared =
-        recovery.kind === "history-required"
-            ? await sessions.restoreSession(preparation)
-            : await sessions.prepareSession(preparation);
-    return readyEvent(command, preparation.target, prepared, session);
-}
 
 export const handleWorkspaceList: CommandHandler<typeof WORKSPACE_LIST_KIND> = async (
     context,
@@ -110,11 +66,11 @@ export const handleSessionPrepare: CommandHandler<typeof SESSION_PREPARE_KIND> =
 ): Promise<void> => {
     const { socket, payloadEncryption, resolveAgent, directories, sessions, diagnostics, signal } = context;
     try {
-        const readyEvent = await prepareSession(
-            command,
+        const readyEvent = await prepareHeldSession(
+            sessions,
+            command.requestId,
             await resolveHeldSession(sessions, resolveAgent, directories, command.target, signal),
             { kind: "interactive-only" },
-            sessions,
         );
         send(socket, await sessionReadyEventCodec.encode(readyEvent, payloadEncryption, signal));
     } catch (error) {
@@ -144,11 +100,11 @@ export const handleSessionRestore: CommandHandler<typeof SESSION_RESTORE_KIND> =
         if (entry === undefined) {
             throw new SessionError("session_not_found", "The Session was not found");
         }
-        const ready = await prepareSession(
-            command,
+        const ready = await prepareHeldSession(
+            sessions,
+            command.requestId,
             await resolveHeldSession(sessions, resolveAgent, directories, entry.target, signal),
             { kind: "history-required" },
-            sessions,
         );
         // The restored Session is named once, by the reply's target.
         const { target: _entryTarget, ...record } = entry;
@@ -272,49 +228,58 @@ async function executeSessionCreate(context: CommandContext, command: SessionCre
             directory: command.directory,
             configurations: command.configurations,
         };
+        // A retry answers the Session this operation created as it stands now: its settings may have changed since.
+        const current = async (target: NativeSessionTarget) =>
+            await prepareHeldSession(
+                context.sessions,
+                command.requestId,
+                await resolveHeldSession(context.sessions, context.resolveAgent, context.directories, target, signal),
+                { kind: "interactive-only" },
+            );
         const create = async () => {
             const resolved = await resolveSessionDirectory(context.directories, command.directory, signal);
             const agent = await context.resolveAgent(command.harness, signal);
-            return await context.sessionCreations.run(command.operationId, input, signal, async () => {
-                // A Session being created starts with exactly the settings it states, by the rule a Turn's settings use.
-                const created = await context.sessions.createSession(
-                    { ...agent, cwd: resolved.cwd, signal },
-                    async ({ target, prepared }, creationSignal) =>
-                        await applyCompleteSessionConfiguration(
-                            context.sessions,
-                            prepared.configOptions,
-                            command.configurations,
-                            "refuse",
-                            agent.agent,
-                            agent.adapter,
-                            resolved.cwd,
-                            command.requestId,
-                            target,
-                            creationSignal,
-                        ),
-                );
-                // A created Session reports the directory its creation named.
-                return readyEvent(command, created.target, created.prepared, {
-                    directory: command.directory,
-                    directoryLabel: resolved.directoryLabel,
-                });
-            });
+            return await context.sessionCreations.run(
+                command.operationId,
+                input,
+                signal,
+                async () => {
+                    // A Session being created starts with exactly the settings it states, by the rule a Turn's settings use.
+                    const created = await context.sessions.createSession(
+                        { ...agent, cwd: resolved.cwd, signal },
+                        async ({ target, prepared }, creationSignal) =>
+                            await applyCompleteSessionConfiguration(
+                                context.sessions,
+                                prepared.configOptions,
+                                command.configurations,
+                                "refuse",
+                                agent.agent,
+                                agent.adapter,
+                                resolved.cwd,
+                                command.requestId,
+                                target,
+                                creationSignal,
+                            ),
+                    );
+                    // A created Session reports the directory its creation named.
+                    return sessionReady(command.requestId, created.target, created.prepared, {
+                        directory: command.directory,
+                        directoryLabel: resolved.directoryLabel,
+                    });
+                },
+                current,
+            );
         };
-        const ready = await (context.sessionCreations.recover(command.operationId, input, signal) ?? create());
+        // The receipt answers before the directory and Agent are resolved again, which may have changed since.
+        const created = context.sessionCreations.created(command.operationId, input, signal);
+        const ready = created === null ? await create() : await current(await created);
         signal.throwIfAborted();
         context.diagnostics.daemonDiagnostic("session_creation_resolved", command.requestId, {
             harness: command.harness,
             operationId: command.operationId,
             sessionId: ready.target.sessionId,
         });
-        send(
-            context.socket,
-            await sessionReadyEventCodec.encode(
-                { ...ready, requestId: command.requestId },
-                context.payloadEncryption,
-                signal,
-            ),
-        );
+        send(context.socket, await sessionReadyEventCodec.encode(ready, context.payloadEncryption, signal));
     } catch (cause) {
         context.signal.throwIfAborted();
         const failure = timeout.signal.aborted
@@ -360,14 +325,14 @@ export const handleSessionConfigRead: CommandHandler<typeof SESSION_CONFIG_READ_
         if (entry === undefined) {
             throw new SessionError("session_not_found", "The Session was not found");
         }
-        const ready = await prepareSession(
-            command,
+        const ready = await prepareHeldSession(
+            sessions,
+            command.requestId,
             await resolveHeldSession(sessions, resolveAgent, directories, entry.target, signal),
             // A settings read must not force history loading: Agents without
             // load support would fail even with a live process whose config is
             // already readable, and prepare reuses the current configuration.
             { kind: "interactive-only" },
-            sessions,
         );
         send(
             socket,

@@ -1,0 +1,211 @@
+{
+    "version": "6",
+    "dialect": "sqlite",
+    "id": "dda63f30-9eb5-4c2b-85c2-ab00b51fcf1f",
+    "prevId": "666576ce-63b2-4315-a1fc-997724c6cc38",
+    "tables": {
+        "acp_session": {
+            "name": "acp_session",
+            "columns": {
+                "agent_id": {
+                    "name": "agent_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "session_id": {
+                    "name": "session_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "cwd": {
+                    "name": "cwd",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "configurations": {
+                    "name": "configurations",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false,
+                    "default": "'[]'"
+                },
+                "prompted": {
+                    "name": "prompted",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "title": {
+                    "name": "title",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "updated_at": {
+                    "name": "updated_at",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {},
+            "compositePrimaryKeys": {
+                "acp_session_agent_id_session_id_pk": {
+                    "columns": ["agent_id", "session_id"],
+                    "name": "acp_session_agent_id_session_id_pk"
+                }
+            },
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "command": {
+            "name": "command",
+            "columns": {
+                "command_id": {
+                    "name": "command_id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "session_id": {
+                    "name": "session_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "command_hash": {
+                    "name": "command_hash",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "attempt_id": {
+                    "name": "attempt_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "admission_order": {
+                    "name": "admission_order",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "fate": {
+                    "name": "fate",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "started_at": {
+                    "name": "started_at",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {
+                "command_admission_order_idx": {
+                    "name": "command_admission_order_idx",
+                    "columns": ["admission_order"],
+                    "isUnique": true
+                },
+                "command_session_idx": {
+                    "name": "command_session_idx",
+                    "columns": ["session_id", "admission_order"],
+                    "isUnique": false
+                }
+            },
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {
+                "command_fate": {
+                    "name": "command_fate",
+                    "value": "\"command\".\"fate\" IN ('pending', 'started', 'cancelled', 'interrupted-before-start', 'settled-before-start', 'settled-after-start')"
+                },
+                "command_started_at": {
+                    "name": "command_started_at",
+                    "value": "(\"command\".\"fate\" IN ('started', 'settled-after-start')) = (\"command\".\"started_at\" IS NOT NULL)"
+                }
+            }
+        },
+        "command_outcome": {
+            "name": "command_outcome",
+            "columns": {
+                "command_id": {
+                    "name": "command_id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "outcome": {
+                    "name": "outcome",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "session_live_event_position_allocation": {
+            "name": "session_live_event_position_allocation",
+            "columns": {
+                "allocated_position": {
+                    "name": "allocated_position",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false,
+                    "default": 10000
+                },
+                "session_id": {
+                    "name": "session_id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        }
+    },
+    "views": {},
+    "enums": {},
+    "_meta": {
+        "schemas": {},
+        "tables": {},
+        "columns": {}
+    },
+    "internal": {
+        "indexes": {}
+    }
+}
