@@ -2,34 +2,42 @@ import { createHash } from "node:crypto";
 import type { NativeSessionTarget } from "@morty-build/client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import type { SessionCreationTable } from "../../storage/session/session-creation-table.ts";
+import { type SharedOperation, shareOperation } from "../../util/shared-operation.ts";
 import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
+
+interface RunningCreation {
+    readonly hash: string;
+    readonly creation: SharedOperation<{ readonly target: NativeSessionTarget }>;
+}
 
 /**
  * Durable operation identity survives response loss without inventing a Session identity. An operation's receipt
  * records only which Session it created; a retry answers that Session as it stands now, so it never repeats settings,
- * capabilities or a title that changed since.
+ * capabilities or a title that changed since. A running creation belongs to every request of its operation: one
+ * request leaving, such as a retry's earlier attempt whose connection closed, never cancels it for the others.
  */
 export class SessionCreations {
     readonly #table: SessionCreationTable;
-    readonly #running = new Map<string, { readonly hash: string; readonly target: Promise<NativeSessionTarget> }>();
+    readonly #running = new Map<string, RunningCreation>();
 
     constructor(table: SessionCreationTable) {
         this.#table = table;
     }
 
     readonly settle = async (): Promise<void> => {
-        await Promise.allSettled([...this.#running.values()].map(({ target }) => target));
+        await Promise.all([...this.#running.values()].map(({ creation }) => creation.ended));
     };
 
     /**
      * The Session an earlier or running creation of this operation created, or null when none did. The same operation
-     * with different inputs is refused.
+     * with different inputs is refused. A creation every request left is ending; it is waited out, and then only its
+     * receipt answers.
      */
-    readonly created = (
+    readonly created = async (
         operationId: string,
         input: unknown,
         signal: AbortSignal,
-    ): Promise<NativeSessionTarget> | null => {
+    ): Promise<NativeSessionTarget | null> => {
         signal.throwIfAborted();
         const hash = requestHash(input);
         const prior = this.#table.read(operationId);
@@ -37,43 +45,49 @@ export class SessionCreations {
         if ((prior !== undefined && prior.requestHash !== hash) || (running !== undefined && running.hash !== hash)) {
             throw new AcpExecutionError("The creation operation has different inputs", {}, "idempotency_conflict");
         }
-        if (running !== undefined) {
-            return waitForSharedOperation(running.target, signal);
+        if (running === undefined) {
+            return prior?.target ?? null;
         }
-        return prior === undefined ? null : Promise.resolve(prior.target);
+        if (running.creation.abandoned()) {
+            await waitForSharedOperation(running.creation.ended, signal);
+            return await this.created(operationId, input, signal);
+        }
+        return (await running.creation.wait(signal)).target;
     };
 
     /**
      * Runs a creation once per operation and answers it. The receipt is written when the Session is held, so a creation
      * that did not finish has no receipt and a retry creates the Session again: nothing was held, and no client was
-     * told of one. An operation that already created its Session is answered by `current` instead.
+     * told of one. An operation that already created its Session is answered by `current` instead. `create` runs under
+     * the creation's own signal, which ends only when every request of the operation has left.
      */
     readonly run = async <Answer extends { readonly target: NativeSessionTarget }>(
         operationId: string,
         input: unknown,
         signal: AbortSignal,
-        create: () => Promise<Answer>,
+        create: (signal: AbortSignal) => Promise<Answer>,
         current: (target: NativeSessionTarget) => Promise<Answer>,
     ): Promise<Answer> => {
-        const created = this.created(operationId, input, signal);
+        const created = await this.created(operationId, input, signal);
         if (created !== null) {
-            return await current(await created);
+            return await current(created);
+        }
+        if (this.#running.has(operationId) || this.#table.read(operationId) !== undefined) {
+            // Another request of the operation started or finished its creation while this one waited.
+            return await this.run(operationId, input, signal, create, current);
         }
         const hash = requestHash(input);
-        const answer = Promise.resolve().then(async () => {
+        const { operation, first } = shareOperation(async (shared) => {
             try {
-                const result = await create();
+                const result = await create(shared);
                 this.#table.record(operationId, hash, result.target);
                 return result;
             } finally {
                 this.#running.delete(operationId);
             }
-        });
-        const target = answer.then((result) => result.target);
-        // A borrower that waits observes a failed creation; nobody else must.
-        target.catch(() => undefined);
-        this.#running.set(operationId, { hash, target });
-        return await waitForSharedOperation(answer, signal);
+        }, signal);
+        this.#running.set(operationId, { hash, creation: operation });
+        return await first;
     };
 }
 

@@ -243,10 +243,10 @@ async function executeSessionCreate(context: CommandContext, command: SessionCre
                 command.operationId,
                 input,
                 signal,
-                async () => {
+                async (shared) => {
                     // A Session being created starts with exactly the settings it states, by the rule a Turn's settings use.
                     const created = await context.sessions.createSession(
-                        { ...agent, cwd: resolved.cwd, signal },
+                        { ...agent, cwd: resolved.cwd, signal: shared },
                         async ({ target, prepared }, creationSignal) =>
                             await applyCompleteSessionConfiguration(
                                 context.sessions,
@@ -271,8 +271,8 @@ async function executeSessionCreate(context: CommandContext, command: SessionCre
             );
         };
         // The receipt answers before the directory and Agent are resolved again, which may have changed since.
-        const created = context.sessionCreations.created(command.operationId, input, signal);
-        const ready = created === null ? await create() : await current(await created);
+        const created = await context.sessionCreations.created(command.operationId, input, signal);
+        const ready = created === null ? await create() : await current(created);
         signal.throwIfAborted();
         context.diagnostics.daemonDiagnostic("session_creation_resolved", command.requestId, {
             harness: command.harness,

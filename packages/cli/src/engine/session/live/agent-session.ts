@@ -28,6 +28,7 @@ import type {
 import type { NativeSessionOrigin } from "../../acp/protocol/native-session.ts";
 import { unsupportedSessionCapabilities } from "../../acp/protocol/session-capabilities.ts";
 import { SerialTaskQueue } from "../../util/serial-task-queue.ts";
+import { type SharedOperation, shareOperation } from "../../util/shared-operation.ts";
 import { recordsEqual, truncate } from "../../util/value-utils.ts";
 import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
 import { promptCompletion, promptEnd } from "../api/prompt-end.ts";
@@ -84,7 +85,8 @@ type SessionLoadState =
     | {
           readonly kind: "capturing";
           readonly history: HistoryReplayCapture;
-          readonly completion: Promise<AdapterSessionOpened>;
+          /** The replay, which every requester of the history shares and none of them owns. */
+          readonly replay: SharedOperation<AdapterSessionOpened>;
       }
     | { readonly kind: "loaded"; readonly history: HistoryReplayCapture };
 
@@ -534,8 +536,13 @@ export class AgentSession {
             return this.#sessionLoad.history;
         }
         if (this.#sessionLoad.kind === "capturing") {
-            const { completion, history } = this.#sessionLoad;
-            await waitForSharedOperation(completion, signal);
+            const { replay, history } = this.#sessionLoad;
+            if (replay.abandoned()) {
+                // Every requester of that replay left, so it is ending; this requester replays again once it has.
+                await waitForSharedOperation(replay.ended, signal);
+                return await this.#completedHistory(signal);
+            }
+            await replay.wait(signal);
             return history;
         }
         if (this.#historyIsEmpty()) {
@@ -558,16 +565,16 @@ export class AgentSession {
         }
         this.#store.events.reset(this.target);
         const history = new HistoryReplayCapture(this.#store.events, this.target, this.#settledTurns());
-        const opening = Promise.resolve().then(async (): Promise<AdapterSessionOpened> => {
+        const { operation: replay, first } = shareOperation(async (shared): Promise<AdapterSessionOpened> => {
             try {
                 const opened = await this.#writeNativeHistory(
                     async () =>
                         await this.#adapter.openSessionWithReplay({
-                            ...this.#sessionParams(signal),
+                            ...this.#sessionParams(shared),
                             sessionId: this.target.sessionId,
                         }),
                 );
-                signal.throwIfAborted();
+                shared.throwIfAborted();
                 this.#capabilities = opened.capabilities;
                 history.finishReplay();
                 this.#holdHistory(history);
@@ -576,9 +583,9 @@ export class AgentSession {
                 this.#sessionLoad = { kind: "not-requested" };
                 throw cause;
             }
-        });
-        this.#sessionLoad = { kind: "capturing", history, completion: opening };
-        return await opening;
+        }, signal);
+        this.#sessionLoad = { kind: "capturing", history, replay };
+        return await first;
     };
 
     /** Reopens the established conversation the Runtime recorded or an import names. */
