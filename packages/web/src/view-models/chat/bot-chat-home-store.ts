@@ -202,6 +202,14 @@ export function newConversationPresentation(
     } as const;
 }
 
+/**
+ * The creation a first message asks for: its draft's key and the Session it asks for. The same key with other settings
+ * asks for another Session, so it is another creation; under the same identity the Computer would refuse it.
+ */
+function creationKey(commandId: string, settings: ChatDraftConfiguration): string {
+    return JSON.stringify([commandId, settings.harness, settings.workspaceRef, settings.configurations]);
+}
+
 /** A first message no Session took, on its way back to the New Session draft. */
 type ReturnedFirstMessage = Pick<QueuedDraftMessage, "attachments" | "commandId" | "content">;
 
@@ -687,7 +695,7 @@ export const createBotChatHomeStore = (
                 }));
                 let access: ChatAccess;
                 try {
-                    access = await requests.createConversation(commandId, settings, signal);
+                    access = await requests.createConversation(creationKey(commandId, settings), settings, signal);
                     signal.throwIfAborted();
                     set((state) => ({
                         creation: transitionConversationCreation(state.creation, {
