@@ -67,7 +67,7 @@ const readExecution = async (peer: RealDaemonPeer, commandId?: string) => {
 };
 
 // @no-uc: Compatibility; a reconnecting client recovers an unconfirmed submission from the Computer's execution receipt.
-test("Given commands the Computer finished, failed, is running or never received, When a client reads the Session execution naming each command, Then the Computer reports each command's delivery, also after a restart", async () => {
+test("Given commands the Computer finished, failed, is running or never received, When a client reads the Session execution naming each command, Then the Computer reports whether it received each command, also after a restart", async () => {
     const directory = await mkdtemp(join(tmpdir(), "morty-command-delivery-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
@@ -89,31 +89,28 @@ test("Given commands the Computer finished, failed, is running or never received
                 await waitForLifecycle(peer, running, "prompt.started");
                 const neverReceived = randomUUID();
 
-                expect((await readExecution(peer, completed)).result).toMatchObject({
-                    command: { state: "completed", stopReason: "end_turn" },
-                });
-                expect((await readExecution(peer, failed)).result).toMatchObject({
-                    command: { state: "failed", code: expect.any(String) },
-                });
+                for (const received of [completed, failed]) {
+                    expect((await readExecution(peer, received)).result).toMatchObject({
+                        delivery: { commandId: received, state: "received" },
+                    });
+                }
                 expect((await readExecution(peer, running)).result).toMatchObject({
-                    command: { state: "accepted" },
+                    delivery: { commandId: running, state: "received" },
                     turn: { commandId: running },
                 });
                 expect((await readExecution(peer, neverReceived)).result).toMatchObject({
-                    command: { state: "unknown" },
+                    delivery: { commandId: neverReceived, state: "unknown" },
                 });
-                // A client that names no command, such as one released before delivery reads, gets the old answer.
-                expect((await readExecution(peer)).raw).not.toHaveProperty("command");
+                expect((await readExecution(peer)).raw).not.toHaveProperty("delivery");
 
                 await peer.restart();
-                expect((await readExecution(peer, completed)).result).toMatchObject({
-                    command: { state: "completed", stopReason: "end_turn" },
-                });
-                expect((await readExecution(peer, running)).result).toMatchObject({
-                    command: { state: "failed", code: "runtime_restarted" },
-                });
+                for (const received of [completed, running]) {
+                    expect((await readExecution(peer, received)).result).toMatchObject({
+                        delivery: { commandId: received, state: "received" },
+                    });
+                }
                 expect((await readExecution(peer, neverReceived)).result).toMatchObject({
-                    command: { state: "unknown" },
+                    delivery: { commandId: neverReceived, state: "unknown" },
                 });
             },
         );
@@ -342,7 +339,7 @@ test.each([
                         }
                     }
                     expect((await readExecution(peer, steering)).result).toMatchObject({
-                        command: { state: "completed", stopReason: "steered" },
+                        delivery: { commandId: steering, state: "received" },
                         lastTurn: { commandId: turn, ...live },
                         turn: null,
                     });

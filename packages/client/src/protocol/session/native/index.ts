@@ -60,20 +60,18 @@ const activeTurnSnapshotSchema = z
     .readonly();
 
 /**
- * Where one submitted command stands in the Computer's execution receipts. Only the
- * Computer that receives a command can say whether it arrived, so a client recovers an
- * unconfirmed submission from this rather than from Agent message identities.
+ * Whether the Computer received one submitted command, from its execution receipts, naming the command it describes.
+ * Only the Computer that receives a command can say whether it arrived, so a client recovers an unconfirmed submission
+ * from this rather than from Agent message identities.
  */
-const commandDeliverySchema = z.discriminatedUnion("state", [
-    // No receipt: the command has not arrived. A delayed submission may still arrive later.
-    z.object({ state: z.literal("unknown") }).readonly(),
-    // The Computer holds the command and has not finished it; it may be waiting or running.
-    z.object({ state: z.literal("accepted") }).readonly(),
-    z.object({ state: z.literal("completed"), stopReason: z.string().max(2_048) }).readonly(),
-    z.object({ code: identifier, state: z.literal("failed") }).readonly(),
-    // The command started, but the Computer no longer retains its result.
-    z.object({ state: z.literal("expired") }).readonly(),
-]);
+const commandDeliverySchema = z
+    .object({
+        commandId: identifier,
+        // `unknown`: no receipt, so the command has not arrived; a delayed submission may still arrive later.
+        // `received`: the Computer holds or held the command, whatever became of it since.
+        state: z.enum(["unknown", "received"]),
+    })
+    .readonly();
 export type CommandDelivery = z.infer<typeof commandDeliverySchema>;
 
 /**
@@ -205,8 +203,8 @@ const executionReadFields = {
         .readonly(),
     // Null when this Computer has no retained Session for the requested identity.
     interactionState: sessionInteractionSnapshotSchema.nullable(),
-    // Present only when the request named a command.
-    command: commandDeliverySchema.optional(),
+    // The delivery of the command the request named; present exactly when the request named one.
+    delivery: commandDeliverySchema.optional(),
 };
 /**
  * What reading a Session's execution answers: a running turn, or none and how the last started command ended. How a

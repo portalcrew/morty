@@ -986,8 +986,8 @@ export class MortySessionResources {
     };
 
     /**
-     * Reads the Session's execution. Naming a command also asks for that command's delivery;
-     * `command` is present when the request names a command. `lastTurn` reports how the last
+     * Reads the Session's execution. Naming a command also asks for that command's delivery, which the answer
+     * carries exactly when a command was named and which names that command. `lastTurn` reports how the last
      * started command ended when none runs. A missing Session has no interaction snapshot.
      */
     readonly readSessionExecution = async (
@@ -1019,7 +1019,7 @@ export class MortySessionResources {
                 reply: {
                     decode: async (encoded, decryptor, replySignal) => {
                         const result = await nativeSessionResultCodec.decode(encoded, decryptor, replySignal);
-                        if (result.action !== "active-turn") {
+                        if (result.action !== "active-turn" || result.delivery?.commandId !== commandId) {
                             throw new MortyProtocolError("The service returned an invalid active Turn");
                         }
                         return result;

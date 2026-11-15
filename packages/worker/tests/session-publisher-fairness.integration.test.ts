@@ -92,12 +92,8 @@ test("Given unviewed output exceeds the live buffer, When another viewer receive
                     ...Array.from({ length: 200 }, () => ({ kind: "text" as const, text: "x".repeat(2048) })),
                 ],
             });
-            const execution = await backgroundClient.sessions.readSessionExecution(
-                background.target,
-                signal,
-                "background-turn",
-            );
-            expect(execution.command).toMatchObject({ state: "completed" });
+            const execution = await backgroundClient.sessions.readSessionExecution(background.target, signal);
+            expect(execution.lastTurn).toMatchObject({ commandId: "background-turn", state: "completed" });
             await activeClient.turns.submit(
                 active.target,
                 { content: "active", attachments: [], idempotencyKey: "active-turn" },

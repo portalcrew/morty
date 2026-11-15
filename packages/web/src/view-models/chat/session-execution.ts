@@ -82,13 +82,12 @@ export type SessionExecutionFact =
     | LiveExecutionFact
     /**
      * The Computer's account of the execution through `snapshot.executionPosition`, for a read that began when the
-     * state's `executionReadBasis` was `basis`. `deliveryCommandId` names the command whose delivery the read asked for;
+     * state's `executionReadBasis` was `basis`.
      */
     | {
           readonly kind: "read";
           readonly snapshot: SessionExecutionSnapshot;
           readonly basis: number;
-          readonly deliveryCommandId: string | null;
       }
     /**
      * The Computer admitted this page's submission of `commandId`, sent at `startedAt`, as `admission` says. An HTTP
@@ -379,7 +378,7 @@ function applyRead(
     state: SessionExecutionState,
     fact: Extract<SessionExecutionFact, { readonly kind: "read" }>,
 ): SessionExecutionTransition {
-    const { snapshot, basis, deliveryCommandId } = fact;
+    const { snapshot, basis } = fact;
     const { coverage } = state;
     const position = snapshot.executionPosition;
     const held = coverage.kind === "covered" ? [] : coverage.held;
@@ -393,15 +392,12 @@ function applyRead(
     }
     const running = snapshot.turn;
     // Only the Computer knows whether a submission arrived, including one that finished while no pane followed the
-    // Session. A Computer or Relay that cannot report it omits the delivery, and the submission stays unconfirmed. The
-    // execution receipt of a running command confirms its delivery even when admission and live events were lost.
+    // Session. A submission the Computer has no receipt for stays unconfirmed. The execution receipt of a running command confirms its delivery even when admission and live events were lost.
     let next = learn(
         state,
         [
             ...snapshot.queued.map((item) => item.commandId),
-            ...(deliveryCommandId !== null && snapshot.command !== undefined && snapshot.command.state !== "unknown"
-                ? [deliveryCommandId]
-                : []),
+            ...(snapshot.delivery?.state === "received" ? [snapshot.delivery.commandId] : []),
             ...(running === null ? [] : [running.commandId]),
         ],
         "holds",
