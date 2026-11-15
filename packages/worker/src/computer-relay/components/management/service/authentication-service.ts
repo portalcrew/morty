@@ -183,18 +183,6 @@ export class AuthenticationService {
         }
     };
 
-    readonly createComputer = async (
-        computerId: string,
-        signal: AbortSignal,
-        token: string,
-    ): Promise<AnonymousIdentity> => {
-        const identity = await this.identities.createComputer(computerId, signal, token);
-        if (identity === null) {
-            throw new ManagementError("LOCAL_CREDENTIAL_UNAVAILABLE", "The credential is no longer available.", 409);
-        }
-        return identity;
-    };
-
     /** The one check of which credential kinds may perform an operation; the rule itself is `mayPerform`. */
     readonly authorize = async <Operation extends CredentialOperation>(
         token: string | undefined,

@@ -17,7 +17,7 @@ type SessionEnvironment = ManagementHttpEnvironment & {
 
 export const authenticatedSession = (ctx: ManagementRouteContext) =>
     createMiddleware<SessionEnvironment>(async (context, next) => {
-        const application = await applicationForRequest(ctx, context);
+        const application = applicationForRequest(ctx, context);
         const result = await application.services.authentication.session(
             readBearerToken(context.req.raw),
             context.req.raw.signal,
@@ -38,7 +38,7 @@ export const authenticatedSession = (ctx: ManagementRouteContext) =>
 /** Admits only the computer's local credential, for an operation no shared access may perform. */
 export const localSession = (ctx: ManagementRouteContext, operation: LocalOperation) =>
     createMiddleware<SessionEnvironment>(async (context, next) => {
-        const application = await applicationForRequest(ctx, context);
+        const application = applicationForRequest(ctx, context);
         const result = await application.services.authentication.authorize(
             readBearerToken(context.req.raw),
             operation,

@@ -1,11 +1,10 @@
-import type { AccountProvisioner } from "../../../../contracts/account-provisioning.ts";
-import type { BootstrapOrigin } from "../../../../contracts/computer-bootstrap.ts";
-import { decodeComputerPlacement } from "../../../../contracts/computer-id.ts";
-import { type ComputerManagement, ComputerManagementError } from "../../../../contracts/computer-management.ts";
+import type { CreationOrigin } from "../../../../contracts/computer-creation.ts";
+import { accountComputerId, decodeComputerPlacement } from "../../../../contracts/computer-id.ts";
+import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
 import { ManagementError } from "../../../../contracts/management-error.ts";
 import type { ComputerIdentity } from "../entity/computer-identity.ts";
 import type { JoiningDevice } from "../storage/identity-storage.ts";
-import { randomSecret } from "../storage/identity-storage-common.ts";
+import { type AnonymousIdentity, digest, randomSecret } from "../storage/identity-storage-common.ts";
 import type { AuthenticationService } from "./authentication-service.ts";
 import type { IdentityOperations } from "./identity-operations.ts";
 import type { LocalComputerService } from "./local-computer-service.ts";
@@ -15,7 +14,6 @@ export class ManagementService {
     readonly #computerId: string;
     readonly #relay: LocalComputerService;
     readonly #credentialKey: IdentityOperations["credentialKey"];
-    readonly #provisionAccount: AccountProvisioner;
 
     constructor(cx: {
         readonly identity: ComputerIdentity;
@@ -23,28 +21,13 @@ export class ManagementService {
         readonly services: {
             readonly authentication: AuthenticationService;
             readonly computers: LocalComputerService;
-            readonly provisionAccount: AccountProvisioner;
         };
     }) {
         this.#authentication = cx.services.authentication;
         this.#computerId = cx.identity.computerId;
         this.#relay = cx.services.computers;
         this.#credentialKey = cx.identityOperations.credentialKey;
-        this.#provisionAccount = cx.services.provisionAccount;
     }
-
-    /**
-     * Every step reuses what an earlier attempt committed. A replacement's credential derives from its origin, so
-     * repeating the same replacement completes it and returns the same identity instead of creating another.
-     */
-    readonly initializeComputer = async (
-        computer: ComputerManagement,
-        signal: AbortSignal,
-        origin: BootstrapOrigin,
-    ) => {
-        const token = await bootstrapToken(this.#credentialKey, computer.computerId, origin, signal);
-        return await this.#authentication.createComputer(computer.computerId, signal, token);
-    };
 
     /** The owner's Computer: where its Runtime pairing stands, read from the Relay that owns it. */
     readonly readComputer = async (computerId: string, signal: AbortSignal) => {
@@ -60,7 +43,7 @@ export class ManagementService {
         return this.#computerId !== computerId ? null : { computerId: this.#computerId };
     };
 
-    /** The previous Computer names its successor so replacement retries reuse it. */
+    /** The successor the previous Computer names, so every retry of its replacement creates the same computer. */
     readonly replaceComputer = async (computerId: string, signal: AbortSignal) => {
         const previous = await this.findComputer(computerId, signal);
         if (previous === null) {
@@ -72,7 +55,9 @@ export class ManagementService {
         if (placement === null) {
             throw new ComputerManagementError("INVALID_ACCOUNT_ID", "The Computer ID is invalid.", 400);
         }
-        return await this.#provisionAccount(reference, placement.locationHint, signal);
+        const successorId = await accountComputerId(reference, placement.locationHint);
+        signal.throwIfAborted();
+        return { computerId: successorId };
     };
 
     readonly createComputerPairing = async (computerId: string, idempotencyKey: string, signal: AbortSignal) => {
@@ -118,13 +103,34 @@ export class ManagementService {
 }
 
 /**
- * The credential a bootstrap issues. A created computer is bootstrapped only by the request that created it, so its
- * credential is new; a replacement's derives from its origin, so repeating the replacement issues it again.
+ * Creates the computer this object holds with its owner's credential. `commitOwner` stores the computer's existence and
+ * the credential as one transaction and reports whether the credential holds access, so a computer never exists without
+ * its owner. Repeating a replacement derives the same credential and answers it again; a revoked one is never reissued.
  */
-async function bootstrapToken(
+export async function createComputer(
+    serverKey: IdentityOperations["credentialKey"],
+    commitOwner: (tokenHash: string) => boolean,
+    computerId: string,
+    origin: CreationOrigin,
+    signal: AbortSignal,
+): Promise<AnonymousIdentity> {
+    const token = await creationToken(serverKey, computerId, origin, signal);
+    const tokenHash = await digest(token);
+    signal.throwIfAborted();
+    if (!commitOwner(tokenHash)) {
+        throw new ManagementError("LOCAL_CREDENTIAL_UNAVAILABLE", "The credential is no longer available.", 409);
+    }
+    return { computerToken: token, computerId };
+}
+
+/**
+ * The credential a creation issues. A created computer is created only by the request that names it, so its credential
+ * is new; a replacement's derives from its origin, so repeating the replacement issues it again.
+ */
+async function creationToken(
     serverKey: IdentityOperations["credentialKey"],
     computerId: string,
-    origin: BootstrapOrigin,
+    origin: CreationOrigin,
     signal: AbortSignal,
 ) {
     switch (origin.kind) {

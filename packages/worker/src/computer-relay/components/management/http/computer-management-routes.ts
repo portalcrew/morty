@@ -29,14 +29,14 @@ export function createComputerManagementRoutes(ctx: ManagementRouteContext) {
     });
     return new Hono<ManagementHttpEnvironment>()
         .get("/pairing-state", authenticatedSession, async (context) => {
-            const application = await applicationForRequest(ctx, context);
+            const application = applicationForRequest(ctx, context);
             using deadline = new RequestDeadline(context.req.raw.signal, 45000);
             return json(
                 await application.services.management.readComputer(context.get("session").computerId, deadline.signal),
             );
         })
         .get("/", sizeLimit, authenticatedSession, async (context) => {
-            const application = await applicationForRequest(ctx, context);
+            const application = applicationForRequest(ctx, context);
             const session = context.get("session");
             using deadline = new RequestDeadline(context.req.raw.signal, 15000);
             return json({
@@ -44,7 +44,7 @@ export function createComputerManagementRoutes(ctx: ManagementRouteContext) {
             });
         })
         .post("/replacement", async (context) => {
-            const application = await applicationForRequest(ctx, context);
+            const application = applicationForRequest(ctx, context);
             using deadline = new RequestDeadline(context.req.raw.signal, 45000);
             const signal = deadline.signal;
             const { authentication, management } = application.services;
@@ -72,25 +72,18 @@ export function createComputerManagementRoutes(ctx: ManagementRouteContext) {
             application.logger.info({ ...audit, stage: "requested" }, "Computer replacement requested");
             try {
                 const successor = await management.replaceComputer(application.identity.computerId, signal);
-                // Repeating the same saved local identity reuses its successor credential, even if bootstrap
-                // committed only part of its data. An explicitly revoked successor credential is never reissued.
+                // Repeating the same saved local identity creates the same successor and reuses its credential. An
+                // explicitly revoked successor credential is never reissued.
                 const response = await new ComputerRelayGateway(
                     relayBindings(application.config.bindings),
                     successor.computerId,
-                ).bootstrap(
-                    new Request("https://computer.internal/__computer/bootstrap", {
-                        body: JSON.stringify({
-                            computer: successor,
-                            origin: {
-                                kind: "replacement",
-                                previousComputerId: audit.previousComputerId,
-                                token: local.token,
-                            },
-                        }),
-                        headers: { "content-type": "application/json" },
-                        method: "POST",
-                        signal,
-                    }),
+                ).create(
+                    {
+                        kind: "replacement",
+                        previousComputerId: v.parse(relayIdentifier, audit.previousComputerId),
+                        token: local.token,
+                    },
+                    signal,
                 );
                 signal.throwIfAborted();
                 if (!response.ok) {
@@ -98,7 +91,7 @@ export function createComputerManagementRoutes(ctx: ManagementRouteContext) {
                         {
                             ...audit,
                             computerId: successor.computerId,
-                            stage: "bootstrap_failed",
+                            stage: "creation_failed",
                             status: response.status,
                         },
                         "Computer replacement did not reach access revocation",
@@ -132,7 +125,7 @@ export function createComputerManagementRoutes(ctx: ManagementRouteContext) {
             localSession(ctx, "pairComputer"),
             bodyParser<ManagementHttpEnvironment, typeof pairingInput>(pairingInput),
             async (context) => {
-                const application = await applicationForRequest(ctx, context);
+                const application = applicationForRequest(ctx, context);
                 const session = context.get("session");
                 using deadline = new RequestDeadline(context.req.raw.signal, 15000);
                 const input = context.req.valid("json");
@@ -146,7 +139,7 @@ export function createComputerManagementRoutes(ctx: ManagementRouteContext) {
             },
         )
         .get("/pairing", noStore, authenticatedSession, async (context) => {
-            const application = await applicationForRequest(ctx, context);
+            const application = applicationForRequest(ctx, context);
             const session = context.get("session");
             using deadline = new RequestDeadline(context.req.raw.signal, 15000);
             return json(await application.services.management.readComputerPairing(session.computerId, deadline.signal));

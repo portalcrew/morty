@@ -45,7 +45,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         this.#credentialKey.read,
         (computerId) => this.#backendServices(computerId),
         () => this.#computerDatabase,
-        this.#account,
+        (write) => this.#commitCreation(write),
     );
 
     readonly #http = this.#createHttpRoutes();
@@ -65,7 +65,6 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
             services: {
                 browser: this.#browserServices,
                 relay: (computerId) => this.#services(computerId, storeFor(computerId)).relay,
-                accounts: this.#account,
                 sessions: (computerId) => ({
                     sessions: this.#services(computerId, storeFor(computerId)).access.sessionAccess,
                     operations: createLocalSessionOperations(this.#connectionsForComputer.context, computerId),
@@ -135,6 +134,22 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         return this.#database;
     }
 
+    /**
+     * Creates the computer this object holds: its existence and what `write` stores with it, such as its owner's
+     * credential, commit as one transaction. A computer never exists without its owner, and a creation that fails leaves
+     * neither the computer nor its database behind.
+     */
+    #commitCreation<Value>(write: (database: DurableObjectDatabase) => Value): Value {
+        const created = this.ctx.storage.transactionSync(() => {
+            this.#account.create();
+            const database = this.#database ?? new DurableObjectDatabase(this.ctx.storage);
+            return { database, value: write(database) };
+        });
+        // Opening the database migrated it inside the transaction, so it is kept only once that committed.
+        this.#database = created.database;
+        return created.value;
+    }
+
     /** The store of the computer this object holds; null when `computerId` names another computer. */
     #computerStore(computerId: string): ComputerRelayStore | null {
         if (!this.#owns(computerId)) {
@@ -187,7 +202,6 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         this.#access ??= new ComputerAccessService(
             computerId,
             store,
-            this.#account,
             new IdentityStorage(this.#computerDatabase, computerId),
         );
         return this.#access;

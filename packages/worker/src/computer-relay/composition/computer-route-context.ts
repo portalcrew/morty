@@ -7,12 +7,11 @@ import type { RelayContext } from "./relay-services.ts";
 export interface ComputerRouteContext {
     readonly bindings: ConfiguredRelayBindings;
     readonly ownsComputer: (computerId: string) => boolean;
-    /** Whether the object holds a computer's account: before it does, only the account's creation is answered. */
+    /** Whether the object holds a computer: before it does, only the computer's creation is answered. */
     readonly holdsComputer: () => boolean;
     readonly services: {
         readonly browser: ComputerServices;
         readonly relay: (computerId: string) => RelayContext;
-        readonly accounts: { readonly create: (signal: AbortSignal) => Promise<void> };
         readonly sessions: (computerId: string) => SessionWebSocketServices;
     };
     readonly utilities: {

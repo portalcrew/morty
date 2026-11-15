@@ -28,7 +28,7 @@ export function createComputerRelayServices(
         store,
         credentialKey,
         services: {
-            identities: new ComputerIdentityService(computerId, store, access),
+            identities: new ComputerIdentityService(computerId, store),
             computerAccounts: access,
         },
     });

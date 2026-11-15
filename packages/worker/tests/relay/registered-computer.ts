@@ -1,7 +1,6 @@
 import { runInDurableObject } from "cloudflare:test";
 import { ComputerAccessService } from "../../src/computer-relay/components/management/service/computer-access-service.ts";
 import { ComputerRelayStore } from "../../src/computer-relay/components/management/storage/computer-relay-store.ts";
-import { DurableComputerAccount } from "../../src/computer-relay/components/management/storage/durable-computer-account.ts";
 import { IdentityStorage } from "../../src/computer-relay/components/management/storage/identity-storage.ts";
 import { createRelayDurableObjectContext } from "../../src/computer-relay/composition/relay-durable-object-context.ts";
 import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-object-database.ts";
@@ -14,12 +13,7 @@ export function computerAccess(computerId: string, storage: DurableObjectStorage
     const store = new ComputerRelayStore(database);
     return {
         store,
-        access: new ComputerAccessService(
-            computerId,
-            store,
-            new DurableComputerAccount(storage),
-            new IdentityStorage(database, computerId),
-        ),
+        access: new ComputerAccessService(computerId, store, new IdentityStorage(database, computerId)),
     };
 }
 

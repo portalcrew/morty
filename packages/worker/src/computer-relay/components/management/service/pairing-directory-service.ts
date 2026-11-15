@@ -77,8 +77,8 @@ export class PairingDirectoryService {
         return rotation;
     };
 
-    readonly authorizeComputer = async (computerId: string, signal: AbortSignal): Promise<void> =>
-        await this.#cx.services.computerAccounts.authorizeComputer(computerId, signal);
+    readonly #authorizeComputer = (computerId: string): void =>
+        this.#cx.services.computerAccounts.authorizeComputer(computerId);
 
     /**
      * Replays retain the original identity, secrets and deadline; retries keep the same key after an ambiguous failure.
@@ -92,7 +92,7 @@ export class PairingDirectoryService {
     ): Promise<CreatedComputerPairing> => {
         const normalizedComputerId = validateIdentifier(computerId, "computer_id");
         const normalizedKey = validateIdentifier(idempotencyKey, "idempotency_key");
-        await this.authorizeComputer(normalizedComputerId, signal);
+        this.#authorizeComputer(normalizedComputerId);
         const storage = this.#cx.store;
         const secrets = await deriveComputerPairingSecrets(
             await this.#cx.credentialKey(signal),
@@ -141,7 +141,7 @@ export class PairingDirectoryService {
     };
 
     readonly readComputerPairing = async (computerId: string, signal: AbortSignal): Promise<PairingStatus> => {
-        await this.authorizeComputer(computerId, signal);
+        this.#authorizeComputer(computerId);
         const row = await this.#cx.store.readComputerPairing(signal);
         if (row === null) {
             throw new PairingDirectoryError("pairing_not_found", "The Computer pairing request was not found");
@@ -188,7 +188,7 @@ export class PairingDirectoryService {
         computerId: string,
         signal: AbortSignal,
     ): Promise<readonly ComputerDescriptor[]> => {
-        await this.authorizeComputer(computerId, signal);
+        this.#authorizeComputer(computerId);
         const runtimes = await this.#cx.store.listComputers(signal);
         return runtimes.map(
             (row) =>
@@ -197,7 +197,7 @@ export class PairingDirectoryService {
     };
 
     readonly isComputerRevoked = async (computerId: string, signal: AbortSignal): Promise<boolean> => {
-        await this.authorizeComputer(computerId, signal);
+        this.#authorizeComputer(computerId);
         const row = await this.#cx.store.readComputer(signal);
         return row !== null && computerRevokedAt(row.revoked_at) !== null;
     };

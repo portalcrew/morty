@@ -7,7 +7,6 @@ import {
     type WebSocketHttpOperation,
 } from "../../contracts/websocket-http-dispatch.ts";
 import { errorHandler } from "../../http/error-middleware.ts";
-import { RequestDeadline } from "../../http/request-deadline.ts";
 import { createAgentSetupRoutes } from "../components/chat/http/bot-chat-routes.ts";
 import { createTransferRedemptionRoutes } from "../components/management/http/authentication-routes.ts";
 import { createManagementApplication } from "../components/management/http/index.ts";
@@ -26,10 +25,7 @@ type WebSocketApplicationEnvironment = {
 function managementRouteContext(ctx: ComputerRouteContext): ManagementRouteContext {
     return {
         services: {
-            forComputer: async (computerId, signal) => {
-                using deadline = new RequestDeadline(signal, 20_000);
-                return await ctx.services.browser.forComputer(computerId, ctx.bindings, deadline.signal);
-            },
+            forComputer: (computerId) => ctx.services.browser.forComputer(computerId, ctx.bindings),
         },
     };
 }
