@@ -235,7 +235,13 @@ export async function connectControlledAgentRuntime(options: {
         directory,
         options.connection.computerId,
         options.signal,
-    ).then(async (store) => await store.access(options.signal));
+    )
+        .then(async (store) => await store.access(options.signal))
+        .catch(async (cause: unknown) => {
+            await initial.stop();
+            await rm(directory, { force: true, recursive: true });
+            throw cause;
+        });
     let state:
         | { readonly kind: "running"; readonly runtime: typeof initial }
         | { readonly kind: "disconnected" }
@@ -359,7 +365,10 @@ export async function createControlledAgentRuntime(options: {
         credential: options.credential,
         origin: options.origin,
         computerId: pairing.computerId,
-        encryptionAccess: await connected.encryptionAccess(options.signal),
+        encryptionAccess: await connected.encryptionAccess(options.signal).catch(async (cause: unknown) => {
+            await connected[Symbol.asyncDispose]();
+            throw cause;
+        }),
     });
     return {
         ...connected,

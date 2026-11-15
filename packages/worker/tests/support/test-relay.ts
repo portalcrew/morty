@@ -29,6 +29,8 @@ export async function startTestRelay(
                 token: string,
                 agents: readonly ControlledAgent[] = [{ harness: "codex", label: "Codex" }],
                 sessionIds?: ReadonlySet<string>,
+                /** The caller's lifetime: the Computer stops when it ends or when the Relay closes, whichever is first. */
+                lifetime?: AbortSignal,
             ) => {
                 const runtime = await createControlledAgentRuntime({
                     credential: token,
@@ -53,7 +55,8 @@ export async function startTestRelay(
                     origin: bindings.origin,
                     computerId,
                     server: app,
-                    signal: cancellation.signal,
+                    signal:
+                        lifetime === undefined ? cancellation.signal : AbortSignal.any([cancellation.signal, lifetime]),
                 });
                 runtimes.push(runtime);
                 return runtime;

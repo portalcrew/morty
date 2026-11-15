@@ -44,7 +44,13 @@ export async function createChatWorkerEnvironment(
     if (sharingNetwork !== null) {
         await cloud.changeAppOrigin(origin);
     }
-    const createApplication = async () => {
+    /**
+     * Everything the application starts belongs to `owner`, the lifetime of the test that creates it: its transport
+     * and Computers stop when that lifetime ends, so a timed-out test cannot keep connecting during later tests.
+     */
+    const createApplication = async (owner: AbortSignal) => {
+        owner.throwIfAborted();
+        const connection = AbortSignal.any([lifetime.signal, owner]);
         const identityResponse = await cloud.dispatchFetch(`${origin}/morty/api/v1/computers`, {
             method: "POST",
         });
@@ -71,14 +77,21 @@ export async function createChatWorkerEnvironment(
         const computerId = identity.computerId;
         const transport = new TestApiTransport(origin);
         transport.open();
+        owner.addEventListener("abort", () => transport.dispose(), { once: true });
         let submissionObserver: PayloadEncryptionConnection | null = null;
         const submissions = new Map<
             string,
             Promise<Omit<Awaited<ReturnType<typeof sessionPromptCommandCodec.decode>>, "requestId">>
         >();
         const connect = async (agents: readonly ControlledAgent[], sessionIds?: ReadonlySet<string>) => {
-            const runtime = await cloud.connectAgent(identity.computerId, identity.token, agents, sessionIds);
-            const access = await runtime.encryptionAccess(lifetime.signal);
+            const runtime = await cloud.connectAgent(
+                identity.computerId,
+                identity.token,
+                agents,
+                sessionIds,
+                connection,
+            );
+            const access = await runtime.encryptionAccess(connection);
             rememberComputerEncryption(access);
             const claims = new Set<string>();
             submissionObserver = await createComputerPayloadEncryption(
@@ -141,7 +154,7 @@ export async function createChatWorkerEnvironment(
                     },
                 });
             }
-            await runtime.api.verifyAgent(agents[0]?.harness ?? "codex", lifetime.signal);
+            await runtime.api.verifyAgent(agents[0]?.harness ?? "codex", connection);
             // The second client reaches the same Worker directly; only the browser uses the failing network.
             const sessionClient = async (
                 target: { readonly harness: string; readonly sessionId: string },
@@ -288,7 +301,13 @@ export async function createChatWorkerEnvironment(
             connectAgents: async (agents: readonly ControlledAgent[], sessionIds?: ReadonlySet<string>) =>
                 await connect(agents, sessionIds),
             connectRuntime: async () => {
-                const runtime = await cloud.connectAgent(identity.computerId, identity.token);
+                const runtime = await cloud.connectAgent(
+                    identity.computerId,
+                    identity.token,
+                    undefined,
+                    undefined,
+                    connection,
+                );
                 return { failure: runtime.failure, computerId: runtime.computerId };
             },
             createTransferUrl: async () => {
