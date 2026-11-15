@@ -12,6 +12,7 @@ import {
 } from "../../services/identity/identity-scope-url.ts";
 import {
     computerAddress,
+    lastComputerHref,
     rememberComputerVisit,
     rememberedComputers,
     resumesComputer,
@@ -89,7 +90,7 @@ export const createAnonymousSessionStore = (
          * Neither switches to another computer by itself.
          */
         const leave = (check: LostAccess) => {
-            const fallback = rememberedComputers().length > 0 ? "/" : null;
+            const fallback = lastComputerHref();
             switch (check.kind) {
                 case "revoked":
                     leaveComputerAddress();
@@ -176,7 +177,7 @@ export const createAnonymousSessionStore = (
                             state: {
                                 kind: "setup",
                                 notice: "none",
-                                returnHref: rememberedComputers().length > 0 ? "/" : null,
+                                returnHref: lastComputerHref(),
                             },
                         });
                         return;
