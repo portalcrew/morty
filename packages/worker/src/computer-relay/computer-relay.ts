@@ -14,7 +14,6 @@ import { DurableComputerAccount } from "./components/management/storage/durable-
 import { DurableCredentialKey } from "./components/management/storage/durable-credential-key.ts";
 import { IdentityStorage } from "./components/management/storage/identity-storage.ts";
 import { DaemonWebSocketRoutes } from "./components/runtime/daemon-websocket-routes.ts";
-import { SessionAccessSigner } from "./components/runtime/entity/session-access-credential.ts";
 import { createLocalSessionOperations } from "./components/runtime/service/local-session-operations.ts";
 import {
     createComputerHttpApplication,
@@ -251,15 +250,6 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
     };
 
     override async alarm(): Promise<void> {
-        const signingKeyId = await new SessionAccessSigner(this.env.MORTY_SESSION_SIGNING_SECRET).keyId();
-        for (const viewer of this.#connectionsForComputer.context.gateways.peers.viewers()) {
-            const { identity } = viewer;
-            if (identity.credential.signingKeyId !== signingKeyId) {
-                viewer.close(1008, "Session signing key rotated");
-            } else if (identity.expiresAt <= Date.now()) {
-                viewer.close(1000, "Session access expired");
-            }
-        }
         try {
             await this.#connectionsForComputer.daemonWebSocket.reauthorizeConnections();
         } finally {

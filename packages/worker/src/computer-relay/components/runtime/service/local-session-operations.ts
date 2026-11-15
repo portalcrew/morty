@@ -84,7 +84,6 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
             sessionTarget: NativeSessionTarget,
             subscription: SessionEventsSubscribeCommandRouting,
             credential: {
-                readonly signingKeyId: string;
                 readonly grant: SessionAccessGrant;
                 readonly expiresAt: number;
             },
@@ -112,10 +111,7 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
                     sessionFilter: sessionTarget,
                     subscriptionId: subscription.subscriptionId,
                     expiresAt: credential.expiresAt,
-                    credential: {
-                        signingKeyId: credential.signingKeyId,
-                        grant: credential.grant,
-                    },
+                    grant: credential.grant,
                 },
                 observer,
                 signal,

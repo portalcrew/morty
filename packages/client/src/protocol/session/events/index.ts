@@ -643,7 +643,7 @@ const sessionEventEnvelopePublicRoutingSchema = z.object({
 const sessionEventEnvelopeRoutingSchema = sessionEventEnvelopePublicRoutingSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
-export type SessionEventEnvelopeRouting = z.infer<typeof sessionEventEnvelopeRoutingSchema>;
+type SessionEventEnvelopeRouting = z.infer<typeof sessionEventEnvelopeRoutingSchema>;
 const decodeSessionEventEnvelopeRouting = (encoded: string) =>
     decodeRoutingZodMessage(encoded, sessionEventEnvelopeRoutingSchema);
 function decodeRoutedSessionEventEnvelope(encoded: string) {

@@ -29,11 +29,7 @@ export function createSessionEventSubscriptions(ctx: {
         await services.operations.subscribeSessionEvents(
             target,
             request.command,
-            {
-                signingKeyId: access.signingKeyId,
-                grant: access.grant,
-                expiresAt: access.expiresAtEpochMilliseconds,
-            },
+            { grant: access.grant, expiresAt: access.expiresAtEpochMilliseconds },
             observer,
             deadline.signal,
         );

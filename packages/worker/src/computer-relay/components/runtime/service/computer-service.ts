@@ -15,6 +15,7 @@ import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
 import type { SessionViewerIdentity } from "../../../../contracts/session-event-subscription.ts";
 import { logger } from "../../../../infra/logger.ts";
 import type { ComputerConnectionIdentity } from "../entity/computer-connection.ts";
+import { sessionViewerAccess } from "../entity/session-viewer-access.ts";
 import type { ComputerCredentialService } from "./computer-credential-service.ts";
 import { ComputerMessageScheduler, ComputerMessageSchedulerCapacityError } from "./computer-message-scheduler.ts";
 import type { ComputerOperationSocket, ComputerRelayActor, RelayPeers, RelaySocket } from "./computer-relay-actor.ts";
@@ -267,13 +268,16 @@ export class ComputerService {
     };
 
     /**
-     * Closes live Session views whose credential no longer authorizes them. The Relay checks as soon as access
-     * to the computer ends, and periodically while views remain connected.
+     * Closes live Session views whose access ended: their credential's term passed or its grant is no longer honored.
+     * The Relay checks as soon as access to the computer ends, at each viewer's term, and periodically while views
+     * remain connected.
      */
     readonly reauthorizeConnections = async (signal: AbortSignal): Promise<void> => {
         for (const viewer of this.#cx.gateways.peers.viewers()) {
-            if ((await this.#cx.services.credentials.authorizeViewer(viewer.identity, signal)) === "revoked") {
-                viewer.close(1008, "Session access revoked");
+            const grant = await this.#cx.services.credentials.authorizeViewer(viewer.identity, signal);
+            const access = sessionViewerAccess(viewer.identity, Date.now(), grant);
+            if (access.kind === "ended") {
+                viewer.close(access.code, access.reason);
             }
         }
     };
