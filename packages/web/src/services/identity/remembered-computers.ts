@@ -102,12 +102,7 @@ function forgetComputer(scope: IdentityScope): void {
     updateComputers(rememberedComputers().filter((computer) => computerKey(computer.scope) !== computerKey(scope)));
 }
 
-export function rememberComputerVisit(
-    scope: IdentityScope,
-    now: number,
-    destination?: ComputerDestination,
-    directory?: string,
-): void {
+export function rememberComputerVisit(scope: IdentityScope, now: number, destination?: ComputerDestination): void {
     const saved = withComputer(rememberedComputers(), scope);
     const current = saved.find((computer) => computerKey(computer.scope) === computerKey(scope));
     if (current === undefined) {
@@ -116,7 +111,6 @@ export function rememberComputerVisit(
     centralLocalStorage.write(computerPreferenceEntry(scope), {
         ...current,
         destination: destination ?? current.destination,
-        directory: directory?.slice(0, 4096) ?? current.directory,
         lastUsedAt: now,
     });
 }
@@ -204,7 +198,7 @@ function withComputer(saved: readonly RememberedComputer[], scope: IdentityScope
     // previously visited computers until the application opens this access.
     return [
         ...saved.slice(0, MAX_REMEMBERED_COMPUTERS - 1),
-        { scope, destination: { kind: "home" }, name: "", directory: null, lastUsedAt: 0 },
+        { scope, destination: { kind: "home" }, name: "", lastUsedAt: 0 },
     ];
 }
 
