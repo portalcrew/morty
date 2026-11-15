@@ -126,11 +126,11 @@ export class NativeSessionService {
             return await this.#executeNew(command, signal);
         }
         // The receipt answers the original intent before consulting the Agent or its mutable native directory.
-        const created = this.#creations.created(command.requestId, forkIntent(command), signal);
+        const created = await this.#creations.created(command.requestId, forkIntent(command), signal);
         if (created === null) {
             return await this.#executeNew(command, signal);
         }
-        const ready = await this.#currentReady(command.requestId, await created, signal);
+        const ready = await this.#currentReady(command.requestId, created, signal);
         return {
             kind: "native.session.result",
             requestId: command.requestId,
@@ -264,11 +264,12 @@ export class NativeSessionService {
             action === "fork"
                 ? nextForkTitle(sourceTitle, this.#sessions.listSessions(Number.MAX_SAFE_INTEGER))
                 : sourceTitle;
-        const open = async (): Promise<SessionReadyEvent> => {
+        const open = async (openSignal: AbortSignal): Promise<SessionReadyEvent> => {
             const opened = await this.#sessions.openNativeSession(
                 {
                     ...options,
                     cwd: target.cwd,
+                    signal: openSignal,
                 },
                 action === "fork"
                     ? { kind: "fork", sessionId: target.info.sessionId, title }
@@ -295,7 +296,7 @@ export class NativeSessionService {
                 ? await this.#creations.run(command.requestId, forkIntent(command), signal, open, (created) =>
                       this.#currentReady(command.requestId, created, signal),
                   )
-                : await open();
+                : await open(signal);
         return {
             ...envelope,
             action,
