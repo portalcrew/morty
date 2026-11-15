@@ -15,6 +15,10 @@ import { createSessionExecutionStore, pendingQuestionIds, type SessionExecutionS
 import { createSessionInteractionStore, type SessionInteractionStore } from "./session-interaction-store.ts";
 import { createSessionMessageQueueStore, type SessionMessageQueueStore } from "./session-message-queue-store.ts";
 import { createSessionOperationConnection, type SessionOperationConnection } from "./session-operation-connection.ts";
+import {
+    createSessionOperationFeedbackStore,
+    type SessionOperationFeedbackStore,
+} from "./session-operation-feedback.ts";
 import { createSessionRenameStore, type SessionRenameStore } from "./session-rename-store.ts";
 import { createSessionSettingsStore, type SessionSettingsStore } from "./session-settings-store.ts";
 import { createSessionTaskControlsStore, type SessionTaskControlsStore } from "./session-task-controls.ts";
@@ -36,6 +40,8 @@ export interface SessionPageState {
     readonly delivery: StoreApi<SessionDeliveryStore>;
     /** The Session's execution: the one place that orders what the Computer reports about it. */
     readonly execution: StoreApi<SessionExecutionStore>;
+    /** The failure of the last operation the user asked of the Session, which the composer reports. */
+    readonly feedback: StoreApi<SessionOperationFeedbackStore>;
     readonly interactions: StoreApi<SessionInteractionStore>;
     readonly queue: StoreApi<SessionMessageQueueStore>;
     readonly rename: StoreApi<SessionRenameStore>;
@@ -59,6 +65,8 @@ export function createSessionPageState(options: {
     const unsent = centralSessionStorage.read(unsentEntry);
     centralSessionStorage.remove(unsentEntry);
     const connection = createSessionOperationConnection();
+    const feedback = createSessionOperationFeedbackStore();
+    const { failed } = feedback.getState();
     const composer = createSessionComposerStore(computerId, sessionTarget, unsent);
     const delivery = createSessionDeliveryStore({
         lifetime: options.lifetime,
@@ -79,15 +87,15 @@ export function createSessionPageState(options: {
         },
         runtime: () => execution.getState().state,
     });
-    const tasks = createSessionTaskControlsStore({ clock: options.clock, sessionTarget, connection });
+    const tasks = createSessionTaskControlsStore({ clock: options.clock, sessionTarget, connection, failed });
     const queue = createSessionMessageQueueStore({
         sessionTarget,
         connection,
         withdrawn: (commandId) => delivery.getState().withdraw(commandId),
+        failed,
         returned: (message) => {
             // The queued message was written first, so it goes ahead of a draft the user started since.
-            tasks.getState().dismissFailure();
-            queue.getState().dismissFailure();
+            feedback.getState().dismiss();
             composer
                 .getState()
                 .returnMessage(
@@ -141,10 +149,11 @@ export function createSessionPageState(options: {
         composer,
         delivery,
         execution,
+        feedback,
         interactions,
         queue,
-        rename: createSessionRenameStore({ sessionTarget, connection, refreshTitle: options.refreshTitle }),
-        settings: createSessionSettingsStore({ computerId, sessionTarget, connection }),
+        rename: createSessionRenameStore({ sessionTarget, connection, refreshTitle: options.refreshTitle, failed }),
+        settings: createSessionSettingsStore({ computerId, sessionTarget, connection, failed }),
         tasks,
     };
 }
