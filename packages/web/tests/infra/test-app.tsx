@@ -5,7 +5,7 @@ import { act, render } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { flushSync } from "react-dom";
 import * as v from "valibot";
-import { afterAll, afterEach } from "vitest";
+import { afterAll, afterEach, beforeEach } from "vitest";
 import type { ControlledAgent } from "../../../../tests/support/fake-daemon/runtime.ts";
 import type { SetupHandoff } from "../../src/services/device/setup-handoff.ts";
 import { encodeIdentityScope, identityScopeSchema } from "../../src/services/identity/identity-scope-url.ts";
@@ -42,6 +42,23 @@ const environment = createChatWorkerEnvironment();
 const activeApps = new Set<TestApp>();
 /** The last unmet expectation of every view wait that has not settled. */
 const pendingViews = new Set<{ readonly lastFailure: () => unknown }>();
+/**
+ * The running test attempt's lifetime. What an attempt starts belongs to it: an application whose setup is still
+ * running when the attempt times out stops with it instead of connecting during the retry or a later test.
+ */
+let attempt = new AbortController();
+/** Application setups still running, which the attempt's cleanup waits for once it has ended them. */
+const setups = new Set<Promise<unknown>>();
+
+beforeEach(({ signal }) => {
+    const current = new AbortController();
+    // Vitest gives every attempt of a test the same context, so a retry's signal may already carry the abort of the
+    // attempt that timed out. Only an abort during this attempt ends it; its cleanup ends it in any case.
+    if (!signal.aborted) {
+        signal.addEventListener("abort", () => current.abort(signal.reason), { once: true });
+    }
+    attempt = current;
+});
 
 export interface TestApp extends Application {
     readonly reload: () => Promise<TestApp>;
@@ -65,37 +82,48 @@ export interface TestApp extends Application {
     readonly user: UserEvent;
 }
 
-export async function createTestApp(
-    options: {
-        readonly application?: Application;
-        readonly environment?: Environment;
-        readonly connectAgent?: boolean;
-        readonly clock?: Clock;
-        /** How the device moves setup to the agent's computer; defaults to the test browser's own. */
-        readonly setupHandoff?: SetupHandoff;
-        readonly agent?: ControlledAgent;
-        readonly agents?: readonly ControlledAgent[];
-        readonly sessionIds?: ReadonlySet<string>;
-        readonly page?:
-            | {
-                  readonly kind: "continue";
-                  readonly harness: string;
-                  readonly sessionId: string;
-                  /** The directory setup ran in; defaults to the system temporary directory. */
-                  readonly workspace?: string;
-                  /** Replaces the created transfer code, for example with one that cannot be redeemed. */
-                  readonly code?: (application: Application) => string;
-              }
-            | { readonly kind: "share"; readonly code?: (application: Application) => string }
-            | { readonly kind: "bootstrap"; readonly identity?: boolean }
-            | { readonly kind: "reload" }
-            | { readonly kind: "url"; readonly path: string }
-            | { readonly kind: "managed-session"; readonly harness: string; readonly sessionId: string }
-            | { readonly kind: "morty" };
-        readonly prepare?: (application: Application) => void | Promise<void>;
-    } = {},
-): Promise<TestApp> {
-    const current = options.application ?? (await (options.environment ?? (await environment)).createApplication());
+export function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
+    const setup = startTestApp(options, attempt.signal);
+    setups.add(setup);
+    const settled = (): void => {
+        setups.delete(setup);
+    };
+    setup.then(settled, settled);
+    return setup;
+}
+
+interface TestAppOptions {
+    readonly application?: Application;
+    readonly environment?: Environment;
+    readonly connectAgent?: boolean;
+    readonly clock?: Clock;
+    /** How the device moves setup to the agent's computer; defaults to the test browser's own. */
+    readonly setupHandoff?: SetupHandoff;
+    readonly agent?: ControlledAgent;
+    readonly agents?: readonly ControlledAgent[];
+    readonly sessionIds?: ReadonlySet<string>;
+    readonly page?:
+        | {
+              readonly kind: "continue";
+              readonly harness: string;
+              readonly sessionId: string;
+              /** The directory setup ran in; defaults to the system temporary directory. */
+              readonly workspace?: string;
+              /** Replaces the created transfer code, for example with one that cannot be redeemed. */
+              readonly code?: (application: Application) => string;
+          }
+        | { readonly kind: "share"; readonly code?: (application: Application) => string }
+        | { readonly kind: "bootstrap"; readonly identity?: boolean }
+        | { readonly kind: "reload" }
+        | { readonly kind: "url"; readonly path: string }
+        | { readonly kind: "managed-session"; readonly harness: string; readonly sessionId: string }
+        | { readonly kind: "morty" };
+    readonly prepare?: (application: Application) => void | Promise<void>;
+}
+
+async function startTestApp(options: TestAppOptions, owner: AbortSignal): Promise<TestApp> {
+    const current =
+        options.application ?? (await (options.environment ?? (await environment)).createApplication(owner));
     await options.prepare?.(current);
     const daemon =
         options.connectAgent === true
@@ -156,6 +184,8 @@ export async function createTestApp(
         );
         window.location.href = destination.href;
     }
+    // An attempt that ended while this setup ran never sees the page; the setup stops instead of mounting it.
+    owner.throwIfAborted();
     let container = document.createElement("div");
     // The same assembly production uses: one application, the continuation
     // router, toast host, and error boundary. Assembled once so a remount
@@ -345,6 +375,9 @@ afterEach(async ({ task }) => {
     // before closing the applications ends those waits.
     const unmet = task.result?.state === "fail" ? [...pendingViews].map((pending) => pending.lastFailure()) : [];
     await closeTestApps();
+    // End the attempt's lifetime, which stops any application setup still running, as one does after a timeout.
+    attempt.abort(new DOMException("The test attempt ended", "AbortError"));
+    await Promise.allSettled(setups);
     document.body.replaceChildren();
     document.documentElement.removeAttribute("data-input-modality");
     window.sessionStorage.clear();
