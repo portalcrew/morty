@@ -2,10 +2,10 @@ import { normalizePairingCode, validateToken } from "../../../../contracts/relay
 
 const COMPUTER_PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-async function deriveSecret(secret: string, computerId: string, idempotencyKey: string, purpose: string) {
+async function deriveSecret(secret: Uint8Array, computerId: string, idempotencyKey: string, purpose: string) {
     const key = await crypto.subtle.importKey(
         "raw",
-        new TextEncoder().encode(validateToken(secret)),
+        Uint8Array.from(secret),
         { hash: "SHA-256", name: "HMAC" },
         false,
         ["sign"],
@@ -36,7 +36,7 @@ export async function deriveComputerDaemonToken(
     // is not exposed by claim/redeem, so the printed code alone cannot derive a
     // long-lived credential offline after the server's replay deadline.
     const bytes = await deriveSecret(
-        pollTokenHash,
+        new TextEncoder().encode(validateToken(pollTokenHash)),
         computerId,
         `${computerId}\u0000${normalizePairingCode(pairingCode)}`,
         "computer-daemon-token-v1",
@@ -44,14 +44,15 @@ export async function deriveComputerDaemonToken(
     return `${computerId}_${encodeToken(bytes)}`;
 }
 
-export async function deriveComputerPairingSecrets(ownerToken: string, computerId: string, idempotencyKey: string) {
-    const codeBytes = await deriveSecret(ownerToken, computerId, idempotencyKey, "pairing-code");
+/** A pairing's secrets derive from the computer's durable key and its request, so a retry derives the same ones. */
+export async function deriveComputerPairingSecrets(key: Uint8Array, computerId: string, idempotencyKey: string) {
+    const codeBytes = await deriveSecret(key, computerId, idempotencyKey, "pairing-code");
     let code = "";
     for (const byte of codeBytes.slice(0, 20)) {
         code += COMPUTER_PAIRING_CODE_ALPHABET.charAt(byte % COMPUTER_PAIRING_CODE_ALPHABET.length);
     }
     return {
         pairingCode: code.match(/.{1,4}/g)?.join("-") ?? code,
-        pollToken: encodeToken(await deriveSecret(ownerToken, computerId, idempotencyKey, "poll-token")),
+        pollToken: encodeToken(await deriveSecret(key, computerId, idempotencyKey, "poll-token")),
     };
 }

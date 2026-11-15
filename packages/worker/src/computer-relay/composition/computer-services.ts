@@ -16,24 +16,24 @@ import { type ApplicationContext, createApplicationDependencies } from "./applic
  * the object does not hold leaves no storage behind.
  */
 export class ComputerServices {
-    readonly #storage: DurableObjectStorage;
     readonly #owns: (id: string) => boolean;
     readonly #endAccess: IdentityOperations["commitAccessEnd"];
+    readonly #credentialKey: IdentityOperations["credentialKey"];
     readonly #runtime: (computerId: string) => ComputerBackendService;
     readonly #database: () => DurableObjectDatabase;
     readonly #account: Pick<DurableComputerAccount, "isActive">;
     /** Commits access changes with their connection checks inside the owning object. */
     constructor(
-        storage: DurableObjectStorage,
         owns: (id: string) => boolean,
         endAccess: IdentityOperations["commitAccessEnd"],
+        credentialKey: IdentityOperations["credentialKey"],
         runtime: (computerId: string) => ComputerBackendService,
         database: () => DurableObjectDatabase,
         account: Pick<DurableComputerAccount, "isActive">,
     ) {
-        this.#storage = storage;
         this.#owns = owns;
         this.#endAccess = endAccess;
+        this.#credentialKey = credentialKey;
         this.#runtime = runtime;
         this.#database = database;
         this.#account = account;
@@ -64,32 +64,6 @@ export class ComputerServices {
         const parsed = v.parse(computerBootstrap, input);
         const dependencies = await this.#application(this.#own(parsed.computer.computerId), env, signal);
         return await dependencies.services.management.initializeComputer(parsed.computer, signal, parsed.origin);
-    };
-
-    readonly #credentialKey = async (signal: AbortSignal): Promise<Uint8Array> => {
-        signal.throwIfAborted();
-        const result = await this.#storage.transaction(async (storage) => {
-            // The stored name predates created identities; renaming it would change credentials a retry derives.
-            const stored: unknown = await storage.get("replacement-key-v1");
-            signal.throwIfAborted();
-            if (stored !== undefined) {
-                return v.parse(
-                    v.pipe(
-                        v.instance(Uint8Array),
-                        v.check((key) => key.length === 32),
-                    ),
-                    stored,
-                );
-            }
-            // Independent server entropy keeps a retired predecessor token or a redemption key from deriving its
-            // credential offline.
-            // This key survives restarts, deployment credential rotation, and retries; no bearer token is stored.
-            const key = crypto.getRandomValues(new Uint8Array(32));
-            await storage.put("replacement-key-v1", key);
-            return key;
-        });
-        signal.throwIfAborted();
-        return result;
     };
 
     readonly #application = async (

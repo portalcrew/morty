@@ -1,6 +1,7 @@
 import type { RelayBindings } from "../../contracts/relay-bindings.ts";
 import type { ComputerAccessService } from "../components/management/service/computer-access-service.ts";
 import { ComputerConnectionService } from "../components/management/service/computer-connection-service.ts";
+import type { IdentityOperations } from "../components/management/service/identity-operations.ts";
 import { PairingDirectoryService } from "../components/management/service/pairing-directory-service.ts";
 import { ComputerIdentityService } from "../components/management/service/pairing-identity-service.ts";
 import { PairingService } from "../components/management/service/pairing-service.ts";
@@ -16,6 +17,7 @@ export function createComputerRelayServices(
     store: ComputerRelayStore,
     runtime: ComputerService,
     access: ComputerAccessService,
+    credentialKey: IdentityOperations["credentialKey"],
 ) {
     const sessionAccess = new SessionAccessService(
         access,
@@ -24,6 +26,7 @@ export function createComputerRelayServices(
     const pairings = new PairingDirectoryService({
         computerId,
         store,
+        credentialKey,
         services: {
             identities: new ComputerIdentityService(computerId, store, access),
             computerAccounts: access,

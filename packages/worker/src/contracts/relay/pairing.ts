@@ -109,7 +109,7 @@ export function normalizePairingCode(code: string): string {
     return normalized;
 }
 
-export async function hashSecret(secret: string): Promise<string> {
+async function hashSecret(secret: string): Promise<string> {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
