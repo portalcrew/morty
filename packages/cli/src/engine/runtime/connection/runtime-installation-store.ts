@@ -10,18 +10,14 @@ import {
 } from "../../storage/installation/installation-files.ts";
 import { tryLock } from "../../storage/installation/local-lock.ts";
 import { validateLocalPath } from "../../util/filesystem/private-path.ts";
-import {
-    type ComputerConnectionActivation,
-    type ComputerConnectionInput,
-    SavedComputerConnection,
-} from "./computer-connection.ts";
+import { type ComputerConnectionInput, SavedComputerConnection } from "./computer-connection.ts";
 import type { ComputerCredentials, HeldComputerCredentials } from "./computer-credentials.ts";
 import { readRelayOrigin } from "./relay-origin.ts";
 
 const PAIRING_GENERATION_PATTERN = /^mcn_[a-f0-9]{32}$/;
 const COMPUTER_CREDENTIAL_PATTERN = /^[a-zA-Z0-9_-]{32,256}$/;
 const CONNECTION_KEYS: readonly string[] = [
-    "activation",
+    "revoked",
     "computerId",
     "pairingGeneration",
     "defaultWorkspace",
@@ -81,18 +77,28 @@ function pairingGeneration(): string {
     return `mcn_${randomUUID().replaceAll("-", "")}`;
 }
 
-function decodeSavedConnection(value: Readonly<Record<string, unknown>>): SavedComputerConnection {
+/** A pairing saved by an earlier release recorded its revocation as `activation: "stopped"`; its next write saves it anew. */
+function currentConnectionRecord(value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+    if (!Object.hasOwn(value, "activation") || Object.hasOwn(value, "revoked")) {
+        return value;
+    }
+    const { activation, ...rest } = value;
+    return { ...rest, revoked: activation === "stopped" ? true : activation === "active" ? false : activation };
+}
+
+function decodeSavedConnection(stored: Readonly<Record<string, unknown>>): SavedComputerConnection {
+    const value = currentConnectionRecord(stored);
     if (!hasExactKeys(value, CONNECTION_KEYS)) {
         throw new RuntimeInstallationStoreError("invalid_connection", "The saved Runtime connection is invalid");
     }
-    const activation = value["activation"];
+    const revoked = value["revoked"];
     const pairingGeneration = value["pairingGeneration"];
     const defaultWorkspace = value["defaultWorkspace"];
     const computerId = value["computerId"];
     const relayOrigin = value["relayOrigin"];
     const credentials = value["credentials"];
     if (
-        (activation !== "active" && activation !== "stopped") ||
+        typeof revoked !== "boolean" ||
         typeof computerId !== "string" ||
         typeof pairingGeneration !== "string" ||
         typeof defaultWorkspace !== "string" ||
@@ -105,7 +111,7 @@ function decodeSavedConnection(value: Readonly<Record<string, unknown>>): SavedC
         throw new RuntimeInstallationStoreError("invalid_connection", "The saved Runtime connection is invalid");
     }
     return new SavedComputerConnection(
-        activation,
+        revoked,
         validatePairingGeneration(pairingGeneration),
         validateIdentifier(computerId),
         defaultWorkspace,
@@ -234,7 +240,7 @@ export class RuntimeInstallationStore {
         signal: AbortSignal,
     ): Promise<SavedComputerConnection> => {
         const stored = new SavedComputerConnection(
-            "active",
+            false,
             pairingGeneration(),
             validateIdentifier(input.computerId),
             input.defaultWorkspace,
@@ -258,16 +264,19 @@ export class RuntimeInstallationStore {
         }
     };
 
-    readonly setConnectionActivation = async (
-        pairingGeneration: string,
-        activation: ComputerConnectionActivation,
-        signal: AbortSignal,
-    ): Promise<void> => {
+    /**
+     * Records that the relay revoked the pairing, so it is never served again; only a new pairing replaces it. A pairing
+     * that is no longer selected is left alone, and recording it again changes nothing.
+     */
+    readonly recordRevocation = async (pairingGeneration: string, signal: AbortSignal): Promise<void> => {
         await this.changePairing(async () => {
             const connection = await this.readConnection(pairingGeneration, signal);
+            if (connection.revoked) {
+                return;
+            }
             await this.overwriteConnection(
                 new SavedComputerConnection(
-                    activation,
+                    true,
                     connection.pairingGeneration,
                     connection.computerId,
                     connection.defaultWorkspace,
@@ -281,7 +290,7 @@ export class RuntimeInstallationStore {
 
     /**
      * Pairing identity and its rotating credentials commit together. Every writer holds the same process-safe lock
-     * and re-reads the selected pairing, so activation cannot restore old credentials and an old Computer cannot
+     * and re-reads the selected pairing, so recording a revocation cannot restore old credentials and an old Computer cannot
      * overwrite a replacement. A rejected completion leaves the prepared successor durable for a safe retry.
      */
     readonly computerCredentials = (pairingGeneration: string): ComputerCredentials => ({
@@ -323,7 +332,7 @@ export class RuntimeInstallationStore {
     ): Promise<void> => {
         await this.overwriteConnection(
             new SavedComputerConnection(
-                connection.activation,
+                connection.revoked,
                 connection.pairingGeneration,
                 connection.computerId,
                 connection.defaultWorkspace,
@@ -341,7 +350,7 @@ export class RuntimeInstallationStore {
         await writeJsonAtomically(
             this.pairingPath,
             {
-                activation: connection.activation,
+                revoked: connection.revoked,
                 computerId: connection.computerId,
                 pairingGeneration: connection.pairingGeneration,
                 defaultWorkspace: connection.defaultWorkspace,

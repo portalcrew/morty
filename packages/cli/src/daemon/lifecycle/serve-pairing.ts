@@ -3,16 +3,27 @@ import { type MortyComputerPairingOptions, pairComputerConnection } from "../../
 import { reloadDaemon } from "./daemon.ts";
 import { ensureDaemon, type RunningDaemon } from "./daemon-client.ts";
 
-/** Activates the installation's current pairing and has a daemon serve it, starting one when none runs. */
+/** The relay revoked the selected pairing: serving it would only be revoked again, and only setup pairs anew. */
+export class ComputerPairingRevokedError extends Error {
+    readonly code = "computer_pairing_revoked";
+
+    constructor() {
+        super(
+            "Morty disconnected this Computer because its connection key was used somewhere else. Run `morty setup` on this computer to pair it again.",
+        );
+        this.name = "ComputerPairingRevokedError";
+    }
+}
+
+/** Has a daemon serve the installation's current pairing, starting one when none runs. A revoked pairing is refused. */
 export async function serveCurrentPairing(
     installation: RuntimeInstallationStore,
     entry: string,
     environment: Readonly<NodeJS.ProcessEnv>,
     signal: AbortSignal,
 ): Promise<RunningDaemon> {
-    const pairing = await installation.currentConnection(signal);
-    if (pairing !== null) {
-        await installation.setConnectionActivation(pairing.pairingGeneration, "active", signal);
+    if ((await installation.currentConnection(signal))?.revoked === true) {
+        throw new ComputerPairingRevokedError();
     }
     const daemon = await ensureDaemon(installation.stateDirectory, entry, environment, signal);
     await reloadDaemon(installation.stateDirectory, signal);
@@ -28,7 +39,6 @@ export async function pairThisComputer(
     signal: AbortSignal,
 ): Promise<void> {
     await ensureDaemon(installation.stateDirectory, entry, environment, signal);
-    const paired = await pairComputerConnection(installation, pairing, signal, environment);
-    await installation.setConnectionActivation(paired.pairingGeneration, "active", signal);
+    await pairComputerConnection(installation, pairing, signal, environment);
     await reloadDaemon(installation.stateDirectory, signal);
 }

@@ -86,6 +86,36 @@ describe("Morty daemon lifecycle", () => {
         }
     });
 
+    it("Given the Relay revoked this computer's pairing, When the user runs morty start, Then it tells them to run setup again instead of serving the Computer", async () => {
+        const directory = await mkdtemp(join(tmpdir(), "morty-start-revoked-"));
+        temporaryDirectories.push(directory);
+        const workspace = join(directory, "workspace");
+        await mkdir(workspace);
+        const environment = { ...process.env, MORTY_STATE_DIRECTORY: join(directory, "state") };
+        const signal = AbortSignal.timeout(60_000);
+        const installation = await openMortyInstallation(signal, environment);
+        const connection = await installation.saveConnection(
+            {
+                computerId: "channel_start_revoked",
+                defaultWorkspace: workspace,
+                relayOrigin: new URL("http://127.0.0.1:1"),
+                computerCredential: "a".repeat(43),
+            },
+            signal,
+        );
+        await installation.recordRevocation(connection.pairingGeneration, signal);
+
+        try {
+            const result = await runCli(["start"], environment, signal);
+
+            expect(result.code).toBe(1);
+            expect(result.stdout).toBe("");
+            expect(result.stderr).toContain("morty setup");
+        } finally {
+            await runCli(["quit"], environment, AbortSignal.timeout(10_000)).catch(() => undefined);
+        }
+    });
+
     it("Given another control client remains connected, When the CLI quits, Then the daemon exits", async () => {
         const stateRoot = await mkdtemp(join(tmpdir(), "morty-manager-quit-"));
         temporaryDirectories.push(stateRoot);

@@ -7,11 +7,10 @@ export interface ComputerConnectionInput {
     readonly computerCredential: string;
 }
 
-export type ComputerConnectionActivation = "active" | "stopped";
-
-/** A saved pairing: the identity a Computer presents to the relay, and whether it should run. */
+/** A saved pairing: the identity a Computer presents to the relay, and whether the relay revoked it. */
 export class SavedComputerConnection {
-    readonly activation: ComputerConnectionActivation;
+    /** The relay revoked this pairing; it never connects again, and only a new pairing replaces it. */
+    readonly revoked: boolean;
     readonly computerId: string;
     /** Fences work from an earlier pairing, even when this computer is paired again with the same identity. */
     readonly pairingGeneration: string;
@@ -21,14 +20,14 @@ export class SavedComputerConnection {
     readonly credentials: HeldComputerCredentials;
 
     constructor(
-        activation: ComputerConnectionActivation,
+        revoked: boolean,
         pairingGeneration: string,
         computerId: string,
         defaultWorkspace: string,
         relayOrigin: URL,
         credentials: HeldComputerCredentials,
     ) {
-        this.activation = activation;
+        this.revoked = revoked;
         this.computerId = computerId;
         this.pairingGeneration = pairingGeneration;
         this.defaultWorkspace = defaultWorkspace;
