@@ -65,7 +65,6 @@ export type ContinueState =
 
 export interface ContinueStore {
     readonly state: ContinueState;
-    readonly continueHref: string | null;
     /** Aborts the in-flight redeem or session-open attempt, if any. */
     readonly cancel: () => void;
     readonly redeem: (signal: AbortSignal) => Promise<void>;
@@ -146,7 +145,6 @@ export const createContinueStore = (transport: ApiTransport) => {
         ) => {
             const message = formatError(cause, "Check your connection and try again.");
             set({
-                continueHref: rememberedComputers().length > 0 ? "/" : null,
                 state:
                     state.kind === "identity-redeeming"
                         ? { kind: "failed", code: state.code, message }
@@ -228,7 +226,6 @@ export const createContinueStore = (transport: ApiTransport) => {
         };
         return {
             diagnostics: null,
-            continueHref: rememberedComputers().length > 0 ? "/" : null,
             enterMorty: () => {
                 const state = get().state;
                 if (state.kind === "session-failed") {
@@ -328,7 +325,6 @@ export const createContinueStore = (transport: ApiTransport) => {
                             return;
                         }
                         set({
-                            continueHref: rememberedComputers().length > 0 ? "/" : null,
                             state: {
                                 kind: "link-unavailable",
                                 recovery: state.kind === "session-opening" ? "setup" : "share",

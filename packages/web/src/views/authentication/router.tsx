@@ -1,5 +1,6 @@
 import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/react-router";
 import { useStore } from "zustand";
+import { lastComputerHref } from "../../services/identity/remembered-computers.ts";
 import type { ContinueStoreApi } from "../../view-models/authentication/continue-store.ts";
 import type { MortyApplication } from "../../view-models/morty-application.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
@@ -17,10 +18,15 @@ function ContinuePageLive({
 }) {
     // The application creates the redeem with itself; the page only
     // subscribes.
-    const { retry, enterMorty, state, diagnostics, continueHref } = useStore(continuation);
+    const { retry, enterMorty, state, diagnostics } = useStore(continuation);
     return (
         <>
-            <ContinuePageContent continueHref={continueHref} enterMorty={enterMorty} retry={retry} state={state} />
+            <ContinuePageContent
+                continueHref={lastComputerHref()}
+                enterMorty={enterMorty}
+                retry={retry}
+                state={state}
+            />
             <BugReportButton appearance="floating" daemonSource={diagnostics} dialog={application.bugReportDialog} />
         </>
     );

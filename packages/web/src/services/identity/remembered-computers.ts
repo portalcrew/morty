@@ -132,6 +132,14 @@ export function computerAddress(scope: IdentityScope, destination: ComputerDesti
     return `/chat?${query}`;
 }
 
+/**
+ * Where "Back to your last computer" leads: the root, which opens the computer this browser used most recently. Null
+ * when the browser remembers none.
+ */
+export function lastComputerHref(): string | null {
+    return rememberedComputers().length > 0 ? "/" : null;
+}
+
 /** Marks an address this browser built from what it remembers, rather than a link someone gave the user. */
 const RESUME_PARAMETER = "resume";
 
