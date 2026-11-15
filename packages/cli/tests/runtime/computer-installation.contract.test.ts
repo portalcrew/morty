@@ -15,9 +15,10 @@ import { WebSocketServer } from "ws";
 import { RuntimeInstallationStore } from "../../src/engine/runtime/connection/runtime-installation-store.ts";
 import { TestComputerHost } from "../support/computer-host.ts";
 
-it("Given an explicit data directory, When a host saves a connection and reopens its store, Then saved connections survive", async () => {
+it("Given an explicit data directory, When a host saves a connection and reopens its store, Then saved connections survive", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-engine-api-"));
-    const signal = AbortSignal.timeout(5_000);
     const params = { dataDirectory: join(directory, "data"), agentLaunchEnvironment: { PATH: "" } };
     try {
         const store = await RuntimeInstallationStore.open(params.dataDirectory, signal);
@@ -40,9 +41,10 @@ it("Given an explicit data directory, When a host saves a connection and reopens
     }
 });
 
-it("Given a fresh installation, When a host concurrently saves connections, Then only one complete pairing becomes active", async () => {
+it("Given a fresh installation, When a host concurrently saves connections, Then only one complete pairing becomes active", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-engine-concurrent-"));
-    const signal = AbortSignal.timeout(5_000);
     try {
         const manager = await RuntimeInstallationStore.open(directory, signal);
         const results = await Promise.allSettled(
@@ -75,7 +77,9 @@ it("Given a fresh installation, When a host concurrently saves connections, Then
     }
 });
 
-it("Given a saved connection with an opaque credential, When a host serves and cancels its loop, Then it publishes its Agent directory, disconnects before completion, and presents its saved successor next time", async () => {
+it("Given a saved connection with an opaque credential, When a host serves and cancels its loop, Then it publishes its Agent directory, disconnects before completion, and presents its saved successor next time", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-engine-loop-"));
     const catalogs: unknown[] = [];
     const requests: string[] = [];
@@ -113,7 +117,6 @@ it("Given a saved connection with an opaque credential, When a host serves and c
         });
     });
     await listen(http);
-    const deadline = AbortSignal.timeout(20_000);
     try {
         const origin = `http://127.0.0.1:${port(http)}`;
         const engine = new TestComputerHost({
@@ -125,7 +128,7 @@ it("Given a saved connection with an opaque credential, When a host serves and c
                 MORTY_PI_PATH: "",
             },
         });
-        const manager = await RuntimeInstallationStore.open(join(directory, "data"), deadline);
+        const manager = await RuntimeInstallationStore.open(join(directory, "data"), signal);
         const saved = await manager.saveConnection(
             {
                 computerId: "loop_channel",
@@ -133,13 +136,13 @@ it("Given a saved connection with an opaque credential, When a host serves and c
                 relayOrigin: new URL(origin),
                 computerCredential: "a".repeat(73),
             },
-            deadline,
+            signal,
         );
         const shutdown = new AbortController();
         let online = false;
         await engine.runLoop({
             pairingGeneration: saved.pairingGeneration,
-            signal: AbortSignal.any([deadline, shutdown.signal]),
+            signal: AbortSignal.any([signal, shutdown.signal]),
             onConnectionStatus: (status) => {
                 if (status === "online") {
                     online = true;
@@ -155,16 +158,14 @@ it("Given a saved connection with an opaque credential, When a host serves and c
         expect(catalogs).toEqual([expect.objectContaining({ agents: [] })]);
         const [savedSuccessor] = successors;
         expect(savedSuccessor).toMatch(/^[A-Za-z0-9_-]{73}$/u);
-        expect(await manager.currentConnection(deadline)).toEqual({
+        expect(await manager.currentConnection(signal)).toEqual({
             ...saved,
             credentials: { current: savedSuccessor, successor: null },
         });
 
         disconnected = Promise.withResolvers<void>();
         revoke = true;
-        await expect(
-            engine.runLoop({ pairingGeneration: saved.pairingGeneration, signal: deadline }),
-        ).rejects.toMatchObject({
+        await expect(engine.runLoop({ pairingGeneration: saved.pairingGeneration, signal })).rejects.toMatchObject({
             code: "computer_relay_revoked",
         });
         await disconnected.promise;

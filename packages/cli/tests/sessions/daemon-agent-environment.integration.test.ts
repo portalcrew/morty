@@ -30,7 +30,7 @@ async function nextMessageOfKind(socket: EncryptedDaemonPeer, kind: string): Pro
 }
 
 /** Starts a daemon whose Computer keeps its data in an installation directory, launches its Agent, and reads what the Agent inherited. */
-async function inheritedStateDirectory(daemonEnvironment: NodeJS.ProcessEnv): Promise<unknown> {
+async function inheritedStateDirectory(daemonEnvironment: NodeJS.ProcessEnv, signal: AbortSignal): Promise<unknown> {
     const directory = await mkdtemp(join(tmpdir(), "morty-agent-environment-"));
     const installationData = join(
         directory,
@@ -45,11 +45,7 @@ async function inheritedStateDirectory(daemonEnvironment: NodeJS.ProcessEnv): Pr
     const record = join(directory, "agent-environment.json");
     await Promise.all([mkdir(installationData, { recursive: true }), mkdir(workspace)]);
 
-    const gateway = await createEncryptedDaemonGateway(
-        installationData,
-        "channel_environment",
-        AbortSignal.timeout(60_000),
-    );
+    const gateway = await createEncryptedDaemonGateway(installationData, "channel_environment", signal);
     const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
     const relay = createServer((request, response) => {
         request.resume();
@@ -118,18 +114,18 @@ async function inheritedStateDirectory(daemonEnvironment: NodeJS.ProcessEnv): Pr
 
 test("Given a daemon started with a custom state root, When it launches an Agent, Then the Agent inherits that root rather than the Computer's installation data", {
     timeout: 60_000,
-}, async () => {
+}, async ({ signal }) => {
     const root = join(tmpdir(), "morty-custom-root");
     const environment = { ...process.env, MORTY_STATE_DIRECTORY: root };
 
-    expect(await inheritedStateDirectory(environment)).toEqual({ stateDirectory: root });
+    expect(await inheritedStateDirectory(environment, signal)).toEqual({ stateDirectory: root });
 });
 
 test("Given a daemon started with the default state root, When it launches an Agent, Then the Agent's environment leaves the root unset so Morty there uses the same default", {
     timeout: 60_000,
-}, async () => {
+}, async ({ signal }) => {
     const environment = { ...process.env };
     delete environment["MORTY_STATE_DIRECTORY"];
 
-    expect(await inheritedStateDirectory(environment)).toEqual({ stateDirectory: null });
+    expect(await inheritedStateDirectory(environment, signal)).toEqual({ stateDirectory: null });
 });

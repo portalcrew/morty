@@ -10,7 +10,9 @@ import { testAgentDefinition } from "../support/agent-definition.ts";
 import { SessionRuntimeFixture } from "../support/session-runtime.ts";
 import { UnretainedExternalContentStore } from "../support/unretained-external-content-store.ts";
 
-test("Given Codex initialization fails once, When the user creates a conversation, Then the same operation recovers and returns the new conversation", async () => {
+test("Given Codex initialization fails once, When the user creates a conversation, Then the same operation recovers and returns the new conversation", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-11T00:00:00Z"));
     const directory = await mkdtemp(join(tmpdir(), "morty-codex-initialize-"));
@@ -51,9 +53,10 @@ createInterface({ input: process.stdin }).on("line", line => {
             { mode: 0o700 },
         );
         const agent = testAgentDefinition("codex", "Codex", command, {});
-        await expect(
-            sessions.createNativeSession({ agent, cwd: directory, signal: AbortSignal.timeout(30_000) }),
-        ).resolves.toEqual({ harness: "codex", sessionId: "recovered-thread" });
+        await expect(sessions.createNativeSession({ agent, cwd: directory, signal })).resolves.toEqual({
+            harness: "codex",
+            sessionId: "recovered-thread",
+        });
     } finally {
         await sessions.close();
         await rm(directory, { recursive: true, force: true });

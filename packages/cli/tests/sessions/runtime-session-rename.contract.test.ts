@@ -1,9 +1,11 @@
 import { expect, it } from "vitest";
 import { startTestRelay } from "../support/relay.ts";
 
-it("Given a prompted local conversation, When the Session is renamed, Then the directory and the controlled Agent show the new title", async () => {
+it("Given a prompted local conversation, When the Session is renamed, Then the directory and the controlled Agent show the new title", async ({
+    signal,
+}) => {
     const cancellation = new AbortController();
-    await using relay = await startTestRelay();
+    await using relay = await startTestRelay(signal);
     try {
         const owner = await relay.createOwner();
         const runtime = await relay.connectAgent(owner.computerId);

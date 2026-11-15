@@ -13,12 +13,11 @@ import { createForkLossProxy } from "./fixtures/fork-loss-proxy.ts";
 
 afterEach(() => vi.useRealTimers());
 
-test.each(["request", "result"] as const)(
+test.for(["request", "result"] as const)(
     "Given the Computer Fork %s is lost, When the operation is retried after reconnect, Then one Fork exists and a completed Fork remains recoverable without its source",
-    async (loss) => {
+    async (loss, { signal }) => {
         vi.useFakeTimers({ now: new Date("2026-10-28T02:00:00Z"), toFake: ["Date"] });
-        await using relay = await startTestRelay();
-        const signal = new AbortController().signal;
+        await using relay = await startTestRelay(signal);
         const owner = await relay.createOwner();
         await using proxy = await createForkLossProxy(relay.baseUrl, loss);
         const disconnected = Promise.withResolvers<void>();
@@ -88,10 +87,11 @@ test.each(["request", "result"] as const)(
     },
 );
 
-test("Given a Fork succeeds but its response is lost, When the same operation is retried, Then its original Session is returned", async () => {
+test("Given a Fork succeeds but its response is lost, When the same operation is retried, Then its original Session is returned", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ now: new Date("2026-10-27T12:00:00Z"), toFake: ["Date"] });
-    await using relay = await startTestRelay();
-    const signal = new AbortController().signal;
+    await using relay = await startTestRelay(signal);
     const owner = await relay.createOwner();
     const runtime = await relay.connectAgent(
         owner.computerId,

@@ -94,8 +94,10 @@ describe("acp interactions", () => {
         }
     });
 
-    it("Given ACP requests permission followed by a form, When the user allows and submits a branch, Then both interactions remain correlated and the prompt consumes the response", async () => {
-        await using session = await createControlledSession();
+    it("Given ACP requests permission followed by a form, When the user allows and submits a branch, Then both interactions remain correlated and the prompt consumes the response", async ({
+        signal,
+    }) => {
+        await using session = await createControlledSession(signal);
         const result = await completeAcpControls(session);
         expect(result.permission).toMatchObject({
             commandId: "controls-command",
@@ -150,8 +152,10 @@ describe("acp interactions", () => {
         );
     });
 
-    it("Given a form whose defaults pre-select all of its many options, When it is requested, Then every default selection reaches the user", async () => {
-        await using session = await createControlledSession();
+    it("Given a form whose defaults pre-select all of its many options, When it is requested, Then every default selection reaches the user", async ({
+        signal,
+    }) => {
+        await using session = await createControlledSession(signal);
         const running = session.manager.runPrompt({
             ...session.request,
             commandId: "many-defaults-command",
@@ -182,8 +186,10 @@ describe("acp interactions", () => {
         await running;
     });
 
-    it("Given URL elicitation, When the user consents and the agent reports completion, Then the out-of-band interaction stays correlated through completion", async () => {
-        await using session = await createControlledSession();
+    it("Given URL elicitation, When the user consents and the agent reports completion, Then the out-of-band interaction stays correlated through completion", async ({
+        signal,
+    }) => {
+        await using session = await createControlledSession(signal);
         const running = session.manager.runPrompt({
             ...session.request,
             commandId: "url-command",

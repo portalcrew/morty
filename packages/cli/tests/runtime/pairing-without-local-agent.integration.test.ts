@@ -81,7 +81,9 @@ function agentlessEnvironment(stateDirectory: string): Readonly<NodeJS.ProcessEn
 
 /** Runs the built CLI with `input` piped to its standard input. */
 describe("pairing a computer without a local Agent", () => {
-    it("Given no supported Agent is discoverable, When the computer redeems its pairing, Then it pairs and advertises an empty Agent directory", async () => {
+    it("Given no supported Agent is discoverable, When the computer redeems its pairing, Then it pairs and advertises an empty Agent directory", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-unattended-computer-"));
         const relay = await createPairingRelay();
 
@@ -99,13 +101,13 @@ describe("pairing a computer without a local Agent", () => {
                     computerId: "unattended-computer",
                     relayOrigin: relay.origin,
                 },
-                AbortSignal.timeout(20_000),
+                signal,
             );
 
             expect(
-                await (await RuntimeInstallationStore.open(stateDirectory, AbortSignal.timeout(5_000))).readConnection(
+                await (await RuntimeInstallationStore.open(stateDirectory, signal)).readConnection(
                     paired.pairingGeneration,
-                    AbortSignal.timeout(5_000),
+                    signal,
                 ),
             ).toMatchObject({
                 computerId: "unattended-computer",
@@ -121,7 +123,9 @@ describe("pairing a computer without a local Agent", () => {
         }
     });
 
-    it("Given an unattended computer is already paired, When another Engine reads its saved connection, Then pairing is retained without redeeming again", async () => {
+    it("Given an unattended computer is already paired, When another Engine reads its saved connection, Then pairing is retained without redeeming again", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-unattended-resume-"));
         const relay = await createPairingRelay();
         const environment = agentlessEnvironment(stateDirectory);
@@ -139,12 +143,13 @@ describe("pairing a computer without a local Agent", () => {
                     computerId: "unattended-computer",
                     relayOrigin: relay.origin,
                 },
-                AbortSignal.timeout(20_000),
+                signal,
             );
 
-            const resumed = await (
-                await RuntimeInstallationStore.open(stateDirectory, AbortSignal.timeout(20_000))
-            ).readConnection(paired.pairingGeneration, AbortSignal.timeout(20_000));
+            const resumed = await (await RuntimeInstallationStore.open(stateDirectory, signal)).readConnection(
+                paired.pairingGeneration,
+                signal,
+            );
 
             expect(resumed.pairingGeneration).toBe(paired.pairingGeneration);
             expect(resumed).toEqual(paired);

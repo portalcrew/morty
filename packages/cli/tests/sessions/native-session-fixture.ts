@@ -183,7 +183,7 @@ export async function fixture(
             const target = await external.createNativeSession({
                 agent,
                 cwd,
-                signal: AbortSignal.timeout(10_000),
+                signal: new AbortController().signal,
             });
             await external.runPrompt({
                 agent,

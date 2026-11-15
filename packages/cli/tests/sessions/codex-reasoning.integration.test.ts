@@ -10,7 +10,9 @@ import type { CodexSettings } from "../../src/engine/acp/harness/codex/settings.
 import { testAgentDefinition } from "../support/agent-definition.ts";
 import { previewCodexHistory } from "../support/codex-history-preview.ts";
 
-it("Given Codex streams detailed reasoning and a summary, When Morty forwards the turn, Then Thinking keeps the reasoning stream", async () => {
+it("Given Codex streams detailed reasoning and a summary, When Morty forwards the turn, Then Thinking keeps the reasoning stream", async ({
+    signal,
+}) => {
     const updates: SessionNotification["update"][] = [];
     let resolveTurnStart: ((value: unknown) => void) | undefined;
     const turnStart = new Promise<unknown>((resolve) => {
@@ -35,7 +37,7 @@ it("Given Codex streams detailed reasoning and a summary, When Morty forwards th
         threadId: () => "thread",
     });
 
-    const running = agent.prompt([], AbortSignal.timeout(10_000), []);
+    const running = agent.prompt([], signal, []);
     resolveTurnStart?.({ turn: { id: "turn", status: "inProgress" } });
     await Promise.resolve();
     await Promise.resolve();

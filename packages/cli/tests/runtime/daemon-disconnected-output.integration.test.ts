@@ -247,7 +247,7 @@ function answer(events: readonly SessionLiveEvent[], sessionTarget: NativeSessio
         .join("");
 }
 
-async function startRuntime() {
+async function startRuntime(signal: AbortSignal) {
     const directory = await mkdtemp(join(tmpdir(), "morty-disconnected-output-"));
     const workspace = join(directory, "workspace");
     await mkdir(workspace);
@@ -256,7 +256,7 @@ async function startRuntime() {
         response.writeHead(request.method === "PUT" ? 204 : 404).end();
     });
     const relay = new WebSocketServer({ server: http });
-    const gateway = await createEncryptedDaemonGateway(directory, "disconnected-output", AbortSignal.timeout(120_000));
+    const gateway = await createEncryptedDaemonGateway(directory, "disconnected-output", signal);
     const peers: RelayPeer[] = [];
     const waiters: Array<(peer: RelayPeer) => void> = [];
     relay.on("connection", (socket) => {
@@ -381,7 +381,7 @@ beforeEach(() => {
 
 afterEach(() => vi.useRealTimers());
 
-test.each([
+test.for([
     {
         label: "a single reasoning block above the wire string limit",
         chunks: ["r".repeat(1_000_001)],
@@ -441,8 +441,8 @@ test.each([
     },
 ])(
     "Given $label, When a client loads history, Then projected reasoning retains only its last 24 KiB after wire bounding without changing answers",
-    async ({ chunks, live, expected, meta }) => {
-        await using runtime = await startRuntime();
+    async ({ chunks, live, expected, meta }, { signal }) => {
+        await using runtime = await startRuntime(signal);
         const turn = await runtime.prompt(runtime.initial, "reasoning-history");
         for (const chunk of chunks) {
             await turn.writeThought(chunk);
@@ -556,8 +556,10 @@ test.each([
     },
 );
 
-test("Given oversized reasoning chunks, When the daemon streams them to the Relay, Then live reasoning and answers remain complete without history truncation metadata", async () => {
-    await using runtime = await startRuntime();
+test("Given oversized reasoning chunks, When the daemon streams them to the Relay, Then live reasoning and answers remain complete without history truncation metadata", async ({
+    signal,
+}) => {
+    await using runtime = await startRuntime(signal);
     const turn = await runtime.prompt(runtime.initial, "reasoning-tail");
     const oversized = `discarded prefix${"\u601d\u{1f600}r".repeat(12_000)} tail-0!!`;
     await turn.writeThought("short thought");
@@ -582,10 +584,10 @@ test("Given oversized reasoning chunks, When the daemon streams them to the Rela
     expect(answer(runtime.initial.events, turn.sessionTarget)).toBe(oversized);
 });
 
-test.each([true, false])(
+test.for([true, false])(
     "Given a reply prefix was flushed=%s, When the Agent finishes while disconnected, Then reconnection delivers the complete reply and completion exactly once",
-    async (flushed) => {
-        await using runtime = await startRuntime();
+    async (flushed, { signal }) => {
+        await using runtime = await startRuntime(signal);
         const turn = await runtime.prompt(runtime.initial, "tail-session");
         const pending = await runtime.timer.next(100);
         if (flushed) {
@@ -625,8 +627,10 @@ test.each([true, false])(
     },
 );
 
-test("Given a daemon restarted with a retained outcome, When the Relay reconnects, Then the outcome is delivered once", async () => {
-    await using runtime = await startRuntime();
+test("Given a daemon restarted with a retained outcome, When the Relay reconnects, Then the outcome is delivered once", async ({
+    signal,
+}) => {
+    await using runtime = await startRuntime(signal);
     const turn = await runtime.prompt(runtime.initial, "restarted-session");
     await turn.write("Finished before the restart.");
     turn.finish();
@@ -649,8 +653,10 @@ test("Given a daemon restarted with a retained outcome, When the Relay reconnect
     expect(outcomes).toMatchObject([{ payload: { commandId: "command-restarted-session", kind: "prompt.completed" } }]);
 });
 
-test("Given concurrent Sessions produce an offline burst, When the Computer reconnects, Then every event reaches the Relay in order within protocol frame limits", async () => {
-    await using runtime = await startRuntime();
+test("Given concurrent Sessions produce an offline burst, When the Computer reconnects, Then every event reaches the Relay in order within protocol frame limits", async ({
+    signal,
+}) => {
+    await using runtime = await startRuntime(signal);
     const first = await runtime.prompt(runtime.initial, "burst-first");
     const second = await runtime.prompt(runtime.initial, "burst-second");
     (await runtime.timer.next(100)).run();
@@ -692,8 +698,10 @@ test("Given concurrent Sessions produce an offline burst, When the Computer reco
     ).toHaveLength(2);
 });
 
-test("Given an outage exhausts the bounded output buffer, When the Relay reconnects, Then pending output stays bounded and the Agent can continue streaming", async () => {
-    await using runtime = await startRuntime();
+test("Given an outage exhausts the bounded output buffer, When the Relay reconnects, Then pending output stays bounded and the Agent can continue streaming", async ({
+    signal,
+}) => {
+    await using runtime = await startRuntime(signal);
     const turn = await runtime.prompt(runtime.initial, "bounded-session");
     (await runtime.timer.next(100)).run();
     await runtime.initial.barrier();

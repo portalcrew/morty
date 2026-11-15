@@ -16,21 +16,23 @@ afterEach(async () => {
 });
 
 describe("Morty version command", () => {
-    it("Given no running daemon, When the user asks for the version, Then the CLI reports its own version and that no daemon is running", async () => {
+    it("Given no running daemon, When the user asks for the version, Then the CLI reports its own version and that no daemon is running", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-version-command-"));
         temporaryDirectories.push(directory);
         const environment = { ...process.env, MORTY_STATE_DIRECTORY: join(directory, "state") };
-        const signal = AbortSignal.timeout(30_000);
         const expected = `CLI: ${cliPackage.version}\nDaemon: not running\n`;
         expect((await runCli(["--version"], environment, signal)).stdout).toBe(expected);
         expect((await runCli(["-v"], environment, signal)).stdout).toBe(expected);
     }, 60_000);
 
-    it("Given a running daemon, When the user asks for the version, Then the CLI reports both the CLI and daemon versions", async () => {
+    it("Given a running daemon, When the user asks for the version, Then the CLI reports both the CLI and daemon versions", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-version-command-"));
         temporaryDirectories.push(directory);
         const environment = { ...process.env, MORTY_STATE_DIRECTORY: join(directory, "state") };
-        const signal = AbortSignal.timeout(60_000);
 
         try {
             const started = await Promise.all(

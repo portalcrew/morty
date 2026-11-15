@@ -134,9 +134,7 @@ async function createProbeEngine(options: ProbeOptions, signal: AbortSignal) {
             MORTY_TEST_PROBE_STATE: join(directory, "probe-state"),
         },
     });
-    const saved = await (
-        await RuntimeInstallationStore.open(join(directory, "computer"), AbortSignal.timeout(5_000))
-    ).saveConnection(
+    const saved = await (await RuntimeInstallationStore.open(join(directory, "computer"), signal)).saveConnection(
         {
             computerId: "output-drain",
             defaultWorkspace: workspace,

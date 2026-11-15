@@ -31,7 +31,9 @@ import { memoryComputerCredentials } from "../support/computer-credentials.ts";
 import { createControlledRuntimeConfig } from "../support/controlled-runtime-config.ts";
 import { createEncryptedDaemonFrames } from "../support/encrypted-daemon-frames.ts";
 
-test("Given a completed foreground turn, When its Agent requests background permission, Then the session snapshot recovers that request and removes it after the user responds", async () => {
+test("Given a completed foreground turn, When its Agent requests background permission, Then the session snapshot recovers that request and removes it after the user responds", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-30T00:00:00Z"));
     const directory = await mkdtemp(join(tmpdir(), "morty-background-interaction-"));
@@ -42,7 +44,7 @@ test("Given a completed foreground turn, When its Agent requests background perm
     const connected = Promise.withResolvers<WebSocket>();
     const frames: string[] = [];
     const readers: Array<(frame: string) => void> = [];
-    const encryption = await createEncryptedDaemonFrames(directory, "background", AbortSignal.timeout(60_000));
+    const encryption = await createEncryptedDaemonFrames(directory, "background", signal);
     server.on("connection", (socket) => {
         socket.on("message", (data) => {
             if (data.toString().includes('"kind":"computer.heartbeat"')) {

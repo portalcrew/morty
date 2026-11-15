@@ -135,7 +135,9 @@ describe("native session authorization", () => {
         }
     });
 
-    it("Given an Agent omits native session capabilities, When a remote caller requests its sessions, Then the local boundary rejects the operation", async () => {
+    it("Given an Agent omits native session capabilities, When a remote caller requests its sessions, Then the local boundary rejects the operation", async ({
+        signal,
+    }) => {
         const f = await fixture("Claude Code", "unsupported");
         try {
             const ready = await f.sessions.prepareSession({
@@ -144,7 +146,7 @@ describe("native session authorization", () => {
                 target: await f.sessions.createNativeSession({
                     agent: f.agent,
                     cwd: f.workspace,
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });

@@ -12,7 +12,9 @@ import { UnretainedExternalContentStore } from "../support/unretained-external-c
 import { fakeAgent, RecordingObserver } from "./acp-feature-fixture.ts";
 
 describe("acp content limits", () => {
-    it("Given an ACP tool returns inline image bytes, When Morty records the tool update, Then the live event exposes an external image reference without inline bytes", async () => {
+    it("Given an ACP tool returns inline image bytes, When Morty records the tool update, Then the live event exposes an external image reference without inline bytes", async ({
+        signal,
+    }) => {
         const observer = new RecordingObserver();
         const manager = new SessionManager({
             observer,
@@ -45,7 +47,7 @@ describe("acp content limits", () => {
                 target: await manager.createNativeSession({
                     agent: fakeAgent(),
                     cwd: process.cwd(),
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });
@@ -73,7 +75,9 @@ describe("acp content limits", () => {
         }
     });
 
-    it("Given two Turns reuse a tool ID, When each Turn produces an image, Then each turn records its own external image event", async () => {
+    it("Given two Turns reuse a tool ID, When each Turn produces an image, Then each turn records its own external image event", async ({
+        signal,
+    }) => {
         const observer = new RecordingObserver();
         const manager = new SessionManager({
             observer,
@@ -99,7 +103,7 @@ describe("acp content limits", () => {
             const target = await manager.createNativeSession({
                 agent: fakeAgent(),
                 cwd: process.cwd(),
-                signal: AbortSignal.timeout(10_000),
+                signal,
             });
             for (const commandId of ["first-image-turn", "second-image-turn"]) {
                 await manager.runPrompt({
@@ -130,7 +134,9 @@ describe("acp content limits", () => {
         }
     });
 
-    it("Given an ACP tool returns more than 500,000 characters, When Morty records the tool update, Then the raw output stays intact in the event log", async () => {
+    it("Given an ACP tool returns more than 500,000 characters, When Morty records the tool update, Then the raw output stays intact in the event log", async ({
+        signal,
+    }) => {
         const observer = new RecordingObserver();
         const manager = new SessionManager({
             observer,
@@ -163,7 +169,7 @@ describe("acp content limits", () => {
                 target: await manager.createNativeSession({
                     agent: fakeAgent(),
                     cwd: process.cwd(),
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });
@@ -177,7 +183,9 @@ describe("acp content limits", () => {
         }
     });
 
-    it("Given an Agent streams oversized UTF-8 reasoning chunks, When it completes, Then live updates retain complete chunks without history truncation metadata", async () => {
+    it("Given an Agent streams oversized UTF-8 reasoning chunks, When it completes, Then live updates retain complete chunks without history truncation metadata", async ({
+        signal,
+    }) => {
         const observer = new RecordingObserver();
         const manager = new SessionManager({
             observer,
@@ -210,7 +218,7 @@ describe("acp content limits", () => {
                 target: await manager.createNativeSession({
                     agent: fakeAgent(),
                     cwd: process.cwd(),
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });
@@ -243,7 +251,9 @@ describe("acp content limits", () => {
         }
     });
 
-    it("Given an ACP agent links a local image in Markdown, When Morty records the reply, Then the reply text preserves the original path", async () => {
+    it("Given an ACP agent links a local image in Markdown, When Morty records the reply, Then the reply text preserves the original path", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-markdown-image-"));
         const observer = new RecordingObserver();
         const manager = new SessionManager({
@@ -277,7 +287,7 @@ describe("acp content limits", () => {
                 target: await manager.createNativeSession({
                     agent: fakeAgent(),
                     cwd: directory,
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });
@@ -291,7 +301,9 @@ describe("acp content limits", () => {
         }
     });
 
-    it("Given an ACP Agent links an image outside its workspace, When Morty records the reply, Then the reply text preserves the Agent path", async () => {
+    it("Given an ACP Agent links an image outside its workspace, When Morty records the reply, Then the reply text preserves the Agent path", async ({
+        signal,
+    }) => {
         const workspace = await mkdtemp(join(tmpdir(), "morty-agent-workspace-"));
         const generatedImages = await mkdtemp(join(tmpdir(), "morty-agent-generated-images-"));
         const observer = new RecordingObserver();
@@ -326,7 +338,7 @@ describe("acp content limits", () => {
                 target: await manager.createNativeSession({
                     agent: fakeAgent([], { FAKE_ACP_IMAGE_DIRECTORY: generatedImages }),
                     cwd: workspace,
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });
@@ -343,7 +355,9 @@ describe("acp content limits", () => {
         }
     });
 
-    it("Given an ACP agent returns image and video output, When Morty records the reply, Then the image stays referenced in text and the video is externalized", async () => {
+    it("Given an ACP agent returns image and video output, When Morty records the reply, Then the image stays referenced in text and the video is externalized", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-media-output-"));
         const observer = new RecordingObserver();
         const manager = new SessionManager({
@@ -377,7 +391,7 @@ describe("acp content limits", () => {
                 target: await manager.createNativeSession({
                     agent: fakeAgent(),
                     cwd: directory,
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });

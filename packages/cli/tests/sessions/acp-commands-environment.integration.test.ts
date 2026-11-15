@@ -16,7 +16,9 @@ import { UnretainedExternalContentStore } from "../support/unretained-external-c
 import { fakeAgent, fakeAgentPath, RecordingObserver } from "./acp-feature-fixture.ts";
 
 describe("acp commands environment", () => {
-    it("Given an ACP Agent has not advertised commands, When Morty prepares a session, Then it does not invent compact", async () => {
+    it("Given an ACP Agent has not advertised commands, When Morty prepares a session, Then it does not invent compact", async ({
+        signal,
+    }) => {
         const manager = new SessionManager({
             observer: {},
             store: new MemorySessionStore(),
@@ -60,7 +62,7 @@ describe("acp commands environment", () => {
                 target: await manager.createNativeSession({
                     agent,
                     cwd: process.cwd(),
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });
@@ -71,7 +73,9 @@ describe("acp commands environment", () => {
         }
     });
 
-    it("Given an ACP Agent advertises compact, When its commands update, Then Morty preserves the ACP command", async () => {
+    it("Given an ACP Agent advertises compact, When its commands update, Then Morty preserves the ACP command", async ({
+        signal,
+    }) => {
         const harness = "unknown-acp";
         const observer = new RecordingObserver();
         const manager = new SessionManager({
@@ -107,7 +111,7 @@ describe("acp commands environment", () => {
                 target: await manager.createNativeSession({
                     agent,
                     cwd: process.cwd(),
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });
@@ -133,7 +137,9 @@ describe("acp commands environment", () => {
         }
     });
 
-    it("Given a managed Computer has a login-shell-only Agent environment, When it starts an ACP session, Then the Agent receives that environment", async () => {
+    it("Given a managed Computer has a login-shell-only Agent environment, When it starts an ACP session, Then the Agent receives that environment", async ({
+        signal,
+    }) => {
         const workspace = await mkdtemp(join(tmpdir(), "morty-login-shell-workspace-"));
         const generatedImages = await mkdtemp(join(tmpdir(), "morty-login-shell-images-"));
         const observer = new RecordingObserver();
@@ -183,7 +189,7 @@ describe("acp commands environment", () => {
                 target: await manager.createNativeSession({
                     agent: config.catalog.find("codex"),
                     cwd: workspace,
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });

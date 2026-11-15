@@ -83,7 +83,9 @@ class Messages {
     };
 }
 
-test("Given a newly created native Session, When its first Turn resolves interactions, Then readiness is recorded and resolved interactions do not appear in its snapshot", async () => {
+test("Given a newly created native Session, When its first Turn resolves interactions, Then readiness is recorded and resolved interactions do not appear in its snapshot", async ({
+    signal,
+}) => {
     // The Computer dates the Turn by its own start: with the clock fixed the date is exactly the system time.
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-07T00:00:00.000Z"));
@@ -92,7 +94,7 @@ test("Given a newly created native Session, When its first Turn resolves interac
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const gateway = await createEncryptedDaemonGateway(stateDirectory, "interaction", AbortSignal.timeout(30_000));
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "interaction", signal);
     const connected = Promise.withResolvers<EncryptedDaemonPeer>();
     websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
@@ -274,17 +276,15 @@ test("Given a newly created native Session, When its first Turn resolves interac
     }
 }, 30_000);
 
-test("Given an Agent announced a tool call with its input, When it requests permission referencing only that tool call, Then the permission carries the announced input, locations and kind", async () => {
+test("Given an Agent announced a tool call with its input, When it requests permission referencing only that tool call, Then the permission carries the announced input, locations and kind", async ({
+    signal,
+}) => {
     const stateDirectory = await mkdtemp(join(tmpdir(), "morty-announced-permission-"));
     const workspace = join(stateDirectory, "workspace");
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const gateway = await createEncryptedDaemonGateway(
-        stateDirectory,
-        "announced-permission",
-        AbortSignal.timeout(30_000),
-    );
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "announced-permission", signal);
     const connected = Promise.withResolvers<EncryptedDaemonPeer>();
     websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
@@ -383,17 +383,15 @@ test("Given an Agent announced a tool call with its input, When it requests perm
     }
 }, 30_000);
 
-test("Given an Agent announced a tool call and then sent a rawInput null update, When it requests permission referencing only that tool call, Then the permission keeps the announced input", async () => {
+test("Given an Agent announced a tool call and then sent a rawInput null update, When it requests permission referencing only that tool call, Then the permission keeps the announced input", async ({
+    signal,
+}) => {
     const stateDirectory = await mkdtemp(join(tmpdir(), "morty-null-input-permission-"));
     const workspace = join(stateDirectory, "workspace");
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const gateway = await createEncryptedDaemonGateway(
-        stateDirectory,
-        "null-input-permission",
-        AbortSignal.timeout(30_000),
-    );
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "null-input-permission", signal);
     const connected = Promise.withResolvers<EncryptedDaemonPeer>();
     websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
@@ -492,17 +490,15 @@ test("Given an Agent announced a tool call and then sent a rawInput null update,
     }
 }, 30_000);
 
-test("Given an Agent's first recorded form of a tool call is an update, When it requests permission referencing only that tool call, Then the permission carries the update's input, locations and kind", async () => {
+test("Given an Agent's first recorded form of a tool call is an update, When it requests permission referencing only that tool call, Then the permission carries the update's input, locations and kind", async ({
+    signal,
+}) => {
     const stateDirectory = await mkdtemp(join(tmpdir(), "morty-orphan-update-permission-"));
     const workspace = join(stateDirectory, "workspace");
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const gateway = await createEncryptedDaemonGateway(
-        stateDirectory,
-        "orphan-update-permission",
-        AbortSignal.timeout(30_000),
-    );
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "orphan-update-permission", signal);
     const connected = Promise.withResolvers<EncryptedDaemonPeer>();
     websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
@@ -601,13 +597,15 @@ test("Given an Agent's first recorded form of a tool call is an update, When it 
     }
 }, 30_000);
 
-test("Given a real daemon prepared a Session, When Relay queries its metadata, Then the daemon returns it without closing the Computer", async () => {
+test("Given a real daemon prepared a Session, When Relay queries its metadata, Then the daemon returns it without closing the Computer", async ({
+    signal,
+}) => {
     const stateDirectory = await mkdtemp(join(tmpdir(), "morty-session-query-"));
     const workspace = join(stateDirectory, "workspace");
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const gateway = await createEncryptedDaemonGateway(stateDirectory, "session-query", AbortSignal.timeout(30_000));
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "session-query", signal);
     const connected = Promise.withResolvers<EncryptedDaemonPeer>();
     websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);
@@ -690,7 +688,9 @@ test("Given a real daemon prepared a Session, When Relay queries its metadata, T
     }
 }, 30_000);
 
-test("Given a real daemon persisted a Session, When Relay restores it by identifier, Then history is loaded once and remains available for paging", async () => {
+test("Given a real daemon persisted a Session, When Relay restores it by identifier, Then history is loaded once and remains available for paging", async ({
+    signal,
+}) => {
     const stateDirectory = await mkdtemp(join(tmpdir(), "morty-session-restore-"));
     const workspace = join(stateDirectory, "workspace");
     await mkdir(workspace);
@@ -728,7 +728,7 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
         new RuntimeLocalContext(stateDirectory, process.env),
         async (agent) => agent,
     );
-    const gateway = await createEncryptedDaemonGateway(stateDirectory, "session-restore", AbortSignal.timeout(30_000));
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "session-restore", signal);
     const startDaemon = async () => {
         const connected = Promise.withResolvers<EncryptedDaemonPeer>();
         websocketServer.once("connection", (socket) => connected.resolve(gateway.connect(socket)));
@@ -832,13 +832,15 @@ test("Given a real daemon persisted a Session, When Relay restores it by identif
     }
 }, 30_000);
 
-test("Given a running turn and a queued prompt with a file, When an active-turn snapshot names only the Session, Then it reports the queued prompt with that prompt's files", async () => {
+test("Given a running turn and a queued prompt with a file, When an active-turn snapshot names only the Session, Then it reports the queued prompt with that prompt's files", async ({
+    signal,
+}) => {
     const stateDirectory = await mkdtemp(join(tmpdir(), "morty-queued-identity-"));
     const workspace = join(stateDirectory, "workspace");
     await mkdir(workspace);
     const relay = createServer((_request, response) => response.writeHead(404).end());
     const websocketServer = new WebSocketServer({ server: relay });
-    const gateway = await createEncryptedDaemonGateway(stateDirectory, "queued-identity", AbortSignal.timeout(30_000));
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "queued-identity", signal);
     const connected = Promise.withResolvers<EncryptedDaemonPeer>();
     websocketServer.on("connection", (socket) => connected.resolve(gateway.connect(socket)));
     await listen(relay);

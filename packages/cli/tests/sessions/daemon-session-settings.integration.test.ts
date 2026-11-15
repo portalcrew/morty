@@ -183,17 +183,15 @@ async function readAgentSettings(frames: ClientFrames, requestId: string) {
 }
 
 describe("daemon session configuration boundary", () => {
-    it("Given Codex removes a model between capability probes, When settings are discovered, Then the daemon returns supported settings and records the unavailable value", async () => {
+    it("Given Codex removes a model between capability probes, When settings are discovered, Then the daemon returns supported settings and records the unavailable value", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-changing-model-catalog-"));
         const workspace = join(stateDirectory, "workspace");
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const gateway = await createEncryptedDaemonGateway(
-            stateDirectory,
-            "channel_alpha",
-            AbortSignal.timeout(120_000),
-        );
+        const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_alpha", signal);
         const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
         const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((request, response) => {
@@ -266,17 +264,15 @@ describe("daemon session configuration boundary", () => {
         }
     });
 
-    it("Given an Agent withholds effort for its default model, When settings are discovered without a model, Then the default model's own capability is reported", async () => {
+    it("Given an Agent withholds effort for its default model, When settings are discovered without a model, Then the default model's own capability is reported", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-default-effort-"));
         const workspace = join(stateDirectory, "workspace");
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const gateway = await createEncryptedDaemonGateway(
-            stateDirectory,
-            "channel_alpha",
-            AbortSignal.timeout(120_000),
-        );
+        const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_alpha", signal);
         const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
         const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((request, response) => {
@@ -355,7 +351,9 @@ describe("daemon session configuration boundary", () => {
         }
     });
 
-    it("Given a project directory whose Agent settings choose another model, When settings are discovered for that directory, Then the daemon reports that directory's default model", async () => {
+    it("Given a project directory whose Agent settings choose another model, When settings are discovered for that directory, Then the daemon reports that directory's default model", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-directory-settings-"));
         const workspace = join(stateDirectory, "workspace");
         const project = join(stateDirectory, "project");
@@ -368,11 +366,7 @@ describe("daemon session configuration boundary", () => {
         await writeFile(join(project, ".claude", "settings.json"), JSON.stringify({ model: "test-large" }));
         const projectDirectory = await realpath(project);
 
-        const gateway = await createEncryptedDaemonGateway(
-            stateDirectory,
-            "channel_alpha",
-            AbortSignal.timeout(120_000),
-        );
+        const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_alpha", signal);
         const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
         const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((request, response) => {
@@ -464,17 +458,15 @@ describe("daemon session configuration boundary", () => {
         }
     });
 
-    it("Given an Agent offers a single model and withholds its effort, When settings are discovered without a model, Then that model is reported without effort", async () => {
+    it("Given an Agent offers a single model and withholds its effort, When settings are discovered without a model, Then that model is reported without effort", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-single-model-"));
         const workspace = join(stateDirectory, "workspace");
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const gateway = await createEncryptedDaemonGateway(
-            stateDirectory,
-            "channel_alpha",
-            AbortSignal.timeout(120_000),
-        );
+        const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_alpha", signal);
         const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
         const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((request, response) => {
@@ -558,17 +550,15 @@ describe("daemon session configuration boundary", () => {
         }
     });
 
-    it("Given an Agent offers effort for its default model, When settings are discovered without a model, Then the session can adjust effort without switching models", async () => {
+    it("Given an Agent offers effort for its default model, When settings are discovered without a model, Then the session can adjust effort without switching models", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-default-effort-offered-"));
         const workspace = join(stateDirectory, "workspace");
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const gateway = await createEncryptedDaemonGateway(
-            stateDirectory,
-            "channel_alpha",
-            AbortSignal.timeout(120_000),
-        );
+        const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_alpha", signal);
         const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
         const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((request, response) => {
@@ -649,17 +639,15 @@ describe("daemon session configuration boundary", () => {
         }
     });
 
-    it("Given a Turn is running with an Agent settings snapshot, When a steering prompt reuses that snapshot while the live Session exposes fewer settings, Then the Agent receives the steering prompt", async () => {
+    it("Given a Turn is running with an Agent settings snapshot, When a steering prompt reuses that snapshot while the live Session exposes fewer settings, Then the Agent receives the steering prompt", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-steer-settings-"));
         const workspace = join(stateDirectory, "workspace");
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const gateway = await createEncryptedDaemonGateway(
-            stateDirectory,
-            "channel_alpha",
-            AbortSignal.timeout(120_000),
-        );
+        const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_alpha", signal);
         const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
         const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((_request, response) => {
@@ -765,17 +753,15 @@ describe("daemon session configuration boundary", () => {
         }
     }, 30_000);
 
-    it("Given a Turn runs with a settings snapshot, When a steering prompt names a setting value the live Session does not hold, Then the Agent receives the steering prompt", async () => {
+    it("Given a Turn runs with a settings snapshot, When a steering prompt names a setting value the live Session does not hold, Then the Agent receives the steering prompt", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-steer-drifted-settings-"));
         const workspace = join(stateDirectory, "workspace");
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const gateway = await createEncryptedDaemonGateway(
-            stateDirectory,
-            "channel_alpha",
-            AbortSignal.timeout(120_000),
-        );
+        const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_alpha", signal);
         const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
         const relaySockets = new WebSocketServer({ noServer: true });
         const relay = createServer((_request, response) => {

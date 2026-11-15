@@ -7,13 +7,17 @@ import { expect, test } from "vitest";
 
 // @no-uc: A cancelled external ACP startup must not leak a rejected promise into
 // the Computer host's process-level fatal handler and terminate unrelated work.
-test.each(["before-observation", "while-pending"])(
+test.for(["before-observation", "while-pending"])(
     "settles %s ACP startup cancellation and serves later settings in the same process",
-    async (cancellation) => {
+    { timeout: 20_000 },
+    async (cancellation, { signal }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-acp-cancellation-"));
         const fixture = fileURLToPath(new URL("./fixtures/acp-cancellation-host.ts", import.meta.url));
+        // The test's timeout kills a hung fixture.
         const child = spawn(process.execPath, [fixture, directory, cancellation], {
             env: { PATH: process.env["PATH"], HOME: directory, TMPDIR: directory },
+            killSignal: "SIGKILL",
+            signal,
             shell: false,
             stdio: ["ignore", "pipe", "pipe"],
         });
@@ -25,7 +29,6 @@ test.each(["before-observation", "while-pending"])(
         child.stderr.on("data", (chunk: Buffer) => {
             stderr += chunk.toString();
         });
-        const timeout = setTimeout(() => child.kill("SIGKILL"), 15_000);
         try {
             const outcome = await new Promise<{ code: number | null; signal: string | null }>((resolve, reject) => {
                 child.once("error", reject);
@@ -42,10 +45,8 @@ test.each(["before-observation", "while-pending"])(
             expect(stdout).toContain("subsequent-settings-succeeded");
             expect(stderr).not.toContain("unhandled_rejection");
         } finally {
-            clearTimeout(timeout);
             child.kill("SIGKILL");
             await rm(directory, { force: true, recursive: true });
         }
     },
-    20_000,
 );

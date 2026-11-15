@@ -11,9 +11,11 @@ import { expect, it, onTestFinished } from "vitest";
 import { startTestRelay } from "../support/relay.ts";
 
 for (const client of ["SDK", "HTTP"] as const) {
-    it(`Given a new Session, When ${client} creates and prompts it, Then its conversation uses the Computer title and workspace`, async () => {
+    it(`Given a new Session, When ${client} creates and prompts it, Then its conversation uses the Computer title and workspace`, async ({
+        signal,
+    }) => {
         const cancellation = new AbortController();
-        await using relay = await startTestRelay();
+        await using relay = await startTestRelay(signal);
         try {
             const owner = await relay.createOwner();
             const runtime = await relay.connectAgent(owner.computerId);
@@ -103,9 +105,10 @@ for (const client of ["SDK", "HTTP"] as const) {
     });
 }
 
-it("Given long ASCII and multibyte directory references, When the SDK browses them, Then the local filesystem remains the authority for directory availability", async () => {
-    await using relay = await startTestRelay();
-    const signal = AbortSignal.timeout(30_000);
+it("Given long ASCII and multibyte directory references, When the SDK browses them, Then the local filesystem remains the authority for directory availability", async ({
+    signal,
+}) => {
+    await using relay = await startTestRelay(signal);
     const owner = await relay.createOwner();
     const runtime = await relay.connectAgent(owner.computerId);
     for (const segment of ["a".repeat(220), "\u00e9".repeat(110)]) {
@@ -122,7 +125,9 @@ it("Given long ASCII and multibyte directory references, When the SDK browses th
     }
 });
 
-it("Given a deeply nested multibyte project path, When the SDK browses it and runs a conversation, Then directory metadata and native history remain accessible", async () => {
+it("Given a deeply nested multibyte project path, When the SDK browses it and runs a conversation, Then directory metadata and native history remain accessible", async ({
+    signal,
+}) => {
     const root = await mkdtemp(join(tmpdir(), "morty-long-workspace-"));
     try {
         const path = join(
@@ -131,8 +136,7 @@ it("Given a deeply nested multibyte project path, When the SDK browses it and ru
         );
         await mkdir(path, { recursive: true });
         const canonical = await realpath(path);
-        await using relay = await startTestRelay();
-        const signal = AbortSignal.timeout(30_000);
+        await using relay = await startTestRelay(signal);
         const owner = await relay.createOwner();
         const runtime = await relay.connectAgent(owner.computerId);
         const directory = canonical;
@@ -180,13 +184,14 @@ it("Given a deeply nested multibyte project path, When the SDK browses it and ru
     }
 });
 
-it("Given a Session in a selected workspace, When the App prompts it and reads its execution naming only the Session, Then the Computer runs the Turn in the Session's own workspace", async () => {
+it("Given a Session in a selected workspace, When the App prompts it and reads its execution naming only the Session, Then the Computer runs the Turn in the Session's own workspace", async ({
+    signal,
+}) => {
     const workspace = await mkdtemp(join(tmpdir(), "morty-session-workspace-"));
     try {
         const directoryLabel = await realpath(workspace);
         const directory = directoryLabel;
-        await using relay = await startTestRelay();
-        const signal = AbortSignal.timeout(30_000);
+        await using relay = await startTestRelay(signal);
         const owner = await relay.createOwner();
         const runtime = await relay.connectAgent(owner.computerId);
         const { target: sessionTarget } = await runtime.createSession(

@@ -1,12 +1,13 @@
 import { expect, it, vi } from "vitest";
 import { startTestRelay } from "../support/relay.ts";
 
-it("Given two harnesses create conversations, When I restore each conversation, Then both native pairs remain independently usable", async () => {
+it("Given two harnesses create conversations, When I restore each conversation, Then both native pairs remain independently usable", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-07T00:00:00.000Z"));
     try {
-        await using relay = await startTestRelay();
-        const signal = AbortSignal.timeout(30_000);
+        await using relay = await startTestRelay(signal);
         const owner = await relay.createOwner();
         const runtime = await relay.connectAgent(
             owner.computerId,
@@ -43,12 +44,13 @@ it("Given two harnesses create conversations, When I restore each conversation, 
     }
 });
 
-it("Given a harness announces its title during creation, When the caller creates a Session and lists it, Then its native conversation retains that title without an intermediate Morty identity", async () => {
+it("Given a harness announces its title during creation, When the caller creates a Session and lists it, Then its native conversation retains that title without an intermediate Morty identity", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-07T00:00:00.000Z"));
     try {
-        await using relay = await startTestRelay();
-        const signal = AbortSignal.timeout(30_000);
+        await using relay = await startTestRelay(signal);
         const owner = await relay.createOwner();
         const runtime = await relay.connectAgent(owner.computerId, [
             {
@@ -79,12 +81,13 @@ it("Given a harness announces its title during creation, When the caller creates
     }
 });
 
-it("Given two harnesses own the same native session ID without prior discovery, When a caller imports and restores each native pair without a binding identity, Then each selects only its harness and a different harness cannot select either", async () => {
+it("Given two harnesses own the same native session ID without prior discovery, When a caller imports and restores each native pair without a binding identity, Then each selects only its harness and a different harness cannot select either", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-07T00:00:00.000Z"));
     try {
-        await using relay = await startTestRelay();
-        const signal = AbortSignal.timeout(30_000);
+        await using relay = await startTestRelay(signal);
         const owner = await relay.createOwner();
         const sessionId = "same-native-session";
         const runtime = await relay.connectAgent(
