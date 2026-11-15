@@ -19,12 +19,12 @@ export const createBugReportDialogStore = (transport: () => ApiTransport | null)
         readonly report: BugReportStoreApi | null;
         readonly show: (daemonSource: DaemonDiagnosticsSource | null) => void;
         readonly hide: () => void;
-    }>((set) => ({
+    }>((set, get) => ({
         report: null,
         show: (daemonSource) => set({ report: createBugReportStore(sentryBugReportSink, transport(), daemonSource) }),
-        hide: () =>
-            set((current) => {
-                current.report?.getState().close();
-                return { report: null };
-            }),
+        hide: () => {
+            const report = get().report;
+            set({ report: null });
+            report?.getState().close();
+        },
     }));
