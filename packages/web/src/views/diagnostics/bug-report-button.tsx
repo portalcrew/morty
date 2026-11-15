@@ -98,9 +98,8 @@ export function BugReportButton({
  * unmounts when loading completes.
  */
 export function BugReportDialogHost({ dialog }: { readonly dialog: BugReportDialogStore }) {
-    const open = useStore(dialog, (state) => state.open);
     const report = useStore(dialog, (state) => state.report);
-    return open && report !== null ? <BugReportDialog dialog={dialog} key="bug-report-dialog" report={report} /> : null;
+    return report !== null ? <BugReportDialog dialog={dialog} key="bug-report-dialog" report={report} /> : null;
 }
 
 function ReportImage({

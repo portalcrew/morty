@@ -15,18 +15,16 @@ export type BugReportDialogStore = ReturnType<typeof createBugReportDialogStore>
  */
 export const createBugReportDialogStore = (transport: () => ApiTransport | null) =>
     create<{
-        readonly open: boolean;
+        /** The open dialog's report; null while the dialog is closed. */
         readonly report: BugReportStoreApi | null;
         readonly show: (daemonSource: DaemonDiagnosticsSource | null) => void;
         readonly hide: () => void;
     }>((set) => ({
-        open: false,
         report: null,
-        show: (daemonSource) =>
-            set({ open: true, report: createBugReportStore(sentryBugReportSink, transport(), daemonSource) }),
+        show: (daemonSource) => set({ report: createBugReportStore(sentryBugReportSink, transport(), daemonSource) }),
         hide: () =>
             set((current) => {
                 current.report?.getState().close();
-                return { open: false, report: null };
+                return { report: null };
             }),
     }));
