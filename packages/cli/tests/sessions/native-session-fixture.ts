@@ -61,7 +61,8 @@ export async function fixture(
         | "unsupported"
         | "invalid-fork"
         | "exclusive-writer"
-        | "persist-after-first-prompt" = "supported",
+        | "persist-after-first-prompt"
+        | "untitled" = "supported",
     adapters: AdapterResolver = acpAdapters,
 ) {
     const temporary = await realpath(await mkdtemp(join(tmpdir(), "morty-native-boundary-")));
@@ -94,7 +95,9 @@ export async function fixture(
                                 ? ["--exclusive-writer"]
                                 : profile === "persist-after-first-prompt"
                                   ? ["--persist-after-first-prompt"]
-                                  : []),
+                                  : profile === "untitled"
+                                    ? ["--untitled-native-sessions"]
+                                    : []),
                     ],
                     environment: options.environment,
                 },

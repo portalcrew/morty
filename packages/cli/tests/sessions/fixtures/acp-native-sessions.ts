@@ -153,9 +153,11 @@ export function registerNativeSessions(agent: ReturnType<typeof acp.agent>) {
                               {
                                   sessionId: id,
                                   cwd: metadata.cwd,
-                                  title: process.argv.includes("--oversized-native-session-title")
-                                      ? `${metadata.title}${"x".repeat(600)}`
-                                      : metadata.title,
+                                  title: process.argv.includes("--untitled-native-sessions")
+                                      ? null
+                                      : process.argv.includes("--oversized-native-session-title")
+                                        ? `${metadata.title}${"x".repeat(600)}`
+                                        : metadata.title,
                                   updatedAt: "2026-09-05T00:00:00Z",
                               },
                           ];

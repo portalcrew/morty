@@ -36,6 +36,14 @@ interface AuthorizedNativeSession {
 }
 
 const MAXIMUM_SESSION_TITLE_LENGTH = 500;
+
+/**
+ * How a Session or native conversation without a title is shown. A missing title stays empty where it is stored, so the
+ * Agent or the Session's first prompt can still name it.
+ */
+function displayTitle(title: string | null | undefined): string {
+    return title || "Untitled session";
+}
 const forkSuffixPattern = / \(Fork #([1-9][0-9]*)\)$/u;
 
 function nextForkTitle(sourceTitle: string, sessions: readonly StoredSession[]): string {
@@ -137,7 +145,7 @@ export class NativeSessionService {
             action: "fork",
             ready: readyBody(ready),
             target: ready.target,
-            title: this.#sessions.findSessions([ready.target])[0]?.title ?? "Untitled session",
+            title: displayTitle(this.#sessions.findSessions([ready.target])[0]?.title),
         };
     };
 
@@ -175,7 +183,7 @@ export class NativeSessionService {
             }
             return {
                 sessionId: decodeIdentifier(info.sessionId),
-                title: info.title ?? "Untitled session",
+                title: displayTitle(info.title),
                 directory: authorized.directory,
                 directoryLabel: authorized.directoryLabel,
                 updatedAt: info.updatedAt ?? null,
@@ -259,9 +267,10 @@ export class NativeSessionService {
                 "native_session_unsupported",
             );
         }
-        const sourceTitle = target.info.title ?? "Untitled session";
+        const sourceTitle = target.info.title ?? "";
+        // A fork of an untitled conversation is untitled too, and is named like any new Session.
         const title =
-            action === "fork"
+            action === "fork" && sourceTitle.length > 0
                 ? nextForkTitle(sourceTitle, this.#sessions.listSessions(Number.MAX_SAFE_INTEGER))
                 : sourceTitle;
         const open = async (openSignal: AbortSignal): Promise<SessionReadyEvent> => {
@@ -302,7 +311,7 @@ export class NativeSessionService {
             action,
             ready: readyBody(ready),
             target: ready.target,
-            title: this.#sessions.findSessions([ready.target])[0]?.title ?? title,
+            title: displayTitle(this.#sessions.findSessions([ready.target])[0]?.title ?? title),
         };
     };
 
@@ -343,7 +352,7 @@ export class NativeSessionService {
                 prompted: session.prompted,
                 target: session.target,
                 status: this.#sessions.sessionStatus(session.target),
-                title: session.title || "Untitled session",
+                title: displayTitle(session.title),
                 updatedAt: session.updatedAt,
             });
         }

@@ -174,6 +174,52 @@ describe("native session history", () => {
         }
     });
 
+    it("Given the Agent reports no title for a saved conversation, When Chat imports it and sends a first message, Then the Session is listed untitled and then named by that message", async () => {
+        const f = await fixture("Codex", "untitled");
+        const signal = new AbortController().signal;
+        try {
+            await f.seed("Words the Agent never titled");
+            const entry = (await f.list()).entries[0];
+            if (entry === undefined) {
+                throw new Error("Missing native conversation");
+            }
+            expect(entry.title).toBe("Untitled session");
+            const opened = await f.service.execute(
+                { ...f.identity, action: "import", sessionId: entry.sessionId },
+                signal,
+            );
+            if (opened.action !== "import") {
+                throw new Error("Expected native import");
+            }
+            expect(opened.title).toBe("Untitled session");
+            expect(await f.service.listSessions(10, signal)).toEqual([
+                expect.objectContaining({ target: opened.target, title: "Untitled session" }),
+            ]);
+
+            await f.sessions.runPrompt({
+                agent: f.agent,
+                cwd: f.workspace,
+                signal,
+                target: opened.target,
+                commandId: crypto.randomUUID(),
+                prompt: "Plan the release notes",
+                lifecycle: {
+                    attemptId: crypto.randomUUID(),
+                    content: [{ type: "text", text: "Plan the release notes" }],
+                    dispatch: { kind: "own" },
+                },
+                images: [],
+                resources: [],
+            });
+
+            expect(await f.service.listSessions(10, signal)).toEqual([
+                expect.objectContaining({ target: opened.target, title: "Plan the release notes" }),
+            ]);
+        } finally {
+            await f.close();
+        }
+    });
+
     it("Given Chat imports a Claude Code conversation, When the imported Chat opens, Then its source history is visible", async () => {
         const f = await fixture("Claude Code", "exclusive-writer");
         const signal = new AbortController().signal;
