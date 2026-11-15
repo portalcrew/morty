@@ -69,11 +69,13 @@ function firstErrorCode(body: unknown): string | undefined {
 }
 
 function createGitHub(repository: string, token: string) {
-    if (!REPOSITORY.test(repository)) {
+    const [owner, name] = repository.split("/");
+    if (!REPOSITORY.test(repository) || owner === undefined || name === undefined) {
         throw new Error("GITHUB_REPOSITORY must name one repository as owner/name.");
     }
+    const repositoryPath = `${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
     return async (method: "GET" | "POST" | "PATCH", path: string, body?: unknown): Promise<unknown> => {
-        const response = await fetch(`https://api.github.com/repos/${repository}${path}`, {
+        const response = await fetch(`https://api.github.com/repos/${repositoryPath}${path}`, {
             method,
             headers: {
                 Accept: "application/vnd.github+json",
