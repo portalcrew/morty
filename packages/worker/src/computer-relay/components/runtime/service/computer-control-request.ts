@@ -1,3 +1,4 @@
+import { sameNativeSession } from "@morty-build/client/native-session";
 import {
     type AgentSettingsDiscoverCommandRouting,
     agentSettingsDiscoveredEventCodec,
@@ -12,6 +13,7 @@ import {
     contentCommitCommandCodec,
     contentReadyEventCodec,
     type contentWriteCommandCodec,
+    daemonToRelayDecoders,
     decodeContentChunkAck,
     decodeMessageKind,
     encodeClientToRelayMessage,
@@ -26,14 +28,14 @@ import {
     fileEndEventCodec,
     fileFailedEventCodec,
     type NativeSessionTarget,
+    SESSION_OPERATION_FAILED_KIND,
 } from "@morty-build/client/protocol";
 import { COMPUTER_REPLY_INVALID_CODE, SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import { logger } from "../../../../infra/logger.ts";
 import {
     type ClientControlCommand,
     type ClientControlReply,
-    computerControlRegistry,
-    computerControlReplyDecoders,
+    computerControlSuccess,
     computerControlTarget,
 } from "./computer-control-registry.ts";
 import { type ComputerReplyConnection, type ReplyDecision, RequestRejectedEvent } from "./computer-reply-request.ts";
@@ -150,51 +152,73 @@ async function awaitComputerReply<Reply>(
     }
 }
 
-/** Waits for an addressed reply without interpreting either endpoint's private data. */
-export async function requestClientControl(
-    socket: ComputerReplyConnection,
-    command: ClientControlCommand,
-    signal: AbortSignal,
-    callerCancellation?: AbortSignal,
-): Promise<ClientControlReply> {
-    const encoded = encodeClientToRelayMessage(command);
-    const requestId = command.requestId;
+type AnyClientControlReply = ClientControlReply<ClientControlCommand["kind"]>;
+
+/**
+ * The one rule for whether a reply addressed to `command` answers it. A reply that names another Session, another
+ * native operation, or, for a fork, no new Session of the same Agent cannot answer it, though the command may have run.
+ */
+function requireAnswer(command: ClientControlCommand, reply: AnyClientControlReply): void {
     const target = computerControlTarget(command);
-    const successKind = computerControlRegistry[command.kind];
-    const accept = (reply: ClientControlReply): ReplyDecision<ClientControlReply> => {
-        if (reply.requestId !== requestId) {
-            return { kind: "ignore" };
-        }
-        if (
-            target !== undefined &&
-            "target" in reply &&
-            reply.target !== undefined &&
-            (reply.kind !== "native.session.result" || reply.action !== "fork") &&
-            (reply.target.harness !== target.harness || reply.target.sessionId !== target.sessionId)
-        ) {
-            throw invalidComputerReply("The Computer returned an invalid reply target");
-        }
-        if (
-            command.kind === "native.session.request" &&
-            reply.kind === "native.session.result" &&
-            reply.action !== command.action
-        ) {
+    if (reply.kind === "native.session.result" && command.kind === "native.session.request") {
+        if (reply.action !== command.action) {
             throw invalidComputerReply("The Computer returned an invalid native operation");
         }
-        if (
-            command.kind === "agent.settings.discover" &&
-            reply.kind === "agent.settings.discovered" &&
-            reply.harness !== command.harness
-        ) {
-            throw invalidComputerReply("The Computer returned an invalid Agent settings target");
+        if (reply.action === "fork") {
+            // A fork answers with a new Session of the source Session's Agent.
+            if (
+                target === undefined ||
+                reply.target.harness !== target.harness ||
+                reply.target.sessionId === target.sessionId
+            ) {
+                throw invalidComputerReply("The Computer returned an invalid fork");
+            }
+            return;
         }
+    }
+    if (
+        reply.kind === "session.ready" &&
+        command.kind === "session.create" &&
+        reply.target.harness !== command.harness
+    ) {
+        throw invalidComputerReply("The Computer created a Session of another Agent");
+    }
+    if (
+        target !== undefined &&
+        "target" in reply &&
+        reply.target !== undefined &&
+        !sameNativeSession(reply.target, target)
+    ) {
+        throw invalidComputerReply("The Computer returned an invalid reply target");
+    }
+}
+
+/**
+ * Sends a client's command to the Computer and waits for what answers it: the command's own success reply, or the
+ * Computer's failure, both still sealed for the client. Any other reply addressed to the command is invalid.
+ */
+export async function requestClientControl<Command extends ClientControlCommand>(
+    socket: ComputerReplyConnection,
+    command: Command,
+    signal: AbortSignal,
+    callerCancellation?: AbortSignal,
+): Promise<ClientControlReply<Command["kind"]>> {
+    const encoded = encodeClientToRelayMessage(command);
+    const kind: Command["kind"] = command.kind;
+    const success = computerControlSuccess[kind];
+    const answer = <Reply extends AnyClientControlReply>(reply: Reply): ReplyDecision<Reply> => {
+        if (reply.requestId !== command.requestId) {
+            return { kind: "ignore" };
+        }
+        requireAnswer(command, reply);
         return { kind: "complete", value: reply };
     };
-    const failureKind =
-        command.kind === "agent.settings.discover" ? "agent.settings.discovery.failed" : "session.operation.failed";
-    const handlers: Readonly<Record<string, ((message: string) => ReplyDecision<ClientControlReply>) | undefined>> = {
-        [successKind]: (message) => accept(computerControlReplyDecoders[successKind](message)),
-        [failureKind]: (message) => accept(computerControlReplyDecoders[failureKind](message)),
+    const handlers: Readonly<
+        Record<string, ((message: string) => ReplyDecision<ClientControlReply<Command["kind"]>>) | undefined>
+    > = {
+        [success.kind]: (message) => answer(success.decode(message)),
+        [SESSION_OPERATION_FAILED_KIND]: (message) =>
+            answer(daemonToRelayDecoders[SESSION_OPERATION_FAILED_KIND](message)),
     };
     const cancel = (): void => {
         if (command.kind === "native.session.request") {

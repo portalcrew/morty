@@ -230,6 +230,15 @@ export class BotChatApi {
         const encryption = this.#sessionTransport().payloadEncryption;
         const body = await computerDiagnosticsRequestCodec.encode(command, encryption, signal);
         const value = await this.#request({ endpoint, body }, signal);
+        const failure = await this.#computerFailure(
+            value,
+            { requestId: command.requestId },
+            { code: "INVALID_SESSION", message: "The Computer returned an invalid diagnostics response." },
+            signal,
+        );
+        if (failure !== null) {
+            throw new CloudApiError(failure.code, failure.message);
+        }
         const result = await computerDiagnosticsResultCodec.decode(JSON.stringify(value), encryption, signal);
         if (result.requestId !== command.requestId) {
             throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid diagnostics response.");
@@ -247,6 +256,15 @@ export class BotChatApi {
             v.object({ computerLatencyMs: v.pipe(v.number(), v.safeInteger(), v.minValue(0)), reply: v.unknown() }),
             await this.#request({ endpoint, body }, signal),
         );
+        const failure = await this.#computerFailure(
+            result.reply,
+            { requestId: command.requestId },
+            { code: "INVALID_SESSION", message: "The Computer returned an invalid network response." },
+            signal,
+        );
+        if (failure !== null) {
+            throw new CloudApiError(failure.code, failure.message);
+        }
         const pong = await computerPongEventCodec.decode(JSON.stringify(result.reply), encryption, signal);
         if (pong.requestId !== command.requestId) {
             throw new CloudApiError("INVALID_SESSION", "The Computer returned an invalid network response.");

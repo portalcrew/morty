@@ -2,7 +2,6 @@ import type { NativeSessionCommandRouting, NativeSessionTarget } from "@morty-bu
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import { logger } from "../../../../infra/logger.ts";
-import type { ClientControlReply } from "./computer-control-registry.ts";
 import type { ComputerOperationSocket, RelayPeers, RelaySocket } from "./computer-relay-actor.ts";
 import { type ComputerReplyConnection, RequestRejectedEvent } from "./computer-reply-request.ts";
 
@@ -144,11 +143,11 @@ export class LocalComputerRequests {
     /** Stable fork identities must not collide in the reply router. Do not join
      * opaque requests: each fresh packet must reach the Computer, which alone
      * can authorize it and compare its private intent with the durable receipt. */
-    readonly runRecoverableFork = async (
+    readonly runRecoverableFork = async <Reply>(
         requestId: string,
         signal: AbortSignal,
-        operation: (signal: AbortSignal) => Promise<ClientControlReply>,
-    ): Promise<ClientControlReply> => {
+        operation: (signal: AbortSignal) => Promise<Reply>,
+    ): Promise<Reply> => {
         using deadline = new RequestDeadline(signal, 120_000);
         if (this.#pendingForks >= 16) {
             throw new SessionRuntimeError("session_busy", "Too many native fork requests are pending");

@@ -41,9 +41,8 @@ export class ComputerBackendService {
         holder: SessionAccessHolder,
         signal: AbortSignal,
     ) => await this.#sessionAccess.issue({ computerId: this.computerId, target }, lifetime, holder, signal);
-    readonly clientControl = async (command: ClientControlCommand, signal: AbortSignal) => {
-        return await this.operations.requestClientControl(command, signal);
-    };
+    readonly clientControl = async <Command extends ClientControlCommand>(command: Command, signal: AbortSignal) =>
+        await this.operations.requestClientControl(command, signal);
     readonly settings = async (command: AgentSettingsDiscoverCommandRouting, signal: AbortSignal) => {
         const computers = await this.#context.services.pairings.listComputers(this.computerId, signal);
         if (!computers.some((computer) => computer.computerId === this.computerId)) {

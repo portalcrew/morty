@@ -51,7 +51,7 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
         });
     };
     return {
-        requestClientControl: async (command: ClientControlCommand, signal: AbortSignal) => {
+        requestClientControl: async <Command extends ClientControlCommand>(command: Command, signal: AbortSignal) => {
             checkTarget();
             const requestId = command.requestId;
             const target = "target" in command ? command.target : undefined;
