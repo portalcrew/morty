@@ -66,8 +66,10 @@ async function subscriptionBody(subscriptionId: string, sessionId = "session"): 
     }
 }
 
-it("Given a browser connection, When it requests a retired private Computer API, Then the transport rejects the target rather than routing it as a supported operation", async () => {
-    const { computerId } = await createOwner();
+it("Given a browser connection, When it requests a retired private Computer API, Then the transport rejects the target rather than routing it as a supported operation", async ({
+    signal,
+}) => {
+    const { computerId } = await createOwner(signal);
     const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
         headers: { Upgrade: "websocket" },
     });
@@ -97,10 +99,10 @@ it("Given a browser connection, When it requests a retired private Computer API,
     }
 });
 
-it.each(["unknown-command", "access-credentials", "access-credentials/unknown-command"])(
+it.for(["unknown-command", "access-credentials", "access-credentials/unknown-command"])(
     "Given a browser connection, When it requests Session operation %s, Then the owning route answers 404 not_found",
-    async (operation) => {
-        const { computerId } = await createOwner();
+    async (operation, { signal }) => {
+        const { computerId } = await createOwner(signal);
         const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
             headers: { Upgrade: "websocket" },
         });
@@ -134,8 +136,10 @@ it.each(["unknown-command", "access-credentials", "access-credentials/unknown-co
     },
 );
 
-it("Given a browser connection, When it heartbeats through the public Relay transport, Then the Computer acknowledges it and an unauthenticated Session request is rejected", async () => {
-    const { computerId } = await createOwner();
+it("Given a browser connection, When it heartbeats through the public Relay transport, Then the Computer acknowledges it and an unauthenticated Session request is rejected", async ({
+    signal,
+}) => {
+    const { computerId } = await createOwner(signal);
     const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
         headers: { Upgrade: "websocket" },
     });
@@ -171,7 +175,7 @@ it("Given a browser connection, When it heartbeats through the public Relay tran
     }
 });
 
-it.each([
+it.for([
     {
         path: "/morty/api/v1/computers/prj_ap_01_000000000000000000000002/harnesses/codex/sessions/example/active-turn",
         binary: false,
@@ -184,8 +188,8 @@ it.each([
     },
 ])(
     "Given a Computer-bound browser, When it addresses another computer at $path (binary: $binary), Then the request is rejected without closing the browser connection",
-    async ({ path, binary }) => {
-        const { computerId } = await createOwner();
+    async ({ path, binary }, { signal }) => {
+        const { computerId } = await createOwner(signal);
         const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
             headers: { Upgrade: "websocket" },
         });
@@ -223,14 +227,16 @@ it.each([
     },
 );
 
-it("Given two browser connections to one Computer, When their pending uploads exceed its shared budget, Then the second upload is refused and capacity is released after a failed transfer", async () => {
+it("Given two browser connections to one Computer, When their pending uploads exceed its shared budget, Then the second upload is refused and capacity is released after a failed transfer", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date("2030-01-01T00:00:00Z") });
     const sockets: WebSocket[] = [];
     try {
-        const { computerId } = await createOwner();
+        const { computerId } = await createOwner(signal);
         await pairComputer(computerId);
         const target = { harness: "codex", sessionId: "upload-session" };
-        const { credential } = await issueSession(computerId, target);
+        const { credential } = await issueSession(computerId, target, signal);
         for (let index = 0; index < 2; index += 1) {
             const response = await ownerRequest(
                 new Request(`${ownerOrigin}/morty/api/v1/computers/${computerId}/transport`, {
@@ -311,7 +317,7 @@ it("Given two browser connections to one Computer, When their pending uploads ex
     }
 });
 
-it.each([
+it.for([
     { name: "missing", authorization: null, code: "invalid_target", status: 400 },
     {
         name: "malformed",
@@ -322,8 +328,8 @@ it.each([
 ])(
     "Given a $name Session credential, When a browser subscribes through its WS connection, Then the DO rejects the subscription without exposing an HTTP event endpoint",
     { timeout: 5_000 },
-    async ({ authorization, code, status }) => {
-        const { computerId } = await createOwner();
+    async ({ authorization, code, status }, { signal }) => {
+        const { computerId } = await createOwner(signal);
         const response = await SELF.fetch(`https://relay.test/morty/api/v1/computers/${computerId}/transport`, {
             headers: { Upgrade: "websocket" },
         });

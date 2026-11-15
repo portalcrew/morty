@@ -11,11 +11,10 @@ afterEach(() => vi.useRealTimers());
 
 test("Given Session access and Computer encryption access, When a caller sends a native mutation to the execution-read endpoint, Then it is refused without creating a Session and execution reads remain usable", {
     timeout: 90_000,
-}, async () => {
+}, async ({ signal }) => {
     const createBindings = await prepareTestMortyRelayBindings();
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });
-    const signal = AbortSignal.timeout(60_000);
     const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
         method: "POST",
         signal,

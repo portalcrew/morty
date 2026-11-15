@@ -45,7 +45,7 @@ class CreationBudget {
 
 test("Given setup and a lost creation response without a known computer, When setup retries across temporary failures, Then it saves a new computer pair and subsequently reuses that pair", {
     timeout: 60_000,
-}, async () => {
+}, async ({ signal }) => {
     const setup = v.parse(setupModule, await import("../../cli/src/setup/setup.ts"));
     await using cleanup = new AsyncDisposableStack();
     const fixture = await createIdentityFixture();
@@ -86,7 +86,7 @@ test("Given setup and a lost creation response without a known computer, When se
                 method: incoming.method ?? "GET",
                 headers,
                 ...(body.length === 0 ? {} : { body }),
-                signal: AbortSignal.timeout(30_000),
+                signal,
             });
             const creation = new URL(request.url).pathname === "/morty/api/v1/computers";
             if (creation) {
@@ -181,7 +181,7 @@ test("Given setup and a lost creation response without a known computer, When se
                 state,
                 runtime,
                 agentEnvironment: {},
-                signal: AbortSignal.timeout(40_000),
+                signal,
                 clock: {
                     now: () => new Date(time),
                     wait: async (milliseconds, signal) => {

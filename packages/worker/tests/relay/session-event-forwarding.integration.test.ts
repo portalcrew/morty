@@ -66,8 +66,10 @@ class Inbox {
     };
 }
 
-it("Given an authenticated live subscription, When its browser unsubscribes, Then the Computer receives cleanup for that exact subscription", async () => {
-    const computer = await connectedComputer();
+it("Given an authenticated live subscription, When its browser unsubscribes, Then the Computer receives cleanup for that exact subscription", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "unsubscribed-session" };
     const inbox = await computer.subscribe(target);
     inbox.send(JSON.stringify({ kind: "session.events.unsubscribe", subscriptionId: "events" }));
@@ -78,8 +80,10 @@ it("Given an authenticated live subscription, When its browser unsubscribes, The
     });
 });
 
-it("Given an authenticated live subscription, When its browser connection closes, Then the Computer receives cleanup for that exact subscription", async () => {
-    const computer = await connectedComputer();
+it("Given an authenticated live subscription, When its browser connection closes, Then the Computer receives cleanup for that exact subscription", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "closed-browser" };
     const inbox = await computer.subscribe(target);
     inbox.close();
@@ -90,8 +94,10 @@ it("Given an authenticated live subscription, When its browser connection closes
     });
 });
 
-it("Given a connected Computer, When it sends a frame of a kind the Worker does not handle, Then the frame is ignored and later encrypted events still arrive", async () => {
-    const computer = await connectedComputer();
+it("Given a connected Computer, When it sends a frame of a kind the Worker does not handle, Then the frame is ignored and later encrypted events still arrive", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "unhandled-frame-origin" };
     const inbox = await computer.subscribe(target);
     const { sender } = await encryptionPair();
@@ -124,13 +130,15 @@ it("Given a connected Computer, When it sends a frame of a kind the Worker does 
     expect(await inbox.next()).toMatchObject({ kind: "session.events.event", data: wire });
 });
 
-it("Given a disconnected Computer, When a Session requests its encrypted configuration, Then the request receives the stable computer_offline error without closing the browser transport", async () => {
-    const computer = await connectedComputer();
+it("Given a disconnected Computer, When a Session requests its encrypted configuration, Then the request receives the stable computer_offline error without closing the browser transport", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "offline-session" };
     const subscription = await computer.subscribe(target);
     computer.daemon.close(1000, "Computer disconnected");
     expect(await subscription.next()).toMatchObject({ kind: "session.events.end" });
-    const { credential } = await issueSession(computer.computerId, target);
+    const { credential } = await issueSession(computer.computerId, target, signal);
     const response = await ownerRequest(
         new Request(`${ownerOrigin}/morty/api/v1/computers/${computer.computerId}/transport`, {
             headers: { Upgrade: "websocket" },
@@ -173,10 +181,12 @@ it("Given a disconnected Computer, When a Session requests its encrypted configu
     expect(await inbox.next()).toEqual({ kind: "pong" });
 });
 
-it("Given an authorized Session, When a browser sends a plaintext prompt, Then the Worker rejects it and the same connection still carries a valid encrypted prompt", async () => {
-    const computer = await connectedComputer();
+it("Given an authorized Session, When a browser sends a plaintext prompt, Then the Worker rejects it and the same connection still carries a valid encrypted prompt", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "plaintext-prompt" };
-    const { credential } = await issueSession(computer.computerId, target);
+    const { credential } = await issueSession(computer.computerId, target, signal);
     const opened = await ownerRequest(
         new Request(`${ownerOrigin}/morty/api/v1/computers/${computer.computerId}/transport`, {
             headers: { Upgrade: "websocket" },
@@ -215,7 +225,6 @@ it("Given an authorized Session, When a browser sends a plaintext prompt, Then t
     );
     expect(await inbox.next()).toMatchObject({ kind: "http.response", requestId: "plaintext-http", status: 400 });
     const { sender, receiver } = await encryptionPair();
-    const signal = new AbortController().signal;
     const command = await sessionPromptCommandCodec.encode(
         { ...plaintext, commandId: "encrypted-1", requestId: "encrypted-request" },
         receiver,
@@ -246,10 +255,12 @@ it("Given an authorized Session, When a browser sends a plaintext prompt, Then t
     expect(JSON.parse(result.body)).toEqual(JSON.parse(reply));
 });
 
-it("Given a Session credential, When the browser sends an encrypted GET command in its transport body, Then the Computer receives it and the correlated encrypted reply returns unchanged", async () => {
-    const computer = await connectedComputer();
+it("Given a Session credential, When the browser sends an encrypted GET command in its transport body, Then the Computer receives it and the correlated encrypted reply returns unchanged", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "settings-session" };
-    const { credential } = await issueSession(computer.computerId, target);
+    const { credential } = await issueSession(computer.computerId, target, signal);
     const response = await ownerRequest(
         new Request(`${ownerOrigin}/morty/api/v1/computers/${computer.computerId}/transport`, {
             headers: { Upgrade: "websocket" },
@@ -263,7 +274,6 @@ it("Given a Session credential, When the browser sends an encrypted GET command 
     socket.accept();
     onTestFinished(() => closeBrowserSocket(socket, new AbortController().signal));
     const { sender, receiver } = await encryptionPair();
-    const signal = new AbortController().signal;
     const command = await sessionConfigReadCommandCodec.encode(
         { kind: "session.config.read", requestId: "config-1", target },
         receiver,
@@ -303,13 +313,14 @@ it("Given a Session credential, When the browser sends an encrypted GET command 
     expect(JSON.parse(received.body)).toEqual(JSON.parse(reply));
 });
 
-it("Given an in-flight request ID, When another Session reuses it, Then the Worker rejects only the duplicate and permits a later retry", async () => {
-    const computer = await connectedComputer();
-    const signal = new AbortController().signal;
+it("Given an in-flight request ID, When another Session reuses it, Then the Worker rejects only the duplicate and permits a later retry", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const first = { harness: "claude", sessionId: "collision-first" };
     const second = { harness: "codex", sessionId: "collision-second" };
     const open = async (target: NativeSessionTarget) => {
-        const { credential } = await issueSession(computer.computerId, target);
+        const { credential } = await issueSession(computer.computerId, target, signal);
         const response = await ownerRequest(
             new Request(`${ownerOrigin}/morty/api/v1/computers/${computer.computerId}/transport`, {
                 headers: { Upgrade: "websocket" },
@@ -444,10 +455,12 @@ it("Given an in-flight request ID, When another Session reuses it, Then the Work
     expect(JSON.parse(retryResponse.body)).toEqual(JSON.parse(retryReply));
 });
 
-it("Given a Session credential and pending interaction, When the browser sends its encrypted answer, Then the Computer receives only the addressed command and the browser receives its encrypted reply", async () => {
-    const computer = await connectedComputer();
+it("Given a Session credential and pending interaction, When the browser sends its encrypted answer, Then the Computer receives only the addressed command and the browser receives its encrypted reply", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "interaction-session" };
-    const { credential } = await issueSession(computer.computerId, target);
+    const { credential } = await issueSession(computer.computerId, target, signal);
     const response = await ownerRequest(
         new Request(`${ownerOrigin}/morty/api/v1/computers/${computer.computerId}/transport`, {
             headers: { Upgrade: "websocket" },
@@ -488,7 +501,6 @@ it("Given a Session credential and pending interaction, When the browser sends i
     );
     expect(await inbox.next()).toMatchObject({ kind: "http.response", requestId: "wrong-http", status: 400 });
     const { sender, receiver } = await encryptionPair();
-    const signal = new AbortController().signal;
     const command = await sessionPermissionRespondCommandCodec.encode(
         {
             kind: "session.permission.respond",
@@ -534,10 +546,12 @@ it("Given a Session credential and pending interaction, When the browser sends i
     expect(JSON.parse(received.body)).toEqual(JSON.parse(reply));
 });
 
-it("Given a Session credential, When the browser requests its encrypted active Turn, Then the Computer receives the addressed request and the browser receives its encrypted reply", async () => {
-    const computer = await connectedComputer();
+it("Given a Session credential, When the browser requests its encrypted active Turn, Then the Computer receives the addressed request and the browser receives its encrypted reply", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "active-session" };
-    const { credential } = await issueSession(computer.computerId, target);
+    const { credential } = await issueSession(computer.computerId, target, signal);
     const response = await ownerRequest(
         new Request(`${ownerOrigin}/morty/api/v1/computers/${computer.computerId}/transport`, {
             headers: { Upgrade: "websocket" },
@@ -576,7 +590,6 @@ it("Given a Session credential, When the browser requests its encrypted active T
     );
     expect(await inbox.next()).toMatchObject({ kind: "http.response", requestId: "wrong-active-http", status: 400 });
     const { sender, receiver } = await encryptionPair();
-    const signal = new AbortController().signal;
     const command = await nativeSessionCommandCodec.encode(
         {
             kind: "native.session.request",
@@ -627,9 +640,10 @@ it("Given a Session credential, When the browser requests its encrypted active T
     expect(JSON.parse(received.body)).toEqual(JSON.parse(reply));
 });
 
-it("Given an authorized native Fork, When the Computer returns a new Session, Then only a matching harness destination answers the Fork", async () => {
-    const computer = await connectedComputer();
-    const signal = new AbortController().signal;
+it("Given an authorized native Fork, When the Computer returns a new Session, Then only a matching harness destination answers the Fork", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const operationId = "fork-routing";
     const digest = new Uint8Array(
         await crypto.subtle.digest(
@@ -719,10 +733,12 @@ it("Given an authorized native Fork, When the Computer returns a new Session, Th
     });
 });
 
-it("Given a forwarded native Session request, When the browser cancels it, Then the same Computer receives its Worker-owned cancellation", async () => {
-    const computer = await connectedComputer();
+it("Given a forwarded native Session request, When the browser cancels it, Then the same Computer receives its Worker-owned cancellation", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "cancel-native" };
-    const { credential } = await issueSession(computer.computerId, target);
+    const { credential } = await issueSession(computer.computerId, target, signal);
     const opened = await ownerRequest(
         new Request(`${ownerOrigin}/morty/api/v1/computers/${computer.computerId}/transport`, {
             headers: { Upgrade: "websocket" },
@@ -761,10 +777,12 @@ it("Given a forwarded native Session request, When the browser cancels it, Then 
     expect(await inbox.next()).toEqual({ kind: "pong" });
 });
 
-it("Given a native request forwarded to an earlier daemon, When the daemon is replaced and the caller cancels, Then the replacement receives no stale cancellation", async () => {
-    const computer = await connectedComputer();
+it("Given a native request forwarded to an earlier daemon, When the daemon is replaced and the caller cancels, Then the replacement receives no stale cancellation", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "replacement-cancel" };
-    const { credential } = await issueSession(computer.computerId, target);
+    const { credential } = await issueSession(computer.computerId, target, signal);
     const transportResponse = await ownerRequest(
         new Request(`${ownerOrigin}/morty/api/v1/computers/${computer.computerId}/transport`, {
             headers: { Upgrade: "websocket" },
@@ -779,7 +797,6 @@ it("Given a native request forwarded to an earlier daemon, When the daemon is re
     onTestFinished(() => closeBrowserSocket(browser, new AbortController().signal));
     const initialCrypto = await encryptionPair();
     const nextCrypto = await encryptionPair();
-    const signal = new AbortController().signal;
     const headers = [
         ["authorization", `Bearer ${credential}`],
         ["content-type", "application/json"],
@@ -852,10 +869,12 @@ it("Given a native request forwarded to an earlier daemon, When the daemon is re
     expect(await inbox.next()).toMatchObject({ kind: "http.response", requestId: "new-http", status: 200 });
 });
 
-it("Given a forwarded prompt, When the browser cancels its HTTP request, Then the prompt is not cancelled as native Session work", async () => {
-    const computer = await connectedComputer();
+it("Given a forwarded prompt, When the browser cancels its HTTP request, Then the prompt is not cancelled as native Session work", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "cancel-prompt" };
-    const { credential } = await issueSession(computer.computerId, target);
+    const { credential } = await issueSession(computer.computerId, target, signal);
     const opened = await ownerRequest(
         new Request(`${ownerOrigin}/morty/api/v1/computers/${computer.computerId}/transport`, {
             headers: { Upgrade: "websocket" },
@@ -870,7 +889,6 @@ it("Given a forwarded prompt, When the browser cancels its HTTP request, Then th
     onTestFinished(() => closeBrowserSocket(socket, new AbortController().signal));
     const promptEncryption = await encryptionPair();
     const nativeEncryption = await encryptionPair();
-    const signal = new AbortController().signal;
     const prompt = await sessionPromptCommandCodec.encode(
         {
             kind: "session.prompt",
@@ -933,8 +951,8 @@ it("Given a forwarded prompt, When the browser cancels its HTTP request, Then th
     expect(await inbox.next()).toMatchObject({ kind: "http.response", requestId: "next-http", status: 200 });
 });
 
-async function connectedComputer() {
-    const owner = await createOwner();
+async function connectedComputer(signal: AbortSignal) {
+    const owner = await createOwner(signal);
     const { computerId } = owner;
     const credential = await pairComputer(computerId);
     const successorCredential = computerCredentialSuccessor(credential);
@@ -965,7 +983,7 @@ async function connectedComputer() {
         credential,
         successorCredential,
         subscribe: async (target: NativeSessionTarget, expiresInSeconds = 900) => {
-            const { credential } = await issueSession(computerId, target, expiresInSeconds);
+            const { credential } = await issueSession(computerId, target, signal, expiresInSeconds);
             const response = await ownerRequest(
                 new Request(`${ownerOrigin}/morty/api/v1/computers/${computerId}/transport`, {
                     headers: { Upgrade: "websocket" },
@@ -1006,11 +1024,13 @@ async function connectedComputer() {
     };
 }
 
-it("Given a Session credential, When a subscription names a different Session, Then the Worker rejects it without registering it on the Computer", async () => {
-    const computer = await connectedComputer();
+it("Given a Session credential, When a subscription names a different Session, Then the Worker rejects it without registering it on the Computer", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const allowed = { harness: "claude", sessionId: "allowed" };
     const other = { harness: "claude", sessionId: "other" };
-    const { credential } = await issueSession(computer.computerId, allowed);
+    const { credential } = await issueSession(computer.computerId, allowed, signal);
     const response = await ownerRequest(
         new Request(`${ownerOrigin}/morty/api/v1/computers/${computer.computerId}/transport`, {
             headers: { Upgrade: "websocket" },
@@ -1109,14 +1129,15 @@ async function encryptionPair() {
     return { sender, receiver };
 }
 
-it("Given two authorized Session viewers, When the Computer sends encrypted single-target events, Then only the matching viewer receives the original frames in order", async () => {
-    const computer = await connectedComputer();
+it("Given two authorized Session viewers, When the Computer sends encrypted single-target events, Then only the matching viewer receives the original frames in order", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const first = { harness: "claude", sessionId: "encrypted-first" };
     const second = { harness: "codex", sessionId: "encrypted-second" };
     const firstInbox = await computer.subscribe(first);
     const secondInbox = await computer.subscribe(second);
     const { sender: encryptor } = await encryptionPair();
-    const signal = new AbortController().signal;
     const encode = (target: NativeSessionTarget, id: string): Promise<string> => {
         const message = decodeSessionEventEnvelope({
             kind: "session.event.v2",
@@ -1152,8 +1173,10 @@ it("Given two authorized Session viewers, When the Computer sends encrypted sing
     expect(v.parse(frame, await secondInbox.next()).data).toBe(secondWire);
 });
 
-it("Given an expired Session viewer, When the Computer sends an encrypted event, Then the subscription ends without delivering it", async () => {
-    const computer = await connectedComputer();
+it("Given an expired Session viewer, When the Computer sends an encrypted event, Then the subscription ends without delivering it", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const target = { harness: "claude", sessionId: "expired-session" };
     const inbox = await computer.subscribe(target, 60);
     const { sender: encryptor } = await encryptionPair();
@@ -1186,8 +1209,10 @@ it("Given an expired Session viewer, When the Computer sends an encrypted event,
     });
 });
 
-it("Given viewers of two native Session pairs, When the Computer sends separate encrypted events with future content, Then each viewer receives only its original frame", async () => {
-    const computer = await connectedComputer();
+it("Given viewers of two native Session pairs, When the Computer sends separate encrypted events with future content, Then each viewer receives only its original frame", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const first = { harness: "claude", sessionId: "shared-id" };
     const second = { harness: "codex", sessionId: "shared-id" };
     const firstInbox = await computer.subscribe(first);
@@ -1196,7 +1221,6 @@ it("Given viewers of two native Session pairs, When the Computer sends separate 
     const secondEvent = event(second, "second-event");
     const firstCrypto = await encryptionPair();
     const secondCrypto = await encryptionPair();
-    const signal = new AbortController().signal;
     const encoder = new TextEncoder();
     const encodeFuture = async (target: NativeSessionTarget, value: unknown, sender: PayloadEncryptionConnection) => {
         const routing = { kind: "session.event.v2", target };
@@ -1230,15 +1254,16 @@ it("Given viewers of two native Session pairs, When the Computer sends separate 
     }
 });
 
-it("Given two live Session views, When the Computer sends an encrypted close notice, Then only its viewer receives the original notice and the other continues receiving output", async () => {
-    const computer = await connectedComputer();
+it("Given two live Session views, When the Computer sends an encrypted close notice, Then only its viewer receives the original notice and the other continues receiving output", async ({
+    signal,
+}) => {
+    const computer = await connectedComputer(signal);
     const closed = { harness: "claude", sessionId: "closed-session" };
     const open = { harness: "claude", sessionId: "open-session" };
     const closedInbox = await computer.subscribe(closed);
     const openInbox = await computer.subscribe(open);
     const closedCrypto = await encryptionPair();
     const openCrypto = await encryptionPair();
-    const signal = new AbortController().signal;
     const notice = { kind: "session.close.notice", target: closed, reason: "Session released" };
     const wire = await sessionCloseNoticeEventCodec.encode(notice, closedCrypto.sender, signal);
     const output = decodeSessionEventEnvelope({

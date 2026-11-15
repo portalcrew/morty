@@ -11,12 +11,12 @@ import { ControlledSetupRuntime } from "../../e2e/infra/setup-daemon.ts";
 import worker from "../src/worker/application.ts";
 import { createIdentityFixture } from "./support/identity-fixture.ts";
 
-test.each(["current", "another service origin", "retired configuration"] as const)(
+test.for(["current", "another service origin", "retired configuration"] as const)(
     "Given %s, When setup runs again, Then it continues the saved identity's Computer or refuses without rewriting the saved state",
     {
         timeout: 60_000,
     },
-    async (stateKind) => {
+    async (stateKind, { signal }) => {
         await using cleanup = new AsyncDisposableStack();
         const fixture = await createIdentityFixture({
             listenOnLoopback: true,
@@ -52,7 +52,7 @@ test.each(["current", "another service origin", "retired configuration"] as cons
                     state,
                     runtime,
                     agentEnvironment: {},
-                    signal: AbortSignal.timeout(40_000),
+                    signal,
                     clock: {
                         now: () => new Date(time),
                         wait: async (milliseconds, signal) => {
@@ -129,7 +129,7 @@ test.each(["current", "another service origin", "retired configuration"] as cons
 
 test("Given the answer to setup's Computer pairing is lost, When setup runs again, Then the Computer uses that same pairing", {
     timeout: 60_000,
-}, async () => {
+}, async ({ signal }) => {
     await using cleanup = new AsyncDisposableStack();
     const fixture = await createIdentityFixture({
         listenOnLoopback: true,
@@ -165,7 +165,7 @@ test("Given the answer to setup's Computer pairing is lost, When setup runs agai
                 state,
                 runtime,
                 agentEnvironment: {},
-                signal: AbortSignal.timeout(40_000),
+                signal,
                 clock: {
                     now: () => new Date(time),
                     wait: async (milliseconds, signal) => {
@@ -208,7 +208,7 @@ test("Given the answer to setup's Computer pairing is lost, When setup runs agai
 
 test("Given a computer whose Runtime Morty revoked, When setup runs again, Then it pairs the same Computer with a new Runtime and keeps the computer's identity", {
     timeout: 60_000,
-}, async () => {
+}, async ({ signal }) => {
     await using cleanup = new AsyncDisposableStack();
     const fixture = await createIdentityFixture({
         listenOnLoopback: true,
@@ -241,7 +241,7 @@ test("Given a computer whose Runtime Morty revoked, When setup runs again, Then 
                 state,
                 runtime,
                 agentEnvironment: {},
-                signal: AbortSignal.timeout(40_000),
+                signal,
                 clock: {
                     now: () => new Date(time),
                     wait: async (milliseconds, signal) => {

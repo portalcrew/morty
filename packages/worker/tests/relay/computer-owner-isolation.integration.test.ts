@@ -3,9 +3,11 @@ import { afterAll, expect, it } from "vitest";
 import { createOwner, ownerOrigin, ownerRequest } from "./owner-fixture.ts";
 
 afterAll(abortAllDurableObjects);
-it("Given two computer owners, When one uses the other's computer management boundary, Then access is denied while its own computer remains available", async () => {
-    const owner = await createOwner();
-    const other = await createOwner();
+it("Given two computer owners, When one uses the other's computer management boundary, Then access is denied while its own computer remains available", async ({
+    signal,
+}) => {
+    const owner = await createOwner(signal);
+    const other = await createOwner(signal);
     const read = (computerId: string, token: string) =>
         ownerRequest(
             new Request(`${ownerOrigin}/morty/api/v1/computers/${computerId}`, {

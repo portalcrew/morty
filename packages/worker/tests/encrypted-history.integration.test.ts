@@ -16,11 +16,10 @@ afterEach(() => vi.useRealTimers());
 
 test("Given large valid history events, When the client reads all pages, Then every event is returned once without disconnecting the Computer", {
     timeout: 120_000,
-}, async () => {
+}, async ({ signal }) => {
     await using bindings = await createBindings();
     await using network = await recordingRelay(bindings.origin);
     await bindings.configure({ APP_ORIGIN: network.origin });
-    const signal = AbortSignal.timeout(90_000);
     const created = await fetch(new URL("/morty/api/v1/computers", network.origin), {
         method: "POST",
         signal,

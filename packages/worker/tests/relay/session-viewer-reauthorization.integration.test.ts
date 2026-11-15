@@ -70,10 +70,9 @@ class Inbox {
     };
 }
 
-async function openSessionView(_slug: string) {
-    const signal = AbortSignal.timeout(10_000);
+async function openSessionView(_slug: string, signal: AbortSignal) {
     const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
-    const owner = await createOwner();
+    const owner = await createOwner(signal);
     const { computerId } = owner;
     const sessionId = "viewer-check-session";
     const identity = await generateE2EIdentity();
@@ -142,7 +141,7 @@ async function openSessionView(_slug: string) {
         }),
     );
 
-    const { credential: sessionCredential } = await issueSession(computerId, { harness: "claude", sessionId });
+    const { credential: sessionCredential } = await issueSession(computerId, { harness: "claude", sessionId }, signal);
 
     const opened = await worker.fetch(
         new Request(`${origin}/v1/computers/${computerId}/transport`, {
@@ -218,8 +217,10 @@ const liveEvent = (sessionId: string, eventId: string) => ({
     },
 });
 
-it("Given a live Session view, When the owner revokes browser access, Then the live view closes", async () => {
-    const { daemon, owner, computerId, viewInbox, sendEvent } = await openSessionView("app");
+it("Given a live Session view, When the owner revokes browser access, Then the live view closes", async ({
+    signal,
+}) => {
+    const { daemon, owner, computerId, viewInbox, sendEvent } = await openSessionView("app", signal);
     await sendEvent("before-revocation");
 
     const revoked = await ownerRequest(
@@ -237,13 +238,14 @@ it("Given a live Session view, When the owner revokes browser access, Then the l
     daemon.close(1000, "done");
 });
 
-it("Given a live Session view the revocation push missed, When the Computer's Session access revocation is committed, Then the Relay's next connection check closes the view", async () => {
-    const { daemon, owner, computerId, viewInbox, sendEvent } = await openSessionView("missed");
+it("Given a live Session view the revocation push missed, When the Computer's Session access revocation is committed, Then the Relay's next connection check closes the view", async ({
+    signal,
+}) => {
+    const { daemon, owner, computerId, viewInbox, sendEvent } = await openSessionView("missed", signal);
     await sendEvent("before-revocation");
 
     // The revocation commits, but its push never reaches the view (or reached it before the view opened).
     await runInDurableObject(env.COMPUTER_RELAY.getByName(computerObjectName(computerId)), async (_instance, state) => {
-        const signal = AbortSignal.timeout(10_000);
         const identities = new IdentityStorage(new DurableObjectDatabase(state.storage), computerId);
         const credential = await identities.findCredential(owner.token, Date.now(), signal);
         if (credential === null) {

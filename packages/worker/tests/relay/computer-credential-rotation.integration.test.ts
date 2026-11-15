@@ -38,10 +38,10 @@ async function responseJson(response: Response, status: number): Promise<Readonl
 }
 
 /** Pairs a Runtime through the public pairing API and returns how its daemon connects. */
-async function pairedComputer(name: string) {
+async function pairedComputer(name: string, signal: AbortSignal) {
     const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
     const environment = bindings();
-    const owner = await createOwner();
+    const owner = await createOwner(signal);
     const headers = new Headers({ authorization: `Bearer ${owner.token}`, "content-type": "application/json" });
     const pairing = await responseJson(
         await ownerRequest(
@@ -112,8 +112,10 @@ afterAll(async () => {
     await abortAllDurableObjects();
 });
 
-it("Given a copy of a connected daemon's credential, When the copy connects and the daemon reconnects with the credential it saved, Then the Relay revokes the Computer and tells both daemons their Computer was revoked", async () => {
-    const runtime = await pairedComputer("copied-computer-credential");
+it("Given a copy of a connected daemon's credential, When the copy connects and the daemon reconnects with the credential it saved, Then the Relay revokes the Computer and tells both daemons their Computer was revoked", async ({
+    signal,
+}) => {
+    const runtime = await pairedComputer("copied-computer-credential", signal);
     const saved = computerCredentialSuccessor(runtime.credential);
     const daemon = accept(await runtime.connect(runtime.credential, saved));
 
@@ -130,8 +132,10 @@ it("Given a copy of a connected daemon's credential, When the copy connects and 
     expect(await copyAgain.closed).toMatchObject({ code: 1008, reason: "Computer revoked" });
 });
 
-it("Given a copy that rotated the credential twice, When the daemon reconnects with the credential it saved, Then the Relay still recognizes the copy and revokes the Computer", async () => {
-    const runtime = await pairedComputer("twice-rotated-copy");
+it("Given a copy that rotated the credential twice, When the daemon reconnects with the credential it saved, Then the Relay still recognizes the copy and revokes the Computer", async ({
+    signal,
+}) => {
+    const runtime = await pairedComputer("twice-rotated-copy", signal);
     const saved = computerCredentialSuccessor(runtime.credential);
     const daemon = accept(await runtime.connect(runtime.credential, saved));
 
@@ -147,8 +151,10 @@ it("Given a copy that rotated the credential twice, When the daemon reconnects w
     expect(await copy.closed).toMatchObject({ code: 1008, reason: "Computer revoked" });
 });
 
-it("Given a daemon whose connection reply was lost, When it repeats the same rotation, Then the Relay accepts it and the successor stays current", async () => {
-    const runtime = await pairedComputer("repeated-computer-rotation");
+it("Given a daemon whose connection reply was lost, When it repeats the same rotation, Then the Relay accepts it and the successor stays current", async ({
+    signal,
+}) => {
+    const runtime = await pairedComputer("repeated-computer-rotation", signal);
     const successor = computerCredentialSuccessor(runtime.credential);
     accept(await runtime.connect(runtime.credential, successor)).socket.close(1000, "Reply lost");
 

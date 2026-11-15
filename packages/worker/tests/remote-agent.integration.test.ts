@@ -10,10 +10,10 @@ import type { runSharedComputer } from "../../web/src/services/remote-agent.ts";
 
 const scenario =
     "Given a shared Computer with $history, when its served helper runs, then it returns the requested answer";
-test.each([
+test.for([
     { history: "short history", olderChunks: 0 },
     { history: "long history exceeding 100 pages", olderChunks: 10_001 },
-])(scenario, { timeout: 90_000 }, async ({ olderChunks }) => {
+])(scenario, { timeout: 90_000 }, async ({ olderChunks }, { signal }) => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-13T00:00:00Z") });
     onTestFinished(() => {
         vi.useRealTimers();
@@ -21,7 +21,6 @@ test.each([
     const createBindings = await prepareTestMortyRelayBindings();
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });
-    const signal = AbortSignal.timeout(75_000);
     const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
         method: "POST",
         signal,
@@ -165,12 +164,12 @@ test.each([
     await rejected;
 });
 
-test.each(["short", "long"])(
+test.for(["short", "long"])(
     "Given a shared Computer and a %s missing directory, When the remote Agent creates a conversation, Then its bounded error explains how to recover",
     {
         timeout: 60_000,
     },
-    async (length) => {
+    async (length, { signal }) => {
         vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-13T00:00:00Z") });
         onTestFinished(() => {
             vi.useRealTimers();
@@ -178,7 +177,6 @@ test.each(["short", "long"])(
         const createBindings = await prepareTestMortyRelayBindings();
         await using bindings = await createBindings();
         await bindings.configure({ APP_ORIGIN: bindings.origin });
-        const signal = AbortSignal.timeout(45_000);
         const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
             method: "POST",
             signal,

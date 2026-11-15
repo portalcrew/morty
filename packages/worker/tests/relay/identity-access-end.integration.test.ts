@@ -9,13 +9,14 @@ import { createOwner, ownerOrigin, ownerRequest } from "./owner-fixture.ts";
 
 afterAll(abortAllDurableObjects);
 
-it("Given the computer's credential was replaced while a request to end other access waited, When that request writes, Then it ends nothing and the successor keeps its access", async () => {
-    const owner = await createOwner();
+it("Given the computer's credential was replaced while a request to end other access waited, When that request writes, Then it ends nothing and the successor keeps its access", async ({
+    signal,
+}) => {
+    const owner = await createOwner(signal);
     const successor = `${owner.token}-successor`;
     await runInDurableObject(
         env.COMPUTER_RELAY.getByName(computerObjectName(owner.computerId)),
         async (_instance, state) => {
-            const signal = AbortSignal.timeout(10_000);
             const identities = new IdentityStorage(new DurableObjectDatabase(state.storage), owner.computerId);
             // The request authorized with the credential, then another revoked all access and replaced it.
             expect(await identities.revokeAllAccess(owner.token, successor, Date.now(), signal)).toBe(true);
@@ -44,14 +45,15 @@ async function joinBrowser(computerId: string, ownerToken: string, label: string
     return v.parse(v.object({ computerToken: v.string() }), await redeemed.json()).computerToken;
 }
 
-it("Given a browser whose device was ended while its request to end another device waited, When that request writes, Then it ends nothing and the other device keeps its access", async () => {
-    const owner = await createOwner();
+it("Given a browser whose device was ended while its request to end another device waited, When that request writes, Then it ends nothing and the other device keeps its access", async ({
+    signal,
+}) => {
+    const owner = await createOwner(signal);
     const stale = await joinBrowser(owner.computerId, owner.token, "Ended browser");
     const other = await joinBrowser(owner.computerId, owner.token, "Other browser");
     await runInDurableObject(
         env.COMPUTER_RELAY.getByName(computerObjectName(owner.computerId)),
         async (_instance, state) => {
-            const signal = AbortSignal.timeout(10_000);
             const identities = new IdentityStorage(new DurableObjectDatabase(state.storage), owner.computerId);
             const staleCredential = await identities.findCredential(stale, Date.now(), signal);
             const otherCredential = await identities.findCredential(other, Date.now(), signal);

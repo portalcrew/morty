@@ -3,7 +3,7 @@ import { createIdentityFixture } from "./support/identity-fixture.ts";
 
 test("Given a creation operation still applying initial settings, When another caller changes its inputs, Then the conflict is refused and a corrected retry after initialization fails creates a retained native Session", {
     timeout: 60000,
-}, async () => {
+}, async ({ signal }) => {
     const cloud = await createIdentityFixture();
     const applying = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
@@ -21,7 +21,6 @@ test("Given a creation operation still applying initial settings, When another c
                 },
             },
         ]);
-        const signal = AbortSignal.timeout(30000);
         const operationId = crypto.randomUUID();
         const input = {
             harness: "configuration-test",

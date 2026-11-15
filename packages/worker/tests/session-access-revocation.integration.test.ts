@@ -11,7 +11,9 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-test("Given a browser opening a Session, When its device is revoked before the Computer finishes creation, Then its pending open cannot grant fresh Session access", async () => {
+test("Given a browser opening a Session, When its device is revoked before the Computer finishes creation, Then its pending open cannot grant fresh Session access", async ({
+    signal,
+}) => {
     const cloud = await createIdentityFixture();
     const creation = Promise.withResolvers<void>();
     const continueCreation = Promise.withResolvers<void>();
@@ -42,7 +44,7 @@ test("Given a browser opening a Session, When its device is revoked before the C
                 env,
             );
         const computerPath = `v1/computers/${owner.computerId}`;
-        await runtime.api.verifyAgent("configuration-test", AbortSignal.timeout(15_000));
+        await runtime.api.verifyAgent("configuration-test", signal);
         const shared = await request(`${computerPath}/identity/transfers`, owner.token, {
             operationId: crypto.randomUUID(),
         });
@@ -66,7 +68,7 @@ test("Given a browser opening a Session, When its device is revoked before the C
             origin: cloud.origin,
             computerId: owner.computerId,
             credential: browser,
-            encryptionAccess: await runtime.encryptionAccess(AbortSignal.timeout(15_000)),
+            encryptionAccess: await runtime.encryptionAccess(signal),
         });
         onTestFinished(browserApi.close);
         const opening = browserApi.api.createConversation(
@@ -77,7 +79,7 @@ test("Given a browser opening a Session, When its device is revoked before the C
                 workspaceRef: ".",
                 workspaceLabel: ".",
             },
-            AbortSignal.timeout(30_000),
+            signal,
         );
         const rejected = expect(opening).rejects.toMatchObject({
             code: "UNAUTHENTICATED",
@@ -102,7 +104,9 @@ test("Given a browser opening a Session, When its device is revoked before the C
     }
 }, 45_000);
 
-test("Given a device with an open Session, When its owner disconnects it while the Computer is offline, Then device and Session access are revoked together without a retry", async () => {
+test("Given a device with an open Session, When its owner disconnects it while the Computer is offline, Then device and Session access are revoked together without a retry", async ({
+    signal,
+}) => {
     const cloud = await createIdentityFixture();
     try {
         const owner = await cloud.createAnonymousUser();
@@ -117,7 +121,7 @@ test("Given a device with an open Session, When its owner disconnects it while t
                 cloud.environment(),
             );
         const computerPath = `v1/computers/${owner.computerId}`;
-        await runtime.api.verifyAgent("codex", AbortSignal.timeout(15_000));
+        await runtime.api.verifyAgent("codex", signal);
         const shared = await request(`${computerPath}/identity/transfers`, owner.token, {
             operationId: crypto.randomUUID(),
         });
@@ -136,7 +140,7 @@ test("Given a device with an open Session, When its owner disconnects it while t
             origin: cloud.origin,
             computerId: owner.computerId,
             credential: browser,
-            encryptionAccess: await runtime.encryptionAccess(AbortSignal.timeout(15_000)),
+            encryptionAccess: await runtime.encryptionAccess(signal),
         });
         onTestFinished(browserApi.close);
         const window = await browserApi.api.createConversation(
@@ -147,19 +151,19 @@ test("Given a device with an open Session, When its owner disconnects it while t
                 workspaceRef: ".",
                 workspaceLabel: ".",
             },
-            AbortSignal.timeout(30_000),
+            signal,
         );
         const transport = new WsTransport();
         onTestFinished(() => transport.close());
         const client = new MortyClient({
             transport,
-            encryption: { access: await runtime.encryptionAccess(AbortSignal.timeout(15_000)) },
+            encryption: { access: await runtime.encryptionAccess(signal) },
             endpoint: cloud.origin,
             computerId: window.computerId,
             credentialProvider: { credential: async () => window.credential },
         });
         onTestFinished(client.close);
-        const readAccess = () => client.sessions.readConfiguration(window.target, AbortSignal.timeout(15_000));
+        const readAccess = () => client.sessions.readConfiguration(window.target, signal);
         await expect(readAccess()).resolves.toBeDefined();
         await runtime.disconnect();
         const failed = await request(`${computerPath}/identity/devices/${device.id}`, owner.token, undefined, "DELETE");
@@ -178,7 +182,7 @@ test("Given a device with an open Session, When its owner disconnects it while t
 }, 60_000);
 
 /** The owner's computer with a connected Computer, and the requests a browser or the owner make against it. */
-async function sharedComputer(cloud: Awaited<ReturnType<typeof createIdentityFixture>>) {
+async function sharedComputer(cloud: Awaited<ReturnType<typeof createIdentityFixture>>, signal: AbortSignal) {
     const owner = await cloud.createAnonymousUser();
     const runtime = await cloud.connectAgent(owner.computerId, owner.token);
     const request = (path: string, token: string, body?: object, method = body === undefined ? "GET" : "POST") =>
@@ -191,7 +195,7 @@ async function sharedComputer(cloud: Awaited<ReturnType<typeof createIdentityFix
             cloud.environment(),
         );
     const computerPath = `v1/computers/${owner.computerId}`;
-    await runtime.api.verifyAgent("codex", AbortSignal.timeout(15_000));
+    await runtime.api.verifyAgent("codex", signal);
     /** A browser joins through a link the owner shares, and opens a conversation it then reads. */
     const joinBrowser = async (label: string) => {
         const shared = await request(`${computerPath}/identity/transfers`, owner.token, {
@@ -212,7 +216,7 @@ async function sharedComputer(cloud: Awaited<ReturnType<typeof createIdentityFix
             origin: cloud.origin,
             computerId: owner.computerId,
             credential: token,
-            encryptionAccess: await runtime.encryptionAccess(AbortSignal.timeout(15_000)),
+            encryptionAccess: await runtime.encryptionAccess(signal),
         });
         onTestFinished(browserApi.close);
         const window = await browserApi.api.createConversation(
@@ -223,37 +227,38 @@ async function sharedComputer(cloud: Awaited<ReturnType<typeof createIdentityFix
                 workspaceRef: ".",
                 workspaceLabel: ".",
             },
-            AbortSignal.timeout(30_000),
+            signal,
         );
         const transport = new WsTransport();
         onTestFinished(transport.close);
         const client = new MortyClient({
             transport,
-            encryption: { access: await runtime.encryptionAccess(AbortSignal.timeout(15_000)) },
+            encryption: { access: await runtime.encryptionAccess(signal) },
             endpoint: cloud.origin,
             computerId: window.computerId,
             credentialProvider: { credential: async () => window.credential },
         });
         onTestFinished(() => client.close());
-        const readConversation = () =>
-            client.events.list(window.target, new MortyPageRequest(1, ""), AbortSignal.timeout(15_000));
+        const readConversation = () => client.events.list(window.target, new MortyPageRequest(1, ""), signal);
         await readConversation();
         /** Opens a live view of the conversation; its `completed` settles only once the view ends. */
         const watchConversation = () =>
             client.events.subscribeLive(
                 window.target,
                 { receive: async () => true, reconcile: async () => undefined },
-                AbortSignal.timeout(30_000),
+                signal,
             );
         return { deviceId: device.id, token, readConversation, watchConversation };
     };
     return { owner, runtime, request, computerPath, joinBrowser };
 }
 
-test("Given two browsers reading their conversations, one watching it live, When the owner removes that one, Then its live view ends and it stops reading while the other keeps reading with the access it holds", async () => {
+test("Given two browsers reading their conversations, one watching it live, When the owner removes that one, Then its live view ends and it stops reading while the other keeps reading with the access it holds", async ({
+    signal,
+}) => {
     const cloud = await createIdentityFixture();
     try {
-        const { owner, runtime, request, computerPath, joinBrowser } = await sharedComputer(cloud);
+        const { owner, runtime, request, computerPath, joinBrowser } = await sharedComputer(cloud, signal);
         await using _runtime = runtime;
         const removed = await joinBrowser("Removed browser");
         const kept = await joinBrowser("Kept browser");
@@ -275,10 +280,12 @@ test("Given two browsers reading their conversations, one watching it live, When
     }
 }, 60_000);
 
-test("Given a browser reading its conversation, When it ends its own access, Then the access it already holds no longer reads the conversation", async () => {
+test("Given a browser reading its conversation, When it ends its own access, Then the access it already holds no longer reads the conversation", async ({
+    signal,
+}) => {
     const cloud = await createIdentityFixture();
     try {
-        const { runtime, request, computerPath, joinBrowser } = await sharedComputer(cloud);
+        const { runtime, request, computerPath, joinBrowser } = await sharedComputer(cloud, signal);
         await using _runtime = runtime;
         const browser = await joinBrowser("Leaving browser");
 
