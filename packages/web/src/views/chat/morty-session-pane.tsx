@@ -558,6 +558,7 @@ function MortySessionPaneBody({
         attachmentModel,
         settingsModel,
         executionContext.available,
+        pane.steeringSupported,
     );
     // An answer to an Agent's question goes out as the composer's message would, which the Computer runs or queues.
     const answer = (messageId: string): void =>
@@ -1038,7 +1039,6 @@ function MortySessionPaneBody({
                         <ChatMessageQueue
                             messages={presentation.queuedMessages}
                             pendingMessages={presentation.pendingQueueMessages}
-                            steeringSupported={pane.steeringSupported}
                             onDelete={(commandId) =>
                                 run(async (signal) => await pane.store.getState().deleteQueued(commandId, signal))
                             }

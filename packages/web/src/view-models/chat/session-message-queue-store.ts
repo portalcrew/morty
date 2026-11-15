@@ -52,15 +52,15 @@ type QueueRequestOutcome =
 export interface SessionMessageQueueStore {
     readonly feedback: QueueFeedback;
     readonly requests: ReadonlyMap<string, QueuedMessageRequest>;
-    readonly deleteMessage: (message: ChatQueuedMessage | null, signal: AbortSignal) => Promise<void>;
+    readonly deleteMessage: (message: ChatQueuedMessage, signal: AbortSignal) => Promise<void>;
     /**
      * Takes a queued message out of the queue and back into the composer for editing. The text returns whenever the
      * Computer may have withdrawn the message, so a withdrawal it did not confirm never loses the text.
      */
-    readonly editMessage: (message: ChatQueuedMessage | null, signal: AbortSignal) => Promise<void>;
+    readonly editMessage: (message: ChatQueuedMessage, signal: AbortSignal) => Promise<void>;
     readonly dismissFailure: () => void;
     /** Resolves whether the Computer took the message into the running turn. */
-    readonly steerMessage: (message: ChatQueuedMessage | null, signal: AbortSignal) => Promise<boolean>;
+    readonly steerMessage: (message: ChatQueuedMessage, signal: AbortSignal) => Promise<boolean>;
 }
 
 /**
@@ -132,11 +132,8 @@ export const createSessionMessageQueueStore = (options: {
 }) =>
     createStore<SessionMessageQueueStore>()((set, get) => {
         /** Marks `message` with `request` while the Computer handles it, unless a request on it already runs. */
-        const begin = (
-            message: ChatQueuedMessage | null,
-            request: "steering" | "deleting",
-        ): message is ChatQueuedMessage => {
-            if (message === null || message.kind !== "queued" || get().requests.has(message.commandId)) {
+        const begin = (message: ChatQueuedMessage, request: "steering" | "deleting"): boolean => {
+            if (get().requests.has(message.commandId)) {
                 return false;
             }
             set((state) => ({

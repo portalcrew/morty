@@ -68,13 +68,17 @@ import {
 import type { SessionConnectionFollower } from "./session-operation-connection.ts";
 import {
     canChangeSettings,
+    canDeleteQueued,
+    canEditQueued,
     canRetryFailedMessage,
     canRetryUnknownDelivery,
     canSend,
+    canSteerQueued,
     canStop,
     canStopFromSettings,
     canSubmit,
     composerHasMessage,
+    queuedMessageEditable,
     type SessionOperationFacts,
 } from "./session-operation-rules.ts";
 import type { SessionPageState } from "./session-page-state.ts";
@@ -232,6 +236,7 @@ function sessionOperationFacts(
     tasks: Pick<SessionTaskControlsStore, "stopRequest">,
     settings: Pick<SessionSettingsStore, "change">,
     connectionAvailable: boolean,
+    steeringSupported: boolean,
 ): SessionOperationFacts {
     return {
         connectionAvailable,
@@ -241,7 +246,21 @@ function sessionOperationFacts(
         delivery: delivery.state.kind,
         waitingForInput: waitingForInput(execution.interactions),
         ownerRunsTurn: ownerRunsTurn(execution.turn),
+        steeringSupported,
     };
+}
+
+/** A message in the Computer's queue as the queue shows it, with the actions the operation rules accept now. */
+function queuedMessagePresentation(facts: SessionOperationFacts, message: ChatQueuedMessage) {
+    return {
+        ...message,
+        editDisabled: !canEditQueued(facts, message),
+        editLabel: queuedMessageEditable(message)
+            ? `Edit queued message: ${message.summary}`
+            : "This message's files cannot be restored here. Delete it and send it again.",
+        steerDisabled: !canSteerQueued(facts, message),
+        deleteDisabled: !canDeleteQueued(facts, message),
+    } as const;
 }
 
 export function sessionPanePresentation(
@@ -255,8 +274,17 @@ export function sessionPanePresentation(
     attachments: ComposerAttachmentStore,
     settings: Pick<SessionSettingsStore, "change">,
     connectionAvailable: boolean,
+    steeringSupported: boolean,
 ) {
-    const facts = sessionOperationFacts(model, execution, delivery, tasks, settings, connectionAvailable);
+    const facts = sessionOperationFacts(
+        model,
+        execution,
+        delivery,
+        tasks,
+        settings,
+        connectionAvailable,
+        steeringSupported,
+    );
     const timeline = sessionProjectionTimeline(model.projection, execution.observations);
     const olderHistory = sessionProjectionOlderHistory(model.projection);
     const activity = sessionActivity(execution, delivery.state);
@@ -346,6 +374,7 @@ export function sessionPanePresentation(
         // An answer to an Agent's question goes out as the composer's message would, whatever the draft holds.
         answerDisabled: !canSend(facts),
         ...deliveries,
+        queuedMessages: deliveries.queuedMessages.map((message) => queuedMessagePresentation(facts, message)),
     } as const;
 }
 
@@ -508,6 +537,7 @@ export function createSessionPaneModel(options: {
                 tasks.getState(),
                 settings.getState(),
                 options.connectionAvailable(get().connection),
+                session.ready.capabilities.steering,
             );
         let connectionChangedAt = clock.now();
         let recoveryNoticeDeadline: AbortController | null = null;
@@ -1217,14 +1247,26 @@ export function createSessionPaneModel(options: {
                 delivery.getState().takeFailedMessage();
             },
             steerQueued: async (commandId, signal) => {
-                if (await messageQueue.getState().steerMessage(queuedMessage(commandId), signal)) {
+                const message = queuedMessage(commandId);
+                if (message === null || !canSteerQueued(operationFacts(), message)) {
+                    return;
+                }
+                if (await messageQueue.getState().steerMessage(message, signal)) {
                     set({ followRevision: get().followRevision + 1 });
                 }
             },
-            deleteQueued: async (commandId, signal) =>
-                await messageQueue.getState().deleteMessage(queuedMessage(commandId), signal),
-            editQueued: async (commandId, signal) =>
-                await messageQueue.getState().editMessage(queuedMessage(commandId), signal),
+            deleteQueued: async (commandId, signal) => {
+                const message = queuedMessage(commandId);
+                if (message !== null && canDeleteQueued(operationFacts(), message)) {
+                    await messageQueue.getState().deleteMessage(message, signal);
+                }
+            },
+            editQueued: async (commandId, signal) => {
+                const message = queuedMessage(commandId);
+                if (message !== null && canEditQueued(operationFacts(), message)) {
+                    await messageQueue.getState().editMessage(message, signal);
+                }
+            },
             configure: async (selection, signal) => {
                 if (!canChangeSettings(operationFacts())) {
                     return;
@@ -1275,6 +1317,7 @@ export function createSessionPaneModel(options: {
                 composerAttachments.getState(),
                 settings.getState(),
                 options.connectionAvailable(store.getState().connection),
+                session.ready.capabilities.steering,
             );
             if (!presentation.canSuggestProgress) {
                 return false;

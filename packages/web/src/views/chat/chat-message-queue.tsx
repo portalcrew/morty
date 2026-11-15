@@ -2,8 +2,7 @@ import { Clock4, CornerUpLeft, LoaderCircle, MessageSquare, Pencil, Trash2 } fro
 import type { ReactNode } from "react";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { dataTestId } from "../../data-testid.ts";
-import type { sessionDeliveryPresentation } from "../../view-models/chat/session-delivery-presentation.ts";
-import type { ChatQueuedMessage } from "../../view-models/chat/session-message-queue-store.ts";
+import type { sessionPanePresentation } from "../../view-models/chat/session-pane-store.ts";
 
 function QueueAction({
     label,
@@ -33,14 +32,12 @@ function QueueAction({
 export function ChatMessageQueue({
     messages,
     pendingMessages,
-    steeringSupported,
     onDelete,
     onEdit,
     onSteer,
 }: {
-    readonly messages: readonly ChatQueuedMessage[];
-    readonly pendingMessages: ReturnType<typeof sessionDeliveryPresentation>["pendingQueueMessages"];
-    readonly steeringSupported: boolean;
+    readonly messages: ReturnType<typeof sessionPanePresentation>["queuedMessages"];
+    readonly pendingMessages: ReturnType<typeof sessionPanePresentation>["pendingQueueMessages"];
     readonly onDelete: (commandId: string) => void;
     readonly onEdit: (commandId: string) => void;
     readonly onSteer: (commandId: string) => void;
@@ -69,10 +66,6 @@ export function ChatMessageQueue({
                         <ol className="mb-0 flex w-full min-w-0 list-none flex-col gap-0 px-3 pt-1 pb-6">
                             {messages.map((message) => {
                                 const pending = message.kind !== "queued";
-                                const editable =
-                                    message.prompt !== "" ||
-                                    (message.attachments.kind === "restorable" &&
-                                        message.attachments.values.length > 0);
                                 return (
                                     <li
                                         className="-mx-2 flex items-start gap-2 rounded-sm py-1.5 pr-2.5 pl-2 text-morty-text-2 transition-colors hover:bg-morty-fill-opacity-2"
@@ -100,18 +93,14 @@ export function ChatMessageQueue({
                                         </span>
                                         <div className="flex h-6 shrink-0 items-center gap-0.5">
                                             <QueueAction
-                                                disabled={pending || !editable}
-                                                label={
-                                                    editable
-                                                        ? `Edit queued message: ${message.summary}`
-                                                        : "This message's files cannot be restored here. Delete it and send it again."
-                                                }
+                                                disabled={message.editDisabled}
+                                                label={message.editLabel}
                                                 onClick={() => onEdit(message.commandId)}
                                             >
                                                 <Pencil aria-hidden="true" className="size-3.5" />
                                             </QueueAction>
                                             <QueueAction
-                                                disabled={pending || !steeringSupported}
+                                                disabled={message.steerDisabled}
                                                 label={`Steer queued message: ${message.summary}`}
                                                 onClick={() => onSteer(message.commandId)}
                                             >
@@ -125,7 +114,7 @@ export function ChatMessageQueue({
                                                 )}
                                             </QueueAction>
                                             <QueueAction
-                                                disabled={pending}
+                                                disabled={message.deleteDisabled}
                                                 label={`Delete queued message: ${message.summary}`}
                                                 onClick={() => onDelete(message.commandId)}
                                             >

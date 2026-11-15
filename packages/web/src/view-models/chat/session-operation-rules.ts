@@ -1,5 +1,6 @@
 import type { SessionConnection } from "./session-connection.ts";
 import type { SessionDeliveryStore } from "./session-delivery-store.ts";
+import type { ChatQueuedMessage } from "./session-message-queue-store.ts";
 
 /**
  * The facts that decide which of the user's operations the Session pane accepts now. The presentation disables a
@@ -18,6 +19,8 @@ export interface SessionOperationFacts {
     readonly waitingForInput: boolean;
     /** The running turn belongs to the native session's owner, such as the Codex app, which only it can stop. */
     readonly ownerRunsTurn: boolean;
+    /** The Session's Agent lets a queued message steer the running turn. */
+    readonly steeringSupported: boolean;
 }
 
 /**
@@ -100,6 +103,48 @@ export function canStopFromSettings(
     facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "ownerRunsTurn" | "stopping">,
 ): boolean {
     return canStop(facts) && !facts.stopping;
+}
+
+/**
+ * Acting on a message in the Computer's queue: the Computer is reachable, and no other request on that message is in
+ * flight. Queue requests are independent of delivery, settings and stopping.
+ */
+function canActOnQueued(
+    facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection">,
+    message: Pick<ChatQueuedMessage, "kind">,
+): boolean {
+    return facts.connectionAvailable && facts.connection === "ready" && message.kind === "queued";
+}
+
+/** Deleting a queued message withdraws it from the Computer's queue. */
+export function canDeleteQueued(
+    facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection">,
+    message: Pick<ChatQueuedMessage, "kind">,
+): boolean {
+    return canActOnQueued(facts, message);
+}
+
+/** A queued message returns to the composer only with something to edit: its text, or files this browser still holds. */
+export function queuedMessageEditable(message: Pick<ChatQueuedMessage, "prompt" | "attachments">): boolean {
+    return (
+        message.prompt !== "" || (message.attachments.kind === "restorable" && message.attachments.values.length > 0)
+    );
+}
+
+/** Editing a queued message withdraws it and returns it to the composer. */
+export function canEditQueued(
+    facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection">,
+    message: Pick<ChatQueuedMessage, "kind" | "prompt" | "attachments">,
+): boolean {
+    return canActOnQueued(facts, message) && queuedMessageEditable(message);
+}
+
+/** Steering moves a queued message into the running turn, which only an Agent that supports steering accepts. */
+export function canSteerQueued(
+    facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "steeringSupported">,
+    message: Pick<ChatQueuedMessage, "kind">,
+): boolean {
+    return facts.steeringSupported && canActOnQueued(facts, message);
 }
 
 /** The composer holds a message to send or queue: text or files, with no file still being read. */

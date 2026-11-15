@@ -754,3 +754,30 @@ test("Given a viewer is loading history before seeing a queue item, When another
     await viewer.close();
     await app.close();
 });
+
+test("Given a follow-up is queued behind a running reply, When the network drops, Then its queue actions are unavailable like Send", {
+    timeout: 30_000,
+}, async () => {
+    const queuedPrompt = "Queued while offline";
+    const app = await createTestApp({ connectAgent: true, agent: { harness: "pi", label: "Pi" } });
+    const composer = await readyComposer(app);
+    await sendPrompt(app, composer, "wait for steering");
+    await app.queryElementByTestId(
+        dataTestId.sendMessage,
+        (element) => element.getAttribute("aria-label") === "Stop agent output",
+    );
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), queuedPrompt);
+    const queued = await app.queryElementByTestId(
+        dataTestId.queuedMessage,
+        (element) => element.textContent?.includes(queuedPrompt) === true,
+    );
+    const actions = ["Edit", "Steer", "Delete"].map((action) =>
+        getByRole(queued, "button", { name: `${action} queued message: ${queuedPrompt}` }),
+    );
+    expect(actions.map((button) => button.hasAttribute("disabled"))).toEqual([false, false, false]);
+
+    app.transport.disconnect();
+
+    await app.waitForView(() => expect(app.elementByTestId(dataTestId.sendMessage)).toHaveProperty("disabled", true));
+    expect(actions.map((button) => button.hasAttribute("disabled"))).toEqual([true, true, true]);
+});
