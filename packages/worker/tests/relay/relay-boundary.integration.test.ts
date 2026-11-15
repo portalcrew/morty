@@ -1453,7 +1453,7 @@ it("Given Chat reads the Session execution naming an unconfirmed command, When t
                     target: runtime.sessionTarget,
                     turn: null,
                     queued: [],
-                    command: { state: "completed", stopReason: "end_turn" },
+                    delivery: { commandId: "unconfirmed-command", state: "received" },
                     executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
                     interactionState: null,
                 },
@@ -1463,7 +1463,7 @@ it("Given Chat reads the Session execution naming an unconfirmed command, When t
         );
         const routed = await responseJson(await response, 200);
         expect(await nativeSessionResultCodec.decode(JSON.stringify(routed), encryption.client, signal)).toMatchObject({
-            command: { state: "completed", stopReason: "end_turn" },
+            delivery: { commandId: "unconfirmed-command", state: "received" },
         });
     } finally {
         runtime.daemon.close(1000, "Test complete");

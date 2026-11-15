@@ -212,7 +212,7 @@ it("Given a Session in a selected workspace, When the App prompts it and reads i
             signal,
         );
         await expect(session.sessions.readSessionExecution(sessionTarget, signal, commandId)).resolves.toHaveProperty(
-            "command",
+            "delivery",
         );
 
         expect(await runtime.api.managedSessions(signal)).toContainEqual(

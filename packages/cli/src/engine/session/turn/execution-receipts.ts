@@ -296,38 +296,20 @@ export class ExecutionReceipts {
         const outcome = command === undefined ? undefined : this.#outcome(command);
         return outcome === undefined ? undefined : storedOutcome(outcome);
     };
-    /** The command's delivery as the ledger knows it; another Session's command reads as unknown. */
+    /** Whether the ledger received the command, whatever became of it since; another Session's command reads as unknown. */
     readonly delivery = (commandId: string, sessionTarget: NativeSessionTarget): CommandDelivery => {
         const standing = this.#standing(commandId, sessionTarget);
         switch (standing.kind) {
             case "unseen":
             case "foreign":
-                return { state: "unknown" };
-            case "expired":
-                return { state: "expired" };
-            case "cancelled":
-                // A command that never started has no result to lose: it stays cancelled.
-                return { state: "completed", stopReason: "cancelled" };
+                return { commandId, state: "unknown" };
             case "retryable":
             case "retained":
-                break;
+            case "expired":
+            case "cancelled":
+                return { commandId, state: "received" };
             default:
                 return standing satisfies never;
-        }
-        const command = this.#read(commandId);
-        if (command === undefined || isUnsettled(command.fate)) {
-            return { state: "accepted" };
-        }
-        const outcome = this.outcome(commandId);
-        if (outcome?.type !== "lifecycle-metadata" || !isPromptTerminal(outcome.payload)) {
-            return { state: "expired" };
-        }
-        switch (outcome.payload.kind) {
-            case "prompt.completed":
-                return { state: "completed", stopReason: promptStopReason(outcome.payload.completion) };
-            case "prompt.failed":
-            case "prompt.failed-before-start":
-                return { code: outcome.payload.code, state: "failed" };
         }
     };
     /**

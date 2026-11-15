@@ -84,7 +84,7 @@ async function readDelivery(peer: RealDaemonPeer, commandId: string) {
         }
         const result = decodeNativeSessionResult(raw);
         if (result.requestId === requestId && result.action === "active-turn") {
-            return result.command;
+            return result.delivery;
         }
     }
 }
@@ -122,7 +122,7 @@ async function evictReceipts(peer: RealDaemonPeer): Promise<void> {
     }
 }
 
-test("Given an executed command and a command cancelled before start, When later commands evict both receipts without a restart, Then the cancelled command reads as cancelled rather than expired and cannot execute", async () => {
+test("Given an executed command and a command cancelled before start, When later commands evict both receipts without a restart, Then both still read as received and the cancelled command cannot execute", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-30T08:00:00Z"));
     const directory = await mkdtemp(join(tmpdir(), "morty-cancelled-delivery-"));
@@ -140,11 +140,9 @@ test("Given an executed command and a command cancelled before start, When later
                 expect((await observe(peer, ["a-cancelled"])).cancelled).toEqual(["a-cancelled"]);
                 await evictReceipts(peer);
 
-                expect(await readDelivery(peer, "a-cancelled")).toEqual({
-                    state: "completed",
-                    stopReason: "cancelled",
-                });
-                expect(await readDelivery(peer, "a-executed")).toEqual({ state: "expired" });
+                for (const commandId of ["a-cancelled", "a-executed"]) {
+                    expect(await readDelivery(peer, commandId)).toEqual({ commandId, state: "received" });
+                }
                 peer.send(promptCommand(peer, "a-cancelled", "This command was already cancelled"));
                 expect(await observe(peer, ["a-cancelled"])).toEqual({
                     started: [],

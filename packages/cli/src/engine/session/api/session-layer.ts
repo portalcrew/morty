@@ -98,7 +98,7 @@ export function buildSessionLayer(options: SessionLayerOptions) {
                 interactionState,
                 ...(request.deliveryCommandId === undefined
                     ? {}
-                    : { command: operations.delivery(request.deliveryCommandId, request.target) }),
+                    : { delivery: operations.delivery(request.deliveryCommandId, request.target) }),
             };
             // How the last started command ended is told only while none runs.
             if (turn !== null) {

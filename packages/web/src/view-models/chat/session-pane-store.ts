@@ -644,7 +644,7 @@ export function createSessionPaneModel(options: {
                 deliveryCommandId ?? undefined,
             );
             signal.throwIfAborted();
-            await observeExecution({ kind: "read", snapshot, basis, deliveryCommandId }, connected, signal);
+            await observeExecution({ kind: "read", snapshot, basis }, connected, signal);
         };
         /** Applies a fact to the Session's execution, and performs the read it asks for through `connected`. */
         const observeExecution = async (

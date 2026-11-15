@@ -68,7 +68,7 @@ describe("Session execution read contracts", () => {
     it("Given an execution with an unknown command delivery state, When it crosses the launch protocol boundary, Then the malformed snapshot is rejected", () => {
         expect(() =>
             decodeNativeSessionResult(
-                JSON.stringify({ ...execution, command: { state: "superseded", by: "command-2" } }),
+                JSON.stringify({ ...execution, delivery: { commandId: "command-1", state: "superseded" } }),
             ),
         ).toThrow();
     });
@@ -93,8 +93,10 @@ describe("Session execution read contracts", () => {
 
     it("Given an execution with a known command delivery, When it is decoded, Then the delivery is kept", () => {
         expect(
-            decodeNativeSessionResult(JSON.stringify({ ...execution, command: { state: "failed", code: "boom" } })),
-        ).toMatchObject({ command: { state: "failed", code: "boom" } });
+            decodeNativeSessionResult(
+                JSON.stringify({ ...execution, delivery: { commandId: "command-1", state: "received" } }),
+            ),
+        ).toMatchObject({ delivery: { commandId: "command-1", state: "received" } });
     });
     it("Given a running turn without its start time, When a client restores execution, Then the retired snapshot is rejected", () => {
         expect(() =>
