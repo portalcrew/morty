@@ -12,10 +12,12 @@ import { ClaudeFixture } from "../support/agents/claude.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 
-test("Given a real Claude native Session with 6000 saved messages, When its preview is loaded through the daemon, Then the in-process adapter delivers every message in order", async () => {
+test("Given a real Claude native Session with 6000 saved messages, When its preview is loaded through the daemon, Then the in-process adapter delivers every message in order", async ({
+    signal,
+}) => {
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "UNUSED_HISTORY_PROVIDER");
     await using agent = await ClaudeFixture.create(provider);
-    await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
         const home = agent.environment["CLAUDE_CONFIG_DIR"];
         if (home === undefined) {
             throw new Error("The Claude fixture requires an isolated configuration directory");

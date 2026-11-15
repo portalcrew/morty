@@ -20,7 +20,9 @@ import { ClaudeFixture } from "../support/agents/claude.ts";
 import { prepareNewRealSession, withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 
-test("Given a real claude native Session, When the active prompt is cancelled with a follow-up queued, Then the queued prompt restores that Session and completes", async () => {
+test("Given a real claude native Session, When the active prompt is cancelled with a follow-up queued, Then the queued prompt restores that Session and completes", async ({
+    signal,
+}) => {
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     let holdResponse = false;
@@ -34,7 +36,7 @@ test("Given a real claude native Session, When the active prompt is cancelled wi
     });
     await using agent = await ClaudeFixture.create(provider);
     try {
-        await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
             const nativeId = await prepareNewRealSession(peer, "claude");
             const sendPrompt = (commandId: string): void =>
                 peer.send(
@@ -125,10 +127,12 @@ test("Given a real claude native Session, When the active prompt is cancelled wi
     }
 });
 
-test("Given a completed real Claude Session, When it is forked, Then its history is visible before the first child Turn completes", async () => {
+test("Given a completed real Claude Session, When it is forked, Then its history is visible before the first child Turn completes", async ({
+    signal,
+}) => {
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "CLAUDE_FORK_REPLY");
     await using agent = await ClaudeFixture.create(provider);
-    await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
         const sendPrompt = (sessionTarget: NativeSessionTarget, commandId: string): void =>
             peer.send(
                 encodeSessionPromptCommand({

@@ -11,7 +11,9 @@ import { verifyImageDelivery } from "../support/agents/verify-image-delivery.ts"
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
 for (const tool of ["view_image", "mcp"] as const) {
-    test(`Given real Codex uses ${tool} on a PNG, When clients watch and reopen the native session, Then the image can be reverse-read without base64 fragments and chatting can continue`, async () => {
+    test(`Given real Codex uses ${tool} on a PNG, When clients watch and reopen the native session, Then the image can be reverse-read without base64 fragments and chatting can continue`, async ({
+        signal,
+    }) => {
         const prompt =
             tool === "mcp"
                 ? "Use the image_test image MCP tool, then reply"
@@ -21,7 +23,7 @@ for (const tool of ["view_image", "mcp"] as const) {
             ...(tool === "mcp" ? { mcpImage: true } : { readPath: "picture.png" }),
         });
         await using agent = await CodexFixture.create(provider);
-        await withRealDaemonConnection(new CodexAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemonConnection(signal, new CodexAgentSpecification(), agent.environment, async (peer) => {
             const image = imageFixture(128);
             const path = join(peer.workspace, "picture.png");
             await writeFile(path, image);

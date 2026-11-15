@@ -42,7 +42,7 @@ function answer(response: ServerResponse, model: string, text: string): void {
 // the result) must absorb that late result; it must not settle the next prompt before that prompt answers.
 test("Given Claude's Stop hook outlasts the result watchdog, When I send the next prompt before the first turn's late result, Then the next prompt completes with its own answer", {
     timeout: 240_000,
-}, async () => {
+}, async ({ signal }) => {
     const model = "claude-sonnet-4-6";
     const stopHook = Promise.withResolvers<void>();
     const heldHooks: ServerResponse[] = [];
@@ -126,7 +126,7 @@ test("Given Claude's Stop hook outlasts the result watchdog, When I send the nex
                 },
             }),
         );
-        await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
             const send = (commandId: string, prompt: string) =>
                 peer.send(
                     encodeSessionPromptCommand({

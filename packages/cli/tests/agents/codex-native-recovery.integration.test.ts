@@ -17,10 +17,12 @@ import { CodexFixture } from "../support/agents/codex.ts";
 import { prepareNewRealSession, withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given a newly created real Codex Session, When Chat requests its V2 history before the first prompt, Then Computer returns an empty replay without resuming the active Codex thread", async () => {
+test("Given a newly created real Codex Session, When Chat requests its V2 history before the first prompt, Then Computer returns an empty replay without resuming the active Codex thread", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "UNUSED_REPLY");
     await using agent = await CodexFixture.create(provider);
-    await withRealDaemon(new CodexAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), agent.environment, async (peer) => {
         const sessionTarget = await prepareNewRealSession(peer, "codex");
         const requestId = randomUUID();
         peer.send(
@@ -58,7 +60,9 @@ test("Given a newly created real Codex Session, When Chat requests its V2 histor
     });
 });
 
-test("Given a real Codex native Session, When the active prompt is cancelled with a follow-up queued, Then the retained Agent completes the queued prompt", async () => {
+test("Given a real Codex native Session, When the active prompt is cancelled with a follow-up queued, Then the retained Agent completes the queued prompt", async ({
+    signal,
+}) => {
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     let holdResponse = false;
@@ -72,7 +76,7 @@ test("Given a real Codex native Session, When the active prompt is cancelled wit
     });
     await using agent = await CodexFixture.create(provider);
     try {
-        await withRealDaemon(new CodexAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new CodexAgentSpecification(), agent.environment, async (peer) => {
             const nativeId = await prepareNewRealSession(peer, "codex");
             const sendPrompt = (commandId: string): void =>
                 peer.send(

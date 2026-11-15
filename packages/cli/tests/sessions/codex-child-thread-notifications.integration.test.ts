@@ -61,14 +61,16 @@ createInterface({ input: process.stdin }).on("line", (line) => {
 `;
 
 // @no-uc: Technical regression; Codex subagent threads must not leak into the parent Session at the daemon boundary.
-test("Given a Codex turn whose subagent thread reports on the same connection, When a member's prompt runs through the daemon, Then only the parent thread's reply, title and command reach the Session", async () => {
+test("Given a Codex turn whose subagent thread reports on the same connection, When a member's prompt runs through the daemon, Then only the parent thread's reply, title and command reach the Session", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-controlled-codex-threads-"));
     try {
         const executable = join(directory, "codex.mjs");
         await writeFile(executable, CONTROLLED_CODEX, { mode: 0o700 });
         const missing = join(directory, "missing-agent");
         const environment = { MORTY_CLAUDE_PATH: missing, MORTY_CODEX_PATH: executable, MORTY_PI_PATH: missing };
-        await withRealDaemon(new CodexAgentSpecification(), environment, async (peer) => {
+        await withRealDaemon(signal, new CodexAgentSpecification(), environment, async (peer) => {
             const commandId = randomUUID();
             peer.send(
                 encodeSessionPromptCommand({

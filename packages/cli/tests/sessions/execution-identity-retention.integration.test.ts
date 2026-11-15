@@ -67,13 +67,16 @@ async function observe(peer: RealDaemonPeer, commandIds: readonly string[]) {
     return { outcomes, output, completedCommandIds, restatedCommandIds, unstartedCommandIds };
 }
 
-test("Given an executed command, When its receipt is evicted and the daemon restarts, Then retries and delayed cancellations preserve its executed identity", async () => {
+test("Given an executed command, When its receipt is evicted and the daemon restarts, Then retries and delayed cancellations preserve its executed identity", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-07T00:00:00.000Z"));
     const directory = await mkdtemp(join(tmpdir(), "morty-execution-identity-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executableDirectory },
             async (peer) => {

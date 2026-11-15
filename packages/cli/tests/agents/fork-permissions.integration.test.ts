@@ -25,9 +25,9 @@ import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 const toolPrompt = "Run the permission verification command";
 const command = `node -e "require('node:fs').writeFileSync('fork-permission.txt', 'approved')"`;
 
-test.each(["codex", "claude"] as const)(
+test.for(["codex", "claude"] as const)(
     "Given a real %s Session with explicit approval, When it is forked before and after restart, Then each child retains approval and enforces the user's decision",
-    async (harness) => {
+    async (harness, { signal }) => {
         await using provider =
             harness === "codex"
                 ? await FakeOpenAiProvider.start("morty-test-model", "FORK_PERMISSION_DONE", {
@@ -60,6 +60,7 @@ test.each(["codex", "claude"] as const)(
         }
         const mode = harness === "codex" ? "read-only" : "default";
         await withRealDaemon(
+            signal,
             harness === "codex" ? new CodexAgentSpecification() : new ClaudeCodeAgentSpecification(),
             agent.environment,
             async (peer) => {

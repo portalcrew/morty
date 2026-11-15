@@ -32,12 +32,13 @@ class ForkSettingsAgent extends ControlledAcpSpecification {
     }
 }
 
-test.each(["", "--fork-mode-unavailable", "--fork-omits-mode", "--fork-omits-model", "--model-dependent-mode"])(
+test.for(["", "--fork-mode-unavailable", "--fork-omits-mode", "--fork-omits-model", "--model-dependent-mode"])(
     "Given source selections and a Fork Agent %s, When a retained client forks, Then settings are inherited or the Fork fails without changing its source",
-    async (fault) => {
+    async (fault, { signal }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-fork-settings-"));
         try {
             await withControlledDaemon(
+                signal,
                 new ForkSettingsAgent(fault),
                 {
                     MORTY_TEST_FORK_SETTINGS_PATH: process.execPath,

@@ -19,13 +19,16 @@ import { ControlledAcpAgentSpecification } from "../support/agents/controlled-ac
 import { withControlledDaemon } from "../support/agents/real-daemon.ts";
 import { writeControlledAcpExecutable } from "../support/controlled-acp-executable.ts";
 
-test("Given a command already completed, When a delayed queue edit cancels it before start, Then the Computer refuses to claim that it was withdrawn", async () => {
+test("Given a command already completed, When a delayed queue edit cancels it before start, Then the Computer refuses to claim that it was withdrawn", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-29T00:00:00Z"));
     const directory = await mkdtemp(join(tmpdir(), "morty-late-queue-edit-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executableDirectory },
             async (peer) => {
@@ -76,13 +79,16 @@ test("Given a command already completed, When a delayed queue edit cancels it be
 }, 90_000);
 
 // @no-uc: Compatibility; conditional cancellation must never cancel a command which already started.
-test("Given running and queued work, When cancellation permits only unstarted work, Then the queued work stops and the running work is preserved", async () => {
+test("Given running and queued work, When cancellation permits only unstarted work, Then the queued work stops and the running work is preserved", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-27T00:00:00Z"));
     const directory = await mkdtemp(join(tmpdir(), "morty-cancel-before-start-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"),
@@ -202,13 +208,16 @@ test("Given running and queued work, When cancellation permits only unstarted wo
 }, 90_000);
 
 // @no-uc: Technical regression; cancelling an unacknowledged command prevents its delayed admission.
-test("Given an unacknowledged command, When Stop arrives before its prompt, Then a recorded cancellation prevents later execution", async () => {
+test("Given an unacknowledged command, When Stop arrives before its prompt, Then a recorded cancellation prevents later execution", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-27T00:00:00Z"));
     const directory = await mkdtemp(join(tmpdir(), "morty-cancel-admission-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"),
@@ -307,7 +316,9 @@ function fileCreated(directory: string, name: string): Promise<void> {
     return created.promise;
 }
 
-test("Given a prompt still loading its conversation's saved history, When the client withdraws it, Then the Computer withdraws it before it starts and the next prompt runs", async () => {
+test("Given a prompt still loading its conversation's saved history, When the client withdraws it, Then the Computer withdraws it before it starts and the next prompt runs", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-30T00:00:00Z"));
     const directory = await mkdtemp(join(tmpdir(), "morty-withdraw-loading-"));
@@ -316,6 +327,7 @@ test("Given a prompt still loading its conversation's saved history, When the cl
         await mkdir(agentDirectory, { recursive: true });
         const executableDirectory = await writeControlledAcpExecutable(directory, { loadSession: true });
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: agentDirectory, PATH: executableDirectory },
             async (peer) => {

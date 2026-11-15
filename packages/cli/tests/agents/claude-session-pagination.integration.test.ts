@@ -8,10 +8,12 @@ import { ClaudeFixture } from "../support/agents/claude.ts";
 import { withRealDaemonConnection } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 
-test("Given 501 saved Claude sessions, When a user lists every page through the daemon, Then all sessions appear once in pages of at most 500", async () => {
+test("Given 501 saved Claude sessions, When a user lists every page through the daemon, Then all sessions appear once in pages of at most 500", async ({
+    signal,
+}) => {
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "UNUSED_LIST_PROVIDER");
     await using agent = await ClaudeFixture.create(provider);
-    await withRealDaemonConnection(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemonConnection(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
         const home = agent.environment["CLAUDE_CONFIG_DIR"];
         if (home === undefined) {
             throw new Error("The Claude fixture requires an isolated configuration directory");

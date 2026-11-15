@@ -116,9 +116,11 @@ class FailingCloseAgentSpecification extends ControlledCloseAgentSpecification {
     };
 }
 
-test("Given the Agent's teardown fails, When the Session is archived, Then clients are told it failed and the Runtime no longer holds the Session", async () => {
+test("Given the Agent's teardown fails, When the Session is archived, Then clients are told it failed and the Runtime no longer holds the Session", async ({
+    signal,
+}) => {
     const agent = new FailingCloseAgentSpecification();
-    await withRealDaemon(agent, { MORTY_TEST_CONTROLLED_CLOSE_PATH: process.execPath }, async (peer) => {
+    await withRealDaemon(signal, agent, { MORTY_TEST_CONTROLLED_CLOSE_PATH: process.execPath }, async (peer) => {
         const requestId = crypto.randomUUID();
         peer.send(encodeSessionArchiveCommand({ kind: "session.archive", requestId, target: peer.target }));
         expect(decodeSessionCloseNoticeEvent(await peer.nextMessage())).toMatchObject({ target: peer.target });
@@ -133,9 +135,11 @@ test("Given the Agent's teardown fails, When the Session is archived, Then clien
     });
 });
 
-test("Given retained Agent teardown does not finish, When the Session archive deadline elapses, Then the daemon reports a typed timeout", async () => {
+test("Given retained Agent teardown does not finish, When the Session archive deadline elapses, Then the daemon reports a typed timeout", async ({
+    signal,
+}) => {
     const agent = new ControlledCloseAgentSpecification();
-    await withRealDaemon(agent, { MORTY_TEST_CONTROLLED_CLOSE_PATH: process.execPath }, async (peer) => {
+    await withRealDaemon(signal, agent, { MORTY_TEST_CONTROLLED_CLOSE_PATH: process.execPath }, async (peer) => {
         const sessionTarget = peer.target;
         vi.useFakeTimers({ now: new Date("2026-10-29T00:00:00Z"), toFake: ["clearTimeout", "setTimeout"] });
         try {
@@ -170,7 +174,9 @@ test("Given retained Agent teardown does not finish, When the Session archive de
     });
 });
 
-test("Given an active Agent session holding an exclusive writer lock, When a public archive command reaches the daemon, Then the process stops and releases the writer lock", async () => {
+test("Given an active Agent session holding an exclusive writer lock, When a public archive command reaches the daemon, Then the process stops and releases the writer lock", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-session-close-"));
     const executableDirectory = join(directory, "bin");
     const executable = join(executableDirectory, "controlled-acp");
@@ -184,6 +190,7 @@ test("Given an active Agent session holding an exclusive writer lock, When a pub
     await chmod(executable, 0o700);
     try {
         await withRealDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: nativeStateDirectory, PATH: executableDirectory },
             async (peer) => {

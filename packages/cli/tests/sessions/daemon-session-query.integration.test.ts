@@ -58,7 +58,9 @@ async function createSession(peer: RealDaemonPeer, directory: string): Promise<R
     return decodeSessionReadyEvent(await reply(peer, "session.ready", requestId)).target;
 }
 
-test("Given a Session whose directory was deleted, When a client queries it with other Sessions, Then every Session is described with its recorded directory", async () => {
+test("Given a Session whose directory was deleted, When a client queries it with other Sessions, Then every Session is described with its recorded directory", async ({
+    signal,
+}) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), "morty-session-query-")));
     const deleted = join(root, "deleted-project");
     await mkdir(deleted);
@@ -66,6 +68,7 @@ test("Given a Session whose directory was deleted, When a client queries it with
     const specification = new ControlledAgentSpecification();
     try {
         await withControlledDaemon(
+            signal,
             specification,
             { MORTY_TEST_CONTROLLED_QUERY_PATH: process.execPath },
             async (peer) => {

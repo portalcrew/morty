@@ -24,7 +24,9 @@ import { withControlledDaemon as withRealDaemon } from "../support/agents/real-d
 
 const fakeAgentPath = fileURLToPath(new URL("./fixtures/acp-peer.ts", import.meta.url));
 
-test("Given native history contains oversized and embedded ACP media, When Chat loads V2 history, Then it receives retrievable keys instead of embedded bodies", async () => {
+test("Given native history contains oversized and embedded ACP media, When Chat loads V2 history, Then it receives retrievable keys instead of embedded bodies", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-external-history-image-"));
     const executableDirectory = join(directory, "bin");
     const executable = join(executableDirectory, "controlled-acp");
@@ -51,6 +53,7 @@ if (process.argv.includes("--version")) {
     await chmod(executable, 0o700);
     try {
         await withRealDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_OVERSIZED_HISTORY_IMAGE: "1",

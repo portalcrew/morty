@@ -122,13 +122,16 @@ async function evictReceipts(peer: RealDaemonPeer): Promise<void> {
     }
 }
 
-test("Given an executed command and a command cancelled before start, When later commands evict both receipts without a restart, Then both still read as received and the cancelled command cannot execute", async () => {
+test("Given an executed command and a command cancelled before start, When later commands evict both receipts without a restart, Then both still read as received and the cancelled command cannot execute", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-30T08:00:00Z"));
     const directory = await mkdtemp(join(tmpdir(), "morty-cancelled-delivery-"));
     try {
         const executable = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executable },
             async (peer) => {
@@ -166,13 +169,16 @@ test("Given an executed command and a command cancelled before start, When later
 }, 90_000);
 
 for (const admission of ["before-admission", "queued"] as const) {
-    test(`Given a command was explicitly cancelled ${admission}, When receipts are evicted and the Computer restarts, Then the command cannot execute again and cancellation remains unstarted`, async () => {
+    test(`Given a command was explicitly cancelled ${admission}, When receipts are evicted and the Computer restarts, Then the command cannot execute again and cancellation remains unstarted`, async ({
+        signal,
+    }) => {
         vi.useFakeTimers({ toFake: ["Date"] });
         vi.setSystemTime(new Date("2026-10-30T08:00:00Z"));
         const directory = await mkdtemp(join(tmpdir(), "morty-cancelled-identity-"));
         try {
             const executable = await writeControlledAcpExecutable(directory);
             await withControlledDaemon(
+                signal,
                 new ControlledAcpAgentSpecification(),
                 { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executable },
                 async (peer) => {

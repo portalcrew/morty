@@ -8,13 +8,13 @@ import { ClaudeFixture } from "../support/agents/claude.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 
-test.each([
+test.for([
     { source: "user", trusted: true, alias: false },
     { source: "user directory alias", trusted: true, alias: true },
     { source: "project", trusted: false, alias: false },
 ])(
     "Given bypass is configured through $source settings, When Claude starts through the daemon, Then only the trusted user mode is inherited",
-    async ({ trusted, alias }) => {
+    async ({ trusted, alias }, { signal }) => {
         await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "PERMISSION_SETTINGS_OK");
         await using agent = await ClaudeFixture.create(provider);
         const home = agent.environment["HOME"];
@@ -36,6 +36,7 @@ test.each([
         }
         const environment = { ...agent.environment, CLAUDE_CONFIG_DIR: configDirectory };
         await withRealDaemon(
+            signal,
             new ClaudeCodeAgentSpecification(),
             environment,
             async (peer) => {

@@ -139,23 +139,27 @@ it("Given Codex sends an individual protocol message above 32 MiB, When Morty re
     }
 });
 
-it("Given a non-Codex agent, When its history is requested through the Codex adapter, Then the adapter reports an agent mismatch rather than an executable change", async () => {
+it("Given a non-Codex agent, When its history is requested through the Codex adapter, Then the adapter reports an agent mismatch rather than an executable change", async ({
+    signal,
+}) => {
     const command = await historyAppServer();
     const agent = testAgentDefinition("claude", "Claude", command);
-    await expect(previewCodexHistory(agent, process.cwd(), "saved-thread")).rejects.toMatchObject({
+    await expect(previewCodexHistory(agent, process.cwd(), "saved-thread", signal)).rejects.toMatchObject({
         code: "agent_adapter_mismatch",
     });
 });
 
-it("Given paginated Codex history exceeds 32 MiB across consumed responses, When Morty reads every page, Then the bounded history reader completes", async () => {
+it("Given paginated Codex history exceeds 32 MiB across consumed responses, When Morty reads every page, Then the bounded history reader completes", async ({
+    signal,
+}) => {
     const command = await historyAppServer();
     const agent = testAgentDefinition("codex", "Codex", command);
 
-    const page = await previewCodexHistory(agent, process.cwd(), "large-history");
+    const page = await previewCodexHistory(agent, process.cwd(), "large-history", signal);
     expect(page.events).toHaveLength(4);
 });
 
-it.each([
+it.for([
     {
         name: "250-item turn",
         extra: Array.from({ length: 248 }, (_, index) => ({ id: `unknown-${index}`, type: "futureItem" })),
@@ -175,7 +179,7 @@ it.each([
     },
 ])(
     "Given a saved Codex $name, When it is previewed and opened, Then both retain identical prompt, answer and tool content",
-    async ({ extra }) => {
+    async ({ extra }, { signal }) => {
         const items = [
             { id: "user", type: "userMessage", content: [{ type: "text", text: "Saved prompt" }] },
             { id: "answer", type: "agentMessage", text: "Saved answer", phase: "final_answer" },
@@ -183,8 +187,8 @@ it.each([
         ];
         const command = await historyAppServer(items);
         const agent = testAgentDefinition("codex", "Codex", command);
-        const preview = await previewCodexHistory(agent, process.cwd(), "saved-thread");
-        const opened = await loadCodexHistory(agent, process.cwd(), "saved-thread");
+        const preview = await previewCodexHistory(agent, process.cwd(), "saved-thread", signal);
+        const opened = await loadCodexHistory(agent, process.cwd(), "saved-thread", signal);
         const updates = (page: typeof preview) =>
             page.events.flatMap((event) =>
                 event.type === "acp" &&
@@ -211,9 +215,9 @@ it.each([
     },
 );
 
-it.each(["mcpToolCall", "dynamicToolCall"])(
+it.for(["mcpToolCall", "dynamicToolCall"])(
     "Given a saved Codex %s result exceeds SDK limits, When history is previewed and opened, Then a marked bounded result and surrounding messages remain readable",
-    async (type) => {
+    async (type, { signal }) => {
         const result = {
             text: "Large saved result ".repeat(60_000),
             content: [{ type: "image", data: imageFixture(16).toString("base64"), mimeType: "image/png" }],
@@ -232,8 +236,8 @@ it.each(["mcpToolCall", "dynamicToolCall"])(
         ];
         const command = await historyAppServer(items);
         const agent = testAgentDefinition("codex", "Codex", command);
-        const preview = await previewCodexHistory(agent, process.cwd(), "saved-thread");
-        const opened = await loadCodexHistory(agent, process.cwd(), "saved-thread");
+        const preview = await previewCodexHistory(agent, process.cwd(), "saved-thread", signal);
+        const opened = await loadCodexHistory(agent, process.cwd(), "saved-thread", signal);
         for (const page of [preview, opened]) {
             const updates = page.events.flatMap((event) => (event.type === "acp" ? [event.payload] : []));
             expect(updates).toEqual(
@@ -265,7 +269,9 @@ it.each(["mcpToolCall", "dynamicToolCall"])(
     },
 );
 
-it("Given a saved Codex tool result exceeds the nesting limit, When it is previewed and opened, Then marked tool content, surrounding messages and shallow images remain readable", async () => {
+it("Given a saved Codex tool result exceeds the nesting limit, When it is previewed and opened, Then marked tool content, surrounding messages and shallow images remain readable", async ({
+    signal,
+}) => {
     let nested: unknown = { text: "Deep saved result" };
     for (let depth = 0; depth < 18; depth += 1) {
         nested = { child: nested };
@@ -286,8 +292,8 @@ it("Given a saved Codex tool result exceeds the nesting limit, When it is previe
         },
     ]);
     const agent = testAgentDefinition("codex", "Codex", command);
-    const preview = await previewCodexHistory(agent, process.cwd(), "saved-thread");
-    const opened = await loadCodexHistory(agent, process.cwd(), "saved-thread");
+    const preview = await previewCodexHistory(agent, process.cwd(), "saved-thread", signal);
+    const opened = await loadCodexHistory(agent, process.cwd(), "saved-thread", signal);
     for (const page of [preview, opened]) {
         const updates = page.events.flatMap((event) => (event.type === "acp" ? [event.payload] : []));
         expect(updates).toEqual(
@@ -316,14 +322,16 @@ it("Given a saved Codex tool result exceeds the nesting limit, When it is previe
     }
 });
 
-it("Given a saved failed Codex turn has no assistant answer, When it is previewed and opened, Then both show the bounded native failure with a stable identity", async () => {
+it("Given a saved failed Codex turn has no assistant answer, When it is previewed and opened, Then both show the bounded native failure with a stable identity", async ({
+    signal,
+}) => {
     const command = await historyAppServer(
         [{ id: "user", type: "userMessage", content: [{ type: "text", text: "Saved failed prompt" }] }],
         { message: "Native failure ".repeat(1_000) },
     );
     const agent = testAgentDefinition("codex", "Codex", command);
-    const preview = await previewCodexHistory(agent, process.cwd(), "saved-thread");
-    const opened = await loadCodexHistory(agent, process.cwd(), "saved-thread");
+    const preview = await previewCodexHistory(agent, process.cwd(), "saved-thread", signal);
+    const opened = await loadCodexHistory(agent, process.cwd(), "saved-thread", signal);
     const failures = (page: typeof preview) =>
         page.events.flatMap((event) =>
             event.type === "acp" && event.payload.sessionUpdate === "tool_call" && event.payload.status === "failed"

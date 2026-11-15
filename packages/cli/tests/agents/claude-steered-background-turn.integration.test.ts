@@ -15,7 +15,9 @@ import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 
 // Keep the subagent alive across the root result and steering cycle. Only the
 // model service is controlled; Claude and the daemon produce all lifecycle events.
-test("Given Claude awaits a background subagent, When the user steers and the subagent finishes, Then the turn completes and the next prompt can run", async () => {
+test("Given Claude awaits a background subagent, When the user steers and the subagent finishes, Then the turn completes and the next prompt can run", async ({
+    signal,
+}) => {
     const subagentEntered = Promise.withResolvers<void>();
     const releaseSubagent = Promise.withResolvers<void>();
     const steeringEntered = Promise.withResolvers<void>();
@@ -54,7 +56,7 @@ test("Given Claude awaits a background subagent, When the user steers and the su
     });
     await using agent = await ClaudeFixture.create(provider);
     try {
-        await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
             const stopped = Promise.withResolvers<never>();
             const abort = () => stopped.reject(peer.signal.reason);
             peer.signal.addEventListener("abort", abort, { once: true });

@@ -19,7 +19,9 @@ import { CodexFixture } from "../support/agents/codex.ts";
 import { nextNativeSessionResult, type RealDaemonPeer, withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given the Codex app owns a thread whose last turn it interrupted, When a message sent here waits in its paused queue and is stopped, Then it is withdrawn, the owner's later turns still arrive, and a later message reports when the owner starts it", async () => {
+test("Given the Codex app owns a thread whose last turn it interrupted, When a message sent here waits in its paused queue and is stopped, Then it is withdrawn, the owner's later turns still arrive, and a later message reports when the owner starts it", async ({
+    signal,
+}) => {
     const entered = Promise.withResolvers<void>();
     let holding = true;
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "OWNER_REPLY", {
@@ -35,7 +37,7 @@ test("Given the Codex app owns a thread whose last turn it interrupted, When a m
         },
     });
     await using codex = await CodexFixture.create(provider, { configuredModel: "morty-test-model" });
-    await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
         let completed = Promise.withResolvers<{ readonly turn: { readonly status: string } }>();
         using _abort = addAbortListener(peer.signal, () => {
             entered.reject(peer.signal.reason);

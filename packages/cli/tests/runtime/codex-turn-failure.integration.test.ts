@@ -10,10 +10,12 @@ import { ControlledCodexFixture } from "../support/agents/controlled-codex.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 
 // @no-uc: Technical regression; a Codex turn failure reaches the member with Codex's own reason at the daemon boundary.
-test("Given Codex fails a turn with a reason, When a member's prompt runs through the daemon, Then the failure event carries Codex's reason for that command and attempt after its user message", async () => {
+test("Given Codex fails a turn with a reason, When a member's prompt runs through the daemon, Then the failure event carries Codex's reason for that command and attempt after its user message", async ({
+    signal,
+}) => {
     const reason = "You've hit your usage limit. Try again later.";
     await using codex = await ControlledCodexFixture.create({ failTurnWith: reason });
-    await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
         const commandId = randomUUID();
         peer.send(
             encodeSessionPromptCommand({

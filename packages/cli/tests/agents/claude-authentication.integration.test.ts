@@ -15,9 +15,12 @@ import { ClaudeFixture } from "../support/agents/claude.ts";
 import { prepareNewRealSession, withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 
-test("Given real Claude has expired OAuth credentials, When I send a message and reopen the session, Then authentication is required without diagnostic assistant text live or in history", async () => {
+test("Given real Claude has expired OAuth credentials, When I send a message and reopen the session, Then authentication is required without diagnostic assistant text live or in history", async ({
+    signal,
+}) => {
     await using agent = await ClaudeFixture.createExpiredOAuth();
     await withRealDaemon(
+        signal,
         new ClaudeCodeAgentSpecification(),
         agent.environment,
         async (peer) => {
@@ -114,11 +117,13 @@ test("Given real Claude has expired OAuth credentials, When I send a message and
     );
 });
 
-test("Given a real Claude answer quotes login diagnostics, When it completes, Then the text remains an ordinary successful answer", async () => {
+test("Given a real Claude answer quotes login diagnostics, When it completes, Then the text remains an ordinary successful answer", async ({
+    signal,
+}) => {
     const reply = "The diagnostic says: Please run /login. OAuth session expired and could not be refreshed.";
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", reply);
     await using agent = await ClaudeFixture.create(provider);
-    await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
         const commandId = randomUUID();
         peer.send(
             encodeSessionPromptCommand({

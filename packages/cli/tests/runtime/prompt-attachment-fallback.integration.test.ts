@@ -17,13 +17,16 @@ import { writeControlledAcpExecutable } from "../support/controlled-acp-executab
 
 afterEach(() => vi.useRealTimers());
 
-test("Given unsupported attachments, When a prompt has text, Then the daemon delivers the original text without losing the connection", async () => {
+test("Given unsupported attachments, When a prompt has text, Then the daemon delivers the original text without losing the connection", async ({
+    signal,
+}) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-28T08:00:00Z"));
     const directory = await mkdtemp(join(tmpdir(), "old-pdf-peer-"));
     try {
         const executable = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"),

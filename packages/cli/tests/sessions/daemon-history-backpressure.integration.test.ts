@@ -22,12 +22,12 @@ class HistoryAgentSpecification extends ControlledAcpSpecification {
 import { withControlledDaemon as withRealDaemon } from "../support/agents/real-daemon.ts";
 
 // Persisted native history is owned by the controlled ACP peer, not by Morty.
-test.each([
+test.for([
     { name: "6000 messages", count: 6000, images: false },
     { name: "32 embedded images", count: 32, images: true },
 ])(
     "Given native history with $name, When its preview is loaded through the daemon, Then replay drains without losing messages or overflowing the output queue",
-    async (scenario) => {
+    async (scenario, { signal }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-history-backpressure-"));
         const executable = join(directory, "controlled-acp");
         const stateDirectory = join(directory, "state");
@@ -71,6 +71,7 @@ if (process.argv.includes("--version")) {
         );
         try {
             await withRealDaemon(
+                signal,
                 new HistoryAgentSpecification(),
                 {
                     MORTY_FAKE_ACP_STATE_DIRECTORY: stateDirectory,

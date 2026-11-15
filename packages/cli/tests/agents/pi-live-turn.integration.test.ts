@@ -18,11 +18,13 @@ import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 import { fakeProviderPrompts } from "../support/llm/scenarios.ts";
 
-test("Given a reused real Pi session, When local commands reply consecutively, Then each reply has a distinct identity without synthetic user chunks", async () => {
+test("Given a reused real Pi session, When local commands reply consecutively, Then each reply has a distinct identity without synthetic user chunks", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_LOCAL_COMMAND_REPLY");
     await using agent = await PiFixture.create(provider);
     await agent.overrideSettings({ quietStartup: false });
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const replyIds = new Set<string>();
         for (const prompt of ["Begin", "/session", "/session", "/steering", "/steering", "/export", "/export"]) {
             const commandId = randomUUID();
@@ -88,7 +90,9 @@ test("Given a reused real Pi session, When local commands reply consecutively, T
     });
 });
 
-test("Given real Pi transforms user input, When a prompt runs through the daemon, Then live user chunks show only the native consumed content", async () => {
+test("Given real Pi transforms user input, When a prompt runs through the daemon, Then live user chunks show only the native consumed content", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_NATIVE_INPUT_REPLY");
     await using agent = await PiFixture.create(provider);
     await agent.installExtension(
@@ -97,7 +101,7 @@ test("Given real Pi transforms user input, When a prompt runs through the daemon
             pi.on("input", async () => ({ action: "transform", text: "PI_NATIVE_CONSUMED_INPUT" }));
         }`,
     );
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const commandId = randomUUID();
         peer.send(
             encodeSessionPromptCommand({
@@ -142,7 +146,9 @@ test("Given real Pi transforms user input, When a prompt runs through the daemon
     });
 });
 
-test("Given real Pi has an active SDK turn, When the user steers it, Then Pi continues the same turn with the steering prompt", async () => {
+test("Given real Pi has an active SDK turn, When the user steers it, Then Pi continues the same turn with the steering prompt", async ({
+    signal,
+}) => {
     const activeEntered = Promise.withResolvers<void>();
     const releaseActive = Promise.withResolvers<void>();
     let responseNumber = 0;
@@ -157,7 +163,7 @@ test("Given real Pi has an active SDK turn, When the user steers it, Then Pi con
     });
     await using agent = await PiFixture.create(provider);
     try {
-        await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+        await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
             const activeCommandId = randomUUID();
             const steeringCommandId = randomUUID();
             const sendPrompt = (commandId: string, prompt: string): void =>
@@ -260,10 +266,12 @@ test("Given real Pi has an active SDK turn, When the user steers it, Then Pi con
     }
 });
 
-test("Given real Pi only supports disabled thinking, When a session is prepared, Then the daemon omits the non-configurable Thinking control", async () => {
+test("Given real Pi only supports disabled thinking, When a session is prepared, Then the daemon omits the non-configurable Thinking control", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "REAL_PI_REPLY");
     await using agent = await PiFixture.create(provider);
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const requestId = randomUUID();
         peer.send(
             encodeSessionPrepareCommand({
@@ -289,10 +297,12 @@ test("Given real Pi only supports disabled thinking, When a session is prepared,
     });
 });
 
-test("Given real Pi without an external ACP adapter, When Bash executes through the daemon, Then the command and result are observable with both replies", async () => {
+test("Given real Pi without an external ACP adapter, When Bash executes through the daemon, Then the command and result are observable with both replies", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "REAL_PI_REPLY");
     await using agent = await PiFixture.create(provider);
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         for (const turn of [0, 1]) {
             const prompt =
                 turn === 0 ? fakeProviderPrompts.successfulTool : "Continue the conversation with another reply";

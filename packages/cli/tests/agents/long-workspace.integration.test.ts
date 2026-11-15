@@ -16,7 +16,9 @@ import { CodexFixture } from "../support/agents/codex.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given a deeply nested multibyte workspace, When real Codex runs a tool through the daemon, Then it writes in the selected directory and its native history reopens", async () => {
+test("Given a deeply nested multibyte workspace, When real Codex runs a tool through the daemon, Then it writes in the selected directory and its native history reopens", async ({
+    signal,
+}) => {
     const root = await mkdtemp(join(tmpdir(), "morty-long-codex-"));
     try {
         // macOS has a lower filesystem path limit; Linux exercises deeper paths.
@@ -41,6 +43,7 @@ test("Given a deeply nested multibyte workspace, When real Codex runs a tool thr
         });
         await using agent = await CodexFixture.create(provider);
         await withRealDaemon(
+            signal,
             new CodexAgentSpecification(),
             agent.environment,
             async (peer) => {

@@ -32,9 +32,9 @@ function piChildProcesses(): readonly number[] {
         .map(([pid]) => Number(pid));
 }
 
-test.each(["responsive", "stalled", "launcher-stalled"])(
+test.for(["responsive", "stalled", "launcher-stalled"])(
     "Given a %s real Pi native Session, When the active prompt is cancelled with a follow-up queued, Then the queued prompt restores that Session and completes",
-    async (state) => {
+    async (state, { signal }) => {
         const entered = Promise.withResolvers<void>();
         const release = Promise.withResolvers<void>();
         let holdResponse = false;
@@ -52,7 +52,7 @@ test.each(["responsive", "stalled", "launcher-stalled"])(
             launcher === null ? agent.environment : { ...agent.environment, MORTY_PI_PATH: launcher.command };
         const stopped: number[] = [];
         try {
-            await withRealDaemon(new PiAgentSpecification(), environment, async (peer) => {
+            await withRealDaemon(signal, new PiAgentSpecification(), environment, async (peer) => {
                 const nativeId = peer.target;
                 const sendPrompt = (commandId: string): void =>
                     peer.send(
@@ -166,10 +166,12 @@ test.each(["responsive", "stalled", "launcher-stalled"])(
     },
 );
 
-test("Given a real Pi native Session was previewed, When the user imports it, Then the daemon stays online and opens the Session", async () => {
+test("Given a real Pi native Session was previewed, When the user imports it, Then the daemon stays online and opens the Session", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_PREVIEW_IMPORT_REPLY");
     await using agent = await PiFixture.create(provider);
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const sourceSessionId = await prepareNewRealSession(peer, "pi");
         const commandId = randomUUID();
         peer.send(
@@ -285,10 +287,12 @@ test("Given a real Pi native Session was previewed, When the user imports it, Th
     });
 });
 
-test("Given a saved real Pi native Session, When the user forks it, Then its history is visible before the independent Session continues", async () => {
+test("Given a saved real Pi native Session, When the user forks it, Then its history is visible before the independent Session continues", async ({
+    signal,
+}) => {
     await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_FORK_REPLY");
     await using agent = await PiFixture.create(provider);
-    await withRealDaemon(new PiAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const sourceSessionId = await prepareNewRealSession(peer, "pi");
         const sourceCommandId = randomUUID();
         peer.send(

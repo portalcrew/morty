@@ -12,10 +12,12 @@ import { ClaudeFixture } from "../support/agents/claude.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 
-test("Given native text and structured task snapshots with delimiter-heavy subjects, When Claude history is previewed, Then each task plan is recovered with its original subject and status", async () => {
+test("Given native text and structured task snapshots with delimiter-heavy subjects, When Claude history is previewed, Then each task plan is recovered with its original subject and status", async ({
+    signal,
+}) => {
     await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "UNUSED_TASK_HISTORY_PROVIDER");
     await using agent = await ClaudeFixture.create(provider);
-    await withRealDaemon(new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
+    await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
         const home = agent.environment["CLAUDE_CONFIG_DIR"];
         if (home === undefined) {
             throw new Error("Missing isolated Claude home");

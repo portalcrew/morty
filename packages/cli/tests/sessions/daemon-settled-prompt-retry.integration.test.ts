@@ -74,11 +74,14 @@ async function retrySettled(peer: RealDaemonPeer, commandId: string): Promise<re
     return seen.filter(completed(commandId)).flatMap((frame) => (frame.kind === "event" ? [frame.event] : []));
 }
 
-test("Given a completed prompt, When a client retries it before and after a daemon restart, Then each retry is answered settled and restates the outcome once, marked as restated", async () => {
+test("Given a completed prompt, When a client retries it before and after a daemon restart, Then each retry is answered settled and restates the outcome once, marked as restated", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-settled-prompt-retry-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             { MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"), PATH: executableDirectory },
             async (peer) => {

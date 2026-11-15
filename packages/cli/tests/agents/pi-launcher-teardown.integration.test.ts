@@ -21,7 +21,7 @@ afterEach(() => {
 
 test.skipIf(process.platform === "win32")(
     "Given real Pi runs behind a shell launcher and is stalled, When the harness is disposed, Then Pi is retired even after its launcher exits and disposal settles",
-    async () => {
+    async ({ signal }) => {
         await using provider = await FakeOpenAiProvider.start("gpt-4.1", "PI_LAUNCHER_REPLY");
         await using fixture = await PiFixture.create(provider);
         const launcher = await fixture.createLauncher();
@@ -43,7 +43,7 @@ test.skipIf(process.platform === "win32")(
         owned.add(pid);
         process.kill(pid, "SIGSTOP");
         vi.useFakeTimers({ now: new Date("2026-11-10T00:00:00Z"), toFake: ["setTimeout", "clearTimeout", "Date"] });
-        const stopped = waitForAgentFile(launcher.stoppedFile, true);
+        const stopped = waitForAgentFile(launcher.stoppedFile, true, signal);
         const closing = client.dispose();
         await stopped;
         await vi.advanceTimersByTimeAsync(1_000);

@@ -18,7 +18,9 @@ import { CodexFixture } from "../support/agents/codex.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
 
-test("Given a real Codex model that asks the user a question while it keeps working, When the turn runs, the conversation is reopened, and the saved thread is previewed, Then its message carries the question and its suggested answers each time", async () => {
+test("Given a real Codex model that asks the user a question while it keeps working, When the turn runs, the conversation is reopened, and the saved thread is previewed, Then its message carries the question and its suggested answers each time", async ({
+    signal,
+}) => {
     const prompt = "Ask which way to go before continuing";
     const question = "Append the sections to the existing page?";
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "Continuing with the code.", {
@@ -34,7 +36,7 @@ test("Given a real Codex model that asks the user a question while it keeps work
         configuredModel: "morty-test-model",
         modelTools: ["send_user_message_async"],
     });
-    await withRealDaemon(new CodexAgentSpecification(), codex.environment, async (peer) => {
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
         const commandId = randomUUID();
         peer.send(
             encodeSessionPromptCommand({

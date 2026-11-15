@@ -96,13 +96,14 @@ const observe = (peer: RealDaemonPeer) => {
     };
 };
 
-const scenario = async (run: (peer: RealDaemonPeer) => Promise<void>) => {
+const scenario = async (signal: AbortSignal, run: (peer: RealDaemonPeer) => Promise<void>) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-29T00:00:00Z"));
     const directory = await mkdtemp(join(tmpdir(), "morty-queued-steer-"));
     try {
         const executableDirectory = await writeControlledAcpExecutable(directory);
         await withControlledDaemon(
+            signal,
             new ControlledAcpAgentSpecification(),
             {
                 MORTY_FAKE_ACP_STATE_DIRECTORY: join(directory, "agent"),
@@ -116,8 +117,10 @@ const scenario = async (run: (peer: RealDaemonPeer) => Promise<void>) => {
     }
 };
 
-test("Given queued work has started or completed, When a client sends a late steer, Then it receives the actual state without executing the message again", async () => {
-    await scenario(async (peer) => {
+test("Given queued work has started or completed, When a client sends a late steer, Then it receives the actual state without executing the message again", async ({
+    signal,
+}) => {
+    await scenario(signal, async (peer) => {
         const observed = observe(peer);
         const running = submit(peer, "hold after first delta");
         await observed.lifecycle("prompt.started", running);
@@ -157,8 +160,10 @@ test("Given queued work has started or completed, When a client sends a late ste
     });
 });
 
-test("Given a queued instruction, When two clients request steering together, Then the instruction is delivered once and any late refusal identifies its state", async () => {
-    await scenario(async (peer) => {
+test("Given a queued instruction, When two clients request steering together, Then the instruction is delivered once and any late refusal identifies its state", async ({
+    signal,
+}) => {
+    await scenario(signal, async (peer) => {
         const observed = observe(peer);
         const running = submit(peer, "wait for steering");
         await observed.until(() =>
