@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { acpSessionStoreMigrations } from "../../generated/acp-session-store-migrations.ts";
+import { computerReplayLedgerMigrations } from "../../generated/computer-replay-ledger-migrations.ts";
 import { sessionEventCacheMigrations } from "../../generated/session-event-cache-migrations.ts";
 import { LocalSqliteDatabase } from "./local-sqlite-database.ts";
 
@@ -21,6 +22,9 @@ export function computerSessionDatabasePaths(stateDirectory: string, computerId:
 export const openAcpSessionDatabase = (path: string): LocalSqliteDatabase => {
     return new LocalSqliteDatabase(path, "ACP Session database", acpSessionStoreMigrations);
 };
+
+export const openComputerReplayLedgerDatabase = (path: string): LocalSqliteDatabase =>
+    new LocalSqliteDatabase(path, "Computer replay ledger", computerReplayLedgerMigrations);
 
 export const openSessionEventCacheDatabase = (path: string): LocalSqliteDatabase =>
     new LocalSqliteDatabase(path, "V2 Session event cache", sessionEventCacheMigrations, [
