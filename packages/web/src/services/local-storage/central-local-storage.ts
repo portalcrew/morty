@@ -188,7 +188,6 @@ const computerPreferenceSchema = v.pipe(
     v.object({
         destination: computerDestinationSchema,
         name: v.pipe(v.string(), v.maxLength(256)),
-        directory: v.nullable(v.pipe(v.string(), v.maxLength(4096))),
         lastUsedAt: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
     }),
     v.readonly(),
@@ -216,7 +215,6 @@ export function readableComputer(value: unknown): RememberedComputer | null {
         scope: parsed.output.scope,
         destination: { kind: "home" },
         name: "",
-        directory: null,
         lastUsedAt: 0,
     };
 }

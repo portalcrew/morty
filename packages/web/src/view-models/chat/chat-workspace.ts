@@ -426,15 +426,10 @@ export function createChatWorkspace(options: {
         closePane();
         const sessionTarget = selection.session.target;
         if (rememberedSessionTarget === null || !sameNativeSession(rememberedSessionTarget, sessionTarget)) {
-            rememberComputerVisit(
-                options.rememberedIdentity,
-                options.clock.now(),
-                {
-                    kind: "session",
-                    ...selection.session.target,
-                },
-                selection.session.ready.directoryLabel,
-            );
+            rememberComputerVisit(options.rememberedIdentity, options.clock.now(), {
+                kind: "session",
+                ...selection.session.target,
+            });
             rememberedSessionTarget = sessionTarget;
         }
         const sessionPage = sessionState(sessionTarget);
@@ -492,12 +487,7 @@ export function createChatWorkspace(options: {
                     : selection.kind === "draft"
                       ? { kind: "home" as const }
                       : undefined;
-            rememberComputerVisit(
-                options.rememberedIdentity,
-                options.clock.now(),
-                destination,
-                selection.kind === "ready" ? selection.session.ready.directoryLabel : undefined,
-            );
+            rememberComputerVisit(options.rememberedIdentity, options.clock.now(), destination);
         },
         start: () => {
             void directory
