@@ -44,8 +44,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      # A test that passes only when retried fails its job and is recorded here; flaky-tests.yml tracks it.
-      MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests
+      # A test that passes only when retried fails its job and is recorded in a directory named for its job; flaky-tests.yml tracks it.
+      MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests/services
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -76,8 +76,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # A test that passes only when retried fails its job and is recorded here; flaky-tests.yml tracks it.
-      MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests
+      # A test that passes only when retried fails its job and is recorded in a directory named for its job; flaky-tests.yml tracks it.
+      MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests/runtime-${{ matrix.shard }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -105,8 +105,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # A test that passes only when retried fails its job and is recorded here; flaky-tests.yml tracks it.
-      MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests
+      # A test that passes only when retried fails its job and is recorded in a directory named for its job; flaky-tests.yml tracks it.
+      MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests/web-${{ matrix.shard }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -155,8 +155,8 @@ jobs:
           # A failed journey keeps its trace, page, screenshot and process logs here for the failure artifact. The path
           # is relative to the suite in packages/e2e: in a container job, runner paths name the host, not the container.
           MORTY_E2E_ARTIFACT_ROOT: e2e-diagnostics
-          # A journey that passes only when retried fails the job and is recorded here; flaky-tests.yml tracks it.
-          MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests
+          # A journey that passes only when retried fails the job and is recorded in a directory named for its job; flaky-tests.yml tracks it.
+          MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests/browser-${{ matrix.shard }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
