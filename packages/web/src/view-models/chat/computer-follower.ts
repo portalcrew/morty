@@ -4,19 +4,15 @@ import { CloudApiError, isComputerConnectionFailure } from "../../services/manag
 import type { Clock } from "../../services/time/clock.ts";
 import { formatError } from "../format-error.ts";
 import type { ComputerObservation } from "./computer-recovery.ts";
-import type { ComputerStatusStoreApi } from "./computer-status-store.ts";
+import {
+    type ComputerEntryOutcome,
+    type ComputerStatusStoreApi,
+    computerEntryOutcome,
+} from "./computer-status-store.ts";
 import { startRecoveryNotice } from "./recovery-notice.ts";
 
 /** Why a Session that waits on a revoked Computer fails. */
 export const COMPUTER_REVOKED_MESSAGE = "This computer was disconnected. Run Morty setup on it again to reconnect.";
-
-/** How the Computer answered the page's entry request, as the Session load waiting on it needs to know. */
-export type ComputerEntryOutcome =
-    | { readonly kind: "paired" }
-    | { readonly kind: "unpaired" }
-    | { readonly kind: "revoked" }
-    /** The request failed; the Computer's status holds why. */
-    | { readonly kind: "failed" };
 
 /**
  * The collaborators the follower announces to. The follower owns what the page reads from the Computer itself: its
@@ -63,8 +59,6 @@ export interface ComputerFollower {
      * recovers from interruptions. Each call starts the entry request again.
      */
     readonly follow: (signal: AbortSignal) => Promise<void>;
-    /** How the Computer answered the current entry request, or null while it has not. */
-    readonly entry: () => ComputerEntryOutcome | null;
     /** Resolves with how the Computer answered the current entry request, as soon as it did. */
     readonly entered: (signal: AbortSignal) => Promise<ComputerEntryOutcome>;
     /** An operation through the Computer failed for connectivity: the follow recovers from the start. */
@@ -78,17 +72,20 @@ export interface ComputerFollower {
 
 export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFollower {
     const { requests, computer, clock } = ports;
-    let outcome: ComputerEntryOutcome | null = null;
+    // Wakes the loads waiting for the current entry request; the answer itself is the Computer's status.
     let answered = Promise.withResolvers<void>();
     // The attempt the follow is in now; ending it makes the follow recover from the start.
     let attempt: AbortController | null = null;
     let recoveryNotice: AbortController | null = null;
     let current: AbortSignal | null = null;
 
-    const settle = (next: ComputerEntryOutcome): void => {
-        outcome = next;
-        answered.resolve();
-        ports.onEntered(next);
+    /** Announces the answer the Computer's status just took. */
+    const settle = (): void => {
+        const outcome = computerEntryOutcome(computer.getState());
+        if (outcome !== null) {
+            answered.resolve();
+            ports.onEntered(outcome);
+        }
     };
     const clearRecoveryNotice = (): void => {
         recoveryNotice?.abort();
@@ -123,7 +120,7 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
         computer.getState().entryReady();
         // The message names why, so it reaches a loading Session before the answer's own generic one.
         ports.onRevoked(message);
-        settle({ kind: "revoked" });
+        settle();
         await requests.waitForComputerPairingChange(signal);
         signal.throwIfAborted();
         ports.onReplaced();
@@ -170,9 +167,9 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
     };
 
     return {
-        entry: () => outcome,
         entered: async (signal) => {
             signal.throwIfAborted();
+            let outcome = computerEntryOutcome(computer.getState());
             while (outcome === null) {
                 const waiting = answered.promise;
                 await new Promise<void>((resolve, reject) => {
@@ -180,6 +177,7 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                     signal.addEventListener("abort", aborted, { once: true });
                     void waiting.then(resolve).finally(() => signal.removeEventListener("abort", aborted));
                 });
+                outcome = computerEntryOutcome(computer.getState());
             }
             return outcome;
         },
@@ -190,7 +188,6 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
         revokedByOperation: revokedBy,
         follow: async (signal) => {
             signal.throwIfAborted();
-            outcome = null;
             answered = Promise.withResolvers<void>();
             current = signal;
             computer.getState().entryStarted();
@@ -217,7 +214,7 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                                 unpaired = true;
                                 computer.getState().pairingDialog.getState().show();
                                 computer.getState().entryReady();
-                                settle({ kind: "unpaired" });
+                                settle();
                                 // An unpaired Computer waits for the pairing it just read to change; the pairing flow
                                 // completes by starting the page over.
                                 await requests.waitForComputerPairingChange(attemptSignal);
@@ -236,7 +233,7 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                                 attemptSignal.throwIfAborted();
                                 computer.getState().entryReady();
                                 entryDone = true;
-                                settle({ kind: "paired" });
+                                settle();
                                 observe(configuration, { kind: "read" });
                                 computer.getState().pairingDialog.getState().dismiss();
                             }
@@ -267,7 +264,7 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                                 computer
                                     .getState()
                                     .entryFailed("unavailable", formatError(cause, "Chat is unavailable."));
-                                settle({ kind: "failed" });
+                                settle();
                                 return;
                             }
                             await clock.sleep(5000, signal);
@@ -280,7 +277,7 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                         }
                         if (cause instanceof CloudApiError && cause.code === "AGENT_REQUIRED") {
                             computer.getState().entryFailed("agent-required", cause.message);
-                            settle({ kind: "failed" });
+                            settle();
                             await requests.waitForComputerConfigurationChange(signal);
                             signal.throwIfAborted();
                             ports.retry();
@@ -290,14 +287,14 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                         if (isComputerConnectionFailure(cause)) {
                             // Only a failed read is eligible for automatic replay; it does not assert the Computer is offline.
                             computer.getState().entryFailed("computer", message);
-                            settle({ kind: "failed" });
+                            settle();
                             ports.onWaitingForComputer();
                             entryDone = true;
                             dropped = true;
                             continue;
                         }
                         computer.getState().entryFailed("unavailable", message);
-                        settle({ kind: "failed" });
+                        settle();
                         return;
                     }
                 }

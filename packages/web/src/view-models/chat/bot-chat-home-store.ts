@@ -18,8 +18,13 @@ import type { Clock } from "../../services/time/clock.ts";
 import { formatError, type PageFailure } from "../format-error.ts";
 import { type ComposerAttachmentStore, createComposerAttachmentStore } from "./composer-attachment-store.ts";
 import { returnToComposer } from "./composer-return.ts";
-import { COMPUTER_REVOKED_MESSAGE, type ComputerEntryOutcome } from "./computer-follower.ts";
-import type { ComputerStatusStore, ComputerStatusStoreApi } from "./computer-status-store.ts";
+import { COMPUTER_REVOKED_MESSAGE } from "./computer-follower.ts";
+import {
+    type ComputerEntryOutcome,
+    type ComputerStatusStore,
+    type ComputerStatusStoreApi,
+    computerEntryOutcome,
+} from "./computer-status-store.ts";
 import {
     type ConversationCreationState,
     failedDraftMessage,
@@ -154,7 +159,7 @@ function homeSetupReason(home: BotChatHomeStore, computer: ComputerStatusStore):
 
 export function homeCanStartConversation(home: BotChatHomeStore, computer: ComputerStatusStore): boolean {
     return (
-        computer.entry.kind === "ready" &&
+        (computer.entry.kind === "ready" || computer.entry.kind === "reloading") &&
         computer.pairing.kind === "paired" &&
         computer.computerConfiguration !== null &&
         homeSetupReason(home, computer) === null
@@ -231,8 +236,6 @@ export const createBotChatHomeStore = (
         /** Whether the connection header reports the New Session page's connection available, network and Computer included. */
         readonly connectionAvailable: () => boolean;
         readonly entry?: "address" | "restore";
-        /** How the Computer answered the page's entry request, or null while it has not. */
-        readonly computerEntry: () => ComputerEntryOutcome | null;
         /** Resolves once the Computer answered the page's entry request, which a Session load waits for. */
         readonly computerEntered: (signal: AbortSignal) => Promise<ComputerEntryOutcome>;
         /** An operation through the Computer failed for connectivity: the Computer's follow recovers. */
@@ -442,7 +445,8 @@ export const createBotChatHomeStore = (
                         return;
                     }
                     // An answer the page already holds moves the selection before anything else runs.
-                    const outcome = options.computerEntry() ?? (await options.computerEntered(signal));
+                    const outcome =
+                        computerEntryOutcome(computer.getState()) ?? (await options.computerEntered(signal));
                     signal.throwIfAborted();
                     get().entryAnswered(outcome);
                     if (outcome.kind === "failed") {

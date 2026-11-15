@@ -15,9 +15,12 @@ type BotPairing =
 /**
  * Whether the page's entry request to the Computer has been answered: its pairing read, and for a paired Computer its
  * configuration. It owns only that request, never the selected Session or the Computer's availability afterwards.
+ * `reloading`: the Computer answered an earlier request and the page asks again; the page keeps showing that answer
+ * while a Session load waits for the new one.
  */
 type ComputerEntry =
     | { readonly kind: "loading" }
+    | { readonly kind: "reloading" }
     | { readonly kind: "ready" }
     | {
           readonly kind: "failed";
@@ -55,7 +58,7 @@ export interface ComputerStatusStore {
     readonly networkChanged: (available: boolean) => void;
     readonly pairingRead: (pairing: "paired" | "unpaired") => void;
     readonly pairingRevoked: () => void;
-    /** The entry request starts again, unless it already succeeded: a Computer that answered stays answered. */
+    /** The entry request starts again: a Computer that answered an earlier one is reloading. */
     readonly entryStarted: () => void;
     readonly entryReady: () => void;
     readonly entryFailed: (failure: "computer" | "agent-required" | "unavailable", message: string) => void;
@@ -84,9 +87,8 @@ export const createComputerStatusStore = (networkAvailable: boolean) =>
         pairingRead: (pairing) => set({ pairing: { kind: pairing } }),
         pairingRevoked: () => set({ pairing: { kind: "revoked" } }),
         entryStarted: () => {
-            if (get().entry.kind !== "ready") {
-                set({ entry: { kind: "loading" } });
-            }
+            const entry = get().entry;
+            set({ entry: { kind: entry.kind === "ready" || entry.kind === "reloading" ? "reloading" : "loading" } });
         },
         entryReady: () => set({ entry: { kind: "ready" } }),
         entryFailed: (failure, message) => set({ entry: { kind: "failed", failure, message } }),
@@ -127,6 +129,31 @@ export const createComputerStatusStore = (networkAvailable: boolean) =>
     }));
 
 export type ComputerStatusStoreApi = ReturnType<typeof createComputerStatusStore>;
+
+/** How the Computer answered the page's current entry request, as the Session load waiting on it needs to know. */
+export type ComputerEntryOutcome =
+    | { readonly kind: "paired" }
+    | { readonly kind: "unpaired" }
+    | { readonly kind: "revoked" }
+    /** The request failed; the entry holds why. */
+    | { readonly kind: "failed" };
+
+/** The current entry request's answer, or null while the Computer has not answered it. */
+export function computerEntryOutcome(
+    computer: Pick<ComputerStatusStore, "entry" | "pairing">,
+): ComputerEntryOutcome | null {
+    switch (computer.entry.kind) {
+        case "loading":
+        case "reloading":
+            return null;
+        case "failed":
+            return { kind: "failed" };
+        case "ready":
+            return computer.pairing.kind === "checking" ? null : { kind: computer.pairing.kind };
+        default:
+            return computer.entry satisfies never;
+    }
+}
 
 /**
  * The Computer's connection as the page shows it everywhere. It is derived from the Computer configuration the page
