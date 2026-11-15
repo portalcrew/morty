@@ -1,3 +1,4 @@
+import type { NativeSessionTarget } from "@morty-build/client/protocol";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { sessionCreation } from "../../schema/acp-session-store/index.ts";
@@ -7,9 +8,16 @@ const receiptSchema = z
     .object({
         operationId: z.string(),
         requestHash: z.string(),
-        resultJson: z.string(),
+        harness: z.string(),
+        sessionId: z.string(),
     })
     .readonly();
+
+/** A finished creation: the request it ran and the Session it created. */
+export interface SessionCreationReceipt {
+    readonly requestHash: string;
+    readonly target: NativeSessionTarget;
+}
 
 /** The receipts of finished creations, which answer a retry of the same operation. */
 export class SessionCreationTable {
@@ -19,21 +27,26 @@ export class SessionCreationTable {
         this.#database = database;
     }
 
-    /** A row without a result is left by a Runtime that recorded a creation before it finished: no creation finished. */
-    readonly read = (operationId: string): z.infer<typeof receiptSchema> | undefined => {
+    readonly read = (operationId: string): SessionCreationReceipt | undefined => {
         const row = this.#database.orm
             .select()
             .from(sessionCreation)
             .where(eq(sessionCreation.operationId, operationId))
             .get();
-        return row === undefined || row.resultJson === null ? undefined : receiptSchema.parse(row);
+        if (row === undefined) {
+            return undefined;
+        }
+        const receipt = receiptSchema.parse(row);
+        return {
+            requestHash: receipt.requestHash,
+            target: { harness: receipt.harness, sessionId: receipt.sessionId },
+        };
     };
 
-    readonly record = (operationId: string, requestHash: string, resultJson: string): void => {
+    readonly record = (operationId: string, requestHash: string, target: NativeSessionTarget): void => {
         this.#database.orm
             .insert(sessionCreation)
-            .values({ operationId, requestHash, resultJson })
-            .onConflictDoUpdate({ target: sessionCreation.operationId, set: { requestHash, resultJson } })
+            .values({ operationId, requestHash, harness: target.harness, sessionId: target.sessionId })
             .run();
     };
 }

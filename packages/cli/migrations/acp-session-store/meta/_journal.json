@@ -120,6 +120,20 @@
             "when": 1794296313877,
             "tag": "0016_blue_silhouette",
             "breakpoints": true
+        },
+        {
+            "idx": 17,
+            "version": "6",
+            "when": 1794706037832,
+            "tag": "0017_bouncy_sally_floyd",
+            "breakpoints": true
+        },
+        {
+            "idx": 18,
+            "version": "6",
+            "when": 1794706044716,
+            "tag": "0018_closed_shard",
+            "breakpoints": true
         }
     ]
 }
