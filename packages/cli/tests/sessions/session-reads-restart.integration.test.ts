@@ -75,7 +75,9 @@ describe("Session settings reads after a daemon restart", () => {
         }
     });
 
-    it("Given an Agent without history loading, When its stored session's settings are read through the config-read path, Then the read resolves with the current configuration", async () => {
+    it("Given an Agent without history loading, When its stored session's settings are read through the config-read path, Then the read resolves with the current configuration", async ({
+        signal,
+    }) => {
         // The controlled peer advertises loadSession: false with this flag, so
         // any history-required preparation would fail with
         // native_history_unsupported before reaching the configuration.
@@ -85,7 +87,7 @@ describe("Session settings reads after a daemon restart", () => {
         const sessionTarget = await manager.createNativeSession({
             agent,
             cwd: process.cwd(),
-            signal: AbortSignal.timeout(10_000),
+            signal,
         });
         try {
             await manager.runPrompt({
@@ -96,7 +98,7 @@ describe("Session settings reads after a daemon restart", () => {
                 resources: [],
                 target: sessionTarget,
                 prompt: "Complete this turn",
-                signal: AbortSignal.timeout(10_000),
+                signal,
             });
         } finally {
             // Retiring the process leaves the stored row; the read must still
@@ -115,14 +117,14 @@ describe("Session settings reads after a daemon restart", () => {
                     agent,
                     cwd: process.cwd(),
                     target: sessionTarget,
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
             ).rejects.toMatchObject({ code: "native_history_unsupported" });
             const prepared = await reader.prepareSession({
                 agent,
                 cwd: process.cwd(),
                 target: sessionTarget,
-                signal: AbortSignal.timeout(10_000),
+                signal,
             });
             const model = prepared.configOptions.find((option) => option.id === "model");
             if (model?.type !== "select") {
@@ -134,7 +136,9 @@ describe("Session settings reads after a daemon restart", () => {
         }
     });
 
-    it("Given a native chat session whose process the daemon retired, When it is looked up after a restart, Then it is still known with its title and a prepare restores its configured settings", async () => {
+    it("Given a native chat session whose process the daemon retired, When it is looked up after a restart, Then it is still known with its title and a prepare restores its configured settings", async ({
+        signal,
+    }) => {
         const temporaryDirectory = await mkdtemp(join(tmpdir(), "morty-session-config-read-retired-"));
         const databasePath = join(temporaryDirectory, "sessions.sqlite");
         const { agent, stateDirectory } = await controlledAgent("claude");
@@ -142,7 +146,7 @@ describe("Session settings reads after a daemon restart", () => {
         const sessionTarget = await seed.createNativeSession({
             agent,
             cwd: process.cwd(),
-            signal: AbortSignal.timeout(10_000),
+            signal,
         });
         await seed.close();
         const store = new SqliteSessionStore(
@@ -155,7 +159,7 @@ describe("Session settings reads after a daemon restart", () => {
                 {
                     agent,
                     cwd: process.cwd(),
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 },
                 { kind: "import", sessionId: sessionTarget.sessionId, title: "Imported native session" },
             );
@@ -168,7 +172,7 @@ describe("Session settings reads after a daemon restart", () => {
                 resources: [],
                 target: sessionTarget,
                 prompt: "Complete this turn",
-                signal: AbortSignal.timeout(10_000),
+                signal,
             });
             // Configure a model so a later read has a non-default value to find.
             await first.applySessionConfiguration({
@@ -177,7 +181,7 @@ describe("Session settings reads after a daemon restart", () => {
                 cwd: process.cwd(),
                 requestId: "config-read-retired-configure",
                 target: sessionTarget,
-                signal: AbortSignal.timeout(10_000),
+                signal,
                 value: "test-large",
                 type: "select",
             });
@@ -194,7 +198,7 @@ describe("Session settings reads after a daemon restart", () => {
                 agent,
                 cwd: process.cwd(),
                 target: sessionTarget,
-                signal: AbortSignal.timeout(10_000),
+                signal,
             });
             const model = prepared.configOptions.find((option) => option.id === "model");
             if (model?.type !== "select") {

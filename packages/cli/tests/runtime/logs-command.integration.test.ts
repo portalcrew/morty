@@ -21,7 +21,9 @@ async function writeComputerLog(stateDirectory: string, filename: string, lines:
 
 describe("Morty logs command", () => {
     // @no-uc: Technical regression; a bug report must include both Computer diagnostics and worker lifecycle evidence.
-    it("Given a stopped daemon with logs from both the Computer and its manager, When the user collects them for a bug report, Then both logs are printed with its state-relative path", async () => {
+    it("Given a stopped daemon with logs from both the Computer and its manager, When the user collects them for a bug report, Then both logs are printed with its state-relative path", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-logs-command-"));
         temporaryDirectories.push(directory);
         const stateDirectory = join(directory, "state");
@@ -34,7 +36,7 @@ describe("Morty logs command", () => {
         ]);
         const environment = { ...process.env, MORTY_STATE_DIRECTORY: stateDirectory };
 
-        const result = await runCli(["logs"], environment, AbortSignal.timeout(30_000));
+        const result = await runCli(["logs"], environment, signal);
 
         expect(result.code).toBe(0);
         expect(result.stdout).toContain("daemon-lifecycle.log");
@@ -48,7 +50,9 @@ describe("Morty logs command", () => {
         expect(result.stdout).toContain("Review them before sharing");
     }, 60_000);
 
-    it("Given a linked log beside an ordinary log, When the user exports diagnostics, Then only the ordinary log is included", async () => {
+    it("Given a linked log beside an ordinary log, When the user exports diagnostics, Then only the ordinary log is included", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-logs-command-"));
         temporaryDirectories.push(directory);
         const stateDirectory = join(directory, "state");
@@ -57,11 +61,7 @@ describe("Morty logs command", () => {
         await writeFile(outside, "must-not-be-exported", { mode: 0o600 });
         await symlink(outside, join(stateDirectory, "computer", "logs", "linked.log"));
 
-        const result = await runCli(
-            ["logs", "--json", "--state-directory", stateDirectory],
-            process.env,
-            AbortSignal.timeout(30_000),
-        );
+        const result = await runCli(["logs", "--json", "--state-directory", stateDirectory], process.env, signal);
 
         expect(result.code).toBe(0);
         expect(JSON.parse(result.stdout)).toEqual({
@@ -72,7 +72,9 @@ describe("Morty logs command", () => {
     }, 60_000);
 
     // @no-uc: Technical regression; bounded log tailing must report what it dropped rather than hide it.
-    it("Given more log lines than the requested tail, When the user collects them, Then the oldest lines are reported as omitted instead of printed", async () => {
+    it("Given more log lines than the requested tail, When the user collects them, Then the oldest lines are reported as omitted instead of printed", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-logs-command-"));
         temporaryDirectories.push(directory);
         const stateDirectory = join(directory, "state");
@@ -81,11 +83,7 @@ describe("Morty logs command", () => {
             "newest-line-should-be-kept",
         ]);
 
-        const result = await runCli(
-            ["logs", "--tail", "1", "--state-directory", stateDirectory],
-            process.env,
-            AbortSignal.timeout(30_000),
-        );
+        const result = await runCli(["logs", "--tail", "1", "--state-directory", stateDirectory], process.env, signal);
 
         expect(result.code).toBe(0);
         expect(result.stdout).toContain("newest-line-should-be-kept");
@@ -94,17 +92,15 @@ describe("Morty logs command", () => {
     }, 60_000);
 
     // @no-uc: Technical regression; machine-readable log export must keep stdout parseable for evidence pipelines.
-    it("Given logs collected as JSON, When the output is piped, Then stdout is machine-parseable and the sharing notice goes to stderr", async () => {
+    it("Given logs collected as JSON, When the output is piped, Then stdout is machine-parseable and the sharing notice goes to stderr", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-logs-command-"));
         temporaryDirectories.push(directory);
         const stateDirectory = join(directory, "state");
         await writeComputerLog(stateDirectory, "daemon.log", ['{"event":"relay_connection_opened"}']);
 
-        const result = await runCli(
-            ["logs", "--json", "--state-directory", stateDirectory],
-            process.env,
-            AbortSignal.timeout(30_000),
-        );
+        const result = await runCli(["logs", "--json", "--state-directory", stateDirectory], process.env, signal);
 
         expect(result.code).toBe(0);
         expect(result.stderr).toContain("Review them before sharing");
@@ -116,7 +112,9 @@ describe("Morty logs command", () => {
     }, 60_000);
 
     // @no-uc: Technical regression; a forensic log export must not mutate the files it reads.
-    it("Given logs with permissions the daemon did not tighten, When the user collects them, Then collection is read-only and the file modes are unchanged", async () => {
+    it("Given logs with permissions the daemon did not tighten, When the user collects them, Then collection is read-only and the file modes are unchanged", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-logs-command-"));
         temporaryDirectories.push(directory);
         const stateDirectory = join(directory, "state");
@@ -128,11 +126,7 @@ describe("Morty logs command", () => {
         await chmod(logPath, 0o644);
         await chmod(directoryPath, 0o755);
 
-        const result = await runCli(
-            ["logs", "--state-directory", stateDirectory],
-            process.env,
-            AbortSignal.timeout(30_000),
-        );
+        const result = await runCli(["logs", "--state-directory", stateDirectory], process.env, signal);
 
         expect(result.code).toBe(0);
         expect(result.stdout).toContain("relay_connection_opened");
@@ -141,7 +135,9 @@ describe("Morty logs command", () => {
     }, 60_000);
 
     // @no-uc: Technical regression; unreadable evidence must not be reported as absent.
-    it("Given a log the collector cannot read, When the user collects logs, Then the report names the missing file and fails instead of claiming no logs exist", async () => {
+    it("Given a log the collector cannot read, When the user collects logs, Then the report names the missing file and fails instead of claiming no logs exist", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-logs-command-"));
         temporaryDirectories.push(directory);
         const stateDirectory = join(directory, "state");
@@ -151,11 +147,7 @@ describe("Morty logs command", () => {
         // survive: the file is present but this user cannot read it.
         await chmod(logPath, 0o000);
         try {
-            const result = await runCli(
-                ["logs", "--state-directory", stateDirectory],
-                process.env,
-                AbortSignal.timeout(30_000),
-            );
+            const result = await runCli(["logs", "--state-directory", stateDirectory], process.env, signal);
 
             expect(result.code).toBe(1);
             expect(result.stdout).toContain("The local daemon logs could not be read.");
@@ -163,11 +155,7 @@ describe("Morty logs command", () => {
             expect(result.stderr).toContain("could not be read and are missing from this report");
             expect(result.stderr).toContain("daemon.log");
 
-            const reported = await runCli(
-                ["logs", "--json", "--state-directory", stateDirectory],
-                process.env,
-                AbortSignal.timeout(30_000),
-            );
+            const reported = await runCli(["logs", "--json", "--state-directory", stateDirectory], process.env, signal);
             // JSON mode is the machine-consumable path, so it has to carry the same
             // failure status; a collector keying on the exit code cannot be fooled
             // by the format flag.
@@ -184,7 +172,9 @@ describe("Morty logs command", () => {
     }, 60_000);
 
     // @no-uc: Technical regression; an unlistable log directory must count as a collection failure.
-    it("Given a log directory this user cannot list, When the user collects logs, Then the directory is reported unreadable instead of being treated as holding no logs", async () => {
+    it("Given a log directory this user cannot list, When the user collects logs, Then the directory is reported unreadable instead of being treated as holding no logs", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-logs-command-"));
         temporaryDirectories.push(directory);
         const stateDirectory = join(directory, "state");
@@ -195,11 +185,7 @@ describe("Morty logs command", () => {
         const logsDirectory = join(stateDirectory, "computer", "logs");
         await chmod(logsDirectory, 0o300);
         try {
-            const result = await runCli(
-                ["logs", "--state-directory", stateDirectory],
-                process.env,
-                AbortSignal.timeout(30_000),
-            );
+            const result = await runCli(["logs", "--state-directory", stateDirectory], process.env, signal);
 
             expect(result.code).toBe(1);
             expect(result.stdout).toContain("The local daemon logs could not be read.");
@@ -211,15 +197,13 @@ describe("Morty logs command", () => {
     }, 60_000);
 
     // @no-uc: Technical regression; a clean computer must report no logs distinctly from an unreadable one.
-    it("Given no daemon has ever run here, When the user collects logs, Then the command reports that nothing was found instead of failing", async () => {
+    it("Given no daemon has ever run here, When the user collects logs, Then the command reports that nothing was found instead of failing", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-logs-command-"));
         temporaryDirectories.push(directory);
 
-        const result = await runCli(
-            ["logs", "--state-directory", join(directory, "unused")],
-            process.env,
-            AbortSignal.timeout(30_000),
-        );
+        const result = await runCli(["logs", "--state-directory", join(directory, "unused")], process.env, signal);
 
         expect(result.code).toBe(0);
         expect(result.stdout).toContain("No local daemon logs were found.");

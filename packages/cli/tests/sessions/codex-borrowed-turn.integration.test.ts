@@ -6,7 +6,9 @@ afterEach(() => {
     vi.useRealTimers();
 });
 
-it("Given another Codex client owns the thread, When its turn for this prompt is still running, Then the prompt ends only after the owner completes it", async () => {
+it("Given another Codex client owns the thread, When its turn for this prompt is still running, Then the prompt ends only after the owner completes it", async ({
+    signal,
+}) => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-30T00:00:00.000Z"));
     // Codex reports the owner's unfinished turn to a reader as "interrupted" without a completion time.
@@ -52,11 +54,11 @@ it("Given another Codex client owns the thread, When its turn for this prompt is
         async () => {},
         async () => {},
     );
-    await agent.initialize(AbortSignal.timeout(60_000));
+    await agent.initialize(signal);
 
     let settled = false;
     const prompt = agent
-        .prompt([{ type: "text", text: "Plan it" }], AbortSignal.timeout(60_000), [{ type: "text", text: "Plan it" }])
+        .prompt([{ type: "text", text: "Plan it" }], signal, [{ type: "text", text: "Plan it" }])
         .finally(() => {
             settled = true;
         });
@@ -117,7 +119,9 @@ function answeringOwner() {
     return { owner, client };
 }
 
-it("Given a queued prompt in a borrowed Codex thread, When one history read times out, Then the owner's answer still completes the prompt", async () => {
+it("Given a queued prompt in a borrowed Codex thread, When one history read times out, Then the owner's answer still completes the prompt", async ({
+    signal,
+}) => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-11-04T00:00:00.000Z"));
     const { owner, client } = answeringOwner();
@@ -132,12 +136,10 @@ it("Given a queued prompt in a borrowed Codex thread, When one history read time
         },
         async () => {},
     );
-    await agent.initialize(AbortSignal.timeout(60_000));
+    await agent.initialize(signal);
 
     owner.stallNextRead = true;
-    const prompt = agent.prompt([{ type: "text", text: "Plan it" }], AbortSignal.timeout(60_000), [
-        { type: "text", text: "Plan it" },
-    ]);
+    const prompt = agent.prompt([{ type: "text", text: "Plan it" }], signal, [{ type: "text", text: "Plan it" }]);
     void prompt.catch(() => {});
     await vi.advanceTimersByTimeAsync(1_000);
     expect(owner.stalledReads).toBe(1);
@@ -149,7 +151,9 @@ it("Given a queued prompt in a borrowed Codex thread, When one history read time
     await agent.close();
 });
 
-it("Given a queued prompt in a borrowed Codex thread, When delivering the owner's answer times out, Then the prompt fails", async () => {
+it("Given a queued prompt in a borrowed Codex thread, When delivering the owner's answer times out, Then the prompt fails", async ({
+    signal,
+}) => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-11-04T00:00:00.000Z"));
     const { owner, client } = answeringOwner();
@@ -163,11 +167,9 @@ it("Given a queued prompt in a borrowed Codex thread, When delivering the owner'
         },
         async () => {},
     );
-    await agent.initialize(AbortSignal.timeout(60_000));
+    await agent.initialize(signal);
 
-    const prompt = agent.prompt([{ type: "text", text: "Plan it" }], AbortSignal.timeout(60_000), [
-        { type: "text", text: "Plan it" },
-    ]);
+    const prompt = agent.prompt([{ type: "text", text: "Plan it" }], signal, [{ type: "text", text: "Plan it" }]);
     const failed = expect(prompt).rejects.toThrow("The owning Codex session could not be followed");
     owner.answered = true;
     await vi.advanceTimersByTimeAsync(2_000);

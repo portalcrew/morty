@@ -279,13 +279,11 @@ describe("daemon relay connection liveness", () => {
         vi.useRealTimers();
     });
 
-    it("Given a liveness-capable relay stops acknowledging heartbeats, When the acknowledgement deadline expires, Then the daemon reconnects", async () => {
+    it("Given a liveness-capable relay stops acknowledging heartbeats, When the acknowledgement deadline expires, Then the daemon reconnects", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-heartbeat-"));
-        const encryption = await createEncryptedDaemonFrames(
-            stateDirectory,
-            "heartbeat-channel",
-            AbortSignal.timeout(120_000),
-        );
+        const encryption = await createEncryptedDaemonFrames(stateDirectory, "heartbeat-channel", signal);
         const sendCommand = async (socket: Duplex, message: string): Promise<void> =>
             writeServerTextFrame(socket, await encryption.encode(message));
         const defaultWorkspace = join(stateDirectory, "workspace");
@@ -436,13 +434,11 @@ describe("daemon relay connection liveness", () => {
         }
     });
 
-    it("Given an active Computer is revoked by the Relay, When the daemon receives the terminal close, Then it exits instead of reconnecting", async () => {
+    it("Given an active Computer is revoked by the Relay, When the daemon receives the terminal close, Then it exits instead of reconnecting", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-computer-revoked-"));
-        const encryption = await createEncryptedDaemonFrames(
-            stateDirectory,
-            "computer-revoked-channel",
-            AbortSignal.timeout(120_000),
-        );
+        const encryption = await createEncryptedDaemonFrames(stateDirectory, "computer-revoked-channel", signal);
         const sendCommand = async (socket: Duplex, message: string): Promise<void> =>
             writeServerTextFrame(socket, await encryption.encode(message));
         const defaultWorkspace = join(stateDirectory, "workspace");
@@ -579,13 +575,11 @@ describe("daemon relay connection liveness", () => {
         }
     });
 
-    it("Given a healthy idle daemon connection, When the Relay sends a future event and twenty minutes pass, Then the same connection remains available", async () => {
+    it("Given a healthy idle daemon connection, When the Relay sends a future event and twenty minutes pass, Then the same connection remains available", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-liveness-"));
-        const encryption = await createEncryptedDaemonFrames(
-            stateDirectory,
-            "liveness-channel",
-            AbortSignal.timeout(120_000),
-        );
+        const encryption = await createEncryptedDaemonFrames(stateDirectory, "liveness-channel", signal);
         const sendCommand = async (socket: Duplex, message: string): Promise<void> =>
             writeServerTextFrame(socket, await encryption.encode(message));
         const defaultWorkspace = join(stateDirectory, "workspace");
@@ -767,13 +761,11 @@ describe("daemon relay connection liveness", () => {
         }
     });
 
-    it("Given a connected daemon, When the Relay sends unknown kinds and malformed frames, Then unknown kinds keep the connection usable and malformed frames cause a protocol close followed by recovery", async () => {
+    it("Given a connected daemon, When the Relay sends unknown kinds and malformed frames, Then unknown kinds keep the connection usable and malformed frames cause a protocol close followed by recovery", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-unsupported-command-"));
-        const encryption = await createEncryptedDaemonFrames(
-            stateDirectory,
-            "unsupported-channel",
-            AbortSignal.timeout(120_000),
-        );
+        const encryption = await createEncryptedDaemonFrames(stateDirectory, "unsupported-channel", signal);
         const sendCommand = async (socket: Duplex, message: string): Promise<void> =>
             writeServerTextFrame(socket, await encryption.encode(message));
         const defaultWorkspace = join(stateDirectory, "workspace");
@@ -982,13 +974,11 @@ describe("daemon relay connection liveness", () => {
         }
     });
 
-    it("Given a live daemon sends without acknowledgements, When it reconnects, Then it resumes live delivery without replaying prior events", async () => {
+    it("Given a live daemon sends without acknowledgements, When it reconnects, Then it resumes live delivery without replaying prior events", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-reconciliation-"));
-        const encryption = await createEncryptedDaemonFrames(
-            stateDirectory,
-            "reconciliation-channel",
-            AbortSignal.timeout(120_000),
-        );
+        const encryption = await createEncryptedDaemonFrames(stateDirectory, "reconciliation-channel", signal);
         const sendCommand = async (socket: Duplex, message: string): Promise<void> =>
             writeServerTextFrame(socket, await encryption.encode(message));
         const defaultWorkspace = join(stateDirectory, "workspace");

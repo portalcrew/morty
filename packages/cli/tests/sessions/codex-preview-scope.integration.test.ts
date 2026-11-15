@@ -6,7 +6,7 @@ import type { SessionEventPage } from "../../src/engine/acp/native-history/previ
 import { testAgentDefinition } from "../support/agent-definition.ts";
 import { codexHistoryAdapter } from "../support/codex-history-preview.ts";
 
-async function previewFixture() {
+async function previewFixture(signal: AbortSignal) {
     const directory = await mkdtemp(join(tmpdir(), "morty-codex-preview-scope-"));
     const command = join(directory, "codex.mjs");
     await writeFile(
@@ -37,7 +37,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
                 query: {
                     agent: agent.withEnvironment({ CODEX_HOME: scope }),
                     cwd: directory,
-                    signal: AbortSignal.timeout(30_000),
+                    signal,
                 },
                 request: { sessionId, eventLimit: 1, cursor },
             }),
@@ -62,8 +62,10 @@ function messages(page: SessionEventPage): readonly string[] {
     );
 }
 
-test("Given two scoped Codex stores for the same thread, When history is previewed and paged in both scopes, Then launch and cursor identity retain each store's environment", async () => {
-    await using fixture = await previewFixture();
+test("Given two scoped Codex stores for the same thread, When history is previewed and paged in both scopes, Then launch and cursor identity retain each store's environment", async ({
+    signal,
+}) => {
+    await using fixture = await previewFixture(signal);
     const first = await fixture.read("scope-one", "saved-thread");
     expect(messages(first)).toEqual(["scope-one:saved-thread:2"]);
     const second = await fixture.read("scope-two", "saved-thread");
@@ -78,8 +80,10 @@ test("Given two scoped Codex stores for the same thread, When history is preview
     ]);
 });
 
-test("Given many saved Codex threads, When the user browses beyond retained preview capacity, Then old cursors expire while recent pages and a refreshed old thread remain readable", async () => {
-    await using fixture = await previewFixture();
+test("Given many saved Codex threads, When the user browses beyond retained preview capacity, Then old cursors expire while recent pages and a refreshed old thread remain readable", async ({
+    signal,
+}) => {
+    await using fixture = await previewFixture(signal);
     const oldest = await fixture.read("scoped", "thread-0");
     const recent = await fixture.read("scoped", "thread-1");
     expect(oldest.nextCursor).not.toBeNull();

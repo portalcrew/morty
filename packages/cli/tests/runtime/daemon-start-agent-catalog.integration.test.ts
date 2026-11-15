@@ -64,7 +64,9 @@ async function catalogRelay() {
     };
 }
 
-it("Given a running daemon with a long temporary directory whose Agent catalog was read at startup, When the user runs `morty start` again, Then the daemon re-reads the local Agent inventory and republishes the catalog before start returns", async () => {
+it("Given a running daemon with a long temporary directory whose Agent catalog was read at startup, When the user runs `morty start` again, Then the daemon re-reads the local Agent inventory and republishes the catalog before start returns", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-start-agent-catalog-"));
     temporaryDirectories.push(directory);
     const temporaryFiles = join(directory, "long-temporary-directory-".repeat(6));
@@ -78,7 +80,7 @@ it("Given a running daemon with a long temporary directory whose Agent catalog w
     };
     const relay = await catalogRelay();
 
-    const installation = await openMortyInstallation(AbortSignal.timeout(10_000), environment);
+    const installation = await openMortyInstallation(signal, environment);
     await installation.saveConnection(
         {
             computerId: "start-catalog-channel",
@@ -86,21 +88,19 @@ it("Given a running daemon with a long temporary directory whose Agent catalog w
             relayOrigin: relay.origin,
             computerCredential: "r".repeat(43),
         },
-        AbortSignal.timeout(10_000),
+        signal,
     );
     try {
-        const started = await runCli(["start"], environment, AbortSignal.timeout(60_000));
+        const started = await runCli(["start"], environment, signal);
         expect(
             started.code,
             started.stderr +
-                JSON.stringify(
-                    await collectLocalDaemonLogs(environment.MORTY_STATE_DIRECTORY, 20, AbortSignal.timeout(5_000)),
-                ),
+                JSON.stringify(await collectLocalDaemonLogs(environment.MORTY_STATE_DIRECTORY, 20, signal)),
         ).toBe(0);
         await relay.firstPublication;
         const publishedAtStartup = relay.published.length;
 
-        const restarted = await runCli(["start"], environment, AbortSignal.timeout(60_000));
+        const restarted = await runCli(["start"], environment, signal);
 
         expect(restarted.code, restarted.stderr).toBe(0);
         expect(relay.published).toHaveLength(publishedAtStartup + 1);

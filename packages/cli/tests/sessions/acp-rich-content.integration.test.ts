@@ -1,8 +1,10 @@
 import { expect, it } from "vitest";
 import { completeAcpControls, createControlledSession } from "./acp-controls-fixture.ts";
 
-it("Given image and embedded context input, When ACP returns structured tool content and an inline image, Then prompt blocks and output types survive the boundary", async () => {
-    await using session = await createControlledSession();
+it("Given image and embedded context input, When ACP returns structured tool content and an inline image, Then prompt blocks and output types survive the boundary", async ({
+    signal,
+}) => {
+    await using session = await createControlledSession(signal);
     const result = await completeAcpControls(session);
     expect(result.completed).toEqual({
         stopReason: "end_turn",

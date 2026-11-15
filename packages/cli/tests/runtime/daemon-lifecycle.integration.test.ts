@@ -25,15 +25,14 @@ afterEach(async () => {
 });
 
 describe("Morty daemon lifecycle", () => {
-    it.each(["workspace", "database"])(
+    it.for(["workspace", "database"])(
         "Given an enabled Computer has a broken %s, When the user starts the daemon, Then startup fails and releases its lock instead of claiming success",
-        async (broken) => {
+        async (broken, { signal }) => {
             const directory = await mkdtemp(join(tmpdir(), "morty-worker-fail-fast-"));
             temporaryDirectories.push(directory);
             const workspace = join(directory, "workspace");
             await mkdir(workspace);
             const environment = { ...process.env, MORTY_STATE_DIRECTORY: join(directory, "state") };
-            const signal = AbortSignal.timeout(30_000);
             const installation = await openMortyInstallation(signal, environment);
             const computerId = "channel_start_failure";
             await installation.saveConnection(
@@ -67,32 +66,35 @@ describe("Morty daemon lifecycle", () => {
             }
         },
     );
-    it("Given the daemon is stopped, When the user runs morty start, Then the daemon is running without requiring a connection", async () => {
+    it("Given the daemon is stopped, When the user runs morty start, Then the daemon is running without requiring a connection", async ({
+        signal,
+    }) => {
         const stateRoot = await mkdtemp(join(tmpdir(), "morty-manager-start-"));
         temporaryDirectories.push(stateRoot);
         const environment = { ...process.env, MORTY_STATE_DIRECTORY: stateRoot };
 
         try {
-            const started = await runCli(["start"], environment, AbortSignal.timeout(60_000));
+            const started = await runCli(["start"], environment, signal);
 
             expect(started.code).toBe(0);
             expect(started.stderr).toBe("");
             expect(started.stdout).toBe(`Morty daemon ${cliPackage.version} started.\n`);
 
-            const ensured = await runCli(["start"], environment, AbortSignal.timeout(60_000));
+            const ensured = await runCli(["start"], environment, signal);
             expect(ensured).toEqual({ code: 0, stderr: "", stdout: "Morty daemon is running.\n" });
         } finally {
             await runCli(["quit"], environment, AbortSignal.timeout(10_000)).catch(() => undefined);
         }
     });
 
-    it("Given the Relay revoked this computer's pairing, When the user runs morty start, Then it tells them to run setup again instead of serving the Computer", async () => {
+    it("Given the Relay revoked this computer's pairing, When the user runs morty start, Then it tells them to run setup again instead of serving the Computer", async ({
+        signal,
+    }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-start-revoked-"));
         temporaryDirectories.push(directory);
         const workspace = join(directory, "workspace");
         await mkdir(workspace);
         const environment = { ...process.env, MORTY_STATE_DIRECTORY: join(directory, "state") };
-        const signal = AbortSignal.timeout(60_000);
         const installation = await openMortyInstallation(signal, environment);
         const connection = await installation.saveConnection(
             {
@@ -116,18 +118,19 @@ describe("Morty daemon lifecycle", () => {
         }
     });
 
-    it("Given another control client remains connected, When the CLI quits, Then the daemon exits", async () => {
+    it("Given another control client remains connected, When the CLI quits, Then the daemon exits", async ({
+        signal,
+    }) => {
         const stateRoot = await mkdtemp(join(tmpdir(), "morty-manager-quit-"));
         temporaryDirectories.push(stateRoot);
         const environment = { ...process.env, MORTY_STATE_DIRECTORY: stateRoot };
-        const deadline = AbortSignal.timeout(60_000);
         let heldConnection: Socket | undefined;
         try {
-            const started = await runCli(["start"], environment, deadline);
+            const started = await runCli(["start"], environment, signal);
             expect(started.code, started.stderr).toBe(0);
-            const control = await openMortyInstallation(deadline, environment);
-            heldConnection = await holdControlConnection(control.stateDirectory, deadline);
-            expect(await runCli(["quit"], environment, deadline)).toEqual({
+            const control = await openMortyInstallation(signal, environment);
+            heldConnection = await holdControlConnection(control.stateDirectory, signal);
+            expect(await runCli(["quit"], environment, signal)).toEqual({
                 code: 0,
                 stderr: "",
                 stdout: "Morty daemon stopped.\n",

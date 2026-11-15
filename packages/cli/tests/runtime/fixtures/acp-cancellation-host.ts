@@ -74,7 +74,9 @@ const endpoint = (): ControlledAcpPeer => {
     };
 };
 
-const gateway = await createEncryptedDaemonGateway(directory, "cancellation-test", AbortSignal.timeout(60_000));
+// The parent test bounds this process; the gateway lives until the fixture finishes.
+const lifetime = new AbortController();
+const gateway = await createEncryptedDaemonGateway(directory, "cancellation-test", lifetime.signal);
 relay.on("connection", (socket) => {
     const peer = gateway.connect(socket);
     void peer.send(
@@ -135,6 +137,7 @@ try {
         await runtime;
     }
 } finally {
+    lifetime.abort(new Error("The cancellation fixture finished"));
     await gateway.close();
     for (const client of relay.clients) {
         client.terminate();

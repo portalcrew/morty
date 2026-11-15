@@ -2,9 +2,11 @@ import { MortyError } from "@morty-build/client";
 import { expect, it } from "vitest";
 import { startTestRelay } from "../support/relay.ts";
 
-it("Given two clients holding one configuration revision, When they edit concurrently, Then only one edit commits and a stale retry cannot overwrite it", async () => {
+it("Given two clients holding one configuration revision, When they edit concurrently, Then only one edit commits and a stale retry cannot overwrite it", async ({
+    signal,
+}) => {
     const cancellation = new AbortController();
-    await using relay = await startTestRelay();
+    await using relay = await startTestRelay(signal);
     try {
         const owner = await relay.createOwner();
         const runtime = await relay.connectAgent(owner.computerId);
@@ -67,9 +69,11 @@ it("Given two clients holding one configuration revision, When they edit concurr
     }
 });
 
-it("Given a created Session whose settings changed, When its creation is retried after a lost reply, Then the retry answers the Session's current settings and they can be edited", async () => {
+it("Given a created Session whose settings changed, When its creation is retried after a lost reply, Then the retry answers the Session's current settings and they can be edited", async ({
+    signal,
+}) => {
     const cancellation = new AbortController();
-    await using relay = await startTestRelay();
+    await using relay = await startTestRelay(signal);
     try {
         const owner = await relay.createOwner();
         const runtime = await relay.connectAgent(owner.computerId);

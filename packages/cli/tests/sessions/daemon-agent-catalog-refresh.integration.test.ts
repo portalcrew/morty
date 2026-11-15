@@ -181,7 +181,7 @@ test.for([
     {
         timeout: 120_000,
     },
-    async ({ harness, queryBeforeUpgrade }) => {
+    async ({ harness, queryBeforeUpgrade }, { signal }) => {
         vi.useFakeTimers({ toFake: ["Date"] });
         vi.setSystemTime(new Date("2026-10-29T00:00:00Z"));
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-agent-refresh-"));
@@ -210,11 +210,7 @@ test.for([
         await symlink(peerLauncher, join(binDirectory, "controlled-acp-peer"));
 
         const catalogBodies: string[] = [];
-        const gateway = await createEncryptedDaemonGateway(
-            stateDirectory,
-            "channel_alpha",
-            AbortSignal.timeout(120_000),
-        );
+        const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_alpha", signal);
         const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
         const relay = createServer((request, response) => {
             if (request.method === "PUT" && request.url?.includes("/catalog") === true) {
@@ -243,7 +239,7 @@ test.for([
             dataDirectory: stateDirectory,
             defaultWorkspace: workspace,
             environment,
-            signal: AbortSignal.timeout(60_000),
+            signal,
             specifications: specifications(harness),
         });
         const agent = inventory.readyAgents().find((entry) => entry.harness === harness);

@@ -28,13 +28,15 @@ import { createEncryptedDaemonGateway, type EncryptedDaemonPeer } from "../suppo
 const fakeAgentPath = fileURLToPath(new URL("./fixtures/acp-peer.ts", import.meta.url));
 
 describe("daemon narration delivery", () => {
-    it("Given an Agent streams a long reasoning activity, When the turn completes, Then bounded narration increments preserve it without duplicate text", async () => {
+    it("Given an Agent streams a long reasoning activity, When the turn completes, Then bounded narration increments preserve it without duplicate text", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-narration-delta-"));
         const workspace = join(stateDirectory, "workspace");
         const nativeStateDirectory = join(stateDirectory, "native");
         await Promise.all([mkdir(workspace), mkdir(nativeStateDirectory)]);
 
-        const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_beta", AbortSignal.timeout(30_000));
+        const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_beta", signal);
         const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
         const relay = createServer((_request, response) => {
             response.writeHead(404);

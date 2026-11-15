@@ -10,7 +10,9 @@ import { SessionRuntimeFixture as SessionManager } from "../support/session-runt
 import { UnretainedExternalContentStore } from "../support/unretained-external-content-store.ts";
 import { fakeAgent } from "./acp-feature-fixture.ts";
 
-it("Given a Session's creation is cancelled while its settings are applied, When the Runtime lists its Sessions, Then the half-configured Session is not held and a new creation succeeds", async () => {
+it("Given a Session's creation is cancelled while its settings are applied, When the Runtime lists its Sessions, Then the half-configured Session is not held and a new creation succeeds", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-session-creation-"));
     const manager = new SessionManager({
         observer: {},
@@ -37,7 +39,7 @@ it("Given a Session's creation is cancelled while its settings are applied, When
         const cancellation = new AbortController();
         await expect(
             manager.createConfiguredSession(
-                { agent, cwd: directory, signal: AbortSignal.any([cancellation.signal, AbortSignal.timeout(10_000)]) },
+                { agent, cwd: directory, signal: AbortSignal.any([cancellation.signal, signal]) },
                 async (_created, signal) => {
                     cancellation.abort(new Error("The client went away."));
                     signal.throwIfAborted();
@@ -46,10 +48,7 @@ it("Given a Session's creation is cancelled while its settings are applied, When
         ).rejects.toThrow("The client went away.");
         expect(manager.listSessions(10)).toEqual([]);
 
-        const created = await manager.createConfiguredSession(
-            { agent, cwd: directory, signal: AbortSignal.timeout(10_000) },
-            async () => undefined,
-        );
+        const created = await manager.createConfiguredSession({ agent, cwd: directory, signal }, async () => undefined);
         expect(manager.listSessions(10).map((session) => session.target)).toEqual([created.target]);
     } finally {
         await manager.close();

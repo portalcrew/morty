@@ -91,7 +91,9 @@ input.on("line", (line) => {
     return executable;
 }
 
-it("Given a long-lived Codex app-server returns more than 32 MiB across consumed messages, When another request completes, Then the healthy connection remains usable", async () => {
+it("Given a long-lived Codex app-server returns more than 32 MiB across consumed messages, When another request completes, Then the healthy connection remains usable", async ({
+    signal,
+}) => {
     const command = await appServer();
     const client = new CodexAppServerClient({
         command,
@@ -103,7 +105,6 @@ it("Given a long-lived Codex app-server returns more than 32 MiB across consumed
         },
     });
     try {
-        const signal = AbortSignal.timeout(30_000);
         await client.initialize(signal);
         for (let request = 0; request < 34; request += 1) {
             await expect(client.request("history/read", {}, signal)).resolves.toHaveLength(1024 * 1024);
@@ -114,7 +115,9 @@ it("Given a long-lived Codex app-server returns more than 32 MiB across consumed
     }
 });
 
-it("Given Codex sends an individual protocol message above 32 MiB, When Morty receives it, Then the connection stops at the bounded transport boundary", async () => {
+it("Given Codex sends an individual protocol message above 32 MiB, When Morty receives it, Then the connection stops at the bounded transport boundary", async ({
+    signal,
+}) => {
     const command = await appServer(33 * 1024 * 1024);
     const client = new CodexAppServerClient({
         command,
@@ -126,7 +129,6 @@ it("Given Codex sends an individual protocol message above 32 MiB, When Morty re
         },
     });
     try {
-        const signal = AbortSignal.timeout(30_000);
         await client.initialize(signal);
         await expect(client.request("history/read", {}, signal)).rejects.toMatchObject({
             code: "codex_app_server_output_limit",

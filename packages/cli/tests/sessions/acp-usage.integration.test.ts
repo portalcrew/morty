@@ -46,6 +46,7 @@ function usageAgent(response: Readonly<Record<string, unknown>>, context?: typeo
 async function run(
     response: Readonly<Record<string, unknown>>,
     observer: RecordingObserver,
+    signal: AbortSignal,
     context?: typeof contextUsage,
 ) {
     const manager = new SessionManager({
@@ -78,10 +79,10 @@ async function run(
             target: await manager.createNativeSession({
                 agent: usageAgent(response, context),
                 cwd: process.cwd(),
-                signal: AbortSignal.timeout(10_000),
+                signal,
             }),
             prompt: "Complete this turn",
-            signal: AbortSignal.timeout(10_000),
+            signal,
         });
     } finally {
         await manager.close();
@@ -94,7 +95,7 @@ const recordedContextUsage = (observer: RecordingObserver) =>
     );
 
 describe("controlled ACP usage boundary", () => {
-    it.each([
+    it.for([
         { name: "absent usage", response: { stopReason: "end_turn", _meta: null, usage: null } },
         {
             name: "unknown metadata",
@@ -109,9 +110,9 @@ describe("controlled ACP usage boundary", () => {
         { name: "cancelled usage", response: { stopReason: "cancelled", usage, _meta: { quota } } },
     ])(
         "Given $name in a final response, When a prompt settles, Then only reported data is preserved",
-        async ({ response }) => {
+        async ({ response }, { signal }) => {
             const observer = new RecordingObserver();
-            const result = await run(response, observer);
+            const result = await run(response, observer, signal);
             expect(result.stopReason).toBe(response.stopReason);
             if (response.usage !== undefined && response.usage !== null) {
                 expect(result.usage).toMatchObject(response.usage);
@@ -123,7 +124,7 @@ describe("controlled ACP usage boundary", () => {
         },
     );
 
-    it.each([
+    it.for([
         { name: "reasoning tokens", usage, tokenCount },
         {
             name: "cache write tokens",
@@ -132,7 +133,7 @@ describe("controlled ACP usage boundary", () => {
         },
     ])(
         "Given $name in final usage, When a prompt completes, Then validated usage and quota coexist with recorded context usage",
-        async (scenario) => {
+        async (scenario, { signal }) => {
             const observer = new RecordingObserver();
             const expectedQuota = {
                 model_usage: [{ model: "test-model", token_count: scenario.tokenCount }],
@@ -145,6 +146,7 @@ describe("controlled ACP usage boundary", () => {
                     _meta: { quota: expectedQuota, privateData: "must not leave the ACP boundary" },
                 },
                 observer,
+                signal,
                 contextUsage,
             );
             expect(result).toMatchObject({
@@ -159,7 +161,9 @@ describe("controlled ACP usage boundary", () => {
         },
     );
 
-    it("Given snake-case quota metadata, When a prompt completes, Then the response succeeds with normalized bounded usage", async () => {
+    it("Given snake-case quota metadata, When a prompt completes, Then the response succeeds with normalized bounded usage", async ({
+        signal,
+    }) => {
         const observer = new RecordingObserver();
         const tokens = { input_tokens: 600, output_tokens: 200 };
         const result = await run(
@@ -168,6 +172,7 @@ describe("controlled ACP usage boundary", () => {
                 _meta: { quota: { model_usage: [{ model: "test-model", token_count: tokens }], token_count: tokens } },
             },
             observer,
+            signal,
         );
         const expectedQuota = {
             model_usage: [
@@ -178,7 +183,7 @@ describe("controlled ACP usage boundary", () => {
         expect(result).toMatchObject({ stopReason: "end_turn", _meta: { quota: expectedQuota } });
     });
 
-    it.each([
+    it.for([
         { name: "usage", response: { stopReason: "end_turn", usage: { ...usage, totalTokens: -1 } } },
         {
             name: "quota",
@@ -189,9 +194,9 @@ describe("controlled ACP usage boundary", () => {
         },
     ])(
         "Given malformed final $name, When a prompt completes, Then invalid data is rejected with a sanitized typed failure",
-        async ({ response }) => {
+        async ({ response }, { signal }) => {
             const observer = new RecordingObserver();
-            await expect(run(response, observer)).rejects.toMatchObject({
+            await expect(run(response, observer, signal)).rejects.toMatchObject({
                 code: "acp_invalid_prompt_response",
                 message: "ACP agent returned an invalid prompt response",
             });

@@ -139,15 +139,14 @@ export async function createFakeAgentHarnessRuntime(options: {
             throw new Error("The production daemon stopped unexpectedly");
         });
         void failure.catch(() => undefined);
-        const startup = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
-        startup.throwIfAborted();
+        signal.throwIfAborted();
         const aborted = Promise.withResolvers<never>();
-        const abort = (): void => aborted.reject(startup.reason);
-        startup.addEventListener("abort", abort, { once: true });
+        const abort = (): void => aborted.reject(signal.reason);
+        signal.addEventListener("abort", abort, { once: true });
         try {
             await Promise.race([online.promise, failure, aborted.promise]);
         } finally {
-            startup.removeEventListener("abort", abort);
+            signal.removeEventListener("abort", abort);
         }
         const owner = createOwnerApi({
             origin: options.origin,

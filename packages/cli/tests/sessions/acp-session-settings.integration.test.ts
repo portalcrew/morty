@@ -153,7 +153,9 @@ describe("Agent setting capabilities", () => {
         }
     });
 
-    it("Given Pi exposes no approval or sandbox setting, When its session is prepared, Then Morty exposes no synthetic execution control", async () => {
+    it("Given Pi exposes no approval or sandbox setting, When its session is prepared, Then Morty exposes no synthetic execution control", async ({
+        signal,
+    }) => {
         const manager = new SessionManager({
             observer: {},
             store: new MemorySessionStore(),
@@ -197,7 +199,7 @@ describe("Agent setting capabilities", () => {
                 target: await manager.createNativeSession({
                     agent,
                     cwd: process.cwd(),
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });
@@ -272,8 +274,10 @@ describe("Agent setting capabilities", () => {
     });
 });
 
-it("Given ACP exposes select and boolean settings, When a user configures the conversation, Then the next prompt executes with those values", async () => {
-    await using session = await createControlledSession();
+it("Given ACP exposes select and boolean settings, When a user configures the conversation, Then the next prompt executes with those values", async ({
+    signal,
+}) => {
+    await using session = await createControlledSession(signal);
     const prepared = await session.manager.prepareSession(session.request);
     expect(prepared).toMatchObject({
         agentName: "Morty test agent",

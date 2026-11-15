@@ -85,7 +85,9 @@ describe("native session preparation", () => {
         }
     });
 
-    it("Given a saved ACP conversation is open elsewhere, When a user imports it and retries after it closes, Then the original opening error is reported and the retry opens the conversation", async () => {
+    it("Given a saved ACP conversation is open elsewhere, When a user imports it and retries after it closes, Then the original opening error is reported and the retry opens the conversation", async ({
+        signal,
+    }) => {
         vi.useFakeTimers({ toFake: ["Date"] });
         vi.setSystemTime(new Date("2026-09-14T00:00:00Z"));
         const f = await fixture("Claude Code", "exclusive-writer");
@@ -117,7 +119,7 @@ describe("native session preparation", () => {
                 target: await external.createNativeSession({
                     agent: f.agent,
                     cwd: f.workspace,
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 commandId: "external-turn",
                 prompt: "Saved conversation",

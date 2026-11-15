@@ -5,14 +5,15 @@ import { expect, it } from "vitest";
 import { startTestRelay } from "../support/relay.ts";
 
 // @no-uc: Performance; validating a directory must not require enumerating its children.
-it("describes a selected directory without browsing its children and still rejects unavailable directories", async () => {
+it("describes a selected directory without browsing its children and still rejects unavailable directories", async ({
+    signal,
+}) => {
     const root = await mkdtemp(join(tmpdir(), "morty-workspace-metadata-"));
     try {
         await mkdir(join(root, "child"));
         const canonical = await realpath(root);
         const directory = canonical;
-        await using relay = await startTestRelay();
-        const signal = AbortSignal.timeout(30_000);
+        await using relay = await startTestRelay(signal);
         const owner = await relay.createOwner();
         const runtime = await relay.connectAgent(owner.computerId);
         const listing = await runtime.api.directory(directory, signal);

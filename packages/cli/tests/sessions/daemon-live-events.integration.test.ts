@@ -142,7 +142,10 @@ class ClientFrames {
     };
 }
 
-async function startControlledDaemon(options: { readonly stateDirectory?: string } = {}): Promise<{
+async function startControlledDaemon(options: {
+    readonly signal: AbortSignal;
+    readonly stateDirectory?: string;
+}): Promise<{
     readonly agent: AcpAgentDefinition;
     readonly close: () => Promise<void>;
     readonly config: ReturnType<typeof createRuntimeConfig>;
@@ -157,7 +160,7 @@ async function startControlledDaemon(options: { readonly stateDirectory?: string
     const workspace = join(stateDirectory, "workspace");
     const nativeStateDirectory = join(stateDirectory, "native");
     await Promise.all([mkdir(workspace, { recursive: true }), mkdir(nativeStateDirectory, { recursive: true })]);
-    const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_alpha", AbortSignal.timeout(120_000));
+    const gateway = await createEncryptedDaemonGateway(stateDirectory, "channel_alpha", options.signal);
     const socketReady = Promise.withResolvers<EncryptedDaemonPeer>();
     const relay = createServer((_request, response) => {
         response.writeHead(404);
@@ -423,10 +426,10 @@ async function activeTurn(fixture: Fixture, command: SessionPromptCommand) {
     }
 }
 describe("daemon V2 live delivery", () => {
-    it.each(["user_message_chunk", "agent_message_chunk"])(
+    it.for(["user_message_chunk", "agent_message_chunk"])(
         "Given consecutive %s blocks cross the wire bound, When a viewer loads history, Then exact-limit merges remain valid and overflow text is retained in order without cutting Unicode",
-        async (sessionUpdate) => {
-            const fixture = await startControlledDaemon();
+        async (sessionUpdate, { signal }) => {
+            const fixture = await startControlledDaemon({ signal });
             try {
                 const command = prompt(fixture, `stream merged text ${sessionUpdate}`);
                 await sendText(fixture.socket, encodeSessionPromptCommand(command));
@@ -458,10 +461,12 @@ describe("daemon V2 live delivery", () => {
         },
     );
 
-    it("Given a stored conversation has valid user blocks totaling 1666038 characters, When it reopens after restart, Then paginated history retains all text and a follow-up continues the same native session", async () => {
+    it("Given a stored conversation has valid user blocks totaling 1666038 characters, When it reopens after restart, Then paginated history retains all text and a follow-up continues the same native session", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-large-saved-history-"));
         try {
-            const first = await startControlledDaemon({ stateDirectory });
+            const first = await startControlledDaemon({ signal, stateDirectory });
             try {
                 await sendText(first.socket, encodeSessionPromptCommand(prompt(first, "Seed saved conversation")));
                 for (;;) {
@@ -495,7 +500,7 @@ describe("daemon V2 live delivery", () => {
             });
             await writeFile(nativePath, saved);
 
-            const restarted = await startControlledDaemon({ stateDirectory });
+            const restarted = await startControlledDaemon({ signal, stateDirectory });
             try {
                 const command = {
                     ...prompt(restarted, "Continue the saved conversation"),
@@ -563,10 +568,10 @@ describe("daemon V2 live delivery", () => {
         }
     });
 
-    it.each(["user_message_chunk", "agent_message_chunk", "agent_thought_chunk", "compaction_summary_chunk"])(
+    it.for(["user_message_chunk", "agent_message_chunk", "agent_thought_chunk", "compaction_summary_chunk"])(
         "Given oversized %s text, When the daemon publishes and replays it, Then text is bounded with an exact omission marker and the turn completes",
-        async (sessionUpdate) => {
-            const fixture = await startControlledDaemon();
+        async (sessionUpdate, { signal }) => {
+            const fixture = await startControlledDaemon({ signal });
             try {
                 const command = prompt(fixture, `stream bounded text ${sessionUpdate}`);
                 await sendText(fixture.socket, encodeSessionPromptCommand(command));
@@ -638,8 +643,10 @@ describe("daemon V2 live delivery", () => {
         },
     );
 
-    it("Given a harness identifies a user message and fails its prompt, When the daemon publishes the failure, Then the failure names the user message it recorded", async () => {
-        const fixture = await startControlledDaemon();
+    it("Given a harness identifies a user message and fails its prompt, When the daemon publishes the failure, Then the failure names the user message it recorded", async ({
+        signal,
+    }) => {
+        const fixture = await startControlledDaemon({ signal });
         try {
             await sendText(fixture.socket, encodeSessionPromptCommand(prompt(fixture, "fail with model unavailable")));
             const events: SessionLiveEvent[] = [];
@@ -662,8 +669,10 @@ describe("daemon V2 live delivery", () => {
         }
     });
 
-    it("Given a running turn with a queued follow-up, When another prompt steers the turn, Then history retains executed user messages once with their turns' lifecycle and omits queue lifecycle metadata", async () => {
-        const fixture = await startControlledDaemon();
+    it("Given a running turn with a queued follow-up, When another prompt steers the turn, Then history retains executed user messages once with their turns' lifecycle and omits queue lifecycle metadata", async ({
+        signal,
+    }) => {
+        const fixture = await startControlledDaemon({ signal });
         try {
             const running = prompt(fixture, "wait for steering");
             const userMessageIds: string[] = [];
@@ -749,10 +758,10 @@ describe("daemon V2 live delivery", () => {
         }
     });
 
-    it.each(["text-only", "with attachment"])(
+    it.for(["text-only", "with attachment"])(
         "Given a %s prompt publishes lifecycle metadata, When a viewer reads history after completion, Then the prompt appears once as ACP content inside its turn's lifecycle",
-        async (scenario) => {
-            const fixture = await startControlledDaemon();
+        async (scenario, { signal }) => {
+            const fixture = await startControlledDaemon({ signal });
             try {
                 const command: SessionPromptCommand = {
                     ...prompt(fixture, "stream token burst"),
@@ -838,8 +847,8 @@ describe("daemon V2 live delivery", () => {
     );
 
     // @no-uc: Performance; the first answer must reach the Relay while the ordinary batching clock is paused.
-    it("delivers the first answer of each Turn before the batching clock advances", async () => {
-        const fixture = await startControlledDaemon();
+    it("delivers the first answer of each Turn before the batching clock advances", async ({ signal }) => {
+        const fixture = await startControlledDaemon({ signal });
         try {
             let previousPosition = 0;
             for (const commandId of ["first-unbuffered-answer", "second-unbuffered-answer"]) {
@@ -847,7 +856,7 @@ describe("daemon V2 live delivery", () => {
                 await sendText(fixture.socket, encodeSessionPromptCommand(command));
                 let firstAnswer: SessionLiveEvent | undefined;
                 for (;;) {
-                    const frame = await fixture.frames.next(AbortSignal.timeout(5_000));
+                    const frame = await fixture.frames.next(signal);
                     if (decodeMessageKind(frame) !== SESSION_EVENT_KIND) {
                         continue;
                     }
@@ -880,12 +889,14 @@ describe("daemon V2 live delivery", () => {
         }
     }, 15_000);
 
-    it("Given a Session emits events before a daemon restart, When Sessions emit after restart, Then event IDs restart per generation and positions stay monotonic per Session", async () => {
+    it("Given a Session emits events before a daemon restart, When Sessions emit after restart, Then event IDs restart per generation and positions stay monotonic per Session", async ({
+        signal,
+    }) => {
         const stateDirectory = await mkdtemp(join(tmpdir(), "morty-daemon-event-id-"));
         let firstGenerationId = "";
         let firstPosition = "";
         let lastPosition = 0;
-        const first = await startControlledDaemon({ stateDirectory });
+        const first = await startControlledDaemon({ signal, stateDirectory });
         try {
             const command = { ...prompt(first, "first allocation"), commandId: "first-allocation" };
             await sendText(first.socket, encodeSessionPromptCommand(command));
@@ -908,7 +919,7 @@ describe("daemon V2 live delivery", () => {
             await first.close();
         }
 
-        const restarted = await startControlledDaemon({ stateDirectory });
+        const restarted = await startControlledDaemon({ signal, stateDirectory });
         try {
             const command = { ...prompt(restarted, "second allocation"), commandId: "second-allocation" };
             await sendText(restarted.socket, encodeSessionPromptCommand(command));
@@ -960,8 +971,10 @@ describe("daemon V2 live delivery", () => {
         }
     });
 
-    it("Given reasoning exceeds a history page, When a client loads live history, Then it receives the reasoning text with pagination", async () => {
-        const fixture = await startControlledDaemon();
+    it("Given reasoning exceeds a history page, When a client loads live history, Then it receives the reasoning text with pagination", async ({
+        signal,
+    }) => {
+        const fixture = await startControlledDaemon({ signal });
         try {
             const command = prompt(fixture, "stream paged reasoning");
             await sendText(fixture.socket, encodeSessionPromptCommand(command));
@@ -990,8 +1003,10 @@ describe("daemon V2 live delivery", () => {
             await fixture.close();
         }
     });
-    it("Given text surrounds a tool call, When a viewer reopens live history, Then the streamed and recovered events preserve the same order", async () => {
-        const fixture = await startControlledDaemon();
+    it("Given text surrounds a tool call, When a viewer reopens live history, Then the streamed and recovered events preserve the same order", async ({
+        signal,
+    }) => {
+        const fixture = await startControlledDaemon({ signal });
         try {
             const command = prompt(fixture, "interleave progress and hold");
             await sendText(fixture.socket, encodeSessionPromptCommand(command));
@@ -1040,8 +1055,10 @@ describe("daemon V2 live delivery", () => {
         }
     });
 
-    it("Given cumulative tool updates, When a viewer reopens history, Then prior cursor positions are retained without duplicate output", async () => {
-        const fixture = await startControlledDaemon();
+    it("Given cumulative tool updates, When a viewer reopens history, Then prior cursor positions are retained without duplicate output", async ({
+        signal,
+    }) => {
+        const fixture = await startControlledDaemon({ signal });
         try {
             const command = prompt(fixture, "stream cumulative tool output");
             await sendText(fixture.socket, encodeSessionPromptCommand(command));
@@ -1072,8 +1089,10 @@ describe("daemon V2 live delivery", () => {
             await fixture.close();
         }
     });
-    it("Given token-sized chunks, When the turn completes, Then every token arrives once and live event identities match recovery", async () => {
-        const fixture = await startControlledDaemon();
+    it("Given token-sized chunks, When the turn completes, Then every token arrives once and live event identities match recovery", async ({
+        signal,
+    }) => {
+        const fixture = await startControlledDaemon({ signal });
         try {
             const command = prompt(fixture, "stream token burst");
             await sendText(fixture.socket, encodeSessionPromptCommand(command));
@@ -1121,8 +1140,10 @@ describe("daemon V2 live delivery", () => {
             await fixture.close();
         }
     });
-    it("Given a 300k character current turn, When a viewer opens history and then cancels, Then recovery contains the complete output and the active turn is released", async () => {
-        const fixture = await startControlledDaemon();
+    it("Given a 300k character current turn, When a viewer opens history and then cancels, Then recovery contains the complete output and the active turn is released", async ({
+        signal,
+    }) => {
+        const fixture = await startControlledDaemon({ signal });
         try {
             const command = prompt(fixture, "hold after large output");
             await sendText(fixture.socket, encodeSessionPromptCommand(command));

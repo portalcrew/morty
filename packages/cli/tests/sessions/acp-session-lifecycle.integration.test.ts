@@ -64,7 +64,9 @@ function processExists(pid: number): boolean {
 }
 
 describe("ACP conversation sessions", () => {
-    it("Given a prompt that already finished, When its cancellation arrives late, Then the next prompt in the conversation still runs", async () => {
+    it("Given a prompt that already finished, When its cancellation arrives late, Then the next prompt in the conversation still runs", async ({
+        signal,
+    }) => {
         const temporaryDirectory = await mkdtemp(join(tmpdir(), "morty-acp-late-cancel-"));
         const agent = createControlledAgent(
             (options) =>
@@ -98,7 +100,7 @@ describe("ACP conversation sessions", () => {
         const target = await manager.createNativeSession({
             agent,
             cwd: temporaryDirectory,
-            signal: AbortSignal.timeout(10_000),
+            signal,
         });
         const prompt = (commandId: string) =>
             manager.runPrompt({
@@ -795,7 +797,7 @@ describe("ACP conversation sessions", () => {
 
     it.skipIf(process.platform === "win32")(
         "Given an ACP Turn keeps running, When it is cancelled, Then Morty keeps its Agent process for the next Turn",
-        async () => {
+        async ({ signal }) => {
             const temporaryDirectory = await mkdtemp(join(tmpdir(), "morty-acp-long-turn-"));
             const adapterPath = join(temporaryDirectory, "pi-acp");
             const piPidPath = join(temporaryDirectory, "pi.pid");
@@ -865,7 +867,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
                 const target = await manager.createNativeSession({
                     agent,
                     cwd: process.cwd(),
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 });
                 const hangingTurn = manager.runPrompt({
                     agent,
@@ -922,7 +924,9 @@ child.once("exit", (code) => process.exit(code ?? 84));
         },
     );
 
-    it("Given a harness owns an empty conversation, When another harness is selected, Then the new harness creates its own conversation", async () => {
+    it("Given a harness owns an empty conversation, When another harness is selected, Then the new harness creates its own conversation", async ({
+        signal,
+    }) => {
         const observer = new RecordingObserver();
         const manager = new SessionManager({
             observer,
@@ -984,7 +988,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             const selected = await manager.createNativeSession({
                 agent: claude,
                 cwd: process.cwd(),
-                signal: AbortSignal.timeout(10_000),
+                signal,
             });
 
             await manager.runPrompt({
@@ -1003,7 +1007,9 @@ child.once("exit", (code) => process.exit(code ?? 84));
         }
     });
 
-    it("Given Controlled ACP emits untagged messages before a tool call, When they arrive, Then each update is recorded live without waiting for the tool boundary", async () => {
+    it("Given Controlled ACP emits untagged messages before a tool call, When they arrive, Then each update is recorded live without waiting for the tool boundary", async ({
+        signal,
+    }) => {
         const observer = new RecordingObserver();
         const manager = new SessionManager({
             observer,
@@ -1052,7 +1058,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
                 target: await manager.createNativeSession({
                     agent,
                     cwd: process.cwd(),
-                    signal: AbortSignal.timeout(10_000),
+                    signal,
                 }),
                 signal: new AbortController().signal,
             });
@@ -1316,7 +1322,9 @@ child.once("exit", (code) => process.exit(code ?? 84));
         }
     });
 
-    it("Given an ACP agent rejects a prompt with a non-authentication error, When Morty runs that turn, Then the local boundary preserves the agent's real failure reason", async () => {
+    it("Given an ACP agent rejects a prompt with a non-authentication error, When Morty runs that turn, Then the local boundary preserves the agent's real failure reason", async ({
+        signal,
+    }) => {
         const manager = new SessionManager({
             observer: {},
             store: new MemorySessionStore(),
@@ -1365,7 +1373,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
                     target: await manager.createNativeSession({
                         agent,
                         cwd: process.cwd(),
-                        signal: AbortSignal.timeout(10_000),
+                        signal,
                     }),
                     signal: new AbortController().signal,
                 }),
@@ -1378,7 +1386,9 @@ child.once("exit", (code) => process.exit(code ?? 84));
         }
     });
 
-    it("Given Codex includes an invalid-prompt detail in an internal ACP error, When Morty runs that turn, Then the user receives the actionable detail", async () => {
+    it("Given Codex includes an invalid-prompt detail in an internal ACP error, When Morty runs that turn, Then the user receives the actionable detail", async ({
+        signal,
+    }) => {
         const manager = new SessionManager({
             observer: {},
             store: new MemorySessionStore(),
@@ -1427,7 +1437,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
                     target: await manager.createNativeSession({
                         agent,
                         cwd: process.cwd(),
-                        signal: AbortSignal.timeout(10_000),
+                        signal,
                     }),
                     signal: new AbortController().signal,
                 }),
@@ -1440,7 +1450,9 @@ child.once("exit", (code) => process.exit(code ?? 84));
         }
     });
 
-    it("Given an ACP Agent has a tool subprocess, When the turn is cancelled, Then Morty retains the process tree until Computer shutdown", async () => {
+    it("Given an ACP Agent has a tool subprocess, When the turn is cancelled, Then Morty retains the process tree until Computer shutdown", async ({
+        signal,
+    }) => {
         const temporaryDirectory = await mkdtemp(join(tmpdir(), "morty-acp-cancel-tree-"));
         const observer = new RecordingObserver();
         const manager = new SessionManager({
@@ -1515,7 +1527,7 @@ agent.once("exit", (code) => process.exit(code ?? 84));
             const target = await manager.createNativeSession({
                 agent,
                 cwd: temporaryDirectory,
-                signal: AbortSignal.timeout(10_000),
+                signal,
             });
             const cancelledTurn = manager.runPrompt({
                 agent,

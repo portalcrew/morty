@@ -10,7 +10,7 @@ import { UnretainedExternalContentStore } from "../support/unretained-external-c
 import { fakeAgent, RecordingObserver } from "./acp-feature-fixture.ts";
 
 /** Owns an isolated ACP process and its disposable native files. */
-export async function createControlledSession() {
+export async function createControlledSession(signal: AbortSignal) {
     const directory = await mkdtemp(join(tmpdir(), "morty-acp-controls-"));
     const observer = new RecordingObserver();
     const manager = new SessionManager({
@@ -38,7 +38,7 @@ export async function createControlledSession() {
         const options = {
             agent: fakeAgent([], { MORTY_FAKE_ACP_STATE_DIRECTORY: directory }),
             cwd: directory,
-            signal: AbortSignal.any([cancellation.signal, AbortSignal.timeout(10_000)]),
+            signal: AbortSignal.any([cancellation.signal, signal]),
         };
         const target = await manager.createNativeSession(options);
         return {

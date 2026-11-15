@@ -3,9 +3,10 @@ import { createTestOwner } from "../../../../packages/relay-test-support/src/ide
 import type { FakeAgentHarnessDefinition } from "./agent-harness.ts";
 import { createFakeAgentHarnessRuntime } from "./relay-agent-harness.ts";
 
-/** Starts the production Relay boundary with isolated local Cloudflare storage. */
-export async function startTestRelay() {
+/** Starts the production Relay boundary with isolated local Cloudflare storage; its work ends with the test's signal or on close. */
+export async function startTestRelay(signal: AbortSignal) {
     const cancellation = new AbortController();
+    const lifetime = AbortSignal.any([signal, cancellation.signal]);
     const runtimes: AsyncDisposable[] = [];
     const bindings = await createTestMortyRelayBindings();
     try {
@@ -13,7 +14,7 @@ export async function startTestRelay() {
         await bindings.configure({ APP_ORIGIN: bindings.origin });
         const owners = new Map<string, string>();
         const createOwner = async () => {
-            const owner = await createTestOwner(bindings.request, bindings.origin, cancellation.signal);
+            const owner = await createTestOwner(bindings.request, bindings.origin, lifetime);
             owners.set(owner.computerId, owner.token);
             return owner;
         };
@@ -45,7 +46,7 @@ export async function startTestRelay() {
                     origin: bindings.origin,
                     computerId,
                     server: app,
-                    signal: cancellation.signal,
+                    signal: lifetime,
                 });
                 runtimes.push(runtime);
                 return runtime;

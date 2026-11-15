@@ -14,13 +14,12 @@ import { createOwnerApi } from "../../../../tests/support/owner-api.ts";
 
 test("Given a prompt with a separate reply address, when it is retried or conflicts, then the Computer answers each request without running a second Turn", {
     timeout: 60_000,
-}, async () => {
+}, async ({ signal }) => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-12T00:00:00Z") });
     try {
         const createBindings = await prepareTestMortyRelayBindings();
         await using bindings = await createBindings();
         await bindings.configure({ APP_ORIGIN: bindings.origin });
-        const signal = AbortSignal.timeout(45_000);
         const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
             method: "POST",
             signal,
