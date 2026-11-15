@@ -21,11 +21,11 @@ For documentation or unchanged behavior, explain why new tests are not needed.
 Identify affected clients, servers, Runtimes and persisted data. Include evidence
 for both mixed-version directions and the rollout/recovery plan, or explain why
 compatibility is not applicable. Cite the human authorization for any intended
-break; a version bump alone is not authorization.
+break.
 
 ## Review checklist
 
 - [ ] I read `docs/CONTRIBUTING.md`, `AGENTS.md`, and `docs/CODE_REVIEW.md`.
-- [ ] New or changed state, computation and interfaces follow the design priorities in `AGENTS.md`: state that can be computed is not stored, independent lifecycles and rules each have one owner, rules are functions of explicit inputs, and operations are dedicated with stated guarantees.
+- [ ] The change follows the design priorities in `AGENTS.md`.
 - [ ] Markdown changes are in a separate documentation-only PR.
 - [ ] Reports and logs contain no credentials or private conversation data.
