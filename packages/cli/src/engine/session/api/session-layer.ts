@@ -1,3 +1,4 @@
+import { NativeSessionSet } from "@morty-build/client/native-session";
 import type { SessionExecution } from "@morty-build/client/protocol";
 import { AcpSessionTable } from "../../storage/session/acp-session-table.ts";
 import { CommandLedgerTable } from "../../storage/session/command-ledger-table.ts";
@@ -110,8 +111,17 @@ export function buildSessionLayer(options: SessionLayerOptions) {
     );
     // Outcomes retained across a restart are published once. The sink keeps them until the Relay connects,
     // and a later reconnect does not replay events it already sent. An outcome the previous process recorded is
-    // restated as the outcome it recorded, so status notifications do not take it for a new one.
+    // restated as the outcome it recorded, so status notifications do not take it for a new one. An archived Session
+    // keeps its receipts, so none of its command IDs runs twice, but it has no event log and nobody can read it, so
+    // its outcomes settle without being published.
+    const held = new NativeSessionSet();
+    for (const session of sessionStore.list()) {
+        held.add(session.target);
+    }
     for (const recovered of operations.recover()) {
+        if (!held.has(recovered.target)) {
+            continue;
+        }
         switch (recovered.kind) {
             case "recorded":
                 sink.publish(events.append(recovered.target, recovered.event, recovered.recordedAt));
