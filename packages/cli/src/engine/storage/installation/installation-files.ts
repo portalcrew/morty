@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type FileHandle, link, mkdir, open, rename, rm, unlink, writeFile } from "node:fs/promises";
+import { type FileHandle, link, mkdir, open, rename, rm, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { isNodeError } from "../../util/node-error.ts";
@@ -86,13 +86,22 @@ async function syncDirectory(directory: string): Promise<void> {
 
 /**
  * Publishes a complete file with owner-only permissions. Fails with `EEXIST` when it already exists.
- * A concurrent reader sees either no file or the whole text, never an empty or partial one.
+ * A concurrent reader sees either no file or the whole text, never an empty or partial one, and the published file
+ * reaches the disk before this returns.
  */
 export async function createInstallationFile(path: string, text: string): Promise<void> {
-    const temporaryPath = join(dirname(path), `.${randomUUID()}.tmp`);
+    const directory = dirname(path);
+    const temporaryPath = join(directory, `.${randomUUID()}.tmp`);
     try {
-        await writeFile(temporaryPath, text, { flag: "wx", mode: 0o600 });
+        const file = await open(temporaryPath, "wx", 0o600);
+        try {
+            await file.writeFile(text);
+            await file.sync();
+        } finally {
+            await file.close();
+        }
         await link(temporaryPath, path);
+        await syncDirectory(directory);
     } finally {
         await rm(temporaryPath, { force: true });
     }

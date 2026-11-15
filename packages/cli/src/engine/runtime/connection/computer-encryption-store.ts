@@ -10,9 +10,10 @@ import {
 } from "@morty-build/client";
 import { type Identifier, isIdentifier } from "@morty-build/client/protocol";
 import { z } from "zod";
+import { ReplayLedgerTable } from "../../storage/encryption/replay-ledger-table.ts";
 import { ensurePrivateDirectory } from "../../storage/files/local-files.ts";
-import { readInstallationFile, writeInstallationFile } from "../../storage/installation/installation-files.ts";
-import { tryLock } from "../../storage/installation/local-lock.ts";
+import { createInstallationFile, readInstallationFile } from "../../storage/installation/installation-files.ts";
+import { openComputerReplayLedgerDatabase } from "../../storage/sqlite/local-databases.ts";
 import { validateLocalPath } from "../../util/filesystem/private-path.ts";
 import { isNodeError } from "../../util/node-error.ts";
 
@@ -20,23 +21,21 @@ const coordinate = z.string().regex(/^[A-Za-z0-9_-]{43}$/u);
 // Match the client replay window's 65,536-packet admission bound. This permits hundreds of
 // maximum-size uploads per window while retaining every live claim; state remains disk-bounded.
 const MAX_REPLAY_CLAIMS = 65_536;
-const MAX_ENCRYPTION_STATE_BYTES = 8 * 1024 * 1024;
+// An identity file written before the replay ledger had its own store also carries that Morty's claims, which are
+// ignored; the bound admits such a file so the Computer keeps its identity.
+const MAX_IDENTITY_FILE_BYTES = 8 * 1024 * 1024;
+const SQLITE_BUSY = 5;
 const privateKeySchema = z
     .object({ kty: z.literal("EC"), crv: z.literal("P-256"), x: coordinate, y: coordinate, d: coordinate })
     .readonly();
-const stateSchema = z
+const identitySchema = z
     .object({
         version: z.literal(1),
         computerId: z.string().refine(isIdentifier),
         computerE2EPrivateKey: privateKeySchema,
-        replayClock: z.number().int().nonnegative().default(0),
-        replayClaims: z
-            .array(z.object({ fingerprint: coordinate, expiresAt: z.number().int().nonnegative() }).readonly())
-            .max(MAX_REPLAY_CLAIMS)
-            .default([]),
     })
     .readonly();
-type EncryptionState = z.infer<typeof stateSchema>;
+type EncryptionIdentity = z.infer<typeof identitySchema>;
 
 async function validateExistingFile(path: string, signal: AbortSignal, privateAccess = true): Promise<void> {
     try {
@@ -49,17 +48,50 @@ async function validateExistingFile(path: string, signal: AbortSignal, privateAc
     }
 }
 
-/** Exactly one persistent encryption identity per Computer; browser connection keys are never stored here. */
+/**
+ * Admits a fresh packet once. The ledger's latest admission keeps a clock set back from reopening expired packets, so a
+ * packet is judged by the later of the wall clock and the last time a packet was admitted.
+ */
+function admit(ledger: ReplayLedgerTable, claim: PayloadClaim, wallClock: number): void {
+    const now = Math.max(wallClock, ledger.latestAdmission());
+    if (
+        !coordinate.safeParse(claim.fingerprint).success ||
+        !Number.isSafeInteger(claim.issuedAt) ||
+        claim.issuedAt < 0 ||
+        claim.expiresAt !== claim.issuedAt + PAYLOAD_MAX_AGE_MILLISECONDS ||
+        claim.issuedAt > now + PAYLOAD_FUTURE_SKEW_MILLISECONDS ||
+        claim.expiresAt <= now
+    ) {
+        throw new E2EError("e2e_invalid_frame");
+    }
+    ledger.forgetExpired(now);
+    if (ledger.holds(claim.fingerprint)) {
+        throw new E2EError("e2e_invalid_frame");
+    }
+    if (ledger.size() >= MAX_REPLAY_CLAIMS) {
+        throw new E2EError("e2e_store_busy");
+    }
+    ledger.admit(claim.fingerprint, claim.expiresAt, now);
+}
+
+function isSqliteBusy(cause: unknown): boolean {
+    return cause instanceof Error && "errcode" in cause && cause.errcode === SQLITE_BUSY;
+}
+
+/**
+ * Exactly one persistent encryption identity per Computer, written once when it is created, and the ledger of the
+ * packets it admitted, which changes with every packet. Browser connection keys are never stored here.
+ */
 export class ComputerEncryptionStore {
     readonly #computerId: Identifier;
-    readonly #path: string;
-    readonly #lockPath: string;
+    readonly #identityPath: string;
+    readonly #ledgerPath: string;
 
     private constructor(directory: string, computerId: Identifier) {
         this.#computerId = computerId;
         const name = createHash("sha256").update(computerId).digest("hex");
-        this.#path = join(directory, `encryption.${name}.json`);
-        this.#lockPath = join(directory, `encryption.${name}.lock.sqlite`);
+        this.#identityPath = join(directory, `encryption.${name}.json`);
+        this.#ledgerPath = join(directory, `encryption.${name}.replay.sqlite`);
     }
 
     static readonly open = async (
@@ -83,9 +115,9 @@ export class ComputerEncryptionStore {
     };
 
     readonly access = async (signal: AbortSignal): Promise<ComputerEncryptionAccess> =>
-        this.lock(signal, async () => {
-            const state = await this.readOrCreate(signal);
-            const key = state.computerE2EPrivateKey;
+        this.guard(signal, async () => {
+            const identity = await this.identity(signal);
+            const key = identity.computerE2EPrivateKey;
             const publicKey = await crypto.subtle.importKey(
                 "jwk",
                 { kty: key.kty, crv: key.crv, x: key.x, y: key.y },
@@ -96,55 +128,38 @@ export class ComputerEncryptionStore {
             return {
                 computerId: this.#computerId,
                 computerE2EPublicKey: await exportE2EPublicKey(publicKey),
-                computerE2EAccessSecret: await this.accessSecret(state, signal),
+                computerE2EAccessSecret: await this.accessSecret(identity, signal),
             };
         });
 
     /** Atomically authorizes and claims a fresh packet before any command may execute. */
     readonly authorizeAndClaim = async (secret: string, claim: PayloadClaim, signal: AbortSignal): Promise<void> =>
-        this.lock(signal, async () => {
-            const state = await this.readOrCreate(signal);
+        this.guard(signal, async () => {
+            const identity = await this.identity(signal);
             const supplied = coordinate.safeParse(secret);
-            const expected = await this.accessSecret(state, signal);
+            const expected = await this.accessSecret(identity, signal);
             if (
                 !supplied.success ||
                 !timingSafeEqual(Buffer.from(expected, "base64url"), Buffer.from(supplied.data, "base64url"))
             ) {
                 throw new E2EError("e2e_access_denied");
             }
-            const now = Math.max(Date.now(), state.replayClock);
-            if (
-                !coordinate.safeParse(claim.fingerprint).success ||
-                !Number.isSafeInteger(claim.issuedAt) ||
-                claim.issuedAt < 0 ||
-                claim.expiresAt !== claim.issuedAt + PAYLOAD_MAX_AGE_MILLISECONDS ||
-                claim.issuedAt > now + PAYLOAD_FUTURE_SKEW_MILLISECONDS ||
-                claim.expiresAt <= now
-            ) {
-                throw new E2EError("e2e_invalid_frame");
+            await validateExistingFile(this.#ledgerPath, signal, false);
+            signal.throwIfAborted();
+            // The ledger's write transaction admits one packet at a time across every process of this Computer.
+            const ledger = new ReplayLedgerTable(openComputerReplayLedgerDatabase(this.#ledgerPath));
+            try {
+                ledger.transaction(() => admit(ledger, claim, Date.now()));
+            } finally {
+                ledger.close();
             }
-            const claims = state.replayClaims.filter((prior) => prior.expiresAt > now);
-            if (claims.some((prior) => prior.fingerprint === claim.fingerprint)) {
-                throw new E2EError("e2e_invalid_frame");
-            }
-            if (claims.length >= MAX_REPLAY_CLAIMS) {
-                throw new E2EError("e2e_store_busy");
-            }
-            await this.write(
-                {
-                    ...state,
-                    replayClock: now,
-                    replayClaims: [...claims, { fingerprint: claim.fingerprint, expiresAt: claim.expiresAt }],
-                },
-                signal,
-            );
         });
 
-    private readonly accessSecret = async (state: EncryptionState, signal: AbortSignal): Promise<string> => {
+    private readonly accessSecret = async (identity: EncryptionIdentity, signal: AbortSignal): Promise<string> => {
         // Domain separation derives browser access from the Computer identity without exposing its private key.
         const key = await crypto.subtle.importKey(
             "raw",
-            Buffer.from(state.computerE2EPrivateKey.d, "base64url"),
+            Buffer.from(identity.computerE2EPrivateKey.d, "base64url"),
             "HKDF",
             false,
             ["deriveBits"],
@@ -163,55 +178,65 @@ export class ComputerEncryptionStore {
         return Buffer.from(bytes).toString("base64url");
     };
 
-    private readonly lock = async <T>(signal: AbortSignal, operation: () => Promise<T>): Promise<T> => {
+    private readonly guard = async <T>(signal: AbortSignal, operation: () => Promise<T>): Promise<T> => {
         signal.throwIfAborted();
         try {
-            await validateExistingFile(this.#lockPath, signal, false);
-            const unlock = tryLock(this.#lockPath);
-            if (unlock === null) {
-                throw new E2EError("e2e_store_busy");
-            }
-            try {
-                return await operation();
-            } finally {
-                unlock();
-            }
+            return await operation();
         } catch (cause) {
             signal.throwIfAborted();
             if (cause instanceof E2EError) {
                 throw cause;
             }
+            if (isSqliteBusy(cause)) {
+                throw new E2EError("e2e_store_busy", { cause });
+            }
             throw new E2EError("e2e_store_unavailable", { cause });
         }
     };
 
-    private readonly readOrCreate = async (signal: AbortSignal): Promise<EncryptionState> => {
-        await validateExistingFile(this.#path, signal);
-        const read = await readInstallationFile(this.#path, MAX_ENCRYPTION_STATE_BYTES);
+    /** The Computer's identity, created once: concurrent first uses publish one identity and all read it. */
+    private readonly identity = async (signal: AbortSignal): Promise<EncryptionIdentity> => {
+        const existing = await this.readIdentity(signal);
+        if (existing !== null) {
+            return existing;
+        }
+        const pair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+        const key: unknown = await crypto.subtle.exportKey("jwk", pair.privateKey);
+        const created: EncryptionIdentity = {
+            version: 1,
+            computerId: this.#computerId,
+            computerE2EPrivateKey: privateKeySchema.parse(key),
+        };
+        signal.throwIfAborted();
+        try {
+            await createInstallationFile(this.#identityPath, JSON.stringify(created));
+            return created;
+        } catch (cause) {
+            if (!isNodeError(cause, "EEXIST")) {
+                throw cause;
+            }
+        }
+        const published = await this.readIdentity(signal);
+        if (published === null) {
+            throw new E2EError("e2e_store_unavailable");
+        }
+        return published;
+    };
+
+    private readonly readIdentity = async (signal: AbortSignal): Promise<EncryptionIdentity | null> => {
+        await validateExistingFile(this.#identityPath, signal);
+        const read = await readInstallationFile(this.#identityPath, MAX_IDENTITY_FILE_BYTES);
         signal.throwIfAborted();
         switch (read.kind) {
-            case "missing": {
-                const pair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, [
-                    "deriveBits",
-                ]);
-                const key: unknown = await crypto.subtle.exportKey("jwk", pair.privateKey);
-                const state: EncryptionState = {
-                    version: 1,
-                    computerId: this.#computerId,
-                    computerE2EPrivateKey: privateKeySchema.parse(key),
-                    replayClock: 0,
-                    replayClaims: [],
-                };
-                await this.write(state, signal);
-                return state;
-            }
+            case "missing":
+                return null;
             case "read": {
                 const value: unknown = JSON.parse(read.text);
-                const state = stateSchema.parse(value);
-                if (state.computerId !== this.#computerId) {
+                const identity = identitySchema.parse(value);
+                if (identity.computerId !== this.#computerId) {
                     throw new E2EError("e2e_invalid_access");
                 }
-                return state;
+                return identity;
             }
             case "unopenable":
                 throw new E2EError("e2e_store_unavailable", { cause: read.cause });
@@ -220,10 +245,5 @@ export class ComputerEncryptionStore {
             default:
                 return read satisfies never;
         }
-    };
-
-    private readonly write = async (state: EncryptionState, signal: AbortSignal): Promise<void> => {
-        await validateExistingFile(this.#path, signal);
-        await writeInstallationFile(this.#path, JSON.stringify(stateSchema.parse(state)), signal);
     };
 }

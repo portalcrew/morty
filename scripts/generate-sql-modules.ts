@@ -61,6 +61,11 @@ await writeMigrationModule(
     await sqlFiles(join(cli, "migrations/acp-session-store")),
 );
 await writeMigrationModule(
+    join(cli, "src/engine/generated/computer-replay-ledger-migrations.ts"),
+    "computerReplayLedgerMigrations",
+    await sqlFiles(join(cli, "migrations/computer-replay-ledger")),
+);
+await writeMigrationModule(
     join(cli, "src/engine/generated/session-event-cache-migrations.ts"),
     "sessionEventCacheMigrations",
     await sqlFiles(join(cli, "migrations/session-event-cache")),
