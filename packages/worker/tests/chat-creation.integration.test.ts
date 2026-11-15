@@ -77,9 +77,9 @@ async function createChatFixture(
 
 test("Given an archived conversation, When the original creation request is retried, Then the retry is refused and the archived Session stays archived", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("codex", signal);
     const settings = {
         harness: "codex",
@@ -109,9 +109,9 @@ test("Given an archived conversation, When the original creation request is retr
 
 test("Given a paired computer, When its owner selects and creates with harness, Then setup and session access expose the same harness", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("codex", signal);
     const workspace = await fixture.request("chat/workspace", {});
     expect(await workspace.json()).toMatchObject({ computer: { agents: [{ harness: "codex" }] } });
@@ -135,9 +135,9 @@ test("Given a paired computer, When its owner selects and creates with harness, 
 
 test("Given a computer addressed by its identity, When its owner requests access to a Session the Computer does not hold, Then Chat refuses to mint a credential while held Sessions remain usable", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("codex", signal);
     await expect(
         fixture.runtime.api.connectSession(
@@ -191,10 +191,10 @@ test("Given a computer addressed by its identity, When its owner requests access
 
 test("Given a draft Bot, When its owner sends the first message's creation request, Then the harness supplies the real session identity on the configured Computer", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud);
     const setup = { harness: "codex" };
-    const signal = AbortSignal.timeout(30_000);
     const setupComputersResponse = await fixture.request(`chat/setup/computers`, {});
     expect(setupComputersResponse.status).toBe(200);
     const setupComputers = v.parse(
@@ -268,11 +268,11 @@ for (const { reason, ...configuration } of [
 ] satisfies readonly (SessionConfigurationSelection & { readonly reason: string })[]) {
     test(`Given a ${reason} Agent setting, When Chat creates a conversation, Then it reports a conflict and a corrected retry opens one fully configured session`, async ({
         cloud,
+        signal,
     }) => {
         await using fixture = await createChatFixture(cloud, [
             { harness: "configuration-test", label: "Settings Agent" },
         ]);
-        const signal = AbortSignal.timeout(30_000);
         await fixture.runtime.api.verifyAgent("configuration-test", signal);
         const settings = {
             harness: "configuration-test",
@@ -322,9 +322,9 @@ for (const { reason, ...configuration } of [
 
 test("Given the answer to a new conversation's Session creation is lost, When the Computer restarts and its owner retries the start, Then the conversation is listed once and the retry opens the created Session", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("codex", signal);
     if (cloud.network === null) {
         throw new Error("The scenario requires a real response-loss proxy");
@@ -356,9 +356,9 @@ test("Given the answer to a new conversation's Session creation is lost, When th
 
 test("Given a completed creation operation, When its first-send settings are changed on retry, Then Chat refuses the reused operation and keeps the original native conversation", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("codex", signal);
     const input = {
         harness: "codex",
@@ -382,9 +382,9 @@ test("Given a completed creation operation, When its first-send settings are cha
 
 test("Given a new conversation whose Session creation never reached the Computer, When its owner lists conversations, Then none is listed until a retry creates it", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("codex", signal);
     if (cloud.network === null) {
         throw new Error("The scenario requires a real request-loss proxy");
@@ -415,11 +415,11 @@ test("Given a new conversation whose Session creation never reached the Computer
 
 test("Given an Agent whose model decides its effort levels, When Chat starts a conversation that lists the effort before the model, Then the new Session holds both selections", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud, [
         { harness: "dependent-settings-test", label: "Settings Agent" },
     ]);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("dependent-settings-test", signal);
     const opened = await fixture.runtime.api.createConversation(
         "effort-before-model",
@@ -446,11 +446,11 @@ test("Given an Agent whose model decides its effort levels, When Chat starts a c
 
 test("Given dependent Agent settings, When applying a later selection changes an earlier one, Then Chat rejects creation instead of returning partially configured access", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud, [
         { harness: "dependent-settings-test", label: "Settings Agent" },
     ]);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("dependent-settings-test", signal);
     await expect(
         fixture.runtime.api.createConversation(
@@ -472,13 +472,13 @@ test("Given dependent Agent settings, When applying a later selection changes an
 
 test("Given a Bot connected through one Agent, When a Session uses another Agent, Then that Session reopens with its own Agent", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud, [
         { harness: "codex", label: "Codex" },
         { harness: "pi", label: "Pi" },
     ]);
     const setup = { harness: "codex" };
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent(setup.harness, signal);
 
     await expect(
@@ -518,10 +518,10 @@ test("Given a Bot connected through one Agent, When a Session uses another Agent
 
 test("Given an imported native session, When its owner closes and explicitly imports it again, Then Chat reopens the canonical session without creating a duplicate", async ({
     cloud,
+    signal,
 }) => {
     const nativeId = crypto.randomUUID();
     await using fixture = await createChatFixture(cloud, undefined, new Set([nativeId]));
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("codex", signal);
     const identity = { harness: "codex", directory: "." };
     const listed = await fixture.runtime.api.nativeSessions(
@@ -555,9 +555,9 @@ test("Given an imported native session, When its owner closes and explicitly imp
 
 test("Given a Session the Computer holds with a running turn, When its owner archives it, Then it leaves the list, the Computer no longer holds it and archiving again succeeds", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("codex", signal);
     const { target } = await fixture.runtime.api.createConversation(
         "busy-archive",
@@ -569,14 +569,14 @@ test("Given a Session the Computer holds with a running turn, When its owner arc
         },
         signal,
     );
-    await (await fixture.runtime.sessionClient(target, AbortSignal.timeout(10_000))).turns.submit(
+    await (await fixture.runtime.sessionClient(target, signal)).turns.submit(
         target,
         {
             content: "wait for steering",
             idempotencyKey: crypto.randomUUID(),
             attachments: [],
         },
-        AbortSignal.timeout(10_000),
+        signal,
     );
 
     await fixture.runtime.api.archiveManagedSession(target, signal);
@@ -591,14 +591,14 @@ test("Given a Session the Computer holds with a running turn, When its owner arc
 
 test("Given an archived native Session, When its owner opens it again from the Agent's sessions, Then it returns to the list as the same Session", async ({
     cloud,
+    signal,
 }) => {
     const nativeId = crypto.randomUUID();
     await using fixture = await createChatFixture(cloud, undefined, new Set([nativeId]));
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("codex", signal);
     const listed = await fixture.runtime.api.nativeSessions(
         { action: "list", harness: "codex", directory: ".", cursor: null },
-        AbortSignal.timeout(10000),
+        signal,
     );
     if (listed.action !== "list") {
         throw new Error("Expected native sessions");
@@ -633,9 +633,9 @@ test("Given an archived native Session, When its owner opens it again from the A
 for (const operation of ["managed-sessions/open", "managed-sessions/resolve"]) {
     test(`Given a managed Chat session, When ${operation} and archival run concurrently, Then the archived session stays archived and cannot be reopened through Morty`, async ({
         cloud,
+        signal,
     }) => {
         await using fixture = await createChatFixture(cloud);
-        const signal = AbortSignal.timeout(30_000);
         await fixture.runtime.api.verifyAgent("codex", signal);
         const { target } = await fixture.runtime.api.createConversation(
             "concurrent-archive",
@@ -672,9 +672,9 @@ for (const operation of ["managed-sessions/open", "managed-sessions/resolve"]) {
 
 test("Given the Computer is offline, When its owner archives a Session, Then archiving fails as retryable and the Session stays listed until a retry archives it", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("codex", signal);
     const { target } = await fixture.runtime.api.createConversation(
         "offline-archive",
@@ -700,9 +700,9 @@ test("Given the Computer is offline, When its owner archives a Session, Then arc
 
 test("Given a chat opened with a Session credential, When the computer's owner revokes all access, Then the Relay refuses that credential at once", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("codex", signal);
     const access = await fixture.runtime.api.createConversation(
         "revoked-while-open",
@@ -718,14 +718,13 @@ test("Given a chat opened with a Session credential, When the computer's owner r
     onTestFinished(transport.close);
     const client = new MortyClient({
         transport,
-        encryption: { access: await fixture.runtime.encryptionAccess(AbortSignal.timeout(15_000)) },
+        encryption: { access: await fixture.runtime.encryptionAccess(signal) },
         endpoint: cloud.origin,
         computerId: access.computerId,
         credentialProvider: { credential: async () => access.credential },
     });
     onTestFinished(() => client.close());
-    const readHistory = () =>
-        client.events.list(access.target, new MortyPageRequest(1, ""), AbortSignal.timeout(15_000));
+    const readHistory = () => client.events.list(access.target, new MortyPageRequest(1, ""), signal);
     await readHistory();
 
     const revoked = await fixture.request("identity/revoke-all-access", {
@@ -739,9 +738,10 @@ test("Given a chat opened with a Session credential, When the computer's owner r
 
 test("Given two browsers joined through links, When one disconnects the other browsers, Then only it and the computer keep access and the other's open chat window is refused", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud);
-    await fixture.runtime.api.verifyAgent("codex", AbortSignal.timeout(30_000));
+    await fixture.runtime.api.verifyAgent("codex", signal);
     const share = async () => {
         const shared = await fixture.request("identity/transfers", { operationId: crypto.randomUUID() });
         return new URL(v.parse(v.object({ url: v.string() }), await shared.json()).url).hash.slice(6);
@@ -773,7 +773,7 @@ test("Given two browsers joined through links, When one disconnects the other br
         origin: cloud.origin,
         computerId: fixture.computerId,
         credential: other,
-        encryptionAccess: await fixture.runtime.encryptionAccess(AbortSignal.timeout(15_000)),
+        encryptionAccess: await fixture.runtime.encryptionAccess(signal),
     });
     onTestFinished(browserApi.close);
     const window = await browserApi.api.createConversation(
@@ -784,20 +784,19 @@ test("Given two browsers joined through links, When one disconnects the other br
             workspaceRef: ".",
             workspaceLabel: ".",
         },
-        AbortSignal.timeout(30_000),
+        signal,
     );
     const transport = new WsTransport();
     onTestFinished(transport.close);
     const client = new MortyClient({
         transport,
-        encryption: { access: await fixture.runtime.encryptionAccess(AbortSignal.timeout(15_000)) },
+        encryption: { access: await fixture.runtime.encryptionAccess(signal) },
         endpoint: cloud.origin,
         computerId: window.computerId,
         credentialProvider: { credential: async () => window.credential },
     });
     onTestFinished(() => client.close());
-    const readHistory = () =>
-        client.events.list(window.target, new MortyPageRequest(1, ""), AbortSignal.timeout(15_000));
+    const readHistory = () => client.events.list(window.target, new MortyPageRequest(1, ""), signal);
     await readHistory();
 
     const ended = await asBrowser(owner, `v1/computers/${fixture.computerId}/identity/other-browser-access`, "DELETE");
@@ -866,9 +865,9 @@ test("Given a sharing link, When a browser redeems it through a Computer-scoped 
 
 test("Given an existing conversation, When a repeated start is refused, Then the conversation remains listed", async ({
     cloud,
+    signal,
 }) => {
     await using fixture = await createChatFixture(cloud, [{ harness: "configuration-test", label: "Settings Agent" }]);
-    const signal = AbortSignal.timeout(30_000);
     await fixture.runtime.api.verifyAgent("configuration-test", signal);
     const settings = { harness: "configuration-test", workspaceRef: ".", workspaceLabel: ".", configurations: [] };
     const { target } = await fixture.runtime.api.createConversation("audit-retry", settings, signal);

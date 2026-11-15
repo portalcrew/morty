@@ -362,11 +362,13 @@ describe.sequential("Relay Session-only boundary", () => {
         expect(response.headers.get("access-control-allow-headers")).toContain("content-type");
     });
 
-    it("Given a linked Computer, When browser subscriptions and history cross Relay hibernation, Then events stay lossless and replies stay correlated without cloud Session storage", async () => {
+    it("Given a linked Computer, When browser subscriptions and history cross Relay hibernation, Then events stay lossless and replies stay correlated without cloud Session storage", async ({
+        signal,
+    }) => {
         vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
         const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
         const environment = bindings();
-        const owner = await createOwner();
+        const owner = await createOwner(signal);
         const { computerId } = owner;
         const appCredential = owner.token;
         const backend = computerBackend(computerId);
@@ -398,7 +400,7 @@ describe.sequential("Relay Session-only boundary", () => {
             200,
         );
         expect(claimed).not.toHaveProperty("appId");
-        expect(await backend.agents(AbortSignal.timeout(10000))).toMatchObject({
+        expect(await backend.agents(signal)).toMatchObject({
             agents: [{ harness: "codex", label: "Codex" }],
             computerId,
         });
@@ -422,7 +424,7 @@ describe.sequential("Relay Session-only boundary", () => {
                 signal,
             );
 
-            const browserAccess = await issueSession(computerId, nativeTarget(sessionId));
+            const browserAccess = await issueSession(computerId, nativeTarget(sessionId), signal);
             const v2Response = await worker.fetch(
                 new Request(`${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${computerId}/transport`, {
                     headers: {
@@ -770,10 +772,12 @@ describe.sequential("Relay Session-only boundary", () => {
         }
     }, 180_000);
 
-    it("Given a computer with no discovered local Agent, When it redeems a Computer pairing and publishes its catalog, Then pairing succeeds and the Computer advertises an empty Agent directory", async () => {
+    it("Given a computer with no discovered local Agent, When it redeems a Computer pairing and publishes its catalog, Then pairing succeeds and the Computer advertises an empty Agent directory", async ({
+        signal,
+    }) => {
         const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
         const environment = bindings();
-        const owner = await createOwner();
+        const owner = await createOwner(signal);
         const { computerId } = owner;
         const appCredential = owner.token;
         const backend = computerBackend(computerId);
@@ -809,7 +813,7 @@ describe.sequential("Relay Session-only boundary", () => {
         );
         const computerCredential = text(claimed, "computerCredential");
 
-        expect(await backend.agents(AbortSignal.timeout(10000))).toMatchObject({ agents: [], computerId });
+        expect(await backend.agents(signal)).toMatchObject({ agents: [], computerId });
 
         const catalogUpdate = await worker.fetch(
             new Request(`${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${text(claimed, "computerId")}/catalog`, {
@@ -820,7 +824,7 @@ describe.sequential("Relay Session-only boundary", () => {
             environment,
         );
         expect(catalogUpdate.status).toBe(204);
-        expect(await backend.agents(AbortSignal.timeout(10000))).toMatchObject({ agents: [], computerId });
+        expect(await backend.agents(signal)).toMatchObject({ agents: [], computerId });
     });
 });
 
@@ -831,10 +835,14 @@ describe.sequential("Relay Session-only boundary", () => {
  * `anchorClockToHeartbeat`, the daemon heartbeats once and the fake clock is set to that answer
  * before the Session credential is issued, so later times are explicit offsets from it.
  */
-async function connectComputerDaemon(slug: string, options: { readonly anchorClockToHeartbeat?: boolean } = {}) {
+async function connectComputerDaemon(
+    slug: string,
+    signal: AbortSignal,
+    options: { readonly anchorClockToHeartbeat?: boolean } = {},
+) {
     const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
     const environment = bindings();
-    const owner = await createOwner();
+    const owner = await createOwner(signal);
     const { computerId } = owner;
     const appCredential = owner.token;
     const backend = computerBackend(computerId);
@@ -902,7 +910,7 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
     if (options.anchorClockToHeartbeat === true) {
         vi.setSystemTime(await heartbeat());
     }
-    const sessionAccess = await issueSession(computerId, nativeTarget(sessionId));
+    const sessionAccess = await issueSession(computerId, nativeTarget(sessionId), signal);
     const sessionRequest = (request: Request) =>
         requestBrowserOperation((operation) => worker.fetch(operation, environment), request);
     return {
@@ -917,7 +925,7 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
         computerId,
         sessionTarget: nativeTarget(sessionId),
         revoke: async () => {
-            await revokeTestComputer(environment, computerId, AbortSignal.timeout(10000));
+            await revokeTestComputer(environment, computerId, signal);
             return new Response(null, { status: 204 });
         },
         reconnect: () => daemonCredential.connect((request) => worker.fetch(request, environment)),
@@ -1027,7 +1035,7 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
         daemonClosed,
         daemonMessages,
         heartbeat,
-        readOnline: async () => (await backend.agents(AbortSignal.timeout(10000)))["online"],
+        readOnline: async () => (await backend.agents(signal))["online"],
         /** Starts the submitted Turn: the Computer records its start and answers the submission as running. */
         startTurn: (commandId: string, position: string) => {
             daemon.send(
@@ -1060,7 +1068,7 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
             );
         },
         issueComputerCredential: async (_targetComputerId: string) =>
-            (await issueSession(computerId, nativeTarget(sessionId))).credential,
+            (await issueSession(computerId, nativeTarget(sessionId), signal)).credential,
         queryActiveTurn: async (signal: AbortSignal) =>
             sessionRequest(
                 new Request(
@@ -1143,8 +1151,10 @@ async function connectComputerDaemon(slug: string, options: { readonly anchorClo
     };
 }
 
-it("Given an encrypted live subscription, When a still-connected daemon is replaced, Then the old subscription ends and a fresh subscription receives answers", async () => {
-    const runtime = await connectComputerDaemon("live-daemon-replacement");
+it("Given an encrypted live subscription, When a still-connected daemon is replaced, Then the old subscription ends and a fresh subscription receives answers", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("live-daemon-replacement", signal);
     let replacement: WebSocket | null = null;
     try {
         const signal = new AbortController().signal;
@@ -1209,10 +1219,10 @@ it("Given an encrypted live subscription, When a still-connected daemon is repla
     }
 });
 
-it.each(["text", "binary"])(
+it.for(["text", "binary"])(
     "Given a connected Computer, When revocation commits but disconnect delivery fails and a %s message arrives, Then later events reach no viewer and the daemon is closed",
-    async (format) => {
-        const runtime = await connectComputerDaemon(`revoked-stream-${format}`);
+    async (format, { signal }) => {
+        const runtime = await connectComputerDaemon(`revoked-stream-${format}`, signal);
         const { socket: viewer, messages, encryption, admission } = await runtime.subscribe();
         expect(admission).toMatchObject({ kind: "session.events.ready" });
         const received: string[] = [];
@@ -1279,8 +1289,10 @@ it.each(["text", "binary"])(
     },
 );
 
-it("Given a connected Computer, When revocation commits but disconnect delivery fails and its daemon retries, Then the daemon is told it was revoked and the earlier connection closes", async () => {
-    const runtime = await connectComputerDaemon("revoked-retry");
+it("Given a connected Computer, When revocation commits but disconnect delivery fails and its daemon retries, Then the daemon is told it was revoked and the earlier connection closes", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("revoked-retry", signal);
     const { socket: viewer, admission } = await runtime.subscribe();
     expect(admission).toMatchObject({ kind: "session.events.ready" });
     try {
@@ -1319,8 +1331,10 @@ it("Given a connected Computer, When revocation commits but disconnect delivery 
     }
 });
 
-it("Given a Computer its owner revoked and then paired again, When the earlier daemon reconnects with its saved credential, Then the Relay tells it the Computer was revoked while the new daemon connects", async () => {
-    const runtime = await connectComputerDaemon("paired-again");
+it("Given a Computer its owner revoked and then paired again, When the earlier daemon reconnects with its saved credential, Then the Relay tells it the Computer was revoked while the new daemon connects", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("paired-again", signal);
     try {
         expect((await runtime.revoke()).status).toBe(204);
         expect(await runtime.daemonClosed).toMatchObject({ code: 1008, reason: "Computer revoked" });
@@ -1352,8 +1366,10 @@ it("Given a Computer its owner revoked and then paired again, When the earlier d
     }
 });
 
-it("Given a Session credential with an open live view, When the owner revokes the Computer and pairs the computer again, Then the credential is refused and its view closes while a credential issued under the new pairing opens a view", async () => {
-    const runtime = await connectComputerDaemon("session-pairing-generation");
+it("Given a Session credential with an open live view, When the owner revokes the Computer and pairs the computer again, Then the credential is refused and its view closes while a credential issued under the new pairing opens a view", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("session-pairing-generation", signal);
     try {
         const subscribed = await runtime.subscribe();
         expect(subscribed.admission).toMatchObject({ kind: "session.events.ready" });
@@ -1409,8 +1425,10 @@ it("Given a Session credential with an open live view, When the owner revokes th
     }
 });
 
-it("Given Chat reads the Session execution naming an unconfirmed command, When the Computer reports that command's delivery, Then the Relay returns the delivery", async () => {
-    const runtime = await connectComputerDaemon("command-delivery");
+it("Given Chat reads the Session execution naming an unconfirmed command, When the Computer reports that command's delivery, Then the Relay returns the delivery", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("command-delivery", signal);
     try {
         const signal = new AbortController().signal;
         const encryption = await endpointEncryption(runtime.computerId, signal);
@@ -1470,8 +1488,10 @@ it("Given Chat reads the Session execution naming an unconfirmed command, When t
     }
 });
 
-it("Given Chat reads the Session execution after missing a turn's outcome, When the Computer reports the last turn, Then the Relay returns the outcome", async () => {
-    const runtime = await connectComputerDaemon("last-turn");
+it("Given Chat reads the Session execution after missing a turn's outcome, When the Computer reports the last turn, Then the Relay returns the outcome", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("last-turn", signal);
     try {
         const signal = new AbortController().signal;
         const encryption = await endpointEncryption(runtime.computerId, signal);
@@ -1537,10 +1557,10 @@ it("Given Chat reads the Session execution after missing a turn's outcome, When 
 });
 
 describe.sequential("Relay Turn submission", () => {
-    it.each(["session"] as const)(
+    it.for(["session"] as const)(
         "Given %s access cancels a Turn, When the Computer reports cancellation or prior completion, Then the response reports the Turn's actual stop reason",
-        async (access) => {
-            const runtime = await connectComputerDaemon(`legacy-queue-cancel-${access.replace(" ", "-")}`);
+        async (access, { signal }) => {
+            const runtime = await connectComputerDaemon(`legacy-queue-cancel-${access.replace(" ", "-")}`, signal);
             try {
                 const signal = new AbortController().signal;
                 const encryption = await endpointEncryption(runtime.computerId, signal);
@@ -1599,10 +1619,10 @@ describe.sequential("Relay Turn submission", () => {
         },
     );
 
-    it.each(["session"] as const)(
+    it.for(["session"] as const)(
         "Given %s access withdraws a queued message, When the Computer refuses because it already started, Then the conditional endpoint rejects the edit",
-        async (access) => {
-            const runtime = await connectComputerDaemon(`conditional-queue-cancel-${access}`);
+        async (access, { signal }) => {
+            const runtime = await connectComputerDaemon(`conditional-queue-cancel-${access}`, signal);
             try {
                 const signal = new AbortController().signal;
                 const encryption = await endpointEncryption(runtime.computerId, signal);
@@ -1659,7 +1679,7 @@ describe.sequential("Relay Turn submission", () => {
     );
 
     // @no-uc: Compatibility; trusted backends must control a Computer Session without delegated Session access.
-    it.each([
+    it.for([
         {
             label: "cancels the selected message",
             path: "/turns/app-command/cancel",
@@ -1715,8 +1735,11 @@ describe.sequential("Relay Turn submission", () => {
             reply: { interactionId: "app-interaction", kind: "session.interaction.answered" },
             expected: { accepted: true },
         },
-    ] as const)("Session access $label", async (operation) => {
-        const runtime = await connectComputerDaemon(`app-control-${operation.command.kind.replaceAll(".", "-")}`);
+    ] as const)("Session access $label", async (operation, { signal }) => {
+        const runtime = await connectComputerDaemon(
+            `app-control-${operation.command.kind.replaceAll(".", "-")}`,
+            signal,
+        );
         try {
             const signal = new AbortController().signal;
             const encryption = await endpointEncryption(runtime.computerId, signal);
@@ -1757,8 +1780,8 @@ describe.sequential("Relay Turn submission", () => {
     });
 
     // @no-uc: Technical regression; a read-only App credential must load a Computer event page through its cursor.
-    it("Session access restores a Computer event page with read permission", async () => {
-        const runtime = await connectComputerDaemon("app-history");
+    it("Session access restores a Computer event page with read permission", async ({ signal }) => {
+        const runtime = await connectComputerDaemon("app-history", signal);
         try {
             const readOnly = await runtime.issueComputerCredential(runtime.computerId);
             const signal = new AbortController().signal;
@@ -1824,8 +1847,10 @@ describe.sequential("Relay Turn submission", () => {
         }
     });
 
-    it("Given Computer read permission, When an App reads Session configuration, Then the matching Computer settings are returned without write permission", async () => {
-        const runtime = await connectComputerDaemon("app-configuration-read");
+    it("Given Computer read permission, When an App reads Session configuration, Then the matching Computer settings are returned without write permission", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("app-configuration-read", signal);
         try {
             const readOnly = await runtime.issueComputerCredential(runtime.computerId);
             const signal = new AbortController().signal;
@@ -1867,7 +1892,7 @@ describe.sequential("Relay Turn submission", () => {
         }
     });
 
-    it.each([
+    it.for([
         {
             label: "unsupported append disposition",
             path: "/turns/app-command/disposition",
@@ -1888,8 +1913,8 @@ describe.sequential("Relay Turn submission", () => {
         },
         { label: "empty event page", path: "/events?limit=0", method: "GET" },
         { label: "empty event cursor", path: "/events?cursor=", method: "GET" },
-    ])("Session access reports $label as an invalid request", async (operation) => {
-        const runtime = await connectComputerDaemon("app-invalid-request");
+    ])("Session access reports $label as an invalid request", async (operation, { signal }) => {
+        const runtime = await connectComputerDaemon("app-invalid-request", signal);
         try {
             if (operation.method === "GET") {
                 const signal = new AbortController().signal;
@@ -1920,8 +1945,10 @@ describe.sequential("Relay Turn submission", () => {
         }
     });
 
-    it("Session access uploads encrypted attachment chunks before submitting a reference-only Turn", async () => {
-        const runtime = await connectComputerDaemon("app-binary-attachment");
+    it("Session access uploads encrypted attachment chunks before submitting a reference-only Turn", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("app-binary-attachment", signal);
         try {
             const signal = new AbortController().signal;
             const encryption = await endpointEncryption(runtime.computerId, signal);
@@ -2118,8 +2145,10 @@ describe.sequential("Relay Turn submission", () => {
         }
     });
 
-    it("Given a cancelled file response, When a late chunk arrives, Then the shared daemon remains available", async () => {
-        const runtime = await connectComputerDaemon("cancelled-file-chunk");
+    it("Given a cancelled file response, When a late chunk arrives, Then the shared daemon remains available", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("cancelled-file-chunk", signal);
         try {
             const signal = new AbortController().signal;
             const { computer: daemonEncryption, client: clientEncryption } = await endpointEncryption(
@@ -2220,10 +2249,10 @@ describe.sequential("Relay Turn submission", () => {
     });
 
     // @no-uc: Technical regression; independent Durable Object clocks must not reject newly issued credentials.
-    it.each([900, 30_000])(
+    it.for([900, 30_000])(
         "accepts a Session credential issued %i milliseconds ahead of ComputerRelay",
-        async (skew) => {
-            const runtime = await connectComputerDaemon(`clock-skew-${skew}`);
+        async (skew, { signal }) => {
+            const runtime = await connectComputerDaemon(`clock-skew-${skew}`, signal);
             try {
                 vi.setSystemTime(Date.now() - skew);
                 const signal = new AbortController().signal;
@@ -2284,11 +2313,11 @@ describe.sequential("Relay Turn submission", () => {
         },
     );
     // @no-uc: Technical regression; issuance tolerance must remain bounded and never extend expiry.
-    it.each([
+    it.for([
         { offset: -30_001, code: "credential_invalid" },
         { offset: 900_000, code: "credential_expired" },
-    ])("refuses a credential at verifier offset $offset with $code", async ({ offset, code }) => {
-        const runtime = await connectComputerDaemon(`clock-rejected-${Math.abs(offset)}`);
+    ])("refuses a credential at verifier offset $offset with $code", async ({ offset, code }, { signal }) => {
+        const runtime = await connectComputerDaemon(`clock-rejected-${Math.abs(offset)}`, signal);
         try {
             vi.setSystemTime(Date.now() + offset);
             expect(await responseJson(await runtime.submitComputerTurn("invalid-time"), 401)).toMatchObject({
@@ -2299,8 +2328,8 @@ describe.sequential("Relay Turn submission", () => {
         }
     });
     // @no-uc: Technical regression; future-time tolerance must not admit correctly signed invalid lifetimes.
-    it.each([0, -1, 900_001])("refuses a signed credential with lifetime %i", async (lifetime) => {
-        const runtime = await connectComputerDaemon(`invalid-lifetime-${Math.abs(lifetime)}`);
+    it.for([0, -1, 900_001])("refuses a signed credential with lifetime %i", async (lifetime, { signal }) => {
+        const runtime = await connectComputerDaemon(`invalid-lifetime-${Math.abs(lifetime)}`, signal);
         try {
             const credential = await runtime.resignCredential(relaySigner, lifetime);
             vi.setSystemTime(Date.now() - 900);
@@ -2311,9 +2340,11 @@ describe.sequential("Relay Turn submission", () => {
             runtime.daemon.close(1000, "Test complete");
         }
     });
-    it("Given an authorized token for another computer, When it selects an existing computer's object, Then that object refuses the computer mismatch", async () => {
-        const owner = await connectComputerDaemon("direct-owner");
-        const other = await connectComputerDaemon("direct-other-computer");
+    it("Given an authorized token for another computer, When it selects an existing computer's object, Then that object refuses the computer mismatch", async ({
+        signal,
+    }) => {
+        const owner = await connectComputerDaemon("direct-owner", signal);
+        const other = await connectComputerDaemon("direct-other-computer", signal);
         try {
             const credential = await other.issueComputerCredential(owner.computerId);
             expect(
@@ -2327,8 +2358,10 @@ describe.sequential("Relay Turn submission", () => {
             other.daemon.close(1000, "Test complete");
         }
     });
-    it("Given an executing native query, When its HTTP caller cancels, Then cancellation reaches the daemon", async () => {
-        const runtime = await connectComputerDaemon("direct-cancellation");
+    it("Given an executing native query, When its HTTP caller cancels, Then cancellation reaches the daemon", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("direct-cancellation", signal);
         const controller = new AbortController();
         try {
             const { computer: daemonEncryption, client: clientEncryption } = await endpointEncryption(
@@ -2372,8 +2405,10 @@ describe.sequential("Relay Turn submission", () => {
             runtime.daemon.close(1000, "Test complete");
         }
     });
-    it("Given a Session credential, When direct Computer HTTP receives a forged, wrong-Session, or expired credential, Then it rejects the request before execution", async () => {
-        const runtime = await connectComputerDaemon("direct-authorization");
+    it("Given a Session credential, When direct Computer HTTP receives a forged, wrong-Session, or expired credential, Then it rejects the request before execution", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("direct-authorization", signal);
         try {
             expect(
                 await responseJson(
@@ -2395,8 +2430,10 @@ describe.sequential("Relay Turn submission", () => {
             runtime.daemon.close(1000, "Test complete");
         }
     });
-    it("Given an unrelated credential digest, When a Session credential is signed with it, Then direct Computer HTTP rejects it before execution", async () => {
-        const runtime = await connectComputerDaemon("stored-digest-forgery");
+    it("Given an unrelated credential digest, When a Session credential is signed with it, Then direct Computer HTTP rejects it before execution", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("stored-digest-forgery", signal);
         try {
             const forged = await runtime.resignCredential(storedDigestSigner);
             expect(
@@ -2406,8 +2443,10 @@ describe.sequential("Relay Turn submission", () => {
             runtime.daemon.close(1000, "Test complete");
         }
     });
-    it("Given a paired Computer, When the Relay signing secret rotates, Then old credentials are rejected and only new credentials can subscribe", async () => {
-        const runtime = await connectComputerDaemon("signing-key-rotation");
+    it("Given a paired Computer, When the Relay signing secret rotates, Then old credentials are rejected and only new credentials can subscribe", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("signing-key-rotation", signal);
         try {
             const signingSecret = "rotated-test-only-session-signing-secret";
             const reissued = await runtime.resignCredential(async () => await relaySigningKey(signingSecret));
@@ -2453,8 +2492,10 @@ describe.sequential("Relay Turn submission", () => {
             runtime.daemon.close(1000, "Test complete");
         }
     });
-    it("Given a Session credential, When the transport reaches ComputerRelay directly, Then the command executes without another relay hop and remains correlated", async () => {
-        const runtime = await connectComputerDaemon("direct-runtime");
+    it("Given a Session credential, When the transport reaches ComputerRelay directly, Then the command executes without another relay hop and remains correlated", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("direct-runtime", signal);
         try {
             const signal = new AbortController().signal;
             const encryption = await endpointEncryption(runtime.computerId, signal);
@@ -2511,10 +2552,12 @@ describe.sequential("Relay Turn submission", () => {
             runtime.daemon.close(1000, "Test complete");
         }
     });
-    it("Given a linked Computer, When Chat submits a first Turn longer than 10,000 characters or an invalid Turn, Then the long Turn reaches the Computer and the invalid Turn is rejected as a client error", async () => {
+    it("Given a linked Computer, When Chat submits a first Turn longer than 10,000 characters or an invalid Turn, Then the long Turn reaches the Computer and the invalid Turn is rejected as a client error", async ({
+        signal,
+    }) => {
         const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
         const environment = bindings();
-        const owner = await createOwner();
+        const owner = await createOwner(signal);
         const { computerId } = owner;
         const appCredential = owner.token;
         const pairing = await responseJson(
@@ -2557,8 +2600,7 @@ describe.sequential("Relay Turn submission", () => {
         daemon.accept();
         try {
             expect(decodeWorkerToDaemonMessage(await daemonMessages.next()).kind).toBe("computer.liveness.ready");
-            const sessionAccess = await issueSession(computerId, nativeTarget(sessionId));
-            const signal = new AbortController().signal;
+            const sessionAccess = await issueSession(computerId, nativeTarget(sessionId), signal);
             const encryption = await endpointEncryption(computerId, signal);
             const sessionRequest = (request: Request) =>
                 requestBrowserOperation((operation) => worker.fetch(operation, environment), request);
@@ -2776,14 +2818,16 @@ describe.sequential("Relay Turn submission", () => {
         }
     });
 
-    it("Given an Agent whose capability advertisement withholds steering and Session renaming, When Chat steers a Turn or renames the Session, Then the Relay forwards both and the Computer's own answer decides", async () => {
+    it("Given an Agent whose capability advertisement withholds steering and Session renaming, When Chat steers a Turn or renames the Session, Then the Relay forwards both and the Computer's own answer decides", async ({
+        signal,
+    }) => {
         const gatedAgent = readyAgents[0];
         if (gatedAgent === undefined) {
             throw new Error("Expected the shared Agent directory entry");
         }
         const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
         const environment = bindings();
-        const owner = await createOwner();
+        const owner = await createOwner(signal);
         const { computerId } = owner;
         const appCredential = owner.token;
         const backend = computerBackend(computerId);
@@ -2828,11 +2872,11 @@ describe.sequential("Relay Turn submission", () => {
             200,
         );
         const sessionId = "capability-gated-session";
-        const sessionAccess = await issueSession(computerId, nativeTarget(sessionId));
+        const sessionAccess = await issueSession(computerId, nativeTarget(sessionId), signal);
         const sessionCredential = text(sessionAccess, "credential");
 
         // Pairing succeeded, so the Agent remains listed with its capabilities.
-        expect(await backend.agents(AbortSignal.timeout(10000))).toMatchObject({
+        expect(await backend.agents(signal)).toMatchObject({
             agents: [{ harness: "codex", label: "Codex" }],
             computerId,
         });
@@ -2957,10 +3001,12 @@ describe.sequential("Relay Turn submission", () => {
         }
     });
 
-    it("Given an Agent advertisement carrying fields and capability values the Relay cannot interpret, When it pairs, Then pairing rejects the invalid capabilities", async () => {
+    it("Given an Agent advertisement carrying fields and capability values the Relay cannot interpret, When it pairs, Then pairing rejects the invalid capabilities", async ({
+        signal,
+    }) => {
         const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
         const environment = bindings();
-        const owner = await createOwner();
+        const owner = await createOwner(signal);
         const { computerId } = owner;
         const appCredential = owner.token;
         const pairing = await responseJson(
@@ -3007,8 +3053,10 @@ describe.sequential("Relay Turn submission", () => {
         expect(rejected).toMatchObject({ error: { code: "invalid_agents" } });
     });
 
-    it("Given a daemon that heartbeats and then falls silent, When Chat submits Turns, Then they reach it while it heartbeats and are refused as computer_offline once the silence outlasts the heartbeat deadline", async () => {
-        const runtime = await connectComputerDaemon("silent-daemon", { anchorClockToHeartbeat: true });
+    it("Given a daemon that heartbeats and then falls silent, When Chat submits Turns, Then they reach it while it heartbeats and are refused as computer_offline once the silence outlasts the heartbeat deadline", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("silent-daemon", signal, { anchorClockToHeartbeat: true });
         // The clock now reads when Cloudflare answered the daemon's heartbeat.
         const heartbeatAt = Date.now();
         try {
@@ -3094,13 +3142,13 @@ describe.sequential("Relay Turn submission", () => {
         }
     });
 
-    it.each([
+    it.for([
         { kind: "permission", answer: { outcome: "selected", optionId: "allow_once" } },
         { kind: "elicitation", answer: { action: "accept", content: { answer: "continue" } } },
     ] as const)(
         "Given a daemon whose heartbeats stopped, When an app answers a pending $kind request, Then the answer is refused at once as computer_offline",
-        async (body) => {
-            const runtime = await connectComputerDaemon(`offline-${body.kind}-answer`, {
+        async (body, { signal }) => {
+            const runtime = await connectComputerDaemon(`offline-${body.kind}-answer`, signal, {
                 anchorClockToHeartbeat: true,
             });
             // The clock now reads when Cloudflare answered the daemon's heartbeat.
@@ -3150,8 +3198,10 @@ describe.sequential("Relay Turn submission", () => {
         },
     );
 
-    it("Given a daemon whose heartbeats stopped, When an app reads the Computer, Then it is reported offline and its connection is closed", async () => {
-        const runtime = await connectComputerDaemon("silent-presence", { anchorClockToHeartbeat: true });
+    it("Given a daemon whose heartbeats stopped, When an app reads the Computer, Then it is reported offline and its connection is closed", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("silent-presence", signal, { anchorClockToHeartbeat: true });
         // The clock now reads when Cloudflare answered the daemon's heartbeat.
         const heartbeatAt = Date.now();
         try {
@@ -3167,8 +3217,10 @@ describe.sequential("Relay Turn submission", () => {
         }
     });
 
-    it("Given a daemon using fixed-text heartbeats, When it sends a noncanonical heartbeat near its deadline, Then only host auto-responses renew its liveness", async () => {
-        const runtime = await connectComputerDaemon("noncanonical-heartbeat", { anchorClockToHeartbeat: true });
+    it("Given a daemon using fixed-text heartbeats, When it sends a noncanonical heartbeat near its deadline, Then only host auto-responses renew its liveness", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("noncanonical-heartbeat", signal, { anchorClockToHeartbeat: true });
         const heartbeatAt = Date.now();
         try {
             vi.setSystemTime(heartbeatAt + 30_000);
@@ -3184,8 +3236,10 @@ describe.sequential("Relay Turn submission", () => {
         }
     });
 
-    it("Given a daemon that never heartbeats after it connected, When its first heartbeat is overdue, Then it is reported offline and its connection is closed", async () => {
-        const runtime = await connectComputerDaemon("unproven-daemon");
+    it("Given a daemon that never heartbeats after it connected, When its first heartbeat is overdue, Then it is reported offline and its connection is closed", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("unproven-daemon", signal);
         const connectedAt = Date.now();
         try {
             // The first heartbeat follows attachment, which has 30 seconds, then the usual silence limit applies.
@@ -3234,8 +3288,10 @@ async function forkRequestId(computerId: string, operationId: string): Promise<s
     return `chat_${[...hash].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
-it("Given a Fork in flight, When it is requested again concurrently and after Relay eviction, Then each Computer request carries the operation identity and the Relay keeps no outcome of its own", async () => {
-    const runtime = await connectComputerDaemon("fork-operation-identity");
+it("Given a Fork in flight, When it is requested again concurrently and after Relay eviction, Then each Computer request carries the operation identity and the Relay keeps no outcome of its own", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("fork-operation-identity", signal);
     const input = {
         harness: "codex",
         sessionId: "native-source",
@@ -3360,11 +3416,12 @@ it("Given a Fork in flight, When it is requested again concurrently and after Re
     }
 });
 
-it("Given a cancelled fork caller whose successful daemon reply is delayed, When invalid ciphertext reuses the operation, Then the old success cannot complete the unauthenticated attempt", async () => {
-    const runtime = await connectComputerDaemon("fork-cancelled-reply");
+it("Given a cancelled fork caller whose successful daemon reply is delayed, When invalid ciphertext reuses the operation, Then the old success cannot complete the unauthenticated attempt", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("fork-cancelled-reply", signal);
     const original = new AbortController();
     const retry = new AbortController();
-    const signal = new AbortController().signal;
     try {
         const encryption = await endpointEncryption(runtime.computerId, signal);
         const operationId = "cancelled-fork-operation";
@@ -3481,10 +3538,11 @@ it("Given a cancelled fork caller whose successful daemon reply is delayed, When
     }
 });
 
-it("Given a cancelled fork has no terminal daemon reply, When its drain deadline expires, Then its original daemon transport is fenced before the address can be reused", async () => {
-    const runtime = await connectComputerDaemon("fork-drain-timeout");
+it("Given a cancelled fork has no terminal daemon reply, When its drain deadline expires, Then its original daemon transport is fenced before the address can be reused", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("fork-drain-timeout", signal);
     const original = new AbortController();
-    const signal = new AbortController().signal;
     try {
         const encryption = await endpointEncryption(runtime.computerId, signal);
         const operationId = "fork-without-terminal-reply";
@@ -3533,8 +3591,10 @@ it("Given a cancelled fork has no terminal daemon reply, When its drain deadline
     }
 });
 
-it("Given the Computer rejects a Fork, When the same operation is retried, Then the rejection is reported and the retry forks again", async () => {
-    const runtime = await connectComputerDaemon("fork-rejected");
+it("Given the Computer rejects a Fork, When the same operation is retried, Then the rejection is reported and the retry forks again", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("fork-rejected", signal);
     const input = {
         harness: "codex",
         sessionId: "native-source",
@@ -3600,8 +3660,10 @@ it("Given the Computer rejects a Fork, When the same operation is retried, Then 
     }
 });
 
-it("Given an anonymous browser knows a Computer, When it declares a full-budget upload, Then it is rejected and an authorized browser can still upload", async () => {
-    const runtime = await connectComputerDaemon("upload-admission");
+it("Given an anonymous browser knows a Computer, When it declares a full-budget upload, Then it is rejected and an authorized browser can still upload", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("upload-admission", signal);
     const anonymous = (await runtime.transport()).webSocket;
     const browser = (await runtime.transport()).webSocket;
     if (anonymous === null || browser === null) {
@@ -3788,8 +3850,10 @@ describe("Computer prompt acknowledgements", () => {
             ],
         });
 
-    it("Given pending submissions, When the Computer answers another request, Then only the reply naming each submission answers it", async () => {
-        const runtime = await connectComputerDaemon("named-queue-change");
+    it("Given pending submissions, When the Computer answers another request, Then only the reply naming each submission answers it", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("named-queue-change", signal);
         try {
             const credential = await runtime.issueComputerCredential(runtime.computerId);
             const signal = new AbortController().signal;
@@ -3914,8 +3978,10 @@ describe("Computer prompt acknowledgements", () => {
         }
     }, 30_000);
 
-    it("Given a completed prompt, When it is retried with the same command identifier, Then the Computer's acceptance answers the retry", async () => {
-        const runtime = await connectComputerDaemon("retried-prompt");
+    it("Given a completed prompt, When it is retried with the same command identifier, Then the Computer's acceptance answers the retry", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("retried-prompt", signal);
         try {
             const signal = new AbortController().signal;
             const { client, encryption } = await sessionClient(runtime, signal);
@@ -4007,8 +4073,10 @@ describe("Computer prompt acknowledgements", () => {
         }
     }, 30_000);
 
-    it("Given a prompt that already settled, When it is retried with the same idempotency key, Then the submission is answered settled instead of running", async () => {
-        const runtime = await connectComputerDaemon("settled-retry");
+    it("Given a prompt that already settled, When it is retried with the same idempotency key, Then the submission is answered settled instead of running", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("settled-retry", signal);
         try {
             const signal = new AbortController().signal;
             const { client, encryption } = await sessionClient(runtime, signal);
@@ -4045,8 +4113,10 @@ describe("Computer prompt acknowledgements", () => {
             runtime.daemon.close(1000, "Test complete");
         }
     }, 30_000);
-    it("Given a submitted prompt whose Agent is still starting, When the Turn is cancelled before it starts, Then the submission is answered by that outcome instead of waiting for its deadline", async () => {
-        const runtime = await connectComputerDaemon("cancelled-before-start");
+    it("Given a submitted prompt whose Agent is still starting, When the Turn is cancelled before it starts, Then the submission is answered by that outcome instead of waiting for its deadline", async ({
+        signal,
+    }) => {
+        const runtime = await connectComputerDaemon("cancelled-before-start", signal);
         try {
             const signal = new AbortController().signal;
             const { client, encryption } = await sessionClient(runtime, signal);

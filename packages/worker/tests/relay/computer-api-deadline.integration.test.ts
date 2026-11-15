@@ -33,8 +33,10 @@ class PendingComputerApiBoundary {
 
 afterAll(abortAllDurableObjects);
 
-it("Given a Computer API with a 120-second deadline mounted beside Session routes, When it finishes after 45 seconds over WebSocket, Then its response succeeds without inheriting the Session deadline", async () => {
-    const owner = await createOwner();
+it("Given a Computer API with a 120-second deadline mounted beside Session routes, When it finishes after 45 seconds over WebSocket, Then its response succeeds without inheriting the Session deadline", async ({
+    signal,
+}) => {
+    const owner = await createOwner(signal);
     vi.useFakeTimers({ now: new Date("2026-11-12T00:00:00.000Z") });
     try {
         await runInDurableObject(

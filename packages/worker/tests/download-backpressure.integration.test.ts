@@ -16,11 +16,10 @@ afterEach(() => vi.useRealTimers());
 
 test("Given a slow file download, When the browser stops reading and cancels, Then the Computer sends only credited chunks and unrelated Session work remains usable", {
     timeout: 90_000,
-}, async () => {
+}, async ({ signal }) => {
     await using bindings = await createBindings();
     await using network = await recordingRelay(bindings.origin);
     await bindings.configure({ APP_ORIGIN: network.origin });
-    const signal = AbortSignal.timeout(60_000);
     const created = await fetch(new URL("/morty/api/v1/computers", network.origin), {
         method: "POST",
         signal,

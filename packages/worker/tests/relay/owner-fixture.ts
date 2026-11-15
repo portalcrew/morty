@@ -16,13 +16,13 @@ const ownerEnvironment = () => ({ ...env, APP_ORIGIN: ownerOrigin });
 export const ownerRequest = (request: Request) => worker.fetch(request, ownerEnvironment());
 
 const owners = new Map<string, string>();
-export async function createOwner() {
-    const owner = await createTestOwner(ownerRequest, ownerOrigin, AbortSignal.timeout(10_000));
+export async function createOwner(signal: AbortSignal) {
+    const owner = await createTestOwner(ownerRequest, ownerOrigin, signal);
     owners.set(owner.computerId, owner.token);
     return owner;
 }
 
-async function ownerHolder(computerId: string): Promise<SessionAccessHolder> {
+async function ownerHolder(computerId: string, signal: AbortSignal): Promise<SessionAccessHolder> {
     const token = owners.get(computerId);
     if (token === undefined) {
         throw new Error("Expected a publicly created owner");
@@ -33,7 +33,7 @@ async function ownerHolder(computerId: string): Promise<SessionAccessHolder> {
             const credential = await new IdentityStorage(
                 new DurableObjectDatabase(state.storage),
                 computerId,
-            ).findCredential(token, Date.now(), AbortSignal.timeout(10_000));
+            ).findCredential(token, Date.now(), signal);
             if (credential === null) {
                 throw new Error("Expected active owner access");
             }
@@ -43,13 +43,18 @@ async function ownerHolder(computerId: string): Promise<SessionAccessHolder> {
 }
 
 /** Session protocol scenarios start with an authorized computer and an issued Session credential. */
-export async function issueSession(computerId: string, target: NativeSessionTarget, expiresInSeconds = 900) {
-    const holder = await ownerHolder(computerId);
+export async function issueSession(
+    computerId: string,
+    target: NativeSessionTarget,
+    signal: AbortSignal,
+    expiresInSeconds = 900,
+) {
+    const holder = await ownerHolder(computerId, signal);
     return runInDurableObject(env.COMPUTER_RELAY.getByName(computerObjectName(computerId)), async (_instance, state) =>
         new SessionAccessService(
             computerAccess(computerId, state.storage).access,
             new SessionAccessSigner(env.MORTY_SESSION_SIGNING_SECRET),
-        ).issue({ computerId, target }, expiresInSeconds, holder, AbortSignal.timeout(10_000)),
+        ).issue({ computerId, target }, expiresInSeconds, holder, signal),
     );
 }
 

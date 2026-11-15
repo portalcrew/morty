@@ -13,10 +13,9 @@ afterEach(() => vi.useRealTimers());
 
 test("Given unviewed output exceeds the live buffer, When another viewer receives an answer, Then the answer is delivered", {
     timeout: 90_000,
-}, async () => {
+}, async ({ signal }) => {
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });
-    const signal = AbortSignal.timeout(20_000);
     const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
         method: "POST",
         signal,

@@ -37,11 +37,10 @@ process.exitCode = await runSetup(process.argv.slice(2), {
     return entry;
 }
 
-// Budgets for the scenarios that run Setup as a child process. CI also runs some of them on Windows, the slowest
+// Budget for the scenarios that run Setup as a child process. CI also runs some of them on Windows, the slowest
 // relay: there each run checks path permissions through PowerShell, which Morty bounds at 30 s per check, and a
-// fixture's first workerd start has taken over 10 s. The child's deadline leaves room for one check to reach that
-// bound and for the run to finish and report. The test's timeout adds room to start the fixture and to clean up.
-const SETUP_PROCESS_TIMEOUT_MS = 60_000;
+// fixture's first workerd start has taken over 10 s. The child ends with the test, so this timeout alone bounds a
+// hang; it leaves room for one check to reach Morty's bound, for the run to finish and report, and for cleanup.
 const SETUP_PROCESS_TEST_TIMEOUT_MS = 90_000;
 
 let createIdentityFixture: Awaited<ReturnType<typeof prepareIdentityFixture>>;
@@ -121,12 +120,12 @@ async function savedIdentity(state: string) {
     return saved.identity;
 }
 
-test.each(["fresh", "unknown", "revoked"] as const)(
+test.for(["fresh", "unknown", "revoked"] as const)(
     "Given an invalid Morty state root and %s replacement state, When setup stops at preflight, Then it preserves the identity and accurately reports earlier shared access",
     {
         timeout: SETUP_PROCESS_TEST_TIMEOUT_MS,
     },
-    async (replacementState) => {
+    async (replacementState, { signal }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-setup-state-root-"));
         // The shell names the installation data of another state root, which Morty refuses.
         const owner = join(directory, "owner");
@@ -194,7 +193,7 @@ test.each(["fresh", "unknown", "revoked"] as const)(
                         MORTY_STATE_DIRECTORY: state,
                     },
                     stdio: ["ignore", "pipe", "pipe"],
-                    signal: AbortSignal.timeout(SETUP_PROCESS_TIMEOUT_MS),
+                    signal,
                     windowsHide: true,
                 },
             );
@@ -227,7 +226,7 @@ test.each(["fresh", "unknown", "revoked"] as const)(
 
 test("Given a local workspace and a private state directory, When setup creates its identity and the user cancels, Then credentials remain private and can be reused", {
     timeout: SETUP_PROCESS_TEST_TIMEOUT_MS,
-}, async () => {
+}, async ({ signal }) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-setup-filesystem-"));
     const state = join(directory, "state ' & workspace");
     const workspace = join(directory, "workspace with spaces & quotes '");
@@ -273,7 +272,7 @@ process.exitCode = await runSetup(process.argv.slice(2), {
             },
             stdio: ["ignore", "pipe", "pipe"],
             windowsHide: true,
-            signal: AbortSignal.timeout(SETUP_PROCESS_TIMEOUT_MS),
+            signal,
         },
     );
     const exited = once(child, "exit");
@@ -310,8 +309,7 @@ process.exitCode = await runSetup(process.argv.slice(2), {
                 {
                     env: { ...process.env, MORTY_TEST_CONFIG: configPath },
                     windowsHide: true,
-                    signal: AbortSignal.timeout(10000),
-                    timeout: 10000,
+                    signal,
                 },
             );
             expect(stdout.trim()).toBe("private");
@@ -364,7 +362,7 @@ test("Given a junction replaces the private Morty directory, When setup validate
 test.runIf(process.platform !== "win32")(
     "Given HOME and no overrides, When a user runs the setup CLI, Then identity is saved in the relay's local state directory and cancellation releases setup",
     { timeout: SETUP_PROCESS_TEST_TIMEOUT_MS },
-    async () => {
+    async ({ signal }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-setup-home-"));
         const state =
             process.platform === "darwin"
@@ -396,7 +394,7 @@ test.runIf(process.platform !== "win32")(
                     HOME: directory,
                 },
                 stdio: ["ignore", "pipe", "pipe"],
-                signal: AbortSignal.timeout(SETUP_PROCESS_TIMEOUT_MS),
+                signal,
             },
         );
         const exited = once(child, "exit");
@@ -488,7 +486,7 @@ for (const segments of [4, 8]) {
     test.skipIf(segments === 8 && process.platform !== "linux")(
         `Given a valid ${segments}-segment multibyte workspace, When setup prepares the handoff, Then it delivers the normal link even when no QR can represent it`,
         { timeout: 30_000 },
-        async () => {
+        async ({ signal }) => {
             const root = await realpath(await mkdtemp(join(tmpdir(), "morty-setup-long-")));
             const state = join(root, "state");
             const workspace = join(
@@ -519,7 +517,7 @@ for (const segments of [4, 8]) {
                     {
                         state,
                         agentEnvironment: {},
-                        signal: AbortSignal.timeout(25_000),
+                        signal,
                         runtime,
                         emit: (event) => events.push(event),
                         clock: {
@@ -559,7 +557,7 @@ for (const segments of [4, 8]) {
                     }
                     const documentUrl = new URL(link);
                     documentUrl.host = `127.0.0.1:${address.port}`;
-                    const response = await fetch(documentUrl, { signal: AbortSignal.timeout(10_000) });
+                    const response = await fetch(documentUrl, { signal });
                     await response.arrayBuffer();
                     const target = await documentRequest.promise;
                     expect(new URL(target, fixture.origin).searchParams.has("workspace")).toBe(false);
@@ -598,6 +596,7 @@ async function setupComputer(
         readonly state: string;
         readonly workspace: string;
     },
+    signal: AbortSignal,
     deadline?: (milliseconds: number) => AbortSignal,
     run: {
         readonly harness?: string;
@@ -633,7 +632,7 @@ async function setupComputer(
         {
             state: paths.state,
             agentEnvironment: run.agentEnvironment ?? {},
-            signal: AbortSignal.any([interrupt.signal, AbortSignal.timeout(55_000)]),
+            signal: AbortSignal.any([interrupt.signal, signal]),
             runtime,
             emit: (event) => {
                 events.push(event);
@@ -702,12 +701,12 @@ async function withSetupComputer(
 
 test("Given a paired computer whose daemon is online, When the user reruns setup, Then setup reuses the running Computer without restarting it", {
     timeout: 90_000,
-}, async () => {
+}, async ({ signal }) => {
     await withSetupComputer(async (runtime, paths) => {
-        const first = await setupComputer(runtime, paths);
+        const first = await setupComputer(runtime, paths, signal);
         expect(first.code, JSON.stringify(first.events)).toBe(0);
 
-        const rerun = await setupComputer(runtime, paths);
+        const rerun = await setupComputer(runtime, paths, signal);
         expect(rerun.code, JSON.stringify(rerun.events)).toBe(0);
         expect(rerun.events).toContainEqual(expect.objectContaining({ status: "computer_already_online" }));
         expect(rerun.events.at(-1)).toMatchObject({ status: "ready", workspace: paths.workspace });
@@ -716,14 +715,14 @@ test("Given a paired computer whose daemon is online, When the user reruns setup
 
 test("Given setup was stopped after pairing its Computer, When the user runs setup again and again, Then each run continues on that Computer and setup finishes", {
     timeout: 120_000,
-}, async () => {
+}, async ({ signal }) => {
     await withSetupComputer(async (runtime, paths) => {
         // Pairing stops at eight Computers; each stopped run must not leave another one behind.
         for (let attempt = 1; attempt <= 8; attempt += 1) {
-            const stopped = await setupComputer(runtime, paths, undefined, { interruptAt: "computer_paired" });
+            const stopped = await setupComputer(runtime, paths, signal, undefined, { interruptAt: "computer_paired" });
             expect(stopped.code, JSON.stringify(stopped.events)).not.toBe(0);
         }
-        const finished = await setupComputer(runtime, paths);
+        const finished = await setupComputer(runtime, paths, signal);
         expect(finished.code, JSON.stringify(finished.events)).toBe(0);
         expect(finished.events.at(-1)).toMatchObject({ status: "ready", workspace: paths.workspace });
     });
@@ -731,9 +730,9 @@ test("Given setup was stopped after pairing its Computer, When the user runs set
 
 test("Given a shared Computer whose local pairing was removed, When setup has no matching replacement approval, Then shared access stays valid until the user approves that Computer", {
     timeout: 120_000,
-}, async () => {
+}, async ({ signal }) => {
     await withSetupComputer(async (runtime, paths) => {
-        const first = await setupComputer(runtime, paths);
+        const first = await setupComputer(runtime, paths, signal);
         expect(first.code, JSON.stringify(first.events)).toBe(0);
         const config = await savedIdentity(paths.state);
         const saved = await readFile(join(paths.state, "config.json"), "utf8");
@@ -744,7 +743,7 @@ test("Given a shared Computer whose local pairing was removed, When setup has no
                     method: "POST",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({ code: new URLSearchParams(new URL(url).hash.slice(1)).get("code") }),
-                    signal: AbortSignal.timeout(10000),
+                    signal,
                 }),
             );
         const redeemed = await redeem();
@@ -753,12 +752,12 @@ test("Given a shared Computer whose local pairing was removed, When setup has no
         const session = async () =>
             await fetch(`${paths.origin}/morty/api/v1/computers/${config.computer_id}/session`, {
                 headers: { authorization: `Bearer ${browser.computerToken}` },
-                signal: AbortSignal.timeout(10000),
+                signal,
             });
         await runtime.forgetConnections();
 
         for (const replaceComputer of [undefined, "another-computer"]) {
-            const blocked = await setupComputer(runtime, paths, undefined, {
+            const blocked = await setupComputer(runtime, paths, signal, undefined, {
                 ...(replaceComputer === undefined ? {} : { replaceComputer }),
             });
             expect(blocked.code).toBe(1);
@@ -772,7 +771,9 @@ test("Given a shared Computer whose local pairing was removed, When setup has no
             expect(await readFile(join(paths.state, "config.json"), "utf8")).toBe(saved);
         }
 
-        const approved = await setupComputer(runtime, paths, undefined, { replaceComputer: config.computer_id });
+        const approved = await setupComputer(runtime, paths, signal, undefined, {
+            replaceComputer: config.computer_id,
+        });
         expect(approved.code, JSON.stringify(approved.events)).toBe(0);
         expect(approved.events).toContainEqual(
             expect.objectContaining({ status: "replacement_access_revoked", previousComputerId: config.computer_id }),
@@ -780,7 +781,7 @@ test("Given a shared Computer whose local pairing was removed, When setup has no
         expect(approved.events.at(-1)).toMatchObject({ status: "ready", computer: "replaced" });
         const retired = await fetch(`${paths.origin}/morty/api/v1/computers/${config.computer_id}/session`, {
             headers: { authorization: `Bearer ${config.computer_token}` },
-            signal: AbortSignal.timeout(10000),
+            signal,
         });
         expect(retired.status).toBe(401);
         expect((await session()).status).toBe(401);
@@ -793,7 +794,7 @@ test("Given a shared Computer whose local pairing was removed, When setup has no
         expect(JSON.stringify(diagnostics)).not.toContain(url);
 
         await runtime.forgetConnections();
-        const stale = await setupComputer(runtime, paths, undefined, { replaceComputer: config.computer_id });
+        const stale = await setupComputer(runtime, paths, signal, undefined, { replaceComputer: config.computer_id });
         expect(stale.code).toBe(1);
         expect(stale.events.at(-1)).toMatchObject({
             error: { code: "COMPUTER_REPLACEMENT_REQUIRED", replacement: { computerId: current.computer_id } },
@@ -803,13 +804,13 @@ test("Given a shared Computer whose local pairing was removed, When setup has no
 
 test("Given an approved replacement request times out, When setup is retried without approval, Then it reports the uncertain access state and does not silently replace the Computer", {
     timeout: 120_000,
-}, async () => {
+}, async ({ signal }) => {
     await withSetupComputer(async (runtime, paths) => {
-        const first = await setupComputer(runtime, paths);
+        const first = await setupComputer(runtime, paths, signal);
         expect(first.code).toBe(0);
         const config = await savedIdentity(paths.state);
         await runtime.forgetConnections();
-        const uncertain = await setupComputer(runtime, paths, undefined, {
+        const uncertain = await setupComputer(runtime, paths, signal, undefined, {
             replaceComputer: config.computer_id,
             stallFromStage: "replacement",
         });
@@ -817,23 +818,25 @@ test("Given an approved replacement request times out, When setup is retried wit
         expect(uncertain.events.at(-1)).toMatchObject({
             error: { replacementAccess: { kind: "unknown", previousComputerId: config.computer_id } },
         });
-        const retry = await setupComputer(runtime, paths);
+        const retry = await setupComputer(runtime, paths, signal);
         expect(retry.events.at(-1)).toMatchObject({
             error: {
                 code: "COMPUTER_REPLACEMENT_REQUIRED",
                 replacementAccess: { kind: "unknown", previousComputerId: config.computer_id },
             },
         });
-        const finished = await setupComputer(runtime, paths, undefined, { replaceComputer: config.computer_id });
+        const finished = await setupComputer(runtime, paths, signal, undefined, {
+            replaceComputer: config.computer_id,
+        });
         expect(finished.code, JSON.stringify(finished.events)).toBe(0);
     });
 });
 
 test("Given a saved uncertain replacement and a restored local pairing, When setup runs without approval, Then it does not hide the uncertain access state behind a successful reconnection", {
     timeout: 120_000,
-}, async () => {
+}, async ({ signal }) => {
     await withSetupComputer(async (runtime, paths) => {
-        expect((await setupComputer(runtime, paths)).code).toBe(0);
+        expect((await setupComputer(runtime, paths, signal)).code).toBe(0);
         const configPath = join(paths.state, "config.json");
         const config = v.parse(
             v.looseObject({ identity: v.record(v.string(), v.unknown()) }),
@@ -846,7 +849,7 @@ test("Given a saved uncertain replacement and a restored local pairing, When set
             JSON.stringify({ ...config, identity: { ...config.identity, replacement: { kind: "unknown" } } }),
             { mode: 0o600 },
         );
-        const blocked = await setupComputer(runtime, paths);
+        const blocked = await setupComputer(runtime, paths, signal);
         expect(blocked.code).toBe(1);
         expect(blocked.events.at(-1)).toMatchObject({
             error: {
@@ -856,23 +859,23 @@ test("Given a saved uncertain replacement and a restored local pairing, When set
             },
         });
         expect(blocked.events).not.toContainEqual(expect.objectContaining({ status: "ready" }));
-        expect((await setupComputer(runtime, paths, undefined, { replaceComputer: computerId })).code).toBe(0);
+        expect((await setupComputer(runtime, paths, signal, undefined, { replaceComputer: computerId })).code).toBe(0);
     });
 });
 
-test.each(["replacement_access_revoked", "computer_replaced"])(
+test.for(["replacement_access_revoked", "computer_replaced"])(
     "Given an approved replacement was stopped at %s, When the user retries with the same approval, Then both the failure and the finished setup report that earlier access was revoked",
     {
         timeout: 120_000,
     },
-    async (interruptAt) => {
+    async (interruptAt, { signal }) => {
         await withSetupComputer(async (runtime, paths) => {
-            const first = await setupComputer(runtime, paths);
+            const first = await setupComputer(runtime, paths, signal);
             expect(first.events.at(-1)).toMatchObject({ status: "ready", computer: "created" });
             const config = await savedIdentity(paths.state);
             await runtime.forgetConnections();
 
-            const stopped = await setupComputer(runtime, paths, undefined, {
+            const stopped = await setupComputer(runtime, paths, signal, undefined, {
                 replaceComputer: config.computer_id,
                 interruptAt,
             });
@@ -899,11 +902,13 @@ test.each(["replacement_access_revoked", "computer_replaced"])(
                 });
             }
 
-            const finished = await setupComputer(runtime, paths, undefined, { replaceComputer: config.computer_id });
+            const finished = await setupComputer(runtime, paths, signal, undefined, {
+                replaceComputer: config.computer_id,
+            });
             expect(finished.code, JSON.stringify(finished.events)).toBe(0);
             expect(finished.events.at(-1)).toMatchObject({ status: "ready", computer: "replaced" });
 
-            const again = await setupComputer(runtime, paths);
+            const again = await setupComputer(runtime, paths, signal);
             expect(again.events.at(-1)).toMatchObject({ status: "ready", computer: "reused" });
             expect((await savedIdentity(paths.state)).replacement).toEqual({ kind: "unchanged" });
         });
@@ -912,9 +917,9 @@ test.each(["replacement_access_revoked", "computer_replaced"])(
 
 test("Given a Computer bound by setup, When the user runs setup again, Then setup finishes on that Computer without a local binding copy", {
     timeout: 90_000,
-}, async () => {
+}, async ({ signal }) => {
     await withSetupComputer(async (runtime, paths) => {
-        const first = await setupComputer(runtime, paths);
+        const first = await setupComputer(runtime, paths, signal);
         expect(first.code, JSON.stringify(first.events)).toBe(0);
         // The Worker's binding is the only record, so a reply lost after the Worker bound the Computer leaves the
         // local configuration exactly as a completed run does.
@@ -925,19 +930,20 @@ test("Given a Computer bound by setup, When the user runs setup again, Then setu
         expect(saved.identity).toMatchObject({ pairing: { kind: "none" } });
         expect(saved.identity).not.toHaveProperty("agent_ref");
 
-        const rerun = await setupComputer(runtime, paths);
+        const rerun = await setupComputer(runtime, paths, signal);
         expect(rerun.code, JSON.stringify(rerun.events)).toBe(0);
         expect(rerun.events).toContainEqual(expect.objectContaining({ status: "computer_reused" }));
         expect(rerun.events.at(-1)).toMatchObject({ status: "ready", workspace: paths.workspace });
     });
 });
 
-test("Given two shared links and redeemed access, When the local owner revokes all access, Then previous links and credentials, the local credential included, fail while the replacement setup saved and another computer remain usable", async () => {
+test("Given two shared links and redeemed access, When the local owner revokes all access, Then previous links and credentials, the local credential included, fail while the replacement setup saved and another computer remain usable", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-revoke-access-"));
     const configurationDirectory = join(directory, "state");
     await mkdir(configurationDirectory, { recursive: true, mode: 0o700 });
     const fixture = await createIdentityFixture();
-    const signal = AbortSignal.timeout(30000);
     try {
         const owner = await fixture.createAnonymousUser();
         const other = await fixture.createAnonymousUser();
@@ -1048,12 +1054,13 @@ test("Given two shared links and redeemed access, When the local owner revokes a
     }
 }, 30000);
 
-test("Given setup replaced the Computer but stopped before ending the previous identity, When the user revokes all access, Then nothing opens the previous Project and only the replacement of the current identity setup saved opens the current one", async () => {
+test("Given setup replaced the Computer but stopped before ending the previous identity, When the user revokes all access, Then nothing opens the previous Project and only the replacement of the current identity setup saved opens the current one", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-replaced-identity-"));
     const configurationDirectory = join(directory, "state");
     await mkdir(configurationDirectory, { recursive: true, mode: 0o700 });
     const fixture = await createIdentityFixture();
-    const signal = AbortSignal.timeout(30000);
     try {
         const previous = await fixture.createAnonymousUser();
         const request = (computerId: string, path: string, token: string, method = "GET", body?: object) =>
@@ -1122,12 +1129,13 @@ test("Given setup replaced the Computer but stopped before ending the previous i
     }
 }, 30000);
 
-test("Given the reply to revoking all access was lost after the Worker replaced the local credential, When the user revokes all access again, Then setup keeps the successor it saved and the earlier credential stays revoked", async () => {
+test("Given the reply to revoking all access was lost after the Worker replaced the local credential, When the user revokes all access again, Then setup keeps the successor it saved and the earlier credential stays revoked", async ({
+    signal,
+}) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-revoke-access-retry-"));
     const configurationDirectory = join(directory, "state");
     await mkdir(configurationDirectory, { recursive: true, mode: 0o700 });
     const fixture = await createIdentityFixture();
-    const signal = AbortSignal.timeout(30000);
     try {
         const owner = await fixture.createAnonymousUser();
         const successor = `morty_computer_v1_${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url")}`;

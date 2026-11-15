@@ -34,9 +34,9 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 afterAll(async () => await abortAllDurableObjects());
 
-async function computer() {
+async function computer(signal: AbortSignal) {
     const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
-    const owner = await createOwner();
+    const owner = await createOwner(signal);
     const { computerId } = owner;
     const backend = computerBackend(computerId);
     const stub = env.COMPUTER_RELAY.getByName(computerObjectName(computerId));
@@ -73,13 +73,13 @@ async function computer() {
             }),
         revoke: async () => {
             try {
-                await revokeTestComputer(env, computerId, AbortSignal.timeout(10000));
+                await revokeTestComputer(env, computerId, signal);
                 return new Response(null, { status: 204 });
             } catch {
                 return new Response(null, { status: 500 });
             }
         },
-        list: async () => Response.json({ computers: await backend.computers(AbortSignal.timeout(10000)) }),
+        list: async () => Response.json({ computers: await backend.computers(signal) }),
         publish: async (pairing: Pairing, token: string) =>
             request(`/v1/computers/${pairing.computerId}/catalog`, "PUT", { agents: [] }, token),
         storage: async <T>(operation: (storage: DurableObjectStorage) => Promise<T> | T): Promise<T> =>
@@ -92,8 +92,10 @@ async function computer() {
     };
 }
 
-it("Given pending reservations at capacity, When their deadline passes without expiry maintenance, Then status reads and new reservations succeed", async () => {
-    const app = await computer();
+it("Given pending reservations at capacity, When their deadline passes without expiry maintenance, Then status reads and new reservations succeed", async ({
+    signal,
+}) => {
+    const app = await computer(signal);
     const first = await app.pair("reservation-0");
     expect(await responseJson(await app.create("over-capacity"), 429)).toMatchObject({
         error: { code: "computer_quota_exceeded" },
@@ -105,8 +107,10 @@ it("Given pending reservations at capacity, When their deadline passes without e
     expect(await app.pair("reservation-0")).toEqual(first);
 });
 
-it("Given a stored pairing whose answer was lost, When the deployment's signing secret rotates before setup retries it, Then the retry answers the same pairing", async () => {
-    const owner = await createOwner();
+it("Given a stored pairing whose answer was lost, When the deployment's signing secret rotates before setup retries it, Then the retry answers the same pairing", async ({
+    signal,
+}) => {
+    const owner = await createOwner(signal);
     const request = () =>
         new Request(`${origin}/v1/computers/${owner.computerId}/pairing`, {
             method: "POST",
@@ -127,15 +131,19 @@ it("Given a stored pairing whose answer was lost, When the deployment's signing 
     expect(retried).toEqual(stored);
 });
 
-it("Given simultaneous retries of one creation, When they commit, Then they share one reservation and occupy the single daemon slot", async () => {
-    const app = await computer();
+it("Given simultaneous retries of one creation, When they commit, Then they share one reservation and occupy the single daemon slot", async ({
+    signal,
+}) => {
+    const app = await computer(signal);
     const [left, right] = await Promise.all([app.pair("same-request"), app.pair("same-request")]);
     expect(left).toEqual(right);
     expect((await app.create("no-place")).status).toBe(429);
 });
 
-it("Given a delayed claim, When newer requests have reused expired capacity, Then the claim cannot overbook the Computer", async () => {
-    const app = await computer();
+it("Given a delayed claim, When newer requests have reused expired capacity, Then the claim cannot overbook the Computer", async ({
+    signal,
+}) => {
+    const app = await computer(signal);
     const pairing = await app.pair("delayed-claim");
     const claimTime = Date.now();
     const codeHash = await hashPairingCredential(pairing.pairingCode);
@@ -161,8 +169,10 @@ it("Given a delayed claim, When newer requests have reused expired capacity, The
     expect(await responseJson(await app.list(), 200)).toEqual({ computers: [] });
 });
 
-it("Given a claim whose registration cannot commit, When the caller retries after recovery, Then the request is still pending and can be claimed once", async () => {
-    const app = await computer();
+it("Given a claim whose registration cannot commit, When the caller retries after recovery, Then the request is still pending and can be claimed once", async ({
+    signal,
+}) => {
+    const app = await computer(signal);
     const pairing = await app.pair("claim-rollback");
     await app.sql(`CREATE TRIGGER reject_claim BEFORE INSERT ON computer_registrations
         BEGIN SELECT RAISE(ABORT, 'Controlled claim failure'); END`);
@@ -178,8 +188,10 @@ it("Given a claim whose registration cannot commit, When the caller retries afte
     expect(await responseJson(await app.claim(pairing), 200)).toMatchObject(claimed);
 });
 
-it("Given a committed redeem response is lost, When the caller retries after a relay restart, Then the original credential is recovered without changing the registration", async () => {
-    const app = await computer();
+it("Given a committed redeem response is lost, When the caller retries after a relay restart, Then the original credential is recovered without changing the registration", async ({
+    signal,
+}) => {
+    const app = await computer(signal);
     const pairing = await app.pair("lost-redeem");
     // Discard the first result before the caller can save its credential.
     const discarded = await app.claim(pairing);
@@ -211,8 +223,10 @@ it("Given a committed redeem response is lost, When the caller retries after a r
     expect((await app.publish(pairing, computerCredential)).status).toBe(401);
 });
 
-it("Given one available Computer place, When distinct requests compete, Then exactly one reserves it and retries keep the same identity", async () => {
-    const app = await computer();
+it("Given one available Computer place, When distinct requests compete, Then exactly one reserves it and retries keep the same identity", async ({
+    signal,
+}) => {
+    const app = await computer(signal);
     const responses = await Promise.all([app.create("competitor-a"), app.create("competitor-b")]);
     expect(responses.map((response) => response.status).sort()).toEqual([201, 429]);
     const winnerIndex = responses.findIndex((response) => response.status === 201);
@@ -226,8 +240,10 @@ it("Given one available Computer place, When distinct requests compete, Then exa
     expect(await responseJson(await app.status(), 200)).toMatchObject({ status: "pending" });
 });
 
-it("Given a pending pairing, When claims arrive concurrently, Then they return the same credential and its Computer survives the handshake deadline", async () => {
-    const app = await computer();
+it("Given a pending pairing, When claims arrive concurrently, Then they return the same credential and its Computer survives the handshake deadline", async ({
+    signal,
+}) => {
+    const app = await computer(signal);
     const pairing = await app.pair("claim-once");
     const responses = await Promise.all([app.claim(pairing), app.claim(pairing)]);
     const results = await Promise.all(responses.map((response) => responseJson(response, 200)));
@@ -255,8 +271,10 @@ it("Given a pending pairing, When claims arrive concurrently, Then they return t
     expect(await app.pair("claim-once")).toEqual(pairing);
 });
 
-it("Given an unclaimed Computer identity, When it is revoked, Then its code cannot claim it and revocation remains visible after expiry", async () => {
-    const app = await computer();
+it("Given an unclaimed Computer identity, When it is revoked, Then its code cannot claim it and revocation remains visible after expiry", async ({
+    signal,
+}) => {
+    const app = await computer(signal);
     const pairing = await app.pair("cancel-before-claim");
     expect((await app.revoke()).status).toBe(204);
     const revoked = await responseJson(await app.status(), 200);
@@ -269,9 +287,11 @@ it("Given an unclaimed Computer identity, When it is revoked, Then its code cann
     expect(await responseJson(await app.list(), 200)).toEqual({ computers: [] });
 });
 
-it("Given separate Computers, When they use the same pairing idempotency key, Then each receives its own stable Computer identity", async () => {
-    const first = await computer();
-    const second = await computer();
+it("Given separate Computers, When they use the same pairing idempotency key, Then each receives its own stable Computer identity", async ({
+    signal,
+}) => {
+    const first = await computer(signal);
+    const second = await computer(signal);
     const left = await first.pair("same-key");
     const right = await second.pair("same-key");
     expect(left.computerId).not.toBe(right.computerId);
@@ -279,8 +299,10 @@ it("Given separate Computers, When they use the same pairing idempotency key, Th
     expect(await second.pair("same-key")).toEqual(right);
 });
 
-it("Given a Computer its owner revoked, When the computer is paired again, Then the old daemon credential is not accepted", async () => {
-    const app = await computer();
+it("Given a Computer its owner revoked, When the computer is paired again, Then the old daemon credential is not accepted", async ({
+    signal,
+}) => {
+    const app = await computer(signal);
     const original = await app.pair("original");
     const credential = v.object({ computerId: v.string(), computerCredential: v.string() });
     const old = v.parse(credential, await responseJson(await app.claim(original), 200));

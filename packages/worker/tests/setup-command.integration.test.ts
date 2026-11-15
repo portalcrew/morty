@@ -14,7 +14,7 @@ test.runIf(process.platform !== "win32")(
     {
         timeout: 90_000,
     },
-    async () => {
+    async ({ signal }) => {
         await using cleanup = new AsyncDisposableStack();
         const fixture = await createIdentityFixture({ listenOnLoopback: true });
         cleanup.defer(() => fixture.close());
@@ -34,7 +34,7 @@ test.runIf(process.platform !== "win32")(
             const child = spawn(process.execPath, [entry, ...args], {
                 cwd: workspace,
                 env: environment,
-                signal: AbortSignal.timeout(60_000),
+                signal,
                 stdio: ["ignore", "pipe", "pipe"],
             });
             const closed = once(child, "close");

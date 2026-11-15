@@ -55,12 +55,13 @@ export async function recordingRelay(upstreamOrigin: string) {
             if (body.byteLength > 0) {
                 record({ direction: "client-to-relay", data: body.toString() });
             }
-            const deadline = AbortSignal.timeout(30_000);
+            // The hop forwards until the response arrives or the relay closes; a fixed deadline would fail a slow but
+            // correct run instead of a hang, which the test's own timeout already bounds.
             const response = await fetch(new URL(incoming.url ?? "/", upstreamOrigin), {
                 method: incoming.method ?? "GET",
                 headers,
                 ...(body.byteLength === 0 ? {} : { body }),
-                signal: deadline,
+                signal: lifetime.signal,
             });
             const responseHeaders = new Headers(response.headers);
             // fetch already decoded the body; forwarding its old encoding/length would decode it a second time.
@@ -90,7 +91,7 @@ export async function recordingRelay(upstreamOrigin: string) {
                         }
                         record({ direction: "relay-to-client", data: Buffer.from(chunk.value).toString() });
                         if (!outgoing.write(chunk.value)) {
-                            await once(outgoing, "drain", { signal: deadline });
+                            await once(outgoing, "drain", { signal: lifetime.signal });
                         }
                         if (gate !== null && !paused) {
                             paused = true;

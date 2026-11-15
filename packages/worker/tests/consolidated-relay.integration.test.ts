@@ -16,10 +16,11 @@ beforeAll(async () => {
 beforeEach(() => vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T00:00:00Z") }));
 afterEach(() => vi.useRealTimers());
 
-test("Given canonical Computer paths, When an owner manages identity and pairing over HTTP and WebSocket, Then both transports enforce the same access and operation identity", async () => {
+test("Given canonical Computer paths, When an owner manages identity and pairing over HTTP and WebSocket, Then both transports enforce the same access and operation identity", async ({
+    signal,
+}) => {
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });
-    const signal = AbortSignal.timeout(45_000);
     const created = await bindings.request(
         new Request(`${bindings.origin}/morty/api/v1/computers`, {
             method: "POST",
@@ -109,12 +110,11 @@ test("Given canonical Computer paths, When an owner manages identity and pairing
     }
 });
 
-test.each(["http", "websocket"] as const)(
+test.for(["http", "websocket"] as const)(
     "Given %s Computer APIs and the default SDK transport, When a client pairs, operates a Session and downloads a file, Then commands use WS and downloads use HTTP",
-    async (apiTransport) => {
+    async (apiTransport, { signal }) => {
         await using bindings = await createBindings();
         await bindings.configure({ APP_ORIGIN: bindings.origin });
-        const signal = AbortSignal.timeout(45_000);
         const operation = (path: string, token?: string, body?: object) =>
             new Request(`${bindings.origin}/morty/api${path}`, {
                 method: body === undefined ? "GET" : "POST",

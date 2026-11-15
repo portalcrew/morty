@@ -136,10 +136,11 @@ test("Given the agent transport description, when a remote agent reads the reque
     );
 });
 
-test("Given the generated agent API description, When a peer sends every documented operation as described, Then HTTP operations reach their Worker routes and WebSocket operations reach the Session routes", async () => {
+test("Given the generated agent API description, When a peer sends every documented operation as described, Then HTTP operations reach their Worker routes and WebSocket operations reach the Session routes", async ({
+    signal,
+}) => {
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });
-    const signal = AbortSignal.timeout(45_000);
     const created = await bindings.request(
         new Request(`${bindings.origin}/morty/api/v1/computers`, {
             method: "POST",

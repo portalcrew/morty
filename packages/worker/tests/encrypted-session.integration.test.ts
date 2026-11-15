@@ -29,11 +29,10 @@ beforeAll(async () => {
 
 test("Given an attachment within the supported plaintext limit, when its encrypted upload exceeds the ordinary transport limit, then the Computer accepts it and larger plaintext is rejected", {
     timeout: 180_000,
-}, async () => {
+}, async ({ signal }) => {
     await using bindings = await createBindings();
     await using network = await recordingRelay(bindings.origin);
     await bindings.configure({ APP_ORIGIN: network.origin });
-    const signal = AbortSignal.timeout(150_000);
     const created = await fetch(new URL("/morty/api/v1/computers", network.origin), {
         method: "POST",
         signal,
@@ -193,10 +192,9 @@ afterEach(() => vi.useRealTimers());
 
 test("Given interrupted content uploads, when their request identities are reused and another prompt is submitted, then no abandoned upload can affect the new operations", {
     timeout: 90_000,
-}, async () => {
+}, async ({ signal }) => {
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });
-    const signal = AbortSignal.timeout(75_000);
     const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
         method: "POST",
         signal,
@@ -359,10 +357,9 @@ test("Given interrupted content uploads, when their request identities are reuse
 
 test("Given a paired Computer, when its owner selects an Agent, then setup receives the Agent settings reply addressed by its public request identity", {
     timeout: 45_000,
-}, async () => {
+}, async ({ signal }) => {
     await using bindings = await createBindings();
     await bindings.configure({ APP_ORIGIN: bindings.origin });
-    const signal = AbortSignal.timeout(35_000);
     const created = await fetch(new URL("/morty/api/v1/computers", bindings.origin), {
         method: "POST",
         signal,
@@ -398,7 +395,7 @@ test("Given a paired Computer, when its owner selects an Agent, then setup recei
 
 test("Given a locally paired encrypted client, when it submits a prompt and reads the answer, then the real daemon executes it while both relay legs carry only ciphertext", {
     timeout: 90_000,
-}, async () => {
+}, async ({ signal }) => {
     await using bindings = await createBindings();
     await using network = await recordingRelay(bindings.origin);
     onTestFailed(() => {
@@ -422,7 +419,6 @@ test("Given a locally paired encrypted client, when it submits a prompt and read
         );
     });
     await bindings.configure({ APP_ORIGIN: network.origin });
-    const signal = AbortSignal.timeout(60_000);
     const request = async (path: string, body: unknown, credential?: string) => {
         const response = await fetch(new URL(`/morty/api/v1${path}`, network.origin), {
             method: "POST",
