@@ -1,12 +1,17 @@
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, openSync, readdirSync, readSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { type FlakyTest, parseFlakyTestRecord } from "./record.ts";
 
 // Records each flaky test found by a failed pipeline run on one issue per test: the first occurrence opens the
 // issue, later ones add a comment, and an occurrence after the issue was closed reopens it. The artifacts come from
 // the tested code, so they are only read as data and validated; everything else comes from GitHub's run event.
 
+// flaky-tests.yml downloads the run's records here.
+const ARTIFACTS_DIRECTORY = fileURLToPath(new URL("../../test-results/flaky-test-artifacts", import.meta.url));
+const GITHUB_API = "https://api.github.com";
+const REPOSITORY = /^[\w.-]+\/[\w.-]+$/;
 const LABEL = "flaky-test";
 const MAX_RECORD_BYTES = 256 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -64,9 +69,12 @@ function firstErrorCode(body: unknown): string | undefined {
     return isRecord(first) && typeof first["code"] === "string" ? first["code"] : undefined;
 }
 
-function createGitHub(apiUrl: string, repository: string, token: string) {
+function createGitHub(repository: string, token: string) {
+    if (!REPOSITORY.test(repository)) {
+        throw new Error("GITHUB_REPOSITORY must name one repository as owner/name.");
+    }
     return async (method: "GET" | "POST" | "PATCH", path: string, body?: unknown): Promise<unknown> => {
-        const response = await fetch(`${apiUrl}/repos/${repository}${path}`, {
+        const response = await fetch(`${GITHUB_API}/repos/${repository}${path}`, {
             method,
             headers: {
                 Accept: "application/vnd.github+json",
@@ -88,6 +96,24 @@ function createGitHub(apiUrl: string, repository: string, token: string) {
 
 type GitHub = ReturnType<typeof createGitHub>;
 
+// Size and type are checked on the descriptor that is read, so a file swapped after the check is never read.
+function readRecord(path: string): string {
+    const descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+        if (!fstatSync(descriptor).isFile()) {
+            throw new Error(`${path} is not a regular file.`);
+        }
+        const buffer = Buffer.alloc(MAX_RECORD_BYTES + 1);
+        const length = readSync(descriptor, buffer, 0, buffer.length, 0);
+        if (length > MAX_RECORD_BYTES) {
+            throw new Error(`${path} exceeds ${MAX_RECORD_BYTES} bytes.`);
+        }
+        return buffer.subarray(0, length).toString("utf8");
+    } finally {
+        closeSync(descriptor);
+    }
+}
+
 function readOccurrences(directory: string, attempt: string): readonly Occurrence[] {
     const byTest = new Map<string, { test: FlakyTest; jobs: Set<string> }>();
     // A run whose failures were all consistent uploads no record, so nothing is downloaded.
@@ -102,10 +128,10 @@ function readOccurrences(directory: string, attempt: string): readonly Occurrenc
         const job = name[3] === undefined ? name[2] : `${name[2]} (${name[3]})`;
         for (const file of readdirSync(join(directory, artifact.name), { withFileTypes: true })) {
             const path = join(directory, artifact.name, file.name);
-            if (!file.isFile() || !RECORD_FILE.test(file.name) || statSync(path).size > MAX_RECORD_BYTES) {
+            if (!file.isFile() || !RECORD_FILE.test(file.name)) {
                 throw new Error(`Unexpected file ${JSON.stringify(file.name)} in artifact ${artifact.name}.`);
             }
-            for (const test of parseFlakyTestRecord(readFileSync(path, "utf8"))) {
+            for (const test of parseFlakyTestRecord(readRecord(path))) {
                 const key = testKey(test);
                 const entry = byTest.get(key) ?? { test, jobs: new Set<string>() };
                 entry.jobs.add(job);
@@ -223,24 +249,20 @@ async function track(github: GitHub, serverRepositoryUrl: string, run: Run, occu
     }
 }
 
-const directory = process.argv[2];
-if (directory === undefined) {
-    throw new Error("Usage: node scripts/flaky-tests/track.ts <downloaded-artifacts-directory>");
-}
 const run: Run = {
     url: requiredEnvironment("RUN_URL"),
     attempt: requiredEnvironment("RUN_ATTEMPT"),
     event: requiredEnvironment("RUN_EVENT"),
     headSha: requiredEnvironment("RUN_HEAD_SHA"),
 };
-const occurrences = readOccurrences(directory, run.attempt);
+const occurrences = readOccurrences(ARTIFACTS_DIRECTORY, run.attempt);
 if (occurrences.length === 0) {
     console.log("No flaky tests were recorded by this run.");
 } else {
     const repository = requiredEnvironment("GITHUB_REPOSITORY");
     await track(
-        createGitHub(requiredEnvironment("GITHUB_API_URL"), repository, requiredEnvironment("GITHUB_TOKEN")),
-        `${requiredEnvironment("GITHUB_SERVER_URL")}/${repository}`,
+        createGitHub(repository, requiredEnvironment("GITHUB_TOKEN")),
+        `https://github.com/${repository}`,
         run,
         occurrences,
     );

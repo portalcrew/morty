@@ -32,7 +32,7 @@ jobs:
           pattern: flaky-tests-${{ github.event.workflow_run.run_attempt }}-*
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/flaky-tests
+          path: test-results/flaky-test-artifacts
       - name: Record each flaky test on its issue
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -40,4 +40,4 @@ jobs:
           RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           RUN_EVENT: ${{ github.event.workflow_run.event }}
           RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: node scripts/flaky-tests/track.ts "$RUNNER_TEMP/flaky-tests"
+        run: node scripts/flaky-tests/track.ts
