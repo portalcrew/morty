@@ -48,7 +48,6 @@ import { FollowLatestScrollArea } from "../../components/utils/follow-latest-scr
 import { ScrollEdgeFade } from "../../components/utils/scroll-edge-fade.tsx";
 import { cn } from "../../lib/utils.ts";
 import { type AgentQuestionChoices, agentQuestionCard } from "../../view-models/chat/agent-question-answer.ts";
-import { agentReplyCopyText, agentReplyMessageGroups } from "../../view-models/chat/agent-reply-copy.ts";
 import { authenticationGuidance } from "../../view-models/chat/authentication-guidance.ts";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { canAddAttachments } from "../../view-models/chat/composer-attachment-store.ts";
@@ -62,17 +61,9 @@ import {
     sessionTitleEdit,
     type TitleEdit,
 } from "../../view-models/chat/session-pane-store.ts";
-import { sessionExecutionStates } from "../../view-models/chat/session-presentation.ts";
 import { sessionProjectionTimeline } from "../../view-models/chat/session-projection.ts";
-import {
-    agentReplySections,
-    hasRunningProcessWork,
-    isGeneratingProcessRenderItem,
-    type SessionRenderItem,
-    sessionRenderGroups,
-    sessionRenderItemId,
-    sessionRenderItems,
-} from "../../view-models/chat/session-render-items.ts";
+import { type SessionRenderItem, sessionRenderItemId } from "../../view-models/chat/session-render-items.ts";
+import { sessionTimelinePresentation } from "../../view-models/chat/session-timeline-presentation.ts";
 import { sessionTitle } from "../../view-models/chat/session-titles-store.ts";
 import { describeLoadFailure } from "../../view-models/format-error.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
@@ -601,24 +592,13 @@ function MortySessionPaneBody({
     // interaction card drops its top margin so the slot's 8px is the whole gap.
     const stackNoticeVisible =
         slotErrorMessage.length > 0 || slotConnectionNotice !== undefined || slotStatusMessage !== undefined;
-    const renderItems = sessionRenderItems(timeline.messages);
-    const renderGroups = sessionRenderGroups(renderItems);
-    const executionStates = sessionExecutionStates(timeline.messages, presentation.activity.kind === "working");
-    const executionStateByItemId = new Map(
-        timeline.messages.flatMap((message, index) => {
-            const state = executionStates[index];
-            return state === undefined ? [] : [[message.firstEvent.eventId, state] as const];
-        }),
+    const timelinePresentation = sessionTimelinePresentation(
+        timeline.messages,
+        presentation,
+        model.connection.kind,
+        isFileEditToolCall,
     );
-    const replyMessagesByRenderGroupId = new Map(
-        agentReplyMessageGroups(timeline.messages).map((group) => [group.id, group.messages] as const),
-    );
-    const lastRenderItemIndex = renderItems.length - 1;
-    const generationActive = presentation.workingIndicator !== null && presentation.activity.kind === "working";
-    const sessionMessagesLoading =
-        model.connection.kind === "first-loading" &&
-        timeline.messages.length === 0 &&
-        presentation.awaitingMessage === null;
+    const sessionMessagesLoading = timelinePresentation.loading;
     const initialMessage = presentation.awaitingMessage;
     const configure = (selection: SessionConfigurationSelection) =>
         run(async (signal) => await pane.store.getState().configure(selection, signal));
@@ -705,19 +685,13 @@ function MortySessionPaneBody({
                                         </div>
                                     </div>
                                 )}
-                            {!sessionMessagesLoading &&
-                                initialMessage === null &&
-                                presentation.confirmedMessages.length === 0 &&
-                                timeline.messages.length === 0 &&
-                                model.connection.kind === "ready" &&
-                                presentation.activity.kind === "idle" &&
-                                !presentation.historyLoading && (
-                                    <div className={chatSessionMessageColumnClassName}>
-                                        <p className="text-center text-sm text-muted-foreground" role="status">
-                                            No message history is available for this session.
-                                        </p>
-                                    </div>
-                                )}
+                            {timelinePresentation.emptyHistory && (
+                                <div className={chatSessionMessageColumnClassName}>
+                                    <p className="text-center text-sm text-muted-foreground" role="status">
+                                        No message history is available for this session.
+                                    </p>
+                                </div>
+                            )}
                             {!sessionMessagesLoading && presentation.historyLoading && <OlderHistorySkeleton />}
                             {!sessionMessagesLoading && (
                                 <div className={chatSessionMessageColumnClassName}>
@@ -729,165 +703,132 @@ function MortySessionPaneBody({
                                             />
                                         </div>
                                     )}
-                                    {(() => {
-                                        let flatIndex = 0;
-                                        return renderGroups.map((group, groupIndex) => {
-                                            if (group.kind === "user") {
-                                                const followsUserMessage =
-                                                    groupIndex === 0
-                                                        ? initialMessage !== null
-                                                        : renderGroups[groupIndex - 1]?.kind === "user";
-                                                const active = generationActive && flatIndex === lastRenderItemIndex;
-                                                const item = group.item;
-                                                flatIndex += 1;
-                                                return (
-                                                    <div
-                                                        key={group.id}
-                                                        className={cn(
-                                                            chatSessionMessageItemClassName,
-                                                            // The previous bubble already reserves its 32px
-                                                            // copy-button strip; mt-1 keeps the former 36px
-                                                            // bubble-to-bubble total.
-                                                            followsUserMessage && "mt-1",
-                                                        )}
-                                                    >
-                                                        <SessionRenderItemContent
-                                                            active={active}
-                                                            answerChoices={composer.answerChoices}
-                                                            item={item}
-                                                            computerName={executionContext.computer}
-                                                            onAnswer={answer}
-                                                            onChooseAnswer={pane.store.getState().chooseAnswer}
-                                                            onRemoveUnknownDelivery={
-                                                                pane.store.getState().removeUnknownDelivery
-                                                            }
-                                                            onRetryUnknownDelivery={() =>
-                                                                run(pane.store.getState().retryUnknownDelivery)
-                                                            }
-                                                            openLocalFile={openLocalFile}
-                                                            pane={pane}
-                                                            presentation={presentation}
-                                                        />
-                                                    </div>
-                                                );
-                                            }
-                                            const firstIndex = flatIndex;
-                                            flatIndex += group.items.length;
-                                            const replyActive = generationActive && flatIndex > lastRenderItemIndex;
-                                            const isRenderItemActive = (item: SessionRenderItem) =>
-                                                replyActive &&
-                                                firstIndex + group.items.indexOf(item) === lastRenderItemIndex;
-                                            const renderItem = (item: SessionRenderItem, spacingClassName: string) => {
-                                                const active = isRenderItemActive(item);
-                                                return (
-                                                    <div className={spacingClassName} key={sessionRenderItemId(item)}>
-                                                        <SessionRenderItemContent
-                                                            active={active}
-                                                            answerChoices={composer.answerChoices}
-                                                            item={item}
-                                                            computerName={executionContext.computer}
-                                                            onAnswer={answer}
-                                                            onChooseAnswer={pane.store.getState().chooseAnswer}
-                                                            onRemoveUnknownDelivery={
-                                                                pane.store.getState().removeUnknownDelivery
-                                                            }
-                                                            onRetryUnknownDelivery={() =>
-                                                                run(pane.store.getState().retryUnknownDelivery)
-                                                            }
-                                                            openLocalFile={openLocalFile}
-                                                            pane={pane}
-                                                            presentation={presentation}
-                                                        />
-                                                    </div>
-                                                );
-                                            };
-                                            const execution = executionStateByItemId.get(group.id) ?? { kind: "open" };
-                                            const sections = agentReplySections(group.items, isFileEditToolCall);
-                                            // A generation the Agent drives natively reports no Morty turn; its running
-                                            // tools are the only live signal that it is still working.
-                                            const replyGenerating = replyActive || hasRunningProcessWork(group.items);
-                                            const copyText = agentReplyCopyText(
-                                                replyMessagesByRenderGroupId.get(group.id) ?? [],
-                                                execution,
-                                                replyGenerating,
-                                            );
-                                            // Flatten the article children so positional margin clearing sees the
-                                            // laid-out order, including the trailing copy action row. Items inside a
-                                            // process disclosure clear first/last within the disclosure body instead.
-                                            const replyChildren: {
-                                                readonly key: string;
-                                                readonly render: (spacingClassName: string) => ReactNode;
-                                                readonly spacing: ReplyItemSpacing;
-                                            }[] = [];
-                                            sections.forEach((section, sectionIndex) => {
-                                                if (section.kind === "process") {
-                                                    replyChildren.push({
-                                                        key: section.id,
-                                                        render: (spacingClassName) => (
-                                                            <TurnWorkDisclosure
-                                                                className={spacingClassName}
-                                                                key={section.id}
-                                                                summary={section.summary}
-                                                                working={
-                                                                    replyActive &&
-                                                                    sectionIndex === sections.length - 1 &&
-                                                                    section.items.some(isGeneratingProcessRenderItem)
-                                                                }
-                                                            >
-                                                                {section.items.map((item, index) =>
-                                                                    renderItem(
-                                                                        item,
-                                                                        replyItemMarginClassName(
-                                                                            replyItemSpacing(item),
-                                                                            index === 0,
-                                                                            index === section.items.length - 1,
-                                                                        ),
-                                                                    ),
-                                                                )}
-                                                            </TurnWorkDisclosure>
-                                                        ),
-                                                        spacing: "block",
-                                                    });
-                                                    return;
-                                                }
-                                                for (const item of section.items) {
-                                                    replyChildren.push({
-                                                        key: sessionRenderItemId(item),
-                                                        render: (spacingClassName) =>
-                                                            renderItem(item, spacingClassName),
-                                                        spacing: replyItemSpacing(item),
-                                                    });
-                                                }
-                                            });
-                                            const replyChildCount = replyChildren.length + (copyText === null ? 0 : 1);
+                                    {timelinePresentation.groups.map((group) => {
+                                        if (group.kind === "user") {
                                             return (
-                                                <article
+                                                <div
                                                     key={group.id}
-                                                    aria-label="Agent response"
                                                     className={cn(
-                                                        chatSessionAgentReplyGroupClassName,
-                                                        replyActive && "pb-3",
+                                                        chatSessionMessageItemClassName,
+                                                        // The previous bubble already reserves its 32px
+                                                        // copy-button strip; mt-1 keeps the former 36px
+                                                        // bubble-to-bubble total.
+                                                        group.followsUserMessage && "mt-1",
                                                     )}
                                                 >
-                                                    {replyChildren.map((child, index) =>
-                                                        child.render(
-                                                            replyItemMarginClassName(
-                                                                child.spacing,
-                                                                index === 0,
-                                                                index === replyChildCount - 1,
-                                                            ),
-                                                        ),
-                                                    )}
-                                                    {copyText !== null && (
-                                                        <ResponseCopyButton
-                                                            createStore={createResponseCopyStore}
-                                                            text={copyText}
-                                                        />
-                                                    )}
-                                                </article>
+                                                    <SessionRenderItemContent
+                                                        active={group.active}
+                                                        answerChoices={composer.answerChoices}
+                                                        item={group.item}
+                                                        computerName={executionContext.computer}
+                                                        onAnswer={answer}
+                                                        onChooseAnswer={pane.store.getState().chooseAnswer}
+                                                        onRemoveUnknownDelivery={
+                                                            pane.store.getState().removeUnknownDelivery
+                                                        }
+                                                        onRetryUnknownDelivery={() =>
+                                                            run(pane.store.getState().retryUnknownDelivery)
+                                                        }
+                                                        openLocalFile={openLocalFile}
+                                                        pane={pane}
+                                                        presentation={presentation}
+                                                    />
+                                                </div>
                                             );
-                                        });
-                                    })()}
+                                        }
+                                        const renderItem = (item: SessionRenderItem, spacingClassName: string) => (
+                                            <div className={spacingClassName} key={sessionRenderItemId(item)}>
+                                                <SessionRenderItemContent
+                                                    active={sessionRenderItemId(item) === group.activeItemId}
+                                                    answerChoices={composer.answerChoices}
+                                                    item={item}
+                                                    computerName={executionContext.computer}
+                                                    onAnswer={answer}
+                                                    onChooseAnswer={pane.store.getState().chooseAnswer}
+                                                    onRemoveUnknownDelivery={
+                                                        pane.store.getState().removeUnknownDelivery
+                                                    }
+                                                    onRetryUnknownDelivery={() =>
+                                                        run(pane.store.getState().retryUnknownDelivery)
+                                                    }
+                                                    openLocalFile={openLocalFile}
+                                                    pane={pane}
+                                                    presentation={presentation}
+                                                />
+                                            </div>
+                                        );
+                                        // Flatten the article children so positional margin clearing sees the
+                                        // laid-out order, including the trailing copy action row. Items inside a
+                                        // process disclosure clear first/last within the disclosure body instead.
+                                        const replyChildren: {
+                                            readonly key: string;
+                                            readonly render: (spacingClassName: string) => ReactNode;
+                                            readonly spacing: ReplyItemSpacing;
+                                        }[] = [];
+                                        for (const section of group.sections) {
+                                            if (section.kind === "process") {
+                                                replyChildren.push({
+                                                    key: section.id,
+                                                    render: (spacingClassName) => (
+                                                        <TurnWorkDisclosure
+                                                            className={spacingClassName}
+                                                            key={section.id}
+                                                            summary={section.summary}
+                                                            working={section.id === group.workingSectionId}
+                                                        >
+                                                            {section.items.map((item, index) =>
+                                                                renderItem(
+                                                                    item,
+                                                                    replyItemMarginClassName(
+                                                                        replyItemSpacing(item),
+                                                                        index === 0,
+                                                                        index === section.items.length - 1,
+                                                                    ),
+                                                                ),
+                                                            )}
+                                                        </TurnWorkDisclosure>
+                                                    ),
+                                                    spacing: "block",
+                                                });
+                                                continue;
+                                            }
+                                            for (const item of section.items) {
+                                                replyChildren.push({
+                                                    key: sessionRenderItemId(item),
+                                                    render: (spacingClassName) => renderItem(item, spacingClassName),
+                                                    spacing: replyItemSpacing(item),
+                                                });
+                                            }
+                                        }
+                                        const replyChildCount =
+                                            replyChildren.length + (group.copyText === null ? 0 : 1);
+                                        return (
+                                            <article
+                                                key={group.id}
+                                                aria-label="Agent response"
+                                                className={cn(
+                                                    chatSessionAgentReplyGroupClassName,
+                                                    group.active && "pb-3",
+                                                )}
+                                            >
+                                                {replyChildren.map((child, index) =>
+                                                    child.render(
+                                                        replyItemMarginClassName(
+                                                            child.spacing,
+                                                            index === 0,
+                                                            index === replyChildCount - 1,
+                                                        ),
+                                                    ),
+                                                )}
+                                                {group.copyText !== null && (
+                                                    <ResponseCopyButton
+                                                        createStore={createResponseCopyStore}
+                                                        text={group.copyText}
+                                                    />
+                                                )}
+                                            </article>
+                                        );
+                                    })}
                                     {presentation.confirmedMessages.map((message) => (
                                         <div key={message.commandId} className={chatSessionMessageItemClassName}>
                                             <UserPromptMessage
@@ -953,26 +894,24 @@ function MortySessionPaneBody({
                                             onRetry={() => run(pane.store.getState().retryUnknownDelivery)}
                                         />
                                     )}
-                                    {presentation.workingIndicator !== null &&
-                                        presentation.outputState !== "idle" &&
-                                        presentation.activity.kind === "working" && (
-                                            // mt-1 keeps 4px of air under the previous bubble's reserved
-                                            // copy-button strip, matching the consecutive-message rhythm.
-                                            <div className="mt-1">
-                                                {presentation.workingIndicator.kind === "queued-in-owner" ? (
-                                                    <OwnerQueueNotice owner={executionContext.agent} />
-                                                ) : (
-                                                    <WorkingIndicator
-                                                        owner={
-                                                            presentation.workingIndicator.inOwner
-                                                                ? executionContext.agent
-                                                                : null
-                                                        }
-                                                        startedAt={presentation.workingIndicator.startedAt}
-                                                    />
-                                                )}
-                                            </div>
-                                        )}
+                                    {timelinePresentation.workingIndicator !== null && (
+                                        // mt-1 keeps 4px of air under the previous bubble's reserved
+                                        // copy-button strip, matching the consecutive-message rhythm.
+                                        <div className="mt-1">
+                                            {timelinePresentation.workingIndicator.kind === "queued-in-owner" ? (
+                                                <OwnerQueueNotice owner={executionContext.agent} />
+                                            ) : (
+                                                <WorkingIndicator
+                                                    owner={
+                                                        timelinePresentation.workingIndicator.inOwner
+                                                            ? executionContext.agent
+                                                            : null
+                                                    }
+                                                    startedAt={timelinePresentation.workingIndicator.startedAt}
+                                                />
+                                            )}
+                                        </div>
+                                    )}
                                     {authenticationRecovery !== null && presentation.authenticationFailure !== null && (
                                         <div className={chatSessionMessageItemClassName}>
                                             <AuthenticationNotice
