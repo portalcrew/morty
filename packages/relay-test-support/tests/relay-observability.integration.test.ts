@@ -5,6 +5,7 @@ import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
 const logs: Record<string, unknown>[] = [];
+const logArrivals = new Set<() => void>();
 let runtime: Miniflare;
 
 beforeAll(async () => {
@@ -48,6 +49,9 @@ beforeAll(async () => {
                 const value: unknown = JSON.parse(log.message);
                 if (typeof value === "object" && value !== null && !Array.isArray(value)) {
                     logs.push(value as Record<string, unknown>);
+                    for (const arrived of logArrivals) {
+                        arrived();
+                    }
                 }
             },
         }),
@@ -123,7 +127,35 @@ async function pairComputer() {
     return { computerId, pairing, claimed };
 }
 
-async function httpFailure(kind: string): Promise<Record<string, unknown>> {
+/** Resolves with the first log since `start` that carries `message`, as soon as the Relay writes it. */
+async function collectedLog(start: number, message: string, signal: AbortSignal): Promise<Record<string, unknown>> {
+    return await new Promise((resolve, reject) => {
+        const check = (): void => {
+            const log = logs.slice(start).find((entry) => entry["msg"] === message);
+            if (log !== undefined) {
+                finish();
+                resolve(log);
+            }
+        };
+        const abort = (): void => {
+            finish();
+            reject(signal.reason);
+        };
+        const finish = (): void => {
+            logArrivals.delete(check);
+            signal.removeEventListener("abort", abort);
+        };
+        if (signal.aborted) {
+            reject(signal.reason);
+            return;
+        }
+        logArrivals.add(check);
+        signal.addEventListener("abort", abort, { once: true });
+        check();
+    });
+}
+
+async function httpFailure(kind: string, signal: AbortSignal): Promise<Record<string, unknown>> {
     const start = logs.length;
     const response = await runtime.dispatchFetch(`https://relay.test/failure/${kind}?token=QUERY_CANARY`, {
         method: "POST",
@@ -132,17 +164,15 @@ async function httpFailure(kind: string): Promise<Record<string, unknown>> {
     });
     expect(response.status).toBe(500);
     expect(await response.json()).toMatchObject({ error: { code: "internal_error" } });
-    await expect.poll(() => logs.slice(start).find((log) => log["msg"] === "Morty request failed")).toBeDefined();
-    const log = logs.slice(start).find((log) => log["msg"] === "Morty request failed");
-    if (log === undefined) {
-        throw new Error("Expected a collected HTTP failure log");
-    }
+    const log = await collectedLog(start, "Morty request failed", signal);
     expect(log).toMatchObject({ method: "POST", path: `/failure/${kind}`, cfRay: "logging-test-ray" });
     expect(JSON.stringify(log)).not.toMatch(/QUERY_CANARY|HEADER_CANARY|BODY_CANARY|PROPERTY_CANARY/);
     return log;
 }
 
-it("Given a request whose credential field is malformed, When the Relay logs the rejected request, Then the log names the field but never its value", async () => {
+it("Given a request whose credential field is malformed, When the Relay logs the rejected request, Then the log names the field but never its value", async ({
+    signal,
+}) => {
     const { computerId, appCredential } = await provisionComputer();
     const canary = "CREDENTIAL-CANARY-not-a-valid-successor";
     const start = logs.length;
@@ -156,17 +186,17 @@ it("Given a request whose credential field is malformed, When the Relay logs the
         400,
     );
     expect(response).toEqual({ error: { code: "INVALID_REQUEST", message: "The request is invalid." } });
-    await expect.poll(() => logs.slice(start).find((log) => log["msg"] === "Morty request failed")).toBeDefined();
+    await collectedLog(start, "Morty request failed", signal);
     const logged = JSON.stringify(logs.slice(start));
     expect(logged).toContain("successor");
     expect(logged).not.toContain(canary);
 });
 
 // @no-uc: Technical regression; unusual throws must not break failure responses or bounded diagnostic collection.
-it.each(["primitive", "object", "circular", "deep", "long", "secrets", "getter"])(
+it.for(["primitive", "object", "circular", "deep", "long", "secrets", "getter"])(
     "safely records %s failures",
-    async (kind) => {
-        const log = await httpFailure(kind);
+    async (kind, { signal }) => {
+        const log = await httpFailure(kind, signal);
         const encoded = JSON.stringify(log["err"]);
         expect(encoded.length).toBeLessThan(40_000);
         expect(encoded).not.toMatch(/PASSWORD_CANARY|URL_CANARY|ERROR_CANARY|PROPERTY_CANARY/);
