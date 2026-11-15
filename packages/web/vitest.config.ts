@@ -1,7 +1,9 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { flakyTests } from "../../scripts/flaky-tests/vitest.ts";
 
 export default defineConfig({
+    plugins: [flakyTests()],
     resolve: {
         // In-process ACP endpoints and the real daemon share the SDK's builder symbols.
         dedupe: ["@agentclientprotocol/sdk"],

@@ -17,8 +17,10 @@ export default defineConfig({
     fullyParallel: true,
     // Each journey starts a Wrangler Worker and a local Computer.
     workers: 1,
-    // A journey fails on its first failure: a retry would turn an intermittent defect into a green run.
-    retries: 0,
+    // A failed journey runs once more against the same code. Passing then proves it flaky, not the change correct, so
+    // the run still fails and the flaky-test reporter records the journey for CI to track.
+    retries: 1,
+    failOnFlakyTests: true,
     // A journey takes under a minute (p99 40 s, longest 59 s across 1,272 recent CI runs): three minutes fails a hung
     // one instead of holding its shard for ten.
     timeout: Number(process.env["MORTY_E2E_TIMEOUT_MS"] ?? 180_000),
@@ -26,5 +28,5 @@ export default defineConfig({
     // An action whose target never becomes actionable fails as an assertion does, instead of holding the shard until
     // the journey's timeout.
     use: { actionTimeout: 30000 },
-    reporter: "list",
+    reporter: [["list"], ["./infra/flaky-test-reporter.ts"]],
 });

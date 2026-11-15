@@ -1,6 +1,8 @@
 import { configDefaults, defineConfig } from "vitest/config";
+import { flakyTests } from "../../scripts/flaky-tests/vitest.ts";
 
 export default defineConfig({
+    plugins: [flakyTests()],
     test: {
         include: ["tests/**/*.integration.test.ts"],
         exclude: [...configDefaults.exclude, "tests/relay/**"],
