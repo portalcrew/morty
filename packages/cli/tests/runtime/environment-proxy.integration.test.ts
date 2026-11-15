@@ -37,6 +37,9 @@ async function closeServer(server: Server, sockets: Set<Socket>): Promise<void> 
 describe("daemon environment proxy", () => {
     it("Given proxy environment variables, When pairing and opening the relay, Then both connections use the proxy", async () => {
         await using codex = await ControlledCodexFixture.create();
+        // Each wait ends on its observable outcome. A wall-clock deadline here would fail the test whenever the host
+        // is slower than the deadline, not when the proxy is bypassed; ending the test cancels every pending wait.
+        const cancellation = new AbortController();
         const pairingSockets = new Set<Socket>();
         const relaySockets = new Set<Socket>();
         const proxySockets = new Set<Socket>();
@@ -92,7 +95,7 @@ describe("daemon environment proxy", () => {
                     path: destination.pathname + destination.search,
                     method: request.method,
                     headers,
-                    signal: AbortSignal.timeout(2_000),
+                    signal: cancellation.signal,
                 },
                 (incoming) => {
                     response.writeHead(incoming.statusCode ?? 502, incoming.headers);
@@ -194,13 +197,13 @@ describe("daemon environment proxy", () => {
                     computerId: "proxy-computer",
                     relayOrigin: `http://127.0.0.1:${pairingPort}`,
                 },
-                AbortSignal.timeout(2_000),
+                cancellation.signal,
             );
             expect(
                 (
                     await (
-                        await RuntimeInstallationStore.open(stateDirectory, AbortSignal.timeout(5_000))
-                    ).readConnection(paired.pairingGeneration, AbortSignal.timeout(2_000))
+                        await RuntimeInstallationStore.open(stateDirectory, cancellation.signal)
+                    ).readConnection(paired.pairingGeneration, cancellation.signal)
                 ).computerId,
             ).toBe("proxy-computer");
 
@@ -212,7 +215,7 @@ describe("daemon environment proxy", () => {
             const relayConnection = await connectRelay(
                 new URL(`ws://127.0.0.1:${relayPort}/daemon`),
                 {},
-                AbortSignal.timeout(2_000),
+                cancellation.signal,
             );
             relayConnection.socket.close();
             relayConnection.release(new Error("Proxy test completed"));
@@ -222,6 +225,7 @@ describe("daemon environment proxy", () => {
             expect(pairingPaths).toEqual([`${MORTY_API_PREFIX}/v1/computers/proxy-computer/pairing/redeem`]);
             await environmentProxyDispatcher.close();
         } finally {
+            cancellation.abort(new Error("Proxy test ended"));
             if (previousHttpProxy === undefined) {
                 delete process.env["HTTP_PROXY"];
             } else {
