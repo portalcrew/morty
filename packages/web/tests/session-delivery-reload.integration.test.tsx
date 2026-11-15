@@ -10,7 +10,7 @@ for (const target of ["immediate", "queued"] as const) {
     for (const interruption of ["before-acceptance", "after-acceptance"] as const) {
         test(`Given an unconfirmed ${target} message disconnected ${interruption}, When I reload and recover it, Then its original request executes once and my next draft survives`, {
             timeout: dedicatedEnvironmentTimeout,
-        }, async () => {
+        }, async ({ signal }) => {
             const environment = await createChatWorkerEnvironment(true);
             onTestFinished(() => environment.close());
             const clock = new TestClock("2026-10-30T08:00:00Z");
@@ -52,7 +52,7 @@ for (const target of ["immediate", "queued"] as const) {
             await app.waitForView(() =>
                 getByRole(document.body, "button", { name: "Retry message with unknown delivery" }),
             );
-            const original = await app.readSubmission(network.submissions.at(-1));
+            const original = await app.readSubmission(network.submissions.at(-1), signal);
             const submissions = network.submissions.length;
             await app.user.click(app.elementByTestId(dataTestId.messageComposer));
             await app.user.paste("Next draft survives reload");
@@ -95,7 +95,7 @@ for (const target of ["immediate", "queued"] as const) {
                 }
             });
             expect(network.submissions).toHaveLength(submissions + (interruption === "before-acceptance" ? 1 : 0));
-            expect(await app.readSubmission(network.submissions.at(-1))).toEqual(original);
+            expect(await app.readSubmission(network.submissions.at(-1), signal)).toEqual(original);
             expect(original.attachments).toEqual(
                 expect.arrayContaining([expect.objectContaining({ name: "recovery.json" })]),
             );
@@ -129,7 +129,7 @@ for (const target of ["immediate", "queued"] as const) {
 
 test("Given an unconfirmed message after a reload, When another device runs a turn, Then retry resends the original request once and the message runs after that turn", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(true);
     onTestFinished(() => environment.close());
     const clock = new TestClock("2026-10-30T08:00:00Z");
@@ -150,7 +150,7 @@ test("Given an unconfirmed message after a reload, When another device runs a tu
     if (sessionId === null) {
         throw new Error("Expected an open Session");
     }
-    const original = await app.readSubmission(network.submissions.at(-1));
+    const original = await app.readSubmission(network.submissions.at(-1), signal);
     const submissions = network.submissions.length;
     network.reconnect();
     const reloaded = await app.reload();
@@ -161,7 +161,7 @@ test("Given an unconfirmed message after a reload, When another device runs a tu
             ),
         ).toBe(false),
     );
-    await daemon.submitTurn(sessionId, "wait for steering");
+    await daemon.submitTurn(sessionId, "wait for steering", signal);
     await reloaded.waitForView(() =>
         expect(reloaded.optionalElementByTestId(dataTestId.workingIndicator)).not.toBeNull(),
     );
@@ -171,14 +171,14 @@ test("Given an unconfirmed message after a reload, When another device runs a tu
         expect(button.hasAttribute("disabled")).toBe(false);
         return button;
     });
-    const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
+    const arriving = network.nextSubmission(signal);
     await reloaded.user.click(retry);
-    expect(await app.readSubmission(await arriving)).toEqual(original);
+    expect(await app.readSubmission(await arriving, signal)).toEqual(original);
     await reloaded.waitForView(() =>
         expect(queryByRole(document.body, "button", { name: "Retry message with unknown delivery" })).toBeNull(),
     );
     expect(network.submissions).toHaveLength(submissions + 1);
-    expect(await app.readSubmission(network.submissions.at(-1))).toEqual(original);
+    expect(await app.readSubmission(network.submissions.at(-1), signal)).toEqual(original);
     await daemon.continueReply("wait for steering", { outcome: "complete", output: [] });
     await reloaded.waitForView(() =>
         expect(reloaded.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain(

@@ -123,7 +123,7 @@ test.each(["refused", "failed"] as const)(
 
 test("Given an existing Session and a held submission, When I send a message and attach a file to my next draft before acknowledgement, Then the message appears once and its completion never clears the new text or file", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({ environment, connectAgent: true });
@@ -138,11 +138,11 @@ test("Given an existing Session and a held submission, When I send a message and
     await app.waitForView(() => getByRole(document.body, "button", { name: "Send message" }));
     const composer = app.elementByTestId(dataTestId.messageComposer);
     network.holdNextTurn();
-    const arriving = network.nextSubmission(AbortSignal.timeout(15_000));
+    const arriving = network.nextSubmission(signal);
     await sendPrompt(app, composer, "Original held message");
     expect(composer).toHaveProperty("value", "");
     expect(composer).toHaveProperty("disabled", false);
-    expect((await app.readSubmission(await arriving)).prompt).toBe("Original held message");
+    expect((await app.readSubmission(await arriving, signal)).prompt).toBe("Original held message");
     const submissions = network.submissions.length;
     await app.user.paste("Next text stays mine");
     await app.user.upload(

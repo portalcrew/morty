@@ -9,7 +9,7 @@ import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./supp
 for (const interruption of ["before-acceptance", "after-acceptance"] as const) {
     test(`Given a queued message disconnects ${interruption}, When I reconnect and recover delivery, Then the instruction executes once and my next draft survives`, {
         timeout: dedicatedEnvironmentTimeout,
-    }, async () => {
+    }, async ({ signal }) => {
         const environment = await createChatWorkerEnvironment(true);
         onTestFinished(() => environment.close());
         const clock = new TestClock("2026-10-30T08:00:00Z");
@@ -32,7 +32,7 @@ for (const interruption of ["before-acceptance", "after-acceptance"] as const) {
         await app.waitForView(() =>
             getByRole(document.body, "button", { name: "Retry message with unknown delivery" }),
         );
-        const original = await app.readSubmission(network.submissions.at(-1));
+        const original = await app.readSubmission(network.submissions.at(-1), signal);
         const submissions = network.submissions.length;
         await app.user.click(app.elementByTestId(dataTestId.messageComposer));
         await app.user.paste("Next draft survives recovery");
@@ -55,7 +55,7 @@ for (const interruption of ["before-acceptance", "after-acceptance"] as const) {
             ]);
         });
         expect(network.submissions).toHaveLength(submissions + (interruption === "before-acceptance" ? 1 : 0));
-        expect(await app.readSubmission(network.submissions.at(-1))).toEqual(original);
+        expect(await app.readSubmission(network.submissions.at(-1), signal)).toEqual(original);
         expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "Next draft survives recovery");
         await app.user.clear(app.elementByTestId(dataTestId.messageComposer));
         await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Queue drain marker");

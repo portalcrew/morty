@@ -6,7 +6,7 @@ import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./supp
 
 test("Given a Fork completes before Morty loses its response, When the user retries, Then the original Session is listed once and opened", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(true);
     let application: TestApp | undefined;
     try {
@@ -41,7 +41,7 @@ test("Given a Fork completes before Morty loses its response, When the user retr
             if (app.daemon === null) {
                 throw new Error("Expected the connected Computer");
             }
-            return { sessions: await app.daemon.readManagedSessions(AbortSignal.timeout(30_000)) };
+            return { sessions: await app.daemon.readManagedSessions(signal) };
         };
         // The Computer holds the Fork it completed, so it is listed before the retry.
         const forked = { sessions: [{ title: "Native fork-recovery-source (Fork #1)" }] };

@@ -6,7 +6,7 @@ import { createChatWorkerEnvironment } from "./support/chat-worker.ts";
 
 test("Given an old setting edit response in flight, When another client changes the model, Then releasing the old response preserves the current model", {
     timeout: 60000,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(true);
     onTestFinished(() => environment.close());
     const app = await createTestApp({
@@ -36,7 +36,7 @@ test("Given an old setting edit response in flight, When another client changes 
     await app.waitForView(() =>
         expect(app.elementByTestId(dataTestId.agentConfiguration).textContent).toContain("Test Large"),
     );
-    await app.daemon.selectModel(sessionId, "test-small");
+    await app.daemon.selectModel(sessionId, "test-small", signal);
     await app.waitForView(() =>
         expect(app.elementByTestId(dataTestId.agentConfiguration).textContent).toContain("Test Small"),
     );

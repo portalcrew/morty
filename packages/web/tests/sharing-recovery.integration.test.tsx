@@ -9,7 +9,7 @@ import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./supp
 
 test("Given a sharing replacement committed before its reply was lost, When the user chooses a shorter term and retries, Then only the displayed latest link grants access", {
     timeout: dedicatedEnvironmentTimeout,
-}, async () => {
+}, async ({ signal }) => {
     const environment = await createChatWorkerEnvironment(false, false, true);
     const clock = new TestClock("2026-11-09T00:00:00Z");
     const app = await createTestApp({
@@ -48,7 +48,7 @@ test("Given a sharing replacement committed before its reply was lost, When the 
                     method: "POST",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({ code: new URLSearchParams(url.hash.slice(1)).get("code") }),
-                    signal: AbortSignal.timeout(15_000),
+                    signal: signal,
                 }),
             );
         expect((await redeem(original)).status).toBe(410);

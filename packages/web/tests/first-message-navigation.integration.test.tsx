@@ -69,7 +69,7 @@ for (const moment of moments) {
             return entry;
         });
         await app.user.click(created);
-        await app.waitForView(() => expect(answered(app, `Codex turn 1: ${prompt}`)).toBe(true), 20_000);
+        await app.waitForView(() => expect(answered(app, `Codex turn 1: ${prompt}`)).toBe(true));
     });
 }
 

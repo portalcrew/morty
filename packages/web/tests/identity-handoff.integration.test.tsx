@@ -107,7 +107,7 @@ test("Given Morty access from a finished setup, When the user reopens Morty in a
 
 test("Given a stored identity, When the user shares access with an AI agent, Then copyable instructions name the agent API document and a link the agent can redeem as documented", {
     timeout: 30_000,
-}, async () => {
+}, async ({ signal }) => {
     const clock = new TestClock("2026-11-13T08:00:00Z");
     const app = await createTestApp({ clock, connectAgent: true, page: { kind: "bootstrap", identity: true } });
     await app.user.click(await app.queryElementByTestId(dataTestId.shareIdentity));
@@ -144,7 +144,7 @@ test("Given a stored identity, When the user shares access with an AI agent, The
                 redemptionKey: "A".repeat(43),
                 device: "Test agent",
             }),
-            signal: AbortSignal.timeout(15_000),
+            signal: signal,
         }),
     );
     expect(redeemed.status).toBe(200);
@@ -718,12 +718,10 @@ test("Given other browsers joined this computer, When the user disconnects one f
     await app.user.click(getByRole(devices, "button", { name: "Close dialog" }));
 
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Still connected here");
-    await app.waitForView(
-        () =>
-            expect(getByRole(document.body, "log", { name: "Messages" }).textContent).toContain(
-                "Codex turn 1: Still connected here",
-            ),
-        30_000,
+    await app.waitForView(() =>
+        expect(getByRole(document.body, "log", { name: "Messages" }).textContent).toContain(
+            "Codex turn 1: Still connected here",
+        ),
     );
 });
 
@@ -754,10 +752,7 @@ test("Given a browser that acknowledged a new device, When another device joins 
 
     await join(app, "Mac · Edge");
 
-    const next = await app.waitForView(
-        () => getByRole(document.body, "status", { name: "New device connected" }),
-        30_000,
-    );
+    const next = await app.waitForView(() => getByRole(document.body, "status", { name: "New device connected" }));
     expect(next.textContent).toContain("Mac · Edge");
     expect(next.textContent).not.toContain("iPhone · Safari");
 });
