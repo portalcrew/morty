@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { afterAll, afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";
 import { ComputerDirectoryStorage } from "../../src/computer-relay/components/management/storage/computer-directory-storage.ts";
+import { ComputerRelay } from "../../src/computer-relay/computer-relay.ts";
 import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-object-database.ts";
 import { computerObjectName } from "../../src/contracts/computer-id.ts";
 import { RelayAuthenticationConfiguration } from "../../src/contracts/relay/computer-management.ts";
@@ -102,6 +103,28 @@ it("Given pending reservations at capacity, When their deadline passes without e
     expect(await responseJson(await app.claim(first), 400)).toMatchObject({ error: { code: "invalid_pairing_code" } });
     expect(await app.pair("replacement")).toMatchObject({ computerId: app.computerId });
     expect(await app.pair("reservation-0")).toEqual(first);
+});
+
+it("Given a stored pairing whose answer was lost, When the deployment's signing secret rotates before setup retries it, Then the retry answers the same pairing", async () => {
+    const owner = await createOwner();
+    const request = () =>
+        new Request(`${origin}/v1/computers/${owner.computerId}/pairing`, {
+            method: "POST",
+            headers: { authorization: `Bearer ${owner.token}`, "content-type": "application/json" },
+            body: JSON.stringify({ idempotencyKey: "answer-lost-before-rotation" }),
+        });
+    const stored = await responseJson(await ownerRequest(request()), 201);
+    const retried = await runInDurableObject(
+        env.COMPUTER_RELAY.getByName(computerObjectName(owner.computerId)),
+        async (_instance, state) => {
+            const redeployed = new ComputerRelay(state, {
+                ...env,
+                MORTY_SESSION_SIGNING_SECRET: "rotated-test-only-session-signing-secret",
+            });
+            return await responseJson(await redeployed.fetch(request()), 201);
+        },
+    );
+    expect(retried).toEqual(stored);
 });
 
 it("Given simultaneous retries of one creation, When they commit, Then they share one reservation and occupy the single daemon slot", async () => {

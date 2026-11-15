@@ -11,6 +11,7 @@ import { ComputerBackendService } from "./components/computer/service/computer-b
 import { ComputerAccessService } from "./components/management/service/computer-access-service.ts";
 import { ComputerRelayStore } from "./components/management/storage/computer-relay-store.ts";
 import { DurableComputerAccount } from "./components/management/storage/durable-computer-account.ts";
+import { DurableCredentialKey } from "./components/management/storage/durable-credential-key.ts";
 import { IdentityStorage } from "./components/management/storage/identity-storage.ts";
 import { DaemonWebSocketRoutes } from "./components/runtime/daemon-websocket-routes.ts";
 import { SessionAccessSigner } from "./components/runtime/entity/session-access-credential.ts";
@@ -36,11 +37,12 @@ const REAUTHORIZATION_INTERVAL_MILLISECONDS = 60_000;
 export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
     #store: ComputerRelayStore | null = null;
     readonly #account = new DurableComputerAccount(this.ctx.storage);
+    readonly #credentialKey = new DurableCredentialKey(this.ctx.storage);
 
     readonly #browserServices = new ComputerServices(
-        this.ctx.storage,
         (id) => this.#owns(id),
         (change) => this.#endAccess(change),
+        this.#credentialKey.read,
         (computerId) => this.#backendServices(computerId),
         () => this.#computerDatabase,
         this.#account,
@@ -199,6 +201,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
             store,
             this.#connectionsForComputer.context.services.runtime,
             this.#accessFor(computerId),
+            this.#credentialKey.read,
         );
         return this.#servicesCache;
     }
@@ -209,7 +212,6 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
             computerId,
             relay,
             access.sessionAccess,
-            this.env.MORTY_SESSION_SIGNING_SECRET,
             createLocalSessionOperations(this.#connectionsForComputer.context, computerId),
         );
     }

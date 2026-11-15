@@ -18,15 +18,17 @@ import {
     validateToken,
 } from "../../../../contracts/relay/pairing.ts";
 import type { ComputerIdentityCredential } from "../../../../contracts/relay/pairing-identity.ts";
-import type { ComputerPairingRow } from "../../../../contracts/relay/pairing-records.ts";
 import type { ComputerRelayStore } from "../storage/computer-relay-store.ts";
 import type { ComputerAccessService } from "./computer-access-service.ts";
 import { deriveComputerDaemonToken, deriveComputerPairingSecrets } from "./computer-pairing-secrets.ts";
+import type { IdentityOperations } from "./identity-operations.ts";
 import type { ComputerIdentityService } from "./pairing-identity-service.ts";
 
 export interface PairingDirectoryInfrastructure {
     readonly computerId: string;
     readonly store: ComputerRelayStore;
+    /** The key pairing secrets derive from, so a retry derives the secrets its request stored. */
+    readonly credentialKey: IdentityOperations["credentialKey"];
     readonly services: {
         readonly identities: ComputerIdentityService;
         readonly computerAccounts: Pick<ComputerAccessService, "authorizeComputer">;
@@ -78,30 +80,13 @@ export class PairingDirectoryService {
     readonly authorizeComputer = async (computerId: string, signal: AbortSignal): Promise<void> =>
         await this.#cx.services.computerAccounts.authorizeComputer(computerId, signal);
 
-    private readonly decodeCreatedComputerPairing = async (
-        row: ComputerPairingRow,
-        computerId: string,
-        pairingKey: string,
-        idempotencyKey: string,
-        signal: AbortSignal,
-    ) => {
-        const secrets = await deriveComputerPairingSecrets(pairingKey, computerId, idempotencyKey);
-        const codeHash = await hashPairingCredential(secrets.pairingCode);
-        const pollHash = await hashPairingCredential(secrets.pollToken);
-        signal.throwIfAborted();
-        if (row.pairing_code_hash !== codeHash || row.poll_token_hash !== pollHash) {
-            throw new PairingDirectoryError(
-                "invalid_directory_record",
-                "This pairing cannot be reused; reinstall Morty and create a new pairing",
-            );
-        }
-        return new CreatedComputerPairing(new Date(row.expires_at).toISOString(), secrets.pairingCode, computerId);
-    };
-
-    /** Replays retain the original identity, secrets and deadline; retries keep the same key after an ambiguous failure. */
+    /**
+     * Replays retain the original identity, secrets and deadline; retries keep the same key after an ambiguous failure.
+     * The secrets derive from the computer's durable key and the request, never from deployment configuration, so a
+     * retry derives the secrets its request stored even after the deployment's credentials rotated.
+     */
     readonly createComputerPairing = async (
         computerId: string,
-        pairingKey: string,
         idempotencyKey: string,
         signal: AbortSignal,
     ): Promise<CreatedComputerPairing> => {
@@ -109,8 +94,11 @@ export class PairingDirectoryService {
         const normalizedKey = validateIdentifier(idempotencyKey, "idempotency_key");
         await this.authorizeComputer(normalizedComputerId, signal);
         const storage = this.#cx.store;
-        // The secrets derive from the request, so a retry presents the same hashes as the request it repeats.
-        const secrets = await deriveComputerPairingSecrets(pairingKey, normalizedComputerId, normalizedKey);
+        const secrets = await deriveComputerPairingSecrets(
+            await this.#cx.credentialKey(signal),
+            normalizedComputerId,
+            normalizedKey,
+        );
         const now = Date.now();
         const expiresAt = now + PAIRING_LIFETIME_MILLISECONDS;
         let stored: Awaited<ReturnType<ComputerRelayStore["requestComputerPairing"]>>;
@@ -133,12 +121,10 @@ export class PairingDirectoryService {
         }
         switch (stored.kind) {
             case "existing":
-                return this.decodeCreatedComputerPairing(
-                    stored.request,
+                return new CreatedComputerPairing(
+                    new Date(stored.request.expires_at).toISOString(),
+                    secrets.pairingCode,
                     normalizedComputerId,
-                    pairingKey,
-                    normalizedKey,
-                    signal,
                 );
             case "quota_exceeded":
                 throw new PairingDirectoryError(
