@@ -9,6 +9,7 @@ import { rememberAgentSettingChoice } from "../../services/chat/last-agent-setti
 import { recordBrowserError } from "../../services/diagnostics/browser-diagnostics.ts";
 import { formatError, isSessionClosedFailure } from "../format-error.ts";
 import type { SessionOperationConnection } from "./session-operation-connection.ts";
+import type { OperationFailure } from "./session-operation-feedback.ts";
 
 // Computer snapshots own current settings. Live updates and history reloads request a new
 // snapshot; historical configuration events never become current settings. The revision
@@ -19,11 +20,11 @@ type ConfigurationSnapshot = {
     readonly configurationRevision: string;
 };
 
-/** A change the user asked of the Session's settings. A failed change keeps its failure until the next one. */
-type SettingsChange =
-    | { readonly kind: "idle" }
-    | { readonly kind: "configuring"; readonly configId: string }
-    | { readonly kind: "failed"; readonly message: string };
+/**
+ * A change the user asked of the Session's settings. A failed change reports its failure to the Session's operation
+ * feedback.
+ */
+type SettingsChange = { readonly kind: "idle" } | { readonly kind: "configuring"; readonly configId: string };
 
 export interface SessionSettingsStore {
     readonly openedAt: string;
@@ -58,6 +59,7 @@ export function createSessionSettingsStore(options: {
     readonly computerId: string;
     readonly sessionTarget: NativeSessionTarget;
     readonly connection: SessionOperationConnection;
+    readonly failed: (failure: OperationFailure) => void;
 }) {
     return createStore<SessionSettingsStore>()((set, get) => {
         let pendingRead: AbortController | null = null;
@@ -157,8 +159,10 @@ export function createSessionSettingsStore(options: {
                     ) {
                         refresh(signal);
                     }
-                    set({
-                        change: { kind: "failed", message: formatError(cause, "The selection could not be applied.") },
+                    set({ change: { kind: "idle" } });
+                    options.failed({
+                        operation: "settings",
+                        message: formatError(cause, "The selection could not be applied."),
                     });
                 }
             },

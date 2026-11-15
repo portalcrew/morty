@@ -26,12 +26,10 @@ interface PendingEvents {
 
 /**
  * Loading the page of history before the oldest message shown. It belongs to the baseline it extends: a new baseline
- * starts idle, so no load of a replaced history can leave it loading. A failure lasts until the next load.
+ * starts idle, so no load of a replaced history can leave it loading. A failed load reports its failure to the
+ * Session's operation feedback.
  */
-export type OlderHistory =
-    | { readonly kind: "idle" }
-    | { readonly kind: "loading" }
-    | { readonly kind: "failed"; readonly message: string };
+export type OlderHistory = { readonly kind: "idle" } | { readonly kind: "loading" };
 
 export type SessionProjection =
     | { readonly kind: "pristine"; readonly pending: PendingEvents | null; readonly revision: number }
@@ -54,8 +52,8 @@ export type SessionProjectionInput =
     /** A load of the page before `revision`'s oldest message began. */
     | { readonly kind: "older-page-requested"; readonly revision: number }
     | { readonly kind: "older-page"; readonly page: SessionEventHistory; readonly revision: number }
-    /** The load of the page before `revision`'s oldest message failed, or ended without a page. */
-    | { readonly kind: "older-page-failed"; readonly revision: number; readonly message: string | null };
+    /** The load of the page before `revision`'s oldest message ended without a page. */
+    | { readonly kind: "older-page-failed"; readonly revision: number };
 
 export type SessionProjectionEffect =
     | { readonly generation: string | null; readonly kind: "load-history" }
@@ -228,10 +226,7 @@ export function transitionSessionProjection(
                 effects: [],
                 state: {
                     ...state,
-                    pagination: {
-                        ...state.pagination,
-                        older: input.message === null ? { kind: "idle" } : { kind: "failed", message: input.message },
-                    },
+                    pagination: { ...state.pagination, older: { kind: "idle" } },
                 },
             };
         }

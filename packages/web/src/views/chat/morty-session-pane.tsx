@@ -320,7 +320,7 @@ function SessionConversationTitleBar({
     return (
         <InlineEditFocus
             control={closedTitle}
-            editing={titleEdit.kind !== "closed" && titleEdit.kind !== "failed"}
+            editing={titleEdit.kind !== "closed"}
             editor={
                 <>
                     {titleHarnessMark(false)}
@@ -333,9 +333,7 @@ function SessionConversationTitleBar({
                         )}
                         disabled={saving}
                         maxLength={500}
-                        value={
-                            titleEdit.kind === "closed" || titleEdit.kind === "failed" ? displayTitle : titleEdit.draft
-                        }
+                        value={titleEdit.kind === "closed" ? displayTitle : titleEdit.draft}
                         onChange={(event) => onSetTitleDraft(event.target.value)}
                         onKeyDown={(event) => {
                             if (event.key === "Enter") {
@@ -526,6 +524,7 @@ function MortySessionPaneBody({
     const delivery = useStore(pane.delivery);
     const messageQueue = useStore(pane.messageQueue);
     const taskControls = useStore(pane.tasks);
+    const feedback = useStore(pane.feedback);
     const welcome = useStore(pane.welcome, (state) => state.state);
     const harness = sessionHarnessSelection(computerConfiguration?.computer ?? null, pane.harness);
 
@@ -551,12 +550,12 @@ function MortySessionPaneBody({
         model,
         execution,
         composer,
-        rename,
         delivery,
         taskControls,
         messageQueue,
         attachmentModel,
         settingsModel,
+        feedback,
         executionContext.available,
         pane.steeringSupported,
     );

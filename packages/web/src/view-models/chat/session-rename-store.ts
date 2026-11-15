@@ -2,34 +2,32 @@ import type { NativeSessionTarget } from "@morty-build/client/protocol";
 import { createStore } from "zustand/vanilla";
 import { isSessionClosedFailure } from "../format-error.ts";
 import type { SessionOperationConnection } from "./session-operation-connection.ts";
+import type { OperationFailure } from "./session-operation-feedback.ts";
 
 /** The Session owns one explicit rename through its acknowledgement and authoritative refresh. */
 export type SessionRename =
     | { readonly kind: "none" }
     | { readonly kind: "waiting"; readonly title: string }
     | { readonly kind: "sending"; readonly title: string }
-    | { readonly kind: "refreshing"; readonly title: string }
-    | { readonly kind: "failed"; readonly message: string };
+    | { readonly kind: "refreshing"; readonly title: string };
 
 export type SessionRenameStore = {
     readonly rename: SessionRename;
     readonly confirm: (title: string, signal: AbortSignal) => Promise<void>;
-    readonly clearFailure: () => void;
 };
 
-/** Switching panes neither cancels nor resends a rename. An ambiguous failure requires a new user decision. */
+/**
+ * Switching panes neither cancels nor resends a rename. A failure reports to the Session's operation feedback, and an
+ * ambiguous one requires a new user decision.
+ */
 export function createSessionRenameStore(options: {
     readonly sessionTarget: NativeSessionTarget;
     readonly connection: SessionOperationConnection;
     readonly refreshTitle: (signal: AbortSignal) => Promise<void>;
+    readonly failed: (failure: OperationFailure) => void;
 }) {
     return createStore<SessionRenameStore>()((set, get) => ({
         rename: { kind: "none" },
-        clearFailure: () => {
-            if (get().rename.kind === "failed") {
-                set({ rename: { kind: "none" } });
-            }
-        },
         confirm: async (title, signal) => {
             signal.throwIfAborted();
             const current = get().rename;
@@ -39,7 +37,6 @@ export function createSessionRenameStore(options: {
                 case "refreshing":
                     return;
                 case "none":
-                case "failed":
                     break;
                 default:
                     return current satisfies never;
@@ -76,12 +73,12 @@ export function createSessionRenameStore(options: {
                         message = "The Session could not connect to rename the conversation.";
                         break;
                     case "none":
-                    case "failed":
                         return;
                     default:
                         return rename satisfies never;
                 }
-                set({ rename: { kind: "failed", message } });
+                set({ rename: { kind: "none" } });
+                options.failed({ operation: "rename", message });
             }
         },
     }));

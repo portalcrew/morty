@@ -6,7 +6,7 @@ import { act } from "@testing-library/react";
 import * as v from "valibot";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
+import { openAgentModelPicker, readyComposer, sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./support/chat-worker.ts";
 
@@ -168,6 +168,66 @@ test("Given queued work starts before its delayed withdrawal, When I edit it and
         ]);
     });
     expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "My next draft");
+});
+
+test("Given a settings change failed earlier, When a later queued-message delete fails, Then the composer reports the delete, the newer failure", {
+    timeout: dedicatedEnvironmentTimeout,
+}, async ({ signal }) => {
+    const environment = await createChatWorkerEnvironment(false, true);
+    onTestFinished(() => environment.close());
+    const app = await createTestApp({ environment, connectAgent: true });
+    const { daemon, executionNetwork } = app;
+    if (daemon === null || executionNetwork === null) {
+        throw new Error("Expected the real Computer and ordering proxy");
+    }
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "wait for steering");
+    await app.waitForView(() => expect(document.body.textContent).toContain("Waiting for steering"));
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "hold after first delta");
+    const queued = await app.queryElementByTestId(dataTestId.queuedMessage);
+    const sessionId = new URL(window.location.href).searchParams.get("sessionId");
+    if (sessionId === null) {
+        throw new Error("Expected an open Session");
+    }
+
+    // Another client changes the model first, so the Computer refuses this page's change.
+    await app.user.click(await app.queryElementByTestId(dataTestId.agentConfiguration));
+    await openAgentModelPicker(app);
+    const heldChange = executionNetwork.holdNextConfigurationChange();
+    await app.user.click(await app.queryElementByTestId(dataTestId.sessionConfigValue("test-large")));
+    const releaseChange = await heldChange;
+    const releaseConfigurationEvents = executionNetwork.holdSessionEvents();
+    let settingsFailure: string | null;
+    try {
+        await daemon.selectModel(sessionId, "test-large", signal);
+        await releaseChange();
+        settingsFailure = await app.waitForView(() => getByRole(document.body, "alert").textContent);
+    } finally {
+        releaseConfigurationEvents();
+    }
+    expect(settingsFailure).toBeTruthy();
+    await app.user.keyboard("{Escape}");
+
+    // The queued message starts before its withdrawal arrives, so the Computer refuses to delete it.
+    const heldDelete = executionNetwork.holdNextQueuedCancellation();
+    await app.user.click(getByLabelText(queued, "Delete queued message: hold after first delta"));
+    const releaseDelete = await heldDelete;
+    const releaseEvents = executionNetwork.holdSessionEvents();
+    try {
+        await daemon.continueReply("wait for steering", { outcome: "complete", output: [] });
+        await daemon.continueReply("hold after first delta", {
+            outcome: "hold",
+            output: [{ kind: "text", text: "The queued instruction is running" }],
+        });
+        await releaseDelete();
+        await app.waitForView(() =>
+            expect(getByRole(document.body, "alert").textContent).toContain(
+                "The message already started and could not be withdrawn",
+            ),
+        );
+    } finally {
+        releaseEvents();
+    }
+    await daemon.continueReply("hold after first delta", { outcome: "complete", output: [] });
 });
 
 test("Given the daemon has queued work, When the user steers it into the active turn, Then every viewer sees the steered reply", {

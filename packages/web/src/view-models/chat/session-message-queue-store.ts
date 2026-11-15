@@ -6,6 +6,7 @@ import { formatError } from "../format-error.ts";
 import { isAuthoritativeFailure, type SubmittedMessage } from "./session-delivery-store.ts";
 import type { QueuedCommand } from "./session-execution.ts";
 import type { SessionOperationConnection } from "./session-operation-connection.ts";
+import type { OperationFailure } from "./session-operation-feedback.ts";
 
 type QueuedMessageAttachments =
     | { readonly kind: "restorable"; readonly values: readonly ComposerAttachment[] }
@@ -23,15 +24,6 @@ export type ChatQueuedMessage =
     | ({ readonly kind: "steering" } & QueuedMessageValue)
     | ({ readonly kind: "deleting" } & QueuedMessageValue);
 
-type QueueFeedback =
-    | { readonly kind: "none" }
-    | {
-          readonly kind: "failed";
-          readonly operation: "delete" | "steer";
-          readonly commandId: string;
-          readonly message: string;
-      };
-
 /** A withdrawn message stays hidden, whatever a read that began before its withdrawal still lists. */
 type QueuedMessageRequest = "steering" | "deleting" | "withdrawn";
 
@@ -47,10 +39,10 @@ type QueueRequestOutcome =
 
 /**
  * The Session's requests on the Computer's queue. They run on the Session's operations, so switching panes neither ends
- * a request nor loses what it returns. Original files remain owned by delivery.
+ * a request nor loses what it returns. A failed request reports its failure to the Session's operation feedback.
+ * Original files remain owned by delivery.
  */
 export interface SessionMessageQueueStore {
-    readonly feedback: QueueFeedback;
     readonly requests: ReadonlyMap<string, QueuedMessageRequest>;
     readonly deleteMessage: (message: ChatQueuedMessage, signal: AbortSignal) => Promise<void>;
     /**
@@ -58,26 +50,8 @@ export interface SessionMessageQueueStore {
      * Computer may have withdrawn the message, so a withdrawal it did not confirm never loses the text.
      */
     readonly editMessage: (message: ChatQueuedMessage, signal: AbortSignal) => Promise<void>;
-    readonly dismissFailure: () => void;
     /** Resolves whether the Computer took the message into the running turn. */
     readonly steerMessage: (message: ChatQueuedMessage, signal: AbortSignal) => Promise<boolean>;
-}
-
-/**
- * The failure of the user's last request on the queue. A failure to steer a message says nothing once the message has
- * left the Computer's `queued` messages.
- */
-export function queueFailure(
-    queue: Pick<SessionMessageQueueStore, "feedback">,
-    queued: readonly QueuedCommand[],
-): string | null {
-    const { feedback } = queue;
-    if (feedback.kind !== "failed") {
-        return null;
-    }
-    return feedback.operation === "steer" && !queued.some((message) => message.commandId === feedback.commandId)
-        ? null
-        : feedback.message;
 }
 
 /** The Computer's queue, enriched from the Session's sole copy of local submitted messages. */
@@ -129,6 +103,7 @@ export const createSessionMessageQueueStore = (options: {
     readonly withdrawn: (commandId: string) => void;
     /** A message taken back for editing returns to the Session's composer. */
     readonly returned: (message: ChatQueuedMessage) => void;
+    readonly failed: (failure: OperationFailure) => void;
 }) =>
     createStore<SessionMessageQueueStore>()((set, get) => {
         /** Marks `message` with `request` while the Computer handles it, unless a request on it already runs. */
@@ -136,10 +111,7 @@ export const createSessionMessageQueueStore = (options: {
             if (get().requests.has(message.commandId)) {
                 return false;
             }
-            set((state) => ({
-                feedback: { kind: "none" },
-                requests: withRequest(state.requests, message.commandId, request),
-            }));
+            set((state) => ({ requests: withRequest(state.requests, message.commandId, request) }));
             return true;
         };
         /** The message left the queue at the user's request; it stays hidden from then on. */
@@ -180,19 +152,14 @@ export const createSessionMessageQueueStore = (options: {
                 return outcome;
             }
             // The message shows again for as long as the Computer's queue lists it.
-            set((state) => ({
-                feedback: {
-                    kind: "failed",
-                    operation: "delete",
-                    commandId,
-                    message: formatError(outcome.cause, "The queued message could not be deleted."),
-                },
-                requests: withRequest(state.requests, commandId, null),
-            }));
+            set((state) => ({ requests: withRequest(state.requests, commandId, null) }));
+            options.failed({
+                operation: "delete-queued",
+                message: formatError(outcome.cause, "The queued message could not be deleted."),
+            });
             return outcome;
         };
         return {
-            feedback: { kind: "none" },
             requests: new Map(),
             deleteMessage: async (message, signal) => {
                 if (begin(message, "deleting")) {
@@ -210,14 +177,10 @@ export const createSessionMessageQueueStore = (options: {
                         return;
                     case "unconfirmed":
                         options.returned(message);
-                        set({
-                            feedback: {
-                                kind: "failed",
-                                operation: "delete",
-                                commandId: message.commandId,
-                                message:
-                                    "Removing the message from the queue was not confirmed. Its text is back in the composer; delete it from the queue if it is still there.",
-                            },
+                        options.failed({
+                            operation: "delete-queued",
+                            message:
+                                "Removing the message from the queue was not confirmed. Its text is back in the composer; delete it from the queue if it is still there.",
                         });
                         return;
                     case "refused":
@@ -227,7 +190,6 @@ export const createSessionMessageQueueStore = (options: {
                         return outcome satisfies never;
                 }
             },
-            dismissFailure: () => set({ feedback: { kind: "none" } }),
             steerMessage: async (message, signal) => {
                 if (!begin(message, "steering")) {
                     return false;
@@ -241,17 +203,14 @@ export const createSessionMessageQueueStore = (options: {
                     left(commandId);
                     return true;
                 }
-                // Execution events and queue reads may show the message gone before the HTTP refusal arrives, which
-                // `queueFailure` then leaves unreported.
-                set((state) => ({
-                    feedback: {
-                        kind: "failed",
-                        operation: "steer",
-                        commandId,
-                        message: formatError(outcome.cause, "The queued message could not steer the task."),
-                    },
-                    requests: withRequest(state.requests, commandId, null),
-                }));
+                // Execution events and queue reads may show the message gone before the HTTP refusal arrives; the failure
+                // then says nothing, since it describes the message only while the Computer queues it.
+                set((state) => ({ requests: withRequest(state.requests, commandId, null) }));
+                options.failed({
+                    operation: "steer",
+                    commandId,
+                    message: formatError(outcome.cause, "The queued message could not steer the task."),
+                });
                 return false;
             },
         };

@@ -62,10 +62,10 @@ import { type SessionLifecycleFact, sessionLifecycleFact } from "./session-lifec
 import {
     type ChatQueuedMessage,
     queuedMessages,
-    queueFailure,
     type SessionMessageQueueStore,
 } from "./session-message-queue-store.ts";
 import type { SessionConnectionFollower } from "./session-operation-connection.ts";
+import { operationFailureMessage, type SessionOperationFeedbackStore } from "./session-operation-feedback.ts";
 import {
     canChangeSettings,
     canDeleteQueued,
@@ -102,9 +102,9 @@ import {
     sessionProjectionTimeline,
     transitionSessionProjection,
 } from "./session-projection.ts";
-import type { SessionRename, SessionRenameStore } from "./session-rename-store.ts";
+import type { SessionRename } from "./session-rename-store.ts";
 import type { SessionSettingsStore } from "./session-settings-store.ts";
-import { type SessionTaskControlsStore, stopFailure, stopRequested } from "./session-task-controls.ts";
+import { type SessionTaskControlsStore, stopRequested } from "./session-task-controls.ts";
 import { type SessionTitlesStore, sessionTitle } from "./session-titles-store.ts";
 import { createSessionWelcomeStore } from "./session-welcome-store.ts";
 
@@ -114,12 +114,11 @@ import { createSessionWelcomeStore } from "./session-welcome-store.ts";
  */
 export type SessionPaneModel = Omit<ReturnType<typeof createSessionPaneModel>, "start" | "stop" | "reconnect">;
 
-/** Renaming the Session. A failed rename closes the editor and keeps its failure until the next edit. */
+/** Renaming the Session. A failed rename closes the editor; its failure is the Session's operation feedback. */
 export type TitleEdit =
     | { readonly kind: "closed" }
     | { readonly kind: "editing"; readonly draft: string }
-    | { readonly kind: "saving"; readonly draft: string }
-    | { readonly kind: "failed"; readonly message: string };
+    | { readonly kind: "saving"; readonly draft: string };
 
 /** What the title editor shows: the draft being edited in this pane, otherwise the rename the Session holds. */
 export function sessionTitleEdit(draft: string | null, rename: SessionRename): TitleEdit {
@@ -133,8 +132,6 @@ export function sessionTitleEdit(draft: string | null, rename: SessionRename): T
         case "sending":
         case "refreshing":
             return { kind: "saving", draft: rename.title };
-        case "failed":
-            return { kind: "failed", message: rename.message };
         default:
             return rename satisfies never;
     }
@@ -266,13 +263,13 @@ function queuedMessagePresentation(facts: SessionOperationFacts, message: ChatQu
 export function sessionPanePresentation(
     model: SessionPaneStore,
     execution: SessionExecutionState,
-    composer: Pick<SessionComposerStore, "draft" | "titleDraft">,
-    rename: SessionRenameStore,
+    composer: Pick<SessionComposerStore, "draft">,
     delivery: SessionDeliveryStore,
     tasks: SessionTaskControlsStore,
     queue: SessionMessageQueueStore,
     attachments: ComposerAttachmentStore,
     settings: Pick<SessionSettingsStore, "change">,
+    feedback: Pick<SessionOperationFeedbackStore, "failure">,
     connectionAvailable: boolean,
     steeringSupported: boolean,
 ) {
@@ -286,7 +283,6 @@ export function sessionPanePresentation(
         steeringSupported,
     );
     const timeline = sessionProjectionTimeline(model.projection, execution.observations);
-    const olderHistory = sessionProjectionOlderHistory(model.projection);
     const activity = sessionActivity(execution, delivery.state);
     // Which turn runs is the current turn's; the stop control only adds whether the user asked to stop it.
     const running = acceptedTurn(execution.turn);
@@ -329,32 +325,23 @@ export function sessionPanePresentation(
             composer.draft.length === 0 &&
             attachments.attachments.length === 0 &&
             attachments.state.kind !== "reading",
-        // Operations that failed because the Session closed say nothing the closed notice does not already say.
+        // Operations that failed because the Session closed say nothing the closed notice does not already say. The
+        // Session's turn and its delivery are reported while they stay failed; otherwise the composer reports the last
+        // operation that failed.
         composerError:
             model.connection.kind === "closed" || pendingDelivery?.error != null
                 ? ""
-                : ([
-                      activity,
-                      sessionTitleEdit(composer.titleDraft, rename.rename),
-                      olderHistory,
-                      settings.change,
-                      delivery.state.kind === "failed"
-                          ? { kind: "failed" as const, message: delivery.state.failure.message }
-                          : delivery.state,
-                  ]
-                      .filter((state) => state.kind === "failed")
-                      .find(
-                          (state) =>
-                              // A turn failure belongs to its timeline card. Keep the
-                              // composer fallback only when that command has no card.
-                              !("commandId" in state) || (!hasFailureCard && authenticationFailure === null),
-                      )?.message ??
-                  stopFailure(tasks, running) ??
-                  queueFailure(queue, execution.queued) ??
+                : ((activity.kind === "failed" && !hasFailureCard && authenticationFailure === null
+                      ? // A turn failure belongs to its timeline card. Keep the composer fallback only when that
+                        // command has no card.
+                        activity.message
+                      : null) ??
+                  (delivery.state.kind === "failed" ? delivery.state.failure.message : null) ??
+                  operationFailureMessage(feedback.failure, running, execution.queued) ??
                   ""),
         deliveryUnknownUserMessageId,
         hasOlderHistory: timeline.hasOlderHistory,
-        historyLoading: olderHistory.kind === "loading",
+        historyLoading: sessionProjectionOlderHistory(model.projection).kind === "loading",
         outputState:
             delivery.state.kind === "preparing"
                 ? "sending"
@@ -470,7 +457,18 @@ export function createSessionPaneModel(options: {
     readonly onWaitingForComputer: () => void;
 }) {
     const { session, computerId, requests, clock, titles } = options;
-    const { composer, delivery, execution, queue: messageQueue, rename, settings, tasks } = options.sessionPage;
+    const {
+        composer,
+        delivery,
+        execution,
+        feedback,
+        queue: messageQueue,
+        rename,
+        settings,
+        tasks,
+    } = options.sessionPage;
+    /** The user asked something of the Session again: the last failure no longer describes what they see. */
+    const acted = (): void => feedback.getState().dismiss();
     const composerAttachments = composer.getState().attachments;
     const sessionTarget = session.target;
     // Working in a conversation makes its harness the reference for the next draft. Its settings carry into New
@@ -901,6 +899,7 @@ export function createSessionPaneModel(options: {
                 return;
             }
             const { revision } = pagination;
+            feedback.getState().retried("older-history");
             commitProjection({ kind: "older-page-requested", revision });
             try {
                 const page = await readSessionHistory(
@@ -916,14 +915,13 @@ export function createSessionPaneModel(options: {
                 if (lifetime.signal.aborted) {
                     return;
                 }
+                commitProjection({ kind: "older-page-failed", revision });
                 if (closedThrough(connected, cause)) {
-                    commitProjection({ kind: "older-page-failed", revision, message: null });
                     get().sessionClosed(cause.message);
                     return;
                 }
-                commitProjection({
-                    kind: "older-page-failed",
-                    revision,
+                feedback.getState().failed({
+                    operation: "older-history",
                     message: formatError(cause, "Older messages could not be loaded."),
                 });
                 throw cause;
@@ -1159,8 +1157,7 @@ export function createSessionPaneModel(options: {
                 dispatchConnection({ kind: "session-closed", reason });
             },
             setDraft: (draft) => {
-                tasks.getState().dismissFailure();
-                messageQueue.getState().dismissFailure();
+                acted();
                 composer.getState().setDraft(draft);
             },
             send: async () => {
@@ -1234,8 +1231,7 @@ export function createSessionPaneModel(options: {
                 if (message === null) {
                     return;
                 }
-                tasks.getState().dismissFailure();
-                messageQueue.getState().dismissFailure();
+                acted();
                 composer
                     .getState()
                     .returnMessage(
@@ -1252,6 +1248,7 @@ export function createSessionPaneModel(options: {
                 if (message === null || !canSteerQueued(operationFacts(), message)) {
                     return;
                 }
+                acted();
                 if (await messageQueue.getState().steerMessage(message, signal)) {
                     set({ followRevision: get().followRevision + 1 });
                 }
@@ -1259,12 +1256,14 @@ export function createSessionPaneModel(options: {
             deleteQueued: async (commandId, signal) => {
                 const message = queuedMessage(commandId);
                 if (message !== null && canDeleteQueued(operationFacts(), message)) {
+                    acted();
                     await messageQueue.getState().deleteMessage(message, signal);
                 }
             },
             editQueued: async (commandId, signal) => {
                 const message = queuedMessage(commandId);
                 if (message !== null && canEditQueued(operationFacts(), message)) {
+                    acted();
                     await messageQueue.getState().editMessage(message, signal);
                 }
             },
@@ -1272,13 +1271,11 @@ export function createSessionPaneModel(options: {
                 if (!canChangeSettings(operationFacts())) {
                     return;
                 }
+                acted();
                 await settings.getState().configure(selection, signal);
             },
             openTitleEdit: () => {
-                // A new edit replaces the failure the last rename left.
-                if (rename.getState().rename.kind === "failed") {
-                    rename.getState().clearFailure();
-                }
+                acted();
                 composer.getState().openTitleEdit(sessionTitle(titles.getState().titles, sessionTarget));
             },
             setTitleDraft: (draft) => composer.getState().setTitleDraft(draft),
@@ -1299,6 +1296,7 @@ export function createSessionPaneModel(options: {
                 if (!canStop(operationFacts())) {
                     return;
                 }
+                acted();
                 await tasks.getState().stop(acceptedTurn(execution.getState().state.turn), signal);
             },
         };
@@ -1311,12 +1309,12 @@ export function createSessionPaneModel(options: {
                 store.getState(),
                 execution.getState().state,
                 composer.getState(),
-                rename.getState(),
                 delivery.getState(),
                 tasks.getState(),
                 messageQueue.getState(),
                 composerAttachments.getState(),
                 settings.getState(),
+                feedback.getState(),
                 options.connectionAvailable(store.getState().connection),
                 session.ready.capabilities.steering,
             );
@@ -1412,6 +1410,7 @@ export function createSessionPaneModel(options: {
         settings,
         store: paneStore,
         delivery,
+        feedback,
         rename,
         filePreview,
         messageQueue,
