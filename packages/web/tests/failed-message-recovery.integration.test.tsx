@@ -1,8 +1,10 @@
 import { getByLabelText, getByRole, getByText, queryByRole } from "@testing-library/dom";
+import { act } from "@testing-library/react";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
 import { readyComposer } from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
+import { TestClock } from "./infra/test-clock.ts";
 
 function answered(app: TestApp, text: string): boolean {
     return app.elementsByTestId(dataTestId.agentResponse).some((element) => element.textContent?.includes(text));
@@ -206,6 +208,38 @@ async function openConversation(app: TestApp, title: string): Promise<HTMLTextAr
     );
     return await editableComposer(app);
 }
+
+test("Given my first message's Session was created but its reply was lost, When I start a new conversation and send the returned message, Then that one Session takes it and no second Session appears", {
+    timeout: 60_000,
+}, async () => {
+    const clock = new TestClock("2026-10-23T08:00:00Z");
+    const creation = heldSessionCreation();
+    const app = await createTestApp({ connectAgent: true, agent: creation.agent, clock });
+    await sendFirstMessage(app, "Only one session for this", creation.hold);
+    await app.waitForView(() =>
+        getByRole(app.elementByTestId(dataTestId.initialMessageStatus), "status", { name: "Sending message" }),
+    );
+    // The network drops while the Computer creates the Session, so the page never hears that it did.
+    app.transport.disconnect();
+    await app.waitForView(() => getByRole(document.body, "button", { name: "Retry message" }));
+    creation.release();
+    await act(async () => {
+        app.transport.open();
+        clock.advanceBy(5_000);
+    });
+    await app.user.click(app.elementByTestId(dataTestId.newConversation));
+    await app.waitForView(() =>
+        expect(app.elementByTestId(dataTestId.messageComposer)).toHaveProperty("value", "Only one session for this"),
+    );
+    const send = await app.waitForView(() => {
+        const button = getByRole(document.body, "button", { name: "Send message" });
+        expect(button).toHaveProperty("disabled", false);
+        return button;
+    });
+    await app.user.click(send);
+    await app.waitForView(() => expect(answered(app, "Only one session for this")).toBe(true));
+    await app.waitForView(() => expect(app.elementsByTestId(dataTestId.managedConversation)).toHaveLength(1));
+});
 
 test("Given I left a new conversation while it was being created, When I attach a file there later and switch conversations, Then the file stays with that conversation", {
     timeout: 60_000,
