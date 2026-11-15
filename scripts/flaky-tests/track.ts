@@ -14,8 +14,8 @@ const REPOSITORY = /^[\w.-]+\/[\w.-]+$/;
 const LABEL = "flaky-test";
 const MAX_RECORD_BYTES = 256 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
-// Written by morty-pipeline.yml as flaky-tests-<attempt>-<job>[-<shard>].
-const ARTIFACT_NAME = /^flaky-tests-(\d+)-([a-z]+)(?:-(\d+))?$/;
+// morty-pipeline.yml records each job's flaky tests in a directory named <job>[-<shard>].
+const JOB_DIRECTORY = /^([a-z]+)(?:-(\d+))?$/;
 const RECORD_FILE = /^(?:vitest|playwright)-[\da-f-]{36}\.json$/;
 
 interface Run {
@@ -115,22 +115,22 @@ function readRecord(path: string): string {
     }
 }
 
-function readOccurrences(directory: string, attempt: string): readonly Occurrence[] {
+function readOccurrences(directory: string): readonly Occurrence[] {
     const byTest = new Map<string, { test: FlakyTest; jobs: Set<string> }>();
     // A run whose failures were all consistent uploads no record, so nothing is downloaded.
     if (!existsSync(directory)) {
         return [];
     }
-    for (const artifact of readdirSync(directory, { withFileTypes: true })) {
-        const name = ARTIFACT_NAME.exec(artifact.name);
-        if (!artifact.isDirectory() || name === null || name[1] !== attempt || name[2] === undefined) {
-            throw new Error(`Unexpected artifact ${JSON.stringify(artifact.name)} for attempt ${attempt}.`);
+    for (const jobDirectory of readdirSync(directory, { withFileTypes: true })) {
+        const name = JOB_DIRECTORY.exec(jobDirectory.name);
+        if (!jobDirectory.isDirectory() || name === null || name[1] === undefined) {
+            throw new Error(`Unexpected entry ${JSON.stringify(jobDirectory.name)} among the downloaded records.`);
         }
-        const job = name[3] === undefined ? name[2] : `${name[2]} (${name[3]})`;
-        for (const file of readdirSync(join(directory, artifact.name), { withFileTypes: true })) {
-            const path = join(directory, artifact.name, file.name);
+        const job = name[2] === undefined ? name[1] : `${name[1]} (${name[2]})`;
+        for (const file of readdirSync(join(directory, jobDirectory.name), { withFileTypes: true })) {
+            const path = join(directory, jobDirectory.name, file.name);
             if (!file.isFile() || !RECORD_FILE.test(file.name)) {
-                throw new Error(`Unexpected file ${JSON.stringify(file.name)} in artifact ${artifact.name}.`);
+                throw new Error(`Unexpected file ${JSON.stringify(file.name)} in the records of ${jobDirectory.name}.`);
             }
             for (const test of parseFlakyTestRecord(readRecord(path))) {
                 const key = testKey(test);
@@ -256,7 +256,7 @@ const run: Run = {
     event: requiredEnvironment("RUN_EVENT"),
     headSha: requiredEnvironment("RUN_HEAD_SHA"),
 };
-const occurrences = readOccurrences(ARTIFACTS_DIRECTORY, run.attempt);
+const occurrences = readOccurrences(ARTIFACTS_DIRECTORY);
 if (occurrences.length === 0) {
     console.log("No flaky tests were recorded by this run.");
 } else {

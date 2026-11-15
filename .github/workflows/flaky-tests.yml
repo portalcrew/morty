@@ -26,13 +26,16 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-      # Only the completed attempt's records: an earlier attempt of a rerun was already tracked.
+      # Only the completed attempt's records: an earlier attempt of a rerun was already tracked. Each artifact holds one
+      # directory named for its job. Merging keeps that layout whether one artifact matches or several: a single match
+      # would otherwise be extracted without a directory of its own.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: flaky-tests-${{ github.event.workflow_run.run_attempt }}-*
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
           path: test-results/flaky-test-artifacts
+          merge-multiple: true
       - name: Record each flaky test on its issue
         env:
           GITHUB_TOKEN: ${{ github.token }}
