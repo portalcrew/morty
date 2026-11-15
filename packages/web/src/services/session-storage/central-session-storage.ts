@@ -89,10 +89,25 @@ export const sessionWelcomeEntry = (
     decode: (raw) => (raw === "pending" ? "pending" : null),
 });
 
-export const newConversationDraftEntry = (computerId: string): StorageEntry<string> =>
-    stringStorageEntry({
-        key: scopedKey("morty:message-draft:new:v1:", computerId),
-        schema: messageDraftSchema,
+const newConversationDraftSchema = v.pipe(
+    v.object({
+        key: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+        text: messageDraftSchema,
+    }),
+    v.readonly(),
+);
+
+export type NewConversationDraft = v.InferOutput<typeof newConversationDraftSchema>;
+
+/**
+ * The New Session draft and its key, which names the Session creation sending it starts or continues. A first message
+ * that returns to the draft brings its own key, so sending it again continues a creation the Computer may already have
+ * completed instead of starting a second Session.
+ */
+export const newConversationDraftEntry = (computerId: string): StorageEntry<NewConversationDraft> =>
+    jsonStorageEntry({
+        key: scopedKey("morty:message-draft:new:v2:", computerId),
+        schema: newConversationDraftSchema,
     });
 
 export const sessionDraftEntry = (computerId: string, sessionTarget: NativeSessionTarget): StorageEntry<string> =>

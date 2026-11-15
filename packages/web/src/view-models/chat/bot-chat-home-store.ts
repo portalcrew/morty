@@ -323,10 +323,23 @@ export const createBotChatHomeStore = (
         let returned: readonly ReturnedFirstMessage[] = [];
         // The first load restores what an earlier page could not hand to a Session; later loads only load the Session.
         let firstLoadStarted = false;
+        /** Writes the New Session draft under the key sending it uses; an empty draft keeps nothing. */
+        const writeDraft = (key: string, text: string): void => {
+            const entry = newConversationDraftEntry(computerId);
+            if (text === "") {
+                centralSessionStorage.remove(entry);
+            } else {
+                centralSessionStorage.write(entry, { key, text });
+            }
+        };
         /**
          * Returns a first message no Session took to the New Session draft, ahead of what the draft holds, as a reload
          * returns it. Leaving the page that sent it is not discarding it. Off the draft page, or while the draft reads
          * files that restoring would cancel, it waits for the next draft.
+         *
+         * Its Session may exist even though no answer said so, so the draft takes the message's key: sending it again
+         * continues that creation, which answers the Session it already created. A draft whose own first message is
+         * still in creation keeps its key for that creation.
          */
         const returnFirstMessage = (message: ReturnedFirstMessage): void => {
             const current = get();
@@ -334,6 +347,14 @@ export const createBotChatHomeStore = (
             if (current.selection.kind !== "draft" || composer.state.kind === "reading") {
                 returned = [...returned, message];
                 return;
+            }
+            if (current.creation.kind === "draft") {
+                set((state) => ({
+                    selection: transitionConversationSelection(state.selection, {
+                        kind: "draft-selected",
+                        key: message.commandId,
+                    }),
+                }));
             }
             releaseUnsentFirstMessage(message.commandId);
             const restored = returnToComposer(
@@ -360,20 +381,25 @@ export const createBotChatHomeStore = (
                 const startedWith = titles.getState().titles;
                 if (!firstLoadStarted) {
                     firstLoadStarted = true;
-                    if (get().selection.kind === "draft") {
-                        const draft = centralSessionStorage.read(newConversationDraftEntry(computerId)) ?? "";
-                        // First messages an earlier page could not hand to a Session return ahead of the draft, the oldest first.
+                    const selected = get().selection;
+                    if (selected.kind === "draft") {
+                        const stored = centralSessionStorage.read(newConversationDraftEntry(computerId));
+                        // First messages an earlier page could not hand to a Session return ahead of the draft, the
+                        // oldest first, and the draft continues the oldest one's creation.
                         const unsent = unsentFirstMessages();
-                        if (unsent.length === 0) {
-                            set({ draft });
-                        } else {
-                            const restored = unsent
-                                .toReversed()
-                                .reduce((text, message) => prependToDraft(message.content, text), draft);
-                            centralSessionStorage.write(newConversationDraftEntry(computerId), restored);
-                            centralSessionStorage.remove(unsentEntry);
-                            set({ draft: restored });
-                        }
+                        const key = unsent[0]?.commandId ?? stored?.key ?? selected.key;
+                        const text = unsent
+                            .toReversed()
+                            .reduce((text, message) => prependToDraft(message.content, text), stored?.text ?? "");
+                        writeDraft(key, text);
+                        centralSessionStorage.remove(unsentEntry);
+                        set((state) => ({
+                            selection: transitionConversationSelection(state.selection, {
+                                kind: "draft-selected",
+                                key,
+                            }),
+                            draft: text,
+                        }));
                     } else {
                         // A page that opens on another conversation keeps an earlier page's unsent first messages for the next draft.
                         const known = new Set(returned.map((message) => message.commandId));
@@ -602,11 +628,9 @@ export const createBotChatHomeStore = (
                 onRestart();
             },
             setDraft: (draft) => {
-                const entry = newConversationDraftEntry(computerId);
-                if (draft === "") {
-                    centralSessionStorage.remove(entry);
-                } else {
-                    centralSessionStorage.write(entry, draft);
+                const selection = get().selection;
+                if (selection.kind === "draft") {
+                    writeDraft(selection.key, draft);
                 }
                 set({ draft });
             },
@@ -630,13 +654,13 @@ export const createBotChatHomeStore = (
                 if (!allowed || settings === null || current.selection.kind !== "draft") {
                     return;
                 }
-                const commandId = current.selection.key;
                 const content = draft.trim();
+                // A first message is sent under the draft's key; a retry sends the same message under its own.
                 const queuedMessage =
                     current.creation.kind === "draft"
                         ? {
                               attachments,
-                              commandId,
+                              commandId: current.selection.key,
                               content,
                               summary: (content || attachments.map((attachment) => attachment.name).join(", ")).slice(
                                   0,
@@ -644,6 +668,7 @@ export const createBotChatHomeStore = (
                               ),
                           }
                         : current.creation.message;
+                const commandId = queuedMessage.commandId;
                 const title = queuedMessage.summary;
                 if (current.creation.kind === "draft") {
                     // The submitted snapshot owns its content before any network work begins.

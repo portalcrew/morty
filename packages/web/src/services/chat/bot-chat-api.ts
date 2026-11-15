@@ -288,9 +288,20 @@ export class BotChatApi {
         settings: ChatDraftConfiguration,
         signal: AbortSignal,
     ): Promise<ChatAccess> => {
+        // One operation is one draft asking for one Session: the same key with other settings asks for another Session,
+        // which the Computer would refuse under the earlier operation's identity.
         const digest = await crypto.subtle.digest(
             "SHA-256",
-            new TextEncoder().encode(JSON.stringify([this.#computerId, "create", conversationKey])),
+            new TextEncoder().encode(
+                JSON.stringify([
+                    this.#computerId,
+                    "create",
+                    conversationKey,
+                    settings.harness,
+                    settings.workspaceRef,
+                    settings.configurations,
+                ]),
+            ),
         );
         signal.throwIfAborted();
         const operationId = `create_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
