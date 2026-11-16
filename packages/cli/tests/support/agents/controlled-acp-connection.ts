@@ -31,6 +31,19 @@ interface ControlledAcpConnectionOptions extends AgentConnectionOptions {
     readonly maximumOutputBytes?: number;
 }
 
+// Scenarios steer the peer through MORTY_FAKE_ and MORTY_TEST_ variables of their own. Every other MORTY_ variable is
+// Morty configuration of whoever runs the tests, and the peer must not see it.
+const TEST_CHANNEL = /^MORTY_(FAKE|TEST)_/;
+
+// The peer runs with the toolchain's environment (PATH, HOME, and the like) and its scenario's variables. A developer
+// shell that sets MORTY_STATE_DIRECTORY therefore cannot change what a daemon scenario observes.
+function peerEnvironment(agentEnvironment: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
+    const inherited = Object.entries(process.env).filter(
+        ([name]) => !name.startsWith("MORTY_") || TEST_CHANNEL.test(name),
+    );
+    return { ...Object.fromEntries(inherited), ...agentEnvironment };
+}
+
 // The SDK validates the ACP envelope; this subprocess peer also promises identified chunks.
 // Validate its wire contract here, not in production harness callback delivery.
 function isIdentifiedNotification(notification: SessionNotification): notification is IdentifiedSessionNotification {
@@ -58,7 +71,7 @@ export class ControlledAcpConnection implements AgentConnection {
         const child = spawnProcess(launch.command, launch.arguments, {
             cwd: options.cwd,
             ...platformSpawnOptions,
-            env: { ...process.env, ...agent.environment },
+            env: peerEnvironment(agent.environment),
             shell: false,
             stdio: ["pipe", "pipe", "pipe"],
         });
