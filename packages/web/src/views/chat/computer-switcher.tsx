@@ -48,7 +48,7 @@ function choiceStatusLabel(status: ComputerChoice["status"]): string | null {
         case "offline":
             return "Offline";
         case "unavailable":
-            return "Unavailable";
+            return "Status unknown";
         case "connecting":
             return "Connecting";
         case "unpaired":
@@ -103,14 +103,20 @@ function ComputerChoiceContent({
             </span>
             <span
                 className={cn(
-                    "min-w-0 truncate font-medium",
+                    "min-w-0 font-medium",
                     current && "col-span-2",
                     nameClassName,
                     status !== null && "font-normal text-copy-secondary",
                 )}
-                title={choice.name}
             >
-                {choice.name}
+                <span className="block truncate" title={choice.name}>
+                    {choice.name}
+                </span>
+                {choice.disambiguator === null ? null : (
+                    <span className="block truncate text-xs font-normal text-morty-text-3" title={choice.disambiguator}>
+                        {choice.disambiguator}
+                    </span>
+                )}
             </span>
             <span className={cn("whitespace-nowrap text-morty-text-3", statusClassName, current && "sr-only")}>
                 {status}
@@ -127,21 +133,18 @@ const menuRowClassName =
 
 function ComputerMenuChoice({ activeKey, choice }: { readonly activeKey: string; readonly choice: ComputerChoice }) {
     const current = choice.key === activeKey;
+    const rowClassName = cn(choiceRowClassName, menuRowClassName, choice.disambiguator !== null && "h-12");
     const content = (
         <ComputerChoiceContent choice={choice} current={current} nameClassName="text-14" statusClassName="text-xs" />
     );
     // Choosing the computer the page is already on only closes the menu; it never reloads the page.
     return current ? (
-        <DropdownMenu.RadioItem
-            className={cn(choiceRowClassName, menuRowClassName)}
-            textValue={choice.name}
-            value={choice.key}
-        >
+        <DropdownMenu.RadioItem className={rowClassName} textValue={choice.name} value={choice.key}>
             {content}
         </DropdownMenu.RadioItem>
     ) : (
         <DropdownMenu.RadioItem asChild textValue={choice.name} value={choice.key}>
-            <a className={cn(choiceRowClassName, menuRowClassName)} href={choice.href}>
+            <a className={rowClassName} href={choice.href}>
                 {content}
             </a>
         </DropdownMenu.RadioItem>
