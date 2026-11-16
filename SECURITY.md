@@ -8,7 +8,7 @@ metadata:
 
 # Security Policy
 
-Morty gives a browser a window into a coding Agent running on someone's own
+Morty gives a browser a window into an Agent running on someone's own
 computer. Session traffic, pairing, and shared access are the parts of that path
 most worth scrutiny, and we would rather hear about a problem from you than from
 an incident.

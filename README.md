@@ -39,7 +39,7 @@ when you're done.
 ## One prompt. Then pick up your phone.
 
 Open [morty.build](https://morty.build) and copy the setup prompt, or paste this
-into your coding agent:
+into your AI agent:
 
 ```text
 Fetch https://morty.build/doc/setup.md and complete the Morty setup for me.

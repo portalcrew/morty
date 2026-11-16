@@ -86,7 +86,7 @@ or pairing does not replace the physical Machine.
 
 The Morty service running on the Machine. It maintains the Runtime connection,
 discovers Agents, starts or restores Agent work, and enforces the local filesystem
-and execution boundary. Morty's Worker and browser do not execute the coding Agent.
+and execution boundary. Morty's Worker and browser do not execute the Agent.
 
 ### Runtime
 
@@ -97,7 +97,7 @@ created per conversation.
 
 ### Agent
 
-A coding Agent available through the Runtime, such as Codex, Claude Code, or Pi.
+An Agent available through the Runtime, such as Codex, Claude Code, or Pi.
 The selected Agent determines which native-history, fork, interaction, and content
 capabilities exist. Morty must not present a capability merely because another
 Agent supports it.

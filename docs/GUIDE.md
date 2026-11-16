@@ -8,13 +8,13 @@ metadata:
 
 # Using Morty
 
-This guide covers connecting your coding Agent, continuing conversations from a
+This guide covers connecting your Agent, continuing conversations from a
 browser, and understanding history and recovery. For the product overview, see the
 [README](../README.md). To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Get connected
 
-Open [morty.build](https://morty.build) and copy the setup prompt into the coding
+Open [morty.build](https://morty.build) and copy the setup prompt into the
 Agent on your computer. Open the link it returns, or scan its QR code on your phone.
 Keep the connected machine awake and online; the Agent runs in that environment.
 
