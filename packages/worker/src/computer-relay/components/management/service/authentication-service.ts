@@ -16,6 +16,7 @@ import type { ClientLocation } from "../../../../contracts/client-location.ts";
 import { ManagementError } from "../../../../contracts/management-error.ts";
 import { sharingOperationCredential } from "../../../../contracts/transfer-credential.ts";
 import type { ComputerIdentity } from "../entity/computer-identity.ts";
+import type { AccessHolder } from "../storage/access-holder.ts";
 import type {
     IdentityStorage,
     IdentityTransfer,
@@ -67,11 +68,11 @@ type ComputerLinkResult =
 export type DeviceSharer = { readonly kind: "computer" } | { readonly kind: "device"; readonly label: string | null };
 
 /** Null when the link's sharer is unknown: a link shared before its sharer was recorded as an access holder. */
-function deviceSharer(kind: Credential["kind"] | null, label: string | null): DeviceSharer | null {
+function deviceSharer(kind: AccessHolder["kind"] | null, label: string | null): DeviceSharer | null {
     switch (kind) {
-        case "local":
+        case "owner":
             return { kind: "computer" };
-        case "browser":
+        case "device":
             return { kind: "device", label };
         case null:
             return null;
@@ -81,7 +82,7 @@ function deviceSharer(kind: Credential["kind"] | null, label: string | null): De
 function classifyCredential(stored: StoredCredential): CredentialLookup {
     switch (stored.kind) {
         case "local":
-            return stored.held
+            return stored.standing.kind === "held"
                 ? {
                       kind: "active",
                       credential: { kind: stored.kind, credentialId: stored.credentialId },
@@ -91,7 +92,7 @@ function classifyCredential(stored: StoredCredential): CredentialLookup {
             if (stored.replaced) {
                 return { kind: "replaced" };
             }
-            return stored.accessHeldUntil === null
+            return stored.standing.kind === "ended"
                 ? { kind: "ended" }
                 : {
                       kind: "active",
@@ -99,8 +100,8 @@ function classifyCredential(stored: StoredCredential): CredentialLookup {
                           kind: stored.kind,
                           credentialId: stored.credentialId,
                           transferId: stored.transferId,
-                          deviceId: stored.deviceId,
-                          accessExpiresAt: stored.accessHeldUntil,
+                          deviceId: stored.holder.deviceId,
+                          accessExpiresAt: stored.standing.until,
                       },
                   };
     }

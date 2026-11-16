@@ -1,4 +1,5 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const continueLink = sqliteTable(
     "identity_transfer",
@@ -17,15 +18,16 @@ export const continueLink = sqliteTable(
 );
 
 /**
- * A link shared by a browser device's access. The link adds no device once that device's access ended; opening another
- * link replaces the device's credential and never ends its access, so the link survives it.
+ * The access that shared a link: the computer's own credential (`holderId` is its id) or a browser device. A link adds
+ * no device once its sharer's access ended; opening another link replaces a device's credential and never ends its
+ * access, so the link survives it.
  */
-export const linkSharedByDevice = sqliteTable("link_shared_by_device", {
-    linkId: text("link_id").primaryKey().notNull(),
-    deviceId: text("device_id").notNull(),
-});
-
-export const linkSharedByOwner = sqliteTable("link_shared_by_owner", {
-    linkId: text("link_id").primaryKey().notNull(),
-    ownerCredentialId: text("owner_credential_id").notNull(),
-});
+export const linkSharer = sqliteTable(
+    "link_sharer",
+    {
+        linkId: text("link_id").primaryKey().notNull(),
+        holderKind: text("holder_kind", { enum: ["owner", "device"] }).notNull(),
+        holderId: text("holder_id").notNull(),
+    },
+    (table) => [check("link_sharer_holder_kind", sql`${table.holderKind} IN ('owner', 'device')`)],
+);
