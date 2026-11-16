@@ -16,12 +16,20 @@ type ReportedStatus =
     | { readonly commandId: string; readonly kind: "working" }
     | { readonly kind: "failed"; readonly commandId: string | null; readonly message: string };
 
-interface SessionObservation {
-    readonly status: ReportedStatus;
+type ListedSession = Pick<ManagedChatSession, "target" | "status">;
+
+/**
+ * What the page remembers of a Session beyond the directory's current listing; a Session without a record shows the
+ * listing. Both are facts of their moment: neither can be derived once the pane and the listing have moved on.
+ */
+type SessionRecord =
     /** A turn ended while the Session was not open here, and the user has not opened it since. */
-    readonly unseenEnd: boolean;
-    readonly observedAt: number;
-}
+    | { readonly kind: "unseen-end" }
+    /**
+     * What the pane showed when the user left the Session. It outranks a listing read before the user left; a directory
+     * load that began afterwards replaces it, and `newerThanLoad` says whether the load in flight began before that.
+     */
+    | { readonly kind: "left"; readonly status: ReportedStatus; readonly newerThanLoad: boolean };
 
 function listedStatus(status: ManagedChatSession["status"]): ReportedStatus {
     if (status.kind === "working") {
@@ -44,27 +52,13 @@ function paneStatus(activity: SessionActivityState): ReportedStatus {
     }
 }
 
-function observe(
-    previous: SessionObservation | undefined,
-    status: ReportedStatus,
-    watched: boolean,
-    observedAt: number,
-): SessionObservation {
-    const ended = previous?.status.kind === "working" && status.kind !== "working";
-    return { status, unseenEnd: !watched && (ended || previous?.unseenEnd === true), observedAt };
-}
-
-function shown(observation: SessionObservation): ConversationListStatus {
-    return observation.unseenEnd && observation.status.kind !== "working" ? { kind: "unread" } : observation.status;
-}
-
 /**
  * What the sidebar shows for a Session. The open Session shows its pane's account once the pane has one, so a
- * submission the Computer never saw shows too. Every other Session shows what the page last learned of it.
+ * submission the Computer never saw shows too. Every other Session shows what the pane left behind or else the listing.
  */
 export function conversationListStatus(
-    session: Pick<ManagedChatSession, "target" | "status">,
-    observations: Pick<NativeSessionMap<SessionObservation>, "get">,
+    session: ListedSession,
+    records: Pick<NativeSessionMap<SessionRecord>, "get">,
     open: {
         readonly sessionTarget: NativeSessionTarget;
         readonly connection: SessionConnection;
@@ -79,25 +73,25 @@ export function conversationListStatus(
     if (activity !== null) {
         return paneStatus(activity);
     }
-    const observation = observations.get(session.target);
-    return observation === undefined ? listedStatus(session.status) : shown(observation);
+    const record = records.get(session.target);
+    const status = record?.kind === "left" ? record.status : listedStatus(session.status);
+    return record?.kind === "unseen-end" && status.kind !== "working" ? { kind: "unread" } : status;
 }
 
 /** Whether any listed Session holds a reply the user has not seen, as the collapsed mobile header must say. */
 export function hasUnreadConversation(
-    sessions: readonly Pick<ManagedChatSession, "target" | "status">[] | null,
-    observations: Pick<NativeSessionMap<SessionObservation>, "get">,
+    sessions: readonly ListedSession[] | null,
+    records: Pick<NativeSessionMap<SessionRecord>, "get">,
     open: Parameters<typeof conversationListStatus>[2],
 ): boolean {
-    return (sessions ?? []).some((session) => conversationListStatus(session, observations, open).kind === "unread");
+    return (sessions ?? []).some((session) => conversationListStatus(session, records, open).kind === "unread");
 }
 
 interface ConversationStatusState {
-    readonly observations: NativeSessionMap<SessionObservation>;
-    readonly learned: number;
-    readonly directoryBasis: number;
+    readonly records: NativeSessionMap<SessionRecord>;
     readonly directoryLoadStarted: () => void;
-    readonly directoryLoaded: (sessions: readonly ManagedChatSession[]) => void;
+    /** `previous` is the listing the load replaced, or null when there was none. */
+    readonly directoryLoaded: (sessions: readonly ListedSession[], previous: readonly ListedSession[] | null) => void;
     /** The user opened this Session, so nothing it finished is unseen. */
     readonly opened: (sessionTarget: NativeSessionTarget) => void;
     readonly paneReleased: (sessionTarget: NativeSessionTarget, activity: SessionActivityState | null) => void;
@@ -110,54 +104,65 @@ export function createConversationStatusStore(selectedSessionId: () => NativeSes
     };
 
     return createStore<ConversationStatusState>((set) => ({
-        observations: new NativeSessionMap(),
-        learned: 0,
-        directoryBasis: 0,
-        directoryLoadStarted: () => set((state) => ({ directoryBasis: state.learned })),
-        directoryLoaded: (sessions) =>
+        records: new NativeSessionMap(),
+        directoryLoadStarted: () =>
+            set((state) => ({
+                records: new NativeSessionMap(
+                    [...state.records].map(([target, record]): readonly [NativeSessionTarget, SessionRecord] => [
+                        target,
+                        record.kind === "left" ? { ...record, newerThanLoad: false } : record,
+                    ]),
+                ),
+            })),
+        directoryLoaded: (sessions, previous) =>
             set((state) => {
-                const observedAt = state.learned + 1;
-                const entries = sessions.map((session): readonly [NativeSessionTarget, SessionObservation] => {
-                    const previous = state.observations.get(session.target);
-                    // An account learned after the load began is newer than its snapshot.
-                    if (previous !== undefined && previous.observedAt > state.directoryBasis) {
-                        return [session.target, previous];
+                const records = new NativeSessionMap<SessionRecord>();
+                for (const session of sessions) {
+                    const record = state.records.get(session.target);
+                    if (record?.kind === "left" && record.newerThanLoad) {
+                        records.set(session.target, record);
+                        continue;
                     }
                     const status = listedStatus(session.status);
-                    return [session.target, observe(previous, status, selected(session.target), observedAt)];
-                });
-                return { observations: new NativeSessionMap(entries), learned: observedAt };
+                    const earlier = previous?.find((candidate) => sameNativeSession(candidate.target, session.target));
+                    const before =
+                        record?.kind === "left"
+                            ? record.status
+                            : earlier === undefined
+                              ? null
+                              : listedStatus(earlier.status);
+                    const ended = before?.kind === "working" && status.kind !== "working";
+                    if (!selected(session.target) && (ended || record?.kind === "unseen-end")) {
+                        records.set(session.target, { kind: "unseen-end" });
+                    }
+                }
+                return { records };
             }),
         opened: (sessionTarget) =>
-            set((state) => {
-                const previous = state.observations.get(sessionTarget);
-                return previous?.unseenEnd === true
-                    ? {
-                          observations: new NativeSessionMap(state.observations).set(sessionTarget, {
-                              ...previous,
-                              unseenEnd: false,
-                          }),
-                      }
-                    : {};
-            }),
+            set((state) =>
+                state.records.get(sessionTarget)?.kind === "unseen-end"
+                    ? { records: withoutRecord(state.records, sessionTarget) }
+                    : {},
+            ),
         paneReleased: (sessionTarget, activity) => {
-            if (activity === null) {
-                return;
+            if (activity !== null) {
+                set((state) => ({
+                    records: new NativeSessionMap(state.records).set(sessionTarget, {
+                        kind: "left",
+                        status: paneStatus(activity),
+                        newerThanLoad: true,
+                    }),
+                }));
             }
-            set((state) => {
-                const observedAt = state.learned + 1;
-                // The pane showed the Session, so what it saw end was seen.
-                const observation = observe(
-                    state.observations.get(sessionTarget),
-                    paneStatus(activity),
-                    true,
-                    observedAt,
-                );
-                return {
-                    observations: new NativeSessionMap(state.observations).set(sessionTarget, observation),
-                    learned: observedAt,
-                };
-            });
         },
     }));
+}
+
+function withoutRecord(
+    records: NativeSessionMap<SessionRecord>,
+    sessionTarget: NativeSessionTarget,
+): NativeSessionMap<SessionRecord> {
+    const remaining = new NativeSessionMap(records);
+    remaining.delete(sessionTarget);
+    return remaining;
 }

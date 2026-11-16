@@ -203,8 +203,8 @@ export function createChatWorkspace(options: {
     });
     const directory = createConversationDirectoryStore(
         requests,
-        (sessions) => {
-            statuses.getState().directoryLoaded(sessions);
+        (sessions, previous) => {
+            statuses.getState().directoryLoaded(sessions, previous);
         },
         options.clock,
         titles,

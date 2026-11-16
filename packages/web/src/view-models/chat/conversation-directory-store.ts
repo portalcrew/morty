@@ -58,8 +58,8 @@ export function conversationDirectorySessions(
 
 export const createConversationDirectoryStore = (
     requests: Pick<BotChatApi, "archiveManagedSession" | "managedSessions">,
-    /** Announced when a load publishes a ready directory, so the owner re-scopes status watching without subscribing. */
-    onLoaded: (sessions: readonly ManagedChatSession[]) => void,
+    /** Announced when a load publishes a ready directory, with the listing it replaced, if there was one. */
+    onLoaded: (sessions: readonly ManagedChatSession[], previous: readonly DirectorySession[] | null) => void,
     clock: Clock,
     titles: SessionTitlesStore,
     onArchived: (sessionTarget: NativeSessionTarget) => void,
@@ -179,7 +179,7 @@ export const createConversationDirectoryStore = (
                     titles.getState().directoryLoaded(reported, startedWith);
                     const sessions = reported.map(({ title: _title, ...session }) => session);
                     set({ state: { kind: "ready", sessions } });
-                    onLoaded(reported);
+                    onLoaded(reported, cached);
                 } catch (cause) {
                     if (!signal.aborted) {
                         if (cause instanceof CloudApiError && cause.code === "AGENT_REQUIRED") {

@@ -429,7 +429,7 @@ export function ConversationSidebar({
     const titles = useStore(workspace.titles, (state) => state.titles);
     const calendarDay = useStore(workspace.directory, (state) => state.calendarDay);
 
-    const sessionStatuses = useStore(workspace.statuses, (state) => state.observations);
+    const sessionStatuses = useStore(workspace.statuses, (state) => state.records);
     const dialogState = useStore(dialogs);
     const mobileNavOpen = dialogState.mobilePanel.kind === "nav";
     const mobileSessionsOpen = dialogState.mobilePanel.kind === "sessions";
