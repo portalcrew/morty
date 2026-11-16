@@ -12,8 +12,7 @@ export class DaemonConnectionService {
 
     readonly latest = () => this.#storage.latest();
 
-    readonly next = (computerId: string): ComputerConnectionIdentity => ({
-        computerId,
+    readonly next = (): ComputerConnectionIdentity => ({
         connectionEpoch: (this.#storage.latest()?.connectionEpoch ?? 0) + 1,
     });
 

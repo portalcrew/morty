@@ -67,7 +67,7 @@ export function createComputerPairingRoutes(ctx: RelayProtocolRouteContext) {
                     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
                         return new Response("WebSocket upgrade required", { status: 426 });
                     }
-                    const admitted = await services.runtime.acceptDaemon(connection.access.computerId, request.signal);
+                    const admitted = await services.runtime.acceptDaemon(request.signal);
                     return admitted.kind === "accepted"
                         ? admitted.response
                         : Response.json(

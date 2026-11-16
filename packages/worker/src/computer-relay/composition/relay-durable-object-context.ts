@@ -6,13 +6,15 @@ import type { DurableObjectDatabase } from "../infra/durable-object-database.ts"
 export function createRelayDurableObjectContext(
     state: DurableObjectState,
     storage: {
+        readonly computerId: string;
         readonly database: DurableObjectDatabase;
-        readonly access: (computerId: string) => ComputerAccessService;
+        readonly access: () => ComputerAccessService;
     },
 ) {
     return createRuntimeContext({
+        computerId: storage.computerId,
         services: { access: storage.access },
-        gateways: { peers: new CloudflareRelayPeers(state) },
+        gateways: { peers: new CloudflareRelayPeers(state, storage.computerId) },
         utilities: { waitUntil: (operation) => state.waitUntil(operation) },
         doDatabase: storage.database,
     });

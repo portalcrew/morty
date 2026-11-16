@@ -5,8 +5,7 @@ import type { RuntimeContext as DurableObjectContext } from "./runtime-context.t
 
 function socketLogContext(webSocket: WebSocket) {
     try {
-        const { computerId, connectionEpoch } = new CloudflareRelaySocket(webSocket).identity();
-        return { computerId, connectionEpoch };
+        return new CloudflareRelaySocket(webSocket).identity();
     } catch {
         // A socket can fail before it has a valid attachment.
         return {};

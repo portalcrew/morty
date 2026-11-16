@@ -25,13 +25,9 @@ import { ContentUploadReader } from "./content-upload-reader.ts";
 
 export type LocalSessionOperations = Readonly<ReturnType<typeof createLocalSessionOperations>>;
 
-export function createLocalSessionOperations(cx: RuntimeContext, computerId: string) {
+export function createLocalSessionOperations(cx: RuntimeContext) {
     const checkTarget = () => {
         if (cx.services.connections.latest() === null) {
-            throw new PairingDirectoryError("computer_access_denied", "The selected Computer is unavailable");
-        }
-        const daemon = cx.services.runtime.currentDaemon();
-        if (daemon !== undefined && daemon.identity.computerId !== computerId) {
             throw new PairingDirectoryError("computer_access_denied", "The selected Computer is unavailable");
         }
     };
@@ -42,15 +38,15 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
         return cx.gateways.requests.open(requestId, target, {
             message: async (socket, message) => {
                 if (!signal.aborted) {
-                    await cx.services.runtime.receiveOperation(computerId, socket, message, signal);
+                    await cx.services.runtime.receiveOperation(socket, message, signal);
                     return;
                 }
                 throw signal.reason;
             },
-            cancel: (socket) => cx.services.runtime.cancelRequest(computerId, socket, requestId),
+            cancel: (socket) => cx.services.runtime.cancelRequest(socket, requestId),
             credit: (socket) => {
                 signal.throwIfAborted();
-                cx.services.runtime.grantFileCredit(computerId, socket, requestId);
+                cx.services.runtime.grantFileCredit(socket, requestId);
             },
         });
     };
@@ -111,7 +107,6 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
             // The viewer is registered before the Computer is told, so events that arrive while it admits are buffered.
             const release = cx.gateways.viewers.open(
                 {
-                    computerId,
                     sessionFilter: sessionTarget,
                     subscriptionId: subscription.subscriptionId,
                     expiresAt: credential.expiresAt,
@@ -121,7 +116,7 @@ export function createLocalSessionOperations(cx: RuntimeContext, computerId: str
                 signal,
             );
             try {
-                await cx.services.runtime.registerSessionSubscription(computerId, sessionTarget, subscription, signal);
+                await cx.services.runtime.registerSessionSubscription(sessionTarget, subscription, signal);
             } catch (cause) {
                 release();
                 throw cause;

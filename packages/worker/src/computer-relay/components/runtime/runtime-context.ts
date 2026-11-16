@@ -1,3 +1,4 @@
+import { logger } from "../../../infra/logger.ts";
 import type { DurableObjectDatabase } from "../../infra/durable-object-database.ts";
 import type { ComputerAccessService } from "../management/service/computer-access-service.ts";
 import { ComputerCredentialService } from "./service/computer-credential-service.ts";
@@ -11,9 +12,10 @@ import { ComputerConnectionStorage } from "./storage/computer-connection-storage
 export type RuntimeContext = ReturnType<typeof createRuntimeContext>;
 
 export function createRuntimeContext(cx: {
+    readonly computerId: string;
     readonly doDatabase: DurableObjectDatabase;
     readonly services: {
-        readonly access: (computerId: string) => ComputerAccessService;
+        readonly access: () => ComputerAccessService;
     };
     readonly gateways: {
         readonly peers: Omit<ComputerPeers, "operations" | "daemons" | "viewers">;
@@ -36,16 +38,17 @@ export function createRuntimeContext(cx: {
         viewers: viewers.viewers,
         operations: requests.routes,
     };
-    const credentials = new ComputerCredentialService(cx.services.access);
+    const credentials = new ComputerCredentialService(cx.computerId, cx.services.access);
     const connections = new DaemonConnectionService(new ComputerConnectionStorage(cx.doDatabase));
     const runtime = new ComputerService({
         services: {
             credentials,
             connections,
-            relay: (computerId: string) => new ComputerRelayActor({ config: { computerId }, gateways: { peers } }),
+            relay: new ComputerRelayActor({ config: { computerId: cx.computerId }, gateways: { peers } }),
         },
         gateways: { peers },
         utilities: cx.utilities,
+        logger: logger.child({ computerId: cx.computerId }),
     });
     return {
         gateways: { peers, requests, viewers },

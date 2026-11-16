@@ -1,5 +1,4 @@
 export interface ComputerConnectionIdentity {
-    readonly computerId: string;
     readonly connectionEpoch: number;
 }
 
