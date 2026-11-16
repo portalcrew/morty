@@ -542,10 +542,15 @@ for (const segments of [4, 8]) {
                 const documentRequest = Promise.withResolvers<string>();
                 const proxy = createServer((incoming, outgoing) => {
                     documentRequest.resolve(incoming.url ?? "");
-                    const forwarded = request(new URL(incoming.url ?? "/", fixture.origin), (response) => {
-                        outgoing.writeHead(response.statusCode ?? 502, response.headers);
-                        response.pipe(outgoing);
-                    });
+                    const requested = new URL(incoming.url ?? "/", fixture.origin);
+                    const forwarded = request(
+                        new URL(fixture.origin),
+                        { path: requested.pathname + requested.search },
+                        (response) => {
+                            outgoing.writeHead(response.statusCode ?? 502, response.headers);
+                            response.pipe(outgoing);
+                        },
+                    );
                     forwarded.on("error", (cause) => outgoing.destroy(cause));
                     incoming.pipe(forwarded);
                 });

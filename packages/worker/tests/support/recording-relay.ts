@@ -57,11 +57,16 @@ export async function recordingRelay(upstreamOrigin: string) {
             }
             // The hop forwards until the response arrives or the relay closes; a fixed deadline would fail a slow but
             // correct run instead of a hang, which the test's own timeout already bounds.
-            const response = await fetch(new URL(incoming.url ?? "/", upstreamOrigin), {
+            const requested = new URL(incoming.url ?? "/", upstreamOrigin);
+            const target = new URL(upstreamOrigin);
+            target.pathname = requested.pathname;
+            target.search = requested.search;
+            const response = await fetch(target, {
                 method: incoming.method ?? "GET",
                 headers,
                 ...(body.byteLength === 0 ? {} : { body }),
                 signal: lifetime.signal,
+                redirect: "manual",
             });
             const responseHeaders = new Headers(response.headers);
             // fetch already decoded the body; forwarding its old encoding/length would decode it a second time.
@@ -120,7 +125,10 @@ export async function recordingRelay(upstreamOrigin: string) {
         });
     });
     server.on("upgrade", (request, socket, head) => {
-        const target = new URL(request.url ?? "/", upstreamOrigin);
+        const requested = new URL(request.url ?? "/", upstreamOrigin);
+        const target = new URL(upstreamOrigin);
+        target.pathname = requested.pathname;
+        target.search = requested.search;
         if (target.pathname.endsWith("/connect")) {
             const successor = request.headers[COMPUTER_SUCCESSOR_CREDENTIAL_HEADER];
             if (typeof successor === "string") {
