@@ -12,6 +12,12 @@ import { systemTimer } from "../../engine/util/timer.ts";
 import { acquireDaemonLock } from "../../storage/daemon/daemon-lock.ts";
 import { sendLocalRequest } from "../control/local-client.ts";
 import { serveLocalControl } from "../control/local-server.ts";
+import {
+    DAEMON_CONTROL_PROTOCOL_VERSION,
+    decodeLifecycleRequest,
+    decodeLifecycleResponse,
+    type LifecycleResponse,
+} from "../control/protocol.ts";
 import { openMortyInstallation } from "../pairing/pair-local-computer.ts";
 import { surviveUnhandledRejections, type UnhandledRejectionGuard } from "./unhandled-rejection.ts";
 
@@ -23,13 +29,8 @@ class DaemonRuntimeError extends Error {
 
 export async function reloadDaemon(stateDirectory: InstallationDirectory, signal: AbortSignal): Promise<void> {
     try {
-        const response = await sendLocalRequest(stateDirectory, { kind: "reload" }, signal);
-        if (
-            typeof response !== "object" ||
-            response === null ||
-            !("kind" in response) ||
-            response.kind !== "reloaded"
-        ) {
+        const response = decodeLifecycleResponse(await sendLocalRequest(stateDirectory, { kind: "reload" }, signal));
+        if (response.kind !== "reloaded") {
             throw new Error("Saved configuration could not be applied to the running daemon");
         }
     } catch (cause) {
@@ -44,8 +45,8 @@ export async function releaseIdleAgentProcesses(
     signal: AbortSignal,
 ): Promise<void> {
     try {
-        const response = await sendLocalRequest(stateDirectory, { kind: "release" }, signal);
-        if (typeof response === "object" && response !== null && "kind" in response && response.kind === "released") {
+        const response = decodeLifecycleResponse(await sendLocalRequest(stateDirectory, { kind: "release" }, signal));
+        if (response.kind === "released") {
             return;
         }
         throw new Error(
@@ -193,22 +194,25 @@ async function runDaemonRuntime(
             }
         };
         let reload: Promise<void> = Promise.resolve();
-        const handle = async (request: unknown) => {
-            if (typeof request === "object" && request !== null && "kind" in request) {
-                if (request.kind === "status") {
-                    return { kind: "status", protocolVersion: 3, daemon: { pid: process.pid, version } };
-                }
-                if (request.kind === "stop") {
-                    return { kind: "stopped" };
-                }
+        const handle = async (message: unknown): Promise<LifecycleResponse> => {
+            const request = decodeLifecycleRequest(message);
+            if (request === null) {
+                return { kind: "error", code: "unsupported_operation", message: "Unknown local control operation" };
             }
-            if (typeof request === "object" && request !== null && "kind" in request && request.kind === "release") {
+            if (request.kind === "status") {
+                return {
+                    kind: "status",
+                    protocolVersion: DAEMON_CONTROL_PROTOCOL_VERSION,
+                    daemon: { pid: process.pid, version },
+                };
+            }
+            if (request.kind === "stop") {
+                return { kind: "stopped" };
+            }
+            if (request.kind === "release") {
                 // Agents' own clients can continue the conversations that idle processes held.
                 await active?.processes.retireIdleProcesses();
                 return { kind: "released" };
-            }
-            if (typeof request !== "object" || request === null || !("kind" in request) || request.kind !== "reload") {
-                return { kind: "error", code: "unsupported_operation", message: "Unknown local control operation" };
             }
             const pending = reload.then(async () => {
                 const previous = active;
@@ -240,12 +244,7 @@ async function runDaemonRuntime(
                 }),
             );
             await serveLocalControl(control.stateDirectory, combined, handle, (response) => {
-                if (
-                    typeof response === "object" &&
-                    response !== null &&
-                    "kind" in response &&
-                    response.kind === "stopped"
-                ) {
+                if (response.kind === "stopped") {
                     shutdown.abort();
                 }
             });

@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
+import { OperationError } from "../../engine/infra/operation-error.ts";
 import type { InstallationDirectory } from "../../engine/storage/installation/installation-files.ts";
 import { isNodeError } from "../../engine/util/node-error.ts";
 import { daemonLockExists } from "../../storage/daemon/daemon-lock.ts";
@@ -89,7 +90,7 @@ async function waitForDaemon(
                 await sendLocalRequest(stateDirectory, { kind: "status" }, signal),
             );
             if (response.kind === "error") {
-                throw new Error(response.message);
+                throw new OperationError(response.code, response.message);
             }
             if (response.kind === "status") {
                 return { version: response.daemon.version, started: daemonStarted };
@@ -136,7 +137,7 @@ export async function stopDaemon(stateDirectory: InstallationDirectory, signal: 
                 await sendLocalRequest(stateDirectory, { kind: "stop" }, deadline),
             );
             if (response.kind === "error") {
-                throw new Error(response.message);
+                throw new OperationError(response.code, response.message);
             }
             if (response.kind !== "stopped") {
                 throw new Error("The Morty daemon returned an unexpected response");
