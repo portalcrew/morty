@@ -1,5 +1,5 @@
 /**
- * How this device gets setup to the computer where the coding agent runs. A desktop browser is usually that
+ * How this device gets setup to the computer where the agent runs. A desktop browser is usually that
  * computer, so it copies the prompt. A touch-first phone or tablet cannot run the agent, so it sends Morty's
  * address on: through the system share sheet when the browser has one, otherwise by copying the link.
  */

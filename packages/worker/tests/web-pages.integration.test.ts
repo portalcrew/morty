@@ -237,7 +237,7 @@ test("Given the public home page, When a crawler fetches it without JavaScript, 
     expect(html).toContain(
         'name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"',
     );
-    expect(html).toContain("<title>Morty — Continue your coding agent from any browser</title>");
+    expect(html).toContain("<title>Morty — Continue your AI agent from any browser</title>");
     expect(html).toContain('name="description"');
     for (const property of [
         "title",
