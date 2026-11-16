@@ -17,49 +17,6 @@ import {
 } from "../../services/chat/html-preview-document.ts";
 import { downloadLocalFile } from "../../services/chat/local-file-download.ts";
 
-const TEXT_MIME = /^(?:text\/|application\/(?:json|xml|javascript|x-httpd-php|x-sh|x-yaml))(?:;|$)/u;
-const TEXT_EXTENSIONS = new Set([
-    "bash",
-    "c",
-    "cc",
-    "conf",
-    "cpp",
-    "css",
-    "csv",
-    "env",
-    "go",
-    "graphql",
-    "h",
-    "hpp",
-    "htm",
-    "html",
-    "ini",
-    "java",
-    "js",
-    "jsx",
-    "json",
-    "log",
-    "md",
-    "mdx",
-    "php",
-    "properties",
-    "py",
-    "rb",
-    "rs",
-    "sh",
-    "sql",
-    "svg",
-    "toml",
-    "ts",
-    "tsx",
-    "txt",
-    "xml",
-    "yaml",
-    "yml",
-    "zsh",
-]);
-const TEXT_NAMES = new Set(["dockerfile", "gemfile", "license", "makefile", "readme"]);
-
 export type FilePreviewState =
     | { readonly kind: "closed" }
     | { readonly kind: "loading"; readonly path: string }
@@ -134,18 +91,6 @@ function previewLayout(sidePanel: boolean, size: "side-panel" | "expanded"): Fil
 
 function panelMode(layout: FilePreviewLayout): "side-panel" | "modal" {
     return layout.kind === "desktop" && layout.size === "side-panel" ? "side-panel" : "modal";
-}
-
-function isTextFile(file: LocalFileResult): boolean {
-    if (TEXT_MIME.test(file.mediaType.toLowerCase())) {
-        return true;
-    }
-    const name = file.name.toLowerCase();
-    if (TEXT_NAMES.has(name)) {
-        return true;
-    }
-    const extension = name.includes(".") ? (name.split(".").at(-1) ?? "") : "";
-    return TEXT_EXTENSIONS.has(extension);
 }
 
 function isHtmlFile(file: LocalFileResult): boolean {
@@ -394,7 +339,9 @@ export function createBrowserFilePreviewStore(read: (path: string, signal: Abort
                     });
                     return;
                 }
-                if (isHtmlFile(file) || isTextFile(file)) {
+                // Text is recognized by its bytes, as Git does: no NUL and valid UTF-8. The name only chooses
+                // how text is shown, so source files of any language preview instead of downloading.
+                if (!file.bytes.includes(0)) {
                     try {
                         const text = decoder.decode(file.bytes);
                         set({
