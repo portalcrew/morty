@@ -345,6 +345,7 @@ test.each(["/setup", "/setup/"])(
         window.location.href = setupUrl.href;
         const setup = await app.reload();
         await setup.waitForView(() => getByRole(document.body, "heading", { name: "Connect another computer" }));
+        expect(document.body.textContent).not.toContain("End-to-end encrypted ·");
         await setup.user.click(getByRole(document.body, "button", { name: "Copy setup prompt" }));
         expect(await navigator.clipboard.readText()).toContain(`${app.origin}/doc/setup.md`);
         const back = getByRole(document.body, "link", { name: "Back to your last computer" });
