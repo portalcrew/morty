@@ -974,7 +974,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         computer: ComputerSelection,
         cwd: string,
         harness: string,
-    ): Promise<void> {
+    ): Promise<ComputerSelection> {
         const reuseOnline = async () => {
             if (computer.kind !== "existing" || !(await computerIsOnline(context, computer, harness))) {
                 return false;
@@ -987,7 +987,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         for (let attempt = 1; attempt <= maximumAttempts; attempt++) {
             signal.throwIfAborted();
             if (await reuseOnline()) {
-                return;
+                return computer;
             }
             try {
                 if (computer.kind === "existing") {
@@ -1005,13 +1005,22 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
                     );
                 }
                 emit({ status: "runtime_started" });
-                return;
+                return computer;
             } catch (startFailure) {
                 signal.throwIfAborted();
+                if (
+                    computer.kind === "existing" &&
+                    errorCode(startFailure) === "computer_pairing_revoked" &&
+                    (await verifyIdentityAndComputer(context)).computerPairing === "revoked"
+                ) {
+                    emit({ status: "computer_revoked", computerId: computer.computerId });
+                    const repaired = await pairComputer(context);
+                    return await startRuntime(repaired.context, repaired.computer, cwd, harness);
+                }
                 const cause = new RuntimeStartError(startFailure);
                 // A launcher may fail after the daemon has connected successfully.
                 if (await reuseOnline()) {
-                    return;
+                    return computer;
                 }
                 if (attempt === maximumAttempts) {
                     throw cause;
@@ -1401,10 +1410,10 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         emit({ status: "identity_ready", computerId: computer.identity.computerId });
         const prepared = await prepareComputer(computer, verified.computerPairing, options.replaceComputer);
         computer = prepared.context;
-        await startRuntime(computer, prepared.computer, cwd, options.harness);
-        await waitForComputer(computer, prepared.computer, options.harness);
+        const serving = await startRuntime(computer, prepared.computer, cwd, options.harness);
+        await waitForComputer(computer, serving, options.harness);
         computer = await bindAgent(computer, options.harness);
-        await finishSetup(computer, prepared.computer, options, cwd, identity.computer);
+        await finishSetup(computer, serving, options, cwd, identity.computer);
     }
 
     try {
