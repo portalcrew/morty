@@ -392,6 +392,7 @@ export class SessionManager {
             } finally {
                 this.#lifecycles.endCreation(target, settled.promise);
                 settled.resolve();
+                this.#processes.notifyChanged();
             }
         });
 
