@@ -43,8 +43,8 @@ export interface MortyApplication {
     /**
      * The /continue handoff redeem. Created with the application: its store
      * reads the transfer code from the location at creation, and only a real
-     * continuation visit starts network work. Another code in the address
-     * reloads the page, so the store always describes the link in it.
+     * continuation visit starts it. Another code in the address reloads the
+     * page, so the store always describes the link in it.
      */
     readonly continuation: ReturnType<typeof createContinueStore>;
     readonly sessionWorkspace: SessionWorkspaceStoreApi;
@@ -234,7 +234,9 @@ export function createMortyApplication(options: {
     window.addEventListener("storage", accessChanged);
     document.addEventListener("visibilitychange", recover);
     document.addEventListener("resume", recover);
-    if (!window.location.pathname.startsWith("/continue")) {
+    if (window.location.pathname.startsWith("/continue")) {
+        continuation.getState().start();
+    } else {
         reloadIdentity();
     }
     return {
