@@ -16,7 +16,7 @@ For a reproducible bug or a feature request, use this repository's
 operating system, Node version, Morty version, Agent and version, reproduction
 steps, expected behavior and actual result.
 
-Run `npx --yes @morty-build/cli status` and `npx --yes @morty-build/cli logs`
+Run `npx --yes @portalcrew/morty status` and `npx --yes @portalcrew/morty logs`
 when diagnosing installation problems. Inspect diagnostic output before sharing
 it. Remove credentials, pairing links, local paths that identify people, and
 private conversation or file contents. Never include an unredacted state directory.

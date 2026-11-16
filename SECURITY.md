@@ -25,7 +25,7 @@ Helpful things to include:
 - what an attacker can do, and what they need in order to do it
 - the smallest reproduction you have, including the Agent (Codex, Claude Code, or Pi)
   and whether the connected machine was online
-- affected versions or commit, and the `@morty-build/cli` CLI version if setup is involved
+- affected versions or commit, and the `@portalcrew/morty` CLI version if setup is involved
 - any sharing link, pairing, or revocation step that is part of the path
 
 Please do not include live credentials, pairing tickets, or customer data in a
@@ -82,7 +82,7 @@ running commands through the Agent, is not.
 
 ## Scope
 
-Security fixes target the latest published `@morty-build/cli` release and current
+Security fixes target the latest published `@portalcrew/morty` release and current
 Morty services. Earlier pre-launch releases and saved state are unsupported. Include
 your exact version even if you are unsure whether it is supported. Do not assume
 that a package update alone revokes exposed credentials; report the exposure so
