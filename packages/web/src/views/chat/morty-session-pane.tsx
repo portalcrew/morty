@@ -10,7 +10,6 @@ import { AutoFocusInput } from "../../components/chat/auto-focus-input.tsx";
 import { BotChatComposer } from "../../components/chat/bot-chat-composer.tsx";
 import { ChatConfigurationMenu } from "../../components/chat/chat-configuration-menu.tsx";
 import {
-    chatSessionAgentReplyGroupClassName,
     chatSessionColumnClassName,
     chatSessionExecutionHeaderClassName,
     chatSessionInteractionColumnClassName,
@@ -29,7 +28,6 @@ import { InlineEditFocus } from "../../components/chat/inline-edit-focus.tsx";
 import { MessageDeliveryStatus } from "../../components/chat/message-delivery-status.tsx";
 import { MobileRenameOverlay } from "../../components/chat/mobile-rename-overlay.tsx";
 import { MobileSessionTitlePortal } from "../../components/chat/mobile-session-title-portal.tsx";
-import { ResponseCopyButton } from "../../components/chat/response-copy-button.tsx";
 import {
     type ElicitationInteractionResponse,
     type PermissionInteractionResponse,
@@ -38,7 +36,6 @@ import {
 import { SessionLoadFailure } from "../../components/chat/session-load-failure.tsx";
 import { SessionWelcomeInChat } from "../../components/chat/session-welcome.tsx";
 import { isFileEditToolCall } from "../../components/chat/tools/tool-renderer-registry.tsx";
-import { TurnWorkDisclosure } from "../../components/chat/turn-work-disclosure.tsx";
 import { UserPromptMessage } from "../../components/chat/user-prompt-message.tsx";
 import { OwnerQueueNotice, WorkingIndicator } from "../../components/chat/working-indicator.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
@@ -53,7 +50,6 @@ import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { canAddAttachments } from "../../view-models/chat/composer-attachment-store.ts";
 import { sessionExecutionContext } from "../../view-models/chat/execution-context.ts";
 import { sessionHarnessSelection } from "../../view-models/chat/native-session-agents.ts";
-import { createResponseCopyStore } from "../../view-models/chat/response-copy-store.ts";
 import { sessionInteractionPresentation } from "../../view-models/chat/session-interaction-store.ts";
 import {
     type SessionPaneModel,
@@ -62,7 +58,7 @@ import {
     type TitleEdit,
 } from "../../view-models/chat/session-pane-store.ts";
 import { sessionProjectionTimeline } from "../../view-models/chat/session-projection.ts";
-import { type SessionRenderItem, sessionRenderItemId } from "../../view-models/chat/session-render-items.ts";
+import type { SessionRenderItem } from "../../view-models/chat/session-render-items.ts";
 import { sessionTimelinePresentation } from "../../view-models/chat/session-timeline-presentation.ts";
 import { sessionTitle } from "../../view-models/chat/session-titles-store.ts";
 import { describeLoadFailure } from "../../view-models/format-error.ts";
@@ -70,35 +66,7 @@ import { reportApplicationError } from "../../view-models/report-error.ts";
 import { ChatMessageQueue } from "./chat-message-queue.tsx";
 import { FilePreview } from "./file-preview.tsx";
 import { MortyAssistantText, MortySessionMessage } from "./morty-session-message.tsx";
-
-/**
- * Vertical spacing class per reply display item: answer text carries no block
- * margin, process groups and notices declare 12px, failure cards 16px. The
- * article is a plain block flow, so adjacent declared margins collapse to the
- * larger value; first and last edges stay clear.
- */
-type ReplyItemSpacing = "alert" | "block" | "text";
-
-function replyItemSpacing(item: SessionRenderItem): ReplyItemSpacing {
-    if (item.kind === "assistant-text") {
-        return "text";
-    }
-    if (item.kind === "event" && item.message.role === "assistant" && item.message.presentation.kind === "failure") {
-        return "alert";
-    }
-    return "block";
-}
-
-const replyItemSpacingMargins: Record<ReplyItemSpacing, { readonly mb: string; readonly mt: string }> = {
-    alert: { mb: "mb-4", mt: "mt-4" },
-    block: { mb: "mb-3", mt: "mt-3" },
-    text: { mb: "", mt: "" },
-};
-
-function replyItemMarginClassName(spacing: ReplyItemSpacing, first: boolean, last: boolean): string {
-    const margins = replyItemSpacingMargins[spacing];
-    return cn(first ? "" : margins.mt, last ? "" : margins.mb);
-}
+import { SessionReplyContent } from "./session-reply-content.tsx";
 
 function SessionRenderItemContent({
     active,
@@ -736,97 +704,34 @@ function MortySessionPaneBody({
                                                 </div>
                                             );
                                         }
-                                        const renderItem = (item: SessionRenderItem, spacingClassName: string) => (
-                                            <div className={spacingClassName} key={sessionRenderItemId(item)}>
-                                                <SessionRenderItemContent
-                                                    active={sessionRenderItemId(item) === group.activeItemId}
-                                                    answerChoices={composer.answerChoices}
-                                                    item={item}
-                                                    computerName={executionContext.computer}
-                                                    onAnswer={answer}
-                                                    onChooseAnswer={pane.store.getState().chooseAnswer}
-                                                    onRemoveUnknownDelivery={
-                                                        pane.store.getState().removeUnknownDelivery
-                                                    }
-                                                    onRetryUnknownDelivery={() =>
-                                                        run(pane.store.getState().retryUnknownDelivery)
-                                                    }
-                                                    openLocalFile={openLocalFile}
-                                                    pane={pane}
-                                                    presentation={presentation}
-                                                />
-                                            </div>
-                                        );
-                                        // Flatten the article children so positional margin clearing sees the
-                                        // laid-out order, including the trailing copy action row. Items inside a
-                                        // process disclosure clear first/last within the disclosure body instead.
-                                        const replyChildren: {
-                                            readonly key: string;
-                                            readonly render: (spacingClassName: string) => ReactNode;
-                                            readonly spacing: ReplyItemSpacing;
-                                        }[] = [];
-                                        for (const section of group.sections) {
-                                            if (section.kind === "process") {
-                                                replyChildren.push({
-                                                    key: section.id,
-                                                    render: (spacingClassName) => (
-                                                        <TurnWorkDisclosure
-                                                            className={spacingClassName}
-                                                            key={section.id}
-                                                            summary={section.summary}
-                                                            working={section.id === group.workingSectionId}
-                                                        >
-                                                            {section.items.map((item, index) =>
-                                                                renderItem(
-                                                                    item,
-                                                                    replyItemMarginClassName(
-                                                                        replyItemSpacing(item),
-                                                                        index === 0,
-                                                                        index === section.items.length - 1,
-                                                                    ),
-                                                                ),
-                                                            )}
-                                                        </TurnWorkDisclosure>
-                                                    ),
-                                                    spacing: "block",
-                                                });
-                                                continue;
-                                            }
-                                            for (const item of section.items) {
-                                                replyChildren.push({
-                                                    key: sessionRenderItemId(item),
-                                                    render: (spacingClassName) => renderItem(item, spacingClassName),
-                                                    spacing: replyItemSpacing(item),
-                                                });
-                                            }
-                                        }
-                                        const replyChildCount =
-                                            replyChildren.length + (group.copyText === null ? 0 : 1);
                                         return (
-                                            <article
+                                            <SessionReplyContent
                                                 key={group.id}
-                                                aria-label="Agent response"
-                                                className={cn(
-                                                    chatSessionAgentReplyGroupClassName,
-                                                    group.active && "pb-3",
-                                                )}
-                                            >
-                                                {replyChildren.map((child, index) =>
-                                                    child.render(
-                                                        replyItemMarginClassName(
-                                                            child.spacing,
-                                                            index === 0,
-                                                            index === replyChildCount - 1,
-                                                        ),
-                                                    ),
-                                                )}
-                                                {group.copyText !== null && (
-                                                    <ResponseCopyButton
-                                                        createStore={createResponseCopyStore}
-                                                        text={group.copyText}
+                                                active={group.active}
+                                                activeItemId={group.activeItemId}
+                                                copyText={group.copyText}
+                                                sections={group.sections}
+                                                workingSectionId={group.workingSectionId}
+                                                renderItem={(item, active) => (
+                                                    <SessionRenderItemContent
+                                                        active={active}
+                                                        answerChoices={composer.answerChoices}
+                                                        item={item}
+                                                        computerName={executionContext.computer}
+                                                        onAnswer={answer}
+                                                        onChooseAnswer={pane.store.getState().chooseAnswer}
+                                                        onRemoveUnknownDelivery={
+                                                            pane.store.getState().removeUnknownDelivery
+                                                        }
+                                                        onRetryUnknownDelivery={() =>
+                                                            run(pane.store.getState().retryUnknownDelivery)
+                                                        }
+                                                        openLocalFile={openLocalFile}
+                                                        pane={pane}
+                                                        presentation={presentation}
                                                     />
                                                 )}
-                                            </article>
+                                            />
                                         );
                                     })}
                                     {presentation.confirmedMessages.map((message) => (

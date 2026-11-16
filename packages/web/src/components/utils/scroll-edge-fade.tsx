@@ -20,6 +20,9 @@ type ScrollEdgeFadeBase = {
     readonly children: ReactNode;
     readonly frameClassName?: string;
     readonly className?: string;
+    readonly viewportClassName?: string;
+    /** Scrolls to the latest content once when this key changes; null resets the next selection. */
+    readonly scrollToBottomKey?: string | null;
     readonly viewportLabel?: string;
     readonly id?: string;
     readonly "aria-label"?: string;
@@ -117,6 +120,8 @@ export function ScrollEdgeFade(props: ScrollEdgeFadeProps) {
         children,
         frameClassName,
         className,
+        viewportClassName,
+        scrollToBottomKey = null,
         id,
         "aria-label": ariaLabel,
         onKeyDown,
@@ -125,6 +130,7 @@ export function ScrollEdgeFade(props: ScrollEdgeFadeProps) {
         scrollElementRef,
     } = props;
     const scrollRef = useRef<HTMLElement | null>(null);
+    const scrolledToBottomFor = useRef<string | null>(null);
     const [edges, setEdges] = useState<ClippedEdges>(hiddenEdges);
 
     const syncEdges = useCallback(() => {
@@ -139,6 +145,20 @@ export function ScrollEdgeFade(props: ScrollEdgeFadeProps) {
     useLayoutEffect(() => {
         syncEdges();
     });
+
+    useLayoutEffect(() => {
+        if (scrollToBottomKey === null) {
+            scrolledToBottomFor.current = null;
+            return;
+        }
+        const element = scrollRef.current;
+        if (element === null || scrolledToBottomFor.current === scrollToBottomKey) {
+            return;
+        }
+        element.scrollTop = element.scrollHeight;
+        scrolledToBottomFor.current = scrollToBottomKey;
+        syncEdges();
+    }, [scrollToBottomKey, syncEdges]);
 
     useEffect(() => {
         const element = scrollRef.current;
@@ -187,7 +207,7 @@ export function ScrollEdgeFade(props: ScrollEdgeFadeProps) {
                 }}
                 role={role}
                 tabIndex={tabIndex}
-                viewportClassName="h-full max-h-[inherit]"
+                viewportClassName={cn("h-full max-h-[inherit]", viewportClassName)}
                 viewportLabel={props.viewportLabel}
                 viewportRef={assignScrollElement}
                 viewportStyle={maskImage === undefined ? undefined : surfaceMaskStyle(maskImage)}

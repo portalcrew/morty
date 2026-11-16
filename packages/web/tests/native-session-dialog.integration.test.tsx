@@ -2,7 +2,7 @@ import { fireEvent, getAllByRole, getByRole, queryByRole } from "@testing-librar
 import { act } from "@testing-library/react";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import "./infra/application-scenario.ts";
+import { sendPrompt } from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 import { createChatWorkerEnvironment } from "./support/chat-worker.ts";
@@ -72,6 +72,67 @@ test("Given the first agent lists saved sessions, When the user opens Open Sessi
     expect(first.getAttribute("aria-pressed")).toBe("true");
     expect(getByRole(dialog, "button", { name: "Native second-session" }).getAttribute("aria-pressed")).toBe("false");
     expect(getByRole(dialog, "button", { name: "Open" }).hasAttribute("disabled")).toBe(false);
+});
+
+test("Given a saved tool reply, When the user previews it, Then Chat and the preview collapse the same process sections", {
+    timeout: 30_000,
+}, async () => {
+    const app = await createTestApp({
+        connectAgent: true,
+        agent: { harness: "tool-lifecycle-test", label: "Tool Lifecycle Agent" },
+        page: { kind: "bootstrap", identity: true },
+    });
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "answer after verification");
+    await app.waitForView(() => {
+        const reply = getByRole(document.body, "article", { name: "Agent response" });
+        expect(reply.textContent).toContain("Verification finished with one failure.");
+        return reply;
+    });
+    await app.user.click(getByRole(document.body, "button", { name: "Open Session" }));
+    const dialog = await app.waitForView(() => getByRole(document.body, "dialog", { name: "Open Session" }));
+    const preview = await app.waitForView(() => {
+        const region = getByRole(dialog, "region", { name: "Selected session preview" });
+        const reply = getByRole(region, "article", { name: "Agent response" });
+        expect(reply.textContent).toContain("Verification finished with one failure.");
+        return region;
+    });
+    expect(getAllByRole(preview, "article", { name: "Agent response" })).toHaveLength(1);
+    expect(getByRole(preview, "button", { name: "2 steps · 1 file edit", expanded: false })).toBeDefined();
+    expect(getByRole(preview, "button", { name: "1 step", expanded: false })).toBeDefined();
+});
+
+test("Given a saved Agent question, When the user previews it in Open Session, Then the question keeps Chat's card layout without offering an answer", {
+    timeout: 30_000,
+}, async () => {
+    const question = "Append the five sections to the existing page?";
+    const app = await createTestApp({
+        connectAgent: true,
+        agent: {
+            harness: "question-preview-test",
+            label: "Question Agent",
+            reply: () => ({
+                outcome: "complete",
+                output: [
+                    {
+                        kind: "message",
+                        text: question,
+                        questions: [{ question, options: ["Update the page", "Not now"] }],
+                    },
+                ],
+            }),
+        },
+    });
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Draft the page update");
+    await app.waitForView(() => getByRole(document.body, "region", { name: "Agent question" }));
+    await app.user.click(getByRole(document.body, "button", { name: "Open Session" }));
+    const dialog = await app.waitForView(() => getByRole(document.body, "dialog", { name: "Open Session" }));
+    const card = await app.waitForView(() => {
+        const preview = getByRole(dialog, "region", { name: "Selected session preview" });
+        return getByRole(preview, "region", { name: "Agent question" });
+    });
+    expect(getByRole(card, "group", { name: question })).toBeDefined();
+    expect(getByRole(card, "radio", { name: "Update the page" })).toHaveProperty("disabled", true);
+    expect(getByRole(card, "button", { name: "Send answer" })).toHaveProperty("disabled", true);
 });
 
 test("Given Pi is not installed on the Computer, When the user opens Open Session and selects Pi, Then the dialog explains Pi is not installed", {

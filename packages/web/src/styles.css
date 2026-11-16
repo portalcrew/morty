@@ -43,7 +43,6 @@
     --copy-secondary: var(--morty-text-2);
     --surface-subtle: #f7f8f9;
     /* Opaque visual match for bg-card/90 over the dialog overlay. */
-    --surface-dialog-composite: #f2f2f3;
     --user-message-surface: #e6e8eb;
     --sidebar: #f4f5f7;
     --surface-elevated: var(--popover);
@@ -201,7 +200,6 @@
     --color-success: var(--success);
     --color-copy-secondary: var(--copy-secondary);
     --color-surface-subtle: var(--surface-subtle);
-    --color-surface-dialog-composite: var(--surface-dialog-composite);
     --color-user-message-surface: var(--user-message-surface);
     --color-sidebar: var(--sidebar);
     --color-surface-elevated: var(--surface-elevated);
