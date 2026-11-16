@@ -1,6 +1,7 @@
 import { dataTestId } from "../web/src/data-testid.ts";
 import { expect, test } from "./infra/test.ts";
 
+// @no-uc: UX regression; browser connectivity changes must agree across the current computer's status displays.
 test("Given an online computer, when the browser loses and regains its network, then the switcher and both computer lists agree", async ({
     runtime,
 }) => {
@@ -18,7 +19,7 @@ test("Given an online computer, when the browser loses and regains its network, 
         "data-connection-status",
         "unavailable",
     );
-    await expect(desktopChoice).toContainText("Unavailable");
+    await expect(desktopChoice).toContainText("Status unknown");
     await expect(desktopChoice).not.toContainText("Online");
     await page.keyboard.press("Escape");
 
@@ -27,7 +28,7 @@ test("Given an online computer, when the browser loses and regains its network, 
     const mobileChoice = page
         .getByRole("navigation", { name: "Computers" })
         .getByRole("button", { name: /^(Online )?Browser test Runtime/ });
-    await expect(mobileChoice).toContainText("Unavailable");
+    await expect(mobileChoice).toContainText("Status unknown");
     await expect(mobileChoice).not.toContainText("Online");
 
     await page.context().setOffline(false);

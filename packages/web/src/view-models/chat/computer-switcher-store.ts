@@ -11,15 +11,20 @@ import {
 } from "../../services/identity/remembered-computers.ts";
 import type { BotConnectionStatus } from "./computer-status-store.ts";
 
-export interface ComputerChoice {
+interface ComputerConnectionChoice {
     readonly key: string;
     readonly name: string;
     readonly href: string;
     readonly status: "online" | "offline" | "unavailable" | "connecting" | "unpaired" | "revoked";
 }
 
-type RememberedComputerChoice = Omit<ComputerChoice, "status"> &
-    ({ readonly kind: "current" } | { readonly kind: "other"; readonly status: "online" | "offline" | "unavailable" });
+export type ComputerChoice = ComputerConnectionChoice & { readonly disambiguator: string | null };
+
+type RememberedComputerChoice = Omit<ComputerConnectionChoice, "status"> &
+    (
+        | { readonly kind: "current" }
+        | { readonly kind: "other"; readonly status: Exclude<ComputerConnectionChoice["status"], "connecting"> }
+    );
 
 type ComputerChoicesState =
     | { readonly kind: "loading"; readonly choices: readonly RememberedComputerChoice[] }
@@ -31,8 +36,8 @@ export function computerSwitcherChoices(
     name: string,
     connection: BotConnectionStatus,
 ): readonly ComputerChoice[] {
-    return state.choices
-        .map((choice): ComputerChoice => {
+    const choices = state.choices
+        .map((choice): ComputerConnectionChoice => {
             if (choice.kind === "other") {
                 return choice;
             }
@@ -49,6 +54,22 @@ export function computerSwitcherChoices(
             };
         })
         .sort((left, right) => left.name.localeCompare(right.name) || left.key.localeCompare(right.key));
+    return choices.map((choice) => ({ ...choice, disambiguator: computerChoiceDisambiguator(choice, choices) }));
+}
+
+function computerChoiceDisambiguator(
+    choice: ComputerConnectionChoice,
+    choices: readonly ComputerConnectionChoice[],
+): string | null {
+    const others = choices.filter((other) => other.name === choice.name && other.key !== choice.key);
+    if (others.length === 0) {
+        return null;
+    }
+    let length = 6;
+    while (length < choice.key.length && others.some((other) => other.key.endsWith(choice.key.slice(-length)))) {
+        length += 1;
+    }
+    return `ID ${choice.key.slice(-length)}`;
 }
 
 export type ComputerSwitcherModel = ReturnType<typeof createComputerSwitcher>;
@@ -103,7 +124,7 @@ export function createComputerSwitcher(options: {
                                 const pairing = await requests.readComputerPairing(signal);
                                 signal.throwIfAborted();
                                 if (pairing !== "paired") {
-                                    return choice;
+                                    return { ...choice, status: pairing };
                                 }
                                 const configuration = await requests.computerConfiguration(signal);
                                 signal.throwIfAborted();

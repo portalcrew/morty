@@ -1,5 +1,5 @@
 import { tmpdir } from "node:os";
-import { getAllByRole, getByRole, queryByRole } from "@testing-library/dom";
+import { getAllByRole, getByRole, getByText, queryByRole, queryByText } from "@testing-library/dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
 import { ANONYMOUS_CREDENTIAL_KEY_NAME } from "../src/services/identity/anonymous-identity-api.ts";
@@ -36,6 +36,95 @@ function identityOf(choice: HTMLElement, currentScope: string): string | null {
         ? new URL(choice.href, window.location.origin).searchParams.get("identity")
         : currentScope;
 }
+
+// @no-uc: UX regression; identically named computers must remain distinguishable without changing their destinations.
+test.each(["desktop", "mobile"])(
+    "Given same-name computers on %s, When I open the computer list, Then only duplicate names have distinct stable identifiers",
+    { timeout: 30_000 },
+    async (layout) => {
+        const viewport = { height: window.innerHeight, width: window.innerWidth };
+        try {
+            const first = await createTestApp({ connectAgent: true });
+            await first.queryElementByTestId(dataTestId.messageComposer);
+            await first.user.click(getByRole(document.body, "button", { name: /Switch computer/ }));
+            const single = await first.waitForView(() => getByRole(document.body, "menuitemradio"));
+            expect(queryByText(single, /^ID /)).toBeNull();
+            await first.close();
+
+            if (layout === "mobile") {
+                window.happyDOM.setViewport({ height: 844, width: 413 });
+            }
+            const app = await createTestApp({ connectAgent: true });
+            await app.queryElementByTestId(dataTestId.messageComposer);
+            const openList = async () => {
+                await app.user.click(
+                    getByRole(document.body, "button", {
+                        name: layout === "mobile" ? "Open navigation" : /Switch computer/,
+                    }),
+                );
+                return app.waitForView(() => {
+                    const list = getByRole(document.body, layout === "mobile" ? "navigation" : "menu", {
+                        ...(layout === "mobile" ? { name: "Computers" } : {}),
+                    });
+                    expect(getByText(list, `ID ${first.identity.computerId.slice(-6)}`)).toBeDefined();
+                    expect(getByText(list, `ID ${app.identity.computerId.slice(-6)}`)).toBeDefined();
+                    return list;
+                });
+            };
+            const list = await openList();
+            const other = getByRole(list, layout === "mobile" ? "link" : "menuitemradio", {
+                name: new RegExp(`Controlled Agent Runtime ID ${first.identity.computerId.slice(-6)}`),
+            });
+            expect(identityOf(other, encodeIdentityScope(app.identity))).toBe(encodeIdentityScope(first.identity));
+            const current = getByRole(list, layout === "mobile" ? "button" : "menuitemradio", {
+                name: new RegExp(`Controlled Agent Runtime ID ${app.identity.computerId.slice(-6)}`),
+            });
+            await app.user.click(current);
+            await openList();
+        } finally {
+            window.happyDOM.setViewport(viewport);
+        }
+    },
+);
+
+// @no-uc: UX regression; a failed status query must not claim a remembered computer is offline.
+test("Given a remembered computer, When its status query fails, Then its entry remains with Status unknown", {
+    timeout: 30_000,
+}, async () => {
+    const first = await createTestApp({ connectAgent: true });
+    await first.queryElementByTestId(dataTestId.messageComposer);
+    await first.close();
+    const app = await createTestApp({ connectAgent: true });
+    await app.queryElementByTestId(dataTestId.messageComposer);
+    app.transport.disconnect();
+    await app.user.click(getByRole(document.body, "button", { name: /Switch computer/ }));
+    const other = await app.waitForView(() => {
+        const entry = computerChoices(getByRole(document.body, "menu")).find(
+            (choice) => identityOf(choice, encodeIdentityScope(app.identity)) === encodeIdentityScope(first.identity),
+        );
+        if (entry === undefined) {
+            throw new Error("Waiting for the remembered computer");
+        }
+        expect(entry.textContent).toContain("Status unknown");
+        return entry;
+    });
+    expect(other.textContent).not.toContain("Offline");
+    expect(other.textContent).not.toContain("Unavailable");
+});
+
+// @no-uc: UX regression; a confirmed unpaired computer must keep its known setup status.
+test("Given an unpaired remembered computer, When I open the computer list, Then it says Not set up", {
+    timeout: 30_000,
+}, async () => {
+    const first = await createTestApp();
+    await first.waitForView(() => getByRole(document.body, "dialog", { name: "Connect agent" }));
+    await first.close();
+    const app = await createTestApp({ connectAgent: true });
+    await app.queryElementByTestId(dataTestId.messageComposer);
+    await app.user.click(getByRole(document.body, "button", { name: /Switch computer/ }));
+    const other = await app.waitForView(() => getByRole(document.body, "menuitemradio", { name: /^Computer / }));
+    expect(other.textContent).toContain("Not set up");
+});
 
 test("Given two remembered computers, When I return and then switch, Then the last computer and each computer's own conversation are restored", {
     timeout: 30_000,
