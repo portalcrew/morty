@@ -49,7 +49,11 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         throw error;
     }
     const sessionStore = new SqliteSessionStore(sessionDatabase, events);
-    const activeSessions = new SessionTurns(operations, (target, commandId) => manager.executes(target, commandId));
+    const activeSessions = new SessionTurns(
+        operations,
+        (target, commandId) => manager.executes(target, commandId),
+        (target) => manager.turnFinished(target),
+    );
     const sessionCreations = new SessionCreations(sessionStore);
     const directories = new WorkspaceDirectoryService(defaultWorkspace);
     const manager = new SessionManager({
@@ -65,6 +69,7 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         onSessionClosed: sink.publishClosed,
         lastTurn: operations.lastTurn,
         settledTurns: operations.settledTurns,
+        hasUnsettledTurn: activeSessions.hasUnsettledTurn,
         timer,
     });
     const eventProjection = new PromptLifecycle(

@@ -24,6 +24,7 @@ test("Given Codex initialization fails once, When the user creates a conversatio
         onSessionClosed: () => undefined,
         lastTurn: () => undefined,
         settledTurns: () => [],
+        hasUnsettledTurn: () => false,
         contentExternalizer: new AcpContentExternalizer((target, content, signal) =>
             new UnretainedExternalContentStore().put({ ...content, target, signal }),
         ),

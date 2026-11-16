@@ -56,9 +56,13 @@ export class RetainedAgentProcesses<P, Key = string> {
         const state = this.#entry(id).lifecycle;
         return state.kind === "preparing" ? state.start : undefined;
     };
-    readonly isBusy = (id: Key): boolean => {
+    readonly activity = (id: Key): { readonly preparing: boolean; readonly borrowers: number } => {
         const entry = this.#entry(id);
-        return entry.users > 0 || entry.lifecycle.kind === "preparing";
+        return { preparing: entry.lifecycle.kind === "preparing", borrowers: entry.users };
+    };
+    readonly isBusy = (id: Key): boolean => {
+        const { preparing, borrowers } = this.activity(id);
+        return borrowers > 0 || preparing;
     };
     readonly touch = (id: Key, expected = this.get(id)): void => {
         if (expected !== undefined && this.get(id) === expected) {
