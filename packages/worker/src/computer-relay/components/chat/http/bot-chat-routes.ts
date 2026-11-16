@@ -72,7 +72,7 @@ const createSessionCredentialGuard = (ctx: ManagementRouteContext) =>
         await next();
         const application = applicationForRequest(ctx, context);
         const current = await application.services.authentication.session(
-            readBearerToken(context.req.raw),
+            readBearerToken(context.req.raw.headers),
             context.req.raw.signal,
         );
         if (current.kind !== "authenticated") {

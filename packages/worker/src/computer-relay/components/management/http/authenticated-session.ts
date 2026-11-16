@@ -19,7 +19,7 @@ export const authenticatedSession = (ctx: ManagementRouteContext) =>
     createMiddleware<SessionEnvironment>(async (context, next) => {
         const application = applicationForRequest(ctx, context);
         const result = await application.services.authentication.session(
-            readBearerToken(context.req.raw),
+            readBearerToken(context.req.raw.headers),
             context.req.raw.signal,
         );
         switch (result.kind) {
@@ -40,7 +40,7 @@ export const localSession = (ctx: ManagementRouteContext, operation: LocalOperat
     createMiddleware<SessionEnvironment>(async (context, next) => {
         const application = applicationForRequest(ctx, context);
         const result = await application.services.authentication.authorize(
-            readBearerToken(context.req.raw),
+            readBearerToken(context.req.raw.headers),
             operation,
             context.req.raw.signal,
         );

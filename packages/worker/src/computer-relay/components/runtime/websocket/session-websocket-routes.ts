@@ -23,6 +23,7 @@ import { WebSocketDispatchError, type WebSocketHttpOperation } from "../../../..
 import { bodyParser, readJsonTextBody } from "../../../../http/body-parser.ts";
 import { json } from "../../../../http/json.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
+import { readBearerToken } from "../../../../http/request-headers.ts";
 import {
     authorizeSessionContentUpload,
     type SessionContentUploadTarget,
@@ -70,7 +71,7 @@ export function createSessionWebSocketRoutes(ctx: {
             throw new WebSocketDispatchError();
         }
         // Preserve the established admission error for a missing or malformed bearer header.
-        const credential = (context.req.header("authorization") ?? "").match(/^Bearer ([^\s]+)$/u)?.[1];
+        const credential = readBearerToken(context.req.raw.headers);
         if (credential === undefined) {
             throw new WebSocketDispatchError();
         }

@@ -24,6 +24,7 @@ import {
 import { type HttpError, toHttpError } from "../../../../contracts/http-error.ts";
 import type { SubscribeSessionEvents } from "../../../../contracts/session-event-subscription.ts";
 import { WebSocketDispatchError, type WebSocketHttpDispatch } from "../../../../contracts/websocket-http-dispatch.ts";
+import { readBearerToken } from "../../../../http/request-headers.ts";
 import { diagnosticText } from "../../../../infra/log-diagnostics.ts";
 import { logger } from "../../../../infra/logger.ts";
 import { WebSocketUploadCapacity } from "../service/websocket-upload-capacity.ts";
@@ -336,7 +337,7 @@ function subscriptionAddress(endpoint: URL): {
 }
 
 function bearerCredential(frameHeaders: Headers): string {
-    const credential = (frameHeaders.get("authorization") ?? "").match(/^Bearer ([^\s]+)$/u)?.[1];
+    const credential = readBearerToken(frameHeaders);
     if (credential === undefined) {
         throw new WebSocketDispatchError();
     }

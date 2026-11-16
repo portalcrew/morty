@@ -5,6 +5,7 @@ import { ComputerManagementError, relayIdentifier } from "../contracts/computer-
 import { ManagementError } from "../contracts/management-error.ts";
 import { readTransferCredential } from "../contracts/transfer-credential.ts";
 import { readJsonBody } from "./body-parser.ts";
+import { readBearerToken } from "./request-headers.ts";
 
 export type ComputerTargetEnvironment = {
     readonly Variables: { readonly computerId: string };
@@ -28,8 +29,7 @@ export async function computerFromRuntimeCredential<E extends ComputerTargetEnvi
     context: Context<E>,
     next: Next,
 ) {
-    const authorization = context.req.header("authorization") ?? "";
-    const computerId = computerIdFromPrefixedValue(authorization.startsWith("Bearer ") ? authorization.slice(7) : "");
+    const computerId = computerIdFromPrefixedValue(readBearerToken(context.req.raw.headers) ?? "");
     context.set("computerId", computerIdentifier(computerId));
     await next();
 }

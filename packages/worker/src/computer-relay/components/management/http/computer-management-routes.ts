@@ -48,7 +48,11 @@ export function createComputerManagementRoutes(ctx: ManagementRouteContext) {
             using deadline = new RequestDeadline(context.req.raw.signal, 45000);
             const signal = deadline.signal;
             const { authentication, management } = application.services;
-            const local = await authentication.authorize(readBearerToken(context.req.raw), "replaceComputer", signal);
+            const local = await authentication.authorize(
+                readBearerToken(context.req.raw.headers),
+                "replaceComputer",
+                signal,
+            );
             switch (local.kind) {
                 case "unauthenticated":
                 case "revoked":
