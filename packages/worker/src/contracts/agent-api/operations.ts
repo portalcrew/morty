@@ -1,4 +1,4 @@
-import type { sessionWireJsonSchemas } from "@morty-build/client/protocol";
+import type { sessionWireJsonSchemas } from "@portalcrew/morty-client/protocol";
 import type * as v from "valibot";
 import { transferRedemptionInput } from "./identity-requests.ts";
 import { identityResponse, workspaceResponse } from "./responses.ts";

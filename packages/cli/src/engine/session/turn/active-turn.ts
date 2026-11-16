@@ -1,4 +1,4 @@
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     decodeIdentifier,
     type NativeSessionResult,
@@ -6,7 +6,7 @@ import {
     type SessionPromptCommand,
     SessionPromptDisposition,
     type SessionPromptDispositionCommand,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 
 import type { CommandDelegation } from "./execution-receipts.ts";
 

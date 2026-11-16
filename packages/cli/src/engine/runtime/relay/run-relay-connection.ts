@@ -1,11 +1,11 @@
-import { E2EError, type PayloadEncryptionConnection } from "@morty-build/client";
+import { E2EError, type PayloadEncryptionConnection } from "@portalcrew/morty-client";
 import {
     COMPUTER_HEARTBEAT_ACK_KIND,
     COMPUTER_HEARTBEAT_MESSAGE,
     COMPUTER_LIVENESS_READY_KIND,
     decodeMessageKind,
     decodeWorkerToDaemonMessage,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { type MessageEvent, WebSocket } from "undici";
 import type { Timer } from "../../util/timer.ts";
 import type { CommandServices } from "../command/context.ts";

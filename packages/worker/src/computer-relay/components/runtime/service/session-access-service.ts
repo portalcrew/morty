@@ -1,11 +1,11 @@
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     decodeNativeSessionTarget,
     type NativeSessionTarget,
     ProtocolMessageError,
     type SessionAccessGrant,
     type SessionAccessHolder,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { ComputerAuthenticationError } from "../../../../contracts/relay/computer-authentication.ts";
 import type { ComputerAccessService } from "../../management/service/computer-access-service.ts";
 import { SessionAccessCredentialExpiredError, type SessionAccessSigner } from "../entity/session-access-credential.ts";

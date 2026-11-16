@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
-import { isDirectoryPath, type WorkspaceEntry } from "@morty-build/client/protocol";
+import { isDirectoryPath, type WorkspaceEntry } from "@portalcrew/morty-client/protocol";
 import { canonicalPath, listDirectory, readPathMetadata } from "../../storage/files/local-files.ts";
 import { LocalAuthorizationError } from "./local-authorization-error.ts";
 

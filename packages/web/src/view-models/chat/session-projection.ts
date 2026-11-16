@@ -1,4 +1,4 @@
-import type { SessionEvent, SessionLiveEvent } from "@morty-build/client/protocol";
+import type { SessionEvent, SessionLiveEvent } from "@portalcrew/morty-client/protocol";
 import type { SessionPresentationEvent } from "./session-presentation.ts";
 import {
     appendSessionMessageEvent,

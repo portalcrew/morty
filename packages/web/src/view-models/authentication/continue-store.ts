@@ -1,5 +1,5 @@
-import { computerEncryptionAccessCodec, E2EError, importE2EPublicKey } from "@morty-build/client";
-import { isIdentifier, MAX_WORKSPACE_PATH_LENGTH } from "@morty-build/client/protocol";
+import { computerEncryptionAccessCodec, E2EError, importE2EPublicKey } from "@portalcrew/morty-client";
+import { isIdentifier, MAX_WORKSPACE_PATH_LENGTH } from "@portalcrew/morty-client/protocol";
 import { base64urlnopad } from "@scure/base";
 import { createStore } from "zustand/vanilla";
 import type { ApiTransport } from "@/services/api/api-transport";

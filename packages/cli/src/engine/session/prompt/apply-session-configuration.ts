@@ -3,7 +3,7 @@ import type {
     NativeSessionTarget,
     SessionConfigOption,
     SessionConfigurationSelection,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import type { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
 import type { Adapter } from "../../acp/native-history/preview-contract.ts";

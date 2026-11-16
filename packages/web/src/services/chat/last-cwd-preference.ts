@@ -1,4 +1,4 @@
-import { isDirectoryPath, MAX_WORKSPACE_PATH_LENGTH } from "@morty-build/client/protocol";
+import { isDirectoryPath, MAX_WORKSPACE_PATH_LENGTH } from "@portalcrew/morty-client/protocol";
 import {
     centralLocalStorage,
     lastCwdEntry,

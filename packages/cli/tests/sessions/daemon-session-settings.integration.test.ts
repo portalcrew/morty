@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     AGENT_SETTINGS_DISCOVER_KIND,
     AGENT_SETTINGS_DISCOVERED_KIND,
@@ -22,8 +22,8 @@ import {
     type SessionLiveEvent,
     type SessionPromptCommand,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
+} from "@portalcrew/morty-client/protocol";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
 import { describe, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
 import { RuntimeLocalContext } from "../../src/engine/runtime/config.ts";

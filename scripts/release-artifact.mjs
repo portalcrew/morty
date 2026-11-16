@@ -31,9 +31,9 @@ export async function verifiedRelease() {
     const manifest = JSON.parse(await readFile(".release/release.json", "utf8"));
     const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
     if (
-        manifest.name !== "@morty-build/cli" ||
+        manifest.name !== "@portalcrew/morty" ||
         !/^\d+\.\d+\.\d+$/.test(manifest.version) ||
-        manifest.archive !== `morty-build-cli-${manifest.version}.tgz` ||
+        manifest.archive !== `portalcrew-morty-${manifest.version}.tgz` ||
         manifest.revision !== revision
     ) {
         throw new Error("Release identity or source mismatch");

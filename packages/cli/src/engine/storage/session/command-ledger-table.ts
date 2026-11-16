@@ -1,4 +1,4 @@
-import { decodeNativeSessionTarget, type NativeSessionTarget } from "@morty-build/client/protocol";
+import { decodeNativeSessionTarget, type NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { and, asc, desc, eq, inArray, lt, max } from "drizzle-orm";
 import { z } from "zod";
 import { command, commandOutcome } from "../../schema/acp-session-store/index.ts";

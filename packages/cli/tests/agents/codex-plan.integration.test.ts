@@ -9,7 +9,7 @@ import {
     encodeSessionPromptCommand,
     type SessionEventPayload,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { CodexAppServerClient } from "../../src/engine/acp/harness/codex/app-server-client.ts";
 import { threadStartResponseSchema } from "../../src/engine/acp/harness/codex/app-server-protocol.ts";

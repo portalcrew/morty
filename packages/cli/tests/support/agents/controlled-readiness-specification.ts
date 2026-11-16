@@ -8,7 +8,7 @@ import {
     type RequestPermissionResponse,
     type SessionNotification,
 } from "@agentclientprotocol/sdk/unstable";
-import type { SessionCapabilities } from "@morty-build/client/protocol";
+import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../../src/engine/acp/acp-error.ts";
 import type { AcpAgentDefinition } from "../../../src/engine/acp/agent/agent-definition.ts";
 import { normalizeAcpCapabilities } from "../../../src/engine/acp/protocol/session-capabilities.ts";

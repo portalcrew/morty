@@ -1,5 +1,5 @@
 import { PROTOCOL_VERSION } from "@agentclientprotocol/sdk/unstable";
-import { decodeAgentPromptResponse, type SessionConfigOption } from "@morty-build/client/protocol";
+import { decodeAgentPromptResponse, type SessionConfigOption } from "@portalcrew/morty-client/protocol";
 import { runCleanup } from "../../../util/run-cleanup.ts";
 import { truncate } from "../../../util/value-utils.ts";
 import { AcpConfigurationValueUnavailableError, AcpExecutionError } from "../../acp-error.ts";

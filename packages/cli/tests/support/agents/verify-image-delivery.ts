@@ -10,7 +10,7 @@ import {
     type SessionEvent,
     type SessionLiveEvent,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect } from "vitest";
 import type { RealDaemonPeer } from "./real-daemon.ts";
 

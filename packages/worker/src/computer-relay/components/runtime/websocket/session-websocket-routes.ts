@@ -1,5 +1,5 @@
-import { sameNativeSession } from "@morty-build/client/native-session";
-import { MORTY_API_PREFIX, type NativeSessionTarget } from "@morty-build/client/protocol";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
+import { MORTY_API_PREFIX, type NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import * as v from "valibot";

@@ -5,7 +5,10 @@ import {
     methods,
     PROTOCOL_VERSION,
 } from "@agentclientprotocol/sdk/unstable";
-import { type ControlledAcpPeer, ControlledEndpointConnection } from "@morty-build/runtime-test-support/fake-daemon";
+import {
+    type ControlledAcpPeer,
+    ControlledEndpointConnection,
+} from "@portalcrew/morty-runtime-test-support/fake-daemon";
 import type { AgentTermination } from "../../../src/engine/acp/agent/agent-lifecycle.ts";
 import type { AgentConnectionFactory } from "./agent-connection.ts";
 

@@ -51,7 +51,7 @@ test("Given a new visitor reviewing setup, When they expand its details, Then th
 
     const steps = getAllByRole(getByRole(document.body, "list", { name: "What setup does" }), "listitem");
     expect(steps.map((step) => step.textContent)).toEqual([
-        "Installs the Morty CLI (@morty-build/cli) from npm. Use npx @morty-build/cli@latest restart to install updates.",
+        "Installs the Morty CLI (@portalcrew/morty) from npm. Use npx @portalcrew/morty@latest restart to install updates.",
         "Runs a background connection until restart or morty stop.",
         "Keeps this computer's Morty identity in your user data folder.",
         "Asks before replacing a missing connection, which ends earlier shared access.",

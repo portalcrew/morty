@@ -162,9 +162,11 @@ jobs:
         with:
           name: morty-release
           path: .release
-      - name: Publish accepted bytes with OIDC and verify registry integrity
+      - name: Publish accepted bytes with provenance and verify registry integrity
         env:
           GITHUB_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+          # Used only to create the new package; remove after configuring its trusted publisher.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
         run: node scripts/publish-release.mjs
 
   github-release:

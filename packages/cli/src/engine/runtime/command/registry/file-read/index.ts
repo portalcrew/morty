@@ -4,7 +4,7 @@ import {
     fileBeginEventCodec,
     fileEndEventCodec,
     fileFailedEventCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { WebSocket } from "undici";
 import { SessionError } from "../../../../session/api/session-error.ts";
 import { streamLocalFile } from "../../../../session/content/session-files.ts";

@@ -1,4 +1,4 @@
-import type { SessionAccessHolder } from "@morty-build/client/protocol";
+import type { SessionAccessHolder } from "@portalcrew/morty-client/protocol";
 import { createMiddleware } from "hono/factory";
 import { accessHolder, type LocalOperation } from "../../../../contracts/authentication/credential.ts";
 import type { Session } from "../../../../contracts/authentication/session.ts";

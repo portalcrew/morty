@@ -1,5 +1,5 @@
 {
-    "name": "@morty-build/web",
+    "name": "@portalcrew/morty-web",
     "version": "0.0.1",
     "license": "Apache-2.0",
     "private": true,
@@ -11,7 +11,7 @@
     },
     "dependencies": {
         "@scure/base": "catalog:",
-        "@morty-build/client": "workspace:*",
+        "@portalcrew/morty-client": "workspace:*",
         "@sentry/react": "catalog:",
         "@streamdown/math": "catalog:",
         "@streamdown/mermaid": "catalog:",

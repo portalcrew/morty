@@ -1,4 +1,4 @@
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import {
     promptStopReason,
     type SESSION_ARCHIVE_KIND,
@@ -17,7 +17,7 @@ import {
     sessionPromptSteeredEventCodec,
     sessionTurnStoppedEventCodec,
     sessionTurnWithdrawnEventCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { WebSocket } from "undici";
 import { SessionError } from "../../../session/api/session-error.ts";
 import { settleAbandonedTurn } from "../../../session/prompt/prompt-lifecycle.ts";

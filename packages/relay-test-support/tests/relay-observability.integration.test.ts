@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER, computerCredentialSuccessor } from "@morty-build/client/protocol";
+import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER, computerCredentialSuccessor } from "@portalcrew/morty-client/protocol";
 import { build } from "esbuild";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { afterAll, beforeAll, expect, it } from "vitest";

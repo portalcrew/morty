@@ -7,7 +7,7 @@ import {
     decodeSessionEventEnvelope,
     encodeSessionPromptCommand,
     type SessionLiveEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
 import { type RealDaemonPeer, withControlledDaemon } from "../support/agents/real-daemon.ts";

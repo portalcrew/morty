@@ -2,7 +2,7 @@ import type {
     SessionConfigOption,
     SessionConfigurationSelection,
     WorkspaceEntriesEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import {
     type BotChatApi,

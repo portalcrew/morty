@@ -1,5 +1,5 @@
 {
-    "name": "@morty-build/relay-test-support",
+    "name": "@portalcrew/morty-relay-test-support",
     "version": "0.0.1",
     "license": "Apache-2.0",
     "private": true,
@@ -14,7 +14,7 @@
     },
     "dependencies": {
         "@cloudflare/workers-types": "^5.20261028.1",
-        "@morty-build/client": "workspace:*",
+        "@portalcrew/morty-client": "workspace:*",
         "@types/ws": "^8.18.2",
         "esbuild": "catalog:",
         "hono": "catalog:",

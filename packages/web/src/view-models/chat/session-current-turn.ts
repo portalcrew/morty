@@ -1,4 +1,4 @@
-import { decodeIdentifier } from "@morty-build/client/protocol";
+import { decodeIdentifier } from "@portalcrew/morty-client/protocol";
 import type { DelegationStage } from "./session-lifecycle.ts";
 
 // The turn the Session treats as current: the command the service reported running or accepted from this page and

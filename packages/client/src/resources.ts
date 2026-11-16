@@ -4,7 +4,7 @@ import type {
     SessionElicitationFormContent,
     SessionPromptAcceptedEvent,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 
 import { MortyValidationError } from "./errors.ts";
 

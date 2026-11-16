@@ -1,12 +1,12 @@
 import { SELF } from "cloudflare:test";
-import { createClientPayloadEncryption, exportE2EPublicKey, generateE2EIdentity } from "@morty-build/client";
+import { createClientPayloadEncryption, exportE2EPublicKey, generateE2EIdentity } from "@portalcrew/morty-client";
 import {
     CONTENT_CHUNK_MAX_BYTES,
     CONTENT_UPLOAD_MAX_ENCODED_BYTES,
     encodeContentChunkFrame,
     FILE_STREAM_CONTENT_TYPE,
     sessionEventsSubscribeCommandCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, it, vi } from "vitest";
 import { acceptWebSocketHttpTransport } from "../../src/computer-relay/components/runtime/http/websocket-http-transport.ts";
 import { SessionRuntimeError } from "../../src/contracts/relay/session.ts";

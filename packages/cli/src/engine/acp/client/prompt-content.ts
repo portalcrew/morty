@@ -1,5 +1,5 @@
 import type { ContentBlock } from "@agentclientprotocol/sdk/unstable";
-import type { SessionCapabilities } from "@morty-build/client/protocol";
+import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../acp-error.ts";
 
 /** One image attachment of a prompt, as the ACP content block will carry it. */

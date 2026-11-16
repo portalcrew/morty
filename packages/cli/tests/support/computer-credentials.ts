@@ -1,4 +1,4 @@
-import { computerCredentialSuccessor } from "@morty-build/client/protocol";
+import { computerCredentialSuccessor } from "@portalcrew/morty-client/protocol";
 import type {
     ComputerCredentialRotation,
     ComputerCredentials,

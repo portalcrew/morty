@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
-import { MortyClient, MortyPageRequest, WsTransport } from "@morty-build/client";
-import type { SessionConfigurationSelection } from "@morty-build/client/protocol";
+import { MortyClient, MortyPageRequest, WsTransport } from "@portalcrew/morty-client";
+import type { SessionConfigurationSelection } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { afterEach, test as baseTest, beforeEach, expect, onTestFinished, vi } from "vitest";
 import type { ControlledAgent } from "../../../tests/support/fake-daemon/runtime.ts";

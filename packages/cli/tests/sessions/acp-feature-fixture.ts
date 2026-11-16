@@ -6,7 +6,7 @@ import type {
     SessionEventPayload,
     SessionLiveEvent,
     SessionPermissionRequestedEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { AcpAgentDefinition } from "../../src/engine/acp/agent/agent-definition.ts";
 import type { SessionObserver } from "../../src/engine/session/api/session-api.ts";
 import { ControlledAcpConnection } from "../support/agents/controlled-acp-connection.ts";

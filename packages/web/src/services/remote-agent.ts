@@ -5,7 +5,7 @@ import {
     MortyPageRequest,
     MortyProtocolError,
     MortyValidationError,
-} from "@morty-build/client";
+} from "@portalcrew/morty-client";
 import * as v from "valibot";
 import { WorkerApiTransport } from "./api/worker-api-transport.ts";
 import { BotChatApi } from "./chat/bot-chat-api.ts";

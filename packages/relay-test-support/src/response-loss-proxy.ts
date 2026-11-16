@@ -1,7 +1,7 @@
 import { EventEmitter, once } from "node:events";
 import { createServer, request } from "node:http";
 import { brotliDecompressSync, gunzipSync, inflateSync } from "node:zlib";
-import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER } from "@morty-build/client/protocol";
+import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER } from "@portalcrew/morty-client/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 import { listen, port } from "./websocket.ts";
 

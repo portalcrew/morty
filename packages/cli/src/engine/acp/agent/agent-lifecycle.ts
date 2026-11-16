@@ -1,4 +1,4 @@
-import type { LifecycleMetadata } from "@morty-build/client/protocol";
+import type { LifecycleMetadata } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../acp-error.ts";
 
 export type AgentTermination =

@@ -1,4 +1,4 @@
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     type AGENT_SETTINGS_DISCOVER_KIND,
     type ClientToRelayMessage,
@@ -15,7 +15,7 @@ import {
     SESSION_EVENTS_SUBSCRIBE_KIND,
     type SessionEventsSubscribeCommandRouting,
     sessionEventsSubscribeCommandCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import type { SessionViewer } from "../../../../contracts/session-event-subscription.ts";
 import { logger } from "../../../../infra/logger.ts";

@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { decodeMessageKind, decodeNativeSessionResult, encodeNativeSessionCommand } from "@morty-build/client/protocol";
+import {
+    decodeMessageKind,
+    decodeNativeSessionResult,
+    encodeNativeSessionCommand,
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { ClaudeCodeAgentSpecification } from "../../src/engine/agent/specification/vendors/claude-code-agent.ts";
 import { ClaudeFixture } from "../support/agents/claude.ts";

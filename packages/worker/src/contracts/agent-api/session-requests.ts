@@ -13,7 +13,7 @@ import {
     sessionPromptCommandCodec,
     sessionPromptDispositionCommandCodec,
     sessionRenameCommandCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { PairingDirectoryError } from "../relay/pairing.ts";
 

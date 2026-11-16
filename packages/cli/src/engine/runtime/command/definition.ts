@@ -4,7 +4,7 @@ import type {
     SessionEventsUnsubscribeControl,
     WorkerFileCredit,
     WorkerRequestCancel,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { CommandContext } from "./context.ts";
 
 export type DaemonCommand = ClientCommand | SessionEventsUnsubscribeControl | WorkerRequestCancel | WorkerFileCredit;

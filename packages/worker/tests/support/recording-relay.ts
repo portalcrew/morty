@@ -5,7 +5,7 @@ import {
     contentChunkCodec,
     decodeContentChunkAck,
     decodeMessageKind,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 
 type UploadGate = {

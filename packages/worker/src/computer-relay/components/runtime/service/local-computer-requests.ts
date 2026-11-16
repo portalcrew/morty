@@ -1,4 +1,4 @@
-import type { NativeSessionCommandRouting, NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionCommandRouting, NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import { logger } from "../../../../infra/logger.ts";

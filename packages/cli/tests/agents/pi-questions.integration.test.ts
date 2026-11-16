@@ -12,7 +12,7 @@ import {
     encodeSessionPromptCommand,
     promptStopReason,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test, vi } from "vitest";
 import { PiAgentSpecification } from "../../src/engine/agent/specification/vendors/pi-agent.ts";
 import type { Timer } from "../../src/engine/util/timer.ts";

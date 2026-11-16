@@ -10,7 +10,7 @@ import {
     type SessionMetadata,
     type SessionReadyBody,
     type SessionReadyEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import type { NativeSessionInfo } from "../../acp/protocol/native-session.ts";
 import { sessionIdSchema } from "../../acp/protocol/native-session.ts";

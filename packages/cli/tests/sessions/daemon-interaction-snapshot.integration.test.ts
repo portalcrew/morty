@@ -37,8 +37,8 @@ import {
     SESSION_READY_KIND,
     SESSION_RESTORED_KIND,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
+} from "@portalcrew/morty-client/protocol";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
 import { expect, test, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { RuntimeLocalContext } from "../../src/engine/runtime/config.ts";

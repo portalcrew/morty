@@ -2,14 +2,14 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     decodeMessageKind,
     decodeSessionsQueriedEvent,
     encodeSessionPromptCommand,
     encodeSessionQueryCommand,
     type SessionStatus,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
 import {

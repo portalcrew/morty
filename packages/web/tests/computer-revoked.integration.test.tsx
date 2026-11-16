@@ -22,5 +22,5 @@ test("Given a connected computer, When Morty revokes its Computer, Then the page
     expect(document.body.textContent).toContain("Run the Morty setup prompt on that computer again to reconnect it.");
     expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", true);
     expect(queryByRole(document.body, "button", { name: "Retry now" })).toBeNull();
-    expect(document.body.textContent).not.toContain("npx @morty-build/cli@latest start");
+    expect(document.body.textContent).not.toContain("npx @portalcrew/morty@latest start");
 });

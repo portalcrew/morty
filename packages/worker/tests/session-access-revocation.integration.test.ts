@@ -1,4 +1,4 @@
-import { MortyClient, MortyPageRequest, WsTransport } from "@morty-build/client";
+import { MortyClient, MortyPageRequest, WsTransport } from "@portalcrew/morty-client";
 import * as v from "valibot";
 import { afterEach, beforeEach, expect, onTestFinished, test, vi } from "vitest";
 import { createOwnerApi } from "../../../tests/support/owner-api.ts";

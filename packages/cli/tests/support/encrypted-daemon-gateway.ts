@@ -4,7 +4,7 @@ import {
     decodeMessageKind,
     decodeSessionReadyEvent,
     type NativeSessionTarget,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { WebSocket } from "ws";
 import { encryptedContentFrames } from "./agents/encrypted-content-frames.ts";
 import { createEncryptedDaemonFrames } from "./encrypted-daemon-frames.ts";

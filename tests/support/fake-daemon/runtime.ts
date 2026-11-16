@@ -8,7 +8,7 @@ import {
     createFakeDaemon,
     type FakeAgentHarnessOptions,
     type HarnessReplyPlan,
-} from "@morty-build/runtime-test-support/fake-daemon";
+} from "@portalcrew/morty-runtime-test-support/fake-daemon";
 import * as v from "valibot";
 import {
     createRuntimeConfig,

@@ -1,4 +1,4 @@
-import type { PayloadDecryptor } from "@morty-build/client";
+import type { PayloadDecryptor } from "@portalcrew/morty-client";
 import {
     COMPUTER_HEARTBEAT_ACK_KIND,
     COMPUTER_LIVENESS_READY_KIND,
@@ -10,7 +10,7 @@ import {
     sessionOperationFailedEventCodec,
     WORKER_FILE_CREDIT_KIND,
     WORKER_REQUEST_CANCEL_KIND,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { WebSocket } from "undici";
 
 import { operationErrorCode, operationErrorMessage } from "../../infra/operation-error.ts";

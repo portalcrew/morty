@@ -1,5 +1,5 @@
 import { setImmediate as yieldToRuntime } from "node:timers/promises";
-import type { SessionCapabilities, SessionConfigOption } from "@morty-build/client/protocol";
+import type { SessionCapabilities, SessionConfigOption } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../../src/engine/acp/acp-error.ts";
 import {
     type NativeSessionEvent,

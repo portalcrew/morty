@@ -1,5 +1,5 @@
 import * as acp from "@agentclientprotocol/sdk/unstable";
-import type { SessionCapabilities } from "@morty-build/client/protocol";
+import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import type { PromptDelegationStage } from "../../../../cli/src/engine/acp/agent/agent-lifecycle.ts";
 import type { FakeAgentHarnessOptions, HarnessOutput, HarnessReplyPlan } from "./model.ts";
 

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { describe, expect, it, vi } from "vitest";
 import { openPreviewEventCache } from "../../src/engine/acp/adapter/preview-event-cache.ts";
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";

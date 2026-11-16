@@ -1,4 +1,4 @@
-import type { AgentQuestion } from "@morty-build/client/protocol";
+import type { AgentQuestion } from "@portalcrew/morty-client/protocol";
 import type { AgentThinkingEntry } from "../../components/chat/agent-thinking.tsx";
 import type { ToolThinkingEntry } from "../../components/chat/tools/tool-renderer.ts";
 import type { TurnWorkSummary } from "../../components/chat/turn-work-disclosure.tsx";

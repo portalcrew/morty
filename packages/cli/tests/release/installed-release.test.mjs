@@ -15,7 +15,7 @@ async function installedEntry() {
         return process.env.MORTY_RELEASE_ENTRY;
     }
     for (const bin of (process.env.PATH ?? "").split(delimiter)) {
-        const candidate = join(bin, "..", "@morty-build", "cli", "dist", "cli.js");
+        const candidate = join(bin, "..", "@portalcrew", "morty", "dist", "cli.js");
         try {
             await access(candidate);
             return await realpath(candidate);

@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { type ComputerEncryptionAccess, createClientPayloadEncryption } from "@morty-build/client";
+import { type ComputerEncryptionAccess, createClientPayloadEncryption } from "@portalcrew/morty-client";
 import {
     agentSettingsDiscoverCommandCodec,
     agentSettingsDiscoveredEventCodec,
     agentSettingsDiscoveryFailedEventCodec,
     decodeIdentifier,
     decodeMessageKind,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import jsQrImport from "jsqr";
 import { PNG } from "pngjs";
 import QRCode from "qrcode";

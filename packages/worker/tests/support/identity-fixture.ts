@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
-import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
-import { createResponseLossProxy } from "@morty-build/relay-test-support/response-loss-proxy";
+import { prepareTestMortyRelayBindings } from "@portalcrew/morty-relay-test-support/cloudflare";
+import { createResponseLossProxy } from "@portalcrew/morty-relay-test-support/response-loss-proxy";
 import * as v from "valibot";
 import { expect } from "vitest";
 import { createSessionExecutionProxy } from "../../../../tests/support/session-execution-proxy.ts";

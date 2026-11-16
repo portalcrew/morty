@@ -1,4 +1,4 @@
-import { decodeIdentifier, type Identifier } from "@morty-build/client/protocol";
+import { decodeIdentifier, type Identifier } from "@portalcrew/morty-client/protocol";
 import {
     type ChatAgentSelection,
     type ChatComputer,

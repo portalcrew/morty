@@ -13,7 +13,7 @@ import {
     type NativeSessionTarget,
     SESSION_OPERATION_FAILED_KIND,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
 import { type DaemonConnectionPeer, type RealDaemonPeer, withControlledDaemon } from "../support/agents/real-daemon.ts";

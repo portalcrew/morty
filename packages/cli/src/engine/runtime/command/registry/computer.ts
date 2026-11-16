@@ -3,7 +3,7 @@ import {
     COMPUTER_PONG_KIND,
     computerDiagnosticsResultCodec,
     computerPongEventCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import packageMetadata from "../../../../../package.json" with { type: "json" };
 import { runtimeEnvironmentDiagnostics } from "../../observability/environment-diagnostics.ts";
 import type { CommandHandler } from "../definition.ts";

@@ -8,7 +8,7 @@ import {
     promptStopReason,
     type SessionLiveEvent,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { z } from "zod";
 import { CodexAppServerClient } from "../../src/engine/acp/harness/codex/app-server-client.ts";

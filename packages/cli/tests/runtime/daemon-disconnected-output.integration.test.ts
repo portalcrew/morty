@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type AgentConnection, agent, methods, PROTOCOL_VERSION } from "@agentclientprotocol/sdk/unstable";
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     decodeMessageKind,
     decodeSessionEventEnvelope,
@@ -20,9 +20,12 @@ import {
     SESSION_EVENT_KIND,
     type SessionLiveEvent,
     WORKSPACE_ENTRIES_KIND,
-} from "@morty-build/client/protocol";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
-import { type ControlledAcpPeer, ControlledEndpointConnection } from "@morty-build/runtime-test-support/fake-daemon";
+} from "@portalcrew/morty-client/protocol";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
+import {
+    type ControlledAcpPeer,
+    ControlledEndpointConnection,
+} from "@portalcrew/morty-runtime-test-support/fake-daemon";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { IdentifiedSessionNotification } from "../../src/engine/acp/connection/session-notification.ts";

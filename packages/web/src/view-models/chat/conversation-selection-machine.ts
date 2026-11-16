@@ -1,5 +1,5 @@
-import { sameNativeSession } from "@morty-build/client/native-session";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { type OpenMortySession, type SelectedMortySession, selectedSession } from "./open-session.ts";
 
 export type ConversationSelectionState =

@@ -2,7 +2,7 @@ import type {
     NativeSessionTarget,
     SessionEventsSubscribeCommand,
     SessionEventsUnsubscribeControl,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 
 /** Tracks the relay's current Session viewers for this Computer connection. */
 export function createSessionSubscriptions(changed: () => void) {

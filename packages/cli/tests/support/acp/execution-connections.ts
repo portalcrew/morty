@@ -1,6 +1,6 @@
 import { isAbsolute, resolve } from "node:path";
 import { methods, RequestError } from "@agentclientprotocol/sdk/unstable";
-import { decodeAgentPromptResponse, type SessionConfigOption } from "@morty-build/client/protocol";
+import { decodeAgentPromptResponse, type SessionConfigOption } from "@portalcrew/morty-client/protocol";
 import { z } from "zod";
 import { AcpConfigurationValueUnavailableError, AcpExecutionError } from "../../../src/engine/acp/acp-error.ts";
 import { buildPromptContent } from "../../../src/engine/acp/client/prompt-content.ts";

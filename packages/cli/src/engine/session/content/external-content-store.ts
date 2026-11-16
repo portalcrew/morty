@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { nativeSessionKey } from "@morty-build/client/native-session";
-import { decodeNativeSessionTarget, type NativeSessionTarget } from "@morty-build/client/protocol";
+import { nativeSessionKey } from "@portalcrew/morty-client/native-session";
+import { decodeNativeSessionTarget, type NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { z } from "zod";
 import { OperationError } from "../../infra/operation-error.ts";
 import { ScratchDirectory } from "../../storage/files/scratch-directory.ts";

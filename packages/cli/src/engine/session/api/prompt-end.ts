@@ -1,4 +1,4 @@
-import type { PromptCompletion } from "@morty-build/client/protocol";
+import type { PromptCompletion } from "@portalcrew/morty-client/protocol";
 
 /** How a prompt's execution ended, before its receipts say whether it ever started. */
 export type PromptEnd =

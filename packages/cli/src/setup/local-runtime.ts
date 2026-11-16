@@ -1,4 +1,4 @@
-import { E2EError } from "@morty-build/client";
+import { E2EError } from "@portalcrew/morty-client";
 import { readLocalAgentInventory } from "../daemon/agents/local-agent-inventory.ts";
 import { pairThisComputer, serveCurrentPairing } from "../daemon/lifecycle/serve-pairing.ts";
 import { openMortyInstallation } from "../daemon/pairing/pair-local-computer.ts";

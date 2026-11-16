@@ -24,8 +24,8 @@ import {
     MORTY_API_PREFIX,
     type NativeSessionTarget,
     SESSION_EVENT_KIND,
-} from "@morty-build/client/protocol";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
+} from "@portalcrew/morty-client/protocol";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
 import { type WebSocket, WebSocketServer } from "ws";
 import { collectLocalDaemonLogs } from "../../../src/cli/handler/logs/logic/collect-local-logs.ts";
 import { sendLocalRequest } from "../../../src/daemon/control/local-client.ts";

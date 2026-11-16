@@ -1,4 +1,4 @@
-import type { SessionEventPayload } from "@morty-build/client/protocol";
+import type { SessionEventPayload } from "@portalcrew/morty-client/protocol";
 import type { AgentProcessPool } from "../../session/process/agent-process-pool.ts";
 import { AcpExecutionError } from "../acp-error.ts";
 import { agentOperationError, waitForAgentOperation } from "../connection/agent-operation.ts";

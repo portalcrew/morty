@@ -1,4 +1,4 @@
-import type { SessionConfigOption } from "@morty-build/client/protocol";
+import type { SessionConfigOption } from "@portalcrew/morty-client/protocol";
 
 /** Evidence from the response that supplied the menu; never a new discovery made while reporting. */
 export interface AgentModelCatalog {

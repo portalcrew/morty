@@ -5,7 +5,7 @@ import {
     decodeMessageKind,
     decodeSessionPreviewHistoryPageLoaded,
     encodeSessionPreviewHistoryPageLoad,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { ControlledAcpSpecification } from "../support/agents/controlled-acp-specification.ts";
 

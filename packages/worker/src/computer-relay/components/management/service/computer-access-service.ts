@@ -1,4 +1,4 @@
-import type { SessionAccessGrant, SessionAccessHolder } from "@morty-build/client/protocol";
+import type { SessionAccessGrant, SessionAccessHolder } from "@portalcrew/morty-client/protocol";
 import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
 import { ComputerAuthenticationError } from "../../../../contracts/relay/computer-authentication.ts";
 import { validateIdentifier } from "../../../../contracts/relay/pairing.ts";

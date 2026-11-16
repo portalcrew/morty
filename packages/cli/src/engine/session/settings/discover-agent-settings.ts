@@ -6,7 +6,7 @@ import {
     type AgentSettingsDiscoveredEvent,
     type SessionConfigOption,
     type SessionConfigValue,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { AcpConfigurationValueUnavailableError, AcpExecutionError } from "../../acp/acp-error.ts";
 import type { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
 import {

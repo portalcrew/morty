@@ -1,5 +1,5 @@
 {
-    "name": "@morty-build/client",
+    "name": "@portalcrew/morty-client",
     "version": "0.0.0",
     "description": "Morty protocol contracts and the session client shared by Morty Web, the Runtime and the Worker.",
     "type": "module",

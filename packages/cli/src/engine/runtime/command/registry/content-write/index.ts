@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     CONTENT_AVAILABLE_KIND,
     type CONTENT_COMMIT_KIND,
@@ -14,7 +14,7 @@ import {
     FILE_FAILED_KIND,
     fileFailedEventCodec,
     type NativeSessionTarget,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { ScheduledTask } from "../../../../util/timer.ts";
 import type { CommandContext } from "../../context.ts";
 import type { CommandMessage } from "../../definition.ts";

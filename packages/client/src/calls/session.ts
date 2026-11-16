@@ -1,4 +1,4 @@
-import { decodeNativeSessionTarget, isIdentifier, type NativeSessionTarget } from "@morty-build/client/protocol";
+import { decodeNativeSessionTarget, isIdentifier, type NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { MortyValidationError } from "../errors.ts";
 import type { MortyTransportEndpoint, MortyTransportPolicy } from "./call.ts";
 

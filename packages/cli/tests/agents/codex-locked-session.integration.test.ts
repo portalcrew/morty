@@ -6,7 +6,7 @@ import {
     encodeNativeSessionCommand,
     encodeSessionPromptCommand,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { CodexAppServerClient } from "../../src/engine/acp/harness/codex/app-server-client.ts";
 import { CodexAgentSpecification } from "../../src/engine/agent/specification/vendors/codex-agent.ts";

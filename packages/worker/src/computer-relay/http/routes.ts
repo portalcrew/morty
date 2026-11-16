@@ -3,7 +3,7 @@ import {
     fileReadCommandCodec,
     MORTY_API_PREFIX,
     type NativeSessionTarget,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { ComputerManagementError } from "../../contracts/computer-management.ts";

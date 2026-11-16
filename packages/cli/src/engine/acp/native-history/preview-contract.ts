@@ -5,7 +5,7 @@ import type {
     SessionConfigOption,
     SessionConfigurationSelection,
     SessionEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { AgentProcessPool } from "../../session/process/agent-process-pool.ts";
 import type { NativeSessionSubscriber } from "../adapter/native-session-event.ts";
 import type { AcpAgentDefinition } from "../agent/agent-definition.ts";

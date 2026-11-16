@@ -13,8 +13,8 @@ import {
     SESSION_EVENT_KIND,
     type SessionPromptCommand,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
+} from "@portalcrew/morty-client/protocol";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
 import { describe, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
 import { RuntimeLocalContext } from "../../src/engine/runtime/config.ts";

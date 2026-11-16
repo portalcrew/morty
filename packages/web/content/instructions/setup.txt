@@ -18,7 +18,7 @@ Chat origin: {{BASE_URL}}
    Setup reads the current session from the harness itself; do not look up or ask
    for a session ID.
 3. Use the installed `morty` CLI. If it is not installed, run it with
-   `npx --yes @morty-build/cli@latest` instead of `morty` in the commands below.
+   `npx --yes @portalcrew/morty@latest` instead of `morty` in the commands below.
    Do not download or run a separate setup script. Stop if installation fails.
 4. Run the following command with real values and shell-appropriate quoting.
    Use the original absolute working directory.
@@ -98,5 +98,5 @@ Managing previously shared access:
 
 Returning Agent sessions to the computer:
 - When the user explicitly asks to release Morty Agent sessions so they can continue in the native Agent CLI or GUI, their request authorizes running `morty release` as the same operating-system user as setup. Do not ask for a second confirmation. It releases every idle Morty Agent session on this computer while Morty stays connected and pairing and Agent-native history are retained. A session that is still working, including this one, is not released.
-- If the running daemon must be updated, run `npx --yes @morty-build/cli@latest restart`, then retry release. Restart stops the running daemon and starts it from the invoked Morty release. `start` only ensures a daemon is running and reuses an existing daemon without upgrading it.
+- If the running daemon must be updated, run `npx --yes @portalcrew/morty@latest restart`, then retry release. Restart stops the running daemon and starts it from the invoked Morty release. `start` only ensures a daemon is running and reuses an existing daemon without upgrading it.
 - After it succeeds, give recovery instructions in their language. Run the Agent CLI from the original working directory. Codex: `codex resume` opens its session picker; its GUI can be restarted and the conversation selected. Claude Code: `claude --resume` opens its picker, while `claude --continue` chooses the most recent conversation in that directory; restart its GUI and select the conversation if needed. Pi: `pi --resume` opens its picker, while `pi --continue` chooses the most recent session in that directory. A picker is safer than guessing a session ID. Tell the user to exit the native session before continuing it in Morty again; continuing in Morty reopens it. To continue this conversation natively, they can run `morty release` in their terminal after this reply finishes.

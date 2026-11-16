@@ -4,7 +4,7 @@ import {
     encodeContentChunkFrame,
     isIdentifier,
     MORTY_API_PREFIX,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { MortyTransportCall } from "../calls/call.ts";
 import { computerEncryptionAccessCodec } from "../calls/encryption.ts";
 import {

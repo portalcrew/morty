@@ -1,4 +1,4 @@
-import type { SessionConfigOption, SessionConfigValue } from "@morty-build/client/protocol";
+import type { SessionConfigOption, SessionConfigValue } from "@portalcrew/morty-client/protocol";
 import { isRecord, readString } from "../../util/value-utils.ts";
 export const MAXIMUM_CONFIG_OPTIONS = 100;
 

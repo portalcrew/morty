@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
-import { PROMPT_IMAGE_MAX_BYTES, type PromptAttachment } from "@morty-build/client/protocol";
+import { PROMPT_IMAGE_MAX_BYTES, type PromptAttachment } from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { buildPromptContent } from "../../src/engine/acp/client/prompt-content.ts";
 import { unsupportedSessionCapabilities } from "../../src/engine/acp/protocol/session-capabilities.ts";

@@ -1,4 +1,4 @@
-import type { SessionCapabilities } from "@morty-build/client/protocol";
+import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import type { ResolvedExecutable } from "../../util/process/executable.ts";
 import type { LocalAgentDiscoveryContext } from "../discovery/agent-discovery-context.ts";
 import type { AgentReadinessProbeParams } from "../discovery/agent-readiness.ts";

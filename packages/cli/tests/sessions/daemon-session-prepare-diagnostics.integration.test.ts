@@ -8,7 +8,7 @@ import {
     decodeMessageKind,
     decodeSessionOperationFailedEvent,
     encodeSessionCreateCommand,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
 import { executableSource } from "../support/agents/executable.ts";

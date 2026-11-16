@@ -1,4 +1,4 @@
-import type { SessionCapabilities } from "@morty-build/client/protocol";
+import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import type { ExecutableIdentity } from "../../util/process/executable.ts";
 
 /** A verified local Agent. Its adapter owns how connections are established. */

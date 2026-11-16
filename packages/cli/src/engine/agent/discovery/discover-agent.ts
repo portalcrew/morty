@@ -1,4 +1,4 @@
-import type { SessionCapabilities } from "@morty-build/client/protocol";
+import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
 import { unsupportedSessionCapabilities } from "../../acp/protocol/session-capabilities.ts";
 import { ProcessExecutionError } from "../../util/process/executable.ts";

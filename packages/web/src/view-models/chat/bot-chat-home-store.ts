@@ -1,5 +1,5 @@
-import { sameNativeSession } from "@morty-build/client/native-session";
-import { type NativeSessionTarget, readNativeSessionTarget } from "@morty-build/client/protocol";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
+import { type NativeSessionTarget, readNativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import { isApiConnectionError } from "../../services/api/worker-api-transport.ts";
 import {

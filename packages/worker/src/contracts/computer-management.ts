@@ -1,4 +1,4 @@
-import { type Identifier, isIdentifier } from "@morty-build/client/protocol";
+import { type Identifier, isIdentifier } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import type { HttpError } from "./http-error.ts";
 

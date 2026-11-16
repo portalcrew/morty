@@ -1,9 +1,9 @@
-import type { ForkMortyNativeSessionRequest } from "@morty-build/client";
+import type { ForkMortyNativeSessionRequest } from "@portalcrew/morty-client";
 import type {
     NativeSessionCommand,
     NativeSessionTarget,
     SessionConfigurationSelection,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { ApiRequest, ComputerCallTarget } from "./call.ts";
 import { commandCall, encodeComputerCall } from "./encode-call.ts";
 

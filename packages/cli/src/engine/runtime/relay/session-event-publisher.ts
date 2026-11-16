@@ -1,5 +1,5 @@
-import type { PayloadEncryptionConnection } from "@morty-build/client";
-import { NativeSessionMap } from "@morty-build/client/native-session";
+import type { PayloadEncryptionConnection } from "@portalcrew/morty-client";
+import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
 import {
     ENCRYPTED_MESSAGE_MAX_PLAINTEXT_BYTES,
     ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
@@ -11,7 +11,7 @@ import {
     type SessionLiveEvent,
     sessionCloseNoticeEventCodec,
     sessionEventEnvelopeCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { WebSocket } from "undici";
 import type { SessionEventSink } from "../../session/api/session-api.ts";
 import type { ScheduledTask, Timer } from "../../util/timer.ts";

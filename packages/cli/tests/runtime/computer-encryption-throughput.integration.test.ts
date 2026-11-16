@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createClientPayloadEncryption, createComputerPayloadEncryption, E2EError } from "@morty-build/client";
+import { createClientPayloadEncryption, createComputerPayloadEncryption, E2EError } from "@portalcrew/morty-client";
 import {
     agentSettingsDiscoverCommandCodec,
     agentSettingsDiscoveryFailedEventCodec,
@@ -11,7 +11,7 @@ import {
     contentWriteCommandCodec,
     fileFailedEventCodec,
     sessionOperationFailedEventCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { WebSocket } from "undici";
 import { expect, it, vi } from "vitest";
 import { WebSocket as PeerWebSocket, WebSocketServer } from "ws";

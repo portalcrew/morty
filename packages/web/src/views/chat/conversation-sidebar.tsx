@@ -1,5 +1,5 @@
-import { nativeSessionKey, sameNativeSession } from "@morty-build/client/native-session";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import { nativeSessionKey, sameNativeSession } from "@portalcrew/morty-client/native-session";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import {
     ArrowLeftRight,
     Check,

@@ -1,4 +1,4 @@
-import type { MortyClient } from "@morty-build/client";
+import type { MortyClient } from "@portalcrew/morty-client";
 import { disconnectedConnection, type SessionConnection, sessionReconnectAttempt } from "./session-connection.ts";
 
 // The pane's connection to its Session is one state machine. The loop that opens, watches and retries the connection

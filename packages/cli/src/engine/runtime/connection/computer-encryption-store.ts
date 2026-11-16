@@ -7,8 +7,8 @@ import {
     PAYLOAD_FUTURE_SKEW_MILLISECONDS,
     PAYLOAD_MAX_AGE_MILLISECONDS,
     type PayloadClaim,
-} from "@morty-build/client";
-import { type Identifier, isIdentifier } from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client";
+import { type Identifier, isIdentifier } from "@portalcrew/morty-client/protocol";
 import { z } from "zod";
 import { ReplayLedgerTable } from "../../storage/encryption/replay-ledger-table.ts";
 import { ensurePrivateDirectory } from "../../storage/files/local-files.ts";

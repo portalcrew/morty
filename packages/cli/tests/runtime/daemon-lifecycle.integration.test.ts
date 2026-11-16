@@ -5,8 +5,8 @@ import { createConnection, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { decodeMessageKind } from "@morty-build/client/protocol";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
+import { decodeMessageKind } from "@portalcrew/morty-client/protocol";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
 

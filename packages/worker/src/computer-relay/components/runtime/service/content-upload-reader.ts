@@ -2,7 +2,7 @@ import {
     CONTENT_UPLOAD_MAX_ENCODED_BYTES,
     decodeFileStreamRecord,
     type FileStreamRecord,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 
 /** Owns the bounded HTTP record buffer and cancellation of its underlying reader. */

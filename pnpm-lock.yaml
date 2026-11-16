@@ -192,10 +192,10 @@ importers:
       '@cloudflare/vite-plugin':
         specifier: 'catalog:'
         version: 1.65.0(@types/node@24.19.2)(bufferutil@4.1.0)(utf-8-validate@6.0.6)(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.14)(yaml@2.9.1))(workerd@1.20261023.1)(wrangler@4.154.0(@cloudflare/workers-types@5.20261028.1)(@types/node@24.19.2)(bufferutil@4.1.0)(utf-8-validate@6.0.6))
-      '@morty-build/client':
+      '@portalcrew/morty-client':
         specifier: workspace:*
         version: link:packages/client
-      '@morty-build/runtime-test-support':
+      '@portalcrew/morty-runtime-test-support':
         specifier: workspace:*
         version: link:packages/runtime-test-support
       '@sentry/cli':
@@ -265,10 +265,10 @@ importers:
       '@anthropic-ai/sdk':
         specifier: 1.6.0
         version: 1.6.0(zod@4.6.7)
-      '@morty-build/client':
+      '@portalcrew/morty-client':
         specifier: workspace:*
         version: link:../client
-      '@morty-build/relay-test-support':
+      '@portalcrew/morty-relay-test-support':
         specifier: workspace:*
         version: link:../relay-test-support
       '@types/node':
@@ -338,12 +338,12 @@ importers:
 
   packages/e2e:
     devDependencies:
-      '@morty-build/runtime-test-support':
-        specifier: workspace:*
-        version: link:../runtime-test-support
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.65.0
+      '@portalcrew/morty-runtime-test-support':
+        specifier: workspace:*
+        version: link:../runtime-test-support
       '@types/ws':
         specifier: ^8.18.2
         version: 8.18.2
@@ -359,7 +359,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20261028.1
         version: 5.20261028.1
-      '@morty-build/client':
+      '@portalcrew/morty-client':
         specifier: workspace:*
         version: link:../client
       '@types/ws':
@@ -389,7 +389,7 @@ importers:
       '@agentclientprotocol/sdk':
         specifier: 'catalog:'
         version: 2.4.0(zod@4.6.7)
-      '@morty-build/client':
+      '@portalcrew/morty-client':
         specifier: workspace:*
         version: link:../client
     devDependencies:
@@ -399,7 +399,7 @@ importers:
 
   packages/web:
     dependencies:
-      '@morty-build/client':
+      '@portalcrew/morty-client':
         specifier: workspace:*
         version: link:../client
       '@scure/base':
@@ -496,7 +496,7 @@ importers:
 
   packages/worker:
     dependencies:
-      '@morty-build/client':
+      '@portalcrew/morty-client':
         specifier: workspace:*
         version: link:../client
       '@valibot/to-json-schema':
@@ -521,7 +521,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20261028.1
         version: 5.20261028.1
-      '@morty-build/relay-test-support':
+      '@portalcrew/morty-relay-test-support':
         specifier: workspace:*
         version: link:../relay-test-support
       esbuild:

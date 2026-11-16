@@ -1,4 +1,4 @@
-import { MORTY_API_PREFIX } from "@morty-build/client/protocol";
+import { MORTY_API_PREFIX } from "@portalcrew/morty-client/protocol";
 import { fetch } from "undici";
 import { environmentProxyDispatcher } from "../../util/network/environment-proxy.ts";
 import type { RuntimeConfig } from "../config.ts";

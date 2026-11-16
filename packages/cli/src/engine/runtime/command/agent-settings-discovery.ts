@@ -1,10 +1,10 @@
-import type { PayloadEncryptionConnection } from "@morty-build/client";
+import type { PayloadEncryptionConnection } from "@portalcrew/morty-client";
 import {
     AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
     type AgentSettingsDiscoverCommand,
     agentSettingsDiscoveredEventCodec,
     agentSettingsDiscoveryFailedEventCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { WebSocket } from "undici";
 import { OperationError, operationErrorCode, operationErrorMessage } from "../../infra/operation-error.ts";
 import type { ResolveAgent } from "../../session/api/session-api.ts";

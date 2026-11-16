@@ -1,5 +1,5 @@
-import { NativeSessionSet } from "@morty-build/client/native-session";
-import { decodeSessionEvent, type NativeSessionTarget, type SessionEvent } from "@morty-build/client/protocol";
+import { NativeSessionSet } from "@portalcrew/morty-client/native-session";
+import { decodeSessionEvent, type NativeSessionTarget, type SessionEvent } from "@portalcrew/morty-client/protocol";
 import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { NodeSQLiteDatabase } from "drizzle-orm/node-sqlite";
 import { z } from "zod";

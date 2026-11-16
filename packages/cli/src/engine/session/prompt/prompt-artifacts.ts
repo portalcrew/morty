@@ -4,7 +4,7 @@ import {
     MAX_PROMPT_ATTACHMENT_BYTES,
     PROMPT_IMAGE_MAX_BYTES,
     type PromptAttachment,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { PromptImageInput, PromptResourceInput } from "../../acp/client/prompt-content.ts";
 import { OperationError } from "../../infra/operation-error.ts";
 

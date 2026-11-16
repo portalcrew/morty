@@ -1,4 +1,4 @@
-import type { MortyTransportPolicy } from "@morty-build/client";
+import type { MortyTransportPolicy } from "@portalcrew/morty-client";
 
 export interface ComputerCallTarget {
     readonly origin: string;

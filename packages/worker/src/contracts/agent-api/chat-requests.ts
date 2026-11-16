@@ -21,7 +21,7 @@ import {
     sessionRestoreCommandCodec,
     type WorkspaceListCommandRouting,
     workspaceListCommandCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 
 // The request bodies the Chat API accepts. Its routes validate with these schemas, and the published agent API

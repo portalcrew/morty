@@ -1,4 +1,4 @@
-import type { HarnessReplyPlan } from "@morty-build/runtime-test-support/fake-daemon";
+import type { HarnessReplyPlan } from "@portalcrew/morty-runtime-test-support/fake-daemon";
 import {
     type ControlledAgentBehavior,
     connectControlledAgentRuntime,

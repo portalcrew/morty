@@ -1,4 +1,4 @@
-import { FILE_STREAM_CONTENT_TYPE } from "@morty-build/client/protocol";
+import { FILE_STREAM_CONTENT_TYPE } from "@portalcrew/morty-client/protocol";
 import { Hono, type MiddlewareHandler } from "hono";
 import type { ConfiguredRelayBindings } from "../../contracts/relay-bindings.ts";
 import {

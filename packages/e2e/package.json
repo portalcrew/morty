@@ -1,5 +1,5 @@
 {
-    "name": "@morty-build/e2e",
+    "name": "@portalcrew/morty-e2e",
     "version": "0.0.1",
     "license": "Apache-2.0",
     "private": true,
@@ -12,7 +12,7 @@
         "typecheck": "tsc --project tsconfig.json"
     },
     "devDependencies": {
-        "@morty-build/runtime-test-support": "workspace:*",
+        "@portalcrew/morty-runtime-test-support": "workspace:*",
         "@playwright/test": "catalog:",
         "@types/ws": "^8.18.2",
         "playwright-core": "catalog:",

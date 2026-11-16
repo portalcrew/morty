@@ -1,5 +1,5 @@
 import type { ContentBlock, SessionUpdate, ToolCallContent } from "@agentclientprotocol/sdk/unstable";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { z } from "zod";
 
 /** One blob pulled out of an Agent update. The caller stores it and keeps the returned key. */

@@ -1,4 +1,4 @@
-import { MORTY_API_PREFIX } from "@morty-build/client/protocol";
+import { MORTY_API_PREFIX } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 
 // The JSON text frames of the Computer WebSocket transport. The transport reads frames with these limits, and the

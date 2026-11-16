@@ -7,7 +7,7 @@ import type {
     ToolCallUpdate,
     ToolKind,
 } from "@agentclientprotocol/sdk/unstable";
-import type { AgentQuestion } from "@morty-build/client/protocol";
+import type { AgentQuestion } from "@portalcrew/morty-client/protocol";
 import { z } from "zod";
 import { type ThreadItem, threadItemSchema } from "./app-server-protocol.ts";
 

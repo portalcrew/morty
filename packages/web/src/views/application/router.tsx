@@ -1,4 +1,4 @@
-import { isIdentifier } from "@morty-build/client/protocol";
+import { isIdentifier } from "@portalcrew/morty-client/protocol";
 import { createRootRoute, createRoute, createRouter, Outlet, useRouter } from "@tanstack/react-router";
 import { Button } from "../../components/ui/cloud-button.tsx";
 import { describePageFailure } from "../../view-models/format-error.ts";

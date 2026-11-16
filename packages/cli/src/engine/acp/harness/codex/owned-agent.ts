@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import type { ContentBlock, PermissionOption, PromptResponse } from "@agentclientprotocol/sdk/unstable";
-import type { AgentQuestion } from "@morty-build/client/protocol";
+import type { AgentQuestion } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp-error.ts";
 import type { NativeSessionInteractions } from "../../adapter/native-session-event.ts";
 import { type AgentTermination, agentTerminationError, type BackgroundActivity } from "../../agent/agent-lifecycle.ts";

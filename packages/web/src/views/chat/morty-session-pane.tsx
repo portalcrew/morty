@@ -1,4 +1,4 @@
-import type { SessionConfigurationSelection } from "@morty-build/client/protocol";
+import type { SessionConfigurationSelection } from "@portalcrew/morty-client/protocol";
 import { Check, CircleAlert, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useStore } from "zustand";

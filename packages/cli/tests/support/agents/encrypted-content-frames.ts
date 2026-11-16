@@ -1,5 +1,5 @@
-import type { PayloadDecryptor, PayloadEncryptor } from "@morty-build/client";
-import { contentChunkCodec, decodeContentChunkFrame, encodeContentChunkFrame } from "@morty-build/client/protocol";
+import type { PayloadDecryptor, PayloadEncryptor } from "@portalcrew/morty-client";
+import { contentChunkCodec, decodeContentChunkFrame, encodeContentChunkFrame } from "@portalcrew/morty-client/protocol";
 
 /** Translates file-transfer frames at the test peer's plaintext protocol boundary. */
 export function encryptedContentFrames(encryption: PayloadEncryptor & PayloadDecryptor, signal: AbortSignal) {

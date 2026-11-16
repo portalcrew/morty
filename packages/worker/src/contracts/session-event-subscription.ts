@@ -2,7 +2,7 @@ import type {
     NativeSessionTarget,
     SessionAccessGrant,
     SessionEventsSubscribeCommandRouting,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 
 export interface SessionViewerIdentity {
     /** When the viewer's Session credential ends. */

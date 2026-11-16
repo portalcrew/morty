@@ -5,7 +5,7 @@ import {
     type ControlledSessionUpdate,
     controlledSessionUpdates,
     fakeHarnessCapabilities,
-} from "@morty-build/runtime-test-support/fake-daemon";
+} from "@portalcrew/morty-runtime-test-support/fake-daemon";
 import type { AgentTermination } from "../../../packages/cli/src/engine/acp/agent/agent-lifecycle.ts";
 import { createControlledAgent } from "../../../packages/cli/tests/support/agents/controlled-agent-definition.ts";
 

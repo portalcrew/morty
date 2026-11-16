@@ -1,4 +1,4 @@
-import { externalContentPath } from "@morty-build/client";
+import { externalContentPath } from "@portalcrew/morty-client";
 import type {
     AcpSessionUpdate,
     AgentQuestion,
@@ -6,7 +6,7 @@ import type {
     PromptCompletion,
     SessionEvent,
     SessionLiveEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { AgentDisplayContent } from "../../components/agents/display-content.ts";
 import {
     REASONING_CHARACTER_LIMIT,

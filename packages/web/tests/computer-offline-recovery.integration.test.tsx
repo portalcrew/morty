@@ -269,9 +269,9 @@ test("Given an open conversation, When its computer goes offline, Then the notic
         expect(element.textContent).toContain("Computer is offline");
         return element;
     });
-    expect(getByRole(notice, "code").textContent).toBe("npx @morty-build/cli@latest start");
+    expect(getByRole(notice, "code").textContent).toBe("npx @portalcrew/morty@latest start");
     await app.user.click(getByRole(notice, "button", { name: "Copy command" }));
-    expect(await navigator.clipboard.readText()).toBe("npx @morty-build/cli@latest start");
+    expect(await navigator.clipboard.readText()).toBe("npx @portalcrew/morty@latest start");
 });
 
 test("Given the New Session page while the computer is offline, When an attachment is rejected, Then the connection status is detail inside that one alert", {

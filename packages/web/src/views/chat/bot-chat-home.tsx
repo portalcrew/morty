@@ -1,4 +1,4 @@
-import { nativeSessionKey } from "@morty-build/client/native-session";
+import { nativeSessionKey } from "@portalcrew/morty-client/native-session";
 import type { ReactNode } from "react";
 import { useStore } from "zustand";
 import { MortyLogoMark } from "../../components/brand/morty-logo.tsx";

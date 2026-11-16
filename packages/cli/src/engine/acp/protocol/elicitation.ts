@@ -3,7 +3,7 @@ import type {
     SessionElicitationField,
     SessionElicitationFormContent,
     SessionElicitationOption,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { isRecord, readString, truncate } from "../../util/value-utils.ts";
 import { AcpExecutionError } from "../acp-error.ts";
 

@@ -1,4 +1,4 @@
-import type { NativeSessionTarget, PromptCompletion } from "@morty-build/client/protocol";
+import type { NativeSessionTarget, PromptCompletion } from "@portalcrew/morty-client/protocol";
 import { WebSocket } from "undici";
 import type { ExecutionReceipts } from "../../session/turn/execution-receipts.ts";
 import type { CommandContext } from "./context.ts";

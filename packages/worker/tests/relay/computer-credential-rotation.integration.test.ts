@@ -4,7 +4,7 @@ import {
     COMPUTER_SUCCESSOR_CREDENTIAL_HEADER,
     computerCredentialSuccessor,
     MORTY_API_PREFIX,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { afterAll, afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";
 import { RelayAuthenticationConfiguration } from "../../src/contracts/relay/computer-management.ts";

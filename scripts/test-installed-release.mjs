@@ -25,7 +25,7 @@ try {
         env: {
             ...process.env,
             MORTY_RELEASE_ARCHIVE: release.archive,
-            MORTY_RELEASE_ENTRY: join(directory, "node_modules/@morty-build/cli/dist/cli.js"),
+            MORTY_RELEASE_ENTRY: join(directory, "node_modules/@portalcrew/morty/dist/cli.js"),
         },
     });
 } finally {

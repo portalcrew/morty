@@ -1,5 +1,5 @@
-import type { PayloadEncryptionConnection } from "@morty-build/client";
-import { type NativeSessionCommand, nativeSessionResultCodec } from "@morty-build/client/protocol";
+import type { PayloadEncryptionConnection } from "@portalcrew/morty-client";
+import { type NativeSessionCommand, nativeSessionResultCodec } from "@portalcrew/morty-client/protocol";
 import { WebSocket } from "undici";
 import { operationErrorCode } from "../../infra/operation-error.ts";
 import { SessionError } from "../../session/api/session-error.ts";

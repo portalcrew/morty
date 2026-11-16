@@ -17,8 +17,11 @@ import {
     decodeSessionsListedEvent,
     encodeSessionPromptCommand,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
-import { type ControlledAcpPeer, ControlledEndpointConnection } from "@morty-build/runtime-test-support/fake-daemon";
+} from "@portalcrew/morty-client/protocol";
+import {
+    type ControlledAcpPeer,
+    ControlledEndpointConnection,
+} from "@portalcrew/morty-runtime-test-support/fake-daemon";
 import { expect, test, vi } from "vitest";
 import {
     encodeSessionArchiveCommand,

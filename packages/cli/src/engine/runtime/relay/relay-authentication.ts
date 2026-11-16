@@ -1,4 +1,4 @@
-import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER } from "@morty-build/client/protocol";
+import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER } from "@portalcrew/morty-client/protocol";
 import type { HeldComputerCredentials } from "../connection/computer-credentials.ts";
 
 /**

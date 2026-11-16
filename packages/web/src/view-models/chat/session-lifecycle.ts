@@ -1,11 +1,11 @@
-import type { MortyPermissionAnswer } from "@morty-build/client";
+import type { MortyPermissionAnswer } from "@portalcrew/morty-client";
 import type {
     SessionElicitationAwaitingCompletionEvent,
     SessionElicitationRequestedEvent,
     SessionLiveEvent,
     SessionPermissionRequestedEvent,
     SessionPermissionResolvedEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { SessionInteraction } from "./session-pane-types.ts";
 
 // The Session pane reads Morty lifecycle metadata only through this module, so

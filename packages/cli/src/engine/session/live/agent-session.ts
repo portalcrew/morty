@@ -1,5 +1,5 @@
-import { conversationTitleFromText } from "@morty-build/client";
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { conversationTitleFromText } from "@portalcrew/morty-client";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     isIdentifier,
     type NativeSessionTarget,
@@ -9,7 +9,7 @@ import {
     type SessionConfigurationSelection,
     type SessionEventPayload,
     type SessionPendingInteractions,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError, AcpPromptExecutionError } from "../../acp/acp-error.ts";
 import { RetryableAcpInitializationError, validateAgentRuntime } from "../../acp/adapter/agent-initialization.ts";
 import type { NativeSessionEvent, NativeSessionSubscriber } from "../../acp/adapter/native-session-event.ts";

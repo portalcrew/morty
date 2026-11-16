@@ -3,7 +3,7 @@ import {
     decodeKnownSessionEventLogPage,
     decodeSessionPermissionRequestedEvent,
     decodeSessionsListedEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, it } from "vitest";
 
 it("Given a permission request without its execution context, When it crosses the Computer boundary, Then the retired form is rejected", () => {

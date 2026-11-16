@@ -1,4 +1,4 @@
-import { MortyClient, MortyPageRequest, sessionEndpoints, WsTransport } from "@morty-build/client";
+import { MortyClient, MortyPageRequest, sessionEndpoints, WsTransport } from "@portalcrew/morty-client";
 import {
     CONTENT_WRITE_MAX_BYTES,
     contentAvailableEventCodec,
@@ -10,8 +10,8 @@ import {
     FILE_STREAM_CONTENT_TYPE,
     sessionPromptAcceptedEventCodec,
     sessionPromptCommandCodec,
-} from "@morty-build/client/protocol";
-import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
+} from "@portalcrew/morty-client/protocol";
+import { prepareTestMortyRelayBindings } from "@portalcrew/morty-relay-test-support/cloudflare";
 import * as v from "valibot";
 import { afterEach, beforeAll, beforeEach, expect, onTestFailed, onTestFinished, test, vi } from "vitest";
 import {

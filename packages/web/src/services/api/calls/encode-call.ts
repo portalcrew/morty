@@ -1,5 +1,5 @@
-import { MortyValidationError } from "@morty-build/client";
-import { isIdentifier } from "@morty-build/client/protocol";
+import { MortyValidationError } from "@portalcrew/morty-client";
+import { isIdentifier } from "@portalcrew/morty-client/protocol";
 import type { ApiEndpoint, ApiRequest, CommandCall, ComputerCallTarget, WorkerCallTarget } from "./call.ts";
 
 export interface CallDefinition {

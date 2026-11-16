@@ -2,7 +2,7 @@ import {
     decodeSessionCloseNoticeEvent,
     SESSION_CLOSE_NOTICE_KIND,
     sessionCloseNoticeEventCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openTestPayloadEncryption } from "../support/payload-encryption.ts";
 

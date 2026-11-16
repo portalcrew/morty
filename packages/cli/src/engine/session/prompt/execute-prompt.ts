@@ -1,4 +1,4 @@
-import type { SessionPromptCommand } from "@morty-build/client/protocol";
+import type { SessionPromptCommand } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import { operationErrorCode, operationErrorMessage } from "../../infra/operation-error.ts";
 import { type PromptEnd, promptEnd } from "../api/prompt-end.ts";

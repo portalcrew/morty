@@ -17,7 +17,7 @@ import {
     promptStopReason,
     SESSION_EVENT_KIND,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { PiAgentSpecification } from "../../src/engine/agent/specification/vendors/pi-agent.ts";
 import { PiFixture } from "../support/agents/pi.ts";

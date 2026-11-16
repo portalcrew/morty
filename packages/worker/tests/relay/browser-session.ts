@@ -1,4 +1,4 @@
-import { CONTENT_CHUNK_MAX_BYTES, encodeContentChunkFrame, MORTY_API_PREFIX } from "@morty-build/client/protocol";
+import { CONTENT_CHUNK_MAX_BYTES, encodeContentChunkFrame, MORTY_API_PREFIX } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { onTestFinished } from "vitest";
 import { RequestDeadline } from "../../src/http/request-deadline.ts";

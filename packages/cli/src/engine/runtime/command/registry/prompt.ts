@@ -2,7 +2,7 @@ import {
     type SESSION_PROMPT_KIND,
     SessionPromptDisposition,
     sessionPromptAcceptedEventCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { WebSocket } from "undici";
 import { executePrompt } from "../../../session/prompt/execute-prompt.ts";
 import type { CommandHandler } from "../definition.ts";

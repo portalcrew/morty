@@ -1,5 +1,5 @@
-import { NativeSessionMap } from "@morty-build/client/native-session";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import type { LiveEventPositionTable } from "../../storage/session/live-event-position-table.ts";
 
 const INITIAL_POSITION = 10 ** 4;

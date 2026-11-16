@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { decodeAgentPromptResponse } from "@morty-build/client/protocol";
+import { decodeAgentPromptResponse } from "@portalcrew/morty-client/protocol";
 import { revalidateExecutable } from "../../../util/process/executable.ts";
 import { runCleanup } from "../../../util/run-cleanup.ts";
 import { truncate } from "../../../util/value-utils.ts";

@@ -1,4 +1,4 @@
-import { COMPUTER_HEARTBEAT_KIND, type ComputerHeartbeatEvent } from "@morty-build/client/protocol";
+import { COMPUTER_HEARTBEAT_KIND, type ComputerHeartbeatEvent } from "@portalcrew/morty-client/protocol";
 
 import type { ScheduledTask, Timer } from "../../util/timer.ts";
 

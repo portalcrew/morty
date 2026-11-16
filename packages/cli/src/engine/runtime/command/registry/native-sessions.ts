@@ -5,7 +5,7 @@ import {
     type SESSION_QUERY_KIND,
     sessionsListedEventCodec,
     sessionsQueriedEventCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { CommandHandler } from "../definition.ts";
 import { reportOperationFailure, send } from "../transport.ts";
 

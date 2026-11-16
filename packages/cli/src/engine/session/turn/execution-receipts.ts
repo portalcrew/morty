@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     type CommandDelivery,
     decodeKnownSessionEventPayload,
@@ -11,7 +11,7 @@ import {
     promptStopReason,
     type SessionEventPayload,
     type SessionLiveEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { z } from "zod";
 import type { CommandFate, CommandLedgerTable, LedgerCommand } from "../../storage/session/command-ledger-table.ts";
 

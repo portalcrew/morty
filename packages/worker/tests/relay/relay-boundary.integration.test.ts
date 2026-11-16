@@ -10,7 +10,7 @@ import {
     MortyPageRequest,
     type PayloadEncryptor,
     WsTransport,
-} from "@morty-build/client";
+} from "@portalcrew/morty-client";
 import {
     COMPUTER_HEARTBEAT_ACK_MESSAGE,
     COMPUTER_HEARTBEAT_MESSAGE,
@@ -58,7 +58,7 @@ import {
     sessionRenameCommandCodec,
     sessionRenamedEventCodec,
     sessionTurnStoppedEventCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { afterAll, afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";
 import { ComputerRelay as RelayComputerRelay } from "../../src/computer-relay/computer-relay.ts";

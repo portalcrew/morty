@@ -1,4 +1,4 @@
-import { MortyError } from "@morty-build/client";
+import { MortyError } from "@portalcrew/morty-client";
 import { createStore } from "zustand/vanilla";
 import { MAX_MARKDOWN_CHARACTERS } from "../../components/agents/agent-markdown.tsx";
 import { isDisplayableImageType } from "../../components/agents/displayable-image-type.ts";

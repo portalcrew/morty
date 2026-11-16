@@ -1,4 +1,4 @@
-import type { AcpSessionUpdate, SessionEvent, SessionLiveEvent } from "@morty-build/client/protocol";
+import type { AcpSessionUpdate, SessionEvent, SessionLiveEvent } from "@portalcrew/morty-client/protocol";
 
 type AcpSessionEvent = Extract<SessionEvent, { readonly type: "acp" }>;
 type ToolCall = Extract<AcpSessionUpdate, { readonly sessionUpdate: "tool_call" | "tool_call_update" }>;

@@ -1,5 +1,5 @@
 import { PROTOCOL_VERSION } from "@agentclientprotocol/sdk/unstable";
-import type { SessionCapabilities } from "@morty-build/client/protocol";
+import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import { createClaudeClient, initializeClaudeClient } from "../../../acp/adapter/claude/create-client.ts";
 import { waitForAgentOperation } from "../../../acp/connection/agent-operation.ts";
 import { normalizeAcpCapabilities } from "../../../acp/protocol/session-capabilities.ts";

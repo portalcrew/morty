@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { PROTOCOL_VERSION } from "@agentclientprotocol/sdk/unstable";
-import type { SessionCapabilities } from "@morty-build/client/protocol";
+import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../../acp/acp-error.ts";
 import { createPiClient } from "../../../acp/adapter/pi/create-client.ts";
 import { agentOperationError, waitForAgentOperation } from "../../../acp/connection/agent-operation.ts";
