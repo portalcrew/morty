@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -17,6 +17,7 @@ import { expect, test, vi } from "vitest";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
 import { type RealDaemonPeer, withControlledDaemon } from "../support/agents/real-daemon.ts";
 import { writeControlledAcpExecutable } from "../support/controlled-acp-executable.ts";
+import { fileCreated } from "../support/file-created.ts";
 
 const submit = (peer: RealDaemonPeer, commandId: string, prompt: string): void =>
     peer.send(
@@ -365,3 +366,48 @@ test.for([
         }
     },
 );
+
+// @no-uc: Compatibility; a client that opens a Session another device is preparing a turn for must not see the failure of the turn before.
+test("Given a turn that failed and a new turn still loading the Session's saved history, When a client reads the Session execution, Then it reports no ended turn while the Session works", async ({
+    signal,
+}) => {
+    const directory = await mkdtemp(join(tmpdir(), "morty-last-turn-preparing-"));
+    try {
+        const agentDirectory = join(directory, "agent");
+        await mkdir(agentDirectory, { recursive: true });
+        const executableDirectory = await writeControlledAcpExecutable(directory, { loadSession: true });
+        await withControlledDaemon(
+            signal,
+            new ControlledAcpAgentSpecification(),
+            { MORTY_FAKE_ACP_STATE_DIRECTORY: agentDirectory, PATH: executableDirectory },
+            async (peer) => {
+                const failed = randomUUID();
+                submit(peer, failed, "fail echoing the prompt CANARY-prompt-body-9f3a");
+                await waitForLifecycle(peer, failed, "prompt.failed");
+                expect((await readExecution(peer)).result).toMatchObject({
+                    lastTurn: { commandId: failed, state: "failed" },
+                });
+
+                // After a restart the next prompt replays the saved history before it reaches the Agent.
+                await peer.restart();
+                await writeFile(join(agentDirectory, "pause-load"), "");
+                const loading = fileCreated(agentDirectory, "load-paused");
+                const next = randomUUID();
+                submit(peer, next, "The next request completes");
+                await loading;
+
+                const preparing = await readExecution(peer);
+                expect(preparing.result).toMatchObject({ turn: null });
+                expect(preparing.raw).not.toHaveProperty("lastTurn");
+
+                await rm(join(agentDirectory, "pause-load"));
+                await waitForLifecycle(peer, next, "prompt.completed");
+                expect((await readExecution(peer)).result).toMatchObject({
+                    lastTurn: { commandId: next, state: "completed" },
+                });
+            },
+        );
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+}, 90_000);

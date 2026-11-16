@@ -101,8 +101,9 @@ export function buildSessionLayer(options: SessionLayerOptions) {
                     ? {}
                     : { delivery: operations.delivery(request.deliveryCommandId, request.target) }),
             };
-            // How the last started command ended is told only while none runs.
-            if (turn !== null) {
+            // How the last started command ended is told only while the Session executes none, as its listing tells a
+            // failed turn only when idle; a command still preparing has not started, so it is no `turn` yet.
+            if (turn !== null || manager.isExecuting(request.target)) {
                 return { ...read, turn };
             }
             const lastTurn = operations.lastTurn(request.target);
