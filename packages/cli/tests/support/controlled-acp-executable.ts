@@ -12,10 +12,7 @@ const fakeAgentPath = fileURLToPath(new URL("../sessions/fixtures/acp-peer.ts", 
  */
 export async function writeControlledAcpExecutable(
     directory: string,
-    {
-        loadSession = false,
-        forkSession = false,
-    }: { readonly loadSession?: boolean; readonly forkSession?: boolean } = {},
+    { loadSession = false }: { readonly loadSession?: boolean } = {},
 ): Promise<string> {
     const executableDirectory = join(directory, "bin");
     const executable = join(executableDirectory, "controlled-acp");
@@ -31,7 +28,7 @@ if (process.argv.includes("--version")) {
     "--agent-version", "1.0.0",${loadSession ? "" : '\n    "--no-load-session",'}
     "--http-mcp",
     "--no-delete-session",
-    ${forkSession ? "" : '"--no-fork-session",'}
+    "--no-fork-session",
     "--no-embedded-context",
   );
   await import(${JSON.stringify(new URL(`file://${fakeAgentPath}`).toString())});
