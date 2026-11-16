@@ -33,7 +33,6 @@ export class AgentProcessPool {
     readonly #idleRetirements = new Set<Promise<void>>();
     readonly #lock = new AcpProcessCapacityLock();
     #stopping = false;
-    #starting = 0;
     #changed = Promise.withResolvers<void>();
 
     constructor(maxProcesses: number = DEFAULT_MAX_ACP_PROCESSES, timer: Timer = systemTimer) {
@@ -172,19 +171,22 @@ export class AgentProcessPool {
         }
     };
 
+    #startingCount(): number {
+        return [...this.#slots.values()].filter((slot) => slot.kind === "starting").length;
+    }
+
     readonly #reserve = async (signal: AbortSignal): Promise<symbol> => {
         const lease = await this.#lock.acquire(signal);
         try {
             for (;;) {
                 signal.throwIfAborted();
-                if (this.#starting >= MAX_CONCURRENT_STARTS) {
+                if (this.#startingCount() >= MAX_CONCURRENT_STARTS) {
                     await waitForSharedOperation(this.#changed.promise, signal);
                     continue;
                 }
                 if (this.#slots.size < this.#maxProcesses) {
                     const id = Symbol("ACP process slot");
                     this.#slots.set(id, { kind: "starting" });
-                    this.#starting += 1;
                     return id;
                 }
                 const candidate = [...this.#slots.values()].find(
@@ -218,7 +220,6 @@ export class AgentProcessPool {
             this.#slots.delete(id);
             throw error;
         } finally {
-            this.#starting -= 1;
             this.notifyChanged();
         }
     };
