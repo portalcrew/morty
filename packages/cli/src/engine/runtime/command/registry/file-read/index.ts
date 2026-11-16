@@ -96,17 +96,15 @@ export function createFileReadCommands(context: CommandContext) {
                 if (signal.aborted || socket.readyState !== WebSocket.OPEN) {
                     return;
                 }
-                context.diagnostics.daemonDiagnostic(
-                    "file_read_failed",
-                    message.requestId,
-                    { code: "file_unavailable" },
-                    error,
-                );
+                // Only the size limit is told apart; any other failure stays opaque to the client.
+                const tooLarge = error instanceof SessionError && error.code === "file_too_large";
+                const code = tooLarge ? "file_too_large" : "file_unavailable";
+                context.diagnostics.daemonDiagnostic("file_read_failed", message.requestId, { code }, error);
                 const encoded = await fileFailedEventCodec.encode(
                     {
                         kind: FILE_FAILED_KIND,
-                        code: "file_unavailable",
-                        message: "The local file is unavailable",
+                        code,
+                        message: tooLarge ? "The local file is too large to read" : "The local file is unavailable",
                         requestId: message.requestId,
                         target: message.target,
                     },

@@ -10,6 +10,7 @@ import {
 } from "@portalcrew/morty-client/protocol";
 import { readLocalRaster } from "../../acp/content/raster.ts";
 import { canonicalPath, readFileChunks, readPathMetadata } from "../../storage/files/local-files.ts";
+import { SessionError } from "../api/session-error.ts";
 import type { ExternalContentStore } from "./external-content-store.ts";
 
 type RequestedFileTarget =
@@ -99,8 +100,11 @@ export async function streamLocalFile({
     }
     const before = await readPathMetadata(target);
     signal.throwIfAborted();
-    if (before.kind !== "file" || before.size < 1 || before.size > command.maxBytes) {
-        throw new Error("The local file is too large to read");
+    if (before.kind !== "file" || before.size < 1) {
+        throw new Error("The local file is unavailable");
+    }
+    if (before.size > command.maxBytes) {
+        throw new SessionError("file_too_large", "The local file is larger than the read allows");
     }
     const raster = external === null ? await readLocalRaster(target, signal) : null;
     await sendBegin({

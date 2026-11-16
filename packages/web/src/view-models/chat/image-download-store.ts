@@ -17,12 +17,10 @@ export function createImageDownloadStore() {
                     }
                     blob = await response.blob();
                 }
-                const bytes = new Uint8Array(await blob.arrayBuffer());
                 bounded.throwIfAborted();
                 const extension = blob.type.split("/")[1]?.replace("jpeg", "jpg").replace("svg+xml", "svg") ?? "png";
                 downloadLocalFile({
-                    bytes,
-                    mediaType: blob.type,
+                    blob,
                     name: /\.[a-z0-9]+$/iu.test(image.name) ? image.name : `${image.name}.${extension}`,
                 });
                 set({ state: { kind: "idle" } });
