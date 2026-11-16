@@ -1,6 +1,6 @@
 # Set up Morty
 
-Connect this coding Agent to Morty so the user can continue the work in their browser.
+Connect this Agent to Morty so the user can continue the work in their browser.
 Stop the original task; complete only this setup in the current session.
 
 Chat origin: {{BASE_URL}}
