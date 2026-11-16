@@ -2,6 +2,7 @@ import * as v from "valibot";
 import type { ApiTransport } from "../api/api-transport.ts";
 import type { ApiRequest } from "../api/calls/call.ts";
 import { identityCalls } from "../api/calls/identity.ts";
+import { readJsonBody } from "../api/response-body.ts";
 import { browserAccessEntry } from "../local-storage/central-local-storage.ts";
 import { CloudApiError, ManagementApi } from "../management/management-api.ts";
 import { centralSessionStorage, transferRedemptionEntry } from "../session-storage/central-session-storage.ts";
@@ -380,8 +381,11 @@ export class AnonymousIdentityApi {
         requestSignal: AbortSignal,
     ): Promise<unknown> => {
         const response = await this.#response(request, init, requestSignal);
-        const value: unknown = response.status === 204 ? null : await response.json();
+        const value = response.status === 204 ? null : await readJsonBody(response, requestSignal);
         requestSignal.throwIfAborted();
+        if (value === undefined) {
+            throw new IdentityApiError("IDENTITY_UNAVAILABLE", "Identity service is unavailable.", response.status);
+        }
         return value;
     };
 
@@ -406,7 +410,7 @@ export class AnonymousIdentityApi {
         });
         signal.throwIfAborted();
         if (!response.ok) {
-            const value: unknown = await response.json();
+            const value = await readJsonBody(response, signal);
             signal.throwIfAborted();
             const error = v.safeParse(
                 v.object({
