@@ -4,6 +4,7 @@ import {
     connectControlledAgentRuntime,
     createMortyFakeDaemon,
 } from "../../../tests/support/fake-daemon/runtime.ts";
+import { ComputerPairingRevokedError } from "../../cli/src/daemon/lifecycle/serve-pairing.ts";
 import type { ComputerCredentials } from "../../cli/src/engine/runtime/connection/computer-credentials.ts";
 import type { SetupRuntime } from "../../cli/src/setup/setup.ts";
 import { memoryComputerCredentials } from "../../cli/tests/support/computer-credentials.ts";
@@ -20,6 +21,7 @@ export class ControlledSetupRuntime implements SetupRuntime {
     readonly #saved = new Map<string, Connection>();
     readonly #credentials = new Map<string, ComputerCredentials>();
     readonly #active = new Map<string, Awaited<ReturnType<typeof connectControlledAgentRuntime>>>();
+    readonly #localRevocations = new Map<string, () => Promise<void>>();
     readonly #failed = Promise.withResolvers<never>();
     readonly failure = this.#failed.promise;
 
@@ -62,6 +64,11 @@ export class ControlledSetupRuntime implements SetupRuntime {
         const connection = Array.from(this.#saved.values()).at(-1);
         if (connection === undefined) {
             throw new Error("Unknown controlled Computer connection");
+        }
+        const revocation = this.#localRevocations.get(connection.pairingGeneration);
+        if (revocation !== undefined) {
+            await revocation();
+            throw new ComputerPairingRevokedError();
         }
         await this.#connect(connection, signal);
     };
@@ -171,10 +178,20 @@ export class ControlledSetupRuntime implements SetupRuntime {
         await Promise.all(Array.from(this.#active.values(), (daemon) => daemon.reconnect()));
     };
 
+    readonly revokeLocalPairing = async (onStart: () => Promise<void>): Promise<void> => {
+        await this.pause();
+        const connection = Array.from(this.#saved.values()).at(-1);
+        if (connection === undefined) {
+            throw new Error("No controlled pairing to revoke");
+        }
+        this.#localRevocations.set(connection.pairingGeneration, onStart);
+    };
+
     readonly forgetConnections = async (): Promise<void> => {
         await this.disconnect();
         this.#saved.clear();
         this.#credentials.clear();
+        this.#localRevocations.clear();
     };
 
     readonly continueReply = async (prompt: string, plan: HarnessReplyPlan): Promise<void> => {

@@ -204,102 +204,132 @@ test("Given the answer to setup's Computer pairing is lost, When setup runs agai
     expect(saved.identity.computer_id).toBe(pairedComputer);
 });
 
-test("Given a computer whose Runtime Morty revoked, When setup runs again, Then it pairs the same Computer with a new Runtime and keeps the computer's identity", {
-    timeout: 60_000,
-}, async ({ signal }) => {
-    await using cleanup = new AsyncDisposableStack();
-    const fixture = await createIdentityFixture({
-        listenOnLoopback: true,
-        workerEntryPoint: fileURLToPath(new URL("./support/credential-storage-worker.ts", import.meta.url)),
-    });
-    cleanup.defer(() => fixture.close());
-    const directory = await realpath(await mkdtemp(join(tmpdir(), "morty-setup-revoked-")));
-    cleanup.defer(() => rm(directory, { recursive: true, force: true }));
-    const state = join(directory, "state");
-    const workspace = join(directory, "workspace");
-    await mkdir(workspace);
-    const runtime = new ControlledSetupRuntime({ harness: "codex", agentName: "Codex", reply: mortyReply }, "Laptop");
-    cleanup.defer(() => runtime.disconnect());
-    let time = Date.parse("2026-11-09T00:00:00Z");
-    const run = async () => {
-        const events: Readonly<Record<string, unknown>>[] = [];
-        const code = await runSetup(
-            [
-                "setup",
-                "--base-url",
-                fixture.origin,
-                "--cwd",
-                workspace,
-                "--harness",
-                "codex",
-                "--session-id",
-                "native-revoked",
-            ],
-            {
-                state,
-                runtime,
-                agentEnvironment: {},
-                signal,
-                clock: {
-                    now: () => new Date(time),
-                    wait: async (milliseconds, signal) => {
-                        signal.throwIfAborted();
-                        time += milliseconds;
+test.for(["relay", "local connection", "newer pairing"] as const)(
+    "Given a computer whose %s reports a revoked Runtime, When setup runs again, Then setup preserves the identity and existing browser access",
+    {
+        timeout: 60_000,
+    },
+    async (revocation, { signal }) => {
+        await using cleanup = new AsyncDisposableStack();
+        const fixture = await createIdentityFixture({
+            listenOnLoopback: true,
+            workerEntryPoint: fileURLToPath(new URL("./support/credential-storage-worker.ts", import.meta.url)),
+        });
+        cleanup.defer(() => fixture.close());
+        const directory = await realpath(await mkdtemp(join(tmpdir(), "morty-setup-revoked-")));
+        cleanup.defer(() => rm(directory, { recursive: true, force: true }));
+        const state = join(directory, "state");
+        const workspace = join(directory, "workspace");
+        await mkdir(workspace);
+        const runtime = new ControlledSetupRuntime(
+            { harness: "codex", agentName: "Codex", reply: mortyReply },
+            "Laptop",
+        );
+        cleanup.defer(() => runtime.disconnect());
+        let time = Date.parse("2026-11-09T00:00:00Z");
+        const run = async (expectedCode = 0) => {
+            const events: Readonly<Record<string, unknown>>[] = [];
+            const code = await runSetup(
+                [
+                    "setup",
+                    "--base-url",
+                    fixture.origin,
+                    "--cwd",
+                    workspace,
+                    "--harness",
+                    "codex",
+                    "--session-id",
+                    "native-revoked",
+                ],
+                {
+                    state,
+                    runtime,
+                    agentEnvironment: {},
+                    signal,
+                    clock: {
+                        now: () => new Date(time),
+                        wait: async (milliseconds, signal) => {
+                            signal.throwIfAborted();
+                            time += milliseconds;
+                        },
                     },
+                    emit: (event) => events.push(event),
                 },
-                emit: (event) => events.push(event),
-            },
-        );
-        expect(code, JSON.stringify(events)).toBe(0);
-        return {
-            events,
-            ready: v.parse(
-                v.object({ status: v.literal("ready"), computerId: v.string(), url: v.string() }),
-                events.at(-1),
-            ),
+            );
+            expect(code, JSON.stringify(events)).toBe(expectedCode);
+            if (code !== 0) {
+                return { kind: "failed", events } as const;
+            }
+            return {
+                kind: "ready" as const,
+                events,
+                ready: v.parse(
+                    v.object({ status: v.literal("ready"), computerId: v.string(), url: v.string() }),
+                    events.at(-1),
+                ),
+            };
         };
-    };
-    const savedIdentity = v.object({
-        identity: v.object({ computer_token: v.string(), computer_id: v.string() }),
-    });
-    const computerState = async () => {
-        const { identity } = v.parse(savedIdentity, JSON.parse(await readFile(join(state, "config.json"), "utf8")));
-        const response = await worker.fetch(
-            new Request(`${fixture.origin}/morty/api/v1/computers/${identity.computer_id}/pairing-state`, {
-                headers: { authorization: `Bearer ${identity.computer_token}` },
-            }),
-            fixture.environment(fixture.origin),
-        );
-        expect(response.status).toBe(200);
-        return {
-            identity,
-            computerPairing: v.parse(v.object({ computerPairing: v.string() }), await response.json()).computerPairing,
+        const savedIdentity = v.object({
+            identity: v.object({ computer_token: v.string(), computer_id: v.string() }),
+        });
+        const computerState = async () => {
+            const { identity } = v.parse(savedIdentity, JSON.parse(await readFile(join(state, "config.json"), "utf8")));
+            const response = await worker.fetch(
+                new Request(`${fixture.origin}/morty/api/v1/computers/${identity.computer_id}/pairing-state`, {
+                    headers: { authorization: `Bearer ${identity.computer_token}` },
+                }),
+                fixture.environment(fixture.origin),
+            );
+            expect(response.status).toBe(200);
+            return {
+                identity,
+                computerPairing: v.parse(v.object({ computerPairing: v.string() }), await response.json())
+                    .computerPairing,
+            };
         };
-    };
-    const first = await run();
-    const before = await computerState();
-    await fixture.revokeComputer(before.identity.computer_id);
-    const revokedWorkspace = await fixture.relayRequest(
-        new Request(`${fixture.origin}/morty/api/v1/computers/${before.identity.computer_id}/workspace`, {
-            method: "POST",
-            headers: { authorization: `Bearer ${before.identity.computer_token}` },
-        }),
-    );
-    expect(revokedWorkspace.status).toBe(401);
-    expect(await revokedWorkspace.json()).toMatchObject({ error: { code: "computer_revoked" } });
+        const first = await run();
+        if (first.kind !== "ready") {
+            throw new Error("Expected the initial Computer to be ready");
+        }
+        const before = await computerState();
+        if (revocation !== "relay") {
+            await runtime.revokeLocalPairing(async () => {
+                if (revocation === "local connection") {
+                    await fixture.revokeComputer(before.identity.computer_id);
+                }
+            });
+            expect((await computerState()).computerPairing).toBe("paired");
+        } else {
+            await fixture.revokeComputer(before.identity.computer_id);
+            const revokedWorkspace = await fixture.relayRequest(
+                new Request(`${fixture.origin}/morty/api/v1/computers/${before.identity.computer_id}/workspace`, {
+                    method: "POST",
+                    headers: { authorization: `Bearer ${before.identity.computer_token}` },
+                }),
+            );
+            expect(revokedWorkspace.status).toBe(401);
+            expect(await revokedWorkspace.json()).toMatchObject({ error: { code: "computer_revoked" } });
 
-    expect((await computerState()).computerPairing).toBe("revoked");
+            expect((await computerState()).computerPairing).toBe("revoked");
+        }
 
-    const again = await run();
-    const after = await computerState();
+        const again = await run(revocation === "newer pairing" ? 1 : 0);
+        if (again.kind === "failed") {
+            expect(again.events.at(-1)).toMatchObject({ error: { code: "RUNTIME_START_FAILED" } });
+            expect(await computerState()).toEqual(before);
+            expect(again.events.some((event) => event["status"] === "computer_revoked")).toBe(false);
+            return;
+        }
+        const after = await computerState();
 
-    expect(again.events).toContainEqual(
-        expect.objectContaining({ status: "computer_revoked", computerId: before.identity.computer_id }),
-    );
-    expect(again.ready.computerId).toBe(first.ready.computerId);
-    const originalAccess = new URLSearchParams(new URL(first.ready.url).hash.slice(1)).get("e2e");
-    expect(originalAccess).not.toBeNull();
-    expect(new URLSearchParams(new URL(again.ready.url).hash.slice(1)).get("e2e")).toBe(originalAccess);
-    expect(after.identity).toEqual(before.identity);
-    expect(after.computerPairing).toBe("paired");
-});
+        expect(again.events).toContainEqual(
+            expect.objectContaining({ status: "computer_revoked", computerId: before.identity.computer_id }),
+        );
+        expect(again.ready.computerId).toBe(first.ready.computerId);
+        const originalAccess = new URLSearchParams(new URL(first.ready.url).hash.slice(1)).get("e2e");
+        expect(originalAccess).not.toBeNull();
+        expect(new URLSearchParams(new URL(again.ready.url).hash.slice(1)).get("e2e")).toBe(originalAccess);
+        expect(after.identity).toEqual(before.identity);
+        expect(after.computerPairing).toBe("paired");
+    },
+);
