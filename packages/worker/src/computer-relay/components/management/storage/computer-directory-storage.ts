@@ -292,7 +292,6 @@ export class ComputerDirectoryStorage {
         this.#database.run(revocation, signal);
     };
 
-    /** Replaces the catalog of the generation this daemon credential is active for; false for any other credential. */
     readonly replaceAgents = async (
         tokenHash: string,
         agents: readonly AgentDescriptor[],

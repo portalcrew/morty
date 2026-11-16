@@ -58,7 +58,6 @@ function deviceTerm(database: AccessDatabase, deviceId: SQLiteColumn) {
         .where(eq(openedCredential.deviceId, deviceId))})`;
 }
 
-/** The end of the device's term while it holds access, null once it does not. */
 export function deviceHeldUntil(
     database: AccessDatabase,
     device: { readonly id: SQLiteColumn; readonly endedAt: SQLiteColumn },
@@ -99,7 +98,6 @@ export function holderHolds(database: AccessDatabase, holder: AccessHolder, now:
     }
 }
 
-/** The token is the computer's own credential and it holds access. */
 export function ownerTokenHeld(
     tokenHash: string,
     owner: { readonly tokenHash: SQLiteColumn; readonly revokedAt: SQLiteColumn } = ownerCredential,
@@ -107,7 +105,6 @@ export function ownerTokenHeld(
     return and(eq(owner.tokenHash, tokenHash), ownerHeld(owner));
 }
 
-/** The token is a browser credential no newer one replaced, and its device holds access. */
 export function browserTokenHeld(
     database: AccessDatabase,
     tokenHash: string,
@@ -146,7 +143,6 @@ export function credentialHolds(database: AccessDatabase, tokenHash: string, now
     );
 }
 
-/** The link's sharer still holds access, so ending that access needs no write to void its links. */
 export function linkSharerHolds(database: AccessDatabase, linkId: SQLiteColumn, now: number) {
     return exists(
         database
@@ -164,7 +160,6 @@ export function linkSharerHolds(database: AccessDatabase, linkId: SQLiteColumn, 
     );
 }
 
-/** The link was shared by the holder of this token, whichever of its credentials the token is. */
 export function linkSharedByToken(database: AccessDatabase, linkId: SQLiteColumn, tokenHash: string, now: number) {
     return exists(
         database
@@ -200,7 +195,6 @@ export function linkSharedByToken(database: AccessDatabase, linkId: SQLiteColumn
     );
 }
 
-/** Reads a predicate built by this module as it stands now. */
 export function holds(database: AccessDatabase, predicate: SQL | undefined): boolean {
     const row = database.get<{ held: number }>(sql`SELECT CASE WHEN ${predicate} THEN 1 ELSE 0 END AS held`);
     return row.held === 1;

@@ -200,7 +200,6 @@ export class IdentityStorage {
         };
     };
 
-    /** Whether the access a Session credential carries holds at `now`. */
     readonly holdsAccess = async (holder: SessionAccessHolder, now: number, signal: AbortSignal): Promise<boolean> => {
         signal.throwIfAborted();
         const database = this.#database.orm;

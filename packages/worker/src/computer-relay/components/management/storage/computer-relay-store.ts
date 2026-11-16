@@ -96,7 +96,6 @@ export class ComputerRelayStore {
         );
     };
 
-    /** Revokes the Computer; ending its pairing generation also ends the Session credentials issued under it. */
     readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<void> =>
         await this.#computers.revokeComputer(now, signal);
 
