@@ -36,6 +36,8 @@ test("Given a new visitor, When the setup page opens, Then it explains what Mort
     expect(getByText(document.body, "Next: paste it into the agent running on your computer.")).toBeInstanceOf(
         HTMLElement,
     );
+    expect(document.body.textContent).toContain("History stays on your computer · End-to-end encrypted ·");
+    expect(getByRole(document.body, "link", { name: /^Open source/ })).toHaveProperty("href", `${repository}`);
     const collapsedDetails = getByRole(document.body, "group", { name: "Setup details" });
     expect(collapsedDetails).toHaveProperty("open", false);
     expect(collapsedDetails.contains(getByText(document.body, /Keep that computer awake and online\./))).toBe(false);

@@ -227,6 +227,14 @@ function SetupApplication({
             <div className="mt-4 w-full">
                 <PairingInstruction handoff={setupHandoff} />
             </div>
+            {returnHref === null && (
+                <p className="mt-5 text-center text-xs leading-5 text-morty-text-2">
+                    History stays on your computer · End-to-end encrypted ·{" "}
+                    <ExternalLink className="underline underline-offset-2 hover:text-foreground" href={mortyRepository}>
+                        Open source
+                    </ExternalLink>
+                </p>
+            )}
         </SetupCardShell>
     );
 }
