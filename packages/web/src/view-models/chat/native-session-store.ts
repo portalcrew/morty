@@ -5,6 +5,7 @@ import { formatError } from "../format-error.ts";
 import { type NativeSessionAgent, nativeSessionAgentTabs } from "./native-session-agents.ts";
 import type { OpenMortySession } from "./open-session.ts";
 import { type SessionMessage, sessionEventLogPresentation } from "./session-presentation.ts";
+import { createUserMessageCollapseStore, type UserMessageCollapseStore } from "./user-message-collapse-store.ts";
 
 type NativeSessionDirectory =
     | {
@@ -45,6 +46,7 @@ type ForkIntent = {
 };
 
 export interface NativeSessionStore {
+    readonly userMessageCollapse: UserMessageCollapseStore;
     /** The agent tab the user chose, by harness; the tabs themselves come from the Computer configuration. */
     readonly selected: string;
     readonly directory: NativeSessionDirectory;
@@ -125,6 +127,7 @@ export const createNativeSessionStore = (
     let discovery: AbortController | null = null;
     const lifetime = new AbortController();
     return createStore<NativeSessionStore>()((set, get) => ({
+        userMessageCollapse: createUserMessageCollapseStore(),
         start: () => {
             void get().load(lifetime.signal);
         },

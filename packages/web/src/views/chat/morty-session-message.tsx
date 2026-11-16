@@ -14,6 +14,7 @@ import { isSafeAudioType } from "../../components/agents/safe-audio-type.ts";
 import { AgentThinking } from "../../components/chat/agent-thinking.tsx";
 import { AttemptFailure } from "../../components/chat/attempt-failure.tsx";
 import { AuthenticationNotice } from "../../components/chat/authentication-notice.tsx";
+import { CollapsibleUserMessageBody } from "../../components/chat/collapsible-user-message-body.tsx";
 import { CompactionDisclosure } from "../../components/chat/compaction-disclosure.tsx";
 import { MessageBubble } from "../../components/chat/message-bubble.tsx";
 import { UserMessageShell } from "../../components/chat/user-message-shell.tsx";
@@ -29,6 +30,7 @@ import {
     type SessionMessage,
     sessionTextValue,
 } from "../../view-models/chat/session-presentation.ts";
+import type { UserMessageCollapseStore } from "../../view-models/chat/user-message-collapse-store.ts";
 
 // Warm the lazily loaded rich renderers once the page settles, so the first
 // LaTeX or Mermaid content resolves its renderer without a visible fallback
@@ -148,6 +150,7 @@ function MessageContentBlock({
 
 function UserMessage({
     message,
+    collapseStore,
     deliveryUnknownUserMessageId,
     onRemoveUnknownDelivery,
     onRetryUnknownDelivery,
@@ -156,6 +159,7 @@ function UserMessage({
     retryUnknownDeliveryDisabled,
 }: {
     readonly message: Extract<SessionMessage, { readonly role: "user" }>;
+    readonly collapseStore: UserMessageCollapseStore;
     readonly deliveryUnknownUserMessageId: string | null;
     readonly onRemoveUnknownDelivery: () => void;
     readonly onRetryUnknownDelivery: () => void;
@@ -173,6 +177,8 @@ function UserMessage({
         (content.type === "resource_link" && isDisplayableImageType(content.mimeType ?? ""));
     const images = message.contents.filter(isImage);
     const bubbleContents = message.contents.filter((content) => !isImage(content));
+    const bodyContents = bubbleContents.filter((content) => content.type === "text" && content.text.trim().length > 0);
+    const attachmentContents = bubbleContents.filter((content) => content.type !== "text");
     return (
         <div className="min-w-0 space-y-2">
             <ImageGallery>
@@ -190,16 +196,32 @@ function UserMessage({
                             ))}
                         </div>
                     )}
-                    {bubbleContents.length > 0 && (
+                    {(bodyContents.length > 0 || attachmentContents.length > 0) && (
                         <MessageBubble
                             {...(copyText.length === 0 ? {} : { copyText })}
                             data-testid={dataTestId.userMessage}
                             speaker="user"
                         >
-                            {bubbleContents.map((content, index) => (
+                            {bodyContents.length > 0 && (
+                                <CollapsibleUserMessageBody
+                                    messageId={message.firstEvent.eventId}
+                                    store={collapseStore}
+                                >
+                                    {bodyContents.map((content, index) => (
+                                        <MessageContentBlock
+                                            content={content}
+                                            key={`${message.firstEvent.eventId}:body:${index.toString()}`}
+                                            openLocalFile={openLocalFile}
+                                            readImage={readImage}
+                                            speaker="user"
+                                        />
+                                    ))}
+                                </CollapsibleUserMessageBody>
+                            )}
+                            {attachmentContents.map((content, index) => (
                                 <MessageContentBlock
                                     content={content}
-                                    key={`${message.firstEvent.eventId}:${index.toString()}`}
+                                    key={`${message.firstEvent.eventId}:attachment:${index.toString()}`}
                                     openLocalFile={openLocalFile}
                                     readImage={readImage}
                                     speaker="user"
@@ -262,6 +284,7 @@ export function MortyAssistantText({
 
 export function MortySessionMessage({
     message,
+    collapseStore,
     deliveryUnknownUserMessageId,
     onRemoveUnknownDelivery,
     onRetryUnknownDelivery,
@@ -273,6 +296,7 @@ export function MortySessionMessage({
     failureComputerName = "",
 }: {
     readonly message: SessionMessage;
+    readonly collapseStore: UserMessageCollapseStore;
     readonly failureHarness?: string;
     readonly failureComputerName?: string;
     readonly deliveryUnknownUserMessageId: string | null;
@@ -286,6 +310,7 @@ export function MortySessionMessage({
     if (message.role === "user") {
         return (
             <UserMessage
+                collapseStore={collapseStore}
                 deliveryUnknownUserMessageId={deliveryUnknownUserMessageId}
                 message={message}
                 onRemoveUnknownDelivery={onRemoveUnknownDelivery}

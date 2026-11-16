@@ -3,13 +3,17 @@ import { cn } from "@/lib/utils";
 import { MessageBubble } from "../../components/chat/message-bubble.tsx";
 import { UserMessageShell } from "../../components/chat/user-message-shell.tsx";
 import { dataTestId } from "../../data-testid.ts";
+import type { UserMessageCollapseStore } from "../../view-models/chat/user-message-collapse-store.ts";
 import { AgentMarkdown } from "../agents/agent-markdown.tsx";
 import { createFileSource } from "../images/file-source.ts";
 import { ImageGallery, PreviewImage, UserImagePlaceholder } from "../images/image-gallery.tsx";
+import { CollapsibleUserMessageBody } from "./collapsible-user-message-body.tsx";
 import type { ComposerAttachment } from "./composer-attachment.ts";
 
 interface UserPromptMessageProps {
     readonly attachments: readonly ComposerAttachment[];
+    readonly collapseStore: UserMessageCollapseStore;
+    readonly messageId: string;
     readonly text: string;
     readonly attachmentLabels?: readonly { readonly name: string; readonly uri: string }[];
     /** Shown beside the bubble, such as the message's delivery state. */
@@ -36,8 +40,16 @@ function PromptImage({ attachment }: { readonly attachment: ComposerAttachment }
     );
 }
 
-export function UserPromptMessage({ attachments, attachmentLabels = [], status, text }: UserPromptMessageProps) {
-    if (text.length === 0 && attachments.length === 0 && attachmentLabels.length === 0) {
+export function UserPromptMessage({
+    attachments,
+    attachmentLabels = [],
+    collapseStore,
+    messageId,
+    status,
+    text,
+}: UserPromptMessageProps) {
+    const hasRenderableText = text.trim().length > 0;
+    if (!hasRenderableText && attachments.length === 0 && attachmentLabels.length === 0) {
         return null;
     }
     const images = attachments.filter((attachment) => attachment.kind === "image");
@@ -50,7 +62,7 @@ export function UserPromptMessage({ attachments, attachmentLabels = [], status, 
                         {images.map((image, index) => (
                             <PromptImage attachment={image} key={`${index.toString()}:${image.name}`} />
                         ))}
-                        {text.length === 0 &&
+                        {!hasRenderableText &&
                             resources.length === 0 &&
                             attachmentLabels.length === 0 &&
                             status !== undefined && (
@@ -60,7 +72,7 @@ export function UserPromptMessage({ attachments, attachmentLabels = [], status, 
                             )}
                     </div>
                 )}
-                {(text.length > 0 || resources.length > 0 || attachmentLabels.length > 0) && (
+                {(hasRenderableText || resources.length > 0 || attachmentLabels.length > 0) && (
                     <MessageBubble copyText={text} data-testid={dataTestId.userMessage} speaker="user" status={status}>
                         <div className="grid min-w-0 gap-2">
                             {(resources.length > 0 || attachmentLabels.length > 0) && (
@@ -75,7 +87,11 @@ export function UserPromptMessage({ attachments, attachmentLabels = [], status, 
                                     ))}
                                 </div>
                             )}
-                            {text.length > 0 && <AgentMarkdown markdown={text} streaming={false} />}
+                            {hasRenderableText && (
+                                <CollapsibleUserMessageBody messageId={messageId} store={collapseStore}>
+                                    <AgentMarkdown markdown={text} streaming={false} />
+                                </CollapsibleUserMessageBody>
+                            )}
                         </div>
                     </MessageBubble>
                 )}

@@ -519,6 +519,7 @@ export function NativeSessionDialog({
                                                     )}
                                                     {model.preview.content.messages.map((message) => (
                                                         <MortySessionMessage
+                                                            collapseStore={store.getState().userMessageCollapse}
                                                             deliveryUnknownUserMessageId={null}
                                                             key={message.firstEvent.eventId}
                                                             message={message}

@@ -1402,6 +1402,7 @@ export function createSessionPaneModel(options: {
     // Views read the pane's state and invoke the user's actions; the connection loop stays with `start`.
     const paneStore: StoreApi<SessionPaneStore> = store;
     return {
+        userMessageCollapse: options.sessionPage.userMessageCollapse,
         composer,
         composerAttachments,
         attachmentSignal: options.attachmentSignal,
