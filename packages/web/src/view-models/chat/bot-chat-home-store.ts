@@ -481,16 +481,7 @@ export const createBotChatHomeStore = (
                     }
                     if (cause instanceof MortyError && cause.code === "AGENT_REQUIRED") {
                         failLoad("agent-required", cause.message);
-                        try {
-                            await requests.waitForComputerConfigurationChange(signal);
-                        } catch (waitCause) {
-                            signal.throwIfAborted();
-                            if (!isApiConnectionError(waitCause)) {
-                                throw waitCause;
-                            }
-                            options.onComputerInterrupted();
-                            return;
-                        }
+                        await requests.waitForComputerConfigurationChange(signal);
                         signal.throwIfAborted();
                         set((current) => ({
                             selection: transitionConversationSelection(current.selection, { kind: "retry-requested" }),
