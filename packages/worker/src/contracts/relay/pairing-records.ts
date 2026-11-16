@@ -11,18 +11,11 @@ interface ComputerRegistrationRow {
     readonly workspace_name: string;
 }
 
-export interface ComputerDirectoryRow extends ComputerRegistrationRow {
-    readonly agents: readonly AgentDescriptor[];
-}
-
-export interface ComputerPairingDirectoryRow {
+export interface PairingComputerRow {
+    readonly expires_at: number;
     readonly revoked_at: number | null;
     readonly registration: ComputerRegistrationRow | null;
     readonly agents: readonly AgentDescriptor[] | null;
-}
-
-export interface PairingComputerRow extends ComputerPairingDirectoryRow {
-    readonly expires_at: number;
 }
 
 export interface PairingClaimRow extends PairingComputerRow {

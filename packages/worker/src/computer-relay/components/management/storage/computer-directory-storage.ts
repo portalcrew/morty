@@ -2,7 +2,6 @@ import { and, count, eq, gt, inArray, isNotNull, notInArray, or, sql } from "dri
 import type { AgentDescriptor } from "../../../../contracts/relay/pairing.ts";
 import type {
     ComputerCredentialRotation,
-    ComputerPairingDirectoryRow,
     ComputerPairingRow,
     PairingClaimRow,
 } from "../../../../contracts/relay/pairing-records.ts";
@@ -195,11 +194,6 @@ export class ComputerDirectoryStorage {
         return results[0]?.meta.changes === 1;
     };
 
-    readonly readComputer = async (signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> => {
-        const row = await this.readCurrentPairing(signal);
-        return row === null ? null : { revoked_at: row.revoked_at, registration: row.registration, agents: row.agents };
-    };
-
     readonly isActiveDaemon = async (tokenHash: string, signal: AbortSignal): Promise<boolean> => {
         const rows = await relayDrizzle(this.#database, signal)
             .select({ generation: daemonCredential.generation })
@@ -283,7 +277,7 @@ export class ComputerDirectoryStorage {
         return ended.length === 0 ? { kind: "unknown" } : { kind: "revoked" };
     };
 
-    readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> => {
+    readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<void> => {
         const database = relayDrizzle(this.#database, signal);
         const current = currentGeneration();
         const revocation = database
@@ -296,13 +290,6 @@ export class ComputerDirectoryStorage {
             )
             .onConflictDoNothing();
         this.#database.run(revocation, signal);
-        // Reading the committed fact makes overlapping retries return the first revocation time.
-        return await this.readComputer(signal);
-    };
-
-    readonly listComputers = async (signal: AbortSignal) => {
-        const row = await this.readComputer(signal);
-        return row?.registration && row.revoked_at === null ? [{ ...row.registration, agents: row.agents ?? [] }] : [];
     };
 
     /** Replaces the catalog of the generation this daemon credential is active for; false for any other credential. */

@@ -2,8 +2,6 @@ import type { AgentDescriptor } from "../../../../contracts/relay/pairing.ts";
 import type { ComputerIdentityCredential } from "../../../../contracts/relay/pairing-identity.ts";
 import type {
     ComputerCredentialRotation,
-    ComputerDirectoryRow,
-    ComputerPairingDirectoryRow,
     ComputerPairingRow,
     PairingClaimRow,
     PairingComputerRow,
@@ -60,12 +58,6 @@ export class ComputerRelayStore {
     readonly readActiveGeneration = async (signal: AbortSignal): Promise<number | null> =>
         await this.#credentials.readActiveGeneration(signal);
 
-    readonly readComputer = async (signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> =>
-        await this.#computers.readComputer(signal);
-
-    readonly listComputers = async (signal: AbortSignal): Promise<readonly ComputerDirectoryRow[]> =>
-        await this.#computers.listComputers(signal);
-
     readonly requestComputerPairing = async (
         value: RequestComputerPairing,
         signal: AbortSignal,
@@ -104,11 +96,8 @@ export class ComputerRelayStore {
         );
     };
 
-    /**
-     * Revokes the Computer and returns its committed revocation; null when it was never paired. Ending its pairing
-     * generation also ends the Session credentials issued under it.
-     */
-    readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> =>
+    /** Revokes the Computer; ending its pairing generation also ends the Session credentials issued under it. */
+    readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<void> =>
         await this.#computers.revokeComputer(now, signal);
 
     readonly holdsCredential = async (credential: ComputerIdentityCredential, signal: AbortSignal): Promise<boolean> =>

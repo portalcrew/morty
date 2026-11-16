@@ -1,7 +1,7 @@
 import { PairingDirectoryError, type PairingStatus } from "./pairing.ts";
 import type { PairingComputerRow } from "./pairing-records.ts";
 
-export function computerRevokedAt(value: unknown): number | null {
+function computerRevokedAt(value: unknown): number | null {
     if (value === null) {
         return null;
     }
