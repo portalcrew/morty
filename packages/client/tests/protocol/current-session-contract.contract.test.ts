@@ -72,7 +72,7 @@ it("Given history holding a turn's lifecycle, When a client decodes it, Then the
         sessionGenerationId: "generation-1",
         throughPosition: "3",
     };
-    expect(decodeKnownSessionEventLogPage(JSON.stringify(page))).toEqual(page);
+    expect(decodeKnownSessionEventLogPage(JSON.stringify(page))).toEqual({ page, unsupported: [] });
 });
 it("Given a session list entry without status, When a client decodes it, Then it rejects the retired entry", () => {
     const entry = {

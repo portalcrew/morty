@@ -370,6 +370,15 @@ export class BotChatApi {
                     elapsedMs: 0,
                     outcome: String(status),
                 }),
+            observeUnsupportedEntries: (entries) =>
+                recordBrowserDiagnostic({
+                    at: new Date().toISOString(),
+                    component: "relay",
+                    operation: "session-entries-skipped",
+                    requestId: "",
+                    elapsedMs: 0,
+                    outcome: `${entries.length} ${entries.some((entry) => entry.reason === "malformed") ? "malformed" : "unknown"}`,
+                }),
             credentialProvider: {
                 credential: async (parent) => {
                     if (Date.parse(access.expiresAt) - Date.now() < 30000) {

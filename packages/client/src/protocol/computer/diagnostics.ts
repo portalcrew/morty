@@ -4,12 +4,12 @@ import { type Identifier, isIdentifier, identifierStringSchema as routingIdentif
 import { decodeZodMessage as decodeRoutingZodMessage, encryptedFieldSchema } from "../shared/message-codec.ts";
 
 const identifier = z.custom<Identifier>(isIdentifier);
-const computerDiagnosticsRequestSchema = z.object({
+const computerDiagnosticsRequestSchema = z.strictObject({
     kind: z.literal("computer.diagnostics.read"),
     requestId: identifier,
 });
 const computerDiagnosticsResultSchema = z
-    .strictObject({
+    .object({
         kind: z.literal("computer.diagnostics.result"),
         requestId: identifier,
         truncated: z.boolean(),

@@ -17,7 +17,7 @@ export const WORKSPACE_LIST_KIND = "workspace.list";
 export const WORKSPACE_ENTRIES_KIND = "workspace.entries";
 
 const workspaceListCommandSchema = z
-    .object({
+    .strictObject({
         directory: DIRECTORY_PATH,
         kind: z.literal(WORKSPACE_LIST_KIND),
         requestId: IDENTIFIER,

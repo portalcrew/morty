@@ -21,6 +21,7 @@ import {
     type SessionLiveEventBatch,
     type SessionOperationFailedEvent,
     SessionPromptDisposition,
+    type UnsupportedSessionEntry,
 } from "@portalcrew/morty-client/protocol";
 import type { MortyOperationEndpoint } from "./calls/call.ts";
 import { sessionEndpoints } from "./calls/session.ts";
@@ -190,6 +191,7 @@ export interface MortyEndpointOptions {
     readonly credentialProvider: MortyCredentialProvider;
     readonly endpoint: string;
     readonly observeResponse?: (metadata: MortyResponseMetadata) => void;
+    readonly observeUnsupportedEntries?: (entries: readonly UnsupportedSessionEntry[]) => void;
     readonly operationTimeoutMilliseconds?: number;
 }
 
@@ -535,6 +537,7 @@ export class MortyRequestExecutor {
     readonly #endpoint: URL;
     readonly #operationTimeoutMilliseconds: number | undefined;
     readonly #observeResponse: ((metadata: MortyResponseMetadata) => void) | undefined;
+    readonly observeUnsupportedEntries: (entries: readonly UnsupportedSessionEntry[]) => void;
     readonly #transport: WsTransport;
     readonly #lifetime = new AbortController();
 
@@ -547,6 +550,11 @@ export class MortyRequestExecutor {
                 ? undefined
                 : validatePositiveInteger(options.operationTimeoutMilliseconds, "operation timeout");
         this.#observeResponse = options.observeResponse;
+        this.observeUnsupportedEntries = (entries) => {
+            if (entries.length > 0) {
+                options.observeUnsupportedEntries?.(entries);
+            }
+        };
     }
 
     readonly close = (): void => this.#lifetime.abort(new MortyConnectionError("The Morty client is closed"));
@@ -1381,7 +1389,8 @@ export class MortyLiveEventSubscription {
                         throw new MortyProtocolError("The live Session event stream contains an unexpected message");
                     }
                     const message = decodeSessionEventEnvelope(plaintext);
-                    const events = decodeKnownSessionLiveEventBatch(message.events);
+                    const { events, unsupported } = decodeKnownSessionLiveEventBatch(message.events);
+                    this.#executor.observeUnsupportedEntries(unsupported);
                     if (events.some((event) => !sameNativeSession(event.target, this.#target))) {
                         throw new MortyProtocolError("The live Session event stream contains another Session");
                     }
@@ -1492,7 +1501,9 @@ export class MortyEventResources {
             },
             signal,
         );
-        return decodeKnownSessionEventLogPage(result.events.events);
+        const { page: decodedPage, unsupported } = decodeKnownSessionEventLogPage(result.events.events);
+        this.#executor.observeUnsupportedEntries(unsupported);
+        return decodedPage;
     };
 
     readonly close = (): void => {

@@ -64,6 +64,13 @@ export function assertKind(value: Readonly<Record<string, unknown>>, expectedKin
     }
 }
 
+export function assertOnlyFields(value: Readonly<Record<string, unknown>>, fields: readonly string[]): void {
+    const unexpected = Object.keys(value).find((key) => !fields.includes(key));
+    if (unexpected !== undefined) {
+        throw new ProtocolMessageError(`Unexpected field: ${unexpected}`);
+    }
+}
+
 export function decodeMessageKind(encoded: string): string {
     return readString(parseJson(encoded), "kind", 64);
 }

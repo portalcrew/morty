@@ -562,29 +562,72 @@ function decode<T>(value: unknown, schema: z.ZodType<T>): T {
     }
     return result.data;
 }
-function decodedEntries<T>(value: unknown, schema: z.ZodType<T>, maximum: number): unknown {
-    return Array.isArray(value) && value.length <= maximum
-        ? value.flatMap((entry) => {
-              const decoded = schema.safeParse(entry);
-              return decoded.success ? [decoded.data] : [];
-          })
-        : value;
+/**
+ * An entry a reader skipped: `unknown-type` is an entry kind this reader does not know, which a newer Computer may
+ * send; `malformed` is a known kind that failed its schema. Neither carries the entry's content.
+ */
+export interface UnsupportedSessionEntry {
+    readonly reason: "unknown-type" | "malformed";
+    readonly type: string | null;
+    readonly eventId: string | null;
 }
-function sanitizeConsumableNativeSessionEvents(value: unknown): unknown {
+
+const knownEntryTypes: ReadonlySet<unknown> = new Set(["acp", "lifecycle-metadata"]);
+const entryLabel = /^[A-Za-z0-9._:-]{1,128}$/u;
+
+function unsupportedEntry(entry: unknown): UnsupportedSessionEntry {
+    const label = (field: string): string | null => {
+        const candidate = isRecord(entry) ? entry[field] : undefined;
+        return typeof candidate === "string" && entryLabel.test(candidate) ? candidate : null;
+    };
+    return {
+        reason: isRecord(entry) && knownEntryTypes.has(entry["type"]) ? "malformed" : "unknown-type",
+        type: label("type"),
+        eventId: label("eventId"),
+    };
+}
+
+function decodedEntries<T>(
+    value: unknown,
+    schema: z.ZodType<T>,
+    maximum: number,
+): { readonly entries: unknown; readonly unsupported: readonly UnsupportedSessionEntry[] } {
+    if (!Array.isArray(value) || value.length > maximum) {
+        return { entries: value, unsupported: [] };
+    }
+    const entries: T[] = [];
+    const unsupported: UnsupportedSessionEntry[] = [];
+    for (const entry of value) {
+        const decoded = schema.safeParse(entry);
+        if (decoded.success) {
+            entries.push(decoded.data);
+        } else {
+            unsupported.push(unsupportedEntry(entry));
+        }
+    }
+    return { entries, unsupported };
+}
+function sanitizeConsumableNativeSessionEvents(value: unknown): {
+    readonly value: unknown;
+    readonly unsupported: readonly UnsupportedSessionEntry[];
+} {
     const input = inputValue(value);
     if (!isRecord(input)) {
-        return input;
+        return { value: input, unsupported: [] };
     }
-    return { ...input, events: sanitizeConsumableSessionEventLogPage(input["events"]) };
+    const events = sanitizeConsumableSessionEventLogPage(input["events"]);
+    return { value: { ...input, events: events.value }, unsupported: events.unsupported };
 }
-function sanitizeConsumableSessionEventLogPage(value: unknown): unknown {
+function sanitizeConsumableSessionEventLogPage(value: unknown): {
+    readonly value: unknown;
+    readonly unsupported: readonly UnsupportedSessionEntry[];
+} {
     const input = inputValue(value);
-    return isRecord(input)
-        ? {
-              ...input,
-              events: decodedEntries(input["events"], sessionEventSchema, MAX_EVENT_COUNT),
-          }
-        : input;
+    if (!isRecord(input)) {
+        return { value: input, unsupported: [] };
+    }
+    const { entries, unsupported } = decodedEntries(input["events"], sessionEventSchema, MAX_EVENT_COUNT);
+    return { value: { ...input, events: entries }, unsupported };
 }
 const knownSessionLiveEventBatchSchema = z.array(sessionLiveEventSchema).max(SESSION_EVENT_BATCH_MAX_SIZE).readonly();
 export const decodeSessionEvent = (value: unknown): SessionEvent => decode(value, sessionEventSchema);
@@ -593,11 +636,16 @@ export const decodeKnownSessionEventPayload = (value: unknown): SessionEventPayl
     return decoded.success ? decoded.data : null;
 };
 export const decodeSessionLiveEvent = (value: unknown): SessionLiveEvent => decode(value, sessionLiveEventSchema);
-export const decodeKnownSessionLiveEventBatch = (value: unknown): SessionLiveEventBatch =>
-    decode(
-        decodedEntries(inputValue(value), sessionLiveEventSchema, SESSION_EVENT_BATCH_MAX_SIZE),
-        knownSessionLiveEventBatchSchema,
+export const decodeKnownSessionLiveEventBatch = (
+    value: unknown,
+): { readonly events: SessionLiveEventBatch; readonly unsupported: readonly UnsupportedSessionEntry[] } => {
+    const { entries, unsupported } = decodedEntries(
+        inputValue(value),
+        sessionLiveEventSchema,
+        SESSION_EVENT_BATCH_MAX_SIZE,
     );
+    return { events: decode(entries, knownSessionLiveEventBatchSchema), unsupported };
+};
 export const decodeSessionEventEnvelope = (value: unknown): SessionEventEnvelope =>
     decode(value, sessionEventEnvelopeSchema);
 function eventBatchTarget(message: SessionEventEnvelope): z.infer<typeof nativeSessionTargetSchema> {
@@ -620,12 +668,16 @@ export const encodeSessionEventEnvelope = (value: SessionEventEnvelope): string 
     return JSON.stringify({ ...message, target: eventBatchTarget(message) });
 };
 export const decodeAcpSessionUpdate = (value: unknown): AcpSessionUpdate => decode(value, acpSessionUpdateSchema);
-export const decodeKnownSessionEventLogPage = (value: unknown): SessionEventLogPage =>
-    decode(sanitizeConsumableSessionEventLogPage(value), sessionEventLogPageSchema);
+export const decodeKnownSessionEventLogPage = (
+    value: unknown,
+): { readonly page: SessionEventLogPage; readonly unsupported: readonly UnsupportedSessionEntry[] } => {
+    const sanitized = sanitizeConsumableSessionEventLogPage(value);
+    return { page: decode(sanitized.value, sessionEventLogPageSchema), unsupported: sanitized.unsupported };
+};
 export const decodeNativeSessionEvents = (value: unknown): NativeSessionEvents =>
     decode(value, nativeSessionEventsSchema);
 export const decodeKnownNativeSessionEvents = (value: unknown): NativeSessionEvents =>
-    decode(sanitizeConsumableNativeSessionEvents(value), nativeSessionEventsSchema);
+    decode(sanitizeConsumableNativeSessionEvents(value).value, nativeSessionEventsSchema);
 
 const sessionEventEnvelopePublicRoutingSchema = z.object({
     kind: z.literal(SESSION_EVENT_KIND),

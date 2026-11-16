@@ -41,7 +41,7 @@ export type AgentSetting = z.infer<typeof agentSettingSchema>;
 const agentSettingsSchema = z.array(agentSettingSchema).max(128).readonly();
 
 const agentSettingsDiscoverCommandSchema = z
-    .object({
+    .strictObject({
         harness: IDENTIFIER,
         directory: DIRECTORY_PATH.optional(),
         kind: z.literal(AGENT_SETTINGS_DISCOVER_KIND),

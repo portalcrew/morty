@@ -114,6 +114,7 @@ export type {
     SessionEventsUnsubscribeControl,
     SessionLiveEvent,
     SessionLiveEventBatch,
+    UnsupportedSessionEntry,
 } from "./session/events/index.ts";
 export {
     decodeAcpSessionUpdate,

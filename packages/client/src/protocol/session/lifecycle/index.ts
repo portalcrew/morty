@@ -88,7 +88,7 @@ const sessionMetadataSchema = z.object({ ...sessionRecordFields, target: nativeS
 export type SessionMetadata = z.infer<typeof sessionMetadataSchema>;
 
 const sessionListCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_LIST_KIND),
         limit: z.number().int().positive().max(500),
         requestId: IDENTIFIER,
@@ -108,7 +108,7 @@ const sessionsListedEventSchema = z
 export type SessionsListedEvent = z.infer<typeof sessionsListedEventSchema>;
 
 const sessionQueryCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_QUERY_KIND),
         requestId: IDENTIFIER,
         targets: z.array(nativeSessionTargetSchema).min(1).max(500).readonly(),
@@ -128,7 +128,7 @@ const sessionsQueriedEventSchema = z
 export type SessionsQueriedEvent = z.infer<typeof sessionsQueriedEventSchema>;
 
 const sessionRestoreCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_RESTORE_KIND),
         requestId: IDENTIFIER,
         target: nativeSessionTargetSchema,
@@ -144,7 +144,7 @@ export type SessionRestoreCommand = z.infer<typeof sessionRestoreCommandSchema>;
  * Session is absent afterwards, as asked, so a retry after a lost answer succeeds too.
  */
 const sessionArchiveCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_ARCHIVE_KIND),
         requestId: IDENTIFIER,
         target: nativeSessionTargetSchema,
@@ -154,7 +154,7 @@ const sessionArchiveCommandSchema = z
 export type SessionArchiveCommand = z.infer<typeof sessionArchiveCommandSchema>;
 
 const sessionPrepareCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_PREPARE_KIND),
         requestId: IDENTIFIER,
         target: nativeSessionTargetSchema,
@@ -164,7 +164,7 @@ const sessionPrepareCommandSchema = z
 export type SessionPrepareCommand = z.infer<typeof sessionPrepareCommandSchema>;
 
 const sessionCreateCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_CREATE_KIND),
         requestId: IDENTIFIER,
         operationId: IDENTIFIER,
