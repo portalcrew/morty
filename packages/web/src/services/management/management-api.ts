@@ -3,6 +3,7 @@ import * as v from "valibot";
 import type { ApiTransport } from "../api/api-transport.ts";
 import type { ApiRequest } from "../api/calls/call.ts";
 import { managementCalls } from "../api/calls/management.ts";
+import { readJsonBody } from "../api/response-body.ts";
 
 const identifier = v.custom<Identifier>(isIdentifier);
 const computerSchema = v.pipe(v.object({ computerId: identifier }), v.readonly());
@@ -67,16 +68,17 @@ export class ManagementApi {
             signal,
             headers: { authorization: `Bearer ${token}` },
         });
-        const value: unknown = response.status === 204 ? null : await response.json();
+        const value = response.status === 204 ? null : await readJsonBody(response, signal);
         signal.throwIfAborted();
         if (response.status === 401) {
             this.#credentialRejected?.();
         }
-        if (!response.ok) {
-            const parsed = v.safeParse(v.object({ error: v.object({ code: v.string(), message: v.string() }) }), value);
+        const parsed = v.safeParse(v.object({ error: v.object({ code: v.string(), message: v.string() }) }), value);
+        if (!response.ok || value === undefined) {
+            // A failure the Worker did not answer, or an answer that is not its JSON, is the service being unavailable.
             throw new CloudApiError(
-                parsed.success ? parsed.output.error.code : "MANAGEMENT_UNAVAILABLE",
-                parsed.success ? parsed.output.error.message : "Chat management is unavailable.",
+                !response.ok && parsed.success ? parsed.output.error.code : "MANAGEMENT_UNAVAILABLE",
+                !response.ok && parsed.success ? parsed.output.error.message : "Chat management is unavailable.",
                 response.status,
                 response.headers.get("x-morty-request-id") ?? response.headers.get("x-request-id") ?? "",
             );
