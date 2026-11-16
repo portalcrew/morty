@@ -50,14 +50,20 @@ export class SessionRuntimeFixture {
         (
             await this.sessions.createSession(
                 { ...options, adapter: this.adapters.resolve(options.agent) },
+                { operationId: crypto.randomUUID(), requestHash: "" },
                 async () => undefined,
             )
         ).target;
 
     readonly createConfiguredSession = (
         options: Omit<SessionCreationOptions, "adapter">,
-        configure: Parameters<SessionManager["createSession"]>[1],
-    ) => this.sessions.createSession({ ...options, adapter: this.adapters.resolve(options.agent) }, configure);
+        configure: Parameters<SessionManager["createSession"]>[2],
+    ) =>
+        this.sessions.createSession(
+            { ...options, adapter: this.adapters.resolve(options.agent) },
+            { operationId: crypto.randomUUID(), requestHash: "" },
+            configure,
+        );
 
     readonly createSession = async (
         options: Omit<SessionCreationOptions, "adapter">,

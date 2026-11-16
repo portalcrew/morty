@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
-import type { SessionCreationTable } from "../../storage/session/session-creation-table.ts";
 import { type SharedOperation, shareOperation } from "../../util/shared-operation.ts";
 import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
+import type { SessionCreationIdentity, SessionStore } from "./session-store.ts";
 
 interface RunningCreation {
     readonly hash: string;
@@ -17,11 +17,11 @@ interface RunningCreation {
  * request leaving, such as a retry's earlier attempt whose connection closed, never cancels it for the others.
  */
 export class SessionCreations {
-    readonly #table: SessionCreationTable;
+    readonly #store: Pick<SessionStore, "creation">;
     readonly #running = new Map<string, RunningCreation>();
 
-    constructor(table: SessionCreationTable) {
-        this.#table = table;
+    constructor(store: Pick<SessionStore, "creation">) {
+        this.#store = store;
     }
 
     readonly settle = async (): Promise<void> => {
@@ -40,7 +40,7 @@ export class SessionCreations {
     ): Promise<NativeSessionTarget | null> => {
         signal.throwIfAborted();
         const hash = requestHash(input);
-        const prior = this.#table.read(operationId);
+        const prior = this.#store.creation(operationId);
         const running = this.#running.get(operationId);
         if ((prior !== undefined && prior.requestHash !== hash) || (running !== undefined && running.hash !== hash)) {
             throw new AcpExecutionError("The creation operation has different inputs", {}, "idempotency_conflict");
@@ -56,32 +56,31 @@ export class SessionCreations {
     };
 
     /**
-     * Runs a creation once per operation and answers it. The receipt is written when the Session is held, so a creation
-     * that did not finish has no receipt and a retry creates the Session again: nothing was held, and no client was
-     * told of one. An operation that already created its Session is answered by `current` instead. `create` runs under
-     * the creation's own signal, which ends only when every request of the operation has left.
+     * Runs a creation once per operation and answers it. `create` holds the Session with the identity it is given, and
+     * the store writes the receipt in that same write, so a creation that did not finish has no receipt and a retry
+     * creates the Session again: nothing was held, and no client was told of one. An operation that already created
+     * its Session is answered by `current` instead. `create` runs under the creation's own signal, which ends only
+     * when every request of the operation has left.
      */
     readonly run = async <Answer extends { readonly target: NativeSessionTarget }>(
         operationId: string,
         input: unknown,
         signal: AbortSignal,
-        create: (signal: AbortSignal) => Promise<Answer>,
+        create: (signal: AbortSignal, creation: SessionCreationIdentity) => Promise<Answer>,
         current: (target: NativeSessionTarget) => Promise<Answer>,
     ): Promise<Answer> => {
         const created = await this.created(operationId, input, signal);
         if (created !== null) {
             return await current(created);
         }
-        if (this.#running.has(operationId) || this.#table.read(operationId) !== undefined) {
+        if (this.#running.has(operationId) || this.#store.creation(operationId) !== undefined) {
             // Another request of the operation started or finished its creation while this one waited.
             return await this.run(operationId, input, signal, create, current);
         }
         const hash = requestHash(input);
         const { operation, first } = shareOperation(async (shared) => {
             try {
-                const result = await create(shared);
-                this.#table.record(operationId, hash, result.target);
-                return result;
+                return await create(shared, { operationId, requestHash: hash });
             } finally {
                 this.#running.delete(operationId);
             }

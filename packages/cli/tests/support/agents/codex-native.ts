@@ -14,8 +14,6 @@ import { NativeSessionService } from "../../../src/engine/session/native/native-
 import { SessionCreations } from "../../../src/engine/session/record/session-creations.ts";
 import { MemorySessionStore } from "../../../src/engine/session/record/session-store.ts";
 import { WorkspaceDirectoryService } from "../../../src/engine/session/workspace/workspace-directory.ts";
-import { SessionCreationTable } from "../../../src/engine/storage/session/session-creation-table.ts";
-import { openAcpSessionDatabase } from "../../../src/engine/storage/sqlite/local-databases.ts";
 import { systemTimer } from "../../../src/engine/util/timer.ts";
 import { testAgentDefinition } from "../agent-definition.ts";
 import { memoryComputerCredentials } from "../computer-credentials.ts";
@@ -69,8 +67,7 @@ export async function codexFixture(
         async (agent) => agent,
     );
     const directories = new WorkspaceDirectoryService(workspace);
-    const database = openAcpSessionDatabase(join(temporary, "operations.sqlite"));
-    const creations = new SessionCreations(new SessionCreationTable(database));
+    const creations = new SessionCreations(store);
     const service = new NativeSessionService(
         (harness) => sessions.resolveAgent(config.catalog.find(harness)),
         directories,
@@ -121,7 +118,6 @@ export async function codexFixture(
         await service.close();
         await sessions.close();
         await creations.settle();
-        database.close();
         await codex[Symbol.asyncDispose]();
         await provider[Symbol.asyncDispose]();
         await rm(temporary, { recursive: true, force: true });

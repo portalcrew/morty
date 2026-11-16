@@ -242,9 +242,10 @@ async function executeSessionCreate(context: CommandContext, command: SessionCre
                 command.operationId,
                 input,
                 signal,
-                async (shared) => {
+                async (shared, creation) => {
                     const created = await context.sessions.createSession(
                         { ...agent, cwd: resolved.cwd, signal: shared },
+                        creation,
                         async ({ target, prepared }, creationSignal) =>
                             await applyCompleteSessionConfiguration(
                                 context.sessions,

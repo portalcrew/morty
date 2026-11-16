@@ -19,7 +19,7 @@ import { RuntimeOperations } from "../manager/operation-drain.ts";
 import type { SessionManager } from "../manager/session-manager.ts";
 import { prepareHeldSession, resolveHeldSession } from "../record/held-session.ts";
 import type { SessionCreations } from "../record/session-creations.ts";
-import type { StoredSession } from "../record/session-store.ts";
+import type { SessionCreationIdentity, StoredSession } from "../record/session-store.ts";
 import { LocalAuthorizationError } from "../workspace/local-authorization-error.ts";
 import type { WorkspaceDirectoryService } from "../workspace/workspace-directory.ts";
 import { nativeSessionQuery } from "./native-query.ts";
@@ -272,16 +272,19 @@ export class NativeSessionService {
             action === "fork" && sourceTitle.length > 0
                 ? nextForkTitle(sourceTitle, this.#sessions.listSessions(Number.MAX_SAFE_INTEGER))
                 : sourceTitle;
-        const open = async (openSignal: AbortSignal): Promise<SessionReadyEvent> => {
+        const open = async (
+            openSignal: AbortSignal,
+            creation: SessionCreationIdentity | null,
+        ): Promise<SessionReadyEvent> => {
             const opened = await this.#sessions.openNativeSession(
                 {
                     ...options,
                     cwd: target.cwd,
                     signal: openSignal,
                 },
-                action === "fork"
-                    ? { kind: "fork", sessionId: target.info.sessionId, title }
-                    : { kind: "import", sessionId: target.info.sessionId, title },
+                creation === null
+                    ? { kind: "import", sessionId: target.info.sessionId, title }
+                    : { kind: "fork", sessionId: target.info.sessionId, title, creation },
                 this.#resolveAgent,
             );
             return {
@@ -303,7 +306,7 @@ export class NativeSessionService {
                 ? await this.#creations.run(command.requestId, forkIntent(command), signal, open, (created) =>
                       this.#currentReady(command.requestId, created, signal),
                   )
-                : await open(signal);
+                : await open(signal, null);
         return {
             ...envelope,
             action,

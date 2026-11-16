@@ -1,9 +1,7 @@
 import { NativeSessionSet } from "@portalcrew/morty-client/native-session";
 import type { SessionExecution } from "@portalcrew/morty-client/protocol";
-import { AcpSessionTable } from "../../storage/session/acp-session-table.ts";
 import { CommandLedgerTable } from "../../storage/session/command-ledger-table.ts";
 import { LiveEventPositionTable } from "../../storage/session/live-event-position-table.ts";
-import { SessionCreationTable } from "../../storage/session/session-creation-table.ts";
 import { SessionEventCacheTable } from "../../storage/session/session-event-cache-table.ts";
 import {
     computerSessionDatabasePaths,
@@ -50,9 +48,9 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         sessionDatabase.close();
         throw error;
     }
-    const sessionStore = new SqliteSessionStore(new AcpSessionTable(sessionDatabase), events);
+    const sessionStore = new SqliteSessionStore(sessionDatabase, events);
     const activeSessions = new SessionTurns(operations, (target, commandId) => manager.executes(target, commandId));
-    const sessionCreations = new SessionCreations(new SessionCreationTable(sessionDatabase));
+    const sessionCreations = new SessionCreations(sessionStore);
     const directories = new WorkspaceDirectoryService(defaultWorkspace);
     const manager = new SessionManager({
         observer: {

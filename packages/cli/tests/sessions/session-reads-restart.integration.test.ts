@@ -6,7 +6,6 @@ import type { AcpAgentDefinition } from "../../src/engine/acp/agent/agent-defini
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
 import { MemorySessionEventStore } from "../../src/engine/session/history/session-event-store.ts";
 import { MemorySessionStore, SqliteSessionStore } from "../../src/engine/session/record/session-store.ts";
-import { AcpSessionTable } from "../../src/engine/storage/session/acp-session-table.ts";
 import { openAcpSessionDatabase } from "../../src/engine/storage/sqlite/local-databases.ts";
 import { systemTimer } from "../../src/engine/util/timer.ts";
 import { acpAdapters } from "../support/acp-adapters.ts";
@@ -149,10 +148,7 @@ describe("Session settings reads after a daemon restart", () => {
             signal,
         });
         await seed.close();
-        const store = new SqliteSessionStore(
-            new AcpSessionTable(openAcpSessionDatabase(databasePath)),
-            new MemorySessionEventStore(),
-        );
+        const store = new SqliteSessionStore(openAcpSessionDatabase(databasePath), new MemorySessionEventStore());
         const first = createManager(store);
         try {
             const imported = await first.openNativeSession(

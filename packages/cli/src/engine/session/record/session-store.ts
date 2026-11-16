@@ -1,6 +1,8 @@
 import { nativeSessionKey } from "@portalcrew/morty-client/native-session";
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
-import type { AcpSessionRow, AcpSessionTable } from "../../storage/session/acp-session-table.ts";
+import { type AcpSessionRow, AcpSessionTable } from "../../storage/session/acp-session-table.ts";
+import { type SessionCreationReceipt, SessionCreationTable } from "../../storage/session/session-creation-table.ts";
+import type { LocalSqliteDatabase } from "../../storage/sqlite/local-sqlite-database.ts";
 import { MemorySessionEventStore, type SessionEventStore } from "../history/session-event-store.ts";
 import { decodeStoredSessionConfigurations, type StoredSessionConfiguration } from "../live/session-configurations.ts";
 
@@ -70,6 +72,11 @@ function updatedSession(held: StoredSession, facts: StoredSessionFacts, modified
     );
 }
 
+export interface SessionCreationIdentity {
+    readonly operationId: string;
+    readonly requestHash: string;
+}
+
 /**
  * The Sessions this Runtime holds. A record is the Session's existence: `hold` creates it, `update` follows the
  * Session's facts only while it exists, so a Session that was removed is never brought back by a late change, and
@@ -77,8 +84,10 @@ function updatedSession(held: StoredSession, facts: StoredSessionFacts, modified
  */
 export interface SessionStore {
     readonly close: () => void;
+    readonly creation: (operationId: string) => SessionCreationReceipt | undefined;
     readonly events: SessionEventStore;
     readonly hold: (session: StoredSession) => void;
+    readonly holdCreated: (session: StoredSession, creation: SessionCreationIdentity) => void;
     readonly list: () => readonly StoredSession[];
     readonly read: (target: NativeSessionTarget) => StoredSession | undefined;
     readonly remove: (target: NativeSessionTarget) => void;
@@ -88,6 +97,7 @@ export interface SessionStore {
 export class MemorySessionStore implements SessionStore {
     readonly events: SessionEventStore;
     readonly #sessions = new Map<string, StoredSession>();
+    readonly #creations = new Map<string, SessionCreationReceipt>();
 
     constructor(events: SessionEventStore = new MemorySessionEventStore()) {
         this.events = events;
@@ -113,6 +123,13 @@ export class MemorySessionStore implements SessionStore {
         this.#sessions.set(nativeSessionKey(session.target), session);
     };
 
+    readonly holdCreated = (session: StoredSession, creation: SessionCreationIdentity): void => {
+        this.hold(session);
+        this.#creations.set(creation.operationId, { requestHash: creation.requestHash, target: session.target });
+    };
+
+    readonly creation = (operationId: string): SessionCreationReceipt | undefined => this.#creations.get(operationId);
+
     readonly update = (target: NativeSessionTarget, facts: StoredSessionFacts, modifiedAt: string | null): void => {
         const held = this.#sessions.get(nativeSessionKey(target));
         if (held !== undefined) {
@@ -136,16 +153,20 @@ function decodeStoredSession(row: AcpSessionRow): StoredSession {
 
 export class SqliteSessionStore implements SessionStore {
     readonly events: SessionEventStore;
+    readonly #database: LocalSqliteDatabase;
     readonly #table: AcpSessionTable;
+    readonly #creations: SessionCreationTable;
 
-    constructor(table: AcpSessionTable, events: SessionEventStore) {
+    constructor(database: LocalSqliteDatabase, events: SessionEventStore) {
         this.events = events;
-        this.#table = table;
+        this.#database = database;
+        this.#table = new AcpSessionTable(database);
+        this.#creations = new SessionCreationTable(database);
     }
 
     readonly close = (): void => {
         try {
-            this.#table.close();
+            this.#database.close();
         } finally {
             this.events.close();
         }
@@ -165,6 +186,14 @@ export class SqliteSessionStore implements SessionStore {
     };
 
     readonly hold = (session: StoredSession): void => this.#table.upsert(encodeStoredSession(session));
+
+    readonly holdCreated = (session: StoredSession, creation: SessionCreationIdentity): void =>
+        this.#database.transaction(() => {
+            this.#table.upsert(encodeStoredSession(session));
+            this.#creations.record(creation.operationId, creation.requestHash, session.target);
+        });
+
+    readonly creation = (operationId: string): SessionCreationReceipt | undefined => this.#creations.read(operationId);
 
     readonly update = (target: NativeSessionTarget, facts: StoredSessionFacts, modifiedAt: string | null): void => {
         const held = this.read(target);
