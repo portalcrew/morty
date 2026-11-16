@@ -820,7 +820,6 @@ export class SessionManager {
     /** Whether the Session is executing a command, from its preparation until the execution releases it. */
     readonly isExecuting = (target: NativeSessionTarget): boolean => isExecuting(this.#activity(target));
 
-    /** Called when a prompt of the Session ended, whatever became of it, so the Session's process may be reclaimed. */
     readonly turnFinished = (target: NativeSessionTarget): void => {
         this.#executionProcesses.touch(target);
         this.#processes.notifyChanged();

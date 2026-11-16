@@ -3,17 +3,10 @@ import { AcpExecutionError } from "../../acp/acp-error.ts";
 import type { ExecutionActivity } from "../turn/active-executions.ts";
 import type { SessionLifecycle } from "./session-lifecycle.ts";
 
-/**
- * Everything this Runtime does with one Session at an instant, read from the facts' owners at once. The Session rules
- * below are the only place that decides from it, so which operation may run, whether the Session is busy, and whether
- * it is known all follow from the same reading.
- */
 export interface SessionActivity {
     readonly lifecycle: SessionLifecycle;
-    /** An import, fork, or history read is managing the native session. */
     readonly nativeOperation: boolean;
     readonly execution: ExecutionActivity;
-    /** A prompt was accepted and has no outcome yet, whether or not its execution has begun. */
     readonly unsettledTurn: boolean;
     readonly process: {
         readonly agent: { readonly kind: "none" } | { readonly kind: "ready"; readonly backgroundActivity: boolean };
@@ -27,13 +20,10 @@ export interface SessionActivity {
 export type ImmediateSessionOperation =
     | { readonly kind: "prepare-execution" }
     | { readonly kind: "use" }
-    /** Runs a prompt in the open Session, which must not write a native session another operation is managing. */
     | { readonly kind: "prompt" }
-    /** Needs the native session to itself: no import, fork, or history read may be managing it. */
     | { readonly kind: "native-exclusive" }
-    /** Copies a Session's native conversation, which no accepted prompt may still be writing. */
+    // No accepted prompt may still be writing the conversation a fork copies.
     | { readonly kind: "fork" }
-    /** Replaces the Agent process with one for another environment, so nothing may still use the current one. */
     | { readonly kind: "change-environment" }
     | { readonly kind: "steer"; readonly targetCommandId: string };
 
@@ -59,13 +49,11 @@ const closedRefusal = (reason: string): ImmediateAdmission => refused(reason, SE
 const notFound = (): ImmediateAdmission => refused("The Session was not found", "session_not_found");
 const managed = (): ImmediateAdmission => refused("The native session is being managed", "session_busy");
 
-/** From the moment a command's execution begins until it is released. */
 export const isExecuting = (activity: SessionActivity): boolean => activity.execution.kind === "running";
 
 const hasBackgroundActivity = (activity: SessionActivity): boolean =>
     activity.process.agent.kind === "ready" && activity.process.agent.backgroundActivity;
 
-/** Whether the Session's current Agent process is in use, so no operation may replace it. */
 const usesAgentProcess = (activity: SessionActivity): boolean =>
     hasBackgroundActivity(activity) ||
     isExecuting(activity) ||
@@ -73,7 +61,6 @@ const usesAgentProcess = (activity: SessionActivity): boolean =>
     activity.lifecycle.kind === "creating" ||
     activity.nativeOperation;
 
-/** Whether the Session's Agent process must be kept: idle reclamation and capacity eviction leave it alone. */
 export const isBusy = (activity: SessionActivity): boolean =>
     usesAgentProcess(activity) || activity.process.preparing || activity.unsettledTurn;
 
@@ -107,7 +94,7 @@ export function admitNow(activity: SessionActivity, operation: ImmediateSessionO
         case "change-environment":
             return usesAgentProcess(activity)
                 ? refused(
-                      "The execution environment cannot change while a conversation turn is running",
+                      "The execution environment cannot change while the Session's Agent is in use",
                       "session_busy",
                   )
                 : admitted;

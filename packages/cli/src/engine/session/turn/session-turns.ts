@@ -22,7 +22,6 @@ export class SessionTurns {
         this.#onFinished = onFinished;
     }
 
-    /** Whether a prompt was accepted for the Session and has no outcome yet, whether or not it began executing. */
     readonly hasUnsettledTurn = (sessionTarget: NativeSessionTarget): boolean =>
         this.#bySessionTarget
             .get(sessionTarget)
