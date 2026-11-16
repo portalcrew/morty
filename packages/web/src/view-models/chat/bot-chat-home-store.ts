@@ -347,28 +347,30 @@ export const createBotChatHomeStore = (
         };
         /**
          * Returns a first message no Session took to the New Session draft, ahead of what the draft holds, as a reload
-         * returns it. Leaving the page that sent it is not discarding it. Off the draft page, or while the draft reads
-         * files that restoring would cancel, it waits for the next draft.
+         * returns it. Leaving the page that sent it is not discarding it. Off the draft page, while the draft reads
+         * files that restoring would cancel, or while the draft's own first message is in creation, it waits for the
+         * next draft: the draft's text and key belong to that creation until it ends.
          *
          * Its Session may exist even though no answer said so, so the draft takes the message's key: sending it again
-         * continues that creation, which answers the Session it already created. A draft whose own first message is
-         * still in creation keeps its key for that creation.
+         * continues that creation, which answers the Session it already created.
          */
         const returnFirstMessage = (message: ReturnedFirstMessage): void => {
             const current = get();
             const composer = current.composerAttachments.getState();
-            if (current.selection.kind !== "draft" || composer.state.kind === "reading") {
+            if (
+                current.selection.kind !== "draft" ||
+                composer.state.kind === "reading" ||
+                current.creation.kind !== "draft"
+            ) {
                 returned = [...returned, message];
                 return;
             }
-            if (current.creation.kind === "draft") {
-                set((state) => ({
-                    selection: transitionConversationSelection(state.selection, {
-                        kind: "draft-selected",
-                        key: message.commandId,
-                    }),
-                }));
-            }
+            set((state) => ({
+                selection: transitionConversationSelection(state.selection, {
+                    kind: "draft-selected",
+                    key: message.commandId,
+                }),
+            }));
             releaseUnsentFirstMessage(message.commandId);
             const restored = returnToComposer(
                 current.draft,
