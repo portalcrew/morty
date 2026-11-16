@@ -217,7 +217,13 @@ function SetupApplication({
         >
             <SetupConnectionGraphic />
             <SetupCardTitle className="text-balance" id="setup-title">
-                {returnHref === null ? "Step away. Keep your agent working." : "Connect another computer"}
+                {returnHref === null ? (
+                    <>
+                        Step away. <span className="inline-block">Keep your agent working.</span>
+                    </>
+                ) : (
+                    "Connect another computer"
+                )}
             </SetupCardTitle>
             <SetupCardDescription className="text-pretty">
                 {returnHref === null
@@ -229,7 +235,10 @@ function SetupApplication({
             </div>
             {returnHref === null && (
                 <p className="mt-5 text-center text-xs leading-5 text-morty-text-2">
-                    History stays on your computer · End-to-end encrypted ·{" "}
+                    <span className="whitespace-nowrap">History stays on your computer</span>
+                    {" · "}
+                    <span className="whitespace-nowrap">End-to-end encrypted</span>
+                    {" · "}
                     <ExternalLink className="underline underline-offset-2 hover:text-foreground" href={mortyRepository}>
                         Open source
                     </ExternalLink>
