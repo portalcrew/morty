@@ -197,7 +197,7 @@ export function createMortyApplication(options: {
         if (document.visibilityState === "hidden" || recovery !== null) {
             return;
         }
-        recovery = Promise.allSettled([workspace?.sessionPane()?.store.getState().recover(lifetime.signal)])
+        recovery = Promise.allSettled([workspace?.sessionPane()?.connection.getState().recover(lifetime.signal)])
             .then(() => undefined)
             .finally(() => {
                 recovery = null;

@@ -203,8 +203,8 @@ export function createChatWorkspace(options: {
     });
     const directory = createConversationDirectoryStore(
         requests,
-        (sessions) => {
-            statuses.getState().directoryLoaded(sessions);
+        (sessions, previous) => {
+            statuses.getState().directoryLoaded(sessions, previous);
         },
         options.clock,
         titles,
@@ -317,7 +317,7 @@ export function createChatWorkspace(options: {
     const draftWaitsForComputer = (): boolean => draftControls.getState().settings.kind === "unreachable";
     const paneWaitingForComputer = () => {
         const open = paneStore.getState();
-        return open.kind === "open" && connectionWaitsForComputer(open.model.store.getState().connection)
+        return open.kind === "open" && connectionWaitsForComputer(open.model.connection.getState().connection)
             ? open.model
             : null;
     };

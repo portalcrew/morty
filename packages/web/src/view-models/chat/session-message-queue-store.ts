@@ -40,7 +40,7 @@ type QueueRequestOutcome =
 /**
  * The Session's requests on the Computer's queue. They run on the Session's operations, so switching panes neither ends
  * a request nor loses what it returns. A failed request reports its failure to the Session's operation feedback.
- * Original files remain owned by delivery.
+ * Original files remain owned by delivery, which releases them once the Computer's account no longer lists the message.
  */
 export interface SessionMessageQueueStore {
     readonly requests: ReadonlyMap<string, QueuedMessageRequest>;
@@ -97,7 +97,6 @@ function withRequest(
 export const createSessionMessageQueueStore = (options: {
     readonly sessionTarget: NativeSessionTarget;
     readonly connection: SessionOperationConnection;
-    readonly withdrawn: (commandId: string) => void;
     readonly returned: (message: ChatQueuedMessage) => void;
     readonly failed: (failure: OperationFailure) => void;
 }) =>
@@ -141,7 +140,6 @@ export const createSessionMessageQueueStore = (options: {
             );
             if (outcome.kind === "done") {
                 left(commandId);
-                options.withdrawn(commandId);
                 return outcome;
             }
             set((state) => ({ requests: withRequest(state.requests, commandId, null) }));

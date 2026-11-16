@@ -52,11 +52,11 @@ import { sessionExecutionContext } from "../../view-models/chat/execution-contex
 import { sessionHarnessSelection } from "../../view-models/chat/native-session-agents.ts";
 import { sessionInteractionPresentation } from "../../view-models/chat/session-interaction-store.ts";
 import {
-    type SessionPaneModel,
     sessionPanePresentation,
     sessionTitleEdit,
     type TitleEdit,
-} from "../../view-models/chat/session-pane-store.ts";
+} from "../../view-models/chat/session-pane-presentation.ts";
+import type { SessionPaneModel } from "../../view-models/chat/session-pane-store.ts";
 import { sessionProjectionTimeline } from "../../view-models/chat/session-projection.ts";
 import type { SessionRenderItem } from "../../view-models/chat/session-render-items.ts";
 import { sessionTimelinePresentation } from "../../view-models/chat/session-timeline-presentation.ts";
@@ -471,13 +471,15 @@ function MortySessionPaneBody({
     const computer = useStore(workspace.computer);
     const computerConfiguration = computer.computerConfiguration;
     const model = useStore(pane.store);
+    const { connection } = useStore(pane.connection);
+    const { projection } = useStore(pane.history);
     const composer = useStore(pane.composer);
     const rename = useStore(pane.rename);
     const titleEdit = sessionTitleEdit(composer.titleDraft, rename.rename);
     const title = useStore(workspace.titles, (state) => sessionTitle(state.titles, pane.session.target));
     const attachmentModel = useStore(pane.composerAttachments);
     const execution = useStore(pane.execution, (state) => state.state);
-    const timeline = sessionProjectionTimeline(model.projection, execution.observations);
+    const timeline = sessionProjectionTimeline(projection, execution.observations);
     const interactionModel = useStore(pane.interactions);
     const settingsModel = useStore(pane.settings);
     const interactions = sessionInteractionPresentation(interactionModel, execution.interactions, timeline.messages);
@@ -506,20 +508,21 @@ function MortySessionPaneBody({
     const respondToElicitation = (response: ElicitationInteractionResponse): void => {
         interactionModel.respondToElicitation(response, pane.operationsSignal());
     };
-    const executionContext = sessionExecutionContext(pane.session, home, computer, model.connection);
-    const presentation = sessionPanePresentation(
-        model,
+    const executionContext = sessionExecutionContext(pane.session, home, computer, connection);
+    const presentation = sessionPanePresentation({
+        connection,
+        projection,
         execution,
         composer,
         delivery,
-        taskControls,
-        messageQueue,
-        attachmentModel,
-        settingsModel,
+        tasks: taskControls,
+        queue: messageQueue,
+        attachments: attachmentModel,
+        settings: settingsModel,
         feedback,
-        executionContext.available,
-        pane.steeringSupported,
-    );
+        connectionAvailable: executionContext.available,
+        steeringSupported: pane.steeringSupported,
+    });
     const answer = (messageId: string): void =>
         runAndFollow(async () => {
             await pane.store.getState().sendAnswer(messageId);
@@ -549,7 +552,7 @@ function MortySessionPaneBody({
                   <ConnectionNotice
                       feedback={executionContext.feedback}
                       inline={inline}
-                      onRetryNow={pane.store.getState().retryNow}
+                      onRetryNow={pane.connection.getState().retryNow}
                   />
               );
     const slotErrorMessage = composerErrorMessage(presentation.composerError, attachmentModel.state);
@@ -564,7 +567,7 @@ function MortySessionPaneBody({
     const timelinePresentation = sessionTimelinePresentation(
         timeline.messages,
         presentation,
-        model.connection.kind,
+        connection.kind,
         isFileEditToolCall,
     );
     const sessionMessagesLoading = timelinePresentation.loading;
@@ -630,25 +633,28 @@ function MortySessionPaneBody({
                             loadOlder={{
                                 hasMore: timeline.hasOlderHistory,
                                 loading: presentation.historyLoading,
-                                onLoadMore: (signal) => pane.store.getState().loadOlderMessages(signal),
+                                onLoadMore: (signal) => pane.history.getState().loadOlderMessages(signal),
                                 revision: timeline.revision,
                             }}
                         >
                             {sessionMessagesLoading && <SessionMessageListSkeleton />}
                             {!sessionMessagesLoading &&
                                 timeline.messages.length === 0 &&
-                                model.connection.kind === "failed" && (
+                                connection.kind === "failed" && (
                                     <div
                                         className={`${chatSessionMessageColumnClassName} flex min-h-full items-center justify-center`}
                                     >
                                         <div className="grid w-full max-w-lg justify-items-center gap-4 text-center">
                                             <SessionLoadFailure
                                                 copy={describeLoadFailure(
-                                                    { kind: "message", message: model.connection.message },
+                                                    { kind: "message", message: connection.message },
                                                     "Couldn't load this chat",
                                                 )}
                                             />
-                                            <Button onClick={() => pane.store.getState().retryNow()} variant="outline">
+                                            <Button
+                                                onClick={() => pane.connection.getState().retryNow()}
+                                                variant="outline"
+                                            >
                                                 Reconnect
                                             </Button>
                                         </div>
@@ -829,7 +835,7 @@ function MortySessionPaneBody({
                                             />
                                         </div>
                                     )}
-                                    {model.connection.kind === "ready" && (
+                                    {connection.kind === "ready" && (
                                         <SessionWelcomeInChat
                                             canSuggestProgress={presentation.canSuggestProgress}
                                             onDismiss={pane.welcome.getState().dismiss}

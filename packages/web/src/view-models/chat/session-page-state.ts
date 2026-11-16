@@ -11,7 +11,7 @@ import {
 import type { Clock } from "../../services/time/clock.ts";
 import { createSessionComposerStore, type SessionComposerStore } from "./session-composer-store.ts";
 import { createSessionDeliveryStore, type SessionDeliveryStore } from "./session-delivery-store.ts";
-import { createSessionExecutionStore, pendingQuestionIds, type SessionExecutionStore } from "./session-execution.ts";
+import { createSessionExecutionStore, pendingQuestions, type SessionExecutionStore } from "./session-execution.ts";
 import { createSessionInteractionStore, type SessionInteractionStore } from "./session-interaction-store.ts";
 import { createSessionMessageQueueStore, type SessionMessageQueueStore } from "./session-message-queue-store.ts";
 import { createSessionOperationConnection, type SessionOperationConnection } from "./session-operation-connection.ts";
@@ -21,16 +21,17 @@ import {
 } from "./session-operation-feedback.ts";
 import { createSessionRenameStore, type SessionRenameStore } from "./session-rename-store.ts";
 import { createSessionSettingsStore, type SessionSettingsStore } from "./session-settings-store.ts";
+import { createSessionSubmission, type SessionSubmission } from "./session-submission.ts";
 import { createSessionTaskControlsStore, type SessionTaskControlsStore } from "./session-task-controls.ts";
 import { createUserMessageCollapseStore, type UserMessageCollapseStore } from "./user-message-collapse-store.ts";
 
 /**
  * What the page holds for one Session, whichever pane shows it: the Session's execution as the Computer reported it,
- * what the user is writing, the messages the page submitted, and what the user asked the Session to do: its requests
- * on the Computer's queue, a stop, a settings change, answers to the Agent and a confirmed rename. A pane is replaced on
- * every re-read or reconnection and only follows the Session's connection and timeline, feeding what it observes into
- * the execution state; this state lasts as long as the page, so no replacement resets a Session fact or ends a Session
- * operation.
+ * what the user is writing, the messages the page submitted and how they are submitted, and what the user asked the
+ * Session to do: its requests on the Computer's queue, a stop, a settings change, answers to the Agent and a confirmed
+ * rename. A pane is replaced on every re-read or reconnection and only follows the Session's connection and timeline,
+ * feeding what it observes into the execution state; this state lasts as long as the page, so no replacement resets a
+ * Session fact or ends a Session operation.
  */
 export interface SessionPageState {
     readonly userMessageCollapse: UserMessageCollapseStore;
@@ -44,6 +45,7 @@ export interface SessionPageState {
     readonly queue: StoreApi<SessionMessageQueueStore>;
     readonly rename: StoreApi<SessionRenameStore>;
     readonly settings: StoreApi<SessionSettingsStore>;
+    readonly submission: SessionSubmission;
     readonly tasks: StoreApi<SessionTaskControlsStore>;
 }
 
@@ -87,7 +89,6 @@ export function createSessionPageState(options: {
     const queue = createSessionMessageQueueStore({
         sessionTarget,
         connection,
-        withdrawn: (commandId) => delivery.getState().withdraw(commandId),
         failed,
         returned: (message) => {
             // The queued message was written first, so it goes ahead of a draft the user started since.
@@ -126,16 +127,10 @@ export function createSessionPageState(options: {
                 centralSessionStorage.write(answerDraftsEntry, Object.fromEntries(drafts));
             }
         },
+        pendingQuestions: () => pendingQuestions(execution.getState().state),
     });
-    const execution = createSessionExecutionStore({
-        changed: (previous, next) => {
-            delivery.getState().observe();
-            // Drafts follow the questions the Computer's account leaves pending, not those a pane opened without.
-            if (next.interactions !== previous.interactions && next.coverage.kind === "covered") {
-                interactions.getState().questionsChanged(pendingQuestionIds(next.interactions));
-            }
-        },
-    });
+    const execution = createSessionExecutionStore();
+    const settings = createSessionSettingsStore({ computerId, sessionTarget, connection, failed });
     return {
         userMessageCollapse: createUserMessageCollapseStore(),
         lifetime: options.lifetime,
@@ -147,7 +142,8 @@ export function createSessionPageState(options: {
         interactions,
         queue,
         rename: createSessionRenameStore({ sessionTarget, connection, refreshTitle: options.refreshTitle, failed }),
-        settings: createSessionSettingsStore({ computerId, sessionTarget, connection, failed }),
+        settings,
+        submission: createSessionSubmission({ sessionTarget, connection, composer, delivery, execution, settings }),
         tasks,
     };
 }

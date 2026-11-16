@@ -34,11 +34,6 @@ export interface SessionInteractionStore {
     readonly submissions: ReadonlyMap<string, InteractionOperation>;
     /** The questions the user tried to accept, so a required answer still missing is pointed out. */
     readonly acceptAttempts: ReadonlySet<string>;
-    /**
-     * The Computer's account now leaves `pending` the questions still waiting for an answer. Drafts last only while
-     * their question is pending; an answered or withdrawn question drops its draft.
-     */
-    readonly questionsChanged: (pending: ReadonlySet<string>) => void;
     readonly respondToPermission: (response: PermissionInteractionResponse, signal: AbortSignal) => void;
     readonly respondToElicitation: (response: ElicitationInteractionResponse, signal: AbortSignal) => void;
     /** Accepts a form question with the answers typed so far, unless a required answer is still missing. */
@@ -65,11 +60,20 @@ export function createSessionInteractionStore(ports: {
     readonly elicitation: (response: ElicitationInteractionResponse, signal: AbortSignal) => Promise<void>;
     readonly answerDrafts: ElicitationAnswerDrafts;
     readonly answerDraftsChanged: (drafts: ElicitationAnswerDrafts) => void;
+    /** The questions the Computer's account leaves pending, or null while the page has no account of them. */
+    readonly pendingQuestions: () => ReadonlySet<string> | null;
 }) {
     return createStore<SessionInteractionStore>()((set, get) => {
+        // Drafts last only while their question is pending: whenever drafts are stored, an answered or withdrawn
+        // question's draft is dropped, and the presentation reads only the drafts of questions that are pending.
         const replaceAnswerDrafts = (drafts: ElicitationAnswerDrafts): void => {
-            set({ answerDrafts: drafts });
-            ports.answerDraftsChanged(drafts);
+            const pending = ports.pendingQuestions();
+            const retained =
+                pending === null
+                    ? drafts
+                    : new Map([...drafts].filter(([interactionId]) => pending.has(interactionId)));
+            set({ answerDrafts: retained });
+            ports.answerDraftsChanged(retained);
         };
         const record = (id: string, operation: InteractionOperation): void => {
             set((current) => ({ submissions: new Map(current.submissions).set(id, operation) }));
@@ -111,17 +115,6 @@ export function createSessionInteractionStore(ports: {
             },
             submissions: new Map(),
             acceptAttempts: new Set(),
-            questionsChanged: (pending) => {
-                const drafts = get().answerDrafts;
-                if ([...drafts.keys()].some((id) => !pending.has(id))) {
-                    replaceAnswerDrafts(new Map([...drafts].filter(([id]) => pending.has(id))));
-                }
-                if ([...get().acceptAttempts].some((id) => !pending.has(id))) {
-                    set((current) => ({
-                        acceptAttempts: new Set([...current.acceptAttempts].filter((id) => pending.has(id))),
-                    }));
-                }
-            },
             respondToPermission: (response, signal) =>
                 submit(response.interactionId, signal, () => ports.permission(response, signal)),
             respondToElicitation: (response, signal) =>

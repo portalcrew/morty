@@ -1,12 +1,12 @@
 import {
+    type DeliveryRecord,
     type DeliveryState,
     deliveryMessagePresentation,
     deliveryMessages,
     journalMessage,
-    type SessionDeliveryStore,
     type SubmittedMessage,
 } from "./session-delivery-store.ts";
-import { runtimeCoversMessage, type SessionExecutionState } from "./session-execution.ts";
+import type { SessionExecutionState } from "./session-execution.ts";
 import { queuedMessages, type SessionMessageQueueStore } from "./session-message-queue-store.ts";
 import { type SessionExecutionMessage, sessionUserCommandIds } from "./session-presentation.ts";
 
@@ -36,14 +36,13 @@ function currentMessage(state: DeliveryState): LocalMessage | null {
 }
 
 /**
- * History, then the Computer queue, then local delivery own each command's sole display location. This is the one place
- * that decides whether the page still shows its own copy of a message the service accepted: only until the Computer's
- * account covers it.
+ * History, then the Computer queue, then local delivery own each command's sole display location. The settled
+ * delivery holds only the accepted messages the Computer's account does not cover yet.
  */
 export function sessionDeliveryPresentation(
     messages: readonly SessionExecutionMessage[],
     execution: SessionExecutionState,
-    delivery: Pick<SessionDeliveryStore, "state" | "accepted">,
+    delivery: DeliveryRecord,
     queue: Pick<SessionMessageQueueStore, "requests">,
 ) {
     const { queued } = execution;
@@ -56,9 +55,7 @@ export function sessionDeliveryPresentation(
     const current = currentMessage(delivery.state);
     const candidates: readonly LocalMessage[] = [
         ...(current === null ? [] : [current]),
-        ...delivery.accepted
-            .filter((message) => !runtimeCoversMessage(execution, message))
-            .map((message): LocalMessage => ({ kind: "accepted", message })),
+        ...delivery.accepted.map((message): LocalMessage => ({ kind: "accepted", message })),
     ];
     const local = candidates.filter(({ message }) => {
         if (claimed.has(message.commandId)) {
