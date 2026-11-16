@@ -1,4 +1,5 @@
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import type { AgentDescriptor } from "../../../contracts/relay/pairing.ts";
 
 export const computerPairing = sqliteTable("computer_pairings", {
     generation: integer("generation").primaryKey({ autoIncrement: true }),
@@ -14,7 +15,12 @@ export const computerRegistration = sqliteTable("computer_registrations", {
     // Keep the persisted column name so retained registrations remain readable.
     computerName: text("machine_name").notNull(),
     workspaceName: text("workspace_name").notNull(),
-    agentsJson: text("agents_json").notNull(),
+});
+
+// Written by every daemon report; a generation that never reported has no row.
+export const computerAgentCatalog = sqliteTable("computer_agent_catalogs", {
+    generation: integer("generation").primaryKey(),
+    agents: text("agents", { mode: "json" }).$type<readonly AgentDescriptor[]>().notNull(),
 });
 
 export const computerRevocation = sqliteTable("computer_revocations", {

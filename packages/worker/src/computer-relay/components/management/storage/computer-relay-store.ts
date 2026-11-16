@@ -1,3 +1,4 @@
+import type { AgentDescriptor } from "../../../../contracts/relay/pairing.ts";
 import type { ComputerIdentityCredential } from "../../../../contracts/relay/pairing-identity.ts";
 import type {
     ComputerCredentialRotation,
@@ -31,7 +32,7 @@ interface ClaimPairing {
     readonly now: number;
     readonly computerName: string;
     readonly workspaceName: string;
-    readonly agents: string;
+    readonly agents: readonly AgentDescriptor[];
 }
 
 /**
@@ -50,8 +51,11 @@ export class ComputerRelayStore {
         this.#credentials = new ComputerCredentialStorage(database);
     }
 
-    readonly updateAgentCatalog = async (tokenHash: string, agents: string, signal: AbortSignal): Promise<boolean> =>
-        (await this.#computers.updateAgents(tokenHash, agents, signal)).meta.changes === 1;
+    readonly replaceAgentCatalog = async (
+        tokenHash: string,
+        agents: readonly AgentDescriptor[],
+        signal: AbortSignal,
+    ): Promise<boolean> => await this.#computers.replaceAgents(tokenHash, agents, signal);
 
     readonly readActiveGeneration = async (signal: AbortSignal): Promise<number | null> =>
         await this.#credentials.readActiveGeneration(signal);

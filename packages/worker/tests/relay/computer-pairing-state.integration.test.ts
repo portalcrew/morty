@@ -80,8 +80,8 @@ async function computer(signal: AbortSignal) {
             }
         },
         list: async () => Response.json({ computers: await backend.computers(signal) }),
-        publish: async (pairing: Pairing, token: string) =>
-            request(`/v1/computers/${pairing.computerId}/catalog`, "PUT", { agents: [] }, token),
+        publish: async (pairing: Pairing, token: string, agents: readonly object[] = []) =>
+            request(`/v1/computers/${pairing.computerId}/catalog`, "PUT", { agents }, token),
         storage: async <T>(operation: (storage: DurableObjectStorage) => Promise<T> | T): Promise<T> =>
             runInDurableObject(stub, async (_instance, state) => operation(state.storage)),
         restart: async () => evictDurableObject(stub),
@@ -157,7 +157,7 @@ it("Given a delayed claim, When newer requests have reused expired capacity, The
                 now: claimTime,
                 computerName: "Delayed computer",
                 workspaceName: "Delayed workspace",
-                agents: "[]",
+                agents: [],
             },
             new AbortController().signal,
         ),
@@ -165,6 +165,47 @@ it("Given a delayed claim, When newer requests have reused expired capacity, The
     expect(claimed).toBe(false);
     expect(await responseJson(await app.status(), 200)).toMatchObject({ status: "pending" });
     expect(await responseJson(await app.list(), 200)).toEqual({ computers: [] });
+});
+
+it("Given a paired Computer that never reported an Agent catalog, When it is read and then its daemon reports, Then it lists no Agents until the report and the report's Agents after", async ({
+    signal,
+}) => {
+    const app = await computer(signal);
+    const pairing = await app.pair("catalog-never-reported");
+    const { computerCredential } = v.parse(
+        v.object({ computerCredential: v.string() }),
+        await responseJson(await app.claim(pairing), 200),
+    );
+    await app.sql("DELETE FROM computer_agent_catalogs");
+    expect(await responseJson(await app.status(), 200)).toMatchObject({ status: "paired", agents: [] });
+    expect(await responseJson(await app.list(), 200)).toMatchObject({
+        computers: [{ computerId: pairing.computerId, agents: [] }],
+    });
+    const agent = {
+        agentPath: "/usr/local/bin/codex",
+        agentVersion: "codex 1.0.0",
+        capabilities: {
+            audioPrompt: false,
+            closeSession: true,
+            deleteSession: true,
+            embeddedContextPrompt: true,
+            imagePrompt: true,
+            listSessions: true,
+            loadSession: true,
+            promptQueueing: false,
+            renameSession: false,
+            resumeSession: true,
+            steering: false,
+            unstableForkSession: false,
+        },
+        harness: "codex",
+        label: "Codex",
+    };
+    expect((await app.publish(pairing, computerCredential, [agent])).status).toBe(204);
+    expect(await responseJson(await app.status(), 200)).toMatchObject({
+        status: "paired",
+        agents: [{ harness: "codex", label: "Codex" }],
+    });
 });
 
 it("Given a claim whose registration cannot commit, When the caller retries after recovery, Then the request is still pending and can be claimed once", async ({

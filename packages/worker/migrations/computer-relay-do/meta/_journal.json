@@ -15,6 +15,13 @@
             "when": 1794579364875,
             "tag": "0001_modern_famine",
             "breakpoints": true
+        },
+        {
+            "idx": 2,
+            "version": "6",
+            "when": 1794829834884,
+            "tag": "0002_talented_spectrum",
+            "breakpoints": true
         }
     ]
 }

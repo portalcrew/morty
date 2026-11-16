@@ -2,6 +2,7 @@ export { browserCredential } from "./browser-credential.ts";
 export { browserDevice } from "./browser-device.ts";
 export { computerConnection } from "./computer-connection.ts";
 export {
+    computerAgentCatalog,
     computerPairing,
     computerRegistration,
     computerRevocation,

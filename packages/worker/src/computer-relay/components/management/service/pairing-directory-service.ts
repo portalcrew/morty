@@ -13,7 +13,6 @@ import {
     normalizePairingCode,
     PAIRING_LIFETIME_MILLISECONDS,
     PairingDirectoryError,
-    parseAgents,
     validateIdentifier,
     validateToken,
 } from "../../../../contracts/relay/pairing.ts";
@@ -174,7 +173,7 @@ export class PairingDirectoryService {
                 now: Date.now(),
                 computerName,
                 workspaceName,
-                agents: JSON.stringify(agents),
+                agents,
             },
             signal,
         );
@@ -191,8 +190,7 @@ export class PairingDirectoryService {
         this.#authorizeComputer(computerId);
         const runtimes = await this.#cx.store.listComputers(signal);
         return runtimes.map(
-            (row) =>
-                new ComputerDescriptor(parseAgents(row.agents_json), row.computer_name, row.workspace_name, computerId),
+            (row) => new ComputerDescriptor(row.agents, row.computer_name, row.workspace_name, computerId),
         );
     };
 
@@ -222,7 +220,7 @@ export class PairingDirectoryService {
                 }
                 throw cause;
             }
-            if (await storage.updateAgentCatalog(tokenHash, JSON.stringify(agents), signal)) {
+            if (await storage.replaceAgentCatalog(tokenHash, agents, signal)) {
                 return;
             }
         }

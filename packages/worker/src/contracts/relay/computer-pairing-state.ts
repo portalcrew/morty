@@ -1,4 +1,4 @@
-import { PairingDirectoryError, type PairingStatus, parseAgents } from "./pairing.ts";
+import { PairingDirectoryError, type PairingStatus } from "./pairing.ts";
 import type { PairingComputerRow } from "./pairing-records.ts";
 
 export function computerRevokedAt(value: unknown): number | null {
@@ -21,7 +21,7 @@ export function computerPairingStatus(row: PairingComputerRow, computerId: strin
     if (row.registration !== null) {
         return {
             status: "paired",
-            agents: parseAgents(row.registration.agents_json),
+            agents: row.agents ?? [],
             computerName: row.registration.computer_name,
             workspaceName: row.registration.workspace_name,
             computerId,
