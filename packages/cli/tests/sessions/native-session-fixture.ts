@@ -10,8 +10,6 @@ import { NativeSessionService } from "../../src/engine/session/native/native-ses
 import { SessionCreations } from "../../src/engine/session/record/session-creations.ts";
 import { MemorySessionStore } from "../../src/engine/session/record/session-store.ts";
 import { WorkspaceDirectoryService } from "../../src/engine/session/workspace/workspace-directory.ts";
-import { SessionCreationTable } from "../../src/engine/storage/session/session-creation-table.ts";
-import { openAcpSessionDatabase } from "../../src/engine/storage/sqlite/local-databases.ts";
 import { systemTimer } from "../../src/engine/util/timer.ts";
 import { acpAdapters } from "../support/acp-adapters.ts";
 import { ControlledAcpConnection } from "../support/agents/controlled-acp-connection.ts";
@@ -139,8 +137,7 @@ export async function fixture(
         async (agent) => agent,
     );
     const directories = new WorkspaceDirectoryService(workspace);
-    const database = openAcpSessionDatabase(join(temporary, "operations.sqlite"));
-    const creations = new SessionCreations(new SessionCreationTable(database));
+    const creations = new SessionCreations(store);
     let service = new NativeSessionService(
         (harness) => sessions.resolveAgent(config.catalog.find(harness)),
         directories,
@@ -212,7 +209,6 @@ export async function fixture(
         await service.close();
         await sessions.close();
         await creations.settle();
-        database.close();
         if (previous === undefined) {
             delete process.env["MORTY_FAKE_ACP_STATE_DIRECTORY"];
         } else {

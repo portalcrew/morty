@@ -16,7 +16,6 @@ import {
     MemorySessionEventStore,
 } from "../../src/engine/session/history/session-event-store.ts";
 import { MemorySessionStore, SqliteSessionStore } from "../../src/engine/session/record/session-store.ts";
-import { AcpSessionTable } from "../../src/engine/storage/session/acp-session-table.ts";
 import { LiveEventPositionTable } from "../../src/engine/storage/session/live-event-position-table.ts";
 import { SessionEventCacheTable } from "../../src/engine/storage/session/session-event-cache-table.ts";
 import {
@@ -674,10 +673,7 @@ describe("ACP conversation sessions", () => {
             legacyDatabase.close();
         }
 
-        const store = new SqliteSessionStore(
-            new AcpSessionTable(openAcpSessionDatabase(databasePath)),
-            new MemorySessionEventStore(),
-        );
+        const store = new SqliteSessionStore(openAcpSessionDatabase(databasePath), new MemorySessionEventStore());
         store.close();
         const migratedDatabase = new DatabaseSync(databasePath, { readOnly: true });
         try {
@@ -711,10 +707,7 @@ describe("ACP conversation sessions", () => {
             process.execPath,
         );
         const signal = new AbortController().signal;
-        const firstStore = new SqliteSessionStore(
-            new AcpSessionTable(openAcpSessionDatabase(databasePath)),
-            new MemorySessionEventStore(),
-        );
+        const firstStore = new SqliteSessionStore(openAcpSessionDatabase(databasePath), new MemorySessionEventStore());
         const firstRuntime = new SessionManager({
             observer: {},
             store: firstStore,
@@ -758,7 +751,7 @@ describe("ACP conversation sessions", () => {
         }
 
         const restartedStore = new SqliteSessionStore(
-            new AcpSessionTable(openAcpSessionDatabase(databasePath)),
+            openAcpSessionDatabase(databasePath),
             new MemorySessionEventStore(),
         );
         const restartedRuntime = new SessionManager({

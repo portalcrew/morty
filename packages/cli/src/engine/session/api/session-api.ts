@@ -19,6 +19,7 @@ import type { PromptImageInput, PromptResourceInput } from "../../acp/client/pro
 import type { AcpContentExternalizer } from "../../acp/content/content-externalizer.ts";
 import type { Adapter } from "../../acp/native-history/preview-contract.ts";
 import type { NativeSessionOrigin } from "../../acp/protocol/native-session.ts";
+import type { SessionCreationIdentity } from "../record/session-store.ts";
 
 export interface SessionCreationOptions {
     readonly adapter: Adapter;
@@ -32,6 +33,11 @@ export interface SessionPrepareOptions extends SessionCreationOptions {
     readonly target: NativeSessionTarget;
     readonly origin?: NativeSessionOrigin;
 }
+
+/** A fork is a creation operation of its own: it is held under that operation's identity, as a created Session is. */
+export type NativeSessionOpening =
+    | Extract<NativeSessionOrigin, { readonly kind: "import" }>
+    | (Extract<NativeSessionOrigin, { readonly kind: "fork" }> & { readonly creation: SessionCreationIdentity });
 
 export interface CreatedSession {
     readonly target: NativeSessionTarget;

@@ -11,7 +11,6 @@ import {
     type SessionStatus,
 } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
-import type { NativeSessionOrigin } from "../../acp/protocol/native-session.ts";
 import { unsupportedSessionCapabilities } from "../../acp/protocol/session-capabilities.ts";
 import type { Timer } from "../../util/timer.ts";
 import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
@@ -20,7 +19,12 @@ import { replaySessionConfigurations, storedSessionConfiguration } from "../live
 import { nativeSessionQuery } from "../native/native-query.ts";
 import type { AgentProcessPool, AgentProcessRetention } from "../process/agent-process-pool.ts";
 import { RetainedAgentProcesses } from "../process/retained-agent-processes.ts";
-import { MemorySessionStore, type SessionStore, type StoredSession } from "../record/session-store.ts";
+import {
+    MemorySessionStore,
+    type SessionCreationIdentity,
+    type SessionStore,
+    type StoredSession,
+} from "../record/session-store.ts";
 import { isModelOption } from "../settings/configuration-dependencies.ts";
 import { ActiveExecutions } from "../turn/active-executions.ts";
 import type { SettledTurn } from "../turn/execution-receipts.ts";
@@ -39,6 +43,7 @@ import {
     AgentSettingsSnapshot,
     type CreatedSession,
     type ElicitationResponseOptions,
+    type NativeSessionOpening,
     type PermissionResponseOptions,
     type PreparedSession,
     type PromptResult,
@@ -350,6 +355,7 @@ export class SessionManager {
      */
     readonly createSession = async (
         options: SessionCreationOptions,
+        creation: SessionCreationIdentity,
         configure: (created: CreatedSession, signal: AbortSignal) => Promise<void>,
     ): Promise<CreatedSession> =>
         this.#operations.run(options, async (options) => {
@@ -358,19 +364,20 @@ export class SessionManager {
                 async () => await AgentSession.create(options, this.#observer, this.#executionRecord, this.#store),
             );
             const target = await this.#retainCreated(runtime);
-            const creation = Promise.withResolvers<void>();
-            this.#lifecycles.beginCreation(target, creation.promise);
+            const settled = Promise.withResolvers<void>();
+            this.#lifecycles.beginCreation(target, settled.promise);
             try {
                 await configure({ target, prepared: runtime.prepared() }, options.signal);
                 options.signal.throwIfAborted();
-                runtime.hold();
-                return { target, prepared: runtime.prepared() };
+                const prepared = runtime.prepared();
+                runtime.holdCreated(creation);
+                return { target, prepared };
             } catch (error) {
                 await this.#discardCreatedSession(target, runtime);
                 throw error;
             } finally {
-                this.#lifecycles.endCreation(target, creation.promise);
-                creation.resolve();
+                this.#lifecycles.endCreation(target, settled.promise);
+                settled.resolve();
             }
         });
 
@@ -903,21 +910,21 @@ export class SessionManager {
 
     readonly openNativeSession = async (
         options: SessionCreationOptions,
-        origin: NativeSessionOrigin,
+        opening: NativeSessionOpening,
         resolveAgent: ResolveAgent,
     ): Promise<{
         readonly target: NativeSessionTarget;
         readonly prepared: PreparedSession;
     }> =>
         this.#operations.run(options, async (options) => {
-            const source = { harness: options.agent.harness, sessionId: origin.sessionId };
-            if (origin.kind === "import") {
+            const source = { harness: options.agent.harness, sessionId: opening.sessionId };
+            if (opening.kind === "import") {
                 await this.#admit(source, { kind: "import" }, options.signal, () => undefined);
             }
             // These checks and the start of the native operation below are synchronous.
             this.#admitNow(source, { kind: "native-exclusive" });
             const held = this.#isHeld(source);
-            if (origin.kind === "import" && held) {
+            if (opening.kind === "import" && held) {
                 return await this.#executionProcesses.use(source, async () => {
                     // A running turn does not prevent importing a Session the Runtime already tracks: another device
                     // joins the same Session and sees the turn's progress.
@@ -938,10 +945,10 @@ export class SessionManager {
             }
             this.#lifecycles.beginNativeOperation(source);
             try {
-                if (origin.kind === "import") {
+                if (opening.kind === "import") {
                     const preparation = await this.#nativeTargetOptions(options, source, resolveAgent);
                     const runtime = await this.#startPreparation(
-                        { ...preparation, origin },
+                        { ...preparation, origin: opening },
                         { kind: "interactive-only" },
                     );
                     return { target: source, prepared: runtime.prepared() };
@@ -952,7 +959,7 @@ export class SessionManager {
                     async () =>
                         await AgentSession.fork(
                             options,
-                            origin,
+                            opening,
                             capabilities,
                             this.#observer,
                             this.#executionRecord,
@@ -962,8 +969,9 @@ export class SessionManager {
                 const target = await this.#retainCreated(runtime);
                 try {
                     options.signal.throwIfAborted();
-                    runtime.hold();
-                    return { target, prepared: runtime.prepared() };
+                    const prepared = runtime.prepared();
+                    runtime.holdCreated(opening.creation);
+                    return { target, prepared };
                 } catch (error) {
                     await this.#discardCreatedSession(target, runtime);
                     throw error;

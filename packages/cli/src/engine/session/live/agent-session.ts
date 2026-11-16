@@ -50,7 +50,7 @@ import {
 import type { SessionEventPage } from "../history/session-event-store.ts";
 import { HistoryReplayCapture } from "../history/session-history.ts";
 import { SessionInteractions } from "../interaction/session-interactions.ts";
-import { type SessionStore, StoredSession } from "../record/session-store.ts";
+import { type SessionCreationIdentity, type SessionStore, StoredSession } from "../record/session-store.ts";
 import type { SettledTurn } from "../turn/execution-receipts.ts";
 import { configurationRevision } from "./configuration-revision.ts";
 import { SessionConfigurations } from "./session-configurations.ts";
@@ -348,19 +348,21 @@ export class AgentSession {
     /**
      * The Runtime now holds this Session: its record is created, so it is listed and its target can be used. A Session
      * being created or forked is not held until its creation completes, so one that fails midway leaves no record behind.
+     * The record and the creation operation's receipt are written together.
      */
-    readonly hold = (): void => this.#hold(new Date().toISOString());
+    readonly holdCreated = (creation: SessionCreationIdentity): void =>
+        this.#store.holdCreated(this.#storedSession(new Date().toISOString()), creation);
 
-    readonly #hold = (modifiedAt: string): void =>
-        this.#store.hold(
-            new StoredSession(
-                this.target,
-                this.#cwd,
-                this.#prompted(),
-                this.#sessionTitle,
-                modifiedAt,
-                this.#sessionConfigurations.stored(),
-            ),
+    readonly #hold = (modifiedAt: string): void => this.#store.hold(this.#storedSession(modifiedAt));
+
+    readonly #storedSession = (modifiedAt: string): StoredSession =>
+        new StoredSession(
+            this.target,
+            this.#cwd,
+            this.#prompted(),
+            this.#sessionTitle,
+            modifiedAt,
+            this.#sessionConfigurations.stored(),
         );
 
     /** Follows the Session's current facts in its record, which exists only while the Runtime holds the Session. */
