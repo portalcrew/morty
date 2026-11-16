@@ -14,6 +14,7 @@ import { DurableComputerAccount } from "./components/management/storage/durable-
 import { DurableCredentialKey } from "./components/management/storage/durable-credential-key.ts";
 import { IdentityStorage } from "./components/management/storage/identity-storage.ts";
 import { DaemonWebSocketRoutes } from "./components/runtime/daemon-websocket-routes.ts";
+import { daemonSocketComputerId } from "./components/runtime/gateway/cloudflare-relay-peers.ts";
 import { createLocalSessionOperations } from "./components/runtime/service/local-session-operations.ts";
 import {
     createComputerHttpApplication,
@@ -66,7 +67,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
                 relay: (computerId) => this.#services(computerId, storeFor(computerId)).relay,
                 sessions: (computerId) => ({
                     sessions: this.#services(computerId, storeFor(computerId)).access.sessionAccess,
-                    operations: createLocalSessionOperations(this.#connectionsForComputer.context, computerId),
+                    operations: createLocalSessionOperations(this.#connectionsFor(computerId).context),
                 }),
             },
             utilities: {
@@ -99,16 +100,18 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         );
     }
 
-    #createConnections() {
+    #createConnections(computerId: string) {
         const context = createRelayDurableObjectContext(this.ctx, {
+            computerId,
             database: this.#computerDatabase,
-            access: (computerId) => this.#accessFor(computerId),
+            access: () => this.#accessFor(computerId),
         });
         return {
             context,
             daemonWebSocket: new DaemonWebSocketRoutes(
                 context,
                 logger.child({
+                    computerId,
                     durableObjectClass: "ComputerRelay",
                     durableObjectId: this.ctx.id.toString(),
                     runtimeInstanceId: crypto.randomUUID(),
@@ -118,9 +121,16 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         };
     }
 
-    get #connectionsForComputer() {
-        this.#connections ??= this.#createConnections();
+    #connectionsFor(computerId: string) {
+        if (!this.#owns(computerId)) {
+            throw new ComputerManagementError("computer_id_mismatch", "The computer is unavailable", 421);
+        }
+        this.#connections ??= this.#createConnections(computerId);
         return this.#connections;
+    }
+
+    #daemonRoutes(socket: WebSocket) {
+        return this.#connectionsFor(daemonSocketComputerId(socket)).daemonWebSocket;
     }
 
     #database: DurableObjectDatabase | undefined;
@@ -211,7 +221,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
             this.env,
             computerId,
             store,
-            this.#connectionsForComputer.context.services.runtime,
+            this.#connectionsFor(computerId).context.services.runtime,
             this.#accessFor(computerId),
             this.#credentialKey.read,
         );
@@ -224,7 +234,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
             computerId,
             relay,
             access.sessionAccess,
-            createLocalSessionOperations(this.#connectionsForComputer.context, computerId),
+            createLocalSessionOperations(this.#connectionsFor(computerId).context),
         );
     }
 
@@ -233,7 +243,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
      * viewers. A pending check that is earlier is kept, so new connections never postpone it.
      */
     readonly #scheduleConnectionChecks = async (): Promise<void> => {
-        const viewers = this.#connectionsForComputer.context.gateways.peers.viewers();
+        const viewers = this.#connections?.context.gateways.peers.viewers() ?? [];
         const checks = viewers.map(({ identity }) => identity.expiresAt);
         if (viewers.length > 0) {
             checks.push(Date.now() + REAUTHORIZATION_INTERVAL_MILLISECONDS);
@@ -250,21 +260,26 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
 
     override async alarm(): Promise<void> {
         try {
-            await this.#connectionsForComputer.daemonWebSocket.reauthorizeConnections();
+            await this.#connections?.daemonWebSocket.reauthorizeConnections();
         } finally {
             await this.#scheduleConnectionChecks();
         }
     }
 
     override async webSocketMessage(socket: WebSocket, message: unknown): Promise<void> {
-        await this.#connectionsForComputer.daemonWebSocket.webSocketMessage(socket, message);
+        await this.#daemonRoutes(socket).webSocketMessage(socket, message);
     }
 
     override async webSocketClose(socket: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
-        await this.#connectionsForComputer.daemonWebSocket.webSocketClose(socket, { code, reason, wasClean });
+        await this.#daemonRoutes(socket).webSocketClose(socket, { code, reason, wasClean });
     }
 
     override webSocketError(socket: WebSocket, error: unknown): void {
-        this.#connectionsForComputer.daemonWebSocket.webSocketError(socket, error);
+        try {
+            this.#daemonRoutes(socket).webSocketError(socket, error);
+        } catch (cause) {
+            logger.error({ err: cause, event: "computer_websocket_error_unattributed" }, "Computer WebSocket error");
+            socket.close(1011, "WebSocket error");
+        }
     }
 }

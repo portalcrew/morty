@@ -31,10 +31,8 @@ export class ComputerAccessService {
         return computerId;
     };
 
-    readonly activeGeneration = async (computerId: string, signal: AbortSignal): Promise<number | null> => {
-        this.#own(computerId);
-        return await this.#store.readActiveGeneration(signal);
-    };
+    readonly activeGeneration = async (signal: AbortSignal): Promise<number | null> =>
+        await this.#store.readActiveGeneration(signal);
 
     readonly authorizeComputer = (computerId: string): void => {
         this.#own(computerId);

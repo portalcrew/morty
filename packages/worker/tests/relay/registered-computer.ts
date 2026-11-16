@@ -23,10 +23,11 @@ export async function revokeTestComputer(bindings: RelayBindings, computerId: st
             const { store, access } = computerAccess(computerId, state.storage);
             await store.revokeComputer(Date.now(), signal);
             const runtime = createRelayDurableObjectContext(state, {
+                computerId,
                 database: new DurableObjectDatabase(state.storage),
                 access: () => access,
             });
-            await runtime.services.runtime.revokeComputer(computerId, signal);
+            await runtime.services.runtime.revokeComputer(signal);
         },
     );
 }

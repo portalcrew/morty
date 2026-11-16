@@ -43,6 +43,7 @@ it("Given a Computer API with a 120-second deadline mounted beside Session route
             async (_instance, state) => {
                 const { access } = computerAccess(owner.computerId, state.storage);
                 const runtime = createRelayDurableObjectContext(state, {
+                    computerId: owner.computerId,
                     database: new DurableObjectDatabase(state.storage),
                     access: () => access,
                 });
@@ -50,12 +51,12 @@ it("Given a Computer API with a 120-second deadline mounted beside Session route
                 const router = createSessionWebSocketRoutes({
                     ownsComputer: (computerId) => computerId === owner.computerId,
                     services: {
-                        forComputer: (computerId) => ({
+                        forComputer: () => ({
                             sessions: new SessionAccessService(
                                 access,
                                 new SessionAccessSigner(env.MORTY_SESSION_SIGNING_SECRET),
                             ),
-                            operations: createLocalSessionOperations(runtime, computerId),
+                            operations: createLocalSessionOperations(runtime),
                         }),
                     },
                 }).route(

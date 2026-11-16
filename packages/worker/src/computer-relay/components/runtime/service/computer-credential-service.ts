@@ -1,20 +1,19 @@
 import type { SessionViewerIdentity } from "../../../../contracts/session-event-subscription.ts";
 import type { ComputerAccessService } from "../../management/service/computer-access-service.ts";
 
-type Access = (computerId: string) => Pick<ComputerAccessService, "activeGeneration" | "grantsSessionCredential">;
+type Access = () => Pick<ComputerAccessService, "activeGeneration" | "grantsSessionCredential">;
 
 export class ComputerCredentialService {
+    readonly #computerId: string;
     readonly #access: Access;
 
-    constructor(access: Access) {
+    constructor(computerId: string, access: Access) {
+        this.#computerId = computerId;
         this.#access = access;
     }
 
-    readonly activeGeneration = async (
-        identity: { readonly computerId: string },
-        signal: AbortSignal,
-    ): Promise<number | null> => {
-        const generation = await this.#access(identity.computerId).activeGeneration(identity.computerId, signal);
+    readonly activeGeneration = async (signal: AbortSignal): Promise<number | null> => {
+        const generation = await this.#access().activeGeneration(signal);
         signal.throwIfAborted();
         return generation;
     };
@@ -23,7 +22,7 @@ export class ComputerCredentialService {
         identity: SessionViewerIdentity,
         signal: AbortSignal,
     ): Promise<"granted" | "revoked"> =>
-        (await this.#access(identity.computerId).grantsSessionCredential(identity.computerId, identity.grant, signal))
+        (await this.#access().grantsSessionCredential(this.#computerId, identity.grant, signal))
             ? "granted"
             : "revoked";
 }

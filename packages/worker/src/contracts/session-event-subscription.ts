@@ -7,7 +7,6 @@ import type {
 export interface SessionViewerIdentity {
     readonly expiresAt: number;
     readonly grant: SessionAccessGrant;
-    readonly computerId: string;
     readonly sessionFilter: NativeSessionTarget;
     readonly subscriptionId: string;
 }
