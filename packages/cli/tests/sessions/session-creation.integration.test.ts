@@ -21,6 +21,7 @@ it("Given a Session's creation is cancelled while its settings are applied, When
         onSessionClosed: () => undefined,
         lastTurn: () => undefined,
         settledTurns: () => [],
+        hasUnsettledTurn: () => false,
         contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
             new UnretainedExternalContentStore().put({
                 bytes: content.bytes,

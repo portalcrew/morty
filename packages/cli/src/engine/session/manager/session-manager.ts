@@ -30,10 +30,16 @@ import { ActiveExecutions } from "../turn/active-executions.ts";
 import type { SettledTurn } from "../turn/execution-receipts.ts";
 import { RuntimeOperations } from "./operation-drain.ts";
 import {
+    admitAfterTransitions,
+    admitNow,
     type ImmediateSessionOperation,
-    SessionLifecycles,
+    isBusy,
+    isExecuting,
+    isKnownSession,
+    type SessionActivity,
     type WaitingSessionOperation,
-} from "./session-lifecycle.ts";
+} from "./session-activity.ts";
+import { SessionLifecycles } from "./session-lifecycle.ts";
 
 const SESSION_CONTROL_TIMEOUT_MILLISECONDS = 30_000;
 const SESSION_CLOSE_TIMEOUT_MILLISECONDS = 30_000;
@@ -72,6 +78,7 @@ export class SessionManager {
     );
     readonly #executions: ActiveExecutions;
     readonly #settledTurns: (target: NativeSessionTarget) => readonly SettledTurn[];
+    readonly #hasUnsettledTurn: (target: NativeSessionTarget) => boolean;
     readonly #executionRecord: SessionExecutionRecord = {
         agentCommand: (target) => this.#executions.agentCommand(target),
         settledTurns: (target) => this.#settledTurns(target),
@@ -91,6 +98,7 @@ export class SessionManager {
         onSessionClosed,
         lastTurn,
         settledTurns,
+        hasUnsettledTurn,
         timer,
     }: {
         readonly observer: SessionObserver;
@@ -100,6 +108,7 @@ export class SessionManager {
         readonly onSessionClosed: (event: SessionCloseNoticeEvent) => void;
         readonly lastTurn: (target: NativeSessionTarget) => LastTurnOutcome | undefined;
         readonly settledTurns: (target: NativeSessionTarget) => readonly SettledTurn[];
+        readonly hasUnsettledTurn: (target: NativeSessionTarget) => boolean;
         readonly timer: Timer;
     }) {
         this.#observer = observer;
@@ -107,6 +116,7 @@ export class SessionManager {
         this.#store = store;
         this.#lastTurn = lastTurn;
         this.#settledTurns = settledTurns;
+        this.#hasUnsettledTurn = hasUnsettledTurn;
         this.#executions = new ActiveExecutions();
         this.#onSessionClosed = onSessionClosed;
         this.#timer = timer;
@@ -124,8 +134,26 @@ export class SessionManager {
         return this.#store.read(target) !== undefined;
     }
 
+    #activity(target: NativeSessionTarget): SessionActivity {
+        const runtime = this.#executionProcesses.get(target);
+        return {
+            lifecycle: this.#lifecycles.lifecycle(target),
+            nativeOperation: this.#lifecycles.managesNativeSession(target),
+            execution: this.#executions.activity(target),
+            unsettledTurn: this.#hasUnsettledTurn(target),
+            process: {
+                agent:
+                    runtime === undefined
+                        ? { kind: "none" }
+                        : { kind: "ready", backgroundActivity: runtime.hasBackgroundActivity() },
+                ...this.#executionProcesses.activity(target),
+            },
+            held: () => this.#isHeld(target),
+        };
+    }
+
     #admitNow(target: NativeSessionTarget, operation: ImmediateSessionOperation): void {
-        const admission = this.#lifecycles.admitNow(target, operation, () => this.#isHeld(target));
+        const admission = admitNow(this.#activity(target), operation);
         if (admission.kind === "refused") {
             throw admission.error;
         }
@@ -142,7 +170,7 @@ export class SessionManager {
         admitted: () => Result,
     ): Promise<Result> {
         for (;;) {
-            const admission = this.#lifecycles.admit(target, operation, () => this.#isHeld(target));
+            const admission = admitAfterTransitions(this.#activity(target), operation);
             switch (admission.kind) {
                 case "admitted":
                     return admitted();
@@ -161,12 +189,7 @@ export class SessionManager {
 
     #retention(target: NativeSessionTarget): AgentProcessRetention<AgentSession> {
         return {
-            isBusy: () =>
-                this.#executionProcesses.get(target)?.hasBackgroundActivity() === true ||
-                this.#executions.isBusy(target) ||
-                this.#executionProcesses.isBusy(target) ||
-                this.#lifecycles.isCreating(target) ||
-                this.#lifecycles.managesNativeSession(target),
+            isBusy: () => isBusy(this.#activity(target)),
             retire: (runtime) => this.#retireSessionProcess(target, runtime),
         };
     }
@@ -181,14 +204,6 @@ export class SessionManager {
             target,
             runtime,
             async () => await this.#processes.retire(runtime, () => runtime.close()),
-        );
-    }
-
-    #isKnownSession(target: NativeSessionTarget): boolean {
-        return (
-            this.#executionProcesses.get(target) !== undefined ||
-            this.#executionProcesses.pending(target) !== undefined ||
-            this.#isHeld(target)
         );
     }
 
@@ -283,8 +298,7 @@ export class SessionManager {
         recovery: SessionRecovery,
     ): Promise<AgentSession> {
         const changed =
-            !this.#lifecycles.managesNativeSession(options.target) &&
-            (await existing.nativeHistoryChanged(options.signal));
+            !this.#activity(options.target).nativeOperation && (await existing.nativeHistoryChanged(options.signal));
         // Another operation may have reopened the Session while the native history was read.
         const pending = this.#executionProcesses.pending(options.target);
         if (pending !== undefined) {
@@ -378,6 +392,7 @@ export class SessionManager {
             } finally {
                 this.#lifecycles.endCreation(target, settled.promise);
                 settled.resolve();
+                this.#processes.notifyChanged();
             }
         });
 
@@ -496,13 +511,7 @@ export class SessionManager {
                 this.#executionProcesses.touch(options.target, runtime);
                 return runtime.prepared();
             }
-            if (this.#executions.isBusy(options.target)) {
-                throw new AcpExecutionError(
-                    "The execution environment cannot change while a conversation turn is running",
-                    {},
-                    "session_busy",
-                );
-            }
+            this.#admitNow(options.target, { kind: "change-environment" });
             return (await this.#replaceExecutionPreparation(existing, options)).prepared();
         });
 
@@ -583,21 +592,18 @@ export class SessionManager {
         this.#executions.executes(target, commandId);
 
     readonly acceptsSteering = (target: NativeSessionTarget, targetCommandId: string): boolean =>
-        this.#executions.acceptsSteering(target, targetCommandId);
+        admitNow(this.#activity(target), { kind: "steer", targetCommandId }).kind === "admitted";
 
     readonly steerPrompt = async (options: SessionSteerOptions): Promise<void> =>
         this.#operations.run(options, async (options) => {
-            if (!this.acceptsSteering(options.target, options.targetCommandId)) {
-                throw new AcpExecutionError("The target turn is no longer active", {}, "steering_target_unavailable");
-            }
+            const steer = { kind: "steer", targetCommandId: options.targetCommandId } as const;
+            this.#admitNow(options.target, steer);
             const pending = this.#executionProcesses.pending(options.target);
             if (pending !== undefined) {
                 await pending.wait(options.signal);
             }
             // Nothing below awaits before the Agent receives the steer, so this check holds at the handoff.
-            if (!this.acceptsSteering(options.target, options.targetCommandId)) {
-                throw new AcpExecutionError("The target turn is no longer active", {}, "steering_target_unavailable");
-            }
+            this.#admitNow(options.target, steer);
             const runtime = this.#executionProcesses.get(options.target);
             if (runtime === undefined || !runtime.runsIn(options.cwd)) {
                 throw new AcpExecutionError(
@@ -724,7 +730,7 @@ export class SessionManager {
     async #endSession(options: { readonly target: NativeSessionTarget; readonly signal: AbortSignal }): Promise<void> {
         const settled = Promise.withResolvers<void>();
         const closing = await this.#admit(options.target, { kind: "end" }, options.signal, (): boolean => {
-            if (!this.#isKnownSession(options.target)) {
+            if (!isKnownSession(this.#activity(options.target))) {
                 return false;
             }
             const reason = "This Session was archived.";
@@ -812,7 +818,12 @@ export class SessionManager {
     };
 
     /** Whether the Session is executing a command, from its preparation until the execution releases it. */
-    readonly isExecuting = (target: NativeSessionTarget): boolean => this.#executions.isBusy(target);
+    readonly isExecuting = (target: NativeSessionTarget): boolean => isExecuting(this.#activity(target));
+
+    readonly turnFinished = (target: NativeSessionTarget): void => {
+        this.#executionProcesses.touch(target);
+        this.#processes.notifyChanged();
+    };
 
     readonly sessionStatus = (target: NativeSessionTarget): SessionStatus =>
         this.#reported(target, this.#executions.status(target));
@@ -922,9 +933,8 @@ export class SessionManager {
                 await this.#admit(source, { kind: "import" }, options.signal, () => undefined);
             }
             // These checks and the start of the native operation below are synchronous.
-            this.#admitNow(source, { kind: "native-exclusive" });
-            const held = this.#isHeld(source);
-            if (opening.kind === "import" && held) {
+            this.#admitNow(source, opening.kind === "fork" ? { kind: "fork" } : { kind: "native-exclusive" });
+            if (opening.kind === "import" && this.#isHeld(source)) {
                 return await this.#executionProcesses.use(source, async () => {
                     // A running turn does not prevent importing a Session the Runtime already tracks: another device
                     // joins the same Session and sees the turn's progress.
@@ -934,14 +944,6 @@ export class SessionManager {
                     this.#admitNow(source, { kind: "native-exclusive" });
                     return { prepared: runtime.prepared(), target: source };
                 });
-            }
-            // A fork or a first import reads the native session, which a running turn may still be writing.
-            if (held && (this.#executions.isBusy(source) || this.#executionProcesses.pending(source) !== undefined)) {
-                throw new AcpExecutionError(
-                    "Wait for the native session's running operation to finish",
-                    {},
-                    "session_busy",
-                );
             }
             this.#lifecycles.beginNativeOperation(source);
             try {

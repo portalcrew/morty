@@ -22,6 +22,7 @@ describe("Agent setting capabilities", () => {
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -100,6 +101,7 @@ describe("Agent setting capabilities", () => {
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -163,6 +165,7 @@ describe("Agent setting capabilities", () => {
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -223,6 +226,7 @@ describe("Agent setting capabilities", () => {
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,

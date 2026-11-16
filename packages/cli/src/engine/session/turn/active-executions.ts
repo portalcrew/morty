@@ -11,6 +11,15 @@ type StopAttempt = { readonly kind: "stopping"; readonly completion: Promise<voi
 
 type Cancellation = { readonly kind: "none" } | { readonly kind: "requested"; readonly attempt: StopAttempt };
 
+export type ExecutionActivity =
+    | { readonly kind: "idle" }
+    | {
+          readonly kind: "running";
+          readonly commandId: string;
+          readonly phase: ExecutionPhase;
+          readonly cancellationRequested: boolean;
+      };
+
 interface Execution {
     readonly commandId: string;
     readonly phase: ExecutionPhase;
@@ -19,10 +28,10 @@ interface Execution {
 }
 
 /**
- * The single authority for which command each Session is executing and in what phase. Every reader asks it: steering
- * joins only a started execution, the Agent process may change only while no execution holds the Session, a
- * cancellation stops only the execution it names, and the Session's working/idle status is derived from it. From the
- * moment an execution begins, its cancellation is recorded here and nowhere else.
+ * The single authority for which command each Session is executing and in what phase. Every reader asks it: the
+ * Session rules decide from its `activity`, a cancellation stops only the execution it names, and the Session's
+ * working/idle status is derived from it. From the moment an execution begins, its cancellation is recorded here and
+ * nowhere else.
  *
  * Contract: admission is the only owner of whether a Session is busy, so `begin` requires an idle Session. Each
  * transition names its command and is ignored for any other. All operations are synchronous, so a check and the
@@ -35,19 +44,20 @@ export class ActiveExecutions {
         return execution === undefined ? { kind: "idle" } : { commandId: execution.commandId, kind: "working" };
     };
 
-    readonly isBusy = (sessionTarget: NativeSessionTarget): boolean => this.#entries.has(sessionTarget);
+    readonly activity = (sessionTarget: NativeSessionTarget): ExecutionActivity => {
+        const execution = this.#entries.get(sessionTarget);
+        return execution === undefined
+            ? { kind: "idle" }
+            : {
+                  kind: "running",
+                  commandId: execution.commandId,
+                  phase: execution.phase,
+                  cancellationRequested: execution.cancellation.kind === "requested",
+              };
+    };
 
     readonly executes = (sessionTarget: NativeSessionTarget, commandId: string): boolean =>
         this.#entries.get(sessionTarget)?.commandId === commandId;
-
-    readonly acceptsSteering = (sessionTarget: NativeSessionTarget, targetCommandId: string): boolean => {
-        const execution = this.#entries.get(sessionTarget);
-        return (
-            execution?.commandId === targetCommandId &&
-            execution.phase === "started" &&
-            execution.cancellation.kind === "none"
-        );
-    };
 
     readonly agentCommand = (sessionTarget: NativeSessionTarget): string | undefined => {
         const execution = this.#entries.get(sessionTarget);

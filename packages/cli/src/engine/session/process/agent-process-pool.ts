@@ -22,7 +22,7 @@ interface RetainedProcessPolicy {
 type ProcessSlot =
     | { readonly kind: "starting" }
     | { readonly kind: "retained"; readonly runtime: AgentProcess; readonly retention: RetainedProcessPolicy }
-    | { readonly kind: "transient" | "retiring"; readonly runtime: AgentProcess };
+    | { readonly kind: "unretained"; readonly runtime: AgentProcess };
 
 export class AgentProcessPool {
     readonly #maxProcesses: number;
@@ -160,7 +160,7 @@ export class AgentProcessPool {
         const id = this.#find(runtime);
         if (id !== undefined) {
             this.#cancelIdleTimeout(id);
-            this.#slots.set(id, { kind: "retiring", runtime });
+            this.#slots.set(id, { kind: "unretained", runtime });
         }
         try {
             await close();
@@ -209,7 +209,7 @@ export class AgentProcessPool {
         const id = await this.#reserve(signal);
         try {
             const runtime = await start();
-            this.#slots.set(id, { kind: "transient", runtime });
+            this.#slots.set(id, { kind: "unretained", runtime });
             if (retention !== null) {
                 this.retain(runtime, retention);
             }

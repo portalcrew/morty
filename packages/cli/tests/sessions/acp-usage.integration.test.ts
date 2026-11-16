@@ -56,6 +56,7 @@ async function run(
         onSessionClosed: () => undefined,
         lastTurn: () => undefined,
         settledTurns: () => [],
+        hasUnsettledTurn: () => false,
         contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
             new UnretainedExternalContentStore().put({
                 bytes: content.bytes,

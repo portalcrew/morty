@@ -10,11 +10,23 @@ export class SessionTurns {
     readonly #bySessionTarget = new NativeSessionMap<SessionExecutionState>();
     readonly #operations: ExecutionReceipts;
     readonly #executes: SessionExecutes;
+    readonly #onFinished: (sessionTarget: NativeSessionTarget) => void;
 
-    constructor(operations: ExecutionReceipts, executes: SessionExecutes) {
+    constructor(
+        operations: ExecutionReceipts,
+        executes: SessionExecutes,
+        onFinished: (sessionTarget: NativeSessionTarget) => void,
+    ) {
         this.#operations = operations;
         this.#executes = executes;
+        this.#onFinished = onFinished;
     }
+
+    readonly hasUnsettledTurn = (sessionTarget: NativeSessionTarget): boolean =>
+        this.#bySessionTarget
+            .get(sessionTarget)
+            ?.turns()
+            .some((turn) => !this.#operations.isTerminalExecution(turn.command.commandId, sessionTarget)) ?? false;
 
     readonly session = (sessionTarget: NativeSessionTarget): SessionExecutionState => {
         let session = this.#bySessionTarget.get(sessionTarget);
@@ -35,6 +47,7 @@ export class SessionTurns {
     readonly finish = (turn: ActiveRuntimeTurn): void => {
         this.#bySessionTarget.get(turn.command.target)?.finish(turn);
         this.sweep();
+        this.#onFinished(turn.command.target);
     };
 
     readonly executionSnapshot = (

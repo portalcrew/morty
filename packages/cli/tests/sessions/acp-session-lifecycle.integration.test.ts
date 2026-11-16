@@ -88,6 +88,7 @@ describe("ACP conversation sessions", () => {
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({ ...content, target: sessionTarget, signal }),
             ),
@@ -149,6 +150,7 @@ describe("ACP conversation sessions", () => {
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -196,6 +198,7 @@ describe("ACP conversation sessions", () => {
                 onSessionClosed: () => undefined,
                 lastTurn: () => undefined,
                 settledTurns: () => [],
+                hasUnsettledTurn: () => false,
                 contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                     new UnretainedExternalContentStore().put({
                         bytes: content.bytes,
@@ -715,6 +718,7 @@ describe("ACP conversation sessions", () => {
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -761,6 +765,7 @@ describe("ACP conversation sessions", () => {
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -821,6 +826,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
                 onSessionClosed: () => undefined,
                 lastTurn: () => undefined,
                 settledTurns: () => [],
+                hasUnsettledTurn: () => false,
                 contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                     new UnretainedExternalContentStore().put({
                         bytes: content.bytes,
@@ -925,6 +931,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -1008,6 +1015,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -1101,6 +1109,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -1214,6 +1223,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -1270,6 +1280,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -1322,6 +1333,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -1386,6 +1398,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -1452,6 +1465,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
@@ -1575,6 +1589,7 @@ agent.once("exit", (code) => process.exit(code ?? 84));
             onSessionClosed: () => undefined,
             lastTurn: () => undefined,
             settledTurns: () => [],
+            hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
                 new UnretainedExternalContentStore().put({
                     bytes: content.bytes,
