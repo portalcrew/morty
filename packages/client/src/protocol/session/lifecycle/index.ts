@@ -36,6 +36,40 @@ export const SESSION_CLOSE_NOTICE_KIND = "session.close.notice";
 export const SESSION_ARCHIVE_KIND = "session.archive";
 export const SESSION_ARCHIVED_KIND = "session.archived";
 export const SESSION_CLOSED_ERROR_CODE = "session_closed";
+
+export type OperationOutcome = "refused" | "applied" | "unknown";
+
+// A refusal means the Computer did not run the operation, so repeating it under a new identity cannot run it twice.
+const refusedOperationCodes: ReadonlySet<string> = new Set([
+    "invalid_request",
+    "session_not_found",
+    "native_session_not_found",
+    "native_session_unsupported",
+    "native_session_cursor_expired",
+    "native_session_target_changed",
+    "unsupported_operation",
+    "session_busy",
+    SESSION_CLOSED_ERROR_CODE,
+    "idempotency_conflict",
+    "command_identity_conflict",
+    "session_creation_refused",
+    "turn_already_started",
+    "turn_not_active",
+    "permission_response_conflict",
+    "elicitation_response_conflict",
+    "session_configuration_conflict",
+    "steering_target_unavailable",
+    "steering_unsupported",
+]);
+
+const appliedOperationCodes: ReadonlySet<string> = new Set(["command_result_expired"]);
+
+export function operationOutcome(code: string): OperationOutcome {
+    if (refusedOperationCodes.has(code)) {
+        return "refused";
+    }
+    return appliedOperationCodes.has(code) ? "applied" : "unknown";
+}
 export const SESSION_OPERATION_FAILED_KIND = "session.operation.failed";
 export const SESSION_PROMPT_ACCEPTED_KIND = "session.prompt.accepted";
 

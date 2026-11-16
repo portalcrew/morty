@@ -1,6 +1,6 @@
 import { MortyValidationError } from "@portalcrew/morty-client";
 import { isIdentifier } from "@portalcrew/morty-client/protocol";
-import type { ApiEndpoint, ApiRequest, CommandCall, ComputerCallTarget, WorkerCallTarget } from "./call.ts";
+import type { ApiEndpoint, ApiRequest, ComputerCallTarget, WorkerCallTarget } from "./call.ts";
 
 export interface CallDefinition {
     readonly method: ApiEndpoint["method"];
@@ -35,13 +35,6 @@ export function encodeComputerCall({ body, ...call }: ComputerCallEncoding): Api
         endpoint: computerEndpoint(call),
         body: body === undefined ? null : JSON.stringify(body),
     };
-}
-
-export function commandCall<Command>({
-    command,
-    ...call
-}: Omit<ComputerCallEncoding, "body"> & { readonly command: Command }): CommandCall<Command> {
-    return { endpoint: computerEndpoint(call), command };
 }
 
 export function encodeWorkerCall({

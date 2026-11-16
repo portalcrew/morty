@@ -55,7 +55,6 @@ it("Given a prompted local conversation, When the Session is renamed, Then the d
         // Session listing reports the new title instead of the first prompt.
         const discovery = await runtime.api.nativeSessions(
             {
-                action: "list",
                 harness: "claude",
                 cursor: null,
                 directory: ".",

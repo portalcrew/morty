@@ -90,7 +90,6 @@ function createComputerForwardingRoutes() {
             .post("/morty/api/v1/computers/:computerId/native-sessions/continue", computerFromPath, forward)
             .post("/morty/api/v1/computers/:computerId/native-sessions/forks/:operationId", computerFromPath, forward)
             .post("/morty/api/v1/computers/:computerId/native-sessions/:sessionId", computerFromPath, forward)
-            .post("/morty/api/v1/computers/:computerId/native-sessions/:sessionId/import", computerFromPath, forward)
     );
 }
 

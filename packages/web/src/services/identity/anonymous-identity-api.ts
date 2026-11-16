@@ -1,10 +1,11 @@
+import { MortyApiError } from "@portalcrew/morty-client";
 import * as v from "valibot";
 import type { ApiTransport } from "../api/api-transport.ts";
 import type { ApiRequest } from "../api/calls/call.ts";
 import { identityCalls } from "../api/calls/identity.ts";
 import { readJsonBody } from "../api/response-body.ts";
 import { browserAccessEntry } from "../local-storage/central-local-storage.ts";
-import { CloudApiError, ManagementApi } from "../management/management-api.ts";
+import { ManagementApi } from "../management/management-api.ts";
 import { centralSessionStorage, transferRedemptionEntry } from "../session-storage/central-session-storage.ts";
 import { describeBrowser } from "./device-label.ts";
 import {
@@ -187,7 +188,7 @@ export class AnonymousIdentityApi {
             }
         } catch (cause) {
             signal.throwIfAborted();
-            if (cause instanceof CloudApiError && (cause.status === 401 || cause.status === 403)) {
+            if (cause instanceof MortyApiError && (cause.status === 401 || cause.status === 403)) {
                 // The session answered before the computer refused this access: access ended in between is reported
                 // as ended, not as a link that does not open the computer.
                 const session = await this.#anonymousSession(identity, signal);

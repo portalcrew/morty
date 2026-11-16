@@ -115,13 +115,8 @@ const nativeSessionCommandSchema = z.discriminatedUnion("action", [
             cursor: identifier.nullable(),
         })
         .readonly(),
-    z
-        .object({
-            ...agentDirectory,
-            action: z.enum(["import", "fork"]),
-            sessionId: identifier,
-        })
-        .readonly(),
+    z.object({ ...agentDirectory, action: z.literal("import"), sessionId: identifier }).readonly(),
+    z.object({ ...agentDirectory, action: z.literal("fork"), sessionId: identifier }).readonly(),
 ]);
 export type NativeSessionCommand = z.infer<typeof nativeSessionCommandSchema>;
 
@@ -204,7 +199,16 @@ const nativeSessionResultSchema = z.union([
     z
         .object({
             ...resultEnvelope,
-            action: z.enum(["import", "fork"]),
+            action: z.literal("import"),
+            target: nativeSessionTargetSchema,
+            ready: sessionReadyBodySchema,
+            title: z.string().max(500),
+        })
+        .readonly(),
+    z
+        .object({
+            ...resultEnvelope,
+            action: z.literal("fork"),
             target: nativeSessionTargetSchema,
             ready: sessionReadyBodySchema,
             title: z.string().max(500),

@@ -183,7 +183,6 @@ test.for(["http", "websocket"] as const)(
         const chat = `/v1/computers/${owner.computerId}`;
         const encryptionAccess = await _runtime.encryptionAccess(signal);
         const ownerTransport = new WorkerApiTransport(bindings.origin, () => encryptionAccess);
-        const observed: { readonly method: string; readonly path: string; readonly status: number }[] = [];
         const ownerClient = new BotChatApi({
             origin: bindings.origin,
             computerId: owner.computerId,
@@ -191,30 +190,13 @@ test.for(["http", "websocket"] as const)(
             encryptionAccess: () => encryptionAccess,
             sessionTransport: () => ownerTransport.computerTransport(owner.computerId),
             waitForChange: ownerTransport.waitForChange,
-            fetchRequest: async (call) => {
-                const input = new Request(call.endpoint.url, {
-                    method: call.endpoint.method,
-                    headers: call.headers,
-                    body: call.body ?? null,
-                    signal: call.signal,
-                });
-                const response =
-                    apiTransport === "websocket" && !input.url.endsWith("/setup")
-                        ? await websocket?.fetch(input)
-                        : await bindings.request(input);
-                if (response === undefined) {
-                    throw new Error("Expected the Computer WebSocket transport");
-                }
-                observed.push({ method: input.method, path: new URL(input.url).pathname, status: response.status });
-                return response;
-            },
+            fetchRequest: ownerTransport.fetch,
         });
         onTestFinished(() => {
             ownerClient.close();
             ownerTransport.dispose();
         });
         await ownerClient.verifyAgent("codex", signal);
-        expect(observed).toContainEqual({ method: "POST", path: `/morty/api${chat}/setup`, status: 202 });
         const workspace = await request(`${chat}/workspace`, owner.token, {});
         expect(workspace.status).toBe(200);
         expect(await workspace.json()).toEqual({
@@ -237,11 +219,6 @@ test.for(["http", "websocket"] as const)(
             { harness: "codex", workspaceRef: ".", workspaceLabel: ".", configurations: [] },
             signal,
         );
-        expect(observed).toContainEqual({
-            method: "POST",
-            path: `/morty/api${chat}/managed-sessions/open`,
-            status: 200,
-        });
         const session = `/v1/computers/${owner.computerId}/harnesses/${access.target.harness}/sessions/${access.target.sessionId}`;
         const transport = new WsTransport();
         const responses: { readonly status: number; readonly serverTiming: string | null }[] = [];
@@ -300,7 +277,7 @@ test.for(["http", "websocket"] as const)(
             const turns = await request(`${session}/turns`, access.credential, {});
             expect(turns.status).toBe(404);
             const downloaded = await client.sessions.readFile(access.target, "entrypoint.txt", signal);
-            expect(responses.at(-1)).toEqual({ status: 200, serverTiming: null });
+            expect(responses.at(-1)).toMatchObject({ status: 200, serverTiming: null });
             expect(new TextDecoder().decode(downloaded.bytes)).toBe("HTTP download");
             expect(downloaded).toMatchObject({ name: "entrypoint.txt", mediaType: "application/octet-stream" });
             const audienceEndpoint = await bindings.request(

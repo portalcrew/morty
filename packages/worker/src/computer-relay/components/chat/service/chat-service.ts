@@ -1,4 +1,4 @@
-import { nativeSessionKey } from "@portalcrew/morty-client/native-session";
+import { nativeForkRequestId, nativeSessionKey } from "@portalcrew/morty-client/native-session";
 import type {
     AgentSettingsDiscoverCommandRouting,
     ComputerDiagnosticsRequestRouting,
@@ -43,11 +43,6 @@ export type ChatScope = {
     readonly computerId: string;
     readonly signal: AbortSignal;
 };
-
-async function scopedNativeForkOperationId(computerId: string, key: string): Promise<string> {
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${computerId}\u0000${key}`));
-    return `chat_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-}
 
 /**
  * Morty's Sessions on a computer are the Sessions its Computer holds: the Computer alone says which exist, and the cloud
@@ -222,12 +217,9 @@ export class ChatService {
         scope: ChatScope,
         input: Extract<NativeSessionCommandRouting, { readonly action: "find" | "import" }>,
     ) => {
-        const computer =
-            (await this.#relay.readComputerPairing(scope.signal)) === "paired"
-                ? await this.#relay.getChatComputerAgents(scope.signal)
-                : undefined;
-        const agent = computer?.agents.find((item) => item.harness === input.target.harness);
-        if (computer === undefined || agent === undefined) {
+        await this.#requirePairedComputer(scope);
+        const computer = await this.#relay.getChatComputerAgents(scope.signal);
+        if (!computer.agents.some((agent) => agent.harness === input.target.harness)) {
             throw new ComputerManagementError("HARNESS_UNAVAILABLE", "The handoff harness is unavailable.", 409);
         }
         return await this.#relay.clientControl(input, scope.signal);
@@ -249,29 +241,13 @@ export class ChatService {
         return await this.#relay.clientControl(input, scope.signal);
     };
 
-    readonly importNativeSession = async (
-        scope: ChatScope,
-        sessionId: string,
-        input: Extract<NativeSessionCommandRouting, { readonly action: "import" }>,
-    ) => {
-        await this.#requirePairedComputer(scope);
-        if (input.target.sessionId !== sessionId) {
-            throw new ComputerManagementError(
-                "INVALID_REQUEST",
-                "The requested Session does not match the route.",
-                400,
-            );
-        }
-        return await this.#relay.clientControl(input, scope.signal);
-    };
-
     readonly recoverableNativeFork = async (
         scope: ChatScope,
         operationId: string,
         input: Extract<NativeSessionCommandRouting, { readonly action: "fork" }>,
     ) => {
         await this.#requirePairedComputer(scope);
-        const scopedOperationId = await scopedNativeForkOperationId(scope.computerId, `fork\u0000${operationId}`);
+        const scopedOperationId = await nativeForkRequestId(scope.computerId, operationId);
         if (input.requestId !== scopedOperationId) {
             throw new ComputerManagementError("INVALID_REQUEST", "The fork operation does not match the route.", 400);
         }

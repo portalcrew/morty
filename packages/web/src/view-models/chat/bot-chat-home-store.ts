@@ -1,3 +1,4 @@
+import { MortyError, MortyTimeoutError } from "@portalcrew/morty-client";
 import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import { type NativeSessionTarget, readNativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
@@ -8,7 +9,7 @@ import {
     type ChatDraftConfiguration,
     computerAgentAvailability,
 } from "../../services/chat/bot-chat-api.ts";
-import { CloudApiError, isComputerConnectionFailure } from "../../services/management/management-api.ts";
+import { isComputerConnectionFailure } from "../../services/management/management-api.ts";
 import {
     centralSessionStorage,
     newConversationDraftEntry,
@@ -437,7 +438,7 @@ export const createBotChatHomeStore = (
                     }
                     const failedTarget = get().selection;
                     if (
-                        cause instanceof CloudApiError &&
+                        cause instanceof MortyError &&
                         ["NOT_FOUND", "SESSION_NOT_FOUND", "FORBIDDEN", "UNAUTHENTICATED"].includes(
                             cause.code.toUpperCase(),
                         )
@@ -451,14 +452,17 @@ export const createBotChatHomeStore = (
                         restoredTarget !== null &&
                         (failedTarget.kind === "pending" || failedTarget.kind === "loading") &&
                         sameNativeSession(failedTarget.target, restoredTarget) &&
-                        cause instanceof CloudApiError &&
+                        cause instanceof MortyError &&
                         ["NOT_FOUND", "session_not_found"].includes(cause.code)
                     ) {
                         restoredTarget = null;
                         get().newConversation();
                         return;
                     }
-                    if (cause instanceof DOMException && cause.name === "TimeoutError") {
+                    if (
+                        cause instanceof MortyTimeoutError ||
+                        (cause instanceof DOMException && cause.name === "TimeoutError")
+                    ) {
                         onRestart();
                         return;
                     }
@@ -471,11 +475,11 @@ export const createBotChatHomeStore = (
                         failLoad("connection", formatError(cause, "Chat is unavailable."));
                         return;
                     }
-                    if (cause instanceof CloudApiError && cause.code === "computer_revoked") {
+                    if (cause instanceof MortyError && cause.code === "computer_revoked") {
                         await options.onComputerRevokedByOperation(cause.message, signal);
                         return;
                     }
-                    if (cause instanceof CloudApiError && cause.code === "AGENT_REQUIRED") {
+                    if (cause instanceof MortyError && cause.code === "AGENT_REQUIRED") {
                         failLoad("agent-required", cause.message);
                         await requests.waitForComputerConfigurationChange(signal);
                         signal.throwIfAborted();

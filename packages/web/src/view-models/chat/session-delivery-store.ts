@@ -9,7 +9,6 @@ import {
 import type { PromptAttachment } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
-import { CloudApiError } from "../../services/management/management-api.ts";
 import { SessionStorageWriteError } from "../../services/session-storage/central-session-storage.ts";
 import { formatError } from "../format-error.ts";
 import {
@@ -242,8 +241,7 @@ export function isAuthoritativeFailure(cause: unknown): boolean {
         cause instanceof SubmissionNotSentError ||
         cause instanceof MortyValidationError ||
         (cause instanceof MortyOperationError && cause.outcome === "refused") ||
-        (cause instanceof MortyApiError && cause.status >= 400 && cause.status < 500) ||
-        (cause instanceof CloudApiError && cause.status !== null && cause.status >= 400 && cause.status < 500)
+        (cause instanceof MortyApiError && cause.status >= 400 && cause.status < 500)
     );
 }
 

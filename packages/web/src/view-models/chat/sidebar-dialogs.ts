@@ -55,7 +55,10 @@ const MOBILE_SHEET_DISMISS_LOCK_MILLISECONDS = 450;
 export function createSidebarDialogs(options: {
     readonly clock: Clock;
     readonly signal: () => AbortSignal;
-    readonly requests: Pick<BotChatApi, "nativeSessions" | "nativeSession" | "forkNativeSession">;
+    readonly requests: Pick<
+        BotChatApi,
+        "nativeSessions" | "nativeSession" | "forkNativeSession" | "importNativeSession"
+    >;
     readonly computer: () => ChatComputer | null;
     readonly createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>;
     readonly onOpenSession: (session: OpenMortySession) => void;

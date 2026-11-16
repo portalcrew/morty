@@ -168,7 +168,6 @@ export async function createChatWorkerEnvironment(
                 readNativeSessions: (signal: AbortSignal) =>
                     runtime.api.nativeSessions(
                         {
-                            action: "list",
                             harness: agents[0]?.harness ?? "codex",
                             directory: ".",
                             cursor: null,

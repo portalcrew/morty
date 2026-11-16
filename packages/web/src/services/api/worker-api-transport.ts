@@ -1,4 +1,9 @@
-import { type ComputerEncryptionAccess, MortyValidationError, WsTransport } from "@portalcrew/morty-client";
+import {
+    type ComputerEncryptionAccess,
+    MortyConnectionError,
+    MortyValidationError,
+    WsTransport,
+} from "@portalcrew/morty-client";
 import { isIdentifier } from "@portalcrew/morty-client/protocol";
 import { recordBrowserDiagnostic } from "../diagnostics/browser-diagnostics.ts";
 import { storedComputerEncryption } from "../identity/remembered-computers.ts";
@@ -7,8 +12,8 @@ import type { ApiResponseSnapshot } from "./api-transport.ts";
 import type { ApiCall } from "./calls/call.ts";
 
 export class ApiConnectionError extends Error {}
-export function isApiConnectionError(error: unknown): error is ApiConnectionError {
-    return error instanceof ApiConnectionError;
+export function isApiConnectionError(error: unknown): error is ApiConnectionError | MortyConnectionError {
+    return error instanceof ApiConnectionError || error instanceof MortyConnectionError;
 }
 export class WorkerApiTransport {
     readonly #computers = new Map<string, WsTransport>();

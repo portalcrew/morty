@@ -32,11 +32,6 @@ export interface ApiRequest {
     readonly body?: string | null;
 }
 
-export interface CommandCall<Command> {
-    readonly endpoint: ApiEndpoint;
-    readonly command: Command;
-}
-
 export interface ApiCall extends ApiRequest {
     readonly headers: Readonly<Record<string, string>>;
     readonly signal: AbortSignal;

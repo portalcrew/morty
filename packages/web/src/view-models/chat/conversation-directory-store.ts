@@ -1,8 +1,9 @@
+import { MortyApiError, MortyError } from "@portalcrew/morty-client";
 import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { BotChatApi, ManagedChatSession } from "@/services/chat/bot-chat-api";
-import { CloudApiError, isComputerConnectionFailure } from "@/services/management/management-api";
+import { isComputerConnectionFailure } from "@/services/management/management-api";
 import { isApiConnectionError } from "../../services/api/worker-api-transport.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import { formatError } from "../format-error.ts";
@@ -107,7 +108,7 @@ export const createConversationDirectoryStore = (
                             ? state.sessions.find((session) => sameNativeSession(session.target, sessionTarget))
                             : undefined;
                     if (session === undefined) {
-                        throw new CloudApiError("NOT_FOUND", "The Session was not found.");
+                        throw new MortyApiError("NOT_FOUND", "The Session was not found.", 404);
                     }
                     await requests.archiveManagedSession(session.target, signal);
                     signal.throwIfAborted();
@@ -182,7 +183,7 @@ export const createConversationDirectoryStore = (
                     onLoaded(reported, cached);
                 } catch (cause) {
                     if (!signal.aborted) {
-                        if (cause instanceof CloudApiError && cause.code === "AGENT_REQUIRED") {
+                        if (cause instanceof MortyError && cause.code === "AGENT_REQUIRED") {
                             set({ state: { kind: "setup-required" } });
                             return;
                         }

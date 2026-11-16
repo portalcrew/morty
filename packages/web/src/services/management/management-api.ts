@@ -1,3 +1,4 @@
+import { MortyApiError, MortyError } from "@portalcrew/morty-client";
 import { decodeIdentifier, type Identifier, isIdentifier } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import type { ApiTransport } from "../api/api-transport.ts";
@@ -56,7 +57,7 @@ export class ManagementApi {
         const signal = AbortSignal.any([requestSignal, AbortSignal.timeout(request.endpoint.timeoutMilliseconds)]);
         const token = await this.#getToken(signal);
         if (token === null) {
-            throw new CloudApiError("UNAUTHENTICATED", "Your session is unavailable.");
+            throw new MortyApiError("UNAUTHENTICATED", "Your session is unavailable.", 401);
         }
         const response = await this.#fetchRequest({
             ...request,
@@ -71,32 +72,19 @@ export class ManagementApi {
         const parsed = v.safeParse(v.object({ error: v.object({ code: v.string(), message: v.string() }) }), value);
         if (!response.ok || value === undefined) {
             // A failure the Worker did not answer, or an answer that is not its JSON, is the service being unavailable.
-            throw new CloudApiError(
-                !response.ok && parsed.success ? parsed.output.error.code : "MANAGEMENT_UNAVAILABLE",
+            throw new MortyApiError(
+                !response.ok && parsed.success ? parsed.output.error.code : "service_unavailable",
                 !response.ok && parsed.success ? parsed.output.error.message : "Chat management is unavailable.",
                 response.status,
-                response.headers.get("x-morty-request-id") ?? response.headers.get("x-request-id") ?? "",
+                { requestId: response.headers.get("x-morty-request-id") ?? response.headers.get("x-request-id") ?? "" },
             );
         }
         return value;
     };
 }
 
-export class CloudApiError extends Error {
-    readonly code: string;
-    readonly status: number | null;
-    readonly requestId: string;
-    constructor(code: string, message: string, status: number | null = null, requestId = "") {
-        super(message);
-        this.code = code;
-        this.status = status;
-        this.requestId = requestId;
-        this.name = "CloudApiError";
-    }
-}
-
 const computerConnectionCodes = new Set(["connection_closed", "computer_offline"]);
 
 export function isComputerConnectionFailure(cause: unknown): boolean {
-    return cause instanceof CloudApiError && computerConnectionCodes.has(cause.code.toLowerCase());
+    return cause instanceof MortyError && computerConnectionCodes.has(cause.code.toLowerCase());
 }
