@@ -1,10 +1,10 @@
-import type { MortyElicitationAnswer, MortyPermissionAnswer } from "@morty-build/client";
+import type { MortyElicitationAnswer, MortyPermissionAnswer } from "@portalcrew/morty-client";
 import type {
     NativeSessionTarget,
     SessionElicitationRequestedEvent,
     SessionElicitationResolvedEvent,
     SessionPermissionRequestedEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 
 type PermissionInteractionDetails = Pick<
     SessionPermissionRequestedEvent,

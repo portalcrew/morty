@@ -12,7 +12,7 @@ import {
     SESSION_CLOSED_ERROR_CODE,
     type SessionOperationFailedEvent,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { encodeSessionArchiveCommand } from "../../../client/src/protocol/session/lifecycle/index.ts";
 import type { AgentConnectionFactory } from "../support/agents/agent-connection.ts";

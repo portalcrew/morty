@@ -1,4 +1,4 @@
-import type { SessionConfigValue } from "@morty-build/client/protocol";
+import type { SessionConfigValue } from "@portalcrew/morty-client/protocol";
 
 export const AGENT_MODEL_EFFORT_RESOLUTION_COMPLETE = "complete";
 export const AGENT_MODEL_EFFORT_RESOLUTION_ON_MODEL_SELECTION = "on_model_selection";

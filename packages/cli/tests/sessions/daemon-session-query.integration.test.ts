@@ -7,7 +7,7 @@ import {
     decodeSessionsQueriedEvent,
     encodeSessionCreateCommand,
     encodeSessionQueryCommand,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import type { AgentConnectionFactory } from "../support/agents/agent-connection.ts";
 import { ControlledReadinessSpecification } from "../support/agents/controlled-readiness-specification.ts";

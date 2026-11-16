@@ -7,7 +7,7 @@ const metadata = JSON.parse(await readFile("packages/cli/package.json", "utf8"))
 const candidate = process.env.MORTY_RELEASE_CANDIDATE === "true";
 const version = candidate ? await releaseVersion() : metadata.version;
 if (candidate) {
-    const response = await fetch(`https://registry.npmjs.org/@morty-build%2fcli/${version}`, {
+    const response = await fetch(`https://registry.npmjs.org/@portalcrew%2fmorty/${version}`, {
         signal: AbortSignal.timeout(30_000),
         headers: { "cache-control": "no-cache" },
     });
@@ -24,5 +24,5 @@ if (process.env.GITHUB_OUTPUT) {
     await appendFile(process.env.GITHUB_OUTPUT, `version=${version}\n`);
 }
 console.log(
-    `Prepared @morty-build/cli@${version} from ${execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", timeout: 30000 }).trim()}`,
+    `Prepared @portalcrew/morty@${version} from ${execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", timeout: 30000 }).trim()}`,
 );

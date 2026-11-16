@@ -1,5 +1,5 @@
-import type { MortyClient, MortyInteractionResponseRequest } from "@morty-build/client";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { MortyClient, MortyInteractionResponseRequest } from "@portalcrew/morty-client";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import type { StoreApi } from "zustand/vanilla";
 import {
     centralSessionStorage,

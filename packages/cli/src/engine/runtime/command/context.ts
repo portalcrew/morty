@@ -1,4 +1,4 @@
-import type { PayloadEncryptionConnection } from "@morty-build/client";
+import type { PayloadEncryptionConnection } from "@portalcrew/morty-client";
 import type { WebSocket } from "undici";
 import type { ResolveAgent } from "../../session/api/session-api.ts";
 import type { ExternalContentStore } from "../../session/content/external-content-store.ts";

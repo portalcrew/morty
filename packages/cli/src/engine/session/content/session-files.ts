@@ -7,7 +7,7 @@ import {
     FILE_BEGIN_KIND,
     FILE_END_KIND,
     type FileReadCommand,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { readLocalRaster } from "../../acp/content/raster.ts";
 import { canonicalPath, readFileChunks, readPathMetadata } from "../../storage/files/local-files.ts";
 import type { ExternalContentStore } from "./external-content-store.ts";

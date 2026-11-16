@@ -1,4 +1,4 @@
-import { nativeSessionKey } from "@morty-build/client/native-session";
+import { nativeSessionKey } from "@portalcrew/morty-client/native-session";
 import type {
     AgentSettingsDiscoverCommandRouting,
     ComputerDiagnosticsRequestRouting,
@@ -13,7 +13,7 @@ import type {
     SessionPreviewHistoryPageLoadRouting,
     SessionRestoreCommandRouting,
     WorkspaceListCommandRouting,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
 import { computerRevoked } from "../../../../contracts/computer-pairing.ts";
 import type { ComputerIdentity } from "../../management/entity/computer-identity.ts";

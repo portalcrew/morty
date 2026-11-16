@@ -4,8 +4,8 @@ import {
     type NativeSessionTarget,
     nativeSessionCommandCodec,
     nativeSessionResultCodec,
-} from "@morty-build/client/protocol";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
+} from "@portalcrew/morty-client/protocol";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
 
 /** Drops a real Computer transport at the Fork boundary; never fabricates a reply. */

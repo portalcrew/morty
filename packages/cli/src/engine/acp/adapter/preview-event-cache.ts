@@ -1,4 +1,4 @@
-import { NativeSessionMap } from "@morty-build/client/native-session";
+import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
 import { CachedSessionEventStore } from "../../session/history/session-event-store.ts";
 import { openTemporarySessionEventCache } from "../../storage/session/temporary-session-event-cache.ts";
 

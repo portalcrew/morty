@@ -1,4 +1,4 @@
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { Clock } from "../../services/time/clock.ts";
 import { formatError } from "../format-error.ts";

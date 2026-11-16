@@ -1,5 +1,5 @@
-import { NativeSessionMap } from "@morty-build/client/native-session";
-import type { NativeSessionResult, NativeSessionTarget, SessionPromptCommand } from "@morty-build/client/protocol";
+import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
+import type { NativeSessionResult, NativeSessionTarget, SessionPromptCommand } from "@portalcrew/morty-client/protocol";
 import type { ActiveRuntimeTurn, PromptDispatch } from "./active-turn.ts";
 import type { ExecutionReceipts } from "./execution-receipts.ts";
 import { type SessionExecutes, SessionExecutionState } from "./session-execution.ts";

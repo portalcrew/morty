@@ -1,4 +1,4 @@
-import type { NativeSessionTarget, SessionReadyEvent } from "@morty-build/client/protocol";
+import type { NativeSessionTarget, SessionReadyEvent } from "@portalcrew/morty-client/protocol";
 import type { PreparedSession, ResolveAgent, SessionPrepareOptions, SessionRecovery } from "../api/session-api.ts";
 import type { SessionManager } from "../manager/session-manager.ts";
 import { resolveSessionDirectory } from "../workspace/resolve-session-directory.ts";

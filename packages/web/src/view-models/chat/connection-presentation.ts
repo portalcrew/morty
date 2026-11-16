@@ -6,7 +6,7 @@ import type { SessionConnection } from "./session-connection.ts";
 /** A computer goes offline when it sleeps, loses its network, or restarts; only a restart needs the user to start Morty again. */
 const COMPUTER_OFFLINE_RECOVERY = "Make sure it’s awake and online. Your draft is saved.";
 /** Starts the daemon, which resumes the saved connection. */
-const MORTY_START_COMMAND = "npx @morty-build/cli@latest start";
+const MORTY_START_COMMAND = "npx @portalcrew/morty@latest start";
 /** What happened to a revoked computer, and the one step that pairs it again. */
 const COMPUTER_REVOKED_RECOVERY =
     "Its connection key was used somewhere else, so Morty disconnected it to keep your account safe. Run the Morty setup prompt on that computer again to reconnect it. Your agent's own sessions stay on that computer.";

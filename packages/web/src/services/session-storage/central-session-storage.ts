@@ -1,10 +1,10 @@
-import { nativeSessionKey } from "@morty-build/client/native-session";
+import { nativeSessionKey } from "@portalcrew/morty-client/native-session";
 import {
     isDirectoryPath,
     isIdentifier,
     MAX_PROMPT_ATTACHMENT_BYTES,
     type NativeSessionTarget,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { jsonStorageEntry, type StorageEntry, scopedKey, stringStorageEntry } from "../storage-entry.ts";
 

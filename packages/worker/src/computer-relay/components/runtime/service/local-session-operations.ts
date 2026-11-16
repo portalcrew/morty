@@ -1,10 +1,14 @@
-import type { FileReadCommandRouting, NativeSessionTarget, SessionAccessGrant } from "@morty-build/client/protocol";
+import type {
+    FileReadCommandRouting,
+    NativeSessionTarget,
+    SessionAccessGrant,
+} from "@portalcrew/morty-client/protocol";
 import {
     type AgentSettingsDiscoverCommandRouting,
     contentWriteCommandCodec,
     ProtocolMessageError,
     type SessionEventsSubscribeCommandRouting,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import type { SessionEventObserver } from "../../../../contracts/session-event-subscription.ts";

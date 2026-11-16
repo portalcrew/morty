@@ -2,7 +2,7 @@ import {
     type ClientToRelayMessage,
     daemonToRelayDecoders,
     type NativeSessionTarget,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 
 export type ClientControlCommand = Exclude<
     ClientToRelayMessage,

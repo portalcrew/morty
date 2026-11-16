@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ContentBlock, PROTOCOL_VERSION, type SessionUpdate } from "@agentclientprotocol/sdk/unstable";
-import type { AcpSessionUpdate } from "@morty-build/client/protocol";
+import type { AcpSessionUpdate } from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { z } from "zod";
 import { piClientCallbacks } from "../../src/engine/acp/adapter/pi/client-callbacks.ts";

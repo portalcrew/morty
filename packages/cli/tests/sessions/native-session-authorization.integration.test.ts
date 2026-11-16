@@ -1,6 +1,6 @@
 import { mkdir, readdir, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import type { NativeSessionCommand, NativeSessionEntry } from "@morty-build/client/protocol";
+import type { NativeSessionCommand, NativeSessionEntry } from "@portalcrew/morty-client/protocol";
 import { describe, expect, it } from "vitest";
 
 import { fixture } from "./native-session-fixture.ts";

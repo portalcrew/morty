@@ -1,5 +1,5 @@
 {
-    "name": "@morty-build/runtime-test-support",
+    "name": "@portalcrew/morty-runtime-test-support",
     "version": "0.0.1",
     "license": "Apache-2.0",
     "private": true,
@@ -12,7 +12,7 @@
     },
     "dependencies": {
         "@agentclientprotocol/sdk": "catalog:",
-        "@morty-build/client": "workspace:*"
+        "@portalcrew/morty-client": "workspace:*"
     },
     "devDependencies": {
         "@types/node": "catalog:"

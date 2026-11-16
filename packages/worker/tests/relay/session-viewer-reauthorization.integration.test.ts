@@ -5,7 +5,7 @@ import {
     createComputerPayloadEncryption,
     exportE2EPublicKey,
     generateE2EIdentity,
-} from "@morty-build/client";
+} from "@portalcrew/morty-client";
 import {
     COMPUTER_HEARTBEAT_ACK_MESSAGE,
     COMPUTER_HEARTBEAT_MESSAGE,
@@ -15,7 +15,7 @@ import {
     MORTY_API_PREFIX,
     sessionEventEnvelopeCodec,
     sessionEventsSubscribeCommandCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { afterAll, afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";
 import { IdentityStorage } from "../../src/computer-relay/components/management/storage/identity-storage.ts";

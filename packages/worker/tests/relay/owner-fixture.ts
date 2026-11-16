@@ -1,6 +1,6 @@
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type { NativeSessionTarget, SessionAccessHolder } from "@morty-build/client/protocol";
+import type { NativeSessionTarget, SessionAccessHolder } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { createTestOwner } from "../../../relay-test-support/src/identity-fixture.ts";
 import { IdentityStorage } from "../../src/computer-relay/components/management/storage/identity-storage.ts";

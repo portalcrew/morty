@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
-import { computerCredentialSuccessor, isIdentifier } from "@morty-build/client/protocol";
+import { computerCredentialSuccessor, isIdentifier } from "@portalcrew/morty-client/protocol";
 import { ensurePrivateDirectory } from "../../storage/files/local-files.ts";
 import {
     type InstallationDirectory,

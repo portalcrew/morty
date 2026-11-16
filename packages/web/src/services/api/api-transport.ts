@@ -1,4 +1,4 @@
-import type { WsTransport } from "@morty-build/client";
+import type { WsTransport } from "@portalcrew/morty-client";
 import type { ApiCall } from "./calls/call.ts";
 
 export interface ApiResponseSnapshot {

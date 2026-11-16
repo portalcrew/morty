@@ -2,7 +2,7 @@ import type {
     AgentSettingsDiscoverCommandRouting,
     NativeSessionTarget,
     SessionAccessHolder,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
 import type { RelayContext } from "../../../composition/relay-services.ts";
 import type { ClientControlCommand } from "../../runtime/service/computer-control-registry.ts";

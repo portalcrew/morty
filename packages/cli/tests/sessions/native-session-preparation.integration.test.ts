@@ -1,7 +1,7 @@
 import { existsSync, watch } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { NativeSessionCommand } from "@morty-build/client/protocol";
+import type { NativeSessionCommand } from "@portalcrew/morty-client/protocol";
 import { describe, expect, it, vi } from "vitest";
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
 import { MemorySessionStore } from "../../src/engine/session/record/session-store.ts";

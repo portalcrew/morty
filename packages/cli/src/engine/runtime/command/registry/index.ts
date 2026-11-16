@@ -1,5 +1,5 @@
-import { E2EError } from "@morty-build/client";
-import { contentChunkCodec, decodeRelayToDaemonMessage } from "@morty-build/client/protocol";
+import { E2EError } from "@portalcrew/morty-client";
+import { contentChunkCodec, decodeRelayToDaemonMessage } from "@portalcrew/morty-client/protocol";
 import { createAgentSettingsDiscoveryHandler } from "../agent-settings-discovery.ts";
 import type { CommandContext } from "../context.ts";
 import type { DaemonCommand } from "../definition.ts";

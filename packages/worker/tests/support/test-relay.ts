@@ -1,4 +1,4 @@
-import { createTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
+import { createTestMortyRelayBindings } from "@portalcrew/morty-relay-test-support/cloudflare";
 import { type ControlledAgent, createControlledAgentRuntime } from "../../../../tests/support/fake-daemon/runtime.ts";
 import { mortyFiles, mortyReply } from "../../../../tests/support/fake-daemon/scenarios.ts";
 

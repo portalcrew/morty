@@ -1,9 +1,9 @@
-import { MortyApiError, MortyOperationError } from "@morty-build/client";
+import { MortyApiError, MortyOperationError } from "@portalcrew/morty-client";
 import type {
     NativeSessionTarget,
     SessionConfigOption,
     SessionConfigurationSelection,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import { rememberAgentSettingChoice } from "../../services/chat/last-agent-settings.ts";
 import { recordBrowserError } from "../../services/diagnostics/browser-diagnostics.ts";

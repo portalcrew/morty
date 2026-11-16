@@ -1,5 +1,5 @@
-import { type ComputerEncryptionAccess, MortyValidationError, WsTransport } from "@morty-build/client";
-import { isIdentifier } from "@morty-build/client/protocol";
+import { type ComputerEncryptionAccess, MortyValidationError, WsTransport } from "@portalcrew/morty-client";
+import { isIdentifier } from "@portalcrew/morty-client/protocol";
 import { recordBrowserDiagnostic } from "../diagnostics/browser-diagnostics.ts";
 import { storedComputerEncryption } from "../identity/remembered-computers.ts";
 import { systemClock } from "../time/clock.ts";

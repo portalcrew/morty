@@ -1,5 +1,5 @@
-import { NativeSessionMap, NativeSessionSet } from "@morty-build/client/native-session";
-import { type NativeSessionTarget, SESSION_CLOSED_ERROR_CODE } from "@morty-build/client/protocol";
+import { NativeSessionMap, NativeSessionSet } from "@portalcrew/morty-client/native-session";
+import { type NativeSessionTarget, SESSION_CLOSED_ERROR_CODE } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 
 /**

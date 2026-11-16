@@ -9,7 +9,7 @@ import {
     decodeSessionOperationFailedEvent,
     encodeSessionPromptCommand,
     NATIVE_SESSION_RESULT_KIND,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test, vi } from "vitest";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
 import { type RealDaemonPeer, withControlledDaemon } from "../support/agents/real-daemon.ts";

@@ -1,4 +1,4 @@
-import type { ComputerDiagnosticsResult } from "@morty-build/client/protocol";
+import type { ComputerDiagnosticsResult } from "@portalcrew/morty-client/protocol";
 import type { ChatDiagnostics } from "./model-catalog.ts";
 import type { ServerNetworkOperations } from "./network-diagnostics.ts";
 

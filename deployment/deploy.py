@@ -104,16 +104,16 @@ def main():
         if accepted is not None and accepted != supplied:
             raise ValueError('Cloud and CLI acceptance records differ')
         accepted = supplied
-    if not isinstance(accepted, dict) or accepted.get('name') != '@morty-build/cli' or accepted.get('version') != version or accepted.get('revision') != manifest['revision'] or not re.fullmatch(r'sha512-[A-Za-z0-9+/]{86}==', accepted.get('integrity', '')):
+    if not isinstance(accepted, dict) or accepted.get('name') != '@portalcrew/morty' or accepted.get('version') != version or accepted.get('revision') != manifest['revision'] or not re.fullmatch(r'sha512-[A-Za-z0-9+/]{86}==', accepted.get('integrity', '')):
         raise ValueError('Deployment requires the accepted CLI integrity record')
-    if not args.cli_release or accepted.get('archive') != 'morty-build-cli-' + version + '.tgz':
+    if not args.cli_release or accepted.get('archive') != 'portalcrew-morty-' + version + '.tgz':
         raise ValueError('The accepted CLI archive is required')
     archive = args.cli_release.parent / accepted['archive']
     cli_bytes = archive.read_bytes()
     if archive.is_symlink() or hashlib.sha256(cli_bytes).hexdigest() != accepted.get('sha256') or 'sha512-' + base64.b64encode(hashlib.sha512(cli_bytes).digest()).decode() != accepted['integrity']:
         raise ValueError('CLI archive checksum differs from the acceptance record')
     if not args.preflight_only and os.environ.get('MORTY_ALLOW_RESTORE') != 'true':
-        with urllib.request.urlopen(urllib.request.Request('https://registry.npmjs.org/@morty-build%2fcli/latest', headers={'Cache-Control': 'no-cache'}), timeout=30) as response:
+        with urllib.request.urlopen(urllib.request.Request('https://registry.npmjs.org/@portalcrew%2fmorty/latest', headers={'Cache-Control': 'no-cache'}), timeout=30) as response:
             latest = json.load(response)['version']
         if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', latest):
             raise ValueError('Unexpected npm latest version')
@@ -123,9 +123,9 @@ def main():
             raise ValueError('A superseded release cannot automatically replace production')
     if not args.preflight_only:
         # Instructions invoke the CLI from npm; refuse to activate them before the accepted bytes are available.
-        with urllib.request.urlopen(urllib.request.Request('https://registry.npmjs.org/@morty-build%2fcli/' + version, headers={'Cache-Control': 'no-cache'}), timeout=30) as response:
+        with urllib.request.urlopen(urllib.request.Request('https://registry.npmjs.org/@portalcrew%2fmorty/' + version, headers={'Cache-Control': 'no-cache'}), timeout=30) as response:
             package = json.load(response)
-        if package.get('name') != '@morty-build/cli' or package.get('version') != version or package.get('bin', {}).get('morty') != 'dist/cli.js':
+        if package.get('name') != '@portalcrew/morty' or package.get('version') != version or package.get('bin', {}).get('morty') != 'dist/cli.js':
             raise ValueError('The exact Morty CLI release is unavailable')
         if package.get('dist', {}).get('integrity') != accepted['integrity']:
             raise ValueError('Published CLI bytes differ from the accepted release')

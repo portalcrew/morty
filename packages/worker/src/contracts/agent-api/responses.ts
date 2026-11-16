@@ -1,4 +1,4 @@
-import { IDENTIFIER_PATTERN } from "@morty-build/client/protocol";
+import { IDENTIFIER_PATTERN } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 
 // The response bodies of the Identity and Chat operations an AI agent uses. The routes pass each body through

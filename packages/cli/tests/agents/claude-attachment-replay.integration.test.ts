@@ -7,7 +7,7 @@ import {
     decodeMessageKind,
     decodeSessionPreviewHistoryPageLoaded,
     encodeSessionPreviewHistoryPageLoad,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { type ClaudeSessionUpdate, createClaudeAcpApp } from "../../src/engine/acp/harness/claude/upstream/dist/lib.js";
 import { ClaudeCodeAgentSpecification } from "../../src/engine/agent/specification/vendors/claude-code-agent.ts";

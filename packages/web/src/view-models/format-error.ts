@@ -1,5 +1,5 @@
-import { MortyError, MortyOperationError } from "@morty-build/client";
-import { SESSION_CLOSED_ERROR_CODE } from "@morty-build/client/protocol";
+import { MortyError, MortyOperationError } from "@portalcrew/morty-client";
+import { SESSION_CLOSED_ERROR_CODE } from "@portalcrew/morty-client/protocol";
 import { isApiConnectionError } from "../services/api/worker-api-transport.ts";
 import { isComputerConnectionFailure } from "../services/management/management-api.ts";
 

@@ -1,5 +1,5 @@
 {
-    "name": "@morty-build/worker",
+    "name": "@portalcrew/morty-worker",
     "version": "0.0.1",
     "license": "Apache-2.0",
     "private": true,
@@ -7,7 +7,7 @@
     "scripts": {
         "db:codegen": "node ../../scripts/generate-sql-modules.ts",
         "codegen": "pnpm db:codegen && pnpm --dir ../.. agent:codegen",
-        "pretest": "pnpm codegen && pnpm --filter @morty-build/cli build && pnpm --filter @morty-build/cli pack:test",
+        "pretest": "pnpm codegen && pnpm --filter @portalcrew/morty build && pnpm --filter @portalcrew/morty pack:test",
         "pretypecheck": "pnpm codegen",
         "pretypecheck:tests": "pnpm codegen",
         "typecheck": "tsc --project tsconfig.json",
@@ -18,12 +18,12 @@
     "devDependencies": {
         "@cloudflare/vitest-plugin": "^1.4.9",
         "@cloudflare/workers-types": "^5.20261028.1",
-        "@morty-build/relay-test-support": "workspace:*",
+        "@portalcrew/morty-relay-test-support": "workspace:*",
         "esbuild": "catalog:",
         "miniflare": "catalog:"
     },
     "dependencies": {
-        "@morty-build/client": "workspace:*",
+        "@portalcrew/morty-client": "workspace:*",
         "@valibot/to-json-schema": "catalog:",
         "drizzle-orm": "catalog:",
         "hono": "catalog:",

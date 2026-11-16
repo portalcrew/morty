@@ -3,7 +3,7 @@ import {
     decodeRelayToDaemonMessage,
     fileFailedEventCodec,
     readUndecodedRequestAddress,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { CommandContext } from "../context.ts";
 import { replyFailure, send } from "../transport.ts";
 

@@ -1,5 +1,5 @@
-import type { ComputerEncryptionAccess } from "@morty-build/client";
-import { decodeSessionReadyEvent, type SessionConfigurationSelection } from "@morty-build/client/protocol";
+import type { ComputerEncryptionAccess } from "@portalcrew/morty-client";
+import { decodeSessionReadyEvent, type SessionConfigurationSelection } from "@portalcrew/morty-client/protocol";
 import { WorkerApiTransport } from "../../packages/web/src/services/api/worker-api-transport.ts";
 import { BotChatApi } from "../../packages/web/src/services/chat/bot-chat-api.ts";
 

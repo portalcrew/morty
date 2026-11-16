@@ -11,7 +11,7 @@ import {
     decodeAcpSessionUpdate,
     type SessionCommand,
     type SessionConfigOption,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { truncate } from "../../util/value-utils.ts";
 import type { BackgroundActivity, PromptDelegationStage } from "../agent/agent-lifecycle.ts";
 import { normalizeSessionConfigurationUpdate } from "../protocol/session-configuration.ts";

@@ -4,7 +4,7 @@ import {
     decodeSessionLiveEvent,
     type SessionEvent,
     type SessionLiveEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { describe, expect, it } from "vitest";
 
 const eventWithoutProvenance = {

@@ -1,4 +1,4 @@
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { sessionLiveEventPositionAllocation } from "../../schema/acp-session-store/index.ts";

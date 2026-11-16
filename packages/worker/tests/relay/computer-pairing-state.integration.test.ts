@@ -1,6 +1,6 @@
 import { abortAllDurableObjects, evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { MORTY_API_PREFIX } from "@morty-build/client/protocol";
+import { MORTY_API_PREFIX } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { afterAll, afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";

@@ -2,7 +2,7 @@ import {
     readUndecodedRequestAddress,
     type SessionPromptCommand,
     sessionPromptCommandCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { openTestPayloadEncryption } from "../support/payload-encryption.ts";
 

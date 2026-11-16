@@ -1,4 +1,4 @@
-import type { AcpSessionUpdate } from "@morty-build/client/protocol";
+import type { AcpSessionUpdate } from "@portalcrew/morty-client/protocol";
 
 /**
  * A tool call as the event history projection currently holds it: either the

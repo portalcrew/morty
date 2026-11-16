@@ -1,5 +1,5 @@
 import { methods } from "@agentclientprotocol/sdk/unstable";
-import type { SessionConfigOption } from "@morty-build/client/protocol";
+import type { SessionConfigOption } from "@portalcrew/morty-client/protocol";
 import { normalizeSessionConfigurationUpdate } from "../../../src/engine/acp/protocol/session-configuration.ts";
 
 interface SessionConfigChange {

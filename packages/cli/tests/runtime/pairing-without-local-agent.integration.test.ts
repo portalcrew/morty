@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
 import { describe, expect, it } from "vitest";
 import { RuntimeInstallationStore } from "../../src/engine/runtime/connection/runtime-installation-store.ts";
 

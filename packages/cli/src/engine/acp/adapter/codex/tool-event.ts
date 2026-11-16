@@ -1,4 +1,4 @@
-import { isBoundedJson } from "@morty-build/client/protocol";
+import { isBoundedJson } from "@portalcrew/morty-client/protocol";
 import { z } from "zod";
 
 const toolEventSchema = z.looseObject({

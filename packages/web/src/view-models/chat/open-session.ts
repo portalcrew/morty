@@ -1,4 +1,4 @@
-import type { NativeSessionEntry, NativeSessionTarget, SessionReadyBody } from "@morty-build/client/protocol";
+import type { NativeSessionEntry, NativeSessionTarget, SessionReadyBody } from "@portalcrew/morty-client/protocol";
 import type { ChatAccess } from "../../services/chat/bot-chat-api.ts";
 
 /**

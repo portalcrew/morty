@@ -2,7 +2,7 @@ import {
     decodeSessionAccessCredential,
     ProtocolMessageError,
     type SessionAccessClaims,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { ComputerAuthenticationError } from "../../../../contracts/relay/computer-authentication.ts";
 
 const SIGNING_SECRET_MINIMUM_LENGTH = 32;

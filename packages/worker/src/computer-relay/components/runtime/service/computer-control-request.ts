@@ -1,4 +1,4 @@
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     type AgentSettingsDiscoverCommandRouting,
     agentSettingsDiscoveredEventCodec,
@@ -29,7 +29,7 @@ import {
     fileFailedEventCodec,
     type NativeSessionTarget,
     SESSION_OPERATION_FAILED_KIND,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { COMPUTER_REPLY_INVALID_CODE, SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import { logger } from "../../../../infra/logger.ts";
 import {

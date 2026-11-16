@@ -1,4 +1,4 @@
-import type { SessionCapabilities } from "@morty-build/client/protocol";
+import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import { type NativeSessionQueryKey, nativeSessionQueryKey } from "../../../src/engine/acp/adapter/query-scope.ts";
 import type { AcpAgentDefinition } from "../../../src/engine/acp/agent/agent-definition.ts";
 import type { NativeSessionQuery } from "../../../src/engine/acp/native-history/preview-contract.ts";

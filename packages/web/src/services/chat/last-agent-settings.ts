@@ -1,4 +1,4 @@
-import type { SessionConfigOption, SessionConfigurationSelection } from "@morty-build/client/protocol";
+import type { SessionConfigOption, SessionConfigurationSelection } from "@portalcrew/morty-client/protocol";
 import {
     centralLocalStorage,
     lastAgentSettingsEntry,

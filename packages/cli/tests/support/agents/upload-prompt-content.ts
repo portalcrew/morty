@@ -9,7 +9,7 @@ import {
     encodeContentCommitCommand,
     encodeContentWriteCommand,
     type PromptAttachment,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { RealDaemonPeer } from "./real-daemon.ts";
 
 export async function uploadPromptContent(

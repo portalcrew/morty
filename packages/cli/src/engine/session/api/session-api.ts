@@ -12,7 +12,7 @@ import type {
     SessionElicitationRespondCommand,
     SessionLiveEvent,
     SessionPermissionRespondCommand,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
 import type { AgentModelEffort } from "../../acp/agent/model-effort.ts";
 import type { PromptImageInput, PromptResourceInput } from "../../acp/client/prompt-content.ts";

@@ -1,4 +1,4 @@
-import { nativeSessionKey } from "@morty-build/client/native-session";
+import { nativeSessionKey } from "@portalcrew/morty-client/native-session";
 import {
     isIdentifier,
     type LastTurnOutcome,
@@ -9,7 +9,7 @@ import {
     type SessionEventPayload,
     type SessionPendingInteractions,
     type SessionStatus,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import type { NativeSessionOrigin } from "../../acp/protocol/native-session.ts";
 import { unsupportedSessionCapabilities } from "../../acp/protocol/session-capabilities.ts";

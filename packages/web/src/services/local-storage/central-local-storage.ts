@@ -1,4 +1,4 @@
-import { isDirectoryPath, isIdentifier, MAX_WORKSPACE_PATH_LENGTH } from "@morty-build/client/protocol";
+import { isDirectoryPath, isIdentifier, MAX_WORKSPACE_PATH_LENGTH } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { identityScopeSchema } from "../identity/identity-scope-url.ts";
 import { jsonStorageEntry, type StorageEntry, scopedKey, stringStorageEntry } from "../storage-entry.ts";

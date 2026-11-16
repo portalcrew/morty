@@ -1,7 +1,7 @@
-import type { ComputerEncryptionAccess, ForkMortyNativeSessionRequest } from "@morty-build/client";
-import { MortyClient, type WsTransport } from "@morty-build/client";
-import { sameNativeSession } from "@morty-build/client/native-session";
-import type { NativeSessionCommand } from "@morty-build/client/protocol";
+import type { ComputerEncryptionAccess, ForkMortyNativeSessionRequest } from "@portalcrew/morty-client";
+import { MortyClient, type WsTransport } from "@portalcrew/morty-client";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
+import type { NativeSessionCommand } from "@portalcrew/morty-client/protocol";
 import {
     type AgentSetting,
     agentSettingsDiscoverCommandCodec,
@@ -36,7 +36,7 @@ import {
     sessionsListedEventCodec,
     workspaceEntriesEventCodec,
     workspaceListCommandCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import type { ApiResponseSnapshot, ApiTransport } from "../api/api-transport.ts";
 import type { ApiRequest, CommandCall } from "../api/calls/call.ts";

@@ -1,10 +1,10 @@
-import { createClientPayloadEncryption, type PayloadEncryptor } from "@morty-build/client";
+import { createClientPayloadEncryption, type PayloadEncryptor } from "@portalcrew/morty-client";
 import {
     daemonInboundSignatures,
     decodeContentChunkAck,
     decodeEncryptedDaemonMessage,
     decodeMessageKind,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { ComputerEncryptionStore } from "../../src/engine/runtime/connection/computer-encryption-store.ts";
 
 /** Exercises the daemon's real message codecs using its persisted Computer capability. */

@@ -2,8 +2,11 @@ import { mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { agent as acpAgent, methods, PROTOCOL_VERSION } from "@agentclientprotocol/sdk/unstable";
-import { AGENT_SETTINGS_DISCOVERED_KIND, encodeAgentSettingsDiscoverCommand } from "@morty-build/client/protocol";
-import { type ControlledAcpPeer, ControlledEndpointConnection } from "@morty-build/runtime-test-support/fake-daemon";
+import { AGENT_SETTINGS_DISCOVERED_KIND, encodeAgentSettingsDiscoverCommand } from "@portalcrew/morty-client/protocol";
+import {
+    type ControlledAcpPeer,
+    ControlledEndpointConnection,
+} from "@portalcrew/morty-runtime-test-support/fake-daemon";
 import { WebSocketServer } from "ws";
 import { RuntimeLocalContext } from "../../../src/engine/runtime/config.ts";
 import { runRuntime } from "../../../src/engine/runtime/run.ts";

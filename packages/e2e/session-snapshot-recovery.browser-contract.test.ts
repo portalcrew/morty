@@ -1,5 +1,5 @@
 import { createServer, request } from "node:http";
-import { computerEncryptionAccessCodec, createClientPayloadEncryption } from "@morty-build/client";
+import { computerEncryptionAccessCodec, createClientPayloadEncryption } from "@portalcrew/morty-client";
 import { WebSocket, WebSocketServer } from "ws";
 import { sessionEventEnvelopeCodec } from "../client/src/protocol/session/events/index.ts";
 import { sessionHistoryPageLoadedCodec } from "../client/src/protocol/session/observability/history.ts";

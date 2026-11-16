@@ -1,4 +1,4 @@
-import type { SessionAccessHolder } from "@morty-build/client/protocol";
+import type { SessionAccessHolder } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import {
     accessHolder,

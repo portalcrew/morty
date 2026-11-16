@@ -1,4 +1,4 @@
-import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
+import { prepareTestMortyRelayBindings } from "@portalcrew/morty-relay-test-support/cloudflare";
 import * as v from "valibot";
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { connectComputerApiWebSocket } from "./support/computer-api-websocket.ts";

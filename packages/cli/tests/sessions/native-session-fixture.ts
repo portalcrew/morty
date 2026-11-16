@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AcpSessionUpdate, NativeSessionCommand, SessionLiveEvent } from "@morty-build/client/protocol";
+import type { AcpSessionUpdate, NativeSessionCommand, SessionLiveEvent } from "@portalcrew/morty-client/protocol";
 import { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
 import type { AdapterResolver } from "../../src/engine/acp/native-history/preview-contract.ts";
 import { createRuntimeConfig, RuntimeAgentDependencies, RuntimeLocalContext } from "../../src/engine/runtime/config.ts";

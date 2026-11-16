@@ -1,5 +1,5 @@
-import { nativeSessionKey } from "@morty-build/client/native-session";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import { nativeSessionKey } from "@portalcrew/morty-client/native-session";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import type { AcpSessionRow, AcpSessionTable } from "../../storage/session/acp-session-table.ts";
 import { MemorySessionEventStore, type SessionEventStore } from "../history/session-event-store.ts";
 import { decodeStoredSessionConfigurations, type StoredSessionConfiguration } from "../live/session-configurations.ts";

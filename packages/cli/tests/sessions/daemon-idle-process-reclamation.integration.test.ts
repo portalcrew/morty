@@ -21,7 +21,7 @@ import {
     encodeSessionRenameCommand,
     encodeSessionRestoreCommand,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { afterEach, expect, test, vi } from "vitest";
 import { ControlledAcpSpecification } from "../support/agents/controlled-acp-specification.ts";
 import { ControlledReadinessSpecification } from "../support/agents/controlled-readiness-specification.ts";

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { decodeComputerDiagnosticsResult, decodeMessageKind } from "@morty-build/client/protocol";
+import { decodeComputerDiagnosticsResult, decodeMessageKind } from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { z } from "zod";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";

@@ -1,4 +1,4 @@
-import type { MortyClient, MortyTurnAdmission } from "@morty-build/client";
+import type { MortyClient, MortyTurnAdmission } from "@portalcrew/morty-client";
 import { createStore } from "zustand/vanilla";
 import type { SessionActivityState } from "./session-activity-machine.ts";
 import {

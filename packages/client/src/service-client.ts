@@ -20,7 +20,7 @@ import {
     type SessionLiveEventBatch,
     type SessionOperationFailedEvent,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { MortyTransportEndpoint } from "./calls/call.ts";
 import { sessionEndpoints } from "./calls/session.ts";
 import type { ComputerEncryptionAccess, PayloadDecryptor } from "./encryption.ts";

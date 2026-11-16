@@ -18,9 +18,9 @@ import {
     MORTY_API_PREFIX,
     SESSION_EVENT_KIND,
     type SessionLiveEvent,
-} from "@morty-build/client/protocol";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
-import { ControlledEndpointConnection } from "@morty-build/runtime-test-support/fake-daemon";
+} from "@portalcrew/morty-client/protocol";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
+import { ControlledEndpointConnection } from "@portalcrew/morty-runtime-test-support/fake-daemon";
 import { expect, test, vi } from "vitest";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { AgentTermination } from "../../src/engine/acp/agent/agent-lifecycle.ts";

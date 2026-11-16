@@ -1,4 +1,4 @@
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import { centralSessionStorage, sessionWelcomeEntry } from "../../services/session-storage/central-session-storage.ts";
 

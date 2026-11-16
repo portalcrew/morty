@@ -3,7 +3,7 @@ import type {
     NativeSessionTarget,
     SessionEventPayload,
     SessionLiveEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { SettledTurn } from "../turn/execution-receipts.ts";
 import type { SessionEventPage, SessionEventStore } from "./session-event-store.ts";
 

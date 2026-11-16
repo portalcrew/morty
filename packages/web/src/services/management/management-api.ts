@@ -1,4 +1,4 @@
-import { decodeIdentifier, type Identifier, isIdentifier } from "@morty-build/client/protocol";
+import { decodeIdentifier, type Identifier, isIdentifier } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import type { ApiTransport } from "../api/api-transport.ts";
 import type { ApiRequest } from "../api/calls/call.ts";

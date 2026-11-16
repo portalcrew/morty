@@ -1,4 +1,4 @@
-import { createTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
+import { createTestMortyRelayBindings } from "@portalcrew/morty-relay-test-support/cloudflare";
 import { createTestOwner } from "../../../../packages/relay-test-support/src/identity-fixture.ts";
 import type { FakeAgentHarnessDefinition } from "./agent-harness.ts";
 import { createFakeAgentHarnessRuntime } from "./relay-agent-harness.ts";

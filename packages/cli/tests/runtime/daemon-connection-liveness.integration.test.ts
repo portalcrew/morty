@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     COMPUTER_HEARTBEAT_ACK_MESSAGE,
     COMPUTER_HEARTBEAT_KIND,
@@ -25,8 +25,12 @@ import {
     type SessionLiveEvent,
     WORKSPACE_ENTRIES_KIND,
     WORKSPACE_LIST_KIND,
-} from "@morty-build/client/protocol";
-import { listen, port as readPort, sendText as writeServerTextFrame } from "@morty-build/relay-test-support/websocket";
+} from "@portalcrew/morty-client/protocol";
+import {
+    listen,
+    port as readPort,
+    sendText as writeServerTextFrame,
+} from "@portalcrew/morty-relay-test-support/websocket";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRuntimeConfig, RuntimeAgentDependencies, RuntimeLocalContext } from "../../src/engine/runtime/config.ts";
 import { ComputerRelayRevokedError } from "../../src/engine/runtime/relay/computer-revocation.ts";

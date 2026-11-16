@@ -1,5 +1,5 @@
 import { RequestError } from "@agentclientprotocol/sdk/unstable";
-import type { HarnessOutput, HarnessReplyPlan } from "@morty-build/runtime-test-support/fake-daemon";
+import type { HarnessOutput, HarnessReplyPlan } from "@portalcrew/morty-runtime-test-support/fake-daemon";
 import { interactiveHtml } from "./html-preview.ts";
 
 const FILE_EXPLORER_SOURCE = [

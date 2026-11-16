@@ -1,4 +1,4 @@
-import type { SessionElicitationField } from "@morty-build/client/protocol";
+import type { SessionElicitationField } from "@portalcrew/morty-client/protocol";
 import { ArrowUpRight, ChevronDown, HelpCircle, ShieldCheck } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { ButtonGroup } from "@/components/ui/button-group";

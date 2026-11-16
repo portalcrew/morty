@@ -5,7 +5,7 @@ import type {
     NativeSessionTarget,
     SessionAccessHolder,
     SessionCreateCommandRouting,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
 import type { ComputerPairing } from "../../../../contracts/computer-pairing.ts";

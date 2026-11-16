@@ -1,5 +1,5 @@
-import { NativeSessionMap, sameNativeSession } from "@morty-build/client/native-session";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import { NativeSessionMap, sameNativeSession } from "@portalcrew/morty-client/native-session";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import { encodeIdentityScope, type IdentityScope } from "../../services/identity/identity-scope-url.ts";

@@ -1,5 +1,5 @@
-import { sameNativeSession } from "@morty-build/client/native-session";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { BotChatApi, ManagedChatSession } from "@/services/chat/bot-chat-api";
 import { CloudApiError, isComputerConnectionFailure } from "@/services/management/management-api";

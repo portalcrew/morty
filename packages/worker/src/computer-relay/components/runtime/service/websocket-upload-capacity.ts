@@ -1,4 +1,4 @@
-import { CONTENT_UPLOAD_MAX_ENCODED_BYTES } from "@morty-build/client/protocol";
+import { CONTENT_UPLOAD_MAX_ENCODED_BYTES } from "@portalcrew/morty-client/protocol";
 import { MAX_BODY_BYTES } from "../../../../contracts/agent-api/transport-frames.ts";
 import type { HttpError } from "../../../../contracts/http-error.ts";
 

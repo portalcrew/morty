@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 const directory = resolve(".release");
 await mkdir(directory, { recursive: true });
 const metadata = JSON.parse(await readFile("packages/cli/package.json", "utf8"));
-const archive = `morty-build-cli-${metadata.version}.tgz`;
+const archive = `portalcrew-morty-${metadata.version}.tgz`;
 execFileSync("npm", ["pack", "./packages/cli", "--ignore-scripts", "--pack-destination", directory], {
     stdio: "inherit",
     timeout: 120000,

@@ -1,12 +1,12 @@
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { WsTransport } from "@morty-build/client";
+import { WsTransport } from "@portalcrew/morty-client";
 import {
     type SessionCreateCommand,
     sessionCreateCommandCodec,
     sessionReadyEventCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, it, onTestFinished } from "vitest";
 import { startTestRelay } from "../support/relay.ts";
 

@@ -3,14 +3,14 @@ import {
     createClientPayloadEncryption,
     createComputerPayloadEncryption,
     type PayloadEncryptionConnection,
-} from "@morty-build/client";
+} from "@portalcrew/morty-client";
 import {
     decodeKnownSessionLiveEventBatch,
     decodeMessageKind,
     nativeSessionResultCodec,
     sessionEventEnvelopeCodec,
     sessionPromptCommandCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import type { ControlledAgent } from "../../../../tests/support/fake-daemon/runtime.ts";
 import { createResponseLossProxy } from "../../../relay-test-support/src/response-loss-proxy.ts";

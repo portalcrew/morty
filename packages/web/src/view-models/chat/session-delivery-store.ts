@@ -6,8 +6,8 @@ import {
     MortyOperationError,
     type MortyTurnAdmission,
     MortyValidationError,
-} from "@morty-build/client";
-import type { PromptAttachment } from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client";
+import type { PromptAttachment } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
 import { CloudApiError } from "../../services/management/management-api.ts";

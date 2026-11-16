@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { SessionConfigOption } from "@morty-build/client/protocol";
+import type { SessionConfigOption } from "@portalcrew/morty-client/protocol";
 
 /**
  * The revision of a Session's configuration, derived from the configuration itself. It covers what a client can act

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createResponseLossProxy } from "@morty-build/relay-test-support/response-loss-proxy";
+import { createResponseLossProxy } from "@portalcrew/morty-relay-test-support/response-loss-proxy";
 import * as v from "valibot";
 import { expect, test } from "vitest";
 import { mortyReply } from "../../../tests/support/fake-daemon/scenarios.ts";

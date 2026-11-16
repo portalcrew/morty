@@ -19,8 +19,8 @@ import {
     encodeSessionPreviewHistoryPageLoad,
     MORTY_API_PREFIX,
     NATIVE_SESSION_REQUEST_KIND,
-} from "@morty-build/client/protocol";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
+} from "@portalcrew/morty-client/protocol";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
 import { expect, test, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { discoverLocalAgentInventory } from "../../src/engine/agent/discovery/discover-local-agents.ts";

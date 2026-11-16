@@ -2,7 +2,7 @@ import {
     type NativeSessionTarget,
     type SessionPromptCommand,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
 import { ActiveRuntimeTurn, type PromptDispatch } from "./active-turn.ts";
 import type { ExecutionReceipts } from "./execution-receipts.ts";

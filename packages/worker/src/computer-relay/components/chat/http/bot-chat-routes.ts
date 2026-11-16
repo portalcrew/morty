@@ -1,4 +1,4 @@
-import type { SessionAccessHolder } from "@morty-build/client/protocol";
+import type { SessionAccessHolder } from "@portalcrew/morty-client/protocol";
 import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import * as v from "valibot";

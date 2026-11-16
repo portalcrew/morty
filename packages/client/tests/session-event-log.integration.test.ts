@@ -1,6 +1,6 @@
 import { once } from "node:events";
 import { createServer } from "node:http";
-import type { NativeSessionTarget, SessionEvent } from "@morty-build/client/protocol";
+import type { NativeSessionTarget, SessionEvent } from "@portalcrew/morty-client/protocol";
 import { base64urlnopad } from "@scure/base";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocketServer } from "ws";

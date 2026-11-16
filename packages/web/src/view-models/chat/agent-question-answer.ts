@@ -1,4 +1,4 @@
-import type { AgentQuestion } from "@morty-build/client/protocol";
+import type { AgentQuestion } from "@portalcrew/morty-client/protocol";
 import type { SessionMessage } from "./session-presentation.ts";
 
 /** The suggested answer the user picked for each question of one message, by the question's position. */

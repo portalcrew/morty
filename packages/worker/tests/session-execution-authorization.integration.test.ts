@@ -1,6 +1,6 @@
-import { createClientPayloadEncryption, MortyClient, sessionEndpoints, WsTransport } from "@morty-build/client";
-import { decodeSessionReadyEvent, nativeSessionCommandCodec } from "@morty-build/client/protocol";
-import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
+import { createClientPayloadEncryption, MortyClient, sessionEndpoints, WsTransport } from "@portalcrew/morty-client";
+import { decodeSessionReadyEvent, nativeSessionCommandCodec } from "@portalcrew/morty-client/protocol";
+import { prepareTestMortyRelayBindings } from "@portalcrew/morty-relay-test-support/cloudflare";
 import * as v from "valibot";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createControlledAgentRuntime } from "../../../tests/support/fake-daemon/runtime.ts";

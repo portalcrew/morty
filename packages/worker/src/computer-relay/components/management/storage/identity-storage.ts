@@ -1,4 +1,4 @@
-import type { SessionAccessHolder } from "@morty-build/client/protocol";
+import type { SessionAccessHolder } from "@portalcrew/morty-client/protocol";
 import { and, eq, exists, gt, inArray, isNull, max, ne, notExists, or, type SQL, sql } from "drizzle-orm";
 import { alias, type SQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { Credential, SharedLinkTerms } from "../../../../contracts/authentication/credential.ts";

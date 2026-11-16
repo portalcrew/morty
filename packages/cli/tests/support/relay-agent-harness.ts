@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mortyApiUrl } from "@morty-build/client/protocol";
+import { mortyApiUrl } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { createOwnerApi } from "../../../../tests/support/owner-api.ts";
 import { RuntimeLocalContext } from "../../src/engine/runtime/config.ts";

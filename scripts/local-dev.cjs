@@ -463,7 +463,7 @@ async function prepare(options) {
         if (options.mode === "web-server-morty-cli") {
             cliLog = path.join(stateDir, "cli.log");
             log("checking local Morty CLI");
-            await run("pnpm", ["--filter", "@morty-build/cli", "start", "agents"], {
+            await run("pnpm", ["--filter", "@portalcrew/morty", "start", "agents"], {
                 cwd: REPO_ROOT,
                 env: { MORTY_STATE_DIRECTORY: path.join(stateDir, "morty") },
             }).then(({ stdout, stderr }) => fs.writeFileSync(cliLog, `${stdout}${stderr}`, { mode: 0o600 }));
@@ -473,7 +473,7 @@ async function prepare(options) {
             ...stack,
             mode: options.mode,
             cliCommand:
-                options.mode === "web-server-morty-cli" ? "pnpm --filter @morty-build/cli start agents" : undefined,
+                options.mode === "web-server-morty-cli" ? "pnpm --filter @portalcrew/morty start agents" : undefined,
             ...(cliLog === undefined ? {} : { cliLog }),
             chatConfig: CHAT_CONFIG,
             chatLog,
@@ -500,7 +500,7 @@ async function installLocalCli(stack) {
     const cliDirectory = path.join(REPO_ROOT, "packages/cli");
     const manifest = JSON.parse(fs.readFileSync(path.join(cliDirectory, "package.json"), "utf8"));
     if (
-        manifest.name !== "@morty-build/cli" ||
+        manifest.name !== "@portalcrew/morty" ||
         typeof manifest.version !== "string" ||
         !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?(?:\+[a-zA-Z0-9.-]+)?$/u.test(manifest.version)
     ) {
@@ -519,7 +519,7 @@ async function installLocalCli(stack) {
         log(`building and packing the checkout's Morty CLI ${manifest.version}`);
         await run("pnpm", ["pack", "--pack-destination", packageDirectory], { ...options, cwd: cliDirectory });
         controller.signal.throwIfAborted();
-        const tarball = path.join(packageDirectory, `morty-build-cli-${manifest.version}.tgz`);
+        const tarball = path.join(packageDirectory, `portalcrew-morty-${manifest.version}.tgz`);
         const prefix = path.join(stack.stateDir, "local-cli", manifest.version);
         log(`installing the local CLI into ${prefix}`);
         await run(
@@ -539,7 +539,7 @@ async function installLocalCli(stack) {
             options,
         );
         controller.signal.throwIfAborted();
-        const entry = path.join(prefix, "node_modules", "@morty-build", "cli", "dist", "cli.js");
+        const entry = path.join(prefix, "node_modules", "@portalcrew", "morty", "dist", "cli.js");
         return entry;
     } finally {
         process.removeListener("SIGINT", cancel);

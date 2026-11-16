@@ -1,7 +1,7 @@
 import { existsSync, watch } from "node:fs";
 import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { sameNativeSession } from "@morty-build/client/native-session";
+import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import { describe, expect, it, vi } from "vitest";
 import type { AdapterResolver } from "../../src/engine/acp/native-history/preview-contract.ts";
 import { MemorySessionEventStore } from "../../src/engine/session/history/session-event-store.ts";

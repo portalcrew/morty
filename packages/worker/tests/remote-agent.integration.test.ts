@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { computerEncryptionAccessCodec } from "@morty-build/client";
-import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
+import { computerEncryptionAccessCodec } from "@portalcrew/morty-client";
+import { prepareTestMortyRelayBindings } from "@portalcrew/morty-relay-test-support/cloudflare";
 import * as v from "valibot";
 import { expect, onTestFinished, test, vi } from "vitest";
 import { createControlledAgentRuntime } from "../../../tests/support/fake-daemon/runtime.ts";

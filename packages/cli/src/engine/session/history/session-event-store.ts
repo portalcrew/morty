@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { NativeSessionMap } from "@morty-build/client/native-session";
+import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
 import type {
     NativeSessionTarget,
     SessionEvent,
     SessionEventPayload,
     SessionLiveEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { ProjectedToolCall } from "../../acp/tool-call-projection.ts";
 import type { SessionEventCacheTable } from "../../storage/session/session-event-cache-table.ts";
 import type { SessionLiveEventPosition } from "./live-event-positions.ts";

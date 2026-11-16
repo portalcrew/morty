@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import type { SessionCreationTable } from "../../storage/session/session-creation-table.ts";
 import { type SharedOperation, shareOperation } from "../../util/shared-operation.ts";

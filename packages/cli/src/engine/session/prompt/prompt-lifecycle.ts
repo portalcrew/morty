@@ -1,4 +1,4 @@
-import { NativeSessionMap, sameNativeSession } from "@morty-build/client/native-session";
+import { NativeSessionMap, sameNativeSession } from "@portalcrew/morty-client/native-session";
 import type {
     ContentBlock,
     NativeSessionTarget,
@@ -8,8 +8,8 @@ import type {
     SessionEventPayload,
     SessionLiveEvent,
     SessionPromptCommand,
-} from "@morty-build/client/protocol";
-import { isPromptTerminal } from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
+import { isPromptTerminal } from "@portalcrew/morty-client/protocol";
 import { type PromptEnd, promptCompletion } from "../api/prompt-end.ts";
 import type { SessionEventSink } from "../api/session-api.ts";
 import { SessionError } from "../api/session-error.ts";

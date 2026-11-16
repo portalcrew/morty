@@ -1,5 +1,5 @@
-import { type MortyClient, MortyError } from "@morty-build/client";
-import { SESSION_CLOSED_ERROR_CODE } from "@morty-build/client/protocol";
+import { type MortyClient, MortyError } from "@portalcrew/morty-client";
+import { SESSION_CLOSED_ERROR_CODE } from "@portalcrew/morty-client/protocol";
 
 // The Session pane owns live-stream recovery: the session client never retries, so
 // connection attempts and reconciliation share one bounded retry policy.

@@ -1,4 +1,4 @@
-import type { ComputerEncryptionAccess } from "@morty-build/client";
+import type { ComputerEncryptionAccess } from "@portalcrew/morty-client";
 import {
     browserAccessEntry,
     type ComputerDestination,

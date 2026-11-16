@@ -8,8 +8,8 @@ import {
     COMPUTER_LIVENESS_READY_KIND,
     COMPUTER_SUCCESSOR_CREDENTIAL_HEADER,
     encodeComputerLivenessReadyEvent,
-} from "@morty-build/client/protocol";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
+} from "@portalcrew/morty-client/protocol";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
 import { expect, it } from "vitest";
 import { WebSocketServer } from "ws";
 import { RuntimeInstallationStore } from "../../src/engine/runtime/connection/runtime-installation-store.ts";

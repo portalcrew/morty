@@ -1,5 +1,5 @@
 import type { InitializeResponse } from "@agentclientprotocol/sdk/unstable";
-import type { SessionCapabilities } from "@morty-build/client/protocol";
+import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import { isRecord } from "../../util/value-utils.ts";
 
 function hasTrueChildField(value: unknown, childKey: string, fieldKey: string): boolean {

@@ -4,13 +4,13 @@ import {
     MortyPageRequest,
     type MortySessionEventObserver,
     MortyTimeoutError,
-} from "@morty-build/client";
+} from "@portalcrew/morty-client";
 import type {
     NativeSessionTarget,
     SessionConfigurationSelection,
     SessionEvent,
     SessionLiveEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";

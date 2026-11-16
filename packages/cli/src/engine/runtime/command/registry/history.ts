@@ -9,7 +9,7 @@ import {
     type SessionEvent,
     sessionHistoryPageLoadedCodec,
     sessionPreviewHistoryPageLoadedCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { operationErrorCode } from "../../../infra/operation-error.ts";
 import { SessionError } from "../../../session/api/session-error.ts";
 import type { SessionEventPage } from "../../../session/history/session-event-store.ts";

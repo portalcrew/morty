@@ -3,7 +3,7 @@ import {
     isIdentifier,
     MAX_LOCAL_AGENT_DIRECTORY_ENTRIES,
     type SessionCapabilities,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import type { HttpError } from "../http-error.ts";
 
 export const PAIRING_LIFETIME_MILLISECONDS = 10 * 60 * 1_000;

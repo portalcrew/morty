@@ -3,7 +3,7 @@ import {
     isDirectoryPath,
     isIdentifier,
     sessionWireJsonSchemas,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { toJsonSchema } from "@valibot/to-json-schema";
 import type * as v from "valibot";
 import {

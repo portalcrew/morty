@@ -5,7 +5,7 @@ import {
     MORTY_API_PREFIX,
     type SessionEventsSubscribeCommandRouting,
     sessionEventsSubscribeCommandCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import {
     CANCEL_KIND,
     ERROR_KIND,

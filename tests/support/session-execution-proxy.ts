@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, request } from "node:http";
-import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER } from "@morty-build/client/protocol";
+import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER } from "@portalcrew/morty-client/protocol";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
 
 /** Forwards real traffic unchanged, with controllable ordering at the Relay transport boundary. */

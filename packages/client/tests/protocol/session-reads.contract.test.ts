@@ -4,7 +4,7 @@ import {
     SESSION_CONFIG_READ_RESULT_KIND,
     sessionConfigReadCommandCodec,
     sessionConfigReadResultCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openTestPayloadEncryption } from "../support/payload-encryption.ts";
 

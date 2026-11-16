@@ -8,7 +8,7 @@ import {
     PROMPT_IMAGE_MAX_BYTES,
     type PromptAttachment,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { afterEach, expect, test, vi } from "vitest";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
 import { withControlledDaemon } from "../support/agents/real-daemon.ts";

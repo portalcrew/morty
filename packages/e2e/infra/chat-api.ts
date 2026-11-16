@@ -1,4 +1,4 @@
-import { type ComputerEncryptionAccess, computerEncryptionAccessCodec } from "@morty-build/client";
+import { type ComputerEncryptionAccess, computerEncryptionAccessCodec } from "@portalcrew/morty-client";
 import { createOwnerApi } from "../../../tests/support/owner-api.ts";
 import { identityCalls } from "../../web/src/services/api/calls/identity.ts";
 import { WorkerApiTransport } from "../../web/src/services/api/worker-api-transport.ts";

@@ -1,5 +1,5 @@
-import type { MortyClient } from "@morty-build/client";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { MortyClient } from "@portalcrew/morty-client";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
 import { formatError } from "../format-error.ts";

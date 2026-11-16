@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { COMPUTER_HEARTBEAT_ACK_MESSAGE, COMPUTER_HEARTBEAT_MESSAGE } from "@morty-build/client/protocol";
+import { COMPUTER_HEARTBEAT_ACK_MESSAGE, COMPUTER_HEARTBEAT_MESSAGE } from "@portalcrew/morty-client/protocol";
 import { Hono } from "hono";
 import { computerObjectName, decodeComputerPlacement } from "../contracts/computer-id.ts";
 import { ComputerManagementError } from "../contracts/computer-management.ts";

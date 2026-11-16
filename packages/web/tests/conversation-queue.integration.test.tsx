@@ -1,6 +1,6 @@
 import { resolveObjectURL } from "node:buffer";
-import { createClientPayloadEncryption } from "@morty-build/client";
-import { sessionOperationFailedEventCodec } from "@morty-build/client/protocol";
+import { createClientPayloadEncryption } from "@portalcrew/morty-client";
+import { sessionOperationFailedEventCodec } from "@portalcrew/morty-client/protocol";
 import { fireEvent, getAllByText, getByLabelText, getByRole, queryAllByText, queryByRole } from "@testing-library/dom";
 import { act } from "@testing-library/react";
 import * as v from "valibot";

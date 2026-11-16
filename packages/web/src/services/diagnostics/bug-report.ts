@@ -1,4 +1,4 @@
-import type { ComputerDiagnosticsResult } from "@morty-build/client/protocol";
+import type { ComputerDiagnosticsResult } from "@portalcrew/morty-client/protocol";
 import { captureFeedback, getClient } from "@sentry/react";
 import type { browserDiagnosticsSnapshot } from "./browser-diagnostics.ts";
 import type { ChatDiagnostics } from "./model-catalog.ts";

@@ -1,4 +1,4 @@
-import { createResponseLossProxy } from "@morty-build/relay-test-support/response-loss-proxy";
+import { createResponseLossProxy } from "@portalcrew/morty-relay-test-support/response-loss-proxy";
 import * as v from "valibot";
 import { expect, test } from "vitest";
 import worker from "../src/worker/application.ts";

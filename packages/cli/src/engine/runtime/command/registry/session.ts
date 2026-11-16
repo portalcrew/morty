@@ -1,4 +1,4 @@
-import type { NativeSessionTarget, SessionCreateCommand } from "@morty-build/client/protocol";
+import type { NativeSessionTarget, SessionCreateCommand } from "@portalcrew/morty-client/protocol";
 import {
     type SESSION_CONFIG_READ_KIND,
     SESSION_CONFIG_READ_RESULT_KIND,
@@ -15,7 +15,7 @@ import {
     sessionRestoredEventCodec,
     type WORKSPACE_LIST_KIND,
     workspaceEntriesEventCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { operationErrorCode } from "../../../infra/operation-error.ts";
 import { SessionError } from "../../../session/api/session-error.ts";
 import { applyCompleteSessionConfiguration } from "../../../session/prompt/apply-session-configuration.ts";

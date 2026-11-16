@@ -1,5 +1,5 @@
-import { NativeSessionSet } from "@morty-build/client/native-session";
-import type { SessionExecution } from "@morty-build/client/protocol";
+import { NativeSessionSet } from "@portalcrew/morty-client/native-session";
+import type { SessionExecution } from "@portalcrew/morty-client/protocol";
 import { AcpSessionTable } from "../../storage/session/acp-session-table.ts";
 import { CommandLedgerTable } from "../../storage/session/command-ledger-table.ts";
 import { LiveEventPositionTable } from "../../storage/session/live-event-position-table.ts";

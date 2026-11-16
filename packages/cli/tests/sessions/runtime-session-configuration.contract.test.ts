@@ -1,4 +1,4 @@
-import { MortyError } from "@morty-build/client";
+import { MortyError } from "@portalcrew/morty-client";
 import { expect, it } from "vitest";
 import { startTestRelay } from "../support/relay.ts";
 

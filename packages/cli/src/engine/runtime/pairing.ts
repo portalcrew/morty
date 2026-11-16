@@ -1,6 +1,6 @@
 import { hostname } from "node:os";
 import { basename, resolve } from "node:path";
-import { isIdentifier, mortyApiUrl } from "@morty-build/client/protocol";
+import { isIdentifier, mortyApiUrl } from "@portalcrew/morty-client/protocol";
 import { fetch, type Response } from "undici";
 import type { CatalogAgent } from "../agent/catalog.ts";
 import { discoverLocalAgentInventory, type LocalAgentInventory } from "../agent/discovery/discover-local-agents.ts";

@@ -1,5 +1,5 @@
-import { NativeSessionMap } from "@morty-build/client/native-session";
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 
 /** Allocates each Session generation's event identifiers in order. */
 export class SessionEventIdAllocator {

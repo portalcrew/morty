@@ -1,5 +1,5 @@
-import { NativeSessionMap } from "@morty-build/client/native-session";
-import type { NativeSessionTarget, SessionStatus } from "@morty-build/client/protocol";
+import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
+import type { NativeSessionTarget, SessionStatus } from "@portalcrew/morty-client/protocol";
 
 /**
  * Where the Session's current execution stands. `preparing`: the Session's Agent process is being readied and the

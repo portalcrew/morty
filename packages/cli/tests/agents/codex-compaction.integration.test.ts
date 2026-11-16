@@ -3,7 +3,7 @@ import {
     decodeSessionLiveEvent,
     encodeSessionPromptCommand,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { CodexAgentSpecification } from "../../src/engine/agent/specification/vendors/codex-agent.ts";
 import { CodexFixture } from "../support/agents/codex.ts";

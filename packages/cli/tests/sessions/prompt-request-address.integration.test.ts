@@ -1,12 +1,12 @@
-import { MortyClient, MortyPageRequest, sessionEndpoints, WsTransport } from "@morty-build/client";
+import { MortyClient, MortyPageRequest, sessionEndpoints, WsTransport } from "@portalcrew/morty-client";
 import {
     decodeMessageKind,
     decodeSessionReadyEvent,
     sessionOperationFailedEventCodec,
     sessionPromptAcceptedEventCodec,
     sessionPromptCommandCodec,
-} from "@morty-build/client/protocol";
-import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
+} from "@portalcrew/morty-client/protocol";
+import { prepareTestMortyRelayBindings } from "@portalcrew/morty-relay-test-support/cloudflare";
 import * as v from "valibot";
 import { expect, test, vi } from "vitest";
 import { createControlledAgentRuntime } from "../../../../tests/support/fake-daemon/runtime.ts";

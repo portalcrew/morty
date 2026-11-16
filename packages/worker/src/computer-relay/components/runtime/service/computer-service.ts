@@ -1,4 +1,4 @@
-import { nativeSessionKey, sameNativeSession } from "@morty-build/client/native-session";
+import { nativeSessionKey, sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     COMPUTER_LIVENESS_READY_KIND,
     type ComputerLivenessReadyEvent,
@@ -9,7 +9,7 @@ import {
     type NativeSessionTarget,
     SESSION_EVENT_KIND,
     type SessionEventsSubscribeCommandRouting,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { ComputerStatus } from "../../../../contracts/relay/computer-status.ts";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
 import type { SessionViewerIdentity } from "../../../../contracts/session-event-subscription.ts";

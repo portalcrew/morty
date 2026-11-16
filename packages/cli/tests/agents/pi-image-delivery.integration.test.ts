@@ -6,7 +6,7 @@ import {
     decodeFileBeginEvent,
     decodeMessageKind,
     encodeFileReadCommand,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { PiAgentSpecification } from "../../src/engine/agent/specification/vendors/pi-agent.ts";
 import { imageFixture } from "../support/agents/image-fixture.ts";

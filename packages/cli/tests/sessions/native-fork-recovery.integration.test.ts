@@ -1,11 +1,11 @@
 import { createServer, request } from "node:http";
-import { WsTransport } from "@morty-build/client";
+import { WsTransport } from "@portalcrew/morty-client";
 import {
     nativeSessionCommandCodec,
     nativeSessionResultCodec,
     sessionOperationFailedEventCodec,
-} from "@morty-build/client/protocol";
-import { listen, port } from "@morty-build/relay-test-support/websocket";
+} from "@portalcrew/morty-client/protocol";
+import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
 import { afterEach, expect, onTestFinished, test, vi } from "vitest";
 import { startTestRelay } from "../support/relay.ts";
 import { createFakeAgentHarnessRuntime } from "../support/relay-agent-harness.ts";

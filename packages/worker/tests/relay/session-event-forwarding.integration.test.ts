@@ -5,7 +5,7 @@ import {
     exportE2EPublicKey,
     generateE2EIdentity,
     type PayloadEncryptionConnection,
-} from "@morty-build/client";
+} from "@portalcrew/morty-client";
 import {
     COMPUTER_SUCCESSOR_CREDENTIAL_HEADER,
     computerCredentialSuccessor,
@@ -22,7 +22,7 @@ import {
     sessionPermissionRespondCommandCodec,
     sessionPromptAcceptedEventCodec,
     sessionPromptCommandCodec,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { afterAll, afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { closeBrowserSocket } from "./browser-session.ts";

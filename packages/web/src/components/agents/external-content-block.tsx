@@ -1,4 +1,4 @@
-import { externalContentPath, type MortyExternalContentBlock } from "@morty-build/client";
+import { externalContentPath, type MortyExternalContentBlock } from "@portalcrew/morty-client";
 import { type ReactNode, useMemo } from "react";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";

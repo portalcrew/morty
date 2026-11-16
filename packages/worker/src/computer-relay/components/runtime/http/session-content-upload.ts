@@ -1,4 +1,4 @@
-import type { NativeSessionTarget } from "@morty-build/client/protocol";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { toHttpError } from "../../../../contracts/http-error.ts";
 import type { SessionAccessService } from "../service/session-access-service.ts";
 

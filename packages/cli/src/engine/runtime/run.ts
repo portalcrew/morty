@@ -1,5 +1,5 @@
 import { styleText } from "node:util";
-import { createComputerPayloadEncryption } from "@morty-build/client";
+import { createComputerPayloadEncryption } from "@portalcrew/morty-client";
 import { createRuntimeAdapterRegistry } from "../acp/adapter/adapter-registry.ts";
 import { buildSessionLayer } from "../session/api/session-layer.ts";
 import { LocalExternalContentStore } from "../session/content/external-content-store.ts";

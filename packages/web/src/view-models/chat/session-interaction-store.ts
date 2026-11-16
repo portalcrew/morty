@@ -1,4 +1,4 @@
-import type { SessionElicitationField } from "@morty-build/client/protocol";
+import type { SessionElicitationField } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { AgentDisplayContent } from "../../components/agents/display-content.ts";
 import {

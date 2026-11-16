@@ -19,7 +19,7 @@ import {
     type SessionPermissionOption,
     type SessionPermissionRequestedEvent,
     type SessionPermissionResolvedEvent,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import { normalizeElicitationFields, validateElicitationContent } from "../../acp/protocol/elicitation.ts";
 import type { ProjectedToolCall } from "../../acp/tool-call-projection.ts";

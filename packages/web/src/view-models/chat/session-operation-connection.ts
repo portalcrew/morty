@@ -1,4 +1,4 @@
-import { type MortyClient, MortyConnectionError } from "@morty-build/client";
+import { type MortyClient, MortyConnectionError } from "@portalcrew/morty-client";
 import { connectionReadiness, type SessionConnection } from "./session-connection.ts";
 
 /**

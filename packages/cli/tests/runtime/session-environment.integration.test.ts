@@ -18,7 +18,7 @@ import {
     NATIVE_SESSION_REQUEST_KIND,
     type NativeSessionTarget,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { expect, test, vi } from "vitest";
 import { type WebSocket, WebSocketServer } from "ws";
 import { type RuntimeConfig, RuntimeLocalContext } from "../../src/engine/runtime/config.ts";

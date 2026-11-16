@@ -55,7 +55,7 @@ const run = (command, args, extra = {}) =>
         maxBuffer: 12 * 1024 * 1024,
         ...extra,
     });
-const entry = join(root, "package/node_modules/@morty-build/cli/dist/cli.js");
+const entry = join(root, "package/node_modules/@portalcrew/morty/dist/cli.js");
 const cli = (...args) => run(process.execPath, [entry, ...args]);
 let packageInstalled = false;
 let browser;
@@ -82,7 +82,7 @@ try {
     ]);
     packageInstalled = true;
     const metadata = JSON.parse(
-        await readFile(join(root, "package/node_modules/@morty-build/cli/package.json"), "utf8"),
+        await readFile(join(root, "package/node_modules/@portalcrew/morty/package.json"), "utf8"),
     );
     receipt.version = metadata.version;
     stage("create-real-native-session");

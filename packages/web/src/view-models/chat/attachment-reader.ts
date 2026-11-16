@@ -1,4 +1,4 @@
-import { MAX_PROMPT_ATTACHMENT_BYTES, PROMPT_IMAGE_MAX_BYTES } from "@morty-build/client/protocol";
+import { MAX_PROMPT_ATTACHMENT_BYTES, PROMPT_IMAGE_MAX_BYTES } from "@portalcrew/morty-client/protocol";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
 
 const READ_TIMEOUT_MILLISECONDS = 15_000;

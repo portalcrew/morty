@@ -1,4 +1,4 @@
-import { isIdentifier } from "@morty-build/client/protocol";
+import { isIdentifier } from "@portalcrew/morty-client/protocol";
 import { z } from "zod";
 
 export interface RetiringIdentity {

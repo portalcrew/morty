@@ -4,7 +4,10 @@ import type {
     RequestPermissionResponse,
 } from "@agentclientprotocol/sdk/unstable";
 
-import type { SessionElicitationRequestedEvent, SessionPermissionRequestedEvent } from "@morty-build/client/protocol";
+import type {
+    SessionElicitationRequestedEvent,
+    SessionPermissionRequestedEvent,
+} from "@portalcrew/morty-client/protocol";
 
 export class PendingPermission {
     readonly completion: PromiseWithResolvers<RequestPermissionResponse> =

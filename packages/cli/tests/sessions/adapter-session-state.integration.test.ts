@@ -15,7 +15,7 @@ import {
     encodeSessionPrepareCommand,
     encodeSessionPromptCommand,
     SessionPromptDisposition,
-} from "@morty-build/client/protocol";
+} from "@portalcrew/morty-client/protocol";
 import { afterEach, expect, test, vi } from "vitest";
 import { ControlledAcpSpecification } from "../support/agents/controlled-acp-specification.ts";
 import { waitForAgentFile } from "../support/agents/observed-process.ts";

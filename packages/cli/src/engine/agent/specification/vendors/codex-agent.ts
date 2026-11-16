@@ -1,4 +1,4 @@
-import type { SessionCapabilities } from "@morty-build/client/protocol";
+import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import { createCodexClient } from "../../../acp/adapter/codex/create-client.ts";
 import { CodexAcpAgent } from "../../../acp/harness/codex/agent.ts";
 import { normalizeAcpCapabilities } from "../../../acp/protocol/session-capabilities.ts";

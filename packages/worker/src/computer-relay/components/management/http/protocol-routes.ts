@@ -1,4 +1,4 @@
-import { MORTY_API_PREFIX } from "@morty-build/client/protocol";
+import { MORTY_API_PREFIX } from "@portalcrew/morty-client/protocol";
 import { Hono } from "hono";
 import { rethrowHonoError } from "../../../../http/error-middleware.ts";
 import type { RelayContext } from "../../../composition/relay-services.ts";

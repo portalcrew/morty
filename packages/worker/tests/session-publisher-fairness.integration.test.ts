@@ -1,5 +1,5 @@
-import { MortyClient, WsTransport } from "@morty-build/client";
-import { prepareTestMortyRelayBindings } from "@morty-build/relay-test-support/cloudflare";
+import { MortyClient, WsTransport } from "@portalcrew/morty-client";
+import { prepareTestMortyRelayBindings } from "@portalcrew/morty-relay-test-support/cloudflare";
 import * as v from "valibot";
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { createControlledAgentRuntime } from "../../../tests/support/fake-daemon/runtime.ts";

@@ -1,4 +1,4 @@
-import type { NativeSessionTarget, SessionCapabilities } from "@morty-build/client/protocol";
+import type { NativeSessionTarget, SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import { type NativeSessionOrigin, sessionIdSchema } from "../../acp/protocol/native-session.ts";
 import type { SessionRecovery } from "../api/session-api.ts";

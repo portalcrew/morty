@@ -1,4 +1,4 @@
-import { isComputerCredentialSuccessor } from "@morty-build/client/protocol";
+import { isComputerCredentialSuccessor } from "@portalcrew/morty-client/protocol";
 import { computerPairingStatus, computerRevokedAt } from "../../../../contracts/relay/computer-pairing-state.ts";
 import type {
     AgentDescriptor,
