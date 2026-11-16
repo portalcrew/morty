@@ -4,11 +4,11 @@ import { hostPlatform as platform } from "../../engine/util/platform/index.ts";
 import { readOrCreateControlToken } from "../../storage/daemon/control-token.ts";
 import { controlSocketPath, readSocketMessage } from "./local-client.ts";
 
-export async function serveLocalControl(
+export async function serveLocalControl<Response>(
     stateDirectory: InstallationDirectory,
     signal: AbortSignal,
-    handle: (request: unknown, signal: AbortSignal) => Promise<unknown>,
-    onResponse: (response: unknown) => void = () => undefined,
+    handle: (request: unknown, signal: AbortSignal) => Promise<Response>,
+    onResponse: (response: Response) => void = () => undefined,
 ): Promise<void> {
     signal.throwIfAborted();
     const token = await readOrCreateControlToken(stateDirectory);
