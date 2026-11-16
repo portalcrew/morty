@@ -48,15 +48,14 @@ export const centralSessionStorage = {
 
 const messageDraftSchema = v.pipe(v.string(), v.maxLength(100_000));
 
-export const accessEndedNoticeEntry = stringStorageEntry({
-    key: "morty:access-ended:v1",
-    schema: v.literal("ended"),
+export const accessEndedEntry = jsonStorageEntry({
+    key: "morty:access-ended:v2",
+    schema: v.object({ computerName: v.pipe(v.string(), v.minLength(1), v.maxLength(256)) }),
 });
 
-export const accessEndedComputerEntry = stringStorageEntry({
-    key: "morty:access-ended-computer:v1",
-    schema: v.pipe(v.string(), v.maxLength(256)),
-});
+export function endedComputerName(name: string | undefined): string {
+    return name === undefined || name === "" ? "the previous computer" : name;
+}
 
 const transferRedemptionSchema = v.pipe(
     v.object({

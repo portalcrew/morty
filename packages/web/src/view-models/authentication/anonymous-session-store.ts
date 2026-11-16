@@ -20,9 +20,9 @@ import {
     storedToken,
 } from "../../services/identity/remembered-computers.ts";
 import {
-    accessEndedComputerEntry,
-    accessEndedNoticeEntry,
+    accessEndedEntry,
     centralSessionStorage,
+    endedComputerName,
 } from "../../services/session-storage/central-session-storage.ts";
 import { type Clock, systemClock } from "../../services/time/clock.ts";
 
@@ -198,17 +198,14 @@ export const createAnonymousSessionStore = (
                         activate(identity, entry, null);
                         return;
                     }
-                    let endedName =
-                        centralSessionStorage.read(accessEndedNoticeEntry) === "ended"
-                            ? (centralSessionStorage.read(accessEndedComputerEntry) ?? "the previous computer")
-                            : null;
+                    let endedName = centralSessionStorage.read(accessEndedEntry)?.computerName ?? null;
                     // Only the requested computer gates entry. An unrelated slow
                     // computer must not block a valid recent one.
                     for (const computer of rememberedComputers()) {
                         const check = await api.checkScope(computer.scope, signal);
                         signal.throwIfAborted();
                         if (check.kind === "revoked") {
-                            endedName ??= computer.name || "the previous computer";
+                            endedName ??= endedComputerName(computer.name);
                             continue;
                         }
                         if (check.kind === "gone") {
@@ -217,8 +214,7 @@ export const createAnonymousSessionStore = (
                         const identity = check.identity;
                         const address = new URL(computerAddress(identity, computer.destination), origin);
                         window.history.replaceState(window.history.state, "", address);
-                        centralSessionStorage.remove(accessEndedNoticeEntry);
-                        centralSessionStorage.remove(accessEndedComputerEntry);
+                        centralSessionStorage.remove(accessEndedEntry);
                         activate(
                             identity,
                             "restore",
@@ -228,8 +224,7 @@ export const createAnonymousSessionStore = (
                         );
                         return;
                     }
-                    centralSessionStorage.remove(accessEndedNoticeEntry);
-                    centralSessionStorage.remove(accessEndedComputerEntry);
+                    centralSessionStorage.remove(accessEndedEntry);
                     set({
                         state: {
                             kind: "setup",

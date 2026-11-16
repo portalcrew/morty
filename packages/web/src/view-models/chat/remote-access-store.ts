@@ -9,9 +9,9 @@ import {
     withStoredAccessLock,
 } from "../../services/identity/remembered-computers.ts";
 import {
-    accessEndedComputerEntry,
-    accessEndedNoticeEntry,
+    accessEndedEntry,
     centralSessionStorage,
+    endedComputerName,
 } from "../../services/session-storage/central-session-storage.ts";
 
 type RemoteAccessState =
@@ -76,8 +76,7 @@ export function createRemoteAccessOperations(options: {
                 throw cause;
             }
             signal.throwIfAborted();
-            centralSessionStorage.write(accessEndedNoticeEntry, "ended");
-            centralSessionStorage.write(accessEndedComputerEntry, computer?.name || "the previous computer");
+            centralSessionStorage.write(accessEndedEntry, { computerName: endedComputerName(computer?.name) });
             options.onEnded();
         },
     };
