@@ -140,7 +140,13 @@ for (const delivery of ["before-acceptance", "after-acceptance"] as const) {
             expect(first.elementByTestId(dataTestId.agentConfiguration).textContent).toContain("Test Large");
         });
         if (delivery === "before-acceptance") {
-            await first.user.click(getByRole(document.body, "button", { name: "Retry message with unknown delivery" }));
+            // The reconnect notice hides before the Session finishes reconnecting; retry only once the button allows it.
+            const retry = await first.waitForView(() => {
+                const button = getByRole(document.body, "button", { name: "Retry message with unknown delivery" });
+                expect(button.hasAttribute("disabled")).toBe(false);
+                return button;
+            });
+            await first.user.click(retry);
         }
         await first.waitForView(() =>
             expect(first.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain(
