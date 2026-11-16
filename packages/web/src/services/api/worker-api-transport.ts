@@ -1,5 +1,6 @@
 import {
     type ComputerEncryptionAccess,
+    MortyApiError,
     MortyConnectionError,
     MortyValidationError,
     WsTransport,
@@ -10,6 +11,10 @@ import { storedComputerEncryption } from "../identity/remembered-computers.ts";
 import { systemClock } from "../time/clock.ts";
 import type { ApiResponseSnapshot } from "./api-transport.ts";
 import type { ApiCall } from "./calls/call.ts";
+
+const WATCH_POLL_MILLISECONDS = 5_000;
+const WATCH_BACKOFF_CEILING_MILLISECONDS = 60_000;
+const WATCH_MAX_CONSECUTIVE_FAILURES = 8;
 
 export class ApiConnectionError extends Error {}
 export function isApiConnectionError(error: unknown): error is ApiConnectionError | MortyConnectionError {
@@ -139,6 +144,17 @@ export class WorkerApiTransport {
         }
         const signal = AbortSignal.any([request.signal, this.#lifetime.signal]);
         let baseline = ready ? undefined : this.#baselines.get(this.#key(request));
+        let failures = 0;
+        const failed = async (cause: unknown): Promise<void> => {
+            failures += 1;
+            if (failures >= WATCH_MAX_CONSECUTIVE_FAILURES) {
+                throw new ApiConnectionError("Unable to reach Morty.", { cause });
+            }
+            await systemClock.sleep(
+                Math.min(WATCH_POLL_MILLISECONDS * 2 ** (failures - 1), WATCH_BACKOFF_CEILING_MILLISECONDS),
+                signal,
+            );
+        };
         while (true) {
             signal.throwIfAborted();
             let response: Response;
@@ -153,10 +169,11 @@ export class WorkerApiTransport {
                 if (ready !== undefined) {
                     throw new ApiConnectionError("Unable to reach Morty.", { cause });
                 }
-                await systemClock.sleep(5000, signal);
+                await failed(cause);
                 continue;
             }
             if (response.status < 500 && response.status !== 429) {
+                failures = 0;
                 const body = await response.text();
                 signal.throwIfAborted();
                 const value = `${response.status}\0${body}`;
@@ -172,8 +189,10 @@ export class WorkerApiTransport {
                 baseline = value;
             } else {
                 await response.body?.cancel();
+                await failed(new MortyApiError("service_unavailable", "Morty is unavailable.", response.status));
+                continue;
             }
-            await systemClock.sleep(5000, signal);
+            await systemClock.sleep(WATCH_POLL_MILLISECONDS, signal);
         }
     };
 }

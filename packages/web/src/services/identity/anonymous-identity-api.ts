@@ -1,4 +1,4 @@
-import { MortyApiError } from "@portalcrew/morty-client";
+import { MortyApiError, MortyError } from "@portalcrew/morty-client";
 import * as v from "valibot";
 import type { ApiTransport } from "../api/api-transport.ts";
 import type { ApiRequest } from "../api/calls/call.ts";
@@ -119,6 +119,8 @@ function transferRedemptionKey(code: string): string {
     return key;
 }
 
+const MAX_ACCESS_CHECKS = 5;
+
 export class AnonymousIdentityApi {
     readonly #fetchRequest: ApiTransport["fetch"];
     readonly #origin: string;
@@ -139,7 +141,7 @@ export class AnonymousIdentityApi {
      * replaced.
      */
     readonly checkScope = async (scope: IdentityScope, signal: AbortSignal): Promise<AccessCheck> => {
-        for (;;) {
+        for (let attempt = 0; attempt < MAX_ACCESS_CHECKS; attempt += 1) {
             signal.throwIfAborted();
             const token = storedToken(scope.computerId);
             if (token === null) {
@@ -160,6 +162,7 @@ export class AnonymousIdentityApi {
                 return checked;
             }
         }
+        throw new MortyError("access_check_unsettled", "This browser's access kept changing while it was checked.");
     };
 
     readonly #checkAccess = async (identity: AnonymousIdentity, signal: AbortSignal): Promise<AccessCheck> => {

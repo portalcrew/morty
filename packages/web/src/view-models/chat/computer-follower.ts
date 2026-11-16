@@ -250,13 +250,33 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                             continue;
                         }
                         if (cause instanceof MortyError && cause.code === "computer_revoked") {
-                            await revokedBy(cause.message, signal);
-                            return;
+                            try {
+                                await revokedBy(cause.message, signal);
+                                return;
+                            } catch (waitCause) {
+                                signal.throwIfAborted();
+                                if (!isApiConnectionError(waitCause)) {
+                                    throw waitCause;
+                                }
+                                await clock.sleep(5000, signal);
+                                dropped = true;
+                                continue;
+                            }
                         }
                         if (cause instanceof MortyError && cause.code === "AGENT_REQUIRED") {
                             computer.getState().entryFailed("agent-required", cause.message);
                             settle();
-                            await requests.waitForComputerConfigurationChange(signal);
+                            try {
+                                await requests.waitForComputerConfigurationChange(signal);
+                            } catch (waitCause) {
+                                signal.throwIfAborted();
+                                if (!isApiConnectionError(waitCause)) {
+                                    throw waitCause;
+                                }
+                                await clock.sleep(5000, signal);
+                                dropped = true;
+                                continue;
+                            }
                             signal.throwIfAborted();
                             ports.retry();
                             return;
