@@ -44,12 +44,14 @@ import { sessionDeliveryPresentation } from "./session-delivery-presentation.ts"
 import {
     awaitingMessage,
     type DeliveryPlacement,
+    type DeliveryRecord,
     type DeliveryState,
     deliveryMessages,
     journalMessage,
     type SessionDeliveryStore,
     type SubmitTurn,
     type SubmittedMessage,
+    settledDelivery,
 } from "./session-delivery-store.ts";
 import {
     executionReadBasis,
@@ -210,8 +212,8 @@ interface SessionPaneState extends SessionPaneStore {
 
 function sessionOperationFacts(
     model: Pick<SessionPaneStore, "connection">,
-    execution: Pick<SessionExecutionState, "turn" | "interactions">,
-    delivery: Pick<SessionDeliveryStore, "state">,
+    execution: SessionExecutionState,
+    delivery: DeliveryRecord,
     tasks: Pick<SessionTaskControlsStore, "stopRequest">,
     settings: Pick<SessionSettingsStore, "change">,
     connectionAvailable: boolean,
@@ -222,7 +224,7 @@ function sessionOperationFacts(
         connection: model.connection.kind,
         stopping: stopRequested(tasks, acceptedTurn(execution.turn)),
         configuring: settings.change.kind === "configuring",
-        delivery: delivery.state.kind,
+        delivery: settledDelivery(delivery, execution).state.kind,
         waitingForInput: waitingForInput(execution.interactions),
         ownerRunsTurn: ownerRunsTurn(execution.turn),
         steeringSupported,
@@ -245,7 +247,7 @@ export function sessionPanePresentation(
     model: SessionPaneStore,
     execution: SessionExecutionState,
     composer: Pick<SessionComposerStore, "draft">,
-    delivery: SessionDeliveryStore,
+    recordedDelivery: SessionDeliveryStore,
     tasks: SessionTaskControlsStore,
     queue: SessionMessageQueueStore,
     attachments: ComposerAttachmentStore,
@@ -254,10 +256,11 @@ export function sessionPanePresentation(
     connectionAvailable: boolean,
     steeringSupported: boolean,
 ) {
+    const delivery = settledDelivery(recordedDelivery, execution);
     const facts = sessionOperationFacts(
         model,
         execution,
-        delivery,
+        recordedDelivery,
         tasks,
         settings,
         connectionAvailable,
@@ -470,8 +473,7 @@ export function createSessionPaneModel(options: {
         }
     };
     const submitTurn =
-        (connected: MortyClient | null): SubmitTurn =>
-        async (request, signal) => {
+        (connected: MortyClient | null) => async (request: Parameters<SubmitTurn>[0], signal: AbortSignal) => {
             if (connected === null) {
                 throw new Error("The Session is not connected.");
             }
@@ -488,7 +490,7 @@ export function createSessionPaneModel(options: {
         queuedMessages(
             execution.getState().state.queued,
             messageQueue.getState(),
-            deliveryMessages(delivery.getState()),
+            deliveryMessages(settledDelivery(delivery.getState(), execution.getState().state)),
         ).find((message) => message.commandId === commandId) ?? null;
     const store = createStore<SessionPaneState>()((set, get) => {
         const operationFacts = (): SessionOperationFacts =>
@@ -535,7 +537,6 @@ export function createSessionPaneModel(options: {
                 const admission = await submitTurn(connected)(request, signal);
                 signal.throwIfAborted();
                 execution.getState().apply({ kind: "acknowledged", commandId, admission, startedAt });
-                return admission;
             };
         let historyLoadController: AbortController | null = null;
         const setProjection = (projection: SessionProjection, recorded: readonly string[] = []): void => {
@@ -932,7 +933,7 @@ export function createSessionPaneModel(options: {
                         reconcile: async () => {
                             await dispatchProjection({ kind: "reconcile" }, connected, signal);
                             signal.throwIfAborted();
-                            const submission = delivery.getState().state;
+                            const submission = settledDelivery(delivery.getState(), execution.getState().state).state;
                             await readExecution(
                                 connected,
                                 signal,
@@ -1111,7 +1112,7 @@ export function createSessionPaneModel(options: {
                 delivery.getState().discardUnknown();
             },
             retryUnknownDelivery: async () => {
-                const state = delivery.getState().state;
+                const state = settledDelivery(delivery.getState(), execution.getState().state).state;
                 if (state.kind !== "delivery-unknown" || !canRetryUnknownDelivery(operationFacts())) {
                     return;
                 }

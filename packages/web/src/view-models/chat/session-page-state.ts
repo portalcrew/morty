@@ -11,7 +11,7 @@ import {
 import type { Clock } from "../../services/time/clock.ts";
 import { createSessionComposerStore, type SessionComposerStore } from "./session-composer-store.ts";
 import { createSessionDeliveryStore, type SessionDeliveryStore } from "./session-delivery-store.ts";
-import { createSessionExecutionStore, pendingQuestionIds, type SessionExecutionStore } from "./session-execution.ts";
+import { createSessionExecutionStore, pendingQuestions, type SessionExecutionStore } from "./session-execution.ts";
 import { createSessionInteractionStore, type SessionInteractionStore } from "./session-interaction-store.ts";
 import { createSessionMessageQueueStore, type SessionMessageQueueStore } from "./session-message-queue-store.ts";
 import { createSessionOperationConnection, type SessionOperationConnection } from "./session-operation-connection.ts";
@@ -87,7 +87,6 @@ export function createSessionPageState(options: {
     const queue = createSessionMessageQueueStore({
         sessionTarget,
         connection,
-        withdrawn: (commandId) => delivery.getState().withdraw(commandId),
         failed,
         returned: (message) => {
             // The queued message was written first, so it goes ahead of a draft the user started since.
@@ -126,16 +125,9 @@ export function createSessionPageState(options: {
                 centralSessionStorage.write(answerDraftsEntry, Object.fromEntries(drafts));
             }
         },
+        pendingQuestions: () => pendingQuestions(execution.getState().state),
     });
-    const execution = createSessionExecutionStore({
-        changed: (previous, next) => {
-            delivery.getState().observe();
-            // Drafts follow the questions the Computer's account leaves pending, not those a pane opened without.
-            if (next.interactions !== previous.interactions && next.coverage.kind === "covered") {
-                interactions.getState().questionsChanged(pendingQuestionIds(next.interactions));
-            }
-        },
-    });
+    const execution = createSessionExecutionStore();
     return {
         userMessageCollapse: createUserMessageCollapseStore(),
         lifetime: options.lifetime,

@@ -4,7 +4,6 @@ import {
     type MortyClient,
     MortyError,
     MortyOperationError,
-    type MortyTurnAdmission,
     MortyValidationError,
 } from "@portalcrew/morty-client";
 import type { PromptAttachment } from "@portalcrew/morty-client/protocol";
@@ -13,18 +12,23 @@ import type { ComposerAttachment } from "../../components/chat/composer-attachme
 import { CloudApiError } from "../../services/management/management-api.ts";
 import { SessionStorageWriteError } from "../../services/session-storage/central-session-storage.ts";
 import { formatError } from "../format-error.ts";
-import { runtimeCoversMessage, runtimeHoldsCommand, type SessionExecutionState } from "./session-execution.ts";
+import {
+    admittedPlacement,
+    runtimeCoversMessage,
+    runtimeHoldsCommand,
+    type SessionExecutionState,
+} from "./session-execution.ts";
 
 type SubmitRequest = Parameters<MortyClient["turns"]["submit"]>[1];
-export type SubmitTurn = (request: SubmitRequest, signal: AbortSignal) => Promise<MortyTurnAdmission>;
+export type SubmitTurn = (request: SubmitRequest, signal: AbortSignal) => Promise<void>;
 interface DeliveryAttempt {
     readonly prepare: (message: SubmittedMessage, signal: AbortSignal) => Promise<Journal["request"]>;
     readonly submit: SubmitTurn;
 }
 /**
  * Where this page shows a message: as the Session's next turn, or in its queue. Sending decides it from whether a
- * turn runs; once the service answers, the Computer's admission decides it. It never changes what is submitted: the
- * Computer alone admits a message, running it now or queueing it.
+ * turn runs; once the service answers, the admission the execution state holds decides it. It never changes what is
+ * submitted: the Computer alone admits a message, running it now or queueing it.
  */
 export type DeliveryPlacement = "turn" | "queue";
 
@@ -111,9 +115,7 @@ export function awaitingMessage(state: DeliveryState): SubmittedMessage | null {
 }
 
 /** The submitted intent and files have one owner through preparation, admission and queueing. */
-export function deliveryMessages(
-    delivery: Pick<SessionDeliveryStore, "state" | "accepted">,
-): readonly SubmittedMessage[] {
+export function deliveryMessages(delivery: DeliveryRecord): readonly SubmittedMessage[] {
     const accepted = delivery.accepted;
     const state = delivery.state;
     switch (state.kind) {
@@ -132,16 +134,49 @@ export function deliveryMessages(
     }
 }
 
+/**
+ * What delivery recorded, not what the page shows: a delivery the Computer already holds is still unknown here, and
+ * accepted messages the Computer's account covers still sit in the list. Read it through `settledDelivery`.
+ */
 export interface SessionDeliveryStore {
     readonly state: DeliveryState;
     readonly accepted: readonly SubmittedMessage[];
     readonly discardUnknown: () => void;
     readonly awaitConnection: (message: SubmittedMessage) => void;
     readonly takeFailedMessage: () => SubmittedMessage | null;
-    readonly observe: () => void;
-    readonly withdraw: (commandId: string) => void;
     readonly send: (message: SubmittedMessage, attempt: DeliveryAttempt) => Promise<void>;
     readonly retry: (submit: SubmitTurn) => Promise<void>;
+}
+
+export type DeliveryRecord = Pick<SessionDeliveryStore, "state" | "accepted">;
+
+/**
+ * Delivery as the Computer's account leaves it. An unknown delivery the Computer holds was delivered: it is idle, or
+ * accepted when it waits in the queue. An accepted message the Computer's account covers is dropped, which releases
+ * the files the page kept for editing it; nothing reads them once the account shows the message.
+ */
+export function settledDelivery(delivery: DeliveryRecord, runtime: SessionExecutionState): DeliveryRecord {
+    const { state } = delivery;
+    const settled: DeliveryRecord =
+        state.kind === "delivery-unknown" && runtimeHoldsCommand(runtime, state.journal.commandId)
+            ? {
+                  state: { kind: "idle" },
+                  accepted:
+                      admittedPlacement(runtime, state.journal) === "queue"
+                          ? [
+                                ...delivery.accepted.filter((message) => message.commandId !== state.journal.commandId),
+                                journalMessage(state.journal),
+                            ]
+                          : delivery.accepted,
+              }
+            : delivery;
+    return {
+        state: settled.state,
+        accepted: settled.accepted.flatMap((message) => {
+            const resolved = { ...message, placement: admittedPlacement(runtime, message) };
+            return runtimeCoversMessage(runtime, resolved) ? [] : [resolved];
+        }),
+    };
 }
 
 function pendingSubmission(state: DeliveryState): {
@@ -215,108 +250,70 @@ export const createSessionDeliveryStore = (options: {
     readonly unsentMessageChanged: (content: string | null) => void;
     readonly runtime: () => SessionExecutionState;
 }) => {
-    type Update = {
-        readonly state: DeliveryState;
-        readonly accepted?: readonly SubmittedMessage[];
-    };
-    /**
-     * The accepted messages the Computer's account does not cover yet. The presentation decides what the page shows;
-     * dropping covered messages only releases their files, which nothing reads once the Computer's account shows them.
-     */
-    const uncovered = (accepted: readonly SubmittedMessage[]): readonly SubmittedMessage[] => {
-        const runtime = options.runtime();
-        return accepted.filter((message) => !runtimeCoversMessage(runtime, message));
-    };
-    const accept = (journal: Journal, placement: DeliveryPlacement, current: SessionDeliveryStore): Update => ({
-        state: { kind: "idle" },
-        accepted: [
-            ...current.accepted.filter((message) => message.commandId !== journal.commandId),
-            { ...journalMessage(journal), placement },
-        ],
-    });
-    const confirm = (
-        journal: Journal,
-        placement: DeliveryPlacement,
-        set: (update: Update) => void,
-        get: () => SessionDeliveryStore,
-    ): void => {
-        set(accept(journal, placement, get()));
-    };
     const delivered = (journal: Journal): boolean => runtimeHoldsCommand(options.runtime(), journal.commandId);
-    const send = async (
-        journal: Journal,
-        submit: SubmitTurn,
-        signal: AbortSignal,
-        set: (state: Update) => void,
-        get: () => SessionDeliveryStore,
-    ): Promise<void> => {
-        try {
-            set({ state: { kind: "submitting", journal } });
-        } catch (cause) {
-            // The request could not be saved, so it cannot be recovered after a reload: it does not leave the browser.
-            if (!(cause instanceof SessionStorageWriteError)) {
-                throw cause;
-            }
-            set({
-                state: {
-                    kind: "preparation-failed",
-                    message: journalMessage(journal),
-                    failure: submissionFailure(cause, cause.message),
-                },
-            });
-            return;
-        }
-        try {
-            const admission = await submit(
-                {
-                    ...journal.request,
-                    idempotencyKey: journal.commandId,
-                },
-                signal,
-            );
-            signal.throwIfAborted();
-            confirm(journal, admission === "queued" ? "queue" : "turn", set, get);
-        } catch (cause) {
-            if (signal.aborted || cause instanceof MortyCancellationError) {
-                // The Session's lifetime on this page ended first. Losing the attempt's connection does not discard
-                // its submitted intent: what the service confirmed stays, the rest is unknown for the next page.
-                const state = get().state;
-                if (state.kind === "submitting" && delivered(journal)) {
-                    if (journal.placement === "queue") {
-                        confirm(journal, journal.placement, set, get);
-                    } else {
-                        set({ state: { kind: "idle" } });
-                    }
-                } else if (state.kind === "submitting") {
-                    set({ state: { kind: "delivery-unknown", journal } });
-                }
-                throw cause;
-            }
-            if (isAuthoritativeFailure(cause)) {
-                set({
-                    state: { kind: "failed", journal, failure: submissionFailure(cause, "The message was rejected.") },
-                });
-                return;
-            }
-            const state = get().state;
-            // A command the Computer already started will not run again: it holds the message, whatever the page saw.
-            const applied = cause instanceof MortyOperationError && cause.outcome === "applied";
-            if (state.kind === "submitting" && (applied || delivered(journal))) {
-                confirm(journal, journal.placement, set, get);
-                return;
-            }
-            set({ state: { kind: "delivery-unknown", journal } });
-        }
-    };
     return createStore<SessionDeliveryStore>()((setState, get) => {
-        const set = (update: Update): void => {
-            const state = update.state;
+        // Each transition starts from the settled record, so it is where the files of covered messages are released and
+        // where the saved request of a delivery the Computer holds is replaced. Until then the saved request stays: a
+        // reload sends it again under the same identity, which the Computer holds already.
+        const settled = (): DeliveryRecord => settledDelivery(get(), options.runtime());
+        const set = (state: DeliveryState, accepted: readonly SubmittedMessage[] = settled().accepted): void => {
             const pending = pendingSubmission(state);
             if (pending?.commandId !== pendingSubmission(get().state)?.commandId) {
                 options.pendingSubmissionChanged(pending);
             }
             options.unsentMessageChanged(unsentContent(state));
-            setState(update);
+            setState({ state, accepted });
+        };
+        const confirm = (journal: Journal): void => {
+            set({ kind: "idle" }, [
+                ...settled().accepted.filter((message) => message.commandId !== journal.commandId),
+                journalMessage(journal),
+            ]);
+        };
+        const attempt = async (journal: Journal, submit: SubmitTurn, signal: AbortSignal): Promise<void> => {
+            try {
+                set({ kind: "submitting", journal });
+            } catch (cause) {
+                // The request could not be saved, so it cannot be recovered after a reload: it does not leave the browser.
+                if (!(cause instanceof SessionStorageWriteError)) {
+                    throw cause;
+                }
+                set({
+                    kind: "preparation-failed",
+                    message: journalMessage(journal),
+                    failure: submissionFailure(cause, cause.message),
+                });
+                return;
+            }
+            try {
+                await submit({ ...journal.request, idempotencyKey: journal.commandId }, signal);
+                signal.throwIfAborted();
+                confirm(journal);
+            } catch (cause) {
+                if (signal.aborted || cause instanceof MortyCancellationError) {
+                    // The Session's lifetime on this page ended first. Losing the attempt's connection does not discard
+                    // its submitted intent: what the service confirmed stays, the rest is unknown for the next page.
+                    if (get().state.kind === "submitting") {
+                        set({ kind: "delivery-unknown", journal });
+                    }
+                    throw cause;
+                }
+                if (isAuthoritativeFailure(cause)) {
+                    set({
+                        kind: "failed",
+                        journal,
+                        failure: submissionFailure(cause, "The message was rejected."),
+                    });
+                    return;
+                }
+                // A command the Computer already started will not run again: it holds the message, whatever the page saw.
+                const applied = cause instanceof MortyOperationError && cause.outcome === "applied";
+                if (get().state.kind === "submitting" && (applied || delivered(journal))) {
+                    confirm(journal);
+                    return;
+                }
+                set({ kind: "delivery-unknown", journal });
+            }
         };
         return {
             state:
@@ -325,67 +322,50 @@ export const createSessionDeliveryStore = (options: {
                     : { kind: "delivery-unknown", journal: { ...options.pendingSubmission, attachments: null } },
             accepted: [],
             discardUnknown: () => {
-                if (get().state.kind === "delivery-unknown") {
-                    set({ state: { kind: "idle" } });
+                if (settled().state.kind === "delivery-unknown") {
+                    set({ kind: "idle" });
                 }
             },
-            awaitConnection: (message) => set({ state: { kind: "awaiting-connection", message } }),
+            awaitConnection: (message) => set({ kind: "awaiting-connection", message }),
             takeFailedMessage: () => {
                 const failed = failedSubmission(get().state);
                 if (failed !== null) {
-                    set({ state: { kind: "idle" } });
+                    set({ kind: "idle" });
                 }
                 return failed?.message ?? null;
             },
-            observe: () => {
-                const current = get();
-                const state = current.state;
-                const confirmed: Update =
-                    state.kind === "delivery-unknown" && delivered(state.journal)
-                        ? state.journal.placement === "queue"
-                            ? accept(state.journal, state.journal.placement, current)
-                            : { state: { kind: "idle" } }
-                        : { state };
-                const accepted = uncovered(confirmed.accepted ?? current.accepted);
-                if (confirmed.state === state && accepted.length === current.accepted.length) {
-                    return;
-                }
-                set({ ...confirmed, accepted });
-            },
-            withdraw: (commandId) => {
-                setState({ accepted: get().accepted.filter((message) => message.commandId !== commandId) });
-            },
-            send: async (message, attempt) => {
+            send: async (message, delivery) => {
                 const signal = options.lifetime;
-                set({ state: { kind: "preparing", message } });
+                set({ kind: "preparing", message });
                 let request: Journal["request"];
                 try {
-                    request = await attempt.prepare(message, signal);
+                    request = await delivery.prepare(message, signal);
                     signal.throwIfAborted();
                 } catch (cause) {
                     signal.throwIfAborted();
                     set({
-                        state: {
-                            kind: "preparation-failed",
-                            message,
-                            failure: submissionFailure(cause, "The agent could not complete the message."),
-                        },
+                        kind: "preparation-failed",
+                        message,
+                        failure: submissionFailure(cause, "The agent could not complete the message."),
                     });
                     return;
                 }
-                const journal: Journal = {
-                    commandId: message.commandId,
-                    placement: message.placement,
-                    request,
-                    attachments: message.attachments.kind === "local" ? message.attachments.values : null,
-                };
-                await send(journal, attempt.submit, signal, set, get);
+                await attempt(
+                    {
+                        commandId: message.commandId,
+                        placement: message.placement,
+                        request,
+                        attachments: message.attachments.kind === "local" ? message.attachments.values : null,
+                    },
+                    delivery.submit,
+                    signal,
+                );
             },
             // Only an unknown delivery repeats its identity; the Computer never runs a rejected command identity again.
             retry: async (submit) => {
-                const state = get().state;
+                const { state } = settled();
                 if (state.kind === "delivery-unknown") {
-                    await send(state.journal, submit, options.lifetime, set, get);
+                    await attempt(state.journal, submit, options.lifetime);
                 }
             },
         };

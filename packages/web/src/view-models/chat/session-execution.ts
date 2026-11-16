@@ -96,6 +96,8 @@ interface RuntimeCommand {
     readonly learnedAt: number;
     readonly shown: boolean;
     readonly ended: boolean;
+    /** What the Computer answered when this page submitted the command; null for a command it learned of otherwise. */
+    readonly admission: MortyTurnAdmission | null;
 }
 
 type ExecutionCoverage =
@@ -149,7 +151,7 @@ function learn(
     for (const commandId of commandIds) {
         const current = commands ?? state.commands;
         const known = current.get(commandId);
-        const base = known ?? { learnedAt: current.size, shown: false, ended: false };
+        const base = known ?? { learnedAt: current.size, shown: false, ended: false, admission: null };
         const next = fact === "shows" ? { ...base, shown: true } : fact === "ended" ? { ...base, ended: true } : base;
         if (known !== undefined && next.shown === known.shown && next.ended === known.ended) {
             continue;
@@ -158,6 +160,15 @@ function learn(
         commands.set(commandId, next);
     }
     return commands === null ? state : { ...state, commands };
+}
+
+function admit(state: SessionExecutionState, commandId: string, admission: MortyTurnAdmission): SessionExecutionState {
+    const learned = learn(state, [commandId], "holds");
+    const command = learned.commands.get(commandId);
+    if (command === undefined || command.admission === admission) {
+        return learned;
+    }
+    return { ...learned, commands: new Map(learned.commands).set(commandId, { ...command, admission }) };
 }
 
 function commandEnded(state: Pick<SessionExecutionState, "commands">, commandId: string): boolean {
@@ -441,7 +452,7 @@ function applyExecutionFact(state: SessionExecutionState, fact: SessionExecution
         case "read":
             return applyRead(state, fact);
         case "acknowledged": {
-            const known = learn(state, [fact.commandId], "holds");
+            const known = admit(state, fact.commandId, fact.admission);
             // Only a message the Computer started running is a turn. A queued one starts none yet, and a settled one
             // ended before this answer, its outcome is the Session's account; a terminal live event can also precede
             // the answer, and the turn it ended stays ended.
@@ -488,6 +499,21 @@ export function runtimeHoldsCommand(state: SessionExecutionState, commandId: str
 }
 
 /**
+ * Where the Computer admitted a message. Its answer to this page's submission decides; until it answers, the placement
+ * the page expected stands.
+ */
+export function admittedPlacement(
+    state: SessionExecutionState,
+    message: { readonly commandId: string; readonly placement: DeliveryPlacement },
+): DeliveryPlacement {
+    const admission = state.commands.get(message.commandId)?.admission ?? null;
+    if (admission === null) {
+        return message.placement;
+    }
+    return admission === "queued" ? "queue" : "turn";
+}
+
+/**
  * Whether the Computer's own account now shows a message the service accepted, so the page no longer needs its copy.
  * A message that runs as a turn is covered once the timeline shows it; history names each turn's command. A message
  * shown in the queue keeps its files there until it starts or a read that could see it no longer lists it.
@@ -503,7 +529,7 @@ export function runtimeCoversMessage(
     if (command.shown) {
         return true;
     }
-    if (message.placement === "turn") {
+    if (admittedPlacement(state, message) === "turn") {
         return false;
     }
     return (
@@ -514,7 +540,12 @@ export function runtimeCoversMessage(
     );
 }
 
-export function pendingQuestionIds(interactions: readonly SessionInteraction[]): ReadonlySet<string> {
+/** The questions the Computer's account leaves pending, or null while this page has no account of them yet. */
+export function pendingQuestions(state: SessionExecutionState): ReadonlySet<string> | null {
+    return state.coverage.kind === "covered" ? pendingQuestionIds(state.interactions) : null;
+}
+
+function pendingQuestionIds(interactions: readonly SessionInteraction[]): ReadonlySet<string> {
     return new Set(
         interactions.flatMap((interaction) =>
             interaction.kind === "elicitation" && interaction.elicitation.state.kind === "pending"
@@ -579,9 +610,7 @@ export interface SessionExecutionStore {
     readonly apply: (fact: SessionExecutionFact) => readonly SessionExecutionEffect[];
 }
 
-export function createSessionExecutionStore(ports: {
-    readonly changed: (previous: SessionExecutionState, next: SessionExecutionState) => void;
-}) {
+export function createSessionExecutionStore() {
     return createStore<SessionExecutionStore>()((set, get) => ({
         state: initialSessionExecution,
         apply: (fact) => {
@@ -589,7 +618,6 @@ export function createSessionExecutionStore(ports: {
             const { state, effects } = applyExecutionFact(previous, fact);
             if (state !== previous) {
                 set({ state });
-                ports.changed(previous, state);
             }
             return effects;
         },
