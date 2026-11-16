@@ -104,6 +104,9 @@ export class LocalComputerService {
             async (computer, signal) => {
                 const started = performance.now();
                 const reply = await computer.clientControl(command, signal);
+                if (reply.kind === "session.operation.failed") {
+                    return reply;
+                }
                 const computerLatencyMs = Math.max(0, Math.round(performance.now() - started));
                 return { computerLatencyMs, reply };
             },

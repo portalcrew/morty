@@ -9,6 +9,7 @@ import {
     decodeZodMessage as decodeRoutingZodMessage,
     encryptedFieldSchema,
     ProtocolMessageError,
+    parseJson,
 } from "../../shared/message-codec.ts";
 import { promptDelegationStageSchema } from "../events/index.ts";
 import {
@@ -17,7 +18,7 @@ import {
     sessionPermissionRequestedEventSchema,
 } from "../interactions/index.ts";
 import { sessionReadyBodySchema } from "../lifecycle/index.ts";
-import { promptAttachmentSchema } from "../prompt/commands.ts";
+import { promptAttachmentReplySchema } from "../prompt/commands.ts";
 import { sessionCapabilitiesSchema } from "../shared/index.ts";
 import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
 
@@ -98,7 +99,7 @@ const agentDirectory = {
 
 const nativeSessionCommandSchema = z.discriminatedUnion("action", [
     z
-        .object({
+        .strictObject({
             ...requestEnvelope,
             action: z.literal("active-turn"),
             // Asks the Computer for this command's delivery alongside the execution snapshot. It is not
@@ -107,21 +108,16 @@ const nativeSessionCommandSchema = z.discriminatedUnion("action", [
             target: nativeSessionTargetSchema,
         })
         .readonly(),
-    z.object({ ...agentDirectory, action: z.literal("find"), sessionId: identifier }).readonly(),
+    z.strictObject({ ...agentDirectory, action: z.literal("find"), sessionId: identifier }).readonly(),
     z
-        .object({
+        .strictObject({
             ...agentDirectory,
             action: z.literal("list"),
             cursor: identifier.nullable(),
         })
         .readonly(),
-    z
-        .object({
-            ...agentDirectory,
-            action: z.enum(["import", "fork"]),
-            sessionId: identifier,
-        })
-        .readonly(),
+    z.strictObject({ ...agentDirectory, action: z.literal("import"), sessionId: identifier }).readonly(),
+    z.strictObject({ ...agentDirectory, action: z.literal("fork"), sessionId: identifier }).readonly(),
 ]);
 export type NativeSessionCommand = z.infer<typeof nativeSessionCommandSchema>;
 
@@ -150,7 +146,7 @@ const executionReadFields = {
                 .object({
                     commandId: identifier,
                     prompt: z.string().max(100_000),
-                    attachments: z.array(promptAttachmentSchema).max(16).readonly(),
+                    attachments: z.array(promptAttachmentReplySchema).max(16).readonly(),
                 })
                 .readonly(),
         )
@@ -204,7 +200,16 @@ const nativeSessionResultSchema = z.union([
     z
         .object({
             ...resultEnvelope,
-            action: z.enum(["import", "fork"]),
+            action: z.literal("import"),
+            target: nativeSessionTargetSchema,
+            ready: sessionReadyBodySchema,
+            title: z.string().max(500),
+        })
+        .readonly(),
+    z
+        .object({
+            ...resultEnvelope,
+            action: z.literal("fork"),
             target: nativeSessionTargetSchema,
             ready: sessionReadyBodySchema,
             title: z.string().max(500),
@@ -301,7 +306,8 @@ function decodeNativeListCommand(encoded: string) {
 }
 
 function decodeTargetedNativeSessionCommand(encoded: string) {
-    const message = decodeNativeSessionCommand(encoded);
+    const { target: _target, ...fields } = parseJson(encoded);
+    const message = decodeNativeSessionCommand(JSON.stringify(fields));
     if (message.action === "active-turn" || message.action === "list") {
         throw new ProtocolMessageError("Native session request does not match its route");
     }

@@ -1,11 +1,10 @@
 import { fileURLToPath } from "node:url";
-import { MortyClient, MortyPageRequest, WsTransport } from "@portalcrew/morty-client";
+import { MortyClient, MortyConnectionError, MortyPageRequest, WsTransport } from "@portalcrew/morty-client";
 import type { SessionConfigurationSelection } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { afterEach, test as baseTest, beforeEach, expect, onTestFinished, vi } from "vitest";
 import type { ControlledAgent } from "../../../tests/support/fake-daemon/runtime.ts";
 import { createOwnerApi } from "../../../tests/support/owner-api.ts";
-import { ApiConnectionError } from "../../web/src/services/api/worker-api-transport.ts";
 import worker, { fetchPublicApplication } from "../src/worker/application.ts";
 import { APP_ORIGIN, AUTH_TIME, createIdentityFixture } from "./support/identity-fixture.ts";
 
@@ -92,7 +91,7 @@ test("Given an archived conversation, When the original creation request is retr
     await fixture.runtime.api.archiveManagedSession(target, signal);
     expect(await fixture.runtime.api.managedSessions(signal)).toEqual([]);
     const refusedBeforeReplay = fixture.runtime.api.managedSession(target, signal);
-    await expect(refusedBeforeReplay).rejects.toMatchObject({ code: "NOT_FOUND", status: null });
+    await expect(refusedBeforeReplay).rejects.toMatchObject({ code: "session_not_found" });
     await expect(refusedBeforeReplay).rejects.toThrow(
         'This session is not in Morty Recent sessions. If you closed it in Morty, use "Open Session" to import or fork it again.',
     );
@@ -101,8 +100,7 @@ test("Given an archived conversation, When the original creation request is retr
     });
     expect(await fixture.runtime.api.managedSessions(signal)).toEqual([]);
     await expect(fixture.runtime.api.managedSession(target, signal)).rejects.toMatchObject({
-        code: "NOT_FOUND",
-        status: null,
+        code: "session_not_found",
     });
 });
 
@@ -336,7 +334,7 @@ test("Given the answer to a new conversation's Session creation is lost, When th
     const input = { harness: "codex", workspaceRef: ".", workspaceLabel: ".", configurations: [] };
     const lost = cloud.network.interruptNextSessionCreation();
     await expect(owner.api.createConversation("lost-creation", input, signal)).rejects.toBeInstanceOf(
-        ApiConnectionError,
+        MortyConnectionError,
     );
     expect(await lost).toBe(200);
     const listed = async () => await owner.api.managedSessions(signal);
@@ -401,7 +399,7 @@ test("Given a new conversation whose Session creation never reached the Computer
     };
     cloud.network.dropNextSessionCreation();
     await expect(owner.api.createConversation("dropped-creation", input, signal)).rejects.toBeInstanceOf(
-        ApiConnectionError,
+        MortyConnectionError,
     );
     const listed = async () => await owner.api.managedSessions(signal);
     expect(await listed()).toEqual([]);
@@ -521,29 +519,14 @@ test("Given an imported native session, When its owner closes and explicitly imp
     await using fixture = await createChatFixture(cloud, undefined, new Set([nativeId]));
     await fixture.runtime.api.verifyAgent("codex", signal);
     const identity = { harness: "codex", directory: "." };
-    const listed = await fixture.runtime.api.nativeSessions(
-        {
-            ...identity,
-            action: "list",
-            cursor: null,
-        },
-        signal,
-    );
-    if (listed.action !== "list") {
-        throw new Error("Expected native session list");
-    }
+    const listed = await fixture.runtime.api.nativeSessions({ ...identity, cursor: null }, signal);
     const entry = v.parse(v.object({ directory: v.string(), sessionId: v.string() }), listed.entries[0]);
     const sessionId = entry.sessionId;
-    const input = { ...identity, directory: entry.directory, action: "import", sessionId } satisfies Parameters<
-        typeof fixture.runtime.api.nativeSessions
-    >[0];
-    const first = await fixture.runtime.api.nativeSessions(input, signal);
-    if (first.action !== "import") {
-        throw new Error("Expected imported Session");
-    }
+    const input = { ...identity, directory: entry.directory, sessionId };
+    const first = await fixture.runtime.api.importNativeSession(input, signal);
     await fixture.runtime.api.archiveManagedSession(first.target, signal);
     expect(await fixture.runtime.api.managedSessions(signal)).toEqual([]);
-    const second = await fixture.runtime.api.nativeSessions(input, signal);
+    const second = await fixture.runtime.api.importNativeSession(input, signal);
     expect(second).toMatchObject({ target: first.target });
     const handoff = await fixture.runtime.api.continueNativeSession("codex", nativeId, signal);
     expect(handoff).toMatchObject({ target: first.target });
@@ -579,7 +562,7 @@ test("Given a Session the Computer holds with a running turn, When its owner arc
     await fixture.runtime.api.archiveManagedSession(target, signal);
     expect(await fixture.runtime.api.managedSessions(signal)).toEqual([]);
     const reopened = fixture.runtime.api.managedSession(target, signal);
-    await expect(reopened).rejects.toMatchObject({ code: "NOT_FOUND", status: null });
+    await expect(reopened).rejects.toMatchObject({ code: "session_not_found" });
     await expect(reopened).rejects.toThrow(
         'This session is not in Morty Recent sessions. If you closed it in Morty, use "Open Session" to import or fork it again.',
     );
@@ -593,30 +576,16 @@ test("Given an archived native Session, When its owner opens it again from the A
     const nativeId = crypto.randomUUID();
     await using fixture = await createChatFixture(cloud, undefined, new Set([nativeId]));
     await fixture.runtime.api.verifyAgent("codex", signal);
-    const listed = await fixture.runtime.api.nativeSessions(
-        { action: "list", harness: "codex", directory: ".", cursor: null },
-        signal,
-    );
-    if (listed.action !== "list") {
-        throw new Error("Expected native sessions");
-    }
+    const listed = await fixture.runtime.api.nativeSessions({ harness: "codex", directory: ".", cursor: null }, signal);
     const nativeSession = listed.entries.find((entry) => entry.sessionId === nativeId);
     if (nativeSession === undefined) {
         throw new Error("Expected native session");
     }
     const open = async () => {
-        const result = await fixture.runtime.api.nativeSessions(
-            {
-                action: "import",
-                harness: "codex",
-                directory: nativeSession.directory,
-                sessionId: nativeId,
-            },
+        const result = await fixture.runtime.api.importNativeSession(
+            { harness: "codex", directory: nativeSession.directory, sessionId: nativeId },
             signal,
         );
-        if (result.action !== "import") {
-            throw new Error("Expected imported Session");
-        }
         return result.target;
     };
     const target = await open();

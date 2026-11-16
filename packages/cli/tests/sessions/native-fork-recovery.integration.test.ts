@@ -49,7 +49,6 @@ test.for(["request", "result"] as const)(
         await connected.promise;
         await runtime.api.nativeSessions(
             {
-                action: "list",
                 harness: "claude",
                 directory: ".",
                 cursor: null,

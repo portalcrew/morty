@@ -101,17 +101,7 @@ it("Given two harnesses own the same native session ID without prior discovery, 
         const imported = new Map<string, string>();
         for (const harness of ["claude", "codex"]) {
             const workspace = { harness: harness, directory: "." };
-            const opened = await runtime.api.nativeSessions(
-                {
-                    ...workspace,
-                    action: "import",
-                    sessionId,
-                },
-                signal,
-            );
-            if (opened.action !== "import") {
-                throw new Error("Expected native session import");
-            }
+            const opened = await runtime.api.importNativeSession({ ...workspace, sessionId }, signal);
             imported.set(harness, opened.target.sessionId);
         }
         for (const harness of ["claude", "codex"]) {
@@ -128,7 +118,7 @@ it("Given two harnesses own the same native session ID without prior discovery, 
                 },
                 signal,
             ),
-        ).rejects.toMatchObject({ code: "NOT_FOUND" });
+        ).rejects.toMatchObject({ code: "session_not_found" });
     } finally {
         vi.useRealTimers();
     }

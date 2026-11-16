@@ -219,9 +219,11 @@ test("Given a newly created native Session, When its first Turn resolves interac
         });
         await socket.send(
             encodeSessionPermissionRespondCommand({
-                ...repeatedAnswer,
+                interactionId: permission.interactionId,
+                kind: "session.permission.respond",
                 requestId: "conflicting-permission",
                 outcome: "cancelled",
+                target: sessionTarget,
             }),
         );
         expect(decodeSessionOperationFailedEvent(await messages.nextKind("session.operation.failed"))).toMatchObject({

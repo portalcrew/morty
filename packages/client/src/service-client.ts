@@ -14,14 +14,16 @@ import {
     type PromptAttachment,
     ProtocolMessageError,
     SESSION_CLOSED_ERROR_CODE,
+    SESSION_OPERATION_FAILED_KIND,
     type SessionConfigurationSelection,
     type SessionEventLogPage,
     type SessionExecution,
     type SessionLiveEventBatch,
     type SessionOperationFailedEvent,
     SessionPromptDisposition,
+    type UnsupportedSessionEntry,
 } from "@portalcrew/morty-client/protocol";
-import type { MortyTransportEndpoint } from "./calls/call.ts";
+import type { MortyOperationEndpoint } from "./calls/call.ts";
 import { sessionEndpoints } from "./calls/session.ts";
 import type { ComputerEncryptionAccess, PayloadDecryptor } from "./encryption.ts";
 import {
@@ -89,6 +91,7 @@ import {
     sessionTurnStoppedEventCodec,
     sessionTurnWithdrawnEventCodec,
 } from "./protocol/session/prompt/commands.ts";
+import { parseJson } from "./protocol/shared/message-codec.ts";
 import type {
     MortyInteractionResponseRequest,
     MortyPageRequest,
@@ -126,17 +129,12 @@ function connectionCauseMessages(cause: unknown): readonly string[] {
 
 export interface MortyCredentialProvider {
     readonly credential: (signal: AbortSignal) => Promise<string>;
+    readonly replacement?: (rejected: string, signal: AbortSignal) => Promise<string | null>;
 }
 
 export type UpdateMortySessionConfigurationRequest = SessionConfigurationSelection & {
     readonly expectedConfigurationRevision: string;
 };
-
-export interface ForkMortyNativeSessionRequest {
-    readonly harness: string;
-    readonly sessionId: string;
-    readonly directory: string;
-}
 
 export type MortyExternalContentBlock =
     | ExternalImageContentBlock
@@ -182,6 +180,8 @@ function validateCredential(value: unknown): string {
 }
 
 export interface MortyResponseMetadata {
+    readonly elapsedMilliseconds: number;
+    readonly operation: string;
     readonly serverTiming: string | null;
     readonly status: number;
 }
@@ -190,6 +190,7 @@ export interface MortyEndpointOptions {
     readonly credentialProvider: MortyCredentialProvider;
     readonly endpoint: string;
     readonly observeResponse?: (metadata: MortyResponseMetadata) => void;
+    readonly observeUnsupportedEntries?: (entries: readonly UnsupportedSessionEntry[]) => void;
     readonly operationTimeoutMilliseconds?: number;
 }
 
@@ -244,46 +245,14 @@ function record(value: unknown): Readonly<Record<string, unknown>> {
     return value;
 }
 
-/** The Computer's refusals: the operation was not run, so repeating it under a new identity cannot run it twice. */
-const refusedOperationCodes = new Set([
-    "invalid_request",
-    "session_not_found",
-    "native_session_not_found",
-    "native_session_unsupported",
-    "native_session_cursor_expired",
-    "native_session_target_changed",
-    "unsupported_operation",
-    "session_busy",
-    SESSION_CLOSED_ERROR_CODE,
-    "idempotency_conflict",
-    "command_identity_conflict",
-    "session_creation_refused",
-    "turn_already_started",
-    "turn_not_active",
-    "permission_response_conflict",
-    "elicitation_response_conflict",
-    "session_configuration_conflict",
-    "steering_target_unavailable",
-    "steering_unsupported",
-]);
-
-const appliedOperationCodes = new Set(["command_result_expired"]);
-
-function operationOutcome(code: string): MortyOperationError["outcome"] {
-    if (refusedOperationCodes.has(code)) {
-        return "refused";
-    }
-    return appliedOperationCodes.has(code) ? "applied" : "unknown";
-}
-
-function throwNativeFailure(
+function throwOperationFailure(
     failure: SessionOperationFailedEvent,
     requestId: string,
-    target: NativeSessionTarget,
+    target: NativeSessionTarget | undefined,
 ): never {
     if (
         failure.requestId !== requestId ||
-        (failure.target !== undefined && !sameNativeSession(failure.target, target))
+        (target !== undefined && failure.target !== undefined && !sameNativeSession(failure.target, target))
     ) {
         throw new MortyProtocolError("The Computer returned a failure for another request");
     }
@@ -293,28 +262,30 @@ function throwNativeFailure(
     if (failure.code === "native_session_timeout" || failure.code === "operation_timeout") {
         throw new MortyTimeoutError({ cause: failure });
     }
-    throw new MortyOperationError(failure.code, failure.message, operationOutcome(failure.code), { cause: failure });
+    throw new MortyOperationError(failure.code, failure.message, { cause: failure });
 }
 
-async function responseValue(response: Response): Promise<unknown> {
-    try {
-        return await response.json();
-    } catch (cause) {
-        throw new MortyProtocolError("The service returned invalid JSON", {
-            cause,
-        });
-    }
+function responseRequestId(response: Response): string {
+    return response.headers.get("x-morty-request-id") ?? response.headers.get("x-request-id") ?? "";
 }
 
 async function throwApiError(response: Response): Promise<never> {
-    const value = record(await responseValue(response));
-    const error = record(value["error"]);
-    const code = error["code"];
-    const message = error["message"];
-    if (typeof code !== "string" || typeof message !== "string") {
-        throw new MortyProtocolError("The service returned an invalid error response");
+    const requestId = responseRequestId(response);
+    let error: Readonly<Record<string, unknown>> | null;
+    try {
+        error = record(record(await response.json())["error"]);
+    } catch {
+        error = null;
     }
-    throw new MortyApiError(code, message, response.status);
+    const code = error?.["code"];
+    const message = error?.["message"];
+    if (typeof code !== "string" || typeof message !== "string") {
+        // An edge or proxy page in front of the Worker answered: the service is unavailable, whatever the body says.
+        throw new MortyApiError("service_unavailable", "The Morty service is unavailable.", response.status, {
+            requestId,
+        });
+    }
+    throw new MortyApiError(code, message, response.status, { requestId });
 }
 
 class RequestDeadline {
@@ -565,6 +536,7 @@ export class MortyRequestExecutor {
     readonly #endpoint: URL;
     readonly #operationTimeoutMilliseconds: number | undefined;
     readonly #observeResponse: ((metadata: MortyResponseMetadata) => void) | undefined;
+    readonly observeUnsupportedEntries: (entries: readonly UnsupportedSessionEntry[]) => void;
     readonly #transport: WsTransport;
     readonly #lifetime = new AbortController();
 
@@ -577,6 +549,11 @@ export class MortyRequestExecutor {
                 ? undefined
                 : validatePositiveInteger(options.operationTimeoutMilliseconds, "operation timeout");
         this.#observeResponse = options.observeResponse;
+        this.observeUnsupportedEntries = (entries) => {
+            if (entries.length > 0) {
+                options.observeUnsupportedEntries?.(entries);
+            }
+        };
     }
 
     readonly close = (): void => this.#lifetime.abort(new MortyConnectionError("The Morty client is closed"));
@@ -585,20 +562,21 @@ export class MortyRequestExecutor {
         return this.#transport.payloadEncryption;
     }
 
-    readonly sendJson = async (endpoint: MortyTransportEndpoint, body: string, signal: AbortSignal): Promise<string> =>
+    readonly sendJson = async (endpoint: MortyOperationEndpoint, body: string, signal: AbortSignal): Promise<string> =>
         await this.request(endpoint, body, "application/json", signal);
 
     /**
-     * Sends one request about a Session and reads the Computer's answer to it. A failure the Computer reports for the
-     * request is thrown; any other answer must be the `reply` codec's, to this request and about this Session, and
-     * `isAnswer` may check what else the request names. Anything else is a protocol error carrying `mismatch`.
+     * Sends one request and reads the Computer's answer to it. A failure the Computer reports for the request is
+     * thrown; any other answer must be the `reply` codec's, to this request and, when the request names a Session,
+     * about that Session, and `isAnswer` may check what else the request names. Anything else is a protocol error
+     * carrying `mismatch`.
      */
-    readonly exchange = async <Reply extends { readonly requestId: string; readonly target: NativeSessionTarget }>(
+    readonly exchange = async <Reply extends { readonly requestId: string; readonly target?: NativeSessionTarget }>(
         request: {
-            readonly endpoint: MortyTransportEndpoint;
+            readonly endpoint: MortyOperationEndpoint;
             readonly body: string;
             readonly requestId: string;
-            readonly target: NativeSessionTarget;
+            readonly target?: NativeSessionTarget;
             readonly reply: {
                 readonly decode: (encoded: string, decryptor: PayloadDecryptor, signal: AbortSignal) => Promise<Reply>;
             };
@@ -608,22 +586,30 @@ export class MortyRequestExecutor {
         signal: AbortSignal,
     ): Promise<Reply> => {
         const encoded = await this.sendJson(request.endpoint, request.body, signal);
-        if (decodeMessageKind(encoded) === "session.operation.failed") {
-            return throwNativeFailure(
-                await sessionOperationFailedEventCodec.decode(encoded, this.payloadEncryption, signal),
-                request.requestId,
-                request.target,
-            );
+        try {
+            if (parseJson(encoded)["kind"] === SESSION_OPERATION_FAILED_KIND) {
+                return throwOperationFailure(
+                    await sessionOperationFailedEventCodec.decode(encoded, this.payloadEncryption, signal),
+                    request.requestId,
+                    request.target,
+                );
+            }
+            const reply = await request.reply.decode(encoded, this.payloadEncryption, signal);
+            if (
+                reply.requestId !== request.requestId ||
+                (request.target !== undefined &&
+                    (reply.target === undefined || !sameNativeSession(reply.target, request.target))) ||
+                (request.isAnswer !== undefined && !request.isAnswer(reply))
+            ) {
+                throw new MortyProtocolError(request.mismatch);
+            }
+            return reply;
+        } catch (cause) {
+            if (cause instanceof ProtocolMessageError) {
+                throw new MortyProtocolError(request.mismatch, { cause });
+            }
+            throw cause;
         }
-        const reply = await request.reply.decode(encoded, this.payloadEncryption, signal);
-        if (
-            reply.requestId !== request.requestId ||
-            !sameNativeSession(reply.target, request.target) ||
-            (request.isAnswer !== undefined && !request.isAnswer(reply))
-        ) {
-            throw new MortyProtocolError(request.mismatch);
-        }
-        return reply;
     };
 
     /**
@@ -631,7 +617,7 @@ export class MortyRequestExecutor {
      * endpoint's timeout bounds each wait for the next record, so a large file is not cut off while it still arrives.
      */
     readonly readFileStream = async (
-        endpoint: MortyTransportEndpoint,
+        endpoint: MortyOperationEndpoint,
         body: string,
         request: FileDownloadRequest,
         signal: AbortSignal,
@@ -658,7 +644,12 @@ export class MortyRequestExecutor {
                 },
                 signal: deadline.signal,
             });
-            this.#observeResponse?.({ serverTiming: response.headers.get("server-timing"), status: response.status });
+            this.#observeResponse?.({
+                elapsedMilliseconds: 0,
+                operation: endpoint.operation,
+                serverTiming: response.headers.get("server-timing"),
+                status: response.status,
+            });
             if (!response.ok) {
                 await throwApiError(response);
             }
@@ -692,14 +683,14 @@ export class MortyRequestExecutor {
     };
 
     readonly putBinary = async (
-        endpoint: MortyTransportEndpoint,
+        endpoint: MortyOperationEndpoint,
         body: Uint8Array,
         contentType: string,
         signal: AbortSignal,
     ): Promise<string> => await this.request(endpoint, body, contentType, signal);
 
     readonly openLiveEventStream = async (
-        endpoint: MortyTransportEndpoint,
+        endpoint: MortyOperationEndpoint,
         body: string,
         subscriptionId: string,
         signal: AbortSignal,
@@ -747,7 +738,7 @@ export class MortyRequestExecutor {
     };
 
     private readonly request = async (
-        endpoint: MortyTransportEndpoint,
+        endpoint: MortyOperationEndpoint,
         body: string | Uint8Array,
         contentType: string,
         signal: AbortSignal,
@@ -757,19 +748,30 @@ export class MortyRequestExecutor {
             this.#operationTimeoutMilliseconds ?? endpoint.timeoutMilliseconds,
         );
         try {
-            const credential = validateCredential(await this.#credentialProvider.credential(deadline.signal));
-            const headers = {
-                ...this.authenticationHeaders(credential, "application/json"),
-                "content-type": contentType,
-            };
-            const response = await this.#transport.fetch({
-                endpoint,
-                origin: this.#endpoint,
-                body,
-                headers,
-                signal: deadline.signal,
-            });
+            const started = performance.now();
+            const send = async (credential: string): Promise<Response> =>
+                await this.#transport.fetch({
+                    endpoint,
+                    origin: this.#endpoint,
+                    body,
+                    headers: {
+                        ...this.authenticationHeaders(validateCredential(credential), "application/json"),
+                        "content-type": contentType,
+                    },
+                    signal: deadline.signal,
+                });
+            const credential = await this.#credentialProvider.credential(deadline.signal);
+            let response = await send(credential);
+            if (response.status === 401 && this.#credentialProvider.replacement !== undefined) {
+                const replacement = await this.#credentialProvider.replacement(credential, deadline.signal);
+                if (replacement !== null) {
+                    await response.body?.cancel();
+                    response = await send(replacement);
+                }
+            }
             this.#observeResponse?.({
+                elapsedMilliseconds: Math.round(performance.now() - started),
+                operation: endpoint.operation,
                 serverTiming: response.headers.get("server-timing"),
                 status: response.status,
             });
@@ -955,7 +957,7 @@ export class MortySessionResources {
         );
         const kind = decodeMessageKind(result);
         if (kind === "session.operation.failed") {
-            return throwNativeFailure(
+            return throwOperationFailure(
                 await sessionOperationFailedEventCodec.decode(result, this.#executor.payloadEncryption, signal),
                 requestId,
                 sessionTarget,
@@ -1275,7 +1277,7 @@ export class MortyLiveEventSubscription {
     readonly #controller = new AbortController();
     readonly #executor: MortyRequestExecutor;
     readonly #observer: MortySessionEventObserver;
-    readonly #endpoint: MortyTransportEndpoint;
+    readonly #endpoint: MortyOperationEndpoint;
     readonly #target: NativeSessionTarget;
     #closed = false;
     readonly connected: Promise<void>;
@@ -1283,7 +1285,7 @@ export class MortyLiveEventSubscription {
 
     constructor(
         executor: MortyRequestExecutor,
-        endpoint: MortyTransportEndpoint,
+        endpoint: MortyOperationEndpoint,
         observer: MortySessionEventObserver,
         signal: AbortSignal,
         target: NativeSessionTarget,
@@ -1386,7 +1388,8 @@ export class MortyLiveEventSubscription {
                         throw new MortyProtocolError("The live Session event stream contains an unexpected message");
                     }
                     const message = decodeSessionEventEnvelope(plaintext);
-                    const events = decodeKnownSessionLiveEventBatch(message.events);
+                    const { events, unsupported } = decodeKnownSessionLiveEventBatch(message.events);
+                    this.#executor.observeUnsupportedEntries(unsupported);
                     if (events.some((event) => !sameNativeSession(event.target, this.#target))) {
                         throw new MortyProtocolError("The live Session event stream contains another Session");
                     }
@@ -1497,7 +1500,9 @@ export class MortyEventResources {
             },
             signal,
         );
-        return decodeKnownSessionEventLogPage(result.events.events);
+        const { page: decodedPage, unsupported } = decodeKnownSessionEventLogPage(result.events.events);
+        this.#executor.observeUnsupportedEntries(unsupported);
+        return decodedPage;
     };
 
     readonly close = (): void => {

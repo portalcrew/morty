@@ -10,6 +10,10 @@ export interface MortyTransportEndpoint {
     readonly timeoutMilliseconds: number;
 }
 
+export interface MortyOperationEndpoint extends MortyTransportEndpoint {
+    readonly operation: string;
+}
+
 export interface MortyTransportCall {
     readonly endpoint: MortyTransportEndpoint;
     readonly origin: URL;

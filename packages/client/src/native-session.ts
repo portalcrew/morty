@@ -7,6 +7,23 @@ export const nativeSessionKey = (target: NativeSessionTarget): string =>
 export const sameNativeSession = (left: NativeSessionTarget, right: NativeSessionTarget): boolean =>
     left.harness === right.harness && left.sessionId === right.sessionId;
 
+export const nativeSessionTarget = ({ harness, sessionId }: NativeSessionTarget): NativeSessionTarget => ({
+    harness,
+    sessionId,
+});
+
+/**
+ * The identity of one native fork on one Computer. The Worker accepts a fork only under the identity its operation
+ * derives, so a fork repeated after a lost answer reaches the same Computer operation.
+ */
+export async function nativeForkRequestId(computerId: string, operationId: string): Promise<string> {
+    const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(`${computerId}\u0000fork\u0000${operationId}`),
+    );
+    return `chat_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
 /** Indexes state by the full native pair; the serialization never leaves this index. */
 export class NativeSessionMap<Value> {
     readonly #entries = new Map<string, { readonly target: NativeSessionTarget; readonly value: Value }>();

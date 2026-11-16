@@ -114,6 +114,7 @@ export type {
     SessionEventsUnsubscribeControl,
     SessionLiveEvent,
     SessionLiveEventBatch,
+    UnsupportedSessionEntry,
 } from "./session/events/index.ts";
 export {
     decodeAcpSessionUpdate,
@@ -210,6 +211,7 @@ export {
     sessionPermissionRespondCommandCodec,
 } from "./session/interactions/index.ts";
 export type {
+    OperationOutcome,
     SessionArchiveCommandRouting,
     SessionCloseNoticeEvent,
     SessionCreateCommand,
@@ -222,6 +224,7 @@ export type {
     SessionReadyBody,
     SessionReadyEvent,
     SessionRestoreCommandRouting,
+    SessionRestoredEvent,
 } from "./session/lifecycle/index.ts";
 export {
     decodeSessionArchivedEvent,
@@ -238,6 +241,7 @@ export {
     encodeSessionPromptAcceptedEvent,
     encodeSessionQueryCommand,
     encodeSessionRestoreCommand,
+    operationOutcome,
     SESSION_ARCHIVE_KIND,
     SESSION_ARCHIVED_KIND,
     SESSION_CLOSE_NOTICE_KIND,

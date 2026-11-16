@@ -6,8 +6,8 @@ import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
 const SESSION_ACCESS_PATTERN = /^msession_([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{43})$/u;
 
 const sessionAccessHolderSchema = z.discriminatedUnion("kind", [
-    z.strictObject({ kind: z.literal("device"), deviceId: identifierStringSchema }).readonly(),
-    z.strictObject({ kind: z.literal("credential"), credentialId: identifierStringSchema }).readonly(),
+    z.object({ kind: z.literal("device"), deviceId: identifierStringSchema }).readonly(),
+    z.object({ kind: z.literal("credential"), credentialId: identifierStringSchema }).readonly(),
 ]);
 
 export type SessionAccessHolder = z.infer<typeof sessionAccessHolderSchema>;
@@ -18,7 +18,7 @@ export type SessionAccessHolder = z.infer<typeof sessionAccessHolderSchema>;
  * one, so ending either ends the credential without any record of its own.
  */
 const sessionAccessGrantSchema = z
-    .strictObject({
+    .object({
         holder: sessionAccessHolderSchema,
         generation: z.number().int().positive(),
     })

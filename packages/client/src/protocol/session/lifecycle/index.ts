@@ -36,6 +36,40 @@ export const SESSION_CLOSE_NOTICE_KIND = "session.close.notice";
 export const SESSION_ARCHIVE_KIND = "session.archive";
 export const SESSION_ARCHIVED_KIND = "session.archived";
 export const SESSION_CLOSED_ERROR_CODE = "session_closed";
+
+export type OperationOutcome = "refused" | "applied" | "unknown";
+
+// A refusal means the Computer did not run the operation, so repeating it under a new identity cannot run it twice.
+const refusedOperationCodes: ReadonlySet<string> = new Set([
+    "invalid_request",
+    "session_not_found",
+    "native_session_not_found",
+    "native_session_unsupported",
+    "native_session_cursor_expired",
+    "native_session_target_changed",
+    "unsupported_operation",
+    "session_busy",
+    SESSION_CLOSED_ERROR_CODE,
+    "idempotency_conflict",
+    "command_identity_conflict",
+    "session_creation_refused",
+    "turn_already_started",
+    "turn_not_active",
+    "permission_response_conflict",
+    "elicitation_response_conflict",
+    "session_configuration_conflict",
+    "steering_target_unavailable",
+    "steering_unsupported",
+]);
+
+const appliedOperationCodes: ReadonlySet<string> = new Set(["command_result_expired"]);
+
+export function operationOutcome(code: string): OperationOutcome {
+    if (refusedOperationCodes.has(code)) {
+        return "refused";
+    }
+    return appliedOperationCodes.has(code) ? "applied" : "unknown";
+}
 export const SESSION_OPERATION_FAILED_KIND = "session.operation.failed";
 export const SESSION_PROMPT_ACCEPTED_KIND = "session.prompt.accepted";
 
@@ -54,7 +88,7 @@ const sessionMetadataSchema = z.object({ ...sessionRecordFields, target: nativeS
 export type SessionMetadata = z.infer<typeof sessionMetadataSchema>;
 
 const sessionListCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_LIST_KIND),
         limit: z.number().int().positive().max(500),
         requestId: IDENTIFIER,
@@ -74,7 +108,7 @@ const sessionsListedEventSchema = z
 export type SessionsListedEvent = z.infer<typeof sessionsListedEventSchema>;
 
 const sessionQueryCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_QUERY_KIND),
         requestId: IDENTIFIER,
         targets: z.array(nativeSessionTargetSchema).min(1).max(500).readonly(),
@@ -94,7 +128,7 @@ const sessionsQueriedEventSchema = z
 export type SessionsQueriedEvent = z.infer<typeof sessionsQueriedEventSchema>;
 
 const sessionRestoreCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_RESTORE_KIND),
         requestId: IDENTIFIER,
         target: nativeSessionTargetSchema,
@@ -110,7 +144,7 @@ export type SessionRestoreCommand = z.infer<typeof sessionRestoreCommandSchema>;
  * Session is absent afterwards, as asked, so a retry after a lost answer succeeds too.
  */
 const sessionArchiveCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_ARCHIVE_KIND),
         requestId: IDENTIFIER,
         target: nativeSessionTargetSchema,
@@ -120,7 +154,7 @@ const sessionArchiveCommandSchema = z
 export type SessionArchiveCommand = z.infer<typeof sessionArchiveCommandSchema>;
 
 const sessionPrepareCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_PREPARE_KIND),
         requestId: IDENTIFIER,
         target: nativeSessionTargetSchema,
@@ -130,7 +164,7 @@ const sessionPrepareCommandSchema = z
 export type SessionPrepareCommand = z.infer<typeof sessionPrepareCommandSchema>;
 
 const sessionCreateCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_CREATE_KIND),
         requestId: IDENTIFIER,
         operationId: IDENTIFIER,

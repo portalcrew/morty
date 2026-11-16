@@ -110,7 +110,7 @@ function listingFor(agent: NativeSessionAgent | undefined): string {
 }
 
 export const createNativeSessionStore = (
-    requests: Pick<BotChatApi, "nativeSessions" | "nativeSession" | "forkNativeSession">,
+    requests: Pick<BotChatApi, "nativeSessions" | "nativeSession" | "forkNativeSession" | "importNativeSession">,
     computer: () => ChatComputer | null,
     onOpen: (session: OpenMortySession) => void,
 ) => {
@@ -175,7 +175,6 @@ export const createNativeSessionStore = (
                 set({ selected });
                 const result = await requests.nativeSessions(
                     {
-                        action: "list",
                         harness: agent.harness,
                         directory: ".",
                         cursor: null,
@@ -183,9 +182,6 @@ export const createNativeSessionStore = (
                     signal,
                 );
                 signal.throwIfAborted();
-                if (result.action !== "list") {
-                    throw new Error("The agent returned an unexpected session directory.");
-                }
                 const entries = result.entries;
                 set({
                     directory: {
@@ -316,19 +312,8 @@ export const createNativeSessionStore = (
                 const result =
                     action === "fork"
                         ? await requests.forkNativeSession(forkIntent.operationId, input, signal)
-                        : await requests.nativeSessions(
-                              {
-                                  action,
-                                  harness: directory.harness,
-                                  directory: preview.entry.directory,
-                                  sessionId: preview.entry.sessionId,
-                              },
-                              signal,
-                          );
+                        : await requests.importNativeSession(input, signal);
                 signal.throwIfAborted();
-                if (result.action !== action) {
-                    throw new Error(`This agent cannot ${action} the selected native session.`);
-                }
                 const { sessionId: _sessionId, ...entry } = preview.entry;
                 onOpen({
                     target: result.target,
@@ -360,7 +345,6 @@ export const createNativeSessionStore = (
             try {
                 const result = await requests.nativeSessions(
                     {
-                        action: "list",
                         harness: directory.harness,
                         directory: ".",
                         cursor: directory.nextCursor,
@@ -368,9 +352,6 @@ export const createNativeSessionStore = (
                     signal,
                 );
                 signal.throwIfAborted();
-                if (result.action !== "list") {
-                    throw new Error("The agent returned an unexpected session directory.");
-                }
                 set({
                     directory: {
                         ...directory,

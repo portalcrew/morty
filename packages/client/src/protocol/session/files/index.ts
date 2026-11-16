@@ -48,7 +48,7 @@ const fileReadMaxBytes = z
     .max(128 * 1024 * 1024);
 
 const fileReadCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(FILE_READ_KIND),
         maxBytes: fileReadMaxBytes,
         requestId: IDENTIFIER,
@@ -78,7 +78,7 @@ const fileBeginEventSchema = z
 export type FileBeginEvent = z.infer<typeof fileBeginEventSchema>;
 
 const contentWriteCommandSchema = z
-    .object({
+    .strictObject({
         byteLength: z.number().int().positive().max(CONTENT_WRITE_MAX_BYTES),
         contentKey: z.string().regex(/^[a-f0-9]{64}$/u),
         contentKind: z.enum(["image", "resource"]),
@@ -93,7 +93,7 @@ const contentWriteCommandSchema = z
 export type ContentWriteCommand = z.infer<typeof contentWriteCommandSchema>;
 
 const contentCommitCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(CONTENT_COMMIT_KIND),
         requestId: IDENTIFIER,
         target: nativeSessionTargetSchema,

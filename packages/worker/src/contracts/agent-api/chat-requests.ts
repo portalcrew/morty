@@ -87,16 +87,6 @@ export const nativeListInput = v.custom<Extract<NativeSessionCommandRouting, { r
         return false;
     }
 }, "An encrypted native Session list request is required.");
-export const nativeImportInput = v.custom<Extract<NativeSessionCommandRouting, { readonly action: "import" }>>(
-    (value) => {
-        try {
-            return nativeSessionCommandCodec.decodeRouting(JSON.stringify(value)).action === "import";
-        } catch {
-            return false;
-        }
-    },
-    "An encrypted native Session import request is required.",
-);
 export const nativeContinuationCommandInput = v.custom<
     Extract<NativeSessionCommandRouting, { readonly action: "find" | "import" }>
 >((value) => {

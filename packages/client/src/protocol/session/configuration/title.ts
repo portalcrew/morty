@@ -19,7 +19,7 @@ export const SESSION_RENAME_KIND = "session.rename";
 export const SESSION_RENAMED_KIND = "session.renamed";
 
 const sessionRenameCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_RENAME_KIND),
         requestId: IDENTIFIER,
         target: nativeSessionTargetSchema,

@@ -153,13 +153,13 @@ const sessionPermissionRespondBase = {
 
 const sessionPermissionRespondCommandSchema = z.discriminatedUnion("outcome", [
     z
-        .object({
+        .strictObject({
             ...sessionPermissionRespondBase,
             optionId: z.string().min(1).max(255),
             outcome: z.literal("selected"),
         })
         .readonly(),
-    z.object({ ...sessionPermissionRespondBase, outcome: z.literal("cancelled") }).readonly(),
+    z.strictObject({ ...sessionPermissionRespondBase, outcome: z.literal("cancelled") }).readonly(),
 ]);
 
 /**
@@ -233,15 +233,15 @@ const sessionElicitationRespondBase = {
 
 const sessionElicitationRespondCommandSchema = z.discriminatedUnion("action", [
     z
-        .object({
+        .strictObject({
             ...sessionElicitationRespondBase,
             action: z.literal("accept"),
             content: elicitationFormContentSchema,
         })
         .readonly(),
-    z.object({ ...sessionElicitationRespondBase, action: z.literal("accept-url") }).readonly(),
-    z.object({ ...sessionElicitationRespondBase, action: z.literal("decline") }).readonly(),
-    z.object({ ...sessionElicitationRespondBase, action: z.literal("cancel") }).readonly(),
+    z.strictObject({ ...sessionElicitationRespondBase, action: z.literal("accept-url") }).readonly(),
+    z.strictObject({ ...sessionElicitationRespondBase, action: z.literal("decline") }).readonly(),
+    z.strictObject({ ...sessionElicitationRespondBase, action: z.literal("cancel") }).readonly(),
 ]);
 
 export type SessionElicitationRespondCommand = z.infer<typeof sessionElicitationRespondCommandSchema>;

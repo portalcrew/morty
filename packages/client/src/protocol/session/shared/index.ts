@@ -41,7 +41,7 @@ export const sessionStatusSchema = z.discriminatedUnion("kind", [
 export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 
 export const sessionCapabilitiesSchema = z
-    .strictObject({
+    .object({
         audioPrompt: z.boolean(),
         closeSession: z.boolean(),
         deleteSession: z.boolean(),

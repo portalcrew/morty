@@ -1,3 +1,5 @@
+import { type OperationOutcome, operationOutcome } from "@portalcrew/morty-client/protocol";
+
 export class MortyError extends Error {
     readonly code: string;
 
@@ -10,25 +12,33 @@ export class MortyError extends Error {
 
 export class MortyApiError extends MortyError {
     readonly status: number;
+    readonly requestId: string;
 
-    constructor(code: string, message: string, status: number, options: ErrorOptions = {}) {
+    constructor(
+        code: string,
+        message: string,
+        status: number,
+        options: ErrorOptions & { readonly requestId?: string } = {},
+    ) {
         super(code, message, options);
         this.name = "MortyApiError";
         this.status = status;
+        this.requestId = options.requestId ?? "";
     }
 }
 
 export class MortyOperationError extends MortyError {
+    constructor(code: string, message: string, options: ErrorOptions = {}) {
+        super(code, message, options);
+        this.name = "MortyOperationError";
+    }
+
     /**
      * What the Computer's reply says of the operation: it `refused` it and nothing ran, it `applied` it already and
      * will not run it again, or the reply does not say, so the operation may have run and may be repeated.
      */
-    readonly outcome: "refused" | "applied" | "unknown";
-
-    constructor(code: string, message: string, outcome: "refused" | "applied" | "unknown", options: ErrorOptions = {}) {
-        super(code, message, options);
-        this.name = "MortyOperationError";
-        this.outcome = outcome;
+    get outcome(): OperationOutcome {
+        return operationOutcome(this.code);
     }
 }
 

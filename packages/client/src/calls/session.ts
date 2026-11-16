@@ -1,6 +1,6 @@
 import { decodeNativeSessionTarget, isIdentifier, type NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { MortyValidationError } from "../errors.ts";
-import type { MortyTransportEndpoint, MortyTransportPolicy } from "./call.ts";
+import type { MortyOperationEndpoint, MortyTransportEndpoint, MortyTransportPolicy } from "./call.ts";
 
 export interface SessionCallTarget {
     readonly computerId: string;
@@ -10,18 +10,20 @@ export interface SessionCallTarget {
 function endpoint({
     computerId,
     target,
+    operation,
     method,
     resource,
     transport,
     timeoutMilliseconds,
     query,
 }: SessionCallTarget & {
+    readonly operation: string;
     readonly method: MortyTransportEndpoint["method"];
     readonly resource: string;
     readonly transport: MortyTransportPolicy;
     readonly timeoutMilliseconds: number;
     readonly query?: URLSearchParams;
-}): MortyTransportEndpoint {
+}): MortyOperationEndpoint {
     if (!isIdentifier(computerId)) {
         throw new MortyValidationError("The Morty Computer identifier is invalid");
     }
@@ -34,6 +36,7 @@ function endpoint({
     const suffix = query === undefined || query.size === 0 ? "" : `?${query.toString()}`;
     return {
         computerId,
+        operation,
         method,
         path: `v1/computers/${encodeURIComponent(computerId)}/harnesses/${encodeURIComponent(parsed.harness)}/sessions/${encodeURIComponent(parsed.sessionId)}/${resource}${suffix}`,
         transport,
@@ -42,8 +45,9 @@ function endpoint({
 }
 
 export const sessionEndpoints = Object.freeze({
-    readConfiguration: ({ computerId, target }: SessionCallTarget): MortyTransportEndpoint =>
+    readConfiguration: ({ computerId, target }: SessionCallTarget): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-configuration-read",
             computerId,
             target,
             method: "GET",
@@ -51,8 +55,9 @@ export const sessionEndpoints = Object.freeze({
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
-    updateConfiguration: ({ computerId, target }: SessionCallTarget): MortyTransportEndpoint =>
+    updateConfiguration: ({ computerId, target }: SessionCallTarget): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-configuration-update",
             computerId,
             target,
             method: "POST",
@@ -60,8 +65,9 @@ export const sessionEndpoints = Object.freeze({
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
-    rename: ({ computerId, target }: SessionCallTarget): MortyTransportEndpoint =>
+    rename: ({ computerId, target }: SessionCallTarget): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-rename",
             computerId,
             target,
             method: "POST",
@@ -69,8 +75,9 @@ export const sessionEndpoints = Object.freeze({
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
-    readFile: ({ computerId, target }: SessionCallTarget): MortyTransportEndpoint =>
+    readFile: ({ computerId, target }: SessionCallTarget): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-file-read",
             computerId,
             target,
             method: "POST",
@@ -82,8 +89,9 @@ export const sessionEndpoints = Object.freeze({
         computerId,
         target,
         commandId,
-    }: SessionCallTarget & { readonly commandId?: string }): MortyTransportEndpoint =>
+    }: SessionCallTarget & { readonly commandId?: string }): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-active-turn",
             computerId,
             target,
             method: "GET",
@@ -92,8 +100,9 @@ export const sessionEndpoints = Object.freeze({
             timeoutMilliseconds: 20_000,
             query: new URLSearchParams(commandId === undefined ? {} : { commandId }),
         }),
-    submitTurn: ({ computerId, target }: SessionCallTarget): MortyTransportEndpoint =>
+    submitTurn: ({ computerId, target }: SessionCallTarget): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-turn-submit",
             computerId,
             target,
             method: "POST",
@@ -101,8 +110,9 @@ export const sessionEndpoints = Object.freeze({
             transport: { kind: "websocket", cancellation: "local" },
             timeoutMilliseconds: 20_000,
         }),
-    liveEvents: ({ computerId, target }: SessionCallTarget): MortyTransportEndpoint =>
+    liveEvents: ({ computerId, target }: SessionCallTarget): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-events-live",
             computerId,
             target,
             method: "GET",
@@ -113,8 +123,9 @@ export const sessionEndpoints = Object.freeze({
     listEvents: ({
         computerId,
         target,
-    }: SessionCallTarget & { readonly limit: number; readonly cursor: string }): MortyTransportEndpoint =>
+    }: SessionCallTarget & { readonly limit: number; readonly cursor: string }): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-events-list",
             computerId,
             target,
             method: "GET",
@@ -126,8 +137,9 @@ export const sessionEndpoints = Object.freeze({
         computerId,
         target,
         key,
-    }: SessionCallTarget & { readonly key: string; readonly uri: string }): MortyTransportEndpoint =>
+    }: SessionCallTarget & { readonly key: string; readonly uri: string }): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-content-upload",
             computerId,
             target,
             method: "PUT",
@@ -139,8 +151,9 @@ export const sessionEndpoints = Object.freeze({
         computerId,
         target,
         commandId,
-    }: SessionCallTarget & { readonly commandId: string }): MortyTransportEndpoint =>
+    }: SessionCallTarget & { readonly commandId: string }): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-turn-cancel",
             computerId,
             target,
             method: "POST",
@@ -152,8 +165,9 @@ export const sessionEndpoints = Object.freeze({
         computerId,
         target,
         commandId,
-    }: SessionCallTarget & { readonly commandId: string }): MortyTransportEndpoint =>
+    }: SessionCallTarget & { readonly commandId: string }): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-turn-cancel-queued",
             computerId,
             target,
             method: "POST",
@@ -165,8 +179,9 @@ export const sessionEndpoints = Object.freeze({
         computerId,
         target,
         commandId,
-    }: SessionCallTarget & { readonly commandId: string }): MortyTransportEndpoint =>
+    }: SessionCallTarget & { readonly commandId: string }): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-turn-steer",
             computerId,
             target,
             method: "PUT",
@@ -178,8 +193,9 @@ export const sessionEndpoints = Object.freeze({
         computerId,
         target,
         interactionId,
-    }: SessionCallTarget & { readonly interactionId: string }): MortyTransportEndpoint =>
+    }: SessionCallTarget & { readonly interactionId: string }): MortyOperationEndpoint =>
         endpoint({
+            operation: "session-interaction-respond",
             computerId,
             target,
             method: "POST",

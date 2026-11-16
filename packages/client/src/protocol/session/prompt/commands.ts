@@ -6,6 +6,7 @@ import {
 } from "../../shared/identifier.ts";
 import {
     assertKind,
+    assertOnlyFields,
     decodeZodMessage as decodeRoutingZodMessage,
     decodeZodMessage,
     decodeZodValue,
@@ -85,6 +86,7 @@ interface SessionCancelBeforeStartCommand {
 function decodeSessionCancelBeforeStartCommand(encoded: string): SessionCancelBeforeStartCommand {
     const value = parseJson(encoded);
     assertKind(value, SESSION_CANCEL_BEFORE_START_KIND);
+    assertOnlyFields(value, ["commandId", "kind", "requestId", "target"]);
     return {
         commandId: readIdentifier(value, "commandId"),
         kind: SESSION_CANCEL_BEFORE_START_KIND,
@@ -101,16 +103,16 @@ export interface SessionPromptDispositionCommand {
     readonly target: NativeSessionTarget;
 }
 
-export const promptAttachmentSchema = z
-    .object({
-        byteLength: z.number().int().positive().max(MAX_PROMPT_ATTACHMENT_BYTES),
-        contentKey: z.string().regex(/^[a-f0-9]{64}$/u),
-        kind: z.enum(["image", "resource"]),
-        mimeType: z.string().min(1).max(255),
-        name: z.string().min(1).max(500),
-        uri: z.string().min(1).max(4_096),
-    })
-    .readonly();
+const promptAttachmentFields = {
+    byteLength: z.number().int().positive().max(MAX_PROMPT_ATTACHMENT_BYTES),
+    contentKey: z.string().regex(/^[a-f0-9]{64}$/u),
+    kind: z.enum(["image", "resource"]),
+    mimeType: z.string().min(1).max(255),
+    name: z.string().min(1).max(500),
+    uri: z.string().min(1).max(4_096),
+};
+const promptAttachmentSchema = z.strictObject(promptAttachmentFields).readonly();
+export const promptAttachmentReplySchema = z.object(promptAttachmentFields).readonly();
 
 export type PromptAttachment = z.infer<typeof promptAttachmentSchema>;
 
@@ -140,6 +142,17 @@ export function decodeSessionPromptCommand(encoded: string): SessionPromptComman
     const value = parseJson(encoded);
     const hasSessionConfigurations = Object.hasOwn(value, "sessionConfigurations");
     assertKind(value, SESSION_PROMPT_KIND);
+    assertOnlyFields(value, [
+        "attachments",
+        "commandId",
+        "disposition",
+        "kind",
+        "prompt",
+        "requestId",
+        "sessionConfigurations",
+        "target",
+        "targetCommandId",
+    ]);
 
     const commandId = readIdentifier(value, "commandId");
     const requestId = readIdentifier(value, "requestId");
@@ -178,6 +191,7 @@ export function decodeSessionPromptCommand(encoded: string): SessionPromptComman
 function decodeSessionCancelCommand(encoded: string): SessionCancelCommand {
     const value = parseJson(encoded);
     assertKind(value, SESSION_CANCEL_KIND);
+    assertOnlyFields(value, ["commandId", "kind", "requestId", "target"]);
 
     return {
         commandId: readIdentifier(value, "commandId"),
@@ -190,6 +204,7 @@ function decodeSessionCancelCommand(encoded: string): SessionCancelCommand {
 function decodeSessionPromptDispositionCommand(encoded: string): SessionPromptDispositionCommand {
     const value = parseJson(encoded);
     assertKind(value, SESSION_PROMPT_DISPOSITION_KIND);
+    assertOnlyFields(value, ["commandId", "disposition", "kind", "requestId", "target"]);
     if (value["disposition"] !== SessionPromptDisposition.Steer) {
         throw new ProtocolMessageError("Only queued prompts can be steered");
     }

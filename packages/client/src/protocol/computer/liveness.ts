@@ -3,6 +3,7 @@ import { encryptedMessageCodec } from "../shared/encrypted-message.ts";
 import { identifierStringSchema as routingIdentifier } from "../shared/identifier.ts";
 import {
     assertKind,
+    assertOnlyFields,
     decodeZodMessage as decodeRoutingZodMessage,
     encryptedFieldSchema,
     parseJson,
@@ -65,6 +66,7 @@ export function decodeComputerHeartbeatAckEvent(encoded: string): ComputerHeartb
 function decodeComputerPingCommand(encoded: string): ComputerPingCommand {
     const value = parseJson(encoded);
     assertKind(value, COMPUTER_PING_KIND);
+    assertOnlyFields(value, ["kind", "requestId"]);
     return { kind: COMPUTER_PING_KIND, requestId: readIdentifier(value, "requestId") };
 }
 

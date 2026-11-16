@@ -10,7 +10,6 @@ import {
     managedSessionsInput,
     nativeContinuationCommandInput,
     nativeForkInput,
-    nativeImportInput,
     nativeListInput,
     nativePreviewInput,
     networkDiagnosticInput,
@@ -263,23 +262,6 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
                 const sessionId = v.parse(relayIdentifier, context.req.param("sessionId"));
                 return json(
                     await application.services.chat.previewNativeSession(
-                        context.get("chatScope"),
-                        sessionId,
-                        context.req.valid("json"),
-                    ),
-                );
-            },
-        )
-        .post(
-            "/native-sessions/:sessionId/import",
-            authenticatedSession,
-            authorizedChat(120000),
-            bodyParser<AuthorizedChatEnvironment, typeof nativeImportInput>(nativeImportInput),
-            async (context) => {
-                const application = applicationForRequest(ctx, context);
-                const sessionId = v.parse(relayIdentifier, context.req.param("sessionId"));
-                return json(
-                    await application.services.chat.importNativeSession(
                         context.get("chatScope"),
                         sessionId,
                         context.req.valid("json"),

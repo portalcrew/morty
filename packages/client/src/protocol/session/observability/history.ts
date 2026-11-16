@@ -29,11 +29,11 @@ const pageRequestFields = {
 };
 
 const sessionHistoryPageLoadSchema = z
-    .object({ ...pageRequestFields, kind: z.literal(SESSION_HISTORY_PAGE_LOAD_KIND) })
+    .strictObject({ ...pageRequestFields, kind: z.literal(SESSION_HISTORY_PAGE_LOAD_KIND) })
     .readonly();
 
 const sessionPreviewHistoryPageLoadSchema = z
-    .object({
+    .strictObject({
         ...pageRequestFields,
         directory: directoryPath,
         kind: z.literal(SESSION_PREVIEW_HISTORY_PAGE_LOAD_KIND),

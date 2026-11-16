@@ -1,6 +1,7 @@
+import { MortyError } from "@portalcrew/morty-client";
 import { isApiConnectionError } from "../../services/api/worker-api-transport.ts";
 import type { BotChatApi, BotComputerConfiguration } from "../../services/chat/bot-chat-api.ts";
-import { CloudApiError, isComputerConnectionFailure } from "../../services/management/management-api.ts";
+import { isComputerConnectionFailure } from "../../services/management/management-api.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import { formatError } from "../format-error.ts";
 import type { ComputerObservation } from "./computer-recovery.ts";
@@ -248,11 +249,11 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                             dropped = true;
                             continue;
                         }
-                        if (cause instanceof CloudApiError && cause.code === "computer_revoked") {
+                        if (cause instanceof MortyError && cause.code === "computer_revoked") {
                             await revokedBy(cause.message, signal);
                             return;
                         }
-                        if (cause instanceof CloudApiError && cause.code === "AGENT_REQUIRED") {
+                        if (cause instanceof MortyError && cause.code === "AGENT_REQUIRED") {
                             computer.getState().entryFailed("agent-required", cause.message);
                             settle();
                             await requests.waitForComputerConfigurationChange(signal);

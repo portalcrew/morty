@@ -134,7 +134,7 @@ export async function createChatWorkerEnvironment(
                             result = sessionEventEnvelopeCodec
                                 .decode(encoded, encryption, signal)
                                 .then((message) =>
-                                    decodeKnownSessionLiveEventBatch(message.events).some(
+                                    decodeKnownSessionLiveEventBatch(message.events).events.some(
                                         (event) =>
                                             event.type === "lifecycle-metadata" &&
                                             (event.payload.kind === "prompt.completed" ||
@@ -168,7 +168,6 @@ export async function createChatWorkerEnvironment(
                 readNativeSessions: (signal: AbortSignal) =>
                     runtime.api.nativeSessions(
                         {
-                            action: "list",
                             harness: agents[0]?.harness ?? "codex",
                             directory: ".",
                             cursor: null,

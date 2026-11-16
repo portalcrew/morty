@@ -45,8 +45,8 @@ export const sessionConfigOptionsSchema = z.array(sessionConfigOptionSchema).max
 
 /** One setting's chosen value: a select takes a value, a boolean takes a flag, and each carries only its own. */
 const sessionConfigurationSelectionSchema = z.discriminatedUnion("type", [
-    z.object({ configId: IDENTIFIER, type: z.literal("select"), value: z.string().max(500) }).readonly(),
-    z.object({ booleanValue: z.boolean(), configId: IDENTIFIER, type: z.literal("boolean") }).readonly(),
+    z.strictObject({ configId: IDENTIFIER, type: z.literal("select"), value: z.string().max(500) }).readonly(),
+    z.strictObject({ booleanValue: z.boolean(), configId: IDENTIFIER, type: z.literal("boolean") }).readonly(),
 ]);
 
 export type SessionConfigurationSelection = z.infer<typeof sessionConfigurationSelectionSchema>;
@@ -78,8 +78,12 @@ const sessionConfigureCommandFields = {
 };
 
 const sessionConfigureCommandSchema = z.discriminatedUnion("type", [
-    z.object({ ...sessionConfigureCommandFields, type: z.literal("select"), value: z.string().max(500) }).readonly(),
-    z.object({ ...sessionConfigureCommandFields, booleanValue: z.boolean(), type: z.literal("boolean") }).readonly(),
+    z
+        .strictObject({ ...sessionConfigureCommandFields, type: z.literal("select"), value: z.string().max(500) })
+        .readonly(),
+    z
+        .strictObject({ ...sessionConfigureCommandFields, booleanValue: z.boolean(), type: z.literal("boolean") })
+        .readonly(),
 ]);
 
 export type SessionConfigureCommand = z.infer<typeof sessionConfigureCommandSchema>;
@@ -116,7 +120,7 @@ export const SESSION_CONFIG_READ_KIND = "session.config.read";
 export const SESSION_CONFIG_READ_RESULT_KIND = "session.config.read.result";
 
 const sessionConfigReadCommandSchema = z
-    .object({
+    .strictObject({
         kind: z.literal(SESSION_CONFIG_READ_KIND),
         requestId: IDENTIFIER,
         target: nativeSessionTargetSchema,
