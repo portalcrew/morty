@@ -59,18 +59,6 @@ import { restoredConversation, restoreOpening } from "./session-restore.ts";
 /** Attributes Agent requests that arrive while the Agent holds no prompt of this Session. */
 const SESSION_CONTROL_COMMAND_ID = "session-control";
 
-/** The latest of the given modification times, in canonical form; a time that does not parse is no modification. */
-function latestModification(...times: readonly (string | null | undefined)[]): string | null {
-    let latest: number | null = null;
-    for (const time of times) {
-        const parsed = time === null || time === undefined ? Number.NaN : Date.parse(time);
-        if (!Number.isNaN(parsed) && (latest === null || parsed > latest)) {
-            latest = parsed;
-        }
-    }
-    return latest === null ? null : new Date(latest).toISOString();
-}
-
 /** What the Session's execution authority tells its Agent session. */
 export interface SessionExecutionRecord {
     /** The command whose prompt the Session's Agent holds. */
@@ -132,11 +120,6 @@ export class AgentSession {
     readonly #scope: AdapterSessionScope;
     readonly #subscriber: NativeSessionSubscriber;
     #identity: NativeIdentity;
-    /**
-     * Whether the Runtime holds this Session: its record exists, so it is listed and its target can be used. A Session
-     * being created or forked is not held until its creation completes, so one that fails midway leaves no record behind.
-     */
-    #holding: "held" | "unheld";
     readonly #adapter: Adapter;
     readonly #harness: string;
     readonly #cwd: string;
@@ -176,7 +159,6 @@ export class AgentSession {
         this.#cwd = cwd;
         this.#environment = agent.environment;
         this.#identity = identity;
-        this.#holding = identity.kind === "awaiting" ? "unheld" : "held";
         this.#store = store;
         this.#observer = observer;
         this.#interactions = new SessionInteractions({
@@ -375,30 +357,37 @@ export class AgentSession {
     readonly usesEnvironment = (environment: Readonly<Record<string, string>>): boolean =>
         recordsEqual(this.#environment, environment);
 
-    /** The Runtime now holds this Session: its record is written, and every later change updates it. */
-    readonly hold = (): void => {
-        this.#holding = "held";
-        this.#writeStoredSession(new Date().toISOString());
-    };
-
     /**
-     * Records the Session's current facts. Its modification time is the latest change anyone observed: a change at
-     * `modifiedAt` moves it forward, an earlier one (such as an Agent restating an older time) never moves it back, and
-     * `null` records facts that are no change to the conversation, such as an Agent reporting its settings.
+     * The Runtime now holds this Session: its record is created, so it is listed and its target can be used. A Session
+     * being created or forked is not held until its creation completes, so one that fails midway leaves no record behind.
      */
-    readonly #writeStoredSession = (modifiedAt: string | null): void => {
-        if (this.#holding === "unheld") {
-            return;
-        }
-        this.#store.write(
+    readonly hold = (): void => this.#hold(new Date().toISOString());
+
+    readonly #hold = (modifiedAt: string): void =>
+        this.#store.hold(
             new StoredSession(
                 this.target,
                 this.#cwd,
                 this.#prompted(),
                 this.#sessionTitle,
-                latestModification(this.#store.read(this.target)?.updatedAt, modifiedAt) ?? new Date().toISOString(),
+                modifiedAt,
                 this.#sessionConfigurations.stored(),
             ),
+        );
+
+    /** Follows the Session's current facts in its record, which exists only while the Runtime holds the Session. */
+    readonly #writeStoredSession = (modifiedAt: string | null): void => {
+        if (this.#identity.kind === "awaiting") {
+            return;
+        }
+        this.#store.update(
+            this.target,
+            {
+                configurations: this.#sessionConfigurations.stored(),
+                prompted: this.#prompted(),
+                title: this.#sessionTitle,
+            },
+            modifiedAt,
         );
     };
 
@@ -617,7 +606,12 @@ export class AgentSession {
         this.#applySessionOpened(opened);
         await this.#restoreStoredConfigurations(conversation, signal);
         signal.throwIfAborted();
-        this.#writeStoredSession(conversation.updatedAt);
+        if (origin?.kind === "import") {
+            // An import is how the Runtime comes to hold the conversation, as a creation is for a new one.
+            this.#hold(conversation.updatedAt);
+        } else {
+            this.#writeStoredSession(conversation.updatedAt);
+        }
     };
 
     /**

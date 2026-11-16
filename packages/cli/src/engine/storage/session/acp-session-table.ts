@@ -58,6 +58,15 @@ export class AcpSessionTable {
             .run();
     };
 
+    /** Changes the row of a saved session, and none when the session has no row. */
+    readonly update = (row: AcpSessionRow): void => {
+        this.#database.orm
+            .update(acpSession)
+            .set(row)
+            .where(and(eq(acpSession.harness, row.harness), eq(acpSession.sessionId, row.sessionId)))
+            .run();
+    };
+
     readonly upsert = (row: AcpSessionRow): void => {
         this.#database.orm
             .insert(acpSession)
