@@ -8,7 +8,10 @@ metadata:
 
 # Morty releases and deployment
 
-Morty owns one workspace and one public npm distribution, `@morty-build/cli`.
+Morty owns one workspace and one public npm distribution, `@portalcrew/morty`.
+The `portalcrew` scope belongs to the organization. Morty's unpublished workspace
+packages use the `morty-` prefix so other products can share that scope without
+claiming generic names such as `cli` or `client`.
 Protocol, Runtime, relay, and storage code are internal to Morty.
 The only hosted application environment is production in the Morty Cloudflare
 account. Development, integration and performance checks use isolated local or
@@ -156,25 +159,32 @@ bypass the acceptance gates.
 
 The Morty CLI workflow publishes only from main after its checks pass and the
 complete product acceptance and review are finished. Configure npm Trusted
-Publishing for this repository, `morty-cli.yml`, and the `morty-npm` environment.
-First-publication authorization must be established separately; scope membership
-alone does not configure a publisher. Verify registry integrity after publication.
+Publishing for this repository, `morty-cli.yml`, and the `morty-npm` environment,
+with direct `npm publish` permission. Verify registry integrity after publication.
 
-This repository and the CLI package are public, and publication uses npm Trusted
-Publishing with provenance enabled. Keep provenance enabled for new releases.
+npm requires the package to exist before its trusted publisher can be configured.
+For its first publication only, use a short-lived granular token restricted to
+the `portalcrew` scope in the protected publishing environment. Publish the same
+accepted archive from GitHub Actions with provenance enabled. The bootstrap
+credential must not publish subsequent versions. Once the package exists, configure
+its trusted publisher, revoke the token, delete the environment secret and remove
+the temporary bootstrap logic. Complete a new OIDC publication within two days of
+creating the trusted publisher; skipping an already-published archive does not
+validate that authorization.
+
+This repository and the CLI package are public. After bootstrap, publication uses
+npm Trusted Publishing with provenance enabled. Keep provenance enabled for every release.
 OIDC authorizes the configured publisher; npm provenance separately links the
 published archive to its source repository, revision and publishing workflow.
 Archived release records and checksums remain useful acceptance evidence, but
 are not substitutes for a public provenance attestation. Making an old release's
 source repository public does not retroactively add provenance to that version.
 
-To inspect a release, open that exact version of `@morty-build/cli` on npm and
-follow its provenance details. For releases published after the organization
-transfer, check that the repository is `portalcrew/morty`, the workflow is
-`morty-cli.yml`, and the source revision matches the accepted release. Earlier
-releases retain the provenance of their original source repository; do not rewrite it.
+To inspect a release, open that exact version of `@portalcrew/morty` on npm and
+follow its provenance details. Check that the repository is `portalcrew/morty`,
+the workflow is `morty-cli.yml`, and the source revision matches the accepted release.
 In an isolated directory, install the exact version with `npm install
---ignore-scripts @morty-build/cli@<version>`, then run `npm audit signatures` with
+--ignore-scripts @portalcrew/morty@<version>`, then run `npm audit signatures` with
 a current npm CLI to verify registry signatures and available attestations.
 Check that the selected CLI version has provenance: a successful audit of registry
 signatures alone does not establish that every installed package has an attestation.

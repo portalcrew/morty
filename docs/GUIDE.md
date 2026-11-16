@@ -55,7 +55,7 @@ Morty's state directory is `~/Library/Application Support/Morty/v3` on macOS,
 it. Pairing and local credentials belong to this installation; Agent-owned history
 remains in the Agent's own storage.
 
-Use `npx --yes @morty-build/cli@latest start` to ensure the daemon is running.
+Use `npx --yes @portalcrew/morty@latest start` to ensure the daemon is running.
 Use `restart` with the same command prefix to launch the selected release, or
 `stop` to leave the machine offline. `status` reports the CLI and daemon versions.
 Each machine installation keeps one pairing. The browser remembers each paired
@@ -63,7 +63,7 @@ machine's access separately and opens the selected identity when you switch comp
 
 ## Command reference
 
-Run each command as `npx --yes @morty-build/cli@latest <command>`. Add `--help` to a
+Run each command as `npx --yes @portalcrew/morty@latest <command>`. Add `--help` to a
 command to see its options; that output is the authoritative description.
 
 | Command | What it does |

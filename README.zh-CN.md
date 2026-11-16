@@ -62,7 +62,7 @@ You may install missing prerequisites and pair this machine.
 
 ## 停止 Morty
 
-`npx --yes @morty-build/cli@latest stop` 停止 Morty，
+`npx --yes @portalcrew/morty@latest stop` 停止 Morty，
 保留配对关系和 Agent 历史。
 
 ## 已知限制
@@ -72,7 +72,7 @@ You may install missing prerequisites and pair this machine.
   都能接上。但一直开着没退出的终端会话保留的是它自己的那份对话：看不到你在 Morty 里发的
   消息，**Claude Code** 和 **Pi** 在那里发下一条消息时还会让对话分叉。
 - **Codex 同一时间只允许一个应用写入同一个 thread。** 在 Morty 里用过某个 thread 之后，
-  如果终端提示 `thread ... already has an active writer`，执行 `npx --yes @morty-build/cli release`。它会交还
+  如果终端提示 `thread ... already has an active writer`，执行 `npx --yes @portalcrew/morty release`。它会交还
   闲置的会话，不会断开 Morty；之后在 Morty 里继续时会重新打开。
 
 ## Morty 如何处理你的数据
@@ -96,7 +96,7 @@ You may install missing prerequisites and pair this machine.
   关闭；如果暂时无法联系 relay，最迟在 15 分钟内关闭。
 - **Morty 记录设备加入时的大致位置，不记录 IP 地址。** 浏览器打开分享链接时，Morty
   保存 Cloudflare 提供的城市和国家，帮助你辨认自己的设备。
-- **重启更新。** `npx --yes @morty-build/cli@latest restart` 启动最新版。用 `status` 查看 CLI 和 daemon 版本。
+- **重启更新。** `npx --yes @portalcrew/morty@latest restart` 启动最新版。用 `status` 查看 CLI 和 daemon 版本。
 - **网站向 Sentry 上报错误和性能诊断。** 报告会去除 URL 查询参数、用户信息、cookie、
   请求头和请求体。Morty 的服务器会在日志里记录 setup 进度（获取说明、创建身份、签发链接、
   打开链接），只记录步骤本身以及请求来自浏览器还是 Agent。你主动提交的 bug 报告还会附带
@@ -104,7 +104,7 @@ You may install missing prerequisites and pair this machine.
 
 ## 离开
 
-Morty 不会扣住你的会话。执行 `npx --yes @morty-build/cli stop`，这台电脑上所有 Morty 会话都会关闭，
+Morty 不会扣住你的会话。执行 `npx --yes @portalcrew/morty stop`，这台电脑上所有 Morty 会话都会关闭，
 而配对关系和 Agent 自身的历史记录完整保留。回到原生客户端继续：
 
 | Agent | 恢复会话 |
@@ -113,8 +113,8 @@ Morty 不会扣住你的会话。执行 `npx --yes @morty-build/cli stop`，这�
 | Claude Code | `claude --resume`，或用 `claude --continue` 直接接上最近一次 |
 | Pi | `pi --resume`，或用 `pi --continue` 直接接上最近一次 |
 
-之后执行 `npx --yes @morty-build/cli start` 即可重新连接 Morty。如果只想把闲置的会话交还给终端、
-不断开 Morty，改用 `npx --yes @morty-build/cli release`。
+之后执行 `npx --yes @portalcrew/morty start` 即可重新连接 Morty。如果只想把闲置的会话交还给终端、
+不断开 Morty，改用 `npx --yes @portalcrew/morty release`。
 
 ## 安全
 

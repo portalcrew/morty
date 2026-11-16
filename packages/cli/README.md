@@ -29,10 +29,10 @@ Open the resulting link in a browser or scan its QR code on your phone.
 ## Manage your installation
 
 ```sh
-npx --yes @morty-build/cli@latest status
-npx --yes @morty-build/cli@latest start
-npx --yes @morty-build/cli@latest restart
-npx --yes @morty-build/cli@latest stop
+npx --yes @portalcrew/morty@latest status
+npx --yes @portalcrew/morty@latest start
+npx --yes @portalcrew/morty@latest restart
+npx --yes @portalcrew/morty@latest stop
 ```
 
 Start ensures the daemon is running. Restart launches the version selected by npx.

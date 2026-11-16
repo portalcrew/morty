@@ -63,7 +63,7 @@ downloaded or run. Read it yourself before you paste the prompt.
 
 ## Stopping Morty
 
-`npx --yes @morty-build/cli@latest stop` stops Morty and retains your pairing and Agent history.
+`npx --yes @portalcrew/morty@latest stop` stops Morty and retains your pairing and Agent history.
 
 ## Known limitations
 
@@ -74,7 +74,7 @@ downloaded or run. Read it yourself before you paste the prompt.
   **Pi** its next message forks the conversation.
 - **Codex lets one app write to a thread at a time.** If the terminal reports
   `thread ... already has an active writer` after you used the thread in Morty, run
-  `npx --yes @morty-build/cli release`. It hands idle sessions back without disconnecting Morty; continuing
+  `npx --yes @portalcrew/morty release`. It hands idle sessions back without disconnecting Morty; continuing
   in Morty reopens them.
 
 ## What Morty does with your data
@@ -108,7 +108,7 @@ downloaded or run. Read it yourself before you paste the prompt.
   browser opens a sharing link, Morty keeps the city and country Cloudflare locates
   the connection in, so you can recognize your devices. It does not store IP
   addresses.
-- **Restart to update Morty.** Run `npx --yes @morty-build/cli@latest restart`
+- **Restart to update Morty.** Run `npx --yes @portalcrew/morty@latest restart`
   to launch the current release. Use `status` to see the CLI and daemon versions.
 - **The website reports errors and performance diagnostics to Sentry.** URL query
   strings, user information, cookies, request headers, and request bodies are removed
@@ -120,7 +120,7 @@ downloaded or run. Read it yourself before you paste the prompt.
 
 ## Leaving
 
-Morty does not hold your session hostage. Run `npx --yes @morty-build/cli stop` and every Morty session
+Morty does not hold your session hostage. Run `npx --yes @portalcrew/morty stop` and every Morty session
 on that computer closes while pairing and the agent's own history stay intact. Pick
 the conversation back up natively:
 
@@ -130,8 +130,8 @@ the conversation back up natively:
 | Claude Code | `claude --resume`, or `claude --continue` for the most recent one |
 | Pi | `pi --resume`, or `pi --continue` for the most recent one |
 
-`npx --yes @morty-build/cli start` reconnects Morty later. To hand idle sessions back to the terminal
-without disconnecting Morty, run `npx --yes @morty-build/cli release` instead.
+`npx --yes @portalcrew/morty start` reconnects Morty later. To hand idle sessions back to the terminal
+without disconnecting Morty, run `npx --yes @portalcrew/morty release` instead.
 
 ## Security
 

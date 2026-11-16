@@ -19,7 +19,7 @@ List the smallest steps that reproduce the problem.
 
 - Operating system:
 - Node version:
-- Morty version (`npx --yes @morty-build/cli status`):
+- Morty version (`npx --yes @portalcrew/morty status`):
 - Agent and version:
 - Browser and version (if relevant):
 
