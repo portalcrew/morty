@@ -76,7 +76,7 @@ export function SetupPromptDetails({ prompt }: { readonly prompt: string }) {
                     </ul>
                     <p className="px-3 pb-2">
                         <ExternalLink
-                            className="text-morty-text-2 hover:text-foreground"
+                            className="text-morty-text-2 underline underline-offset-2 hover:text-foreground"
                             href={`${window.location.origin}/doc/setup.md`}
                         >
                             Read setup.md
