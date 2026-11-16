@@ -93,10 +93,7 @@ export function admitNow(activity: SessionActivity, operation: ImmediateSessionO
                 : admitted;
         case "change-environment":
             return usesAgentProcess(activity)
-                ? refused(
-                      "The execution environment cannot change while the Session's Agent is in use",
-                      "session_busy",
-                  )
+                ? refused("The execution environment cannot change while the Session's Agent is in use", "session_busy")
                 : admitted;
         case "steer": {
             const execution = activity.execution;
