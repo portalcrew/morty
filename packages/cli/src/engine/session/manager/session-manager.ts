@@ -816,6 +816,9 @@ export class SessionManager {
         return stored;
     };
 
+    /** Whether the Session is executing a command, from its preparation until the execution releases it. */
+    readonly isExecuting = (target: NativeSessionTarget): boolean => this.#executions.isBusy(target);
+
     readonly sessionStatus = (target: NativeSessionTarget): SessionStatus =>
         this.#reported(target, this.#executions.status(target));
 

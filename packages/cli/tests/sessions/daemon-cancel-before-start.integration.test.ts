@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, watch } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +17,7 @@ import { expect, test, vi } from "vitest";
 import { ControlledAcpAgentSpecification } from "../support/agents/controlled-acp.ts";
 import { withControlledDaemon } from "../support/agents/real-daemon.ts";
 import { writeControlledAcpExecutable } from "../support/controlled-acp-executable.ts";
+import { fileCreated } from "../support/file-created.ts";
 
 test("Given a command already completed, When a delayed queue edit cancels it before start, Then the Computer refuses to claim that it was withdrawn", async ({
     signal,
@@ -300,21 +300,6 @@ test("Given an unacknowledged command, When Stop arrives before its prompt, Then
         vi.useRealTimers();
     }
 }, 90_000);
-
-function fileCreated(directory: string, name: string): Promise<void> {
-    const created = Promise.withResolvers<void>();
-    const watcher = watch(directory, () => {
-        if (existsSync(join(directory, name))) {
-            watcher.close();
-            created.resolve();
-        }
-    });
-    if (existsSync(join(directory, name))) {
-        watcher.close();
-        created.resolve();
-    }
-    return created.promise;
-}
 
 test("Given a prompt still loading its conversation's saved history, When the client withdraws it, Then the Computer withdraws it before it starts and the next prompt runs", async ({
     signal,
