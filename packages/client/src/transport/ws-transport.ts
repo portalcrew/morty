@@ -710,7 +710,6 @@ export class WsTransport {
         return execution;
     };
 
-    /** How many deliveries and bytes the pending fan-outs hold, summed from them: they are the one record of it. */
     readonly #pendingLiveFanoutTotals = (): { readonly count: number; readonly bytes: number } => {
         let count = 0;
         let bytes = 0;

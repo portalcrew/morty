@@ -12,8 +12,8 @@ function browserCorsHeaders(origin: string, methods: readonly string[], headers:
     });
 }
 
-/** Refuses a browser origin that is not allowed; a request without an origin is not a browser's cross-origin request. */
 export function assertBrowserOriginAllowed(allowedOrigins: ReadonlySet<string>, origin: string): void {
+    // A request without an Origin is not a browser's cross-origin request.
     if (origin.length > 0 && !allowedOrigins.has("*") && !allowedOrigins.has(origin)) {
         throw new ComputerManagementError("browser_origin_denied", "The browser origin is not allowed", 403);
     }
