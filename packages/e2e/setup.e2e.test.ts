@@ -99,7 +99,7 @@ test("Given a browser opened the saved Computer's link, When the user approves r
     );
     expect(session.status()).toBe(401);
     // Observe the open page: reloading after it detects revocation dismisses this one-time notice.
-    await expect(page.getByRole("status")).toContainText("Current access ended");
+    await expect(page.getByRole("status").filter({ hasText: "Current access ended" })).toBeVisible();
     await page.goto(original.url);
     await expect(page.getByRole("heading", { name: "This link is no longer available" })).toBeVisible();
     // The new link differs only after "#", so the browser keeps the page that showed the previous one.
