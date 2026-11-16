@@ -23,6 +23,12 @@ function reconnectStatusText(app: TestApp): string | null {
     return notice.textContent;
 }
 
+function expectSendExplainsConnection(): void {
+    const send = getByRole(document.body, "button", { name: "Send message" });
+    expect(send).toHaveProperty("disabled", false);
+    expect(send.getAttribute("aria-disabled")).toBe("true");
+}
+
 function retrySeconds(app: TestApp): number {
     const match = /Retrying in (\d+) s/u.exec(reconnectStatusText(app) ?? "");
     if (match === null) {
@@ -103,14 +109,16 @@ test("Given native operation capacity is occupied, When I reopen a saved Session
     await clock.waitForSleep(1000, signal);
     await reloaded.user.click(await reloaded.queryElementByTestId(dataTestId.messageComposer));
     await reloaded.user.paste("Continue after capacity clears");
-    expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", true);
+    expectSendExplainsConnection();
     release.resolve();
     await Promise.all(reads);
     // The first automatic retry has a five-second ceiling; advance application time past its whole countdown.
     await act(async () => clock.advanceBy(5000));
     await reloaded.waitForView(() => {
         expect(reloaded.optionalElementByTestId(dataTestId.sessionLoadFailure)).toBeNull();
-        expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", false);
+        const send = getByRole(document.body, "button", { name: "Send message" });
+        expect(send).toHaveProperty("disabled", false);
+        expect(send.getAttribute("aria-disabled")).toBeNull();
     });
     expect(reloaded.elementByTestId(dataTestId.messageComposer)).toHaveProperty(
         "value",
@@ -124,7 +132,7 @@ test("Given native operation capacity is occupied, When I reopen a saved Session
     );
 });
 
-test("Given a new session with an unsent draft, When the browser resumes after repeated background bridge drops, Then it reconnects without flashing a notice or sending the draft", {
+test("Given a new session with an unsent draft, When the browser resumes after repeated background bridge drops, Then it reconnects without flashing an actionable notice or sending the draft", {
     timeout: 30_000,
 }, async () => {
     const clock = new TestClock(CLOCK_ORIGIN);
@@ -238,7 +246,7 @@ test("Given an online computer and a saved session, When the session first loads
     expect(reconnectStatusText(app)).toBeNull();
 });
 
-test("Given an open conversation with a draft, When recovery after two background suspensions takes twelve seconds, Then it stays quiet without sending the draft", {
+test("Given an open conversation with a draft, When recovery after two background suspensions takes twelve seconds, Then it keeps a recovery status without sending the draft", {
     timeout: dedicatedEnvironmentTimeout,
 }, async () => {
     const clock = new TestClock(CLOCK_ORIGIN);
@@ -255,7 +263,7 @@ test("Given an open conversation with a draft, When recovery after two backgroun
         await app.waitForView(() =>
             getByRole(document.body, "button", { name: /Switch computer/, description: "Reconnecting" }),
         );
-        expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", true);
+        expectSendExplainsConnection();
         expect(reconnectStatusText(app), `interruption ${cycle}`).toBeNull();
         expect(composer.disabled).toBe(false);
         await act(async () => {
@@ -269,7 +277,7 @@ test("Given an open conversation with a draft, When recovery after two backgroun
         try {
             await act(async () => clock.advanceBy(12_000));
             expect(reconnectStatusText(app), `slow foreground recovery ${cycle}`).toBeNull();
-            expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", true);
+            expectSendExplainsConnection();
         } finally {
             release();
         }
@@ -297,20 +305,36 @@ test("Given an interrupted conversation, When recovery lasts thirty seconds acro
     await app.waitForView(() =>
         getByRole(document.body, "button", { name: /Switch computer/, description: "Reconnecting" }),
     );
-    expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", true);
+    expectSendExplainsConnection();
+    expect(app.elementByTestId(dataTestId.sessionReconnectStatus).textContent).toMatch(/Reconnecting|Retrying/u);
+    expect(app.elementByTestId(dataTestId.sessionReconnectStatus).getAttribute("role")).toBe("status");
+    await app.user.click(getByRole(document.body, "button", { name: "Send message" }));
+    expect(document.body.textContent).toContain("Can't send while reconnecting");
+    expect(document.body.textContent).toContain("Your draft is saved. Try again when the connection returns.");
+    expect(composer.value).toBe("Still unsent");
+    expect(getByRole(document.body, "log", { name: "Messages" }).textContent).not.toContain("Still unsent");
     expect(reconnectStatusText(app)).toBeNull();
     await act(async () => clock.advanceBy(29_999));
+    expect(app.elementByTestId(dataTestId.sessionReconnectStatus).textContent).toMatch(/Reconnecting|Retrying/u);
     expect(reconnectStatusText(app)).toBeNull();
     await act(async () => clock.advanceBy(1));
     await app.waitForView(() => expect(reconnectStatusText(app)).not.toBeNull());
+    expect(app.optionalElementByTestId(dataTestId.sessionReconnectStatus)).toBeNull();
     expect(app.elementsByTestId(dataTestId.sessionReconnectNotice)).toHaveLength(1);
     const retry = await app.waitForView(() => getByRole(document.body, "button", { name: "Retry now" }));
+    const retrying = app.waitForView(() => {
+        const notice = app.elementByTestId(dataTestId.sessionReconnectStatus);
+        expect(notice.textContent).toContain("Retrying…");
+        expect(notice.querySelector("svg")?.classList.contains("animate-spin")).toBe(true);
+    });
     await app.daemon.reconnect();
     await app.user.click(retry);
+    await retrying;
     await app.waitForView(() =>
         getByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" }),
     );
     expect(reconnectStatusText(app)).toBeNull();
+    expect(app.optionalElementByTestId(dataTestId.sessionReconnectStatus)).toBeNull();
     expect(composer.value).toBe("Still unsent");
 });
 
@@ -463,7 +487,7 @@ test("Given a recovered Computer and an unsent draft, When the retry deadline ar
     );
     await app.daemon.reconnect();
     expect(composer.disabled).toBe(false);
-    expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", true);
+    expectSendExplainsConnection();
     expect(reconnectStatusText(app)).toBeNull();
     await act(async () => clock.advanceBy(5_000));
     await app.waitForView(() => {
@@ -529,7 +553,7 @@ test("Given an unavailable Computer and an editable draft, When automatic retrie
     expect(queryAllByRole(attachmentAlert, "status")).toHaveLength(0);
     expect(getByRole(attachmentAlert, "button", { name: "Retry now" })).not.toBeNull();
     expect(composer.disabled).toBe(false);
-    expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", true);
+    expectSendExplainsConnection();
     await app.user.type(composer, " even now");
     fireEvent.change(getByLabelText(composerForm, "Choose attachments"), {
         target: {

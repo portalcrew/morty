@@ -15,6 +15,7 @@ import { ImageGallery, PreviewImage } from "../images/image-gallery.tsx";
 import { Button } from "../ui/cloud-button.tsx";
 import { ScrollArea } from "../ui/scroll-area.tsx";
 import { Textarea } from "../ui/textarea.tsx";
+import { useToast } from "../ui/toast.tsx";
 import { useAutoGrowingTextarea } from "../utils/use-auto-growing-textarea.ts";
 import { useComposerFocus } from "../utils/use-composer-focus.ts";
 import { useScrollClippedEdges } from "../utils/use-scroll-clipped-edges.ts";
@@ -108,6 +109,7 @@ export function BotChatComposer({
     onStop,
     onSubmit,
     outputState,
+    sendBlockedMessage,
     submitDisabled,
     stopDisabled = false,
 }: {
@@ -141,6 +143,8 @@ export function BotChatComposer({
     readonly onStop: () => void;
     readonly onSubmit: () => void;
     readonly outputState: "idle" | "sending" | "running" | "stopping";
+    /** Why a draft cannot be sent while this Session reconnects. */
+    readonly sendBlockedMessage?: string | undefined;
     /** The owner's rule refuses a submission now, including while attachments are still being read. */
     readonly submitDisabled: boolean;
     readonly stopDisabled?: boolean;
@@ -152,6 +156,13 @@ export function BotChatComposer({
     useAutoGrowingTextarea(textarea, draft, scrollViewport);
     const clipped = useScrollClippedEdges(scrollViewport, composerScrollEdgeThresholdPx);
     const { attachments, state: attachmentState } = attachmentModel;
+    const showToast = useToast();
+    const explainBlockedSend =
+        outputState === "idle" &&
+        submitDisabled &&
+        sendBlockedMessage !== undefined &&
+        attachmentState.kind !== "reading" &&
+        (draft.trim().length > 0 || attachments.length > 0);
 
     const submit = (event: FormEvent<HTMLFormElement>): void => {
         event.preventDefault();
@@ -163,6 +174,12 @@ export function BotChatComposer({
             } else {
                 textarea.current?.focus({ preventScroll: true });
             }
+        } else if (explainBlockedSend) {
+            showToast({
+                title: sendBlockedMessage,
+                description: "Your draft is saved. Try again when the connection returns.",
+                variant: "error",
+            });
         }
     };
 
@@ -297,6 +314,7 @@ export function BotChatComposer({
                     <div className="flex shrink-0 items-center gap-1">
                         <Button
                             aria-busy={outputState === "sending"}
+                            aria-disabled={explainBlockedSend || undefined}
                             aria-label={
                                 outputState === "sending"
                                     ? "Sending message"
@@ -306,16 +324,17 @@ export function BotChatComposer({
                                         ? "Send message"
                                         : "Stop agent output"
                             }
-                            className={composerActionButtonClassName}
+                            className={`${composerActionButtonClassName}${explainBlockedSend ? " opacity-50" : ""}`}
                             data-testid={dataTestId.sendMessage}
                             disabled={
                                 outputState === "sending" ||
                                 outputState === "stopping" ||
-                                (outputState === "idle" && submitDisabled) ||
+                                (outputState === "idle" && submitDisabled && !explainBlockedSend) ||
                                 (outputState === "running" && stopDisabled)
                             }
                             onClick={outputState === "running" && !submitAction ? onStop : undefined}
                             size="icon"
+                            title={explainBlockedSend ? sendBlockedMessage : undefined}
                             type={submitAction ? "submit" : "button"}
                         >
                             {submitAction || outputState === "sending" ? (

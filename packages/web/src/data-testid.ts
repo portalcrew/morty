@@ -21,6 +21,7 @@ export const dataTestId = Object.freeze({
     initialMessageStatus: "chat-initial-message-status",
     sessionStatus: "chat-session-status",
     sessionReconnectNotice: "chat-session-reconnect-notice",
+    sessionReconnectStatus: "chat-session-reconnect-status",
     sessionClosedNotice: "chat-session-closed-notice",
     queuedMessage: "chat-queued-message",
     sendMessage: "chat-send-message",
