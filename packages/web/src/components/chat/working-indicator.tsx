@@ -13,10 +13,6 @@ function elapsedSecondsSince(startedAt: number): number {
     return Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
 }
 
-/**
- * The running turn's work and how long it has run. `owner` names the client that owns the native session when the
- * turn runs there, which alone can stop it.
- */
 export function WorkingIndicator({ owner, startedAt }: { readonly owner: string | null; readonly startedAt: number }) {
     const [elapsedSeconds, setElapsedSeconds] = useState(() => elapsedSecondsSince(startedAt));
 
@@ -43,7 +39,6 @@ export function WorkingIndicator({ owner, startedAt }: { readonly owner: string 
     );
 }
 
-/** A message the native session's owner holds in its queue, which only that owner can resume. */
 export function OwnerQueueNotice({ owner }: { readonly owner: string }) {
     return (
         <span className="text-xs text-muted-foreground" data-testid={dataTestId.workingIndicator} role="status">

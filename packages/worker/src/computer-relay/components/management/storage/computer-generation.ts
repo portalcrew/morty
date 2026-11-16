@@ -4,7 +4,6 @@ import { computerPairing, computerRegistration, computerRevocation } from "../..
 
 const query = new QueryBuilder();
 
-/** The computer's current pairing generation: its latest one. Each computer has its own database. */
 export const currentGeneration = () =>
     query.select({ generation: max(computerPairing.generation) }).from(computerPairing);
 

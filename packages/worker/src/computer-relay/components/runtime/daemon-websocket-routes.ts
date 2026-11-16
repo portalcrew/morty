@@ -13,7 +13,6 @@ function socketLogContext(webSocket: WebSocket) {
     }
 }
 
-/** DO-owned daemon/relay peer messages and lifecycle, with no HTTP fetch entrypoint. */
 export class DaemonWebSocketRoutes {
     readonly #dependencies: DurableObjectContext;
     readonly #logger: typeof logger;
@@ -52,7 +51,6 @@ export class DaemonWebSocketRoutes {
         webSocket: WebSocket,
         close: { readonly code: number; readonly reason: string; readonly wasClean: boolean },
     ): Promise<void> {
-        // Complete the peer's close handshake.
         webSocket.close(1000, "Computer connection closed");
         const context = socketLogContext(webSocket);
         const details = {
@@ -81,7 +79,6 @@ export class DaemonWebSocketRoutes {
         }
     }
 
-    /** Closes live Session views whose credential no longer authorizes them. */
     async reauthorizeConnections(): Promise<void> {
         await this.withOperationSignal((signal) => this.#dependencies.services.runtime.reauthorizeConnections(signal));
     }

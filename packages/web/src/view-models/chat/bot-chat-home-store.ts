@@ -91,7 +91,6 @@ export interface BotChatNavigation {
 export interface BotChatHomeStore {
     readonly userMessageCollapse: UserMessageCollapseStore;
     readonly composerAttachments: ReturnType<typeof createComposerAttachmentStore>;
-    /** The draft written while creating the Session the page followed, until that Session's composer takes it. */
     readonly draftHandoff: {
         readonly sessionTarget: NativeSessionTarget;
         readonly draft: string;
@@ -100,23 +99,19 @@ export interface BotChatHomeStore {
     readonly selection: ConversationSelectionState;
     readonly creation: ConversationCreationState;
     readonly draft: string;
-    /** Bumped whenever the message list should re-arm following the latest message. */
     readonly scrollFollowRevision: number;
-    /** Loads the selected Session once the Computer's entry request is answered. */
     readonly load: (signal: AbortSignal) => Promise<void>;
     /**
      * The Computer answered the page's entry request. The selection waiting for it moves in the same step: to loading
      * when the Computer is paired, to a failure when it is not.
      */
     readonly entryAnswered: (outcome: ComputerEntryOutcome) => void;
-    /** The pairing was revoked: a Session still loading for it fails. */
     readonly computerRevoked: (message: string) => void;
     readonly newConversation: () => void;
     readonly openManaged: (target: NativeSessionTarget) => void;
     readonly retry: () => void;
     readonly setDraft: (draft: string) => void;
     readonly createConversation: (signal: AbortSignal) => Promise<void>;
-    /** Hands the draft written during creation to the Session the page followed; null for any other Session. */
     readonly takeNextDraft: (sessionTarget: NativeSessionTarget) => {
         readonly draft: string;
         readonly attachments: ReturnType<typeof createComposerAttachmentStore>;
@@ -132,7 +127,6 @@ function initialSelection(urlValue: string, createId: () => string): Conversatio
     return target !== null ? { kind: "pending", target } : { kind: "draft", key: createId() };
 }
 
-/** Setup is a projection of its owning workflows, not a second stored configuration snapshot. */
 function homeSetupReason(home: BotChatHomeStore, computer: ComputerStatusStore): SetupReason | null {
     if (computer.pairing.kind === "unpaired") {
         return "unconfigured";
@@ -194,7 +188,6 @@ function composerMessage(
     };
 }
 
-/** What the New Session page offers now: the composer's send control and a failed first message's Retry. */
 export function newConversationPresentation(
     home: BotChatHomeStore,
     computer: ComputerStatusStore,
@@ -217,7 +210,6 @@ function creationKey(commandId: string, settings: ChatDraftConfiguration): strin
     return JSON.stringify([commandId, settings.harness, settings.workspaceRef, settings.configurations]);
 }
 
-/** A first message no Session took, on its way back to the New Session draft. */
 type ReturnedFirstMessage = Pick<QueuedDraftMessage, "attachments" | "commandId" | "content">;
 
 export const createBotChatHomeStore = (
@@ -235,14 +227,10 @@ export const createBotChatHomeStore = (
         readonly computer: ComputerStatusStoreApi;
         readonly titles: SessionTitlesStore;
         readonly draftConfiguration: () => ChatDraftConfiguration | null;
-        /** Whether the connection header reports the New Session page's connection available, network and Computer included. */
         readonly connectionAvailable: () => boolean;
         readonly entry?: "address" | "restore";
-        /** Resolves once the Computer answered the page's entry request, which a Session load waits for. */
         readonly computerEntered: (signal: AbortSignal) => Promise<ComputerEntryOutcome>;
-        /** An operation through the Computer failed for connectivity: the Computer's follow recovers. */
         readonly onComputerInterrupted: () => void;
-        /** An operation reported the Computer's pairing revoked: the Computer's follow waits for setup to repair it. */
         readonly onComputerRevokedByOperation: (message: string, signal: AbortSignal) => Promise<void>;
         /** Announced when the view failed only because the Computer was unreachable and waits for it to be retried. */
         readonly onWaitingForComputer: () => void;
@@ -255,23 +243,12 @@ export const createBotChatHomeStore = (
          * owner restarts the home and directory loads.
          */
         readonly onRestart: () => void;
-        /**
-         * Announced when another conversation was selected, or the selected one is tried again: the owner restarts the
-         * home load, which loads the selected Session. The directory of conversations does not depend on the selection.
-         */
         readonly onSelectionChanged: () => void;
         /** Announced when a created conversation joins the directory: the owner reloads it without reloading the home view. */
         readonly onDirectoryRefreshed: () => void;
-        /**
-         * Hands a created Session its first message: the Session's delivery owns it, durably, from this call until
-         * the Computer takes it, whichever conversation is on screen.
-         */
         readonly onFirstMessage: (sessionTarget: NativeSessionTarget, message: SubmittedMessage) => void;
-        /** Announced after a transition that selects a new draft: the owner reloads the draft controls. */
         readonly onDraftSelected: () => void;
-        /** Announced after a transition that targets another conversation: the owner re-scopes the status watch. */
         readonly onSelectionTargeted: (conversationId: NativeSessionTarget | null) => void;
-        /** Announced after a transition that makes a selection ready: the owner builds the pane for it. */
         readonly onSelectionReady: (selection: Extract<ConversationSelectionState, { readonly kind: "ready" }>) => void;
     },
 ) => {
@@ -289,9 +266,6 @@ export const createBotChatHomeStore = (
         onSelectionReady,
     } = options;
     return createStore<BotChatHomeStore>()((set, get) => {
-        // Announced from the explicit transition sites: a ready selection
-        // builds the pane for it, and every selection transition re-scopes
-        // the status watch to the selected conversation (null for a draft).
         const announceSelection = (): void => {
             const selection = get().selection;
             onSelectionTargeted(selectedConversationTarget(selection));
@@ -313,8 +287,6 @@ export const createBotChatHomeStore = (
             set({ selection });
             announceSelection();
         };
-        // The reload copies of first messages no Session owns yet, oldest first. A copy ends once its Session owns the
-        // message or the draft takes it back.
         const unsentEntry = newConversationUnsentMessagesEntry(computerId);
         const unsentFirstMessages = () => centralSessionStorage.read(unsentEntry) ?? [];
         const keepUnsentFirstMessage = (message: { readonly commandId: string; readonly content: string }): void => {
@@ -331,12 +303,8 @@ export const createBotChatHomeStore = (
                 centralSessionStorage.write(unsentEntry, remaining);
             }
         };
-        // First messages no Session took while the New Session page was not showing them, oldest first. Each keeps
-        // its reload copy until a New Session draft takes it back.
         let returned: readonly ReturnedFirstMessage[] = [];
-        // The first load restores what an earlier page could not hand to a Session; later loads only load the Session.
         let firstLoadStarted = false;
-        /** Writes the New Session draft under the key sending it uses; an empty draft keeps nothing. */
         const writeDraft = (key: string, text: string): void => {
             const entry = newConversationDraftEntry(computerId);
             if (text === "") {
@@ -400,8 +368,6 @@ export const createBotChatHomeStore = (
                     const selected = get().selection;
                     if (selected.kind === "draft") {
                         const stored = centralSessionStorage.read(newConversationDraftEntry(computerId));
-                        // First messages an earlier page could not hand to a Session return ahead of the draft, the
-                        // oldest first, and the draft continues the oldest one's creation.
                         const unsent = unsentFirstMessages();
                         const key = unsent[0]?.commandId ?? stored?.key ?? selected.key;
                         const text = unsent
@@ -417,7 +383,6 @@ export const createBotChatHomeStore = (
                             draft: text,
                         }));
                     } else {
-                        // A page that opens on another conversation keeps an earlier page's unsent first messages for the next draft.
                         const known = new Set(returned.map((message) => message.commandId));
                         returned = [
                             ...returned,
@@ -427,7 +392,6 @@ export const createBotChatHomeStore = (
                         ];
                     }
                 }
-                // A Session's failure belongs to the load that was in flight for it.
                 const failLoad = (
                     failure: "computer" | "agent-required" | "unavailable" | "connection",
                     message: string,
@@ -445,17 +409,14 @@ export const createBotChatHomeStore = (
                     }
                 };
                 try {
-                    // A draft or an open Session has nothing to load.
                     if (get().selection.kind === "draft" || get().selection.kind === "ready") {
                         return;
                     }
-                    // An answer the page already holds moves the selection before anything else runs.
                     const outcome =
                         computerEntryOutcome(computer.getState()) ?? (await options.computerEntered(signal));
                     signal.throwIfAborted();
                     get().entryAnswered(outcome);
                     if (outcome.kind === "failed") {
-                        // The request this load waited on failed; the Computer's status holds why.
                         const entry = computer.getState().entry;
                         if (entry.kind === "failed") {
                             failLoad(entry.failure, entry.message);
@@ -581,14 +542,10 @@ export const createBotChatHomeStore = (
             },
             newConversation: () => {
                 restoredTarget = null;
-                // A first message still in creation stays with its creation; one whose Session could not be created
-                // returns to the new draft.
                 const failed = failedDraftMessage(get().creation);
                 get().composerAttachments.getState().clear();
                 const current = get();
                 centralSessionStorage.remove(newConversationDraftEntry(computerId));
-                // Entry that is not ready starts over; leaving a pending selection releases its request, even when entry
-                // configuration is already ready.
                 const startOver = !homeCanStartConversation(current, computer.getState());
                 const releaseSelection =
                     current.selection.kind === "pending" ||
@@ -672,7 +629,6 @@ export const createBotChatHomeStore = (
                     return;
                 }
                 const content = draft.trim();
-                // A first message is sent under the draft's key; a retry sends the same message under its own.
                 const queuedMessage =
                     current.creation.kind === "draft"
                         ? {
@@ -721,8 +677,6 @@ export const createBotChatHomeStore = (
                             kind: "session-create-failed",
                         }),
                     }));
-                    // The page that sent it shows the failure with Retry; once the user has left it, the message
-                    // returns to the draft.
                     if (failedDraftMessage(get().creation)?.commandId !== commandId) {
                         returnFirstMessage(queuedMessage);
                     }
@@ -759,7 +713,6 @@ export const createBotChatHomeStore = (
                             kind: "conversation-created",
                             session,
                         }),
-                        // The attachment store moves with the draft, including any read still in progress.
                         draftHandoff: {
                             sessionTarget: conversationId,
                             draft: state.draft,

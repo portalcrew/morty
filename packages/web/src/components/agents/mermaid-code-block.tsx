@@ -17,7 +17,6 @@ function MermaidSource({ code, message }: { readonly code: string; readonly mess
 type DiagramComponent = typeof import("./mermaid-diagram.tsx")["default"];
 let diagramComponent: Promise<DiagramComponent> | null = null;
 
-/** Starts (once) loading the diagram renderer; safe to call eagerly. */
 export function loadDiagramRenderer(): Promise<DiagramComponent> {
     diagramComponent ??= import("./mermaid-diagram.tsx").then(
         (module) => module.default,

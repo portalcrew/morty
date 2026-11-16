@@ -21,8 +21,6 @@ function isObject(value: unknown): value is JsonObject {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// A non-streaming gateway: a JSON body even for stream requests. Claude then yields
-// the assistant message with stop_reason end_turn ahead of its result.
 function answer(response: ServerResponse, model: string, text: string): void {
     response.writeHead(200, { "content-type": "application/json" }).end(
         JSON.stringify({
@@ -100,8 +98,6 @@ test("Given Claude's Stop hook outlasts the result watchdog, When I send the nex
             throw new Error("Missing isolated Claude configuration");
         }
         await mkdir(config, { recursive: true });
-        // A user Stop hook that runs until the test releases it, like a "run the tests
-        // before finishing" hook taking longer than the adapter's result watchdog.
         const hook = join(config, "stop-hook.mjs");
         await writeFile(
             hook,
@@ -141,7 +137,6 @@ test("Given Claude's Stop hook outlasts the result watchdog, When I send the nex
                 );
             let answers = "";
             let submitted = "";
-            /** Reads the next live event, recording delivered text; returns its lifecycle payload. */
             const next = async () => {
                 const event = decodeSessionLiveEvent(JSON.parse(await peer.nextEvent()));
                 if (event.type === "acp") {
@@ -173,8 +168,6 @@ test("Given Claude's Stop hook outlasts the result watchdog, When I send the nex
             };
 
             try {
-                // The first turn answers, then its Stop hook keeps the result back past
-                // the adapter's watchdog, which settles the prompt on its own.
                 const first = randomUUID();
                 send(first, firstPrompt);
                 const firstCompletion = await completion(first);

@@ -25,11 +25,9 @@ import type { ComposerAttachment } from "./composer-attachment.ts";
 import { type ComposerNoticePlacement, ComposerNoticeSlot, composerErrorMessage } from "./composer-notice-slot.tsx";
 
 const composerMaxHeightPx = 256;
-/** Outer vertical padding and footer height. */
 const composerChromeHeightPx = 64;
 const composerTextareaMaxHeightPx = composerMaxHeightPx - composerChromeHeightPx;
 const composerScrollEdgeThresholdPx = 1;
-/** Send and stop share one primary control; only the glyph changes. */
 const composerActionButtonClassName =
     "size-8! rounded-full bg-foreground text-background hover:bg-foreground/85 active:bg-foreground/75";
 
@@ -115,7 +113,6 @@ export function BotChatComposer({
 }: {
     readonly attachmentModel: ComposerAttachmentStore;
     readonly focusScope?: object;
-    /** Whether the attachment rules admit another file now. */
     readonly canAttach: boolean;
     readonly attachmentSignal: AbortSignal;
     readonly children: ReactNode;
@@ -130,7 +127,6 @@ export function BotChatComposer({
      * card and a second assertive region inside itself.
      */
     readonly connectionNotice?: ((inline: boolean) => ReactNode) | undefined;
-    /** Plain status text with no notice of its own; the composer gives it a neutral alert surface. */
     readonly statusMessage?: string | undefined;
     /**
      * Where the notice slot sits. "overlay" renders it inside this form, floating
@@ -145,7 +141,6 @@ export function BotChatComposer({
     readonly outputState: "idle" | "sending" | "running" | "stopping";
     /** Why a draft cannot be sent while this Session reconnects. */
     readonly sendBlockedMessage?: string | undefined;
-    /** The owner's rule refuses a submission now, including while attachments are still being read. */
     readonly submitDisabled: boolean;
     readonly stopDisabled?: boolean;
 }) {

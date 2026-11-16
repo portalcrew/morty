@@ -4,15 +4,11 @@ import type { ComputerIdentityCredential } from "../../../../contracts/relay/pai
 import { DatabaseError } from "../../../../infra/sql-database.ts";
 import type { ComputerRelayStore } from "../storage/computer-relay-store.ts";
 
-/** A credential that matches nothing, including one stored for a Computer that is no longer served. */
 function unmatchedCredential(credential: ComputerIdentityCredential): PairingDirectoryError {
     const code = credential.kind === "pairing-code" ? "invalid_pairing_code" : "unauthorized";
     return new PairingDirectoryError(code, "A valid pairing or channel credential is required");
 }
 
-/**
- * Verifies credentials against the owning computer's store, then checks its authoritative directory lifecycle.
- */
 export class ComputerIdentityService {
     readonly #computerId: string;
     readonly #store: ComputerRelayStore;
@@ -21,11 +17,6 @@ export class ComputerIdentityService {
         this.#store = store;
     }
 
-    /**
-     * Presents a daemon credential with its successor. The Computer store rotates the credential; a retired credential
-     * presented with another successor is reported as reused, for the caller to end the Computer's access, and one of a
-     * Computer whose access already ended as revoked.
-     */
     readonly rotateComputer = async (
         presentedHash: string,
         successorHash: string,

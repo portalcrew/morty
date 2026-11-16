@@ -20,5 +20,4 @@ const platforms: ReadonlyMap<NodeJS.Platform, ProcessPlatformSupport> = new Map(
     ["win32", windowsProcessPlatform],
 ]);
 
-/** This host's process operations. */
 export const hostProcessPlatform: ProcessPlatformSupport = platforms.get(process.platform) ?? fallbackPlatform;

@@ -71,7 +71,6 @@ test("Given a follow-up the Computer rejected while a reply runs, When I ask to 
     });
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "answer then hold");
     await app.waitForView(() => expect(document.body.textContent).toContain("Partial answer before stopping."));
-    // Production validation rejects the oversized follow-up before it enters the Computer's queue.
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "x".repeat(100_001));
     const retry = (): HTMLElement =>
         getByRole(app.elementByTestId(dataTestId.queuedMessage), "button", { name: "Retry message" });

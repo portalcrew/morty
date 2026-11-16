@@ -175,7 +175,6 @@ const readyAgents = [
     },
 ];
 
-/** Connects as a paired daemon does: each connection presents the credential and a successor that becomes current. */
 class DaemonCredential {
     #current: string;
 
@@ -891,7 +890,6 @@ async function connectComputerDaemon(
     });
     daemon.accept();
     expect(decodeWorkerToDaemonMessage(await daemonMessages.next()).kind).toBe("computer.liveness.ready");
-    /** Heartbeats exactly as the daemon does and returns when Cloudflare answered, by its own clock. */
     const heartbeat = async (): Promise<number> => {
         daemon.send(COMPUTER_HEARTBEAT_MESSAGE);
         expect(await daemonMessages.next()).toBe(COMPUTER_HEARTBEAT_ACK_MESSAGE);
@@ -1009,9 +1007,7 @@ async function connectComputerDaemon(
                     },
                 ),
             ),
-        /** Signs the issued claims again, optionally with another lifetime, under the key `signer` derives. */
         resignCredential: async (signer: CredentialSigner, lifetimeMilliseconds?: number) => {
-            // Sign adversarial claims outside the Relay issuer, which refuses invalid lifetimes.
             const decoded = decodeSessionAccessCredential(text(sessionAccess, "credential"));
             const claims =
                 lifetimeMilliseconds === undefined
@@ -1036,7 +1032,6 @@ async function connectComputerDaemon(
         daemonMessages,
         heartbeat,
         readOnline: async () => (await backend.agents(signal))["online"],
-        /** Starts the submitted Turn: the Computer records its start and answers the submission as running. */
         startTurn: (commandId: string, position: string) => {
             daemon.send(
                 encodeSessionEventEnvelope({
@@ -2630,7 +2625,6 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                 );
             };
 
-            // First Turns carry the teammate's instructions ahead of the user's message.
             const longPrompt = `${"instruction ".repeat(2_000)}\n\nsummarize the workspace`;
             expect(longPrompt.length).toBeGreaterThan(20_000);
             const longTurn = submitTurn("long-first-turn", longPrompt, []);
@@ -2747,7 +2741,6 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                 await sessionTurnStoppedEventCodec.decode(JSON.stringify(stopped), encryption.client, signal),
             ).toMatchObject({ stopReason: "cancelled", commandId: "long-first-turn" });
 
-            // An appended Turn the Computer queues is answered as queued.
             const queuedTurn = submitTurn("queued-follow-up", "queue this follow-up", []);
             expect(
                 (await decodeEncryptedDaemonInboundMessage(await daemonMessages.next(), encryption.computer, signal))
@@ -2797,7 +2790,6 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                     400,
                 ),
             ).toMatchObject({ error: { code: "invalid_request" } });
-            // A malformed settings change is the caller's error on the Session surface too.
             expect(
                 await responseJson(
                     await sessionRequest(
@@ -2881,9 +2873,6 @@ describe("Relay Turn submission", { concurrent: false }, () => {
             computerId,
         });
 
-        // The Relay no longer decides from the catalog. It forwards the steer
-        // to the Computer, whose own rejection answers with the same
-        // machine-readable code and a terminal status.
         const daemonCredential = new DaemonCredential(text(claimed, "computerCredential"));
         const daemonResponse = await daemonCredential.connect((request) => worker.fetch(request, environment));
         if (daemonResponse.webSocket === null) {
@@ -3057,7 +3046,6 @@ describe("Relay Turn submission", { concurrent: false }, () => {
         signal,
     }) => {
         const runtime = await connectComputerDaemon("silent-daemon", signal, { anchorClockToHeartbeat: true });
-        // The clock now reads when Cloudflare answered the daemon's heartbeat.
         const heartbeatAt = Date.now();
         try {
             const signal = new AbortController().signal;
@@ -3127,7 +3115,6 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                 kind: "session.prompt",
             });
 
-            // Once the silence outlasts the deadline, the next Turn is refused at once and releases the stranded one.
             vi.setSystemTime(heartbeatAt + 36_000);
             expect(await responseJson(await submit("after-silence-turn"), 503)).toMatchObject({
                 error: { code: "computer_offline" },
@@ -3151,7 +3138,6 @@ describe("Relay Turn submission", { concurrent: false }, () => {
             const runtime = await connectComputerDaemon(`offline-${body.kind}-answer`, signal, {
                 anchorClockToHeartbeat: true,
             });
-            // The clock now reads when Cloudflare answered the daemon's heartbeat.
             const heartbeatAt = Date.now();
             try {
                 vi.setSystemTime(heartbeatAt + 36_000);
@@ -3202,7 +3188,6 @@ describe("Relay Turn submission", { concurrent: false }, () => {
         signal,
     }) => {
         const runtime = await connectComputerDaemon("silent-presence", signal, { anchorClockToHeartbeat: true });
-        // The clock now reads when Cloudflare answered the daemon's heartbeat.
         const heartbeatAt = Date.now();
         try {
             vi.setSystemTime(heartbeatAt + 30_000);
@@ -3399,7 +3384,6 @@ it("Given a Fork in flight, When it is requested again concurrently and after Re
             webSockets: "hibernate",
         });
         const replayed = runtime.forkNative(operationId, await makeFork(input));
-        // The Computer answers the retry from the receipt it keeps under the same operation identity.
         expect(
             await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),
         ).toEqual(fork);
@@ -3446,7 +3430,6 @@ it("Given a cancelled fork caller whose successful daemon reply is delayed, When
         expect(
             await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),
         ).toMatchObject(command);
-        // The Computer has finished; its genuine encrypted success has not reached the Worker yet.
         const delayed = await nativeSessionResultCodec.encode(
             forkResult(requestId, nativeTarget("cancelled-first-fork")),
             encryption.computer,
@@ -4145,8 +4128,6 @@ describe("Computer prompt acknowledgements", () => {
                 throw new Error("Expected the cancellation to reach the Computer");
             }
             expect(cancellation.commandId).toBe("preparing-command");
-            // A command cancelled before it starts answers its submission as settled, and the cancellation with
-            // how it stopped.
             runtime.daemon.send(
                 await sessionPromptAcceptedEventCodec.encode(
                     {

@@ -8,7 +8,6 @@ const CLOCK_ROW = 0;
 const clockRowSchema = z.object({ latestAt: z.number().int().safe().nonnegative() });
 const countRowSchema = z.object({ claims: z.number().int().nonnegative() });
 
-/** The packets a Computer admitted while they are fresh, and the latest time it admitted one at. */
 export class ReplayLedgerTable {
     readonly #database: LocalSqliteDatabase;
 
@@ -27,7 +26,6 @@ export class ReplayLedgerTable {
         return row === undefined ? 0 : clockRowSchema.parse(row).latestAt;
     };
 
-    /** Forgets the claims that expired by `now`; an expired packet is refused by its own terms. */
     readonly forgetExpired = (now: number): void => {
         this.#database.orm.delete(replayClaim).where(lte(replayClaim.expiresAt, now)).run();
     };

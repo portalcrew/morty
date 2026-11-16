@@ -36,7 +36,6 @@ const agents = {
                 specification: new ClaudeCodeAgentSpecification(),
             };
         },
-        // Each terminal run is a fresh native client, as when the user returns to `claude --resume`.
         terminal: (sessionId: string, first: boolean) => ["-p", first ? "--session-id" : "--resume", sessionId],
     },
     pi: {
@@ -168,7 +167,6 @@ test.for(["claude", "pi"] as const)(
             await terminal("TERMINAL_THREE reply without tools");
             expect(sentWith("TERMINAL_THREE").some((conversation) => conversation.includes("MORTY_TWO"))).toBe(true);
 
-            // Morty's idle process loaded the conversation before the terminal continued it.
             expect(await historyInMorty(peer, sessionTarget)).toContain("TERMINAL_THREE");
             await promptFromMorty(peer, sessionTarget, "MORTY_FOUR reply without tools");
             expect(sentWith("MORTY_FOUR").some((conversation) => conversation.includes("TERMINAL_THREE"))).toBe(true);

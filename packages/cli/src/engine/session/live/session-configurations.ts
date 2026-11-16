@@ -62,13 +62,11 @@ export async function replaySessionConfigurations(
     }
 }
 
-/** The settings a user chose for a Session, following the changes the Agent later makes to them. */
 export class SessionConfigurations {
     #selected: readonly StoredSessionConfiguration[] = [];
 
     readonly stored = (): readonly StoredSessionConfiguration[] => this.#selected;
 
-    /** Follows the Agent's own changes, such as leaving Plan mode, to the settings a user chose. */
     readonly capture = (options: readonly SessionConfigOption[]): void => {
         this.#selected = this.#selected.map((selection) => {
             const current = options.find(

@@ -11,7 +11,6 @@ import { requestTimeoutMiddleware } from "../../../../middleware/request-timeout
 import type { ComputerRouteHttpEnvironment } from "../../../http/environment.ts";
 import type { RelayProtocolRouteContext } from "./protocol-routes.ts";
 
-// validateAgents decodes the catalog and reports its own error code.
 const catalogRequestSchema = v.object({ agents: v.unknown() });
 
 export function createComputerRoutes(ctx: RelayProtocolRouteContext) {

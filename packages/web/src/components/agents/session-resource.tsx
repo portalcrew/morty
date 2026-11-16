@@ -10,7 +10,6 @@ import type {
 
 const StoreFactoryContext = createContext<SessionResourceStoreFactory | null>(null);
 
-/** Provides the view-model factory that owns the resource workflow, once for the whole application. */
 export function SessionResourceStoreProvider({
     createStore,
     children,

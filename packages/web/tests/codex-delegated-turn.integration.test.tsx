@@ -29,7 +29,6 @@ test("Given the Codex app owns the conversation, When it holds my message in its
         expect(app.elementByTestId(dataTestId.workingIndicator).textContent).toBe(
             "Queued in Codex. If Codex paused its queue, choose Continue there.",
         );
-        // A queued message can still be withdrawn from here.
         expect(getByRole(document.body, "button", { name: "Stop agent output" })).toHaveProperty("disabled", false);
     });
 

@@ -67,10 +67,6 @@ import type {
 } from "@anthropic-ai/sdk/resources/beta.mjs";
 import { z } from "zod";
 
-/**
- * Union of all possible content types that can appear in tool results from the Anthropic SDK.
- * These are transformed to valid ACP ContentBlock types by toValidAcpContent().
- */
 type ToolResultContent =
     | TextBlockParam
     | DocumentBlockParam
@@ -124,10 +120,6 @@ interface ToolUpdate {
     };
 }
 
-/**
- * Convert an absolute file path to a project-relative path for display.
- * Returns the original path if it's outside the project directory or if no cwd is provided.
- */
 export function toDisplayPath(filePath: string, cwd?: string): string {
     if (!cwd) {
         return filePath;
@@ -549,8 +541,6 @@ function stripUsageBlock(text: string): string {
  *  linear time on any input. */
 const AGENT_ID_LINE = /^agentId: [\w-]+ \([^)]*\)$/;
 
-/** Remove a final `agentId: <id> (…)` line, plus trailing whitespace and the
- *  newline that preceded the line. */
 function stripAgentIdLine(text: string): string {
     const body = text.trimEnd();
     const lineStart = body.lastIndexOf("\n") + 1;
@@ -560,8 +550,6 @@ function stripAgentIdLine(text: string): string {
     return body.slice(0, Math.max(lineStart - 1, 0));
 }
 
-/** Apply {@link stripAgentTrailer} across a raw tool_result `content` (plain
- *  string or block array), leaving non-text blocks untouched. */
 function stripAgentTrailerFromContent(content: unknown): unknown {
     if (typeof content === "string") {
         return stripAgentTrailer(content);
@@ -640,7 +628,6 @@ export function toolUpdateFromToolResult(
         toolResult.content.length > 0 &&
         !(toolUse?.name === "Bash" && supportsTerminalOutput)
     ) {
-        // Only return errors
         return toAcpContentUpdate(toolResult.content, true);
     }
 
@@ -912,7 +899,7 @@ export function toolUpdateFromToolResult(
             return {};
         }
 
-        case "Edit": // Edit is handled in hooks
+        case "Edit":
         case "Write": {
             return {};
         }
@@ -969,8 +956,6 @@ function formatWebSearchHit(hit: { title: string; url: string }): string {
     return `${hit.title} (${hit.url})`;
 }
 
-/** Human-readable size for the document placeholder ("312 B", "2.4 KB",
- *  "1.3 MB"). */
 function formatByteSize(bytes: number): string {
     if (bytes < 1024) {
         return `${bytes} B`;
@@ -1116,13 +1101,6 @@ export function planEntries(input: { todos: ClaudePlanEntry[] } | undefined): Pl
     }));
 }
 
-/**
- * Per-session task list accumulated from Task* tool calls (TaskCreate /
- * TaskUpdate). The headless/SDK session emits these as incremental tool
- * calls keyed by task ID, replacing the snapshot-style TodoWrite tool.
- * Iteration order is insertion order (Map semantics), matching the order
- * tasks are created.
- */
 export type TaskEntry = {
     subject: string;
     status: "pending" | "in_progress" | "completed";
@@ -1131,11 +1109,6 @@ export type TaskEntry = {
 };
 export type TaskState = Map<string, TaskEntry>;
 
-/**
- * Best-effort parse of a structured Task* tool_result. The SDK delivers tool
- * outputs either as a string or as an array of TextBlockParam-like blocks
- * containing JSON text; try both.
- */
 function parseJsonToolOutput<T>(content: unknown, isExpectedOutput: (value: unknown) => value is T): T | undefined {
     const tryParse = (text: string): T | undefined => {
         try {
@@ -1377,13 +1350,8 @@ interface DiffToolResponseHunk {
 interface DiffToolResponse {
     filePath?: string;
     structuredPatch?: DiffToolResponseHunk[];
-    /** FileWriteOutput only (FileEditOutput carries no `type`): whether the
-     *  write created the file or overwrote an existing one. */
     type?: "create" | "update";
-    /** FileWriteOutput only: the content that was written. */
     content?: string;
-    /** FileWriteOutput only: the pre-write content — null on create, or on an
-     *  update whose previous content was too large to include. */
     originalFile?: string | null;
 }
 
@@ -1472,14 +1440,12 @@ export function toolUpdateFromDiffToolResponse(toolResponse: unknown): {
     return result;
 }
 
-/* A global variable to store callbacks that should be executed when receiving hooks from Claude Code */
 const toolUseCallbacks: {
     [toolUseId: string]: {
         onPostToolUseHook?: (toolUseID: string, toolInput: unknown, toolResponse: unknown) => Promise<void>;
     };
 } = {};
 
-/* Setup callbacks that will be called when receiving hooks from Claude Code */
 export const registerHookCallback = (
     toolUseID: string,
     {
@@ -1493,12 +1459,10 @@ export const registerHookCallback = (
     };
 };
 
-/* A callback for Claude Code that is called when receiving a PostToolUse hook */
 export const createPostToolUseHook =
     (options?: { onEnterPlanMode?: () => Promise<void> }): HookCallback =>
     async (input: any, toolUseID: string | undefined): Promise<{ continue: boolean }> => {
         if (input.hook_event_name === "PostToolUse") {
-            // Handle EnterPlanMode tool - notify client of mode change after successful execution
             if (input.tool_name === "EnterPlanMode" && options?.onEnterPlanMode) {
                 await options.onEnterPlanMode();
             }
@@ -1508,7 +1472,7 @@ export const createPostToolUseHook =
                 if (onPostToolUseHook) {
                     await onPostToolUseHook(toolUseID, input.tool_input, input.tool_response);
                 }
-                delete toolUseCallbacks[toolUseID]; // Cleanup after execution
+                delete toolUseCallbacks[toolUseID];
             }
         }
         return { continue: true };

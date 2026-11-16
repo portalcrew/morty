@@ -120,9 +120,7 @@ export class SessionEventCacheTable {
             // incompatible row degrades one merge instead of all persistence.
             try {
                 resolved.set(row.eventId, decodeSessionEvent(JSON.parse(cachedEventRowSchema.parse(row).eventJson)));
-            } catch {
-                // Keep the undecodable row unresolved.
-            }
+            } catch {}
         }
         return resolved;
     };

@@ -1,9 +1,5 @@
 import type { AgentDisplayContent } from "../../agents/display-content.ts";
 
-/**
- * Presentational contract for a tool call in the timeline. The projection in
- * the view-model layer produces it; the tool renderers consume it.
- */
 export type SessionToolCallState =
     | { readonly kind: "background"; readonly status: "running" | "completed" | "failed" | "stopped" | "unknown" }
     | { readonly kind: "running" }

@@ -62,7 +62,6 @@ type DraftSettingsState =
 
 type ReadyDraftSettings = Extract<DraftSettingsState, { readonly kind: "ready" }>;
 
-/** The setting fields on screen, including those kept while new ones load; only `ready` ones can be changed. */
 export function draftShownOptions(settings: DraftSettingsState): readonly SessionConfigOption[] {
     switch (settings.kind) {
         case "ready":
@@ -126,19 +125,9 @@ export interface DraftControlsStore {
     readonly browseCwd: (directory: string, signal: AbortSignal) => Promise<void>;
     readonly closeCwd: () => void;
     readonly forgetRecentCwd: (directory: string) => void;
-    /**
-     * A draft is selected: its settings live until `leave`, within `signal`. Entering again starts the new draft's
-     * settings over. Nothing loads while no draft is selected.
-     */
     readonly enter: (signal: AbortSignal) => Promise<void>;
-    /** The selection left the draft: its settings operations stop and nothing of them stays on screen. */
     readonly leave: () => void;
-    /** Loads the open draft's settings again, as Retry does. */
     readonly retry: (signal: AbortSignal) => Promise<void>;
-    /**
-     * The page observed a Computer configuration. Settings read under a different one are dropped; the open draft loads
-     * once the Computer can serve it, and a draft whose Agent the Computer no longer offers settles on an offered one.
-     */
     readonly computerChanged: (configuration: BotComputerConfiguration, signal: AbortSignal) => Promise<void>;
     readonly openCwd: () => void;
     readonly refreshRecentCwds: () => void;
@@ -177,9 +166,7 @@ function waitForCwdPreview(signal: AbortSignal): Promise<void> {
 export const createDraftControlsStore = (
     computerId: string,
     requests: Pick<BotChatApi, "directory" | "agentSettings">,
-    /** The Computer configuration the workspace keeps current. */
     computerConfiguration: () => BotComputerConfiguration | null,
-    /** A read found the Computer unreachable although the configuration says it is online. */
     onUnreachable: () => void,
 ) =>
     createStore<DraftControlsStore>()((set, get) => {
@@ -281,7 +268,6 @@ export const createDraftControlsStore = (
                 directoryLabel: directory.directoryLabel,
             });
         };
-        /** A new directory brings its own Agent settings, read while the draft keeps its selection. */
         const applyDirectory = async (
             settings: ReadyDraftSettings,
             directory: WorkspaceEntriesEvent,
@@ -476,7 +462,6 @@ export const createDraftControlsStore = (
                 operation.finish();
             }
         };
-        /** Reads the selected Agent's settings in the directory, keeping the selection and directory while they load. */
         const refreshSettings = async (
             settings: Extract<DraftSettingsState, { readonly kind: "ready" | "refreshing" }>,
             refresh: boolean,
@@ -554,7 +539,6 @@ export const createDraftControlsStore = (
                 await load(signal);
             },
             computerChanged: async (configuration, signal) => {
-                // Agent settings follow the Computer configuration: a different one drops those read before it.
                 const computer = JSON.stringify(configuration.computer);
                 const changed = computer !== agentSettings.computer;
                 if (changed) {
@@ -574,13 +558,11 @@ export const createDraftControlsStore = (
                     }
                     return;
                 }
-                // Only a draft that is not loading now waits for this configuration to load it.
                 const waiting =
                     settings.kind === "unreachable" || (settings.kind === "loading" && settingsOperation === null);
                 if (!changed && !waiting) {
                     return;
                 }
-                // Reconcile with this configuration. The new operation supersedes any read still in flight.
                 const selectedAgent =
                     settings.kind === "ready" || settings.kind === "refreshing" ? settings.selectedAgent : null;
                 const offered =
@@ -600,7 +582,6 @@ export const createDraftControlsStore = (
                     set({ cwdBrowser: { kind: "ready", directory: settings.cwd, path: settings.cwd.directoryLabel } });
                 }
             },
-            // The menu shows the recent directories as storage holds them now, including another tab's changes.
             refreshRecentCwds: () => {
                 set({ recentCwds: readRecentCwdPreferences(computerId) ?? [] });
             },

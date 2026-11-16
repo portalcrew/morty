@@ -20,7 +20,6 @@ interface RequestComputerPairing {
     readonly idempotencyKey: string;
 }
 
-/** The pairing request stored under the idempotency key, or the quota that refused a new one. */
 type ComputerPairingRequest =
     | { readonly kind: "created" }
     | { readonly kind: "existing"; readonly request: ComputerPairingRow }
@@ -54,7 +53,6 @@ export class ComputerRelayStore {
     readonly updateAgentCatalog = async (tokenHash: string, agents: string, signal: AbortSignal): Promise<boolean> =>
         (await this.#computers.updateAgents(tokenHash, agents, signal)).meta.changes === 1;
 
-    /** The pairing generation whose daemon may act for the computer now; null while none may. */
     readonly readActiveGeneration = async (signal: AbortSignal): Promise<number | null> =>
         await this.#credentials.readActiveGeneration(signal);
 
@@ -64,7 +62,6 @@ export class ComputerRelayStore {
     readonly listComputers = async (signal: AbortSignal): Promise<readonly ComputerDirectoryRow[]> =>
         await this.#computers.listComputers(signal);
 
-    /** Returns the pairing request created under the idempotency key, or creates one within the Computer quota. */
     readonly requestComputerPairing = async (
         value: RequestComputerPairing,
         signal: AbortSignal,
@@ -110,7 +107,6 @@ export class ComputerRelayStore {
     readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> =>
         await this.#computers.revokeComputer(now, signal);
 
-    /** Whether the computer holds the credential; the caller decides what a match authorizes. */
     readonly holdsCredential = async (credential: ComputerIdentityCredential, signal: AbortSignal): Promise<boolean> =>
         await credentialMatches(this.#database, credential, signal);
 

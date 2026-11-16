@@ -14,7 +14,6 @@ function isRasterMime(value: string): value is NativeHistoryImage["mimeType"] {
     return value === "image/png" || value === "image/jpeg" || value === "image/gif" || value === "image/webp";
 }
 
-/** Decode inline raster images before attempting the authorized local-file path. */
 function parseNativeHistoryImage(uri: string): NativeHistoryImage | null {
     const header = DATA_IMAGE_HEADER.exec(uri);
     if (header === null) {

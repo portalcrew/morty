@@ -16,10 +16,8 @@ const EDGE_THRESHOLD_PX = 4;
 type ScrollEdge = "top" | "bottom";
 
 type ScrollEdgeFadeBase = {
-    /** Element that actually scrolls. Use `ul` when the list itself is the scrollport. */
     readonly scrollElement?: "div" | "ul";
     readonly children: ReactNode;
-    /** Layout classes for the non-scrolling frame that holds the fades. */
     readonly frameClassName?: string;
     readonly className?: string;
     readonly viewportLabel?: string;
@@ -28,23 +26,18 @@ type ScrollEdgeFadeBase = {
     readonly onKeyDown?: KeyboardEventHandler<HTMLElement>;
     readonly role?: React.AriaRole;
     readonly tabIndex?: number;
-    /** Receives the actual scrollport element when a caller also needs to reference it. */
     readonly scrollElementRef?: (element: HTMLElement | null) => void;
 };
 
 type EdgeStrokeAppearance = {
-    /** Opaque border-color class matching the surface's final composited color. */
     readonly className: string;
     /** `outside` covers a layout seam; its frame and ancestors must not clip the stroke. */
     readonly placement: "inside" | "outside";
 };
 
 type PaintedEdgeFade = ScrollEdgeFadeBase & {
-    /** Opaque Tailwind `from-*` of the surface directly behind the scrollport. */
     readonly fadeFromClassName: string;
-    /** That same surface color at 0% alpha, for example `to-card/0`. */
     readonly fadeToClassName: string;
-    /** Shared placement classes for both fades, such as a native-scrollbar gutter. */
     readonly fadeClassName?: string;
     readonly edgeStroke?: EdgeStrokeAppearance;
     readonly revealSurface?: false;

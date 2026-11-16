@@ -9,8 +9,6 @@ test("Given a conversation recovering after suspension, when its history read ti
     const historyHeld = Promise.withResolvers<() => void>();
     let holdHistory = false;
     const connections = new Set<WebSocketRoute>();
-    // Forward to the real Relay. Delay one real history request while
-    // keeping subscription acknowledgements and heartbeats flowing.
     await page.routeWebSocket("**/morty/api/v1/computers/*/transport", (socket) => {
         const server = socket.connectToServer();
         connections.add(socket);

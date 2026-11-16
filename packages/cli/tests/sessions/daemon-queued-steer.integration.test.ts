@@ -35,7 +35,6 @@ const submit = (peer: RealDaemonPeer, prompt: string) => {
     return commandId;
 };
 
-/** Sends a steer and returns the identifier its reply names. */
 const steer = (peer: RealDaemonPeer, commandId: string, sessionTarget = peer.target): string => {
     const requestId = randomUUID();
     peer.send(

@@ -137,7 +137,6 @@ export function DevicesDialog({
 }: {
     readonly accessExpiry: StoreApi<AccessExpiryStore>;
     readonly computerName: string;
-    /** The page's one list of the other devices with access. */
     readonly devices: StoreApi<LinkedDevicesStore>;
     readonly signal: () => AbortSignal;
     readonly store: StoreApi<DeviceAccessStore>;

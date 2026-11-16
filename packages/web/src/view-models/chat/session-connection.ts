@@ -17,7 +17,6 @@ export type SessionConnection =
     | {
           /** The Computer archived the Session, so nothing this page does connects to it again. */
           readonly kind: "closed";
-          /** The Computer's explanation, or null when this page learned of the closing from a failed operation. */
           readonly reason: string | null;
       }
     | { readonly kind: "failed"; readonly message: string };
@@ -96,7 +95,6 @@ export function sessionReconnectAttempt(
     return { kind: "scheduled", delayMs: Math.round(ceiling * (0.5 + jitter * 0.5)) };
 }
 
-/** The disconnected state while an automatic retry counts down, or after retries are exhausted. */
 export function disconnectedConnection(
     message: string,
     remainingMs: number | null,

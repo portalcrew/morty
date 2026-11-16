@@ -4,7 +4,6 @@ import { raceAgentOperation } from "../../../cli/src/engine/acp/connection/agent
 import { type AcpClientHandler, createAcpClient } from "../../../cli/tests/support/acp/create-client.ts";
 import type { AgentConnection } from "../../../cli/tests/support/agents/agent-connection.ts";
 
-/** A stateful controlled peer, injected only by ACP boundary scenarios. */
 export interface ControlledAcpPeer {
     readonly terminated: Promise<AgentTermination>;
     readonly app: () => AgentApp;
@@ -12,7 +11,6 @@ export interface ControlledAcpPeer {
     readonly close: () => Promise<void>;
 }
 
-/** Connects an injected stateful ACP endpoint to the production daemon. */
 export class ControlledEndpointConnection implements AgentConnection {
     readonly #peer: ControlledAcpPeer;
     readonly connection: ClientConnection;

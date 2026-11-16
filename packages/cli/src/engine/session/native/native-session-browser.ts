@@ -268,7 +268,6 @@ export class NativeSessionService {
             );
         }
         const sourceTitle = target.info.title ?? "";
-        // A fork of an untitled conversation is untitled too, and is named like any new Session.
         const title =
             action === "fork" && sourceTitle.length > 0
                 ? nextForkTitle(sourceTitle, this.#sessions.listSessions(Number.MAX_SAFE_INTEGER))
@@ -314,7 +313,6 @@ export class NativeSessionService {
         };
     };
 
-    /** A Session an earlier run of an operation created, as this Runtime holds it now. */
     readonly #currentReady = async (
         requestId: string,
         target: NativeSessionTarget,
@@ -343,7 +341,6 @@ export class NativeSessionService {
     private readonly describeSessions = (sessions: readonly StoredSession[]): readonly SessionMetadata[] => {
         const entries: SessionMetadata[] = [];
         for (const session of sessions) {
-            // Report the recorded workspace even if it was deleted or unmounted.
             const directory = this.#directories.identifyRecorded(session.cwd);
             entries.push({
                 directory: directory.directory,

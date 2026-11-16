@@ -11,7 +11,6 @@ import {
     setupPrimaryButtonSize,
 } from "../setup/setup-card-shell.tsx";
 
-/** The document-level fallback shown when rendering the application throws. */
 export function MortyCrashFallback({ dialog }: { readonly dialog: BugReportDialogStore }) {
     return (
         <>

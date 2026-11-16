@@ -16,12 +16,7 @@ import { formatError } from "../format-error.ts";
 import { runtimeCoversMessage, runtimeHoldsCommand, type SessionExecutionState } from "./session-execution.ts";
 
 type SubmitRequest = Parameters<MortyClient["turns"]["submit"]>[1];
-/** The Computer took the message: it runs now, waits behind the Session's earlier work, or already settled. */
 export type SubmitTurn = (request: SubmitRequest, signal: AbortSignal) => Promise<MortyTurnAdmission>;
-/**
- * How one attempt reaches the Session through the request access it started with. Preparation uploads the message's
- * files and freezes the request that delivery then owns through submission and recovery.
- */
 interface DeliveryAttempt {
     readonly prepare: (message: SubmittedMessage, signal: AbortSignal) => Promise<Journal["request"]>;
     readonly submit: SubmitTurn;
@@ -42,7 +37,6 @@ export interface SubmittedMessage {
     readonly content: string;
 }
 export type Journal = {
-    /** Original local files are kept only in memory; the request already owns uploaded references. */
     readonly attachments: readonly ComposerAttachment[] | null;
     readonly commandId: string;
     readonly placement: DeliveryPlacement;
@@ -74,7 +68,6 @@ export function deliveryMessagePresentation(message: SubmittedMessage) {
     };
 }
 
-/** Why a submission failed before the service accepted it; delivery is the one record of it. */
 export type SubmissionFailure = { readonly code: string; readonly message: string };
 
 function submissionFailure(cause: unknown, fallback: string): SubmissionFailure {
@@ -94,7 +87,6 @@ export type DeliveryState =
     | { readonly kind: "delivery-unknown"; readonly journal: Journal }
     | { readonly kind: "failed"; readonly journal: Journal; readonly failure: SubmissionFailure };
 
-/** The message of a submission that failed before the service accepted it, kept until it is retried or discarded. */
 function failedSubmission(
     state: DeliveryState,
 ): { readonly message: SubmittedMessage; readonly failure: SubmissionFailure } | null {
@@ -114,7 +106,6 @@ function failedSubmission(
     }
 }
 
-/** The message the Session holds for its next connected pane to submit. */
 export function awaitingMessage(state: DeliveryState): SubmittedMessage | null {
     return state.kind === "awaiting-connection" ? state.message : null;
 }
@@ -143,31 +134,16 @@ export function deliveryMessages(
 
 export interface SessionDeliveryStore {
     readonly state: DeliveryState;
-    /**
-     * Messages the service accepted, with their files for editing, until the Computer's account covers them. Whether
-     * the page shows one is the presentation's decision, from the Computer's account as it stands.
-     */
     readonly accepted: readonly SubmittedMessage[];
     readonly discardUnknown: () => void;
-    /** Takes a new Session's first message, which a pane submits once it connects. */
     readonly awaitConnection: (message: SubmittedMessage) => void;
     readonly takeFailedMessage: () => SubmittedMessage | null;
-    /**
-     * Follows the Computer's account of the Session's execution as it now stands: an unknown delivery the Computer holds
-     * is delivered, and accepted messages its account now covers release their files.
-     */
     readonly observe: () => void;
-    /** The user withdrew an accepted message from the Computer's queue, which confirmed it. */
     readonly withdraw: (commandId: string) => void;
-    /**
-     * Prepares and submits a message on the Session's lifetime: the pane that started the attempt may stop before it
-     * settles, and the next pane shows where it is. The message is `preparing` as soon as this is called.
-     */
     readonly send: (message: SubmittedMessage, attempt: DeliveryAttempt) => Promise<void>;
     readonly retry: (submit: SubmitTurn) => Promise<void>;
 }
 
-/** The request a reload recovers: one the browser may have delivered, by the identity it was submitted under. */
 function pendingSubmission(state: DeliveryState): {
     readonly commandId: string;
     readonly placement: DeliveryPlacement;
@@ -213,7 +189,6 @@ function unsentContent(state: DeliveryState): string | null {
     }
 }
 
-/** Joins a message returned to the composer with the draft written after it. */
 export function prependToDraft(content: string, draft: string): string {
     return draft.length === 0 ? content : content.length === 0 ? draft : `${content}\n\n${draft}`;
 }
@@ -228,21 +203,16 @@ export function isAuthoritativeFailure(cause: unknown): boolean {
     );
 }
 
-/** The delivery of no Session, for a view that follows the open Session's delivery when none is open. */
 export const noSessionDelivery = createStore<Pick<SessionDeliveryStore, "state">>()(() => ({
     state: { kind: "idle" },
 }));
 
-/** The Session owns delivery and runs each attempt on its own lifetime, apart from the pane that started it. */
 export const createSessionDeliveryStore = (options: {
-    /** The Session's lifetime on this page; only its end cancels an attempt. */
     readonly lifetime: AbortSignal;
     readonly pendingSubmission: Omit<Journal, "attachments"> | null;
     /** Writes the frozen request before it can leave the browser; failure prevents submission. */
     readonly pendingSubmissionChanged: (journal: Omit<Journal, "attachments"> | null) => void;
-    /** Persists the unsent message's text, or clears it with null. */
     readonly unsentMessageChanged: (content: string | null) => void;
-    /** The Computer's account of the Session's execution, as the page holds it now. */
     readonly runtime: () => SessionExecutionState;
 }) => {
     type Update = {
@@ -257,7 +227,6 @@ export const createSessionDeliveryStore = (options: {
         const runtime = options.runtime();
         return accepted.filter((message) => !runtimeCoversMessage(runtime, message));
     };
-    /** The service accepted the journal's message, which the page keeps until the Computer's account covers it. */
     const accept = (journal: Journal, placement: DeliveryPlacement, current: SessionDeliveryStore): Update => ({
         state: { kind: "idle" },
         accepted: [
@@ -273,7 +242,6 @@ export const createSessionDeliveryStore = (options: {
     ): void => {
         set(accept(journal, placement, get()));
     };
-    /** Whether the Computer has shown it holds the submission whose request failed, which delivered it after all. */
     const delivered = (journal: Journal): boolean => runtimeHoldsCommand(options.runtime(), journal.commandId);
     const send = async (
         journal: Journal,
@@ -344,7 +312,6 @@ export const createSessionDeliveryStore = (options: {
         const set = (update: Update): void => {
             const state = update.state;
             const pending = pendingSubmission(state);
-            // The request is saved once, when it is frozen; moving from submitting to unknown keeps what was saved.
             if (pending?.commandId !== pendingSubmission(get().state)?.commandId) {
                 options.pendingSubmissionChanged(pending);
             }
@@ -375,9 +342,7 @@ export const createSessionDeliveryStore = (options: {
                 const state = current.state;
                 const confirmed: Update =
                     state.kind === "delivery-unknown" && delivered(state.journal)
-                        ? // A recovered message to run is shown by the Computer's account; a queued one keeps its
-                          // files for editing while it waits.
-                          state.journal.placement === "queue"
+                        ? state.journal.placement === "queue"
                             ? accept(state.journal, state.journal.placement, current)
                             : { state: { kind: "idle" } }
                         : { state };
@@ -408,7 +373,6 @@ export const createSessionDeliveryStore = (options: {
                     });
                     return;
                 }
-                // Freezing the request moves the message from unsent to possibly delivered under its identity.
                 const journal: Journal = {
                     commandId: message.commandId,
                     placement: message.placement,

@@ -16,7 +16,6 @@ afterEach(async () => {
     );
 });
 
-/** A Relay that accepts the Computer and records every Agent catalog the daemon publishes. */
 async function catalogRelay() {
     const published: string[] = [];
     const firstPublication = Promise.withResolvers<void>();
@@ -71,7 +70,6 @@ it("Given a running daemon with a long temporary directory whose Agent catalog w
     temporaryDirectories.push(directory);
     const temporaryFiles = join(directory, "long-temporary-directory-".repeat(6));
     await mkdir(temporaryFiles);
-    // The Agent inventory is read from the same isolated environment on each start.
     const environment = {
         HOME: directory,
         MORTY_STATE_DIRECTORY: join(directory, "state"),

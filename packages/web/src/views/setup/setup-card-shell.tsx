@@ -10,15 +10,12 @@ const setupSectionClassName = "mx-auto w-full max-w-[460px]";
 
 const setupCardClassName = `flex flex-col items-center overflow-hidden ${overlaySurfaceRadiusClassName} border-[1px] border-white bg-card px-8 pt-10 pb-6 text-center shadow-module backdrop-blur`;
 
-/** Vertical rhythm below title or description (24px top, 12px between children). */
 const setupContentStackClassName = "mt-6 w-full space-y-3";
 
-/** Full-width setup actions; pair with `setupPrimaryButtonSize` on cloud `Button`. */
 export const setupPrimaryButtonClassName = "w-full !rounded-[24px]";
 
 export const setupPrimaryButtonSize = "lg" as const;
 
-/** Primary heading on setup card surfaces (`SetupCardShell`). */
 const setupCardTitleClassName = "max-w-md text-24 font-semibold tracking-[-0.03em]";
 
 function SetupPageHeader({ headerAction }: { readonly headerAction: ReactNode }) {
@@ -39,7 +36,6 @@ function SetupPageHeader({ headerAction }: { readonly headerAction: ReactNode })
     );
 }
 
-/** Top logo bar plus a centered content column; pairs with a single card section surface. */
 function SetupPageWithHeader({
     children,
     headerAction,
@@ -66,7 +62,6 @@ function SetupPageWithHeader({
                 }
             >
                 {pageAction !== undefined && <div className="mb-6">{pageAction}</div>}
-                {/* Mobile: the gap above the card is 40% of the space left after the header and card. */}
                 {!hasPageLeading && <div aria-hidden="true" className="grow-[40] basis-0 md:hidden" />}
                 {children}
                 {!hasPageLeading && <div aria-hidden="true" className="grow-[60] basis-0 md:hidden" />}
@@ -142,7 +137,6 @@ export function SetupCardShell({
     readonly cardLeading?: ReactNode;
     readonly headerAction?: ReactNode;
     readonly pageAction?: ReactNode;
-    /** Content below the card. */
     readonly pageFooter?: ReactNode;
     readonly pageNotice?: ReactNode;
     readonly titleId: string;

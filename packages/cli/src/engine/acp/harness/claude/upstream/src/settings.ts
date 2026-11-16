@@ -8,18 +8,6 @@ import * as path from "node:path";
 import { filterEscalatingDefaultMode, resolveSettings, type Settings } from "@anthropic-ai/claude-agent-sdk";
 import { CLAUDE_CONFIG_DIR } from "./acp-agent.js";
 
-/**
- * Permission rule format examples:
- * - "Read" - matches all Read tool calls
- * - "Read(./.env)" - matches specific path
- * - "Read(./.env.*)" - glob pattern
- * - "Read(./secrets/**)" - recursive glob
- * - "Bash(npm run lint)" - exact command prefix
- * - "Bash(npm run:*)" - command prefix with wildcard
- *
- * Docs: https://code.claude.com/docs/en/iam#tool-specific-permission-rules
- */
-
 function getManagedSettingsPath(): string {
     switch (process.platform) {
         case "darwin":
@@ -62,9 +50,6 @@ export class SettingsManager {
         this.logger = options?.logger ?? console;
     }
 
-    /**
-     * Initialize the settings manager by loading all settings and setting up file watchers
-     */
     async initialize(): Promise<void> {
         if (this.initialized) {
             return;
@@ -97,10 +82,6 @@ export class SettingsManager {
         ];
     }
 
-    /**
-     * Resolves the effective settings via the SDK and applies the CLI's trust
-     * filter for escalating `permissions.defaultMode` values.
-     */
     private async loadAllSettings(): Promise<void> {
         try {
             const resolved = await resolveSettings({ cwd: this.cwd });
@@ -133,9 +114,6 @@ export class SettingsManager {
         }
     }
 
-    /**
-     * Sets up file watchers for all settings files
-     */
     private setupWatchers(): void {
         for (const filePath of this.getWatchedPaths()) {
             try {
@@ -185,23 +163,14 @@ export class SettingsManager {
         }, 100);
     }
 
-    /**
-     * Returns the current merged settings
-     */
     getSettings(): Settings {
         return this.effective;
     }
 
-    /**
-     * Returns the current working directory
-     */
     getCwd(): string {
         return this.cwd;
     }
 
-    /**
-     * Updates the working directory and reloads project-specific settings
-     */
     async setCwd(cwd: string): Promise<void> {
         if (this.cwd === cwd) {
             return;
@@ -212,9 +181,6 @@ export class SettingsManager {
         await this.initialize();
     }
 
-    /**
-     * Disposes of file watchers and cleans up resources
-     */
     dispose(): void {
         this.disposed = true;
         this.initialized = false;

@@ -18,7 +18,6 @@ const eventWithoutProvenance = {
     type: "acp" as const,
 };
 const sharedEvent = eventWithoutProvenance;
-// A history page states its Session and generation once; a live event carries them itself.
 const liveFields = { sessionGenerationId: "generation-1", target: { harness: "claude", sessionId: "session-1" } };
 
 describe("Session Event V2 contracts", () => {

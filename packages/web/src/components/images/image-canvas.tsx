@@ -14,7 +14,6 @@ function clampPan(value: number, imageSize: number, viewportSize: number): numbe
     return Math.max(-limit, Math.min(limit, value));
 }
 
-/** Shared by the conversation lightbox and the existing file preview panel. */
 export function ImageCanvas({
     image,
     onStep,
@@ -112,7 +111,6 @@ export function ImageCanvas({
                 : (node.scrollTop + viewport.height / 2 - Math.max(0, (viewport.height - natural.height * scale) / 2)) /
                   scale;
         setZoom({ kind: "scale", value: next });
-        // The ref callback below recenters after React commits the new dimensions.
         center.current = { left: left * next - viewport.width / 2, top: top * next - viewport.height / 2 };
     };
     const center = useRef<{ readonly left: number; readonly top: number } | null>(null);

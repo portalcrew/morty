@@ -11,9 +11,7 @@ afterEach(() => {
     for (const pid of owned) {
         try {
             process.kill(pid, "SIGKILL");
-        } catch {
-            // Teardown already released this owned Pi process.
-        }
+        } catch {}
     }
     owned.clear();
     vi.useRealTimers();

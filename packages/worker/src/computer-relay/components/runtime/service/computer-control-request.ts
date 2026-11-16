@@ -51,7 +51,6 @@ export interface ComputerFileStream {
     readonly response: Response;
 }
 
-/** The caller owns request semantics; this exchange owns its single reply and cleanup. */
 interface ComputerExchange<Reply> {
     readonly send: () => void;
     readonly receive: (
@@ -165,7 +164,6 @@ function requireAnswer(command: ClientControlCommand, reply: AnyClientControlRep
             throw invalidComputerReply("The Computer returned an invalid native operation");
         }
         if (reply.action === "fork") {
-            // A fork answers with a new Session of the source Session's Agent.
             if (
                 target === undefined ||
                 reply.target.harness !== target.harness ||

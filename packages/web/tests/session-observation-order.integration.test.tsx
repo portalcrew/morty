@@ -106,7 +106,6 @@ test("Given a directory refresh already read an open session, When I close it be
     if (app.executionNetwork === null) {
         throw new Error("Expected a connected session");
     }
-    // The directory is the Computer's Session list.
     const held = app.executionNetwork.holdNextResponse("/managed-sessions");
     await app.user.click(getByRole(document.body, "button", { name: "Refresh sessions" }));
     const release = await held;

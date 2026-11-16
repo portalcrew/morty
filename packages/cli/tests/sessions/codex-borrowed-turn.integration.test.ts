@@ -73,7 +73,6 @@ it("Given another Codex client owns the thread, When its turn for this prompt is
     await agent.close();
 });
 
-/** A thread the owner answers once asked; `stallNextRead` leaves the next history read to its deadline. */
 function answeringOwner() {
     const owner = { answered: false, stallNextRead: false, stalledReads: 0, clientId: "" };
     const client = {

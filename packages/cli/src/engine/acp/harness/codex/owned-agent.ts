@@ -70,7 +70,6 @@ interface OwnedAgentContext {
     readonly close: () => Promise<void>;
 }
 
-/** The choices Morty offers when the app-server asks it to approve a local side effect. */
 const APPROVAL_OPTIONS: readonly PermissionOption[] = Object.freeze([
     { kind: "allow_once", name: "Allow once", optionId: "accept" },
     { kind: "allow_always", name: "Allow for this session", optionId: "acceptForSession" },
@@ -182,7 +181,6 @@ export function agentMessageUpdate(
     text: string,
     questions: readonly AgentQuestion[] = [],
 ): CodexMessageUpdate {
-    // Commentary and final answers are public assistant messages; reasoning has separate events.
     return {
         content: { text, type: "text" },
         messageId,
@@ -214,7 +212,6 @@ function userInputSchema(questions: readonly UserInputQuestion[]): unknown {
     return { properties, required, type: "object" };
 }
 
-/** Owns direct turns, their live notifications, and local approval requests. */
 export class CodexOwnedAcpAgent implements CodexSessionAgent {
     readonly steeringSupported = true;
     readonly runsTurns = true;
@@ -283,9 +280,6 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         return open;
     };
 
-    /** Clears the tracked compaction and emits the terminal update. Used by both
-     *  #settleCompaction and the item/completed handler, which emits its own
-     *  terminal update. */
     readonly #finishCompaction = (emit: () => Promise<void>): void => {
         this.#openCompaction = null;
         void this.#enqueue(emit).catch((cause: unknown) => {

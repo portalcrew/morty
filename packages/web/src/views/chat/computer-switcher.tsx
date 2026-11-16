@@ -40,7 +40,6 @@ function connectionLabel(status: BotConnectionStatus): string {
     }
 }
 
-/** Why a computer is not online, written in its row; an online computer needs no words. */
 function choiceStatusLabel(status: ComputerChoice["status"]): string | null {
     switch (status) {
         case "online":
@@ -226,7 +225,6 @@ export function ComputerSwitcher({
     readonly name: string;
     readonly status: BotConnectionStatus;
     readonly layout: "header" | "list";
-    /** Called when the computer the page is already on is chosen from the list layout. */
     readonly onChooseCurrent?: () => void;
 }) {
     const state = useStore(model.store);

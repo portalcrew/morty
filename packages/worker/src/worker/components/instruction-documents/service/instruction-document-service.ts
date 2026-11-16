@@ -17,7 +17,6 @@ const schemas = { openapi: agentOpenApiDocument, asyncapi: agentAsyncApiDocument
 export type InstructionDocument = keyof typeof templates;
 export type ApiSchemaDocument = keyof typeof schemas;
 
-/** The public paths of every origin-rendered document, which the edge caches per origin. */
 export const instructionDocumentPaths: ReadonlySet<string> = new Set([
     "/doc/setup.md",
     "/doc/agent-api.md",

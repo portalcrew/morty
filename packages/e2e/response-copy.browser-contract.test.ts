@@ -22,7 +22,6 @@ test("Given the browser denies clipboard access, When I copy a response and then
         });
         await copy.click();
         await expect(response.getByRole("alert")).toContainText("select the response and copy it manually");
-        // The same copy button stays available to try again.
         await expect(copy).toBeEnabled();
         await page.screenshot({ path: testInfo.outputPath("response-copy-denied.png"), fullPage: true });
         await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);

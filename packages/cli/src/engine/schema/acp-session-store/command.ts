@@ -25,7 +25,6 @@ export const command = sqliteTable(
                 "settled-after-start",
             ],
         }).notNull(),
-        /** When the Agent received the command; only a command that started has one. */
         startedAt: text("started_at"),
     },
     (table) => [

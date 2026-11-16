@@ -18,7 +18,6 @@ export interface ClaudePermissionEffectContext {
     durableChangeSet?: DurablePermissionChangeSet;
 }
 
-/** Parse the ACP envelope once before dispatching to a tool-specific effect. */
 export function parseClaudePermissionSelection(
     response: RequestPermissionResponse,
     toolName: string,
@@ -196,7 +195,6 @@ function applyGeneratedDurableSelection(
     return allow(context, updates(), true);
 }
 
-/** Apply a parsed selection using the semantics of the tool that produced it. */
 export function applyClaudePermissionSelection(
     selection: ClaudePermissionSelection,
     context: ClaudePermissionEffectContext,

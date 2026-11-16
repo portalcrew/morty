@@ -27,7 +27,6 @@ const petals = [
     },
 ] as const;
 
-/** The whole-document loading mark: every petal scales in clockwise sequence. */
 export function MortyLoadingMark() {
     const clipPrefix = useId().replaceAll(":", "");
 

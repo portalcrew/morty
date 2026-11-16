@@ -12,7 +12,6 @@ import type { AcpAgentDefinition } from "../../../packages/cli/src/engine/acp/ag
 import type { AgentTermination } from "../../../packages/cli/src/engine/acp/agent/agent-lifecycle.ts";
 import { createControlledAgent } from "../../../packages/cli/tests/support/agents/controlled-agent-definition.ts";
 
-/** Like Claude Code, a new session starts with the model its working directory's `.claude/settings.json` names. */
 async function projectModel(cwd: string): Promise<string | undefined> {
     let settings: unknown;
     try {
@@ -28,7 +27,6 @@ async function projectModel(cwd: string): Promise<string | undefined> {
     return typeof model === "string" ? model : undefined;
 }
 
-/** Registers an in-process ACP Agent with the daemon. */
 const defineAgent = (
     id: string,
     label: string,
@@ -46,10 +44,6 @@ const defineAgent = (
         fakeHarnessCapabilities,
     );
 
-/**
- * A stateful Agent with one model setting. Asked to "Remove settings", it removes
- * its configuration through a real ACP update; it answers any other prompt.
- */
 export function createSettingsAgent(
     profile: "model" | "full" | "dependent" | "diagnostics" = "model",
     beforeConfigurationApplied?: (configId: string, value: string | boolean) => Promise<void>,
@@ -164,7 +158,6 @@ export function createSettingsAgent(
                     throw new Error("Unknown controlled setting");
                 }
                 const options = configuration(sessionId).map((option) => {
-                    // This Agent's plan mode constrains its model, as real settings can depend on one another.
                     if (
                         profile === "dependent" &&
                         configId === "mode" &&

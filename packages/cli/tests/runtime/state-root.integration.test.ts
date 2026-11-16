@@ -13,7 +13,6 @@ afterEach(async () => {
     );
 });
 
-/** A state root initialized by a real daemon, and the daemon data directory it created inside it. */
 async function openedStateRoot(signal: AbortSignal): Promise<{
     readonly root: string;
     readonly installation: string;
@@ -109,7 +108,6 @@ describe("Morty state root", () => {
         signal,
     }) => {
         const { installation, home } = await openedStateRoot(signal);
-        // A daemon that ran with this directory as its root recorded its current version data there.
         await mkdir(join(installation, "versions", packageMetadata.version), { recursive: true, mode: 0o700 });
         await writeFile(join(installation, "current-data.txt"), `versions/${packageMetadata.version}\n`, {
             mode: 0o600,

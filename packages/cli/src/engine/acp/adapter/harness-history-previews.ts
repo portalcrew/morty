@@ -23,7 +23,6 @@ function unexpectedSnapshotIdentity(identity: never): never {
     );
 }
 
-/** Shared read-only snapshot ownership and transient process capacity for replay-based harnesses. */
 export class HarnessHistoryPreviews {
     readonly #snapshots: NativeHistoryPreviewSnapshots;
     readonly processes: AgentProcessPool;

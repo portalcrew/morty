@@ -1,6 +1,5 @@
 import type { SessionConfigOption } from "@portalcrew/morty-client/protocol";
 
-/** Whether an Agent setting selects the model. */
 export function isModelOption(option: Pick<SessionConfigOption, "category" | "id">): boolean {
     return option.id === "model" || option.category === "model";
 }

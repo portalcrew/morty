@@ -21,7 +21,6 @@ import { jsonStorageEntry, type StorageEntry, scopedKey, stringStorageEntry } fr
  */
 
 export const centralSessionStorage = {
-    /** Reads and decodes; null when absent, undecodable, or storage is unavailable. */
     read: <T>(entry: StorageEntry<T>): T | null => {
         let raw: string | null;
         try {
@@ -31,7 +30,6 @@ export const centralSessionStorage = {
         }
         return raw === null ? null : entry.decode(raw);
     },
-    /** Removes the stored value. */
     remove: (entry: StorageEntry<never> | { readonly key: string }): void => {
         try {
             window.sessionStorage.removeItem(entry.key);
@@ -48,13 +46,8 @@ export const centralSessionStorage = {
     },
 };
 
-// ---------------------------------------------------------------------------
-// Unsent message drafts
-// ---------------------------------------------------------------------------
-
 const messageDraftSchema = v.pipe(v.string(), v.maxLength(100_000));
 
-/** One-time confirmation carried across the existing access-ending page reload. */
 export const accessEndedNoticeEntry = stringStorageEntry({
     key: "morty:access-ended:v1",
     schema: v.literal("ended"),
@@ -73,13 +66,11 @@ const transferRedemptionSchema = v.pipe(
     v.readonly(),
 );
 
-/** The key naming this tab's redemption of a link; a retry or reload after a lost reply repeats that redemption. */
 export const transferRedemptionEntry = jsonStorageEntry({
     key: "morty:transfer-redemption:v1",
     schema: transferRedemptionSchema,
 });
 
-/** Carries first-visit guidance from a successful native handoff to its session. */
 export const sessionWelcomeEntry = (
     computerId: string,
     sessionTarget: NativeSessionTarget,
@@ -141,7 +132,6 @@ const elicitationAnswerDraftsSchema = v.pipe(
 
 export type ElicitationAnswerDrafts = v.InferOutput<typeof elicitationAnswerDraftsSchema>;
 
-/** Answers typed into the Agent's pending questions in a Session, by question; a reload returns them to the form. */
 export const elicitationAnswerDraftsEntry = (
     computerId: string,
     sessionTarget: NativeSessionTarget,
@@ -164,10 +154,6 @@ const agentQuestionChoicesSchema = v.pipe(
 
 export type AgentQuestionChoicesByMessage = v.InferOutput<typeof agentQuestionChoicesSchema>;
 
-/**
- * The suggested answers picked for the questions Agent messages ask in a Session, by message and then by question
- * position; returning to the Session or reloading keeps them until they are sent.
- */
 export const agentQuestionChoicesEntry = (
     computerId: string,
     sessionTarget: NativeSessionTarget,
@@ -189,10 +175,6 @@ const unsentFirstMessagesSchema = v.pipe(v.array(unsentFirstMessageSchema), v.ma
 
 export type UnsentFirstMessage = v.InferOutput<typeof unsentFirstMessageSchema>;
 
-/**
- * The first messages whose Sessions do not exist yet, oldest first, one per message: several creations can be in
- * flight at once, and a reload returns every one of them to the new-conversation composer.
- */
 export const newConversationUnsentMessagesEntry = (computerId: string): StorageEntry<readonly UnsentFirstMessage[]> =>
     jsonStorageEntry({
         key: scopedKey("morty:unsent-messages:new:v2:", computerId),

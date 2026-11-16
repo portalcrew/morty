@@ -2,7 +2,6 @@ import { relayDrizzle } from "../../../../infra/drizzle-database.ts";
 import type { DurableObjectDatabase } from "../../../infra/durable-object-database.ts";
 import { activeGeneration } from "./computer-generation.ts";
 
-/** Which pairing generation of the computer is active in its own storage. */
 export class ComputerCredentialStorage {
     readonly #database: DurableObjectDatabase;
 

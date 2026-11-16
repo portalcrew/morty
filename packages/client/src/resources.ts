@@ -8,7 +8,6 @@ import type {
 
 import { MortyValidationError } from "./errors.ts";
 
-/** A Turn's content. The Computer runs it with the Agent and directory of the Session it holds. */
 interface SubmitMortyTurnContent {
     readonly attachments: readonly PromptAttachment[];
     readonly content: string;
@@ -27,21 +26,15 @@ export type SubmitMortyTurnRequest = SubmitMortyTurnContent &
         | { readonly disposition: typeof SessionPromptDisposition.Steer; readonly targetCommandId: string }
     );
 
-/**
- * How the Computer admitted a submitted prompt: it entered the Session's queue, started running, or had already
- * settled before this answer (withdrawn before it started, or a retry of a prompt that finished).
- */
 export type MortyTurnAdmission = SessionPromptAcceptedEvent["state"];
 
 /** How a cancelled Turn ended: `cancelled`, or the Agent's stop reason when the Turn finished first. */
 export type MortyTurnCancellation = { readonly stopReason: string };
 
-/** The user's answer to an Agent's permission request. */
 export type MortyPermissionAnswer =
     | { readonly outcome: "selected"; readonly optionId: string }
     | { readonly outcome: "cancelled" };
 
-/** The user's answer to an Agent's elicitation: a form's content, a URL visited, or a refusal. */
 export type MortyElicitationAnswer =
     | { readonly action: "accept"; readonly content: SessionElicitationFormContent }
     | { readonly action: "accept-url" }

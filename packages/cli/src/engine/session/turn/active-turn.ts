@@ -12,10 +12,6 @@ import type { CommandDelegation } from "./execution-receipts.ts";
 
 type ActiveTurnSnapshot = Extract<NativeSessionResult, { readonly action: "active-turn" }>["turn"];
 
-/**
- * How an admitted prompt executes: as its own turn, or by steering the running turn of `targetCommandId`. An appended
- * prompt promoted out of the queue steers the turn it waited behind, which admission names when it admits it.
- */
 export type { PromptDispatch };
 
 /**
@@ -59,11 +55,6 @@ export class ActiveRuntimeTurn {
     readonly #executing: () => boolean;
     #admission: TurnAdmission = { kind: "waiting" };
 
-    /**
-     * `started`, `startedAt` and `delegation` read the command's execution receipt, the single owner of whether and when
-     * the command started and how far the native session's owner has taken it. `executing` asks the Session whether it
-     * began executing the command.
-     */
     constructor(
         command: SessionPromptCommand,
         started: () => boolean,
@@ -86,7 +77,6 @@ export class ActiveRuntimeTurn {
         this.#admission = { kind: "queued", promotion: Promise.withResolvers<void>() };
     };
 
-    /** Whether the prompt was admitted to its Session's queue, whatever happened to it afterwards. */
     readonly enteredQueue = (): boolean =>
         this.#admission.kind === "queued" ||
         this.#admission.kind === "promoted" ||
@@ -165,7 +155,6 @@ export class ActiveRuntimeTurn {
         }
     };
 
-    /** A steering prompt joins the execution of the turn it steers; every other prompt owns its execution. */
     readonly execution = (): string =>
         this.#admission.kind === "admitted" && this.#admission.dispatch.kind === "steer"
             ? this.#admission.dispatch.targetCommandId

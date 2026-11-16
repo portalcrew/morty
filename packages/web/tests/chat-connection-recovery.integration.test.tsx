@@ -56,7 +56,6 @@ test("Given a draft on an open Chat, When its bridge repeatedly disconnects and 
     }
     await app.user.click(composer);
     await app.user.paste("Do not resend this draft");
-    // Repeated drops before a healthy interval retain the bounded backoff.
     for (const delayMs of [1_000, 2_000, 4_000]) {
         app.transport.disconnect();
         expect(queryByRole(document.body, "dialog")).toBeNull();

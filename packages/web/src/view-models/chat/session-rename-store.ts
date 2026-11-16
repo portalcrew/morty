@@ -4,7 +4,6 @@ import { isSessionClosedFailure } from "../format-error.ts";
 import type { SessionOperationConnection } from "./session-operation-connection.ts";
 import type { OperationFailure } from "./session-operation-feedback.ts";
 
-/** The Session owns one explicit rename through its acknowledgement and authoritative refresh. */
 export type SessionRename =
     | { readonly kind: "none" }
     | { readonly kind: "waiting"; readonly title: string }

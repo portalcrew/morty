@@ -29,7 +29,6 @@ type InteractionOperation =
 export type ElicitationAnswerDrafts = ReadonlyMap<string, Readonly<Record<string, ElicitationFieldValue>>>;
 
 export interface SessionInteractionStore {
-    /** What the user typed into questions not yet answered; it belongs to the Session, not to this pane. */
     readonly answerDrafts: ElicitationAnswerDrafts;
     readonly editAnswer: (interactionId: string, fieldName: string, value: ElicitationFieldValue) => void;
     readonly submissions: ReadonlyMap<string, InteractionOperation>;
@@ -46,7 +45,6 @@ export interface SessionInteractionStore {
     readonly acceptElicitation: (elicitation: FormElicitation, signal: AbortSignal) => void;
 }
 
-/** A question the Agent asks with fields to fill. */
 export type FormElicitation = Extract<ElicitationInteraction, { readonly mode: "form" }>;
 
 /**
@@ -65,7 +63,6 @@ function missingRequiredChoice(
 export function createSessionInteractionStore(ports: {
     readonly permission: (response: PermissionInteractionResponse, signal: AbortSignal) => Promise<void>;
     readonly elicitation: (response: ElicitationInteractionResponse, signal: AbortSignal) => Promise<void>;
-    /** The answer drafts the Session kept, and where changes to them are kept. */
     readonly answerDrafts: ElicitationAnswerDrafts;
     readonly answerDraftsChanged: (drafts: ElicitationAnswerDrafts) => void;
 }) {
@@ -177,7 +174,6 @@ function requestedFileChanges(
     return announced?.content.flatMap((content) => (content.type === "diff" ? [content] : [])) ?? [];
 }
 
-/** What the interaction cards show of the Agent's pending `interactions` and the user's responses to them. */
 export function sessionInteractionPresentation(
     model: SessionInteractionStore,
     interactions: readonly SessionInteraction[],
@@ -304,7 +300,6 @@ function scopeLabel(kind: PermissionOption["kind"]): string {
     }
 }
 
-/** What a permission option's button and its recorded decision read. */
 function permissionOptionLabel(option: PermissionOption): string {
     if (genericAnswerNames.has(option.name.trim().toLowerCase())) {
         return scopeLabel(option.kind);

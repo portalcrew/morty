@@ -20,7 +20,6 @@ test("Given a saved-session link, When the bridge drops during entry initializat
             prepare: (application) => {
                 const observer = new MutationObserver(() => {
                     if (!dropped && queryByRole(document.body, "region", { name: "Conversation" }) !== null) {
-                        // Interrupt the real bridge as the entry first renders, before its reads complete.
                         dropped = true;
                         application.transport.disconnect();
                     }

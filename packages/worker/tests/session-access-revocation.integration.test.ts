@@ -181,7 +181,6 @@ test("Given a device with an open Session, When its owner disconnects it while t
     }
 }, 60_000);
 
-/** The owner's computer with a connected Computer, and the requests a browser or the owner make against it. */
 async function sharedComputer(cloud: Awaited<ReturnType<typeof createIdentityFixture>>, signal: AbortSignal) {
     const owner = await cloud.createAnonymousUser();
     const runtime = await cloud.connectAgent(owner.computerId, owner.token);
@@ -196,7 +195,6 @@ async function sharedComputer(cloud: Awaited<ReturnType<typeof createIdentityFix
         );
     const computerPath = `v1/computers/${owner.computerId}`;
     await runtime.api.verifyAgent("codex", signal);
-    /** A browser joins through a link the owner shares, and opens a conversation it then reads. */
     const joinBrowser = async (label: string) => {
         const shared = await request(`${computerPath}/identity/transfers`, owner.token, {
             operationId: crypto.randomUUID(),
@@ -241,7 +239,6 @@ async function sharedComputer(cloud: Awaited<ReturnType<typeof createIdentityFix
         onTestFinished(() => client.close());
         const readConversation = () => client.events.list(window.target, new MortyPageRequest(1, ""), signal);
         await readConversation();
-        /** Opens a live view of the conversation; its `completed` settles only once the view ends. */
         const watchConversation = () =>
             client.events.subscribeLive(
                 window.target,

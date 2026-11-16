@@ -42,10 +42,7 @@ export type SessionPendingInteractions = z.infer<typeof sessionPendingInteractio
 const activeTurnSnapshotSchema = z
     .object({
         commandId: identifier,
-        // When the Computer recorded the start of this running turn.
         startedAt: z.iso.datetime({ offset: true }),
-        // How far the native session's owner has taken the command when the Computer handed it there, and when it
-        // reached that stage; null when the Computer runs the command itself.
         delegation: z
             .object({ stage: promptDelegationStageSchema, at: z.iso.datetime({ offset: true }) })
             .readonly()
@@ -107,7 +104,6 @@ const nativeSessionCommandSchema = z.discriminatedUnion("action", [
             // Asks the Computer for this command's delivery alongside the execution snapshot. It is not
             // named `commandId`, which routes a request as the command it names.
             deliveryCommandId: identifier.optional(),
-            // The Computer reads the Session it holds for this target.
             target: nativeSessionTargetSchema,
         })
         .readonly(),
@@ -159,16 +155,13 @@ const executionReadFields = {
                 .readonly(),
         )
         .readonly(),
-    // The whole execution read covers this prefix of the Session event log.
     executionPosition: z
         .object({
             sessionGenerationId: identifier,
             throughPosition: z.string().regex(/^(0|[1-9][0-9]*)$/),
         })
         .readonly(),
-    // The requests the Session's Agent is waiting on an answer to, as of `executionPosition`.
     interactions: sessionPendingInteractionsSchema,
-    // The delivery of the command the request named; present exactly when the request named one.
     delivery: commandDeliverySchema.optional(),
 };
 /**
@@ -189,7 +182,6 @@ export type SessionExecution =
             ? Omit<Read, "action" | "kind" | "requestId" | "target">
             : never
         : never;
-// A union of its own variants, not discriminated by `action`: the two reads of an execution share theirs.
 const nativeSessionResultSchema = z.union([
     runningTurnResultSchema,
     idleTurnResultSchema,

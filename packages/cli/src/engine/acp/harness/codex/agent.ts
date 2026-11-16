@@ -48,7 +48,6 @@ function promptInput(prompt: readonly ContentBlock[]): readonly unknown[] {
     });
 }
 
-/** One native app-server client. Shared harness ownership supplies the Morty session lifecycle. */
 export class CodexAcpAgent {
     readonly #appServer: CodexAppServerClient;
     readonly #lifetime = new AbortController();

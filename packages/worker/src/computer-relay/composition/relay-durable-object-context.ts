@@ -7,7 +7,6 @@ export function createRelayDurableObjectContext(
     state: DurableObjectState,
     storage: {
         readonly database: DurableObjectDatabase;
-        /** The access of the computer this object holds; refuses any other computer. */
         readonly access: (computerId: string) => ComputerAccessService;
     },
 ) {

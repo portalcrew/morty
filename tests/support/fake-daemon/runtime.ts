@@ -40,22 +40,16 @@ const computerClaimSchema = v.object({
 export interface ControlledComputerConnection {
     readonly computerId: string;
     readonly origin: string;
-    /** The Computer's relay credential; it rotates on every connection and outlives restarts, as a saved one does. */
     readonly credentials: ComputerCredentials;
 }
 
-/** An Agent the controlled Computer exposes. */
 export interface ControlledAgent {
     readonly harness: string;
     readonly label: string;
-    /** Controls replies through the real daemon's Agent dependency. */
     readonly reply?: FakeAgentHarnessOptions["reply"];
-    /** Holds or rejects the controlled Agent's next Session creation through its real ACP boundary. */
     readonly beforeSessionCreated?: (() => Promise<void>) | undefined;
     readonly beforeSessionsListed?: ((signal: AbortSignal) => Promise<void>) | undefined;
-    /** Test control that holds a selected Agent configuration request before it is applied. */
     readonly beforeConfigurationApplied?: ((configId: string, value: string | boolean) => Promise<void>) | undefined;
-    /** Holds the controlled Agent's cancellation while its current reply remains active. */
     readonly beforeCancellationApplied?: (() => Promise<void>) | undefined;
     readonly onBackgroundPermissionReady?: ((request: () => Promise<void>) => void) | undefined;
 }
@@ -175,7 +169,6 @@ export async function connectControlledAgentRuntime(options: {
     relayUrl.protocol = relayUrl.protocol === "https:" ? "wss:" : "ws:";
     let connection = options.connection;
     let behavior = options.behavior;
-    // The Agents can change across restarts, as when the user installs another Agent on the computer.
     const configure = (behavior: ControlledAgentBehavior) => {
         const harness = createMortyFakeDaemon(behavior, workspace);
         const runtime = controlledRuntime(
@@ -302,7 +295,6 @@ export async function connectControlledAgentRuntime(options: {
             ({ harness, runtime } = configure(behavior));
             state = { kind: "running", runtime: await start() };
         },
-        /** Restarts the Computer offering other Agents, which it publishes to the Relay when it reconnects. */
         restartWithAgents: async (
             agents: Pick<ControlledAgentBehavior, "additionalAgents" | "harness" | "agentName">,
         ): Promise<void> => {

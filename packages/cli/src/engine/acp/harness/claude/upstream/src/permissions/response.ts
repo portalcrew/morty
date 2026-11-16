@@ -11,7 +11,6 @@ export interface ClaudePermissionDecision {
     contextResetMode?: PermissionMode;
 }
 
-/** Decode, validate, and interpret an ACP response exactly once. */
 export function decodeClaudePermissionResponse(
     response: RequestPermissionResponse,
     toolName: string,

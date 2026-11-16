@@ -186,7 +186,6 @@ describe("Session settings reads after a daemon restart", () => {
                 type: "select",
             });
         } finally {
-            // Closing the daemon retires the Session's process; the Session itself outlives it.
             await first.close();
         }
 

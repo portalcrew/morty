@@ -86,7 +86,6 @@ class Messages {
 test("Given a newly created native Session, When its first Turn resolves interactions, Then readiness is recorded and resolved interactions do not appear in its snapshot", async ({
     signal,
 }) => {
-    // The Computer dates the Turn by its own start: with the clock fixed the date is exactly the system time.
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-07T00:00:00.000Z"));
     const stateDirectory = await mkdtemp(join(tmpdir(), "morty-interaction-snapshot-"));
@@ -158,7 +157,6 @@ test("Given a newly created native Session, When its first Turn resolves interac
                 target: sessionTarget,
             }),
         );
-        // The prompt is answered once the Session is executing it.
         await messages.nextKind("session.prompt.accepted");
         const snapshot = async (requestId: string) => {
             await socket.send(
@@ -234,7 +232,6 @@ test("Given a newly created native Session, When its first Turn resolves interac
             encodeSessionQueryCommand({ kind: "session.query", requestId: "metadata-time", targets: [sessionTarget] }),
         );
         expect(decodeSessionsQueriedEvent(await messages.nextKind(SESSION_QUERIED_KIND))).toMatchObject({
-            // The Agent reports older times than the Turn the Computer just ran, which is the latest change.
             entries: [expect.objectContaining({ target: sessionTarget, updatedAt: "2026-11-07T00:00:00.000Z" })],
         });
         await writeFile(join(stateDirectory, "agent", "resume-after-permission"), "");
@@ -368,7 +365,6 @@ test("Given an Agent announced a tool call with its input, When it requests perm
                 target: sessionTarget,
             }),
         );
-        // The Agent finishes the Turn only after it receives the permission response.
         await messages.nextKind("prompt.completed");
     } finally {
         cancellation.abort();
@@ -475,7 +471,6 @@ test("Given an Agent announced a tool call and then sent a rawInput null update,
                 target: sessionTarget,
             }),
         );
-        // The Agent finishes the Turn only after it receives the permission response.
         await messages.nextKind("prompt.completed");
     } finally {
         cancellation.abort();
@@ -582,7 +577,6 @@ test("Given an Agent's first recorded form of a tool call is an update, When it 
                 target: sessionTarget,
             }),
         );
-        // The Agent finishes the Turn only after it receives the permission response.
         await messages.nextKind("prompt.completed");
     } finally {
         cancellation.abort();
@@ -904,7 +898,6 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
                 target: sessionTarget,
             }),
         );
-        // The prompt is answered once the Session is executing it.
         await messages.nextKind("session.prompt.accepted");
         // A prompt with a file queues behind the running turn; a client needs the file to restore it for editing.
         const report = {
@@ -926,7 +919,6 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
                 target: sessionTarget,
             }),
         );
-        // A client reads the queue once the Computer has answered that the prompt waits in it.
         for (;;) {
             const accepted = decodeSessionPromptAcceptedEvent(await messages.nextKind(SESSION_PROMPT_ACCEPTED_KIND));
             if (accepted.requestId === "own_queued_turn") {

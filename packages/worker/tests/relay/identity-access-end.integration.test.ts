@@ -18,7 +18,6 @@ it("Given the computer's credential was replaced while a request to end other ac
         env.COMPUTER_RELAY.getByName(computerObjectName(owner.computerId)),
         async (_instance, state) => {
             const identities = new IdentityStorage(new DurableObjectDatabase(state.storage), owner.computerId);
-            // The request authorized with the credential, then another revoked all access and replaced it.
             expect(await identities.revokeAllAccess(owner.token, successor, Date.now(), signal)).toBe(true);
 
             expect(await identities.revokeOtherAccess(owner.token, Date.now(), signal)).toBe(false);
@@ -29,7 +28,6 @@ it("Given the computer's credential was replaced while a request to end other ac
     );
 });
 
-/** A browser joined through a link the owner shared. */
 async function joinBrowser(computerId: string, ownerToken: string, label: string): Promise<string> {
     const api = (path: string, body: object) =>
         ownerRequest(
@@ -60,7 +58,6 @@ it("Given a browser whose device was ended while its request to end another devi
             if (staleCredential?.kind !== "browser" || otherCredential?.kind !== "browser") {
                 throw new Error("Expected both browsers to have joined");
             }
-            // The request authorized with the stale browser's credential, then the owner ended that browser's device.
             expect(await identities.endDeviceAccess(owner.token, staleCredential.deviceId, Date.now(), signal)).toEqual(
                 { kind: "ended" },
             );
@@ -72,7 +69,6 @@ it("Given a browser whose device was ended while its request to end another devi
             expect(await identities.findCredential(other, Date.now(), signal)).toMatchObject({
                 accessHeldUntil: expect.any(Number),
             });
-            // A device that does not exist is reported as such to a caller that still holds access.
             expect(await identities.endDeviceAccess(owner.token, "device_missing", Date.now(), signal)).toEqual({
                 kind: "unknown",
             });

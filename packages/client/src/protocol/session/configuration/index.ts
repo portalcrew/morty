@@ -27,7 +27,6 @@ const sessionConfigOptionFields = {
     name: z.string().min(1).max(255),
 };
 
-/** A setting the Agent offers and what it holds now: a select holds one of its values, a boolean holds a flag. */
 const sessionConfigOptionSchema = z.discriminatedUnion("type", [
     z
         .object({
@@ -88,7 +87,6 @@ export type SessionConfigureCommand = z.infer<typeof sessionConfigureCommandSche
 const sessionConfigUpdatedEventSchema = z
     .object({
         configOptions: sessionConfigOptionsSchema,
-        // An opaque Computer generation token.
         configurationRevision: IDENTIFIER,
         kind: z.literal(SESSION_CONFIG_UPDATED_KIND),
         requestId: IDENTIFIER,
@@ -130,7 +128,6 @@ export type SessionConfigReadCommand = z.infer<typeof sessionConfigReadCommandSc
 const sessionConfigReadResultSchema = z
     .object({
         configOptions: sessionConfigOptionsSchema,
-        // An opaque Computer generation token.
         configurationRevision: IDENTIFIER,
         kind: z.literal(SESSION_CONFIG_READ_RESULT_KIND),
         requestId: IDENTIFIER,

@@ -4,7 +4,6 @@ export class ManagementError extends Error implements HttpError {
     readonly code: string;
     readonly status: number;
     readonly headers: Readonly<Record<string, string>>;
-    /** A finer machine-readable cause that keeps `code` unchanged for readers that only know the code. */
     readonly reason: string | null;
     constructor(
         code: string,

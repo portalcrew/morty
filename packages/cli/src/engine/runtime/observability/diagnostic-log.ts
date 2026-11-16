@@ -63,7 +63,6 @@ const FIELD_VALUE_PATTERN = /^[a-zA-Z0-9_.: -]{1,256}$/u;
 
 interface DiagnosticSource {
     readonly path: string;
-    /** This log's own rotation bound, or null when another owner rotates it. */
     readonly maximumBytes: number | null;
 }
 

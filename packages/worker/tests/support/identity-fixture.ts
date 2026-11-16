@@ -26,7 +26,6 @@ export function accountRequest(token?: string, computerId?: string): Request {
 }
 
 type IdentityFixtureOptions = {
-    /** Serve the Chat Worker on a free loopback port and use that origin as APP_ORIGIN. */
     readonly listenOnLoopback?: true;
     readonly loseTurnResponses?: true;
     readonly delayExecutionReads?: true;
@@ -103,7 +102,6 @@ async function startIdentityFixture(
             ASSETS: { fetch: () => Promise.resolve(new Response()) },
             COMPUTER_RELAY: computerRelays,
         });
-        /** Restarts the Worker with the changed deployment settings, keeping its storage. */
         const reconfigure = async () => {
             await relay.configure(baseConfiguration);
             cloudBindings = await cloudflare.getBindings();

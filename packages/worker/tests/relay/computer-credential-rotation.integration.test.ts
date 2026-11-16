@@ -37,7 +37,6 @@ async function responseJson(response: Response, status: number): Promise<Readonl
     return Object.fromEntries(Object.entries(body));
 }
 
-/** Pairs a Runtime through the public pairing API and returns how its daemon connects. */
 async function pairedComputer(name: string, signal: AbortSignal) {
     const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
     const environment = bindings();

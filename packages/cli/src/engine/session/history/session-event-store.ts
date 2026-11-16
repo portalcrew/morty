@@ -82,7 +82,6 @@ class SessionEvents {
         return this.#cachedItemsByEventId.size;
     }
 
-    /** The projected tool call for this identifier, materializing it if needed. */
     readonly toolCall = (toolCallId: string, resolve: MaterializedEventsResolver): ProjectedToolCall | undefined =>
         this.#projection.getToolCall(toolCallId, resolve);
 
@@ -107,11 +106,6 @@ class SessionEvents {
 
     readonly item = (eventId: string): SessionEvent | undefined => this.#cachedItemsByEventId.get(eventId)?.event;
 
-    /**
-     * Materializes an event that was previously dropped to the cache database.
-     * Its payload stays materialized until the next flush persists the merged
-     * form and drops it again.
-     */
     readonly adopt = (event: SessionEvent): boolean => {
         if (!this.#eventIndexById.has(event.eventId) || this.#cachedItemsByEventId.has(event.eventId)) {
             return false;
@@ -120,10 +114,6 @@ class SessionEvents {
         return true;
     };
 
-    /**
-     * Fills the ordinal-keyed merge view with materialized events, overriding
-     * stale persisted rows for the same ordinals.
-     */
     readonly eventsInRange = (startIndex: number, endIndex: number, into: Map<number, SessionEvent>): void => {
         for (let index = startIndex; index < endIndex; index += 1) {
             const eventId = this.#eventIds[index];
@@ -184,10 +174,6 @@ export interface SessionEventStore {
         recordedAt?: string,
     ) => SessionLiveEvent;
     readonly close: () => void;
-    /**
-     * The projected tool call announced with this identifier in its current
-     * merged form, or `undefined` when no such announcement is recorded.
-     */
     readonly getToolCall: (sessionTarget: NativeSessionTarget, toolCallId: string) => ProjectedToolCall | undefined;
     readonly materialize: (
         sessionTarget: NativeSessionTarget,
@@ -195,7 +181,6 @@ export interface SessionEventStore {
         events: readonly SessionEventPayload[],
     ) => void;
     readonly page: (sessionTarget: NativeSessionTarget, eventLimit: number, cursor: string | null) => SessionEventPage;
-    /** The live stream boundary, including events omitted from projected history. */
     readonly livePosition: (
         sessionTarget: NativeSessionTarget,
     ) => Pick<SessionEventPage, "sessionGenerationId" | "throughPosition">;

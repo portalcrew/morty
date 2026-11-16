@@ -5,7 +5,6 @@ import { RequestDeadline } from "../../src/http/request-deadline.ts";
 
 type Fetch = (request: Request) => Response | Promise<Response>;
 
-/** Request framing belongs to the WebSocket connection, not to the operation carried inside it. */
 export function browserOperationHeaders(request: Request) {
     return Array.from(request.headers.entries()).filter(([name]) => name !== "content-length" && name !== "upgrade");
 }
@@ -46,7 +45,6 @@ const reply = v.variant("kind", [
     }),
 ]);
 
-/** A protocol client, not an HTTP alternative: every operation crosses the actual browser WS boundary. */
 export async function requestBrowserOperation(
     fetch: Fetch,
     request: Request,

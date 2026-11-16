@@ -11,7 +11,6 @@ const CONNECTION_TIMEOUT_MILLISECONDS = 60_000;
 
 export interface RelayConnection {
     readonly socket: WebSocket;
-    /** Releases the underlying transport after the WebSocket close frame has been queued. */
     readonly release: (reason: Error) => void;
 }
 
@@ -61,7 +60,6 @@ export function connectRelay(
             }
         };
         const dispatcher = environmentProxyDispatcher.compose((dispatch) => (options, handler) => {
-            // Observes the handshake and the upgraded transport, and forwards every callback to undici's handler.
             const trackedHandler: Dispatcher.DispatchHandler = {
                 onRequestStart: (controller, context): void => {
                     releaseTransport = (reason) => controller.abort(reason);

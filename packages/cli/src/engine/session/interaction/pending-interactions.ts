@@ -46,7 +46,6 @@ export class PendingElicitation {
     readonly completion: PromiseWithResolvers<CreateElicitationResponse> =
         Promise.withResolvers<CreateElicitationResponse>();
     readonly request: SessionElicitationRequestedEvent;
-    /** The form the Agent asked for; a URL request has none. */
     readonly requestedSchema: unknown;
     #settled = false;
 

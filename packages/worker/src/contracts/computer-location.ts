@@ -1,4 +1,3 @@
-/** Where Cloudflare places a computer's Durable Object. */
 export type ComputerLocationHint = "wnam" | "apac" | "apac-ne" | "apac-se";
 
 import * as v from "valibot";

@@ -36,8 +36,6 @@ for (const path of git.stdout.split("\n").filter((line) => line.length > 0)) {
         if (match === null) {
             return;
         }
-        // A subscribe declaration or a React watch port hand-off is fine;
-        // only subscribing to a store is not.
         const isDeclaration =
             /\bsubscribe\s*\(/u.test(line) && /\(\s*\)/u.test(line) === false && /readonly subscribe/u.test(line);
         if (isDeclaration) {

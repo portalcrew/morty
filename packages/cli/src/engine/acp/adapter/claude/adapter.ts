@@ -28,7 +28,6 @@ import { createClaudeCatalogClient, createClaudeClient, initializeClaudeClient }
 
 type ClaudeSession = HarnessSession<ClaudeAcpAgent>;
 
-/** Claude-specific operations; shared harness ownership handles delivery, cancellation and retirement. */
 export class ClaudeAdapter implements Adapter {
     readonly #sessions = new Map<SessionId, ClaudeSession>();
     readonly #lifetime = new AbortController();

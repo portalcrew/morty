@@ -50,7 +50,6 @@ for (const submission of ["rejected", "upload-failed"] as const) {
             );
             await app.waitForView(() => getByRole(form, "list", { name: "Attachments" }));
         }
-        // Both requests are rejected by real production validation before a new Agent turn starts.
         const prompt = submission === "rejected" ? "x".repeat(100_001) : "Keep this unsent message";
         await sendPrompt(app, composer, prompt);
         const submissionError = await app.waitForView(() => {
@@ -133,7 +132,6 @@ test("Given a rejected submission after an earlier failure, When another viewer'
     }
     await app.waitForView(() => {
         expect(getByRole(document.body, "button", { name: "Retry message" })).toHaveProperty("disabled", false);
-        // Each failed turn keeps its own failure: the earlier one and the one recovered on reconnect.
         expect(queryAllByText(appRoot, recoveredFailure, { exact: true })).toHaveLength(2);
         expect(entryStatus(app, "Established session")).toBe("Session failed");
     });
@@ -179,7 +177,6 @@ test("Given a turn that fails while I am in another Session, When I return, Then
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     network.releaseHeldTurn();
-    // The turn ran and ended while another Session was selected.
 
     await app.user.click(sessionEntry(app, "Established session"));
     const composer = await app.waitForView(() => {
@@ -202,7 +199,6 @@ test("Given a turn that fails while I am in another Session, When I return, Then
     await app.waitForView(() => {
         expect(app.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain("Keep chatting");
         expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
-        // The failed turn keeps its failure in the conversation; the Session itself is no longer failed.
         expect(queryAllByText(document.body, recoveredFailure, { exact: true })).toHaveLength(1);
         expect(entryStatus(app, "Established session")).toBeNull();
     });
@@ -223,7 +219,6 @@ test("Given a Session whose last turn failed, When I reload the page, Then the s
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     await app.waitForView(() => expect(entryStatus(app, "Established session")).toBe("Session failed"));
 
-    // The failure is the Computer's to report, not only the memory of the page that watched it.
     const reloaded = await app.reload();
     await reloaded.waitForView(() => expect(entryStatus(reloaded, "Established session")).toBe("Session failed"));
 });
@@ -255,7 +250,6 @@ test("Given my last turn completed while I was away after an earlier failure, Wh
         expect(getByRole(document.body, "log", { name: "Messages" }).textContent).toContain("Finish while away");
         expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
         expect(entryStatus(app, "Established session")).toBeNull();
-        // Only the failed turn's own card reports a failure.
         expect(queryAllByText(document.body, recoveredFailure, { exact: true })).toHaveLength(1);
         expect(queryAllByRole(document.body, "alert")).toHaveLength(1);
     });
@@ -287,7 +281,6 @@ test("Given a stopped turn whose messages span two history pages, When I reopen 
     await app.waitForView(() => expect(document.body.textContent).toContain("Turn two part 19."));
     await app.waitForView(() => expect(app.optionalElementByTestId(dataTestId.sessionStatus)).toBeNull());
 
-    // The reopened Session's newest page holds the first turn's last messages but not its user message.
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     await app.user.click(
         await app.waitForView(() => {
@@ -326,7 +319,6 @@ test("Given a stopped turn whose messages span two history pages, When I reopen 
         if (notice === undefined || last === undefined || next === undefined) {
             throw new Error(`The stopped turn's ending is missing: ${messages.textContent}`);
         }
-        // The ending follows the turn's last message, before the next turn.
         expect(last.compareDocumentPosition(notice)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
         expect(notice.compareDocumentPosition(next)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
         expect(stoppedNotices()).toHaveLength(1);
@@ -370,11 +362,9 @@ test("Given a turn I steered and then stopped, When I reopen the Session, Then i
             ? "notice-before-steer"
             : "notice-after-steer";
     };
-    // Live, the ending follows the whole turn, including the steered reply.
     await app.waitForView(() => expect(order()).toBe("notice-after-steer"));
     await app.waitForView(() => expect(app.optionalElementByTestId(dataTestId.sessionStatus)).toBeNull());
 
-    // Reopened, history restates the turn's outcome and names the steering as part of that turn.
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     await app.user.click(
         await app.waitForView(() => {

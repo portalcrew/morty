@@ -34,11 +34,9 @@ export interface SetupPairing {
     readonly relayOrigin: string;
     readonly computerId: string;
     readonly pairingCode: string;
-    /** The Computer's default workspace. */
     readonly workspace: string;
 }
 
-/** Whether this computer's Morty offers one Agent, and how the user makes it available when it does not. */
 export interface SetupAgentReport {
     readonly harness: string;
     readonly label: string;
@@ -47,7 +45,6 @@ export interface SetupAgentReport {
     readonly minimumSupportedVersion: string;
 }
 
-/** The Morty installation in a state directory, as setup drives it. */
 export interface SetupRuntime {
     /** Reads local Computer encryption access. Its secret must never be sent to the Worker. */
     readonly encryptionAccess: (
@@ -55,14 +52,9 @@ export interface SetupRuntime {
         computerId: string,
         signal: AbortSignal,
     ) => Promise<ComputerEncryptionAccess>;
-    /** The Computers the installation keeps a connection for. */
-    /** The Computer this computer's saved pairing serves, if any. */
     readonly computer: (directory: string, signal: AbortSignal) => Promise<string | null>;
-    /** Redeems a pairing, saves its connection, and has the daemon serve it. */
     readonly pair: (directory: string, pairing: SetupPairing, signal: AbortSignal) => Promise<void>;
-    /** Has the daemon serve the saved connection, starting one when none runs. */
     readonly start: (directory: string, signal: AbortSignal) => Promise<void>;
-    /** The Agents the installation finds on this computer. */
     readonly agents: (directory: string, signal: AbortSignal) => Promise<readonly SetupAgentReport[]>;
 }
 
@@ -74,19 +66,16 @@ interface SetupEnvironment {
     readonly state: string;
     readonly signal: AbortSignal;
     readonly emit: (value: Readonly<Record<string, unknown>>) => void;
-    /** The calling Agent's environment, where its harness exposes the current session. Defaults to this process's. */
     readonly agentEnvironment?: Readonly<Record<string, string | undefined>>;
     readonly clock?: {
         readonly now: () => Date;
         readonly wait: (milliseconds: number, signal: AbortSignal) => Promise<void>;
-        /** A signal that aborts once the duration elapses. */
         readonly deadline?: (milliseconds: number) => AbortSignal;
     };
 }
 
 export type SetupHost = SetupEnvironment & { readonly runtime: SetupRuntime };
 
-/** Where each supported harness exposes its current session to the commands its Agent runs. */
 const harnessSessionVariables: ReadonlyMap<string, string> = new Map([
     ["claude", "CLAUDE_CODE_SESSION_ID"],
     ["codex", "CODEX_THREAD_ID"],
@@ -112,7 +101,6 @@ function withReplacementRequested(identity: ReadyIdentity): ReadyIdentity {
     return { ...identity, replacement: { kind: "unknown" } };
 }
 
-/** The successor identity, keeping the replaced one until it is ended. */
 function replacedIdentity(previous: ReadyIdentity, successor: IssuedIdentity): ReadyIdentity {
     return {
         kind: "ready",
@@ -133,17 +121,14 @@ function withPreviousRetired(identity: ReadyIdentity, previous: RetiringIdentity
     };
 }
 
-/** Saved before the request that makes `successor` the only local credential. */
 function withRotationRequested(identity: ReadyIdentity, successor: string): ReadyIdentity {
     return { ...identity, rotation: { kind: "requested", successor } };
 }
 
-/** The local credential after the Worker replaced it with the requested successor. */
 function rotatedIdentity(identity: ReadyIdentity, successor: string): ReadyIdentity {
     return { ...identity, computerToken: successor, rotation: { kind: "none" } };
 }
 
-/** Cleared only after a finished setup reported the replacement. */
 function withReplacementReported(identity: ReadyIdentity): ReadyIdentity {
     return { ...identity, replacement: { kind: "unchanged" } };
 }
@@ -153,7 +138,6 @@ interface StateLocation {
     readonly base: string;
 }
 
-/** A run whose saved identity can authenticate with the service. */
 interface Context extends StateLocation {
     readonly identity: ReadyIdentity;
 }
@@ -162,7 +146,6 @@ type ComputerSelection =
     | {
           readonly kind: "existing";
           readonly computerId: string;
-          /** Whether the Relay records this Computer as the computer's paired Computer. */
           readonly paired: boolean;
       }
     | {
@@ -174,7 +157,6 @@ type ComputerSelection =
 
 interface VerifiedIdentity {
     readonly context: Context;
-    /** Where the Computer's Runtime pairing stands, as the Relay records it. */
     readonly computerPairing: "unpaired" | "paired" | "revoked";
 }
 
@@ -193,7 +175,6 @@ interface SetupIdentity {
 
 interface SetupOptions {
     readonly base: string;
-    /** How long the browser that opens setup's link keeps access, or null for Morty's default; Morty validates it. */
     readonly deviceAccess: string | null;
     readonly cwd: string;
     readonly harness: string;
@@ -266,7 +247,6 @@ function errorCode(cause: unknown): unknown {
     return cause !== null && typeof cause === "object" && "code" in cause ? cause.code : undefined;
 }
 
-/** Starting or pairing the local Runtime failed; the cause says why. */
 class RuntimeStartError extends Error {
     readonly code = "RUNTIME_START_FAILED";
     readonly nextStep =
@@ -303,7 +283,6 @@ class MortyStateRootError extends Error {
     });
 }
 
-/** A failure the Morty service reported with its own error code. */
 class RemoteError extends Error {
     constructor(message: string) {
         super(message);
@@ -325,7 +304,6 @@ function bindingNextStep(code: string, harness: string): string {
     }
 }
 
-/** Setup could not bind the Computer to the chosen harness. */
 class AgentBindingError extends Error {
     readonly code: string;
     readonly harness: string;
@@ -350,7 +328,6 @@ interface HarnessDiagnosis {
     readonly minimumSupportedVersion: string;
 }
 
-/** What the agent should do when the Computer does not offer the chosen harness, chosen by the inventory status. */
 function harnessNextStep(harness: string, diagnosis: HarnessDiagnosis | null): string {
     const rerun = `rerun setup with --harness ${harness}; it reuses this Computer.`;
     switch (diagnosis?.status) {
@@ -361,14 +338,12 @@ function harnessNextStep(harness: string, diagnosis: HarnessDiagnosis | null): s
         case "unsupported_version":
             return `Update ${diagnosis.label} to ${diagnosis.minimumSupportedVersion || "its latest release"} or newer, then ${rerun}`;
         case "ready":
-            // Morty refreshes a running Computer's Agents when setup starts it.
             return `${diagnosis.label} is ready, but this computer's running Morty Computer has not picked it up yet. Rerun setup once. If it fails the same way again, ask the user before running \`morty stop\`, because it stops every Morty session on this computer; when they agree, run it and ${rerun}`;
         default:
             return `Confirm \`${harness}\` starts and answers a prompt in a new terminal and fix what stops it, then ${rerun} If it answers and setup fails the same way again, report error.code to the user.`;
     }
 }
 
-/** The Computer does not offer the chosen harness. */
 class HarnessUnavailableError extends Error {
     readonly code = "HARNESS_UNAVAILABLE";
     readonly harness: string;
@@ -499,7 +474,6 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         }
     }
 
-    /** Creates the state directory with private permissions, refusing one that is a link to somewhere else. */
     async function prepareStateDirectory(requested: string) {
         const directory = resolve(requested);
         await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -543,7 +517,6 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         }
     }
 
-    /** The saved state, or null before this computer's first setup. */
     async function readSavedState(directory: string): Promise<SavedState | null> {
         const path = join(directory, "config.json");
         let content: string;
@@ -566,7 +539,6 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         return saved ?? fail("INVALID_CONFIGURATION");
     }
 
-    /** The identity saved for the requested service. A state that belongs to another service is refused unchanged. */
     async function loadIdentity(directory: string, base: string): Promise<IdentityState> {
         const saved = await readSavedState(directory);
         if (saved === null) {
@@ -578,7 +550,6 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         return saved.identity;
     }
 
-    /** Replaces the saved state atomically; every write follows an explicit identity transition. */
     async function writeSavedState(location: StateLocation, identity: ReadyIdentity) {
         const temporary = join(location.directory, `.config-${crypto.randomUUID()}`);
         try {
@@ -664,7 +635,6 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         return value;
     }
 
-    /** Sends a request as the saved identity, to its Computer unless the route names one. */
     async function request(context: Context, route: string, body?: unknown, requestSignal: AbortSignal = signal) {
         const headers: Record<string, string> = { authorization: `Bearer ${context.identity.computerToken}` };
         if (route === "/replacement") {
@@ -741,7 +711,6 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         return await commit(requested, rotatedIdentity(requested.identity, successor));
     }
 
-    /** Finishes revoking all access when an earlier run stopped before saving the replaced local credential. */
     async function settleCredentialRotation<Settling extends Context>(context: Settling): Promise<Settling> {
         if (context.identity.rotation.kind === "none") {
             return context;
@@ -847,7 +816,6 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         if (identifier(session["computerId"]) !== context.identity.computerId) {
             fail("IDENTITY_CONFLICT");
         }
-        // The Worker reads the Computer's pairing from the Relay, the same one every browser handoff opens.
         const computerPairing = text((await request(context, "/pairing-state"))["computerPairing"]);
         if (computerPairing !== "unpaired" && computerPairing !== "paired" && computerPairing !== "revoked") {
             fail("INVALID_RESPONSE");
@@ -933,7 +901,6 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         if (context.identity.replacement.kind === "unknown") {
             return await replaceWithApproval("replacement_result_unknown");
         }
-        // Whether this computer's saved pairing already serves the Computer.
         const computerId = context.identity.computerId;
         const reused = async (): Promise<boolean> => {
             if ((await host.runtime.computer(context.directory, signal)) !== computerId) {
@@ -1070,13 +1037,11 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         );
     }
 
-    /** The Agents the Computer offers while it is online, or null while it is not. */
     async function onlineComputerAgents(
         context: Context,
         computer: ComputerSelection,
     ): Promise<readonly string[] | null> {
         const botPath = `/computers/${context.identity.computerId}`;
-        // A paired Computer is read through management; one still waiting for its pairing is among the setup candidates.
         const alreadyPaired = computer.kind === "existing" && computer.paired;
         const state = await request(context, `${botPath}/${alreadyPaired ? "workspace" : "setup/computers"}`, {});
         const candidates = alreadyPaired
@@ -1260,7 +1225,6 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         return saved;
     }
 
-    /** Waits until the Computer is online and offers the harness this run set up. */
     async function waitForReadiness(context: Context, computer: ComputerSelection, requestedHarness: string) {
         const harness = identifier(requestedHarness);
         let attempts = 0;
@@ -1364,7 +1328,6 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
             status: "ready",
             computerId: context.identity.computerId,
             url: handoffUrl,
-            // The browser that opens the link keeps access until then, unless access is revoked earlier.
             accessExpiresAt: text(transfer["accessExpiresAt"]),
             workspace: workingDirectory,
             qrPath: qr.kind === "available" ? qr.path : null,

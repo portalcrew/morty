@@ -8,13 +8,11 @@ import { type FlakyTest, parseFlakyTestRecord } from "./record.ts";
 // issue, later ones add a comment, and an occurrence after the issue was closed reopens it. The artifacts come from
 // the tested code, so they are only read as data and validated; everything else comes from GitHub's run event.
 
-// flaky-tests.yml downloads the run's records here.
 const ARTIFACTS_DIRECTORY = fileURLToPath(new URL("../../test-results/flaky-test-artifacts", import.meta.url));
 const REPOSITORY = /^[\w.-]+\/[\w.-]+$/;
 const LABEL = "flaky-test";
 const MAX_RECORD_BYTES = 256 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
-// morty-pipeline.yml records each job's flaky tests in a directory named <job>[-<shard>].
 const JOB_DIRECTORY = /^([a-z]+)(?:-(\d+))?$/;
 const RECORD_FILE = /^(?:vitest|playwright)-[\da-f-]{36}\.json$/;
 

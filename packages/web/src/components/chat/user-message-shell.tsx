@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-/** Right-aligned column for one or more user bubbles (matches Morty chat max width). */
 export function UserMessageShell({ children }: { readonly children: ReactNode }) {
     return (
         <div className="flex min-w-0 justify-end">

@@ -28,7 +28,6 @@ type ComputerEntry =
           readonly message: string;
       };
 
-/** How the page's follow of the Computer's configuration stands. */
 type ConfigurationWatch =
     | { readonly kind: "checking" }
     | { readonly kind: "current"; readonly checkedAt: number }
@@ -53,23 +52,19 @@ export interface ComputerStatusStore {
     readonly computerConfiguration: BotComputerConfiguration | null;
     readonly configurationWatch: ConfigurationWatch;
     readonly networkAvailable: boolean;
-    /** Whether the pairing instructions show, independently of the pairing it follows. */
     readonly pairingDialog: ReturnType<typeof createPairingDialogStore>;
     readonly networkChanged: (available: boolean) => void;
     readonly pairingRead: (pairing: "paired" | "unpaired") => void;
     readonly pairingRevoked: () => void;
-    /** The entry request starts again: a Computer that answered an earlier one is reloading. */
     readonly entryStarted: () => void;
     readonly entryReady: () => void;
     readonly entryFailed: (failure: "computer" | "agent-required" | "unavailable", message: string) => void;
-    /** The Computer's configuration as the Computer last reported it, read or watched at `checkedAt`. */
     readonly configurationObserved: (configuration: BotComputerConfiguration, checkedAt: number) => void;
     /**
      * The follow was interrupted. Returns the notice the interruption starts with: an established follow recovers
      * quietly, one that never was current says so at once, and a continuing interruption keeps its notice.
      */
     readonly watchInterrupted: () => "quiet" | "visible";
-    /** An interruption's notice changed while the follow stays unavailable. */
     readonly interruptionNoticed: (notice: "quiet" | "visible") => void;
     /** Nothing recovers the interruption any more, so it asks the user to retry at once. */
     readonly interruptionUnattended: () => void;
@@ -130,15 +125,12 @@ export const createComputerStatusStore = (networkAvailable: boolean) =>
 
 export type ComputerStatusStoreApi = ReturnType<typeof createComputerStatusStore>;
 
-/** How the Computer answered the page's current entry request, as the Session load waiting on it needs to know. */
 export type ComputerEntryOutcome =
     | { readonly kind: "paired" }
     | { readonly kind: "unpaired" }
     | { readonly kind: "revoked" }
-    /** The request failed; the entry holds why. */
     | { readonly kind: "failed" };
 
-/** The current entry request's answer, or null while the Computer has not answered it. */
 export function computerEntryOutcome(
     computer: Pick<ComputerStatusStore, "entry" | "pairing">,
 ): ComputerEntryOutcome | null {

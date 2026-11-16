@@ -5,10 +5,6 @@ class MortyPathError extends Error {
     readonly code = "morty_state_directory_invalid";
 }
 
-/**
- * The Morty state root, which contains configuration, the default workspace, and the computer directory. Each
- * installation has one computer account and one local daemon.
- */
 export function readStateDirectory(environment: Readonly<NodeJS.ProcessEnv> = process.env): string {
     const configured = environment["MORTY_STATE_DIRECTORY"]?.trim();
     if (configured) {

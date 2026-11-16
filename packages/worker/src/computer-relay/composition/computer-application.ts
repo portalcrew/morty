@@ -30,7 +30,6 @@ function managementRouteContext(ctx: ComputerRouteContext): ManagementRouteConte
     };
 }
 
-/** HTTP and WebSocket have independent route trees; only application behavior is shared. */
 export function createComputerHttpApplication(ctx: ComputerRouteContext): (request: Request) => Promise<Response> {
     const management = managementRouteContext(ctx);
     const http = new Hono<ManagementHttpEnvironment>()
@@ -50,7 +49,6 @@ export function createComputerHttpApplication(ctx: ComputerRouteContext): (reque
     return async (request) => await http.fetch(request, ctx.bindings);
 }
 
-/** Compose once for the owning Computer, not once for each connecting client. */
 export function createComputerWebSocketApplication(ctx: ComputerRouteContext) {
     const managementContext = managementRouteContext(ctx);
     const uploads = new WebSocketUploadCapacity();

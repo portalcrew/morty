@@ -128,7 +128,6 @@ export interface MortyCredentialProvider {
     readonly credential: (signal: AbortSignal) => Promise<string>;
 }
 
-/** A Session setting change. */
 export type UpdateMortySessionConfigurationRequest = SessionConfigurationSelection & {
     readonly expectedConfigurationRevision: string;
 };
@@ -196,10 +195,8 @@ export interface MortyEndpointOptions {
 
 export interface MortyClientOptions extends MortyEndpointOptions {
     readonly computerId: string;
-    /** Owned by the Computer; closing this client does not close its transport. */
     readonly transport: WsTransport;
     readonly encryption: { readonly access: ComputerEncryptionAccess };
-    /** Releases the owner's registration after this client's resources close. */
     readonly onClose?: () => void;
 }
 
@@ -270,7 +267,6 @@ const refusedOperationCodes = new Set([
     "steering_unsupported",
 ]);
 
-/** A command that already started: its result is gone, but the Computer will not run it again. */
 const appliedOperationCodes = new Set(["command_result_expired"]);
 
 function operationOutcome(code: string): MortyOperationError["outcome"] {
@@ -394,7 +390,6 @@ type FileDownloadState =
       }
     | { readonly kind: "end"; readonly begin: FileBeginEvent; readonly bytes: Uint8Array<ArrayBuffer> };
 
-/** How much of a file being read has arrived. */
 export interface FileReadProgress {
     readonly receivedBytes: number;
     readonly totalBytes: number;
@@ -590,7 +585,6 @@ export class MortyRequestExecutor {
         return this.#transport.payloadEncryption;
     }
 
-    /** Sends one JSON body to the endpoint; the endpoint's own method is the HTTP method. */
     readonly sendJson = async (endpoint: MortyTransportEndpoint, body: string, signal: AbortSignal): Promise<string> =>
         await this.request(endpoint, body, "application/json", signal);
 
@@ -1020,11 +1014,6 @@ export class MortySessionResources {
         );
     };
 
-    /**
-     * Reads the Session's execution. Naming a command also asks for that command's delivery, which the answer
-     * carries exactly when a command was named and which names that command. `lastTurn` reports how the last
-     * started command ended when none runs. A missing Session has no interaction snapshot.
-     */
     readonly readSessionExecution = async (
         sessionTarget: NativeSessionTarget,
         signal: AbortSignal,
@@ -1078,7 +1067,6 @@ export class MortyTurnResources {
         this.#computerId = computerId;
     }
 
-    /** Submits a prompt and returns the Computer's admission of it, as the Computer answered. */
     readonly submit = async (
         sessionTarget: NativeSessionTarget,
         request: SubmitMortyTurnRequest,
@@ -1155,7 +1143,6 @@ export class MortyTurnResources {
         return { stopReason: result.stopReason };
     };
 
-    /** Withdraws a queued prompt only when the Computer confirms it did not execute. */
     readonly cancelQueued = async (
         sessionTarget: NativeSessionTarget,
         commandId: string,
@@ -1184,7 +1171,6 @@ export class MortyTurnResources {
         );
     };
 
-    /** Steers a queued prompt into the running Turn, once the Computer confirms the prompt started. */
     readonly steer = async (
         sessionTarget: NativeSessionTarget,
         commandId: string,
@@ -1282,11 +1268,9 @@ export class MortyInteractionResources {
 
 export interface MortySessionEventObserver {
     readonly receive: (events: SessionLiveEventBatch) => Promise<boolean>;
-    /** Catches up on what the stream did not carry, once the stream is open and before its first events. */
     readonly reconcile: () => Promise<void>;
 }
 
-/** One live event stream for a Session. Its owner recovers it: a lost stream fails `completed`. */
 export class MortyLiveEventSubscription {
     readonly #controller = new AbortController();
     readonly #executor: MortyRequestExecutor;

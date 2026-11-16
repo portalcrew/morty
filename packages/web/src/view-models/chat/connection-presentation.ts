@@ -15,9 +15,7 @@ const RETRY_IN_PROGRESS_STATUS: ConnectionFeedback = {
     title: "Retrying…",
     description: "Trying to reconnect now. Your draft is saved.",
 };
-/** Starts the daemon, which resumes the saved connection. */
 const MORTY_START_COMMAND = "npx @portalcrew/morty@latest start";
-/** What happened to a revoked computer, and the one step that pairs it again. */
 const COMPUTER_REVOKED_RECOVERY =
     "Its connection key was used somewhere else, so Morty disconnected it to keep your account safe. Run the Morty setup prompt on that computer again to reconnect it. Your agent's own sessions stay on that computer.";
 
@@ -26,7 +24,6 @@ type ConnectionPresentation = Pick<
     "computerStatus" | "lastConfirmed" | "connection" | "indicator" | "feedback" | "available"
 >;
 
-/** One projection for the header, details and composer; none infer availability independently. */
 export function connectionPresentation(
     status: ComputerStatusStore,
     selection: ConversationSelectionState,

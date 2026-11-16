@@ -1,13 +1,9 @@
 import * as v from "valibot";
 
-/** Redeems the one-time code of a continue link. Its route validates with this schema, and the published agent API
- * description is generated from it. */
 export const transferRedemptionInput = v.pipe(
     v.object({
         code: v.pipe(v.string(), v.description("The `code` from the continue link's URL fragment.")),
-        /** The credential this browser already holds for the link's Computer, which the new one replaces. */
         replaces: v.optional(v.pipe(v.string(), v.maxLength(512))),
-        /** How the browser describes itself, such as "iPhone · Safari"; shown to the owner's other devices. */
         device: v.optional(
             v.pipe(
                 v.string(),

@@ -118,7 +118,6 @@ test.describe("message composer resizing", () => {
         }
         expect(boxes.surfaceHeight).toBe(composerMaxHeightPx);
         expect(boxes.viewportBottom).toBeLessThanOrEqual(boxes.toolbarTop);
-        // The clipped draft still scrolls inside the reduced text region.
         const scroll = await scrollViewport.evaluate((element) => ({
             scrollHeight: element.scrollHeight,
             clientHeight: element.clientHeight,

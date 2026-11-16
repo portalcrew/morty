@@ -171,7 +171,6 @@ def main():
             upload.write_text(json.dumps(entries))
             # Assets are content-addressed and immutable, so uploading one again writes the same bytes.
             upload_objects(WRANGLER + ['r2', 'bulk', 'put', expected['buckets']['web_assets'], '--filename', str(upload), '--content-type', types[extension], '--cache-control', 'public, max-age=31536000, immutable', '--concurrency', '10', '--remote', '--force', '--config', str(config_file)], env)
-        # From the Worker activation on, a failed check restores the deployment that served before this release.
         try:
             secret_file = temporary / 'morty.secrets.json'
             secret_file.touch(mode=0o600)

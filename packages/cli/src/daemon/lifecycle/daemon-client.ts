@@ -39,13 +39,11 @@ async function waitForDaemonExit(stateDirectory: InstallationDirectory, signal: 
     throw deadline.reason;
 }
 
-/** The daemon serving an installation, and whether this call started it. */
 export interface RunningDaemon {
     readonly version: string;
     readonly started: boolean;
 }
 
-// A new daemon runs the same package as its invoking command, in the environment the caller names.
 export async function ensureDaemon(
     stateDirectory: InstallationDirectory,
     entry: string,
@@ -60,7 +58,6 @@ export async function ensureDaemon(
     return await waitForDaemon(stateDirectory, entry, environment, deadline);
 }
 
-// Status identifies the currently running daemon.
 export async function readDaemonVersion(
     stateDirectory: InstallationDirectory,
     signal: AbortSignal,

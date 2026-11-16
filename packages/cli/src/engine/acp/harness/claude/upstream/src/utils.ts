@@ -1,13 +1,10 @@
 // Modified for Morty.
 // Part of the Claude ACP adapter derived from Zed Industries' claude-code-acp (Apache-2.0).
 
-// A pushable async iterable: allows you to push items and consume them with for-await.
-
 import type { Readable, Writable } from "node:stream";
 import { ReadableStream, WritableStream } from "node:stream/web";
 import type { Logger } from "./acp-agent.js";
 
-// Useful for bridging push-based and async-iterator-based code.
 export class Pushable<T> implements AsyncIterable<T> {
     private queue: T[] = [];
     private resolvers: ((value: IteratorResult<T>) => void)[] = [];
@@ -54,7 +51,6 @@ export class Pushable<T> implements AsyncIterable<T> {
     }
 }
 
-// Helper to convert Node.js streams to Web Streams
 export function nodeToWebWritable(nodeStream: Writable): WritableStream<Uint8Array> {
     return new WritableStream<Uint8Array>({
         write(chunk) {

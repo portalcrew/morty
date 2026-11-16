@@ -1,7 +1,3 @@
-/**
- * Pure display summary of where a session runs. The view-model derives it;
- * the header, details, and composer render the same connection presentation.
- */
 export interface ExecutionContext {
     readonly harness: string;
     readonly computer: string;
@@ -32,7 +28,6 @@ export interface ExecutionContext {
         | "Closed";
 }
 
-/** The command that brings an offline computer back after a restart; null while the computer is not offline. */
 type RestartCommand = string | null;
 
 export type ConnectionFeedback =
@@ -57,7 +52,6 @@ export type ConnectionFeedback =
           readonly title: string;
           readonly description: string;
       }
-    /** The computer needs its owner to act on it; nothing in the browser can restore it. */
     | {
           readonly kind: "action-required";
           readonly title: string;

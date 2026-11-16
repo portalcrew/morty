@@ -4,11 +4,6 @@ import { useState } from "react";
 import { Button } from "./cloud-button.tsx";
 import { useToast } from "./toast.tsx";
 
-/**
- * `confirming` is the short-lived button feedback; `confirmed` keeps the
- * caller's next-step guidance visible after the button has returned to idle.
- * The attempt lets a repeated copy restart the animation-driven confirmation.
- */
 type CopyFeedback =
     | { readonly kind: "idle" }
     | { readonly kind: "confirming"; readonly attempt: number }
@@ -35,13 +30,10 @@ export function CopyToClipboardButton({
     readonly value: string;
     readonly label: string;
     readonly failureToast: { readonly description: string; readonly title: string };
-    /** Shown when the copy succeeds and the caller has no inline success content. */
     readonly successToast?: { readonly description?: string; readonly title: string };
     /** Inline feedback for a next step that should stay visible instead of a toast. */
     readonly successContent?: ReactNode;
-    /** Guidance occupying the same place before the copy succeeds. */
     readonly idleContent?: ReactNode;
-    /** Button contents shown after a successful copy. */
     readonly copiedContent?: ReactNode;
     readonly children?: ReactNode;
     readonly className?: string;

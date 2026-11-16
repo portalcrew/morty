@@ -3,7 +3,6 @@ import * as readline from "node:readline";
 import { getPiCommand, shouldUseShellForPiCommand } from "./command.js";
 
 export class PiRpcSpawnError extends Error {
-    /** Underlying spawn error code, e.g. ENOENT, EACCES */
     code?: string;
 
     constructor(message: string, opts?: { code?: string; cause?: unknown }) {
@@ -56,7 +55,6 @@ const ANSI_ESCAPE_REGEX = new RegExp(
 );
 
 function stripAnsi(s: string): string {
-    // Basic ANSI escape stripping (colors, cursor movement, etc.)
     return s.replace(ANSI_ESCAPE_REGEX, "");
 }
 
@@ -65,26 +63,19 @@ type PiRpcCommand =
     | { type: "steer"; id?: string; message: string; images?: unknown[] }
     | { type: "abort"; id?: string }
     | { type: "get_state"; id?: string }
-    // Model
     | { type: "get_available_models"; id?: string }
     | { type: "set_model"; id?: string; provider: string; modelId: string }
-    // Thinking
     | { type: "get_available_thinking_levels"; id?: string }
     | { type: "set_thinking_level"; id?: string; level: string }
-    // Modes
     | { type: "set_follow_up_mode"; id?: string; mode: "all" | "one-at-a-time" }
     | { type: "set_steering_mode"; id?: string; mode: "all" | "one-at-a-time" }
-    // Compaction
     | { type: "compact"; id?: string; customInstructions?: string }
     | { type: "set_auto_compaction"; id?: string; enabled: boolean }
-    // Session
     | { type: "get_session_stats"; id?: string }
     | { type: "set_session_name"; id?: string; name: string }
     | { type: "export_html"; id?: string; outputPath?: string }
     | { type: "switch_session"; id?: string; sessionPath: string }
-    // Messages
     | { type: "get_messages"; id?: string }
-    // Commands
     | { type: "get_commands"; id?: string };
 
 type PiRpcResponse = {
@@ -103,13 +94,8 @@ type PiExtensionUiResponse =
 
 export type PiRpcEvent = Record<string, unknown>;
 
-/** Maximum wait for an auxiliary context-usage update. */
 export const SESSION_STATS_TIMEOUT_MS = 1_000;
 
-/**
- * Shape of `stats.contextUsage` in pi's `get_session_stats` response.
- * `tokens` is null while pi has no trustworthy token count (e.g. right after compaction).
- */
 export type PiContextUsage = {
     tokens?: number | null;
     contextWindow?: number | null;
@@ -140,7 +126,6 @@ type SpawnParams = {
     readonly signal?: AbortSignal;
     readonly cwd: string;
     readonly environment: Readonly<NodeJS.ProcessEnv>;
-    /** Optional override for `pi` executable name/path */
     readonly piCommand?: string;
     readonly origin: PiSessionOrigin;
 };
@@ -332,9 +317,7 @@ export class PiRpcProcess {
                 const { dirname } = await import("node:path");
                 mkdirSync(dirname(sessionFile), { recursive: true });
             }
-        } catch {
-            // ignore for now
-        }
+        } catch {}
 
         if (params.signal?.aborted) {
             await proc.dispose();

@@ -19,7 +19,6 @@ import type { SessionEventStore } from "../../src/engine/session/history/session
 import type { AgentProcessPool } from "../../src/engine/session/process/agent-process-pool.ts";
 import type { AcpSessionConnector, AdapterSessionConnection } from "./acp/session-events.ts";
 
-/** Controlled peers replay history over ACP; real vendors own their native history readers. */
 export class ControlledAcpHistory {
     readonly #snapshots = new NativeHistoryPreviewSnapshots(memoryHistoryPreviewSnapshot, Infinity);
     readonly #processes: AgentProcessPool;

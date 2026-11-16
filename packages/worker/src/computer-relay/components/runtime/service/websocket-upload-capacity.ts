@@ -17,7 +17,6 @@ class UploadCapacityError extends Error implements HttpError {
     });
 }
 
-/** Bounds the uploads buffered at once. One instance serves a WebSocket connection, another a Computer application. */
 export class WebSocketUploadCapacity {
     #bytes = 0;
     #ordinaryBytes = 0;

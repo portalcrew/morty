@@ -10,7 +10,6 @@ const UPDATES_PER_YIELD = 32;
 let runtimeQueuedBytes = 0;
 let updatesSinceYield = 0;
 
-/** Bounds and serializes native notifications that already identify their session. */
 export class AgentUpdateStream {
     #tail: Promise<void> = Promise.resolve();
     #pendingUpdates = 0;

@@ -14,7 +14,6 @@ function clippedDialogBodyEdges(element: HTMLElement): ClippedEdges {
     };
 }
 
-/** Edge fades for a default dialog body viewport that grows with dynamic content. */
 export function useDialogBodyClippedEdges(bodyScrollRef: RefObject<HTMLDivElement | null>): {
     readonly bodyEdges: ClippedEdges;
     readonly syncBodyEdges: () => void;

@@ -24,7 +24,6 @@ import { SessionTurns } from "../turn/session-turns.ts";
 import { WorkspaceDirectoryService } from "../workspace/workspace-directory.ts";
 import type { ResolveAgent, SessionEventSink } from "./session-api.ts";
 
-/** What the session layer needs to wire itself: the runtime's identity, its agent source, and its sink. */
 export interface SessionLayerOptions {
     readonly processes: AgentProcessPool;
     readonly computerId: string;
@@ -35,7 +34,6 @@ export interface SessionLayerOptions {
     readonly timer: Timer;
 }
 
-/** Wires the session layer for one runtime: its stores, manager, turns, and native session browsing. */
 export function buildSessionLayer(options: SessionLayerOptions) {
     const { computerId, defaultWorkspace, resolveAgent, sink, stateDirectory, timer } = options;
     const databases = computerSessionDatabasePaths(stateDirectory, computerId);
@@ -84,7 +82,6 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         (sessionTarget, event, recordedAt) => events.append(sessionTarget, event, recordedAt),
         operations,
     );
-    // The Session's commands, receipts, interactions and event position are read in one synchronous step.
     const nativeSessions = new NativeSessionService(
         resolveAgent,
         directories,

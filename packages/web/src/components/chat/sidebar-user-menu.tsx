@@ -26,12 +26,10 @@ export function SidebarUserMenu({
     onOpenDevices,
     onEndAccess,
 }: {
-    /** Read-only facts about this browser's access, shown above the actions. */
     readonly header: ReactNode;
     readonly disabled: boolean;
     readonly endAccessDisabled: boolean;
     readonly onMeasureNetwork: () => void;
-    /** Shows the devices with access to this computer. */
     readonly onOpenDevices: () => void;
     readonly onEndAccess: () => void;
 }) {

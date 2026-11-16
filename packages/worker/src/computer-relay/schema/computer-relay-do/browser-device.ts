@@ -16,7 +16,6 @@ export const browserDevice = sqliteTable("browser_device", {
      */
     joinedCity: text("joined_city"),
     joinedCountry: text("joined_country"),
-    /** The link that added the device, which names who added it. */
     joinedThroughTransferId: text("joined_through_transfer_id").notNull(),
     /** When the device's access was ended; null while it was not. Ended access never resumes. */
     endedAt: integer("ended_at"),

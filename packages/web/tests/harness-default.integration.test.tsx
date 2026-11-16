@@ -47,7 +47,6 @@ test("Given the draft agent settings are still loading, When they settle, Then t
     expect(titleMark).not.toBeNull();
     expect(titleMark?.getAttribute("data-harness-product")).toBeNull();
 
-    // The Computer's first installed Agent is the draft's default; whatever it is, its mark replaces the skeleton.
     await app.waitForView(() => expect(harnessProduct(app)).not.toBeNull());
     expect(app.optionalElementByTestId(dataTestId.harnessMarkSkeleton)).toBeNull();
 });

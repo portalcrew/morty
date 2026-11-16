@@ -42,7 +42,6 @@ function without(awaiting: ReadonlyMap<string, string>, key: string): ReadonlyMa
     return remaining;
 }
 
-/** A frame the page sends starts an exchange that real I/O answers, or ends one the page gave up on. */
 function afterSent(
     awaiting: ReadonlyMap<string, string>,
     message: Readonly<Record<string, unknown>>,
@@ -69,7 +68,6 @@ function afterSent(
     }
 }
 
-/** A frame the page receives answers the exchange it names. */
 function afterReceived(
     awaiting: ReadonlyMap<string, string>,
     message: Readonly<Record<string, unknown>>,
@@ -95,7 +93,6 @@ function sent(socket: TransportSocket, payload: string | Buffer): TransportSocke
     }
     const awaiting = socket.kind === "open" ? socket.awaiting : new Map<string, string>();
     const message = frame(payload);
-    // A binary frame carries the body of a request already started.
     return { kind: "open", url: socket.url, awaiting: message === null ? awaiting : afterSent(awaiting, message) };
 }
 
@@ -163,7 +160,6 @@ export class RuntimeClock {
             this.#notify();
             socket.on("framesent", ({ payload }) => update((current) => sent(current, payload)));
             socket.on("framereceived", ({ payload }) => update((current) => received(current, payload)));
-            // A socket error ends the socket as a close does.
             socket.on("socketerror", () => update((current) => ({ kind: "closed", url: current.url })));
             socket.on("close", () => update((current) => ({ kind: "closed", url: current.url })));
         });
@@ -240,10 +236,6 @@ export class RuntimeClock {
         await this.#page.clock.setFixedTime(new Date(Date.now()));
     };
 
-    /**
-     * The test now holds every `/transport` socket the page has open, as a stalled network does: their exchanges no
-     * longer stop virtual time. Sockets the page opens afterwards are awaited as usual.
-     */
     readonly holdOpenTransports = (): void => {
         for (const [socket, state] of this.#sockets) {
             if (state.kind !== "closed") {
@@ -253,10 +245,6 @@ export class RuntimeClock {
         this.#notify();
     };
 
-    /**
-     * Advances virtual time in one-second steps. Each step on a live transport first waits for the replies the page
-     * awaits; a held transport advances through them, for a test that stalls the network until deadlines expire.
-     */
     readonly runFor = async (
         milliseconds: number,
         { transport = "live" }: { readonly transport?: Transport } = {},
@@ -313,12 +301,10 @@ export class RuntimeClock {
             advanced += 1000;
         }
         if (typeof assertion !== "function") {
-            // A rejected promise fails the wait with its own cause.
             await assertion;
         }
     };
 
-    /** Fires every timer due within `milliseconds` once, as after a suspension, when the page awaits no reply. */
     readonly fastForward = async (milliseconds: number): Promise<void> => {
         await this.#settle("live", this.#deadline());
         this.#setTime((await this.#page.evaluate(() => Date.now())) + milliseconds);

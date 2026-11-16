@@ -30,12 +30,7 @@ type SessionResult =
           readonly kind: "authenticated";
           readonly session: Session;
           readonly credentialKind: Credential["kind"];
-          /**
-           * When this access ends: a browser's at its device's term, the latest among the links the device opened;
-           * other access does not expire.
-           */
           readonly accessExpiresAt: number | null;
-          /** Whose access this is; the Session credentials it obtains last only while that access holds. */
           readonly holder: SessionAccessHolder;
       }
     | { readonly kind: "unauthenticated" }
@@ -48,9 +43,7 @@ type SessionResult =
 
 type CredentialLookup =
     | { readonly kind: "active"; readonly credential: Credential }
-    /** A newer credential of the same browser device replaced it; the device may still hold access. */
     | { readonly kind: "replaced" }
-    /** Its access ended: the credential was revoked, or its browser device was ended or reached its term. */
     | { readonly kind: "ended" }
     | { readonly kind: "unknown" };
 
@@ -71,7 +64,6 @@ type ComputerLinkResult =
     | { readonly kind: "linked"; readonly computerId: string }
     | { readonly kind: "unauthenticated" | "revoked" | "mismatch" };
 
-/** Who shared the link a device joined through, as the owner recognizes it. */
 export type DeviceSharer = { readonly kind: "computer" } | { readonly kind: "device"; readonly label: string | null };
 
 /** Null when the link's sharer is unknown: a link shared before its sharer was recorded as an access holder. */
@@ -86,7 +78,6 @@ function deviceSharer(kind: Credential["kind"] | null, label: string | null): De
     }
 }
 
-/** What a stored credential grants now, read from what storage reports of it and its device. */
 function classifyCredential(stored: StoredCredential): CredentialLookup {
     switch (stored.kind) {
         case "local":
@@ -183,7 +174,6 @@ export class AuthenticationService {
         }
     };
 
-    /** The one check of which credential kinds may perform an operation; the rule itself is `mayPerform`. */
     readonly authorize = async <Operation extends CredentialOperation>(
         token: string | undefined,
         operation: Operation,
@@ -206,7 +196,6 @@ export class AuthenticationService {
         }
     };
 
-    /** Shares this access through a link whose device keeps access for `duration`, replacing an unopened link. */
     readonly createTransfer = async (
         token: string | undefined,
         request: {
@@ -263,7 +252,6 @@ export class AuthenticationService {
                   readonly label: string | null;
                   readonly location: ClientLocation | null;
                   readonly addedBy: DeviceSharer | null;
-                  /** When the device's access ends. */
                   readonly accessExpiresAt: number;
               }[];
           }
@@ -276,7 +264,6 @@ export class AuthenticationService {
                 const stored = await this.identities.linkedDevices(Date.now(), signal);
                 const devices = stored.flatMap((device) => {
                     const heldUntil = device.accessHeldUntil;
-                    // Only a device that holds access now is listed, with the term it holds it until.
                     return device.deviceId === own || heldUntil === null
                         ? []
                         : [
@@ -323,10 +310,6 @@ export class AuthenticationService {
         return { kind: "revoked" };
     };
 
-    /**
-     * Revokes all access except the computer's own credential. Computer replacement keeps it until setup has saved the
-     * successor Computer's identity, and then ends it.
-     */
     readonly revokeOtherAccess = async (
         token: string | undefined,
         signal: AbortSignal,
@@ -388,7 +371,6 @@ export class AuthenticationService {
         return result.kind === "callerEnded" ? { kind: "unauthenticated" } : result;
     };
 
-    /** Ends a device's access under the caller's credential, which the write checks again; the result is that write's. */
     readonly #endDevice = async (
         token: string,
         deviceId: string,

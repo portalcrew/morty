@@ -12,7 +12,6 @@ test.runIf(process.platform === "win32")(
     async () => {
         await using provider = await FakeOpenAiProvider.start("morty-test-model", "WINDOWS_PI_READY");
         await using agent = await PiFixture.create(provider);
-        // The npm launcher resolves to its verified JavaScript entrypoint before readiness runs.
         expect(agent.executable).toMatch(/\.(?:js|mjs|cjs)$/iu);
         const directory = await mkdtemp(join(tmpdir(), "morty windows pi "));
         try {

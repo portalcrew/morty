@@ -184,7 +184,6 @@ export async function createTestRuntime(
                     },
                     runtime,
                     ...(replaceComputer === undefined ? {} : { replaceComputer }),
-                    // A Claude Code shell exposes its current session; the controlled peer stands in for Claude Code.
                     agentEnvironment: { CLAUDE_CODE_SESSION_ID: sessionId },
                 });
                 return {

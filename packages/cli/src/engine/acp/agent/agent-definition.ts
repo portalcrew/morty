@@ -1,7 +1,6 @@
 import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import type { ExecutableIdentity } from "../../util/process/executable.ts";
 
-/** A verified local Agent. Its adapter owns how connections are established. */
 export class AcpAgentDefinition {
     readonly agentIdentity: ExecutableIdentity;
     readonly agentVersion: string;

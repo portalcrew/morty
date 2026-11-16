@@ -23,10 +23,6 @@ function counted(count: number, singular: string, plural: string): string {
     return `${count.toString()} ${count === 1 ? singular : plural}`;
 }
 
-/**
- * Collapses one adjacent process segment (tool calls, reasoning, and progress
- * notes) behind a summary row. The latest generating segment shimmers.
- */
 export function TurnWorkDisclosure({
     children,
     className,

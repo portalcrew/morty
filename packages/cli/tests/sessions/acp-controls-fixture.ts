@@ -9,7 +9,6 @@ import { SessionRuntimeFixture as SessionManager } from "../support/session-runt
 import { UnretainedExternalContentStore } from "../support/unretained-external-content-store.ts";
 import { fakeAgent, RecordingObserver } from "./acp-feature-fixture.ts";
 
-/** Owns an isolated ACP process and its disposable native files. */
 export async function createControlledSession(signal: AbortSignal) {
     const directory = await mkdtemp(join(tmpdir(), "morty-acp-controls-"));
     const observer = new RecordingObserver();
@@ -68,7 +67,6 @@ export async function createControlledSession(signal: AbortSignal) {
     }
 }
 
-/** Drive the controlled peer's permission/form dialogue through production ports. */
 export async function completeAcpControls(session: Awaited<ReturnType<typeof createControlledSession>>) {
     const running = session.manager.runPrompt({
         ...session.request,

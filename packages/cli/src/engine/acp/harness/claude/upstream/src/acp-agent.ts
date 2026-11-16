@@ -181,9 +181,6 @@ const execFileAsync = promisify(execFile);
 
 const _MAX_TITLE_LENGTH = 256;
 
-/**
- * Logger interface for customizing logging output
- */
 export interface Logger {
     log: (...args: any[]) => void;
     error: (...args: any[]) => void;
@@ -196,8 +193,6 @@ type AccumulatedUsage = {
     cachedWriteTokens: number;
 };
 
-/** Per-model token tallies keyed by the model id the SDK reported them under
- *  (its resolved spelling, e.g. "claude-opus-5[1m]"). */
 type ModelTokenTally = Record<string, AccumulatedUsage>;
 
 type UsageSnapshot = {
@@ -255,7 +250,6 @@ function supportsMcpOAuth(query: Query): query is McpOAuthQuery {
     return typeof (query as Partial<McpOAuthQuery>).mcpAuthenticate === "function";
 }
 
-/** Wait for a polling interval, resolving false when the session is aborted. */
 function waitUnlessAborted(milliseconds: number, signal: AbortSignal): Promise<boolean> {
     if (signal.aborted) {
         return Promise.resolve(false);
@@ -357,23 +351,15 @@ function parseSteerRequest(params: unknown): SteerRequest {
     };
 }
 
-/** Custom (extension) request method a client uses to retitle a session: the
- *  title is persisted to the session file via the SDK's `renameSession`, which
- *  is the same field the CLI's own `/rename` command writes. Named
- *  `_session/rename` per the ACP extension convention; advertised to clients
- *  via the top-level `InitializeResponse._meta.renameSession.supported`. */
 const RENAME_METHOD = "_session/rename";
 
-/** Params of a {@link RENAME_METHOD} request. */
 export type RenameRequest = {
     sessionId: string;
     title: string;
 };
 
-/** Result of a {@link RENAME_METHOD} request. */
 export type RenameResponse = Record<string, never>;
 
-/** Validate raw JSON-RPC params into a {@link RenameRequest}. */
 function parseRenameRequest(params: unknown): RenameRequest {
     if (!params || typeof params !== "object") {
         throw RequestError.invalidParams(undefined, "rename params must be an object");
@@ -388,22 +374,16 @@ function parseRenameRequest(params: unknown): RenameRequest {
     return { sessionId, title };
 }
 
-/** Custom (extension) request method Morty uses to learn whether another client
- *  continued a session's transcript while this Agent kept an earlier copy. Named
- *  `_session/revision` per the ACP extension convention. */
 const REVISION_METHOD = "_session/revision";
 
-/** Params of a {@link REVISION_METHOD} request. */
 export type RevisionRequest = {
     sessionId: string;
 };
 
-/** Result of a {@link REVISION_METHOD} request. */
 export type RevisionResponse = {
     latestEntryId: string;
 };
 
-/** Validate raw JSON-RPC params into a {@link RevisionRequest}. */
 function parseRevisionRequest(params: unknown): RevisionRequest {
     if (!params || typeof params !== "object") {
         throw RequestError.invalidParams(undefined, "revision params must be an object");
@@ -539,7 +519,6 @@ type Turn = {
     carriedModelUsage?: ModelTokenTally;
     resolve: (response: PromptResponse) => void;
     reject: (error: unknown) => void;
-    /** Settles after the ACP prompt request completes, regardless of outcome. */
     completion?: Promise<void>;
 };
 
@@ -547,11 +526,7 @@ export type Session = {
     query: Query;
     input: Pushable<SDKUserMessage>;
     cancelled: boolean;
-    /** FIFO of in-flight prompts. The head is the turn the SDK is currently
-     *  processing; later entries are queued and will be echoed in order. */
     turnQueue?: Turn[];
-    /** The turn whose messages the consumer is currently attributing output to
-     *  (the head of `turnQueue` once its user message has been echoed). */
     activeTurn?: Turn | null;
     /** Optimistic goal state published for a submitted `/goal` command whose
      *  matching runtime update has not arrived yet. Runtime updates for the old
@@ -564,8 +539,6 @@ export type Session = {
         previous: GoalSnapshot | null | undefined;
         started: boolean;
     };
-    /** Last goal snapshot sent to the ACP client, used to roll back an
-     *  optimistic `/goal` update when the command itself fails. */
     lastPublishedGoal?: GoalSnapshot | null;
     /** Count of result messages the consumer should treat as orphans and skip
      *  (not promote/attribute to the current head). When cancel() settles+removes
@@ -635,13 +608,9 @@ export type Session = {
      *  identify another client's continuation (see readSessionRevision). */
     streamedMessageIds: Set<string>;
     cwd: string;
-    /** Serialized snapshot of session-defining params (cwd, mcpServers) used to
-     *  detect when loadSession/resumeSession is called with changed values. */
     sessionFingerprint: string;
-    /** Original ACP parameters used to recreate this query with a new provider. */
     creationParams?: NewSessionRequest;
     settingsManager: SettingsManager;
-    /** This session's title state and the turn-end logic that maintains it. */
     titles: SessionTitles;
     accumulatedUsage: AccumulatedUsage;
     /** The active turn's spend broken out per model — the breakdown behind
@@ -658,16 +627,9 @@ export type Session = {
     modelInfos: ModelInfo[];
     /** Prevents the model-specific Auto fallback from spamming the transcript. */
     autoModeFallbackWarningShown?: boolean;
-    /** Initial mode fallback is reported after session/new, on the first prompt. */
     autoModeFallbackWarningPending?: boolean;
     configOptions: SessionConfigOption[];
-    /** Custom main-thread agent personas the user (or a plugin/project) has
-     *  configured, discovered via `supportedAgents()` with Claude Code's built-in
-     *  subagents filtered out. Empty when none are configured, in which case the
-     *  "agent" config option is omitted entirely. */
     agents: AgentInfo[];
-    /** The currently selected main-thread agent name, or "default" for the
-     *  standard Claude Code agent (no `agent` flag applied). */
     currentAgent: string;
     /** Whether Fast mode is currently enabled for this session. Tracked as the
      *  user's intent so it persists across model switches; the Fast mode config
@@ -701,8 +663,6 @@ export type Session = {
      *  cancel. */
     forceCancelTimer?: ReturnType<typeof setTimeout>;
     emitRawSDKMessages: boolean | SDKMessageFilter[];
-    /** Whether nested subagent text/thinking is forwarded to the ACP client.
-     *  Enabled by either the ACP capability or the pre-existing SDK option. */
     forwardSubagentText: boolean;
     /** Number of ACP permission/elicitation requests currently awaiting user
      *  input. This is a counter rather than a boolean because parallel subagents
@@ -896,8 +856,6 @@ function isHeldOpen(turn: Turn | null | undefined): turn is Turn & { deferredSet
     return turn != null && turn.deferredSettle !== undefined && !turn.settled;
 }
 
-/** Whether a steer moved this turn's settlement off the next result and onto the
- *  SDK's `idle` (see Turn.steeredEchoes). Shared by the consumer's settle lanes. */
 function isSteering(turn: Turn | null | undefined): turn is Turn & { steeredEchoes: Set<string> } {
     return turn != null && turn.steeredEchoes !== undefined && !turn.settled;
 }
@@ -929,26 +887,8 @@ export type SDKMessageFilter = {
     origin?: SDKMessageOrigin["kind"];
 };
 
-/**
- * Extra metadata that can be given when creating a new session.
- */
 export type NewSessionMeta = {
     claudeCode?: {
-        /**
-         * Options forwarded to Claude Code when starting a new session.
-         * Those parameters will be ignored and managed by ACP:
-         *   - cwd
-         *   - includePartialMessages
-         *   - allowDangerouslySkipPermissions
-         *   - permissionMode
-         *   - canUseTool
-         *   - executable
-         * Those parameters will be used and updated to work with ACP:
-         *   - hooks (merged with ACP's hooks)
-         *   - mcpServers (merged with ACP's mcpServers)
-         *   - disallowedTools (merged with ACP's disallowedTools)
-         *   - tools (passed through; defaults to claude_code preset if not provided)
-         */
         options?: Options;
         /**
          * When set, raw SDK messages are emitted as extNotification("_claude/sdkMessage", message)
@@ -962,9 +902,6 @@ export type NewSessionMeta = {
     additionalRoots?: string[];
 };
 
-/**
- * Extra metadata for 'gateway' authentication requests.
- */
 type GatewayAuthMeta = {
     /**
      * These parameters are mapped to environment variables to:
@@ -998,38 +935,22 @@ type SetProviderMeta = {
     };
 };
 
-/**
- * Resolved, non-secret + secret routing config for the `main` provider. This is
- * the shared shape produced by both `providers/set` and the legacy gateway auth
- * path, and consumed by {@link createEnvForProvider}. `null` means the provider
- * is unconfigured (no client-managed routing in effect).
- */
 type ProviderConfig = {
     apiType: LlmProtocol;
     baseUrl: string;
     headers: Record<string, string>;
-    /** Present only for `apiType === "vertex"`. */
     vertex?: {
         projectId: string;
         region: string;
     };
 };
 
-/**
- * Extra metadata that the agent provides for each tool_call / tool_update update.
- */
 export type ToolUpdateMeta = {
     "morty.backgroundTask"?: { readonly id: string; readonly status: "running" | "unknown" };
     claudeCode?: {
-        /* The name of the tool that was used in Claude Code. */
         toolName: string;
-        /* A human-readable title supplied by Claude Code for the tool call. */
         title?: string;
-        /* The structured output provided by Claude Code. */
         toolResponse?: unknown;
-        /* For a tool call made inside a subagent: the tool_use id of the
-       Agent/Task call that spawned the subagent. Mirrors the SDK's
-       `parent_tool_use_id` on streamed subagent messages. */
         parentToolUseId?: string;
         /* On a "failed" tool_call_update: why the tool never actually ran, so a
        client can render the denial/cancellation distinctly from a real tool
@@ -1037,8 +958,6 @@ export type ToolUpdateMeta = {
        "user-rejected", "permission-rule", "interrupted", "cancelled", …
        (open set). Absent when the tool executed — including real failures. */
         nonExecutionKind?: string;
-        /* Free-text the user supplied when rejecting the tool call, when the
-       harness collected any. Only ever present alongside nonExecutionKind. */
         userFeedback?: string;
         /* Marks Agent/Task tool calls as subagent launches. ACP 1.2 has no
        standard subagent ToolKind yet, so clients that support nested
@@ -1052,7 +971,6 @@ export type ToolUpdateMeta = {
        located on disk. Lets clients turn the rendered skill name into a link to it. */
         skillPath?: string;
     };
-    /* Terminal metadata for Bash tool execution, matching codex-acp's _meta protocol. */
     terminal_info?: {
         terminal_id: string;
     };
@@ -1100,8 +1018,6 @@ type StreamedToolInput = {
     escaped: boolean;
     objectDepth: number;
     arrayDepth: number;
-    /** Offset of the most recent comma at the top level of the input object
-     *  (-1 before the first). Everything before it is a complete field. */
     lastTopLevelComma: number;
     /** The comma offset the last emitted refinement was sliced at (-1 before the
      *  first), so a field boundary only triggers one recovery attempt. */
@@ -1153,8 +1069,6 @@ function scanStreamedToolInput(state: StreamedToolInput): boolean {
     return complete;
 }
 
-/** Parse the complete top-level fields before a top-level comma by closing the
- *  object at that boundary. */
 function recoveredToolInput(prefix: string): Record<string, unknown> | undefined {
     try {
         const value: unknown = JSON.parse(`${prefix}}`);
@@ -1192,8 +1106,6 @@ const LOCAL_COMMAND_MARKERS = [
     "local-command-stderr",
 ].map((tag) => ({ open: `<${tag}>`, close: `</${tag}>` }));
 
-// Single-pass scanner that removes each `<tag>…</tag>` marker (matching the
-// nearest closing tag of the same name, like a lazy regex would).
 function stripMarkerTags(text: string): string {
     const dead = new Set<string>();
     let result = "";
@@ -1299,7 +1211,6 @@ export interface AcpClient {
      *  elicitation so the client can dismiss its prompt and settle our await. */
     createElicitation(params: CreateElicitationRequest, signal?: AbortSignal): Promise<CreateElicitationResponse>;
     completeElicitation(params: CompleteElicitationNotification): Promise<void>;
-    /** Send a custom (extension) notification, e.g. `_claude/sdkMessage`. */
     extNotification(method: string, params: Record<string, unknown>): Promise<void>;
 }
 
@@ -1382,8 +1293,6 @@ type McpAuthenticationHost = {
     logger: Logger;
 };
 
-/** Background OAuth work is implementation state, not part of the public
- *  `Session` shape exposed through `ClaudeAcpAgent.sessions`. */
 const mcpAuthentications = new WeakMap<Session, Promise<void>>();
 
 /** Start OAuth for ACP-provided MCP servers that Claude reported as needing
@@ -1557,9 +1466,7 @@ export class ClaudeAcpAgent {
     logger: Logger;
     private readonly sessionModes: SessionModeManager<Session>;
     gatewayAuthRequest?: GatewayAuthRequest;
-    /** Set while ACP overrides the agent's native provider configuration. */
     providerConfig?: ProviderConfig;
-    /** Serializes provider changes while every open query is recreated between turns. */
     private providerUpdate: Promise<void> | null = null;
     private readonly exitPlan: ExitPlanCoordinator<Session, Turn>;
     private readonly environment: Readonly<NodeJS.ProcessEnv>;
@@ -1764,9 +1671,6 @@ export class ClaudeAcpAgent {
                 auth: {
                     logout: {},
                 },
-                // Client-managed LLM routing via `providers/list`, `providers/set`, and
-                // `providers/disable`. Advertised unconditionally; there is no client
-                // capability prerequisite for the provider methods.
                 providers: {},
                 loadSession: true,
                 sessionCapabilities: {
@@ -1927,12 +1831,6 @@ export class ClaudeAcpAgent {
         return { providers: [provider] };
     }
 
-    /**
-     * `providers/set` — replace the full configuration for the `main` provider.
-     * Rejects unknown IDs, unsupported protocols, and empty/invalid base URLs with
-     * `invalid_params`. Config is process-scoped and applies to sessions created or
-     * loaded after this call.
-     */
     async unstable_setProvider(params: SetProviderRequest): Promise<SetProviderResponse> {
         if (params.providerId !== PROVIDER_ID) {
             throw RequestError.invalidParams(
@@ -1985,16 +1883,11 @@ export class ClaudeAcpAgent {
         return {};
     }
 
-    /**
-     * `providers/disable` ends ACP ownership of the single mutually exclusive
-     * backend slot and restores the agent's native routing state.
-     */
     async unstable_disableProvider(params: DisableProviderRequest): Promise<DisableProviderResponse> {
         if (params.providerId === PROVIDER_ID) {
             this.logger.log(`[providers/disable] sessions=${Object.keys(this.sessions).length}`);
             await this.enqueueProviderUpdate(undefined);
         }
-        // Unknown provider: idempotent success.
         return {};
     }
 
@@ -2147,10 +2040,6 @@ export class ClaudeAcpAgent {
         const isLocalOnlyCommand = firstText.startsWith("/") && LOCAL_ONLY_COMMANDS.has(firstText.split(" ", 1)[0]);
 
         session.titles.onPrompt(params.prompt);
-        // Each prompt is a Turn whose deferred the persistent consumer settles once
-        // the turn's outcome is known. `prompt()` owns no loop: it enqueues the
-        // turn, pushes the user message onto the streaming input, makes sure the
-        // consumer is running, and awaits the deferred.
         const turn: Turn = {
             promptUuid,
             inputQueuedAt: performance.now(),
@@ -2360,8 +2249,6 @@ export class ClaudeAcpAgent {
         return { outcome: "injected", messageId: steeredUuid };
     }
 
-    /** Lazily start the per-session consumer that drains the SDK query stream for
-     *  the session's whole life. Idempotent: only the first `prompt()` starts it. */
     private ensureConsumer(session: Session, sessionId: string): void {
         if (session.consumer !== undefined) {
             return;
@@ -2762,13 +2649,9 @@ export class ClaudeAcpAgent {
             }
         };
 
-        /** The unsettled in-flight turn owning this prompt uuid, if any. */
         const findUnsettledTurn = (uuid: string) =>
             (session.turnQueue ?? []).find((t) => t.promptUuid === uuid && !t.settled);
 
-        /** The first queued turn still awaiting its outcome, if any — the single
-         *  spelling of "a prompt is pending" shared by the head promotion and
-         *  the autonomous stretch-close guard. */
         const firstUnsettledQueuedTurn = () => (session.turnQueue ?? []).find((t) => !t.settled);
 
         /** Whether any background subagent this turn spawned is still live —
@@ -2826,15 +2709,12 @@ export class ClaudeAcpAgent {
             }
         };
 
-        /** Settle the active turn's deferred exactly once, disarm the force-cancel
-         *  backstop (the turn is over), and drop it from the queue. */
         const settleActive = (result: PromptResponse) => {
             const turn = session.activeTurn;
             if (!turn || turn.settled) {
                 return;
             }
             disarmResultWatchdog();
-            // Captured before the settled flip below (isHeldOpen tests !settled).
             const wasHeld = isHeldOpen(turn);
             turn.settled = true;
             disarmForceCancel(session);
@@ -2940,7 +2820,6 @@ export class ClaudeAcpAgent {
             }
         };
 
-        /** Reject every in-flight turn — used when the stream dies. */
         const failAllTurns = (error: unknown) => {
             disarmForceCancel(session);
             const turns = session.activeTurn
@@ -3029,7 +2908,6 @@ export class ClaudeAcpAgent {
                     continue;
                 }
 
-                // A message arrived: this next() is consumed; arm a fresh one next pass.
                 pendingNext = null;
 
                 const { value: message, done } = raced.result as IteratorResult<SDKMessage, void>;
@@ -3212,9 +3090,6 @@ export class ClaudeAcpAgent {
                                 if (message.capabilities?.includes("msg_lifecycle_v1")) {
                                     session.msgLifecycleV1 = true;
                                 }
-                                // A fresh `system`/init (e.g. after reinitialize) can carry an
-                                // updated Fast mode state; reconcile it with what we seeded at
-                                // session creation.
                                 await this.syncFastModeState(
                                     message.session_id,
                                     session,
@@ -3375,8 +3250,6 @@ export class ClaudeAcpAgent {
                                         // finish the hold only after its own subagents drain.
                                         settleDeferredIfDrained();
                                     } else if (hadEarlierResult) {
-                                        // Absorb a previous turn's trailer before considering
-                                        // the active turn's steering or missing-result lanes.
                                     } else if (isSteering(session.activeTurn)) {
                                         // A steered turn settles here, not at a result: this idle is
                                         // the only signal spanning the interrupted and steered cycles
@@ -3422,8 +3295,6 @@ export class ClaudeAcpAgent {
                                             ),
                                         );
                                     }
-                                    // Turn-over is when a title may have landed or become
-                                    // generatable; see SessionTitles.onTurnEnd.
                                     await session.titles.onTurnEnd(session);
                                 }
                                 break;
@@ -3673,7 +3544,6 @@ export class ClaudeAcpAgent {
                                 // can't grow for the session's lifetime if a notification is
                                 // skipped.
                                 if (!hasBackgroundLevel && message.patch.is_backgrounded === true) {
-                                    // A foreground task moved to the background now owes a result.
                                     backgroundTasks.add(message.task_id);
                                     reportBackgroundActivity();
                                 }
@@ -4010,7 +3880,6 @@ export class ClaudeAcpAgent {
                                 }
                             }
 
-                            // Send usage_update notification
                             if (lastAssistantTotalUsage !== null) {
                                 await sendUpdate({
                                     sessionId: params.sessionId,
@@ -4431,7 +4300,6 @@ export class ClaudeAcpAgent {
                             }
                         }
                         if (currentStreamMessageId === undefined) {
-                            // Boundary-only SDK events before message_start produce no chunks.
                             if (
                                 message.event.type !== "content_block_start" &&
                                 message.event.type !== "content_block_delta"
@@ -4456,8 +4324,6 @@ export class ClaudeAcpAgent {
                                 compactionId: compaction?.id,
                             },
                         )) {
-                            // sendUpdate records delivery; a subagent stream's chunks carry
-                            // the stamped parentToolUseId meta and are excluded there.
                             await sendUpdate(notification);
                         }
                         break;
@@ -4553,7 +4419,6 @@ export class ClaudeAcpAgent {
                                     // that only starts at this echo. Wait for its own result.
                                     session.activeTurn.steeredSettle = undefined;
                                 }
-                                // Unrelated replay (e.g. the echo of an already-settled turn).
                                 break;
                             }
                         }
@@ -4597,11 +4462,6 @@ export class ClaudeAcpAgent {
                             }
                         }
 
-                        // Strip <command-*>/<local-command-stdout> markers and render any
-                        // remaining prose. Skill bodies and built-in slash commands (e.g.
-                        // /usage, /status, /model) arrive wrapped in these tags; pure-marker
-                        // payloads (e.g. /compact's malformed output) strip to null and are
-                        // skipped. Mirrors the replay path at replaySessionHistory.
                         if (
                             message.message.role !== "system" &&
                             typeof message.message.content === "string" &&
@@ -4766,10 +4626,6 @@ export class ClaudeAcpAgent {
                                 compactionId: compaction?.id,
                             },
                         )) {
-                            // sendUpdate records delivery. Subagent text/thinking is
-                            // filtered out of `content` above; blocks that do pass through
-                            // (e.g. a subagent image) carry the stamped parentToolUseId
-                            // meta and are excluded there.
                             await sendUpdate(acceptedPlanToolResult(notification, acceptedPlanToolUseId));
                         }
                         break;
@@ -4940,7 +4796,6 @@ export class ClaudeAcpAgent {
             turn.commandFinished === "discarded" ||
             turn.commandFinished === "refused"
         ) {
-            // Finished SDK-side; any result already passed. Nothing to track.
         } else if (turn.commandFinished === "cancelled") {
             // Aborted after dispatch: its late result may still come — unless it
             // already did.
@@ -4948,8 +4803,6 @@ export class ClaudeAcpAgent {
                 this.trackOrphanCommand(session, turn.promptUuid, "zombie");
             }
         } else if (turn.commandResultSeen) {
-            // Its result was already consumed; only the terminal frame is
-            // outstanding, which no-ops with no entry. Nothing to track.
         } else {
             // The turn WAS dispatched (it was active), so track it "started": its
             // late result is consumed as this turn's, and its terminal frame — or
@@ -5047,8 +4900,6 @@ export class ClaudeAcpAgent {
                     continue;
                 }
                 if (turn.commandStarted && turn.commandResultSeen) {
-                    // Dispatched and its turn's result already passed; only its
-                    // terminal frame is outstanding, which no-ops with no entry.
                     continue;
                 }
                 this.trackOrphanCommand(session, turn.promptUuid, turn.commandStarted ? "started" : "pending");
@@ -5205,8 +5056,6 @@ export class ClaudeAcpAgent {
         this.reportBackgroundActivity(session, "none");
     }
 
-    /** Cleanly tear down a session: cancel in-flight work, release stream
-     *  resources, and remove it from the session map. */
     private async teardownSession(sessionId: string, graceful = true): Promise<void> {
         const session = this.sessions[sessionId];
         if (!session) {
@@ -6042,9 +5891,6 @@ export class ClaudeAcpAgent {
                 session.agents,
                 session.currentAgent,
                 {
-                    // The toggle follows the newly selected model: it disappears when the
-                    // model lacks fast support and reappears (with the retained user
-                    // intent) when a supporting model is selected again.
                     supported: newModelInfo?.supportsFastMode ?? false,
                     enabled: session.fastModeEnabled,
                     useBooleanOption: clientSupportsBooleanConfigOptions(this.clientCapabilities),
@@ -6347,7 +6193,6 @@ export class ClaudeAcpAgent {
         // launch" error from the SDK (see issue #749).
         await this.validateCwd(params.cwd);
 
-        // We want to create a new session id unless it is resume.
         let sessionId: string;
         if (creationOpts.publicSessionId) {
             sessionId = creationOpts.publicSessionId;
@@ -6387,7 +6232,6 @@ export class ClaudeAcpAgent {
         if (Array.isArray(params.mcpServers)) {
             for (const server of params.mcpServers) {
                 if ("type" in server && (server.type === "http" || server.type === "sse")) {
-                    // HTTP or SSE type MCP server
                     mcpServers[server.name] = {
                         type: server.type,
                         url: server.url,
@@ -6413,8 +6257,6 @@ export class ClaudeAcpAgent {
             if (typeof customPrompt === "string") {
                 systemPrompt = customPrompt;
             } else if (typeof customPrompt === "object" && customPrompt !== null && !Array.isArray(customPrompt)) {
-                // Forward all preset options (append, excludeDynamicSections, and
-                // anything the SDK adds later) while locking type/preset.
                 systemPrompt = {
                     ...(customPrompt as object),
                     type: "preset",
@@ -6429,14 +6271,11 @@ export class ClaudeAcpAgent {
         );
         const initialPermissionMode = creationOpts.permissionMode ?? permissionMode;
 
-        // Extract options from _meta if provided
         const forwardSubagentText =
             supportsSubagentTranscript(this.clientCapabilities) || userProvidedOptions?.forwardSubagentText === true;
 
-        // Configure thinking behavior from environment variable
         const thinking = resolveThinkingConfig(process.env.MAX_THINKING_TOKENS, this.logger);
 
-        // Parse model configuration from environment (e.g. Bedrock model overrides)
         const modelConfig = parseModelConfig(process.env.CLAUDE_MODEL_CONFIG);
 
         // Elicitation modes the connected client advertised. We only forward
@@ -6503,11 +6342,7 @@ export class ClaudeAcpAgent {
         const env = {
             ...this.environment,
             ...userProvidedOptions?.env,
-            // Client-managed LLM routing: `providers/set` config wins, else the
-            // legacy gateway auth request. Routing is baked into the query at
-            // creation; provider updates recreate loaded queries between turns.
             ...providerEnv,
-            // Opt-in to session state events like when the agent is idle
             CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: "1",
         };
         // Scopes the context-window cache to this query's backend (see
@@ -6658,11 +6493,9 @@ export class ClaudeAcpAgent {
         ];
 
         if (creationOpts?.resume === undefined) {
-            // Set our own session id if not resuming an existing session.
             options.sessionId = creationOpts.publicSessionId ? randomUUID() : sessionId;
         }
 
-        // Handle abort controller from meta options
         this.signal.throwIfAborted();
         abortController.signal.throwIfAborted();
         q = query({
@@ -7060,8 +6893,6 @@ function modelUsageIncrement(current: ModelTokenTally, previous: ModelTokenTally
     return increment;
 }
 
-/** Fold `increment` into `base` per model — the per-model counterpart of the
- *  `+=` the turn's flat accumulator uses. */
 function addModelUsage(base: ModelTokenTally, increment: ModelTokenTally): ModelTokenTally {
     const merged: ModelTokenTally = { ...base };
     for (const [model, usage] of Object.entries(increment)) {
@@ -7175,7 +7006,7 @@ function createEnvForProvider(config: ProviderConfig | null): Record<string, str
         return {
             ...resetRouting,
             CLAUDE_CODE_USE_BEDROCK: "1",
-            AWS_BEARER_TOKEN_BEDROCK: "acp-proxy", // Bypass local AWS credential checks
+            AWS_BEARER_TOKEN_BEDROCK: "acp-proxy",
             ANTHROPIC_BEDROCK_BASE_URL: config.baseUrl,
             ANTHROPIC_CUSTOM_HEADERS: customHeaders,
         };
@@ -7198,7 +7029,7 @@ function createEnvForProvider(config: ProviderConfig | null): Record<string, str
         ...resetRouting,
         ANTHROPIC_BASE_URL: config.baseUrl,
         ANTHROPIC_CUSTOM_HEADERS: customHeaders,
-        ANTHROPIC_AUTH_TOKEN: "acp-proxy", // Bypass local Claude login checks
+        ANTHROPIC_AUTH_TOKEN: "acp-proxy",
     };
 }
 
@@ -7292,8 +7123,6 @@ export const MODEL_CONFIG_ID = "model";
 export const AGENT_CONFIG_ID = "agent";
 export const FAST_MODE_CONFIG_ID = "fast";
 
-/** Select-fallback values used when the client has not opted into boolean
- *  config options (see {@link createFastModeConfigOption}). */
 export const FAST_MODE_ON = "on";
 export const FAST_MODE_OFF = "off";
 const FAST_MODE_DESCRIPTION = "Faster responses on supported models";
@@ -7382,9 +7211,6 @@ export function createFastModeConfigOption(
     };
 }
 
-/** Resolve the requested Fast mode value from a `session/set_config_option`
- *  request. Accepts a native boolean (boolean-capable Clients) or the
- *  "on"/"off" select-fallback strings. */
 export function resolveFastModeEnabled(params: SetSessionConfigOptionRequest): boolean {
     const value = params.value;
     if (typeof value === "boolean") {
@@ -7399,15 +7225,10 @@ export function resolveFastModeEnabled(params: SetSessionConfigOptionRequest): b
     throw new Error(`Invalid value for config option ${FAST_MODE_CONFIG_ID}: ${value}`);
 }
 
-/** Per-model Fast mode state threaded into {@link buildConfigOptions}. The
- *  option is only surfaced when the current model `supported`s fast mode. */
 export type FastModeOptionState = {
     supported: boolean;
     enabled: boolean;
-    /** Whether the Client opted into boolean config options. */
     useBooleanOption: boolean;
-    /** Latest explainable `fast_mode_disabled_reason`, folded into the option's
-     *  description while the toggle reads off. */
     disabledReason?: FastModeDisabledReason;
 };
 
@@ -7449,7 +7270,6 @@ export function buildConfigOptions(
         },
     ];
 
-    // Add effort level option based on the currently selected model
     const currentModelInfo = modelInfos.find((m) => m.value === models.currentModelId);
     const supportedLevels = currentModelInfo?.supportsEffort ? (currentModelInfo.supportedEffortLevels ?? []) : [];
 
@@ -7533,8 +7353,6 @@ function canonicalizeModelId(s: string): string {
     return s.trim().toLowerCase().replace(CONTEXT_HINT_SUFFIX_PATTERN, "[$1]");
 }
 
-/** The context hint a model string carries ("1m" for either spelling), or
- *  null for a bare id. */
 function contextHintOf(s: string): string | null {
     return canonicalizeModelId(s).match(MODEL_CONTEXT_HINT_PATTERN)?.[1] ?? null;
 }
@@ -7665,7 +7483,6 @@ export function resolveModelPreference(models: ModelInfo[], preference: string):
         return includesMatch;
     }
 
-    // Tokenized matching for aliases like "opus[1m]"
     const { tokens, contextHint } = tokenizeModelPreference(trimmed);
     if (tokens.length === 0) {
         return null;
@@ -8032,7 +7849,6 @@ export function promptToClaude(prompt: PromptRequest): SDKUserMessage {
         switch (chunk.type) {
             case "text": {
                 let text = chunk.text;
-                // change /mcp:server:command args -> /server:command (MCP) args
                 const mcpMatch = text.match(/^\/mcp:([^:\s]+):(\S+)(?:\s(.*))?$/);
                 if (mcpMatch) {
                     const [, server, command, args] = mcpMatch;
@@ -8061,7 +7877,6 @@ export function promptToClaude(prompt: PromptRequest): SDKUserMessage {
                         text: formatContextBlock(chunk.resource.uri, chunk.resource.text),
                     });
                 }
-                // Ignore blob resources (unsupported)
                 break;
             }
             case "image":
@@ -8084,7 +7899,6 @@ export function promptToClaude(prompt: PromptRequest): SDKUserMessage {
                     });
                 }
                 break;
-            // Ignore audio and other unsupported types
             default:
                 break;
         }
@@ -8179,7 +7993,6 @@ function claudeCodeMetaFromToolUse(
     };
 }
 
-/** Roots a skill's directory may sit under, relative to the directory the scope resolves to. */
 const SKILL_CONTAINER_DIRS = [".claude/skills", ".agents/skills"] as const;
 
 /**
@@ -8285,10 +8098,6 @@ function streamedInputRefinement(
     };
 }
 
-/**
- * Convert an SDKAssistantMessage (Claude) to a SessionNotification (ACP).
- * Only handles text, image, and thinking chunks for now.
- */
 export function toAcpNotifications(
     content: string | ContentBlockParam[] | BetaContentBlock[] | BetaRawContentBlockDelta[],
     role: "assistant" | "user",
@@ -8325,9 +8134,6 @@ export function toAcpNotifications(
         // untyped in sdk.d.ts) and validated by `parseToolResultMeta`. Stamps
         // denied/interrupted tool_call_updates with why the tool never ran.
         toolResultMeta?: unknown;
-        // ID of the in-flight compaction that streamed `compaction` content blocks
-        // belong to. Absent when no compaction is open, in which case those blocks
-        // are dropped.
         compactionId?: string;
     },
 ): SessionNotification[] {
@@ -8376,7 +8182,6 @@ export function toAcpNotifications(
     const toolResultMeta = parseToolResultMeta(options?.toolResultMeta);
 
     const output = [];
-    // Only handle the first chunk for streaming; extend as needed for batching
     for (const chunk of content) {
         let update: SessionNotification["update"] | null = null;
         switch (chunk.type) {
@@ -8488,9 +8293,7 @@ export function toAcpNotifications(
                     let rawInput: unknown;
                     try {
                         rawInput = JSON.parse(JSON.stringify(chunk.input));
-                    } catch {
-                        // ignore if we can't turn it to JSON
-                    }
+                    } catch {}
 
                     // Emit a `tool_call` only the first time this id surfaces to the
                     // client; afterwards refine it with a `tool_call_update`. The first
@@ -8508,8 +8311,6 @@ export function toAcpNotifications(
                         // tool_call_update rather than emitting a duplicate tool_call.
                         update = toolCallNotification(chunk, rawInput, supportsTerminalOutput, options?.cwd, true);
                     } else {
-                        // First surface (streaming content_block_start or replay) — send as
-                        // tool_call (with terminal_info for Bash).
                         update = toolCallNotification(chunk, rawInput, supportsTerminalOutput, options?.cwd);
                     }
                 }
@@ -8714,10 +8515,6 @@ export function toAcpNotifications(
                 break;
             case "compaction":
             case "compaction_delta": {
-                // The summary the model produced while compacting streams as
-                // `compaction` content blocks (deltas carry `content`). Forward each
-                // as a compaction_summary_chunk addressed to the in-flight
-                // compaction; the terminal compaction_update settles the summary.
                 const text = (chunk as { content?: unknown }).content;
                 if (
                     options?.compactionId !== undefined &&
@@ -8929,7 +8726,6 @@ export interface ClaudeAcpApp {
     readonly app: AgentApp;
 }
 
-/** Native background work: tasks still running, or finished tasks whose results the model has not handled. */
 export type BackgroundActivity = "none" | "running" | "awaiting-results";
 
 export interface ClaudeAcpAppOptions {
@@ -8937,7 +8733,6 @@ export interface ClaudeAcpAppOptions {
     readonly environment?: Readonly<NodeJS.ProcessEnv>;
     readonly logger?: Logger;
     readonly onConnect?: (connection: AgentConnection) => void;
-    /** In-process delivery waits for consumption; standalone ACP uses the wire transport. */
     readonly onSessionUpdate?: (params: ClaudeSessionNotification) => Promise<void>;
     readonly onBackgroundActivity?: (activity: BackgroundActivity) => void;
 }

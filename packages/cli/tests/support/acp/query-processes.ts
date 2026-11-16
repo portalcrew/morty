@@ -8,7 +8,6 @@ import { RetainedAgentProcesses } from "../../../src/engine/session/process/reta
 import { AcpQuerySession } from "./query-session.ts";
 import type { AcpSessionConnector } from "./session-events.ts";
 
-/** Owns workspace-scoped readers, independently of execution conversations. */
 export class AgentQueryProcesses {
     readonly #processesByAgent = new Map<
         AcpAgentDefinition,

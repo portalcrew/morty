@@ -1,6 +1,5 @@
 import { createStore } from "zustand/vanilla";
 
-/** Owns presentation of pairing instructions independently of connection and conversation lifetimes. */
 export const createPairingDialogStore = () =>
     createStore<{
         readonly open: boolean;

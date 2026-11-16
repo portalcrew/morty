@@ -249,7 +249,6 @@ class ClientFrameQueue {
     };
 }
 
-/** Reads daemon frames until one carries `kind`, skipping unrelated traffic. */
 async function nextFrameOfKind(
     frames: ClientFrameQueue,
     kind: string,
@@ -899,9 +898,7 @@ describe("daemon relay connection liveness", () => {
             expect(JSON.parse(extended.text).requestId).toBe("extended-workspace-request");
             expect(connectionCount).toBe(1);
 
-            // Future binary formats are discarded before any upload can use their bytes.
             socket.write(Buffer.from([0x82, 3, 0xff, 0x00, 0x03]));
-            // Unknown commands are skipped regardless of their other fields.
             writeServerTextFrame(socket, JSON.stringify({ kind: "session.future.read", requestId: "??" }));
             await sendCommand(
                 socket,
@@ -1295,7 +1292,6 @@ describe("daemon relay connection liveness", () => {
                     freshEvents.push(...decodeSessionEventEnvelope(freshFrame.text).events);
                 }
             }
-            // A restart retains terminal facts, while no earlier content or admission is replayed.
             expect(
                 freshEvents
                     .filter((event) => !sameNativeSession(event.target, fresh.sessionTarget))

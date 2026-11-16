@@ -23,7 +23,6 @@ export class CodexFixture implements AsyncDisposable {
             readonly approvalPolicy?: "never" | "on-request";
             readonly autoCompactTokenLimit?: number;
             readonly configuredModel?: string;
-            /** Experimental Codex tools the configured model's catalog entry enables, such as `send_user_message_async`. */
             readonly modelTools?: readonly string[];
         } = {},
     ): Promise<CodexFixture> {
@@ -39,7 +38,6 @@ export class CodexFixture implements AsyncDisposable {
             if (options.configuredModel === undefined) {
                 throw new Error("Model tools need a configured model");
             }
-            // The smallest catalog entry Codex accepts; the tools it lists are what the model is offered.
             await writeFile(
                 modelCatalog,
                 JSON.stringify({

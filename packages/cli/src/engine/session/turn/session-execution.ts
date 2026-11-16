@@ -7,7 +7,6 @@ import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts"
 import { ActiveRuntimeTurn, type PromptDispatch } from "./active-turn.ts";
 import type { ExecutionReceipts } from "./execution-receipts.ts";
 
-/** Whether the Session began executing the command and still holds it, as its execution authority answers. */
 export type SessionExecutes = (sessionTarget: NativeSessionTarget, commandId: string) => boolean;
 
 /**

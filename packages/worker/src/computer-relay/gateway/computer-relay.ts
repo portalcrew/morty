@@ -7,7 +7,6 @@ import type { ConfiguredRelayBindings } from "../../contracts/relay-bindings.ts"
 import { RequestDeadline } from "../../http/request-deadline.ts";
 import { DatabaseError } from "../../infra/sql-database.ts";
 
-/** Calls from outside a computer enter it only through its Durable Object HTTP endpoint. */
 export class ComputerRelayGateway {
     readonly #bindings: ConfiguredRelayBindings;
     readonly #computerId: string;
@@ -46,7 +45,6 @@ export class ComputerRelayGateway {
         }
     };
 
-    /** Creates this computer, or answers the replacement an earlier request with the same origin created. */
     readonly create = (origin: CreationOrigin, signal: AbortSignal): Promise<Response> =>
         this.#call(signal, (stub, signal) => stub.fetch(computerCreationRequest(this.#computerId, origin, signal)));
 }

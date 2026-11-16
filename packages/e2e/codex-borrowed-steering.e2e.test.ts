@@ -19,7 +19,6 @@ if (selectedBrowser !== "webkit" && selectedBrowser !== "chromium") {
 }
 test.use({ browserName: selectedBrowser, contextOptions: { isMobile: true, hasTouch: true } });
 
-// Both Codex processes and the daemon are real. Only model responses are controlled.
 test("Given desktop Codex owns a conversation, When I open it in Morty and queue follow-ups, Then steering is unavailable and the queued replies complete", async ({
     browserName,
     contextOptions,

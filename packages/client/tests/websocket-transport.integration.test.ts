@@ -176,7 +176,6 @@ afterEach(() => {
     vi.useRealTimers();
 });
 
-/** A stateful wire peer for SDK recovery; the SDK owns its real connector and transport. */
 async function liveEventPeer(liveness: "responsive" | "silent" = "responsive") {
     const identity = await generateE2EIdentity();
     const accessSecret = base64urlnopad.encode(new Uint8Array(32).fill(8));

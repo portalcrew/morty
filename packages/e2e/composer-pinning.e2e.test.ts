@@ -16,7 +16,6 @@ test.describe("composer stays pinned to the pane bottom", () => {
 
         const card = page.getByRole("dialog", { name: "Agent information request" });
         await expect(card).toBeVisible();
-        // Tabbing across the answer controls makes the browser reveal each one.
         await card.getByRole("button", { name: "Continue" }).focus();
         await page.keyboard.press("Tab");
         await page.keyboard.press("Tab");
@@ -39,13 +38,10 @@ test.describe("composer stays pinned to the pane bottom", () => {
             throw new Error("Expected the header, pane, composer, and answer card to have layout boxes");
         }
 
-        // The header stays at the pane's top edge and the composer inside its bottom edge.
         expect(headerBox.y - paneBox.y).toBeLessThan(2);
         expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(paneBox.y + paneBox.height + 0.5);
         expect(paneBox.y + paneBox.height - (composerBox.y + composerBox.height)).toBeLessThan(16);
 
-        // The answer card yields the space the header and composer need: it ends
-        // above the composer and keeps its own scrolling for the clipped answers.
         expect(scrollerBox.height).toBeGreaterThan(0);
         expect(scrollerBox.y + scrollerBox.height).toBeLessThanOrEqual(composerBox.y + 0.5);
         const scroll = await interactionScroller.evaluate((element) => ({

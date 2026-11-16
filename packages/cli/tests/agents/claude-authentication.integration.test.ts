@@ -56,7 +56,6 @@ test("Given real Claude has expired OAuth credentials, When I send a message and
                 }
             }
 
-            // Restart drops the live Agent and reads the real native transcript on reopen.
             await peer.restart();
             const prepareId = randomUUID();
             peer.send(

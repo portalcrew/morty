@@ -18,7 +18,6 @@ function mergeAttachHandlers(
     };
 }
 
-/** Hosts sidebar access notices and keeps their store attach lifetimes. */
 export function SidebarAccessNoticeHost({
     attachAccess,
     attachLinkedDevices,

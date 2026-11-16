@@ -60,7 +60,6 @@ import { DraftChatControls } from "./draft-chat-controls.tsx";
 import { MortySessionPane, MortySessionPaneLoading, SessionMessageListSkeleton } from "./morty-session-pane.tsx";
 import { PairingInstruction } from "./pairing-instruction.tsx";
 
-/** The centered pre-session failure block: card, grouped action buttons and the report entry. */
 function PreSessionFailure({
     action,
     failure,
@@ -73,7 +72,6 @@ function PreSessionFailure({
     return (
         <div className="m-auto grid justify-items-center gap-4 text-center">
             <SessionLoadFailure copy={describeLoadFailure(failure, "Couldn't load this chat")} />
-            {/* The recovery and report buttons form one group: stacked, with the group's 8px rhythm. */}
             <div className="grid justify-items-center gap-2">
                 {action}
                 {report}
@@ -148,7 +146,6 @@ function NewSessionTitle({
     );
 }
 
-/** The chat home renders its desktop or compact layout as the viewport allows. */
 export function BotChatHome(props: BotChatHomeProps) {
     return <DesktopChatLayout>{(desktop) => <BotChatHomeLayout {...props} desktop={desktop} />}</DesktopChatLayout>;
 }

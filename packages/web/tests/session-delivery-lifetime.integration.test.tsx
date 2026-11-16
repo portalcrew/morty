@@ -346,7 +346,6 @@ test("Given a message whose file is still uploading, When I switch to New Sessio
         getByLabelText(document.body, "Choose attachments"),
         new File(["attachment body ".repeat(4096)], "photo.txt", { type: "text/plain" }),
     );
-    // Leave the moment the message shows as sending, while its file is still on its way.
     let left = false;
     const observer = new MutationObserver(() => {
         if (!left && queryAllByLabelText(document.body, "Sending message").length > 0) {

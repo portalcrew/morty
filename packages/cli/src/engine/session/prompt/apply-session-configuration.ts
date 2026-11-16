@@ -26,7 +26,6 @@ function validateSessionConfigurationSelection(
     }
 }
 
-/** Whether the select setting offers `value`. */
 function offers(option: Extract<SessionConfigOption, { readonly type: "select" }>, value: string): boolean {
     return option.values.some((entry) => entry.value === value);
 }

@@ -167,7 +167,6 @@ test("Given my first message's Session was just created, When the page reloads b
     });
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     onTestFinished(() => observer.disconnect());
-    // The reload ends the old page's interaction along with the page.
     await sendFirstMessage(app, "Message caught by the reload").catch((cause: unknown) => {
         if (!(cause instanceof DOMException && cause.name === "AbortError")) {
             throw cause;

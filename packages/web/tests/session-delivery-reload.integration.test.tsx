@@ -165,7 +165,6 @@ test("Given an unconfirmed message after a reload, When another device runs a tu
     await reloaded.waitForView(() =>
         expect(reloaded.optionalElementByTestId(dataTestId.workingIndicator)).not.toBeNull(),
     );
-    // The retry need not wait for the other turn: the Computer queues the message behind it.
     const retry = await reloaded.waitForView(() => {
         const button = getByRole(document.body, "button", { name: "Retry message with unknown delivery" });
         expect(button.hasAttribute("disabled")).toBe(false);

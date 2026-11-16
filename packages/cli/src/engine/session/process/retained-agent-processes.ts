@@ -13,7 +13,6 @@ type Lifecycle<P> =
     | Resource<P>
     | {
           readonly kind: "preparing";
-          /** A start in progress, which no one requester owns. */
           readonly start: SharedOperation<P>;
           readonly resource: Resource<P>;
       };
@@ -26,7 +25,6 @@ interface RetainedSessionEvents<P> {
     readonly changed: () => void;
 }
 
-/** Tracks reusable Agent processes and their preparation/borrow lifetimes. */
 export class RetainedAgentProcesses<P, Key = string> {
     readonly #entries = new Map<string, Entry<P>>();
     readonly #keys = new Map<string, Key>();
@@ -77,7 +75,6 @@ export class RetainedAgentProcesses<P, Key = string> {
     readonly retain = (id: Key, runtime: P): void => {
         this.#setResource(id, { kind: "ready", runtime });
     };
-    /** Settles once the id's retiring process has ended, however it ended; the id's next process starts after it. */
     readonly retiring = (id: Key): Promise<void> | undefined => {
         const resource = this.#resource(this.#entry(id));
         return resource.kind === "retiring" ? resource.ended : undefined;
@@ -114,7 +111,6 @@ export class RetainedAgentProcesses<P, Key = string> {
         }
         return result;
     };
-    /** Starts, or joins, the start for `id`; `signal` ends only this requester's wait while others still wait. */
     readonly prepare = (id: Key, start: (signal: AbortSignal) => Promise<P>, signal: AbortSignal): Promise<P> => {
         const pending = this.pending(id);
         if (pending !== undefined) {

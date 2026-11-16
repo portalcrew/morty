@@ -283,7 +283,6 @@ for (const schedule of ["before-snapshot", "after-snapshot", "after-recovery"] a
                         );
                     }
                 });
-                // Retain rejection on the queue for the awaited readiness checks and final drain.
                 void observations.catch(() => undefined);
             });
         });
@@ -307,7 +306,6 @@ for (const schedule of ["before-snapshot", "after-snapshot", "after-recovery"] a
                     ? null
                     : network.gateHistory(schedule === "before-snapshot" ? "request" : "response");
             phase = "recovery";
-            // Recovery runs quietly first: the page offers no manual retry while it reconnects on its own.
             network.interrupt();
             if (gate !== null) {
                 try {
@@ -381,7 +379,6 @@ test("Given a partial reply, when it finishes while the browser is disconnected,
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(responses).toContainText("Waiting for steering");
     await composer.fill("Preserve this draft.");
-    // Recovery runs quietly first: the page offers no manual retry while it reconnects on its own.
     network.interrupt();
     // Closing the proxy socket is asynchronous in WebKit. Observe the interruption before finishing the reply.
     await expect(page.getByTestId(dataTestId.sendMessage)).toBeDisabled();
@@ -439,7 +436,6 @@ test("Given the user has loaded older messages, when the connection recovers, th
     const reading = messages.nth(1);
     await reading.evaluate((element) => element.scrollIntoView({ block: "center" }));
     const before = await reading.boundingBox();
-    // Recovery runs quietly first: the page offers no manual retry while it reconnects on its own.
     network.interrupt();
     await runtime.clock.runFor(5000);
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();

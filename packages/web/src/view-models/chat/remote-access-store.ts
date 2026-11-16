@@ -25,7 +25,6 @@ type RemoteAccessState =
 
 interface RemoteAccessOperations {
     readonly currentAccessToken: (signal: AbortSignal) => Promise<string>;
-    /** Ends the access this browser holds when it runs, while no other tab changes it. */
     readonly endRemoteAccess: (signal: AbortSignal) => Promise<void>;
 }
 
@@ -37,11 +36,9 @@ export function createRemoteAccessOperations(options: {
         readonly getToken: (signal: AbortSignal) => Promise<string>;
     };
     readonly onEnded: () => void;
-    /** The page's access as its owner confirms it, or null when it no longer opens the computer. */
     readonly currentAccess: (
         signal: AbortSignal,
     ) => Promise<{ readonly computerId: string; readonly computerToken: string } | null>;
-    /** Tells the owner of the page's access that the Worker refused it; settles once the owner checked it. */
     readonly credentialRejected: () => Promise<void>;
 }): RemoteAccessOperations {
     const api = new AnonymousIdentityApi(options);

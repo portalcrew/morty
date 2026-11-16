@@ -7,7 +7,6 @@ import type { UserMessageCollapseStore } from "../../view-models/chat/user-messa
 const COLLAPSE_THRESHOLD_HEIGHT = 15 * 24;
 const COLLAPSED_HEIGHT = 11 * 24;
 
-/** Measures the unclipped body; attachments are rendered by callers outside this component. */
 export function CollapsibleUserMessageBody({
     children,
     messageId,

@@ -76,8 +76,6 @@ for (const viewport of [
                 await details.click();
             }
 
-            // The controlled Agent follows the served instructions through the
-            // real setup, Chat, Relay and daemon, returning the user's link.
             const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
             await page.goto(connected.url);
             await expect(page).toHaveURL((url) => url.pathname === "/chat" && url.searchParams.has("sessionId"));

@@ -34,7 +34,6 @@ test("Given exhausted creation quota over HTTP, When visitors retry, Then the qu
                     name: "creation-budget",
                     modules: true,
                     compatibilityDate: "2026-09-07",
-                    // Stateful external admission port; each independent visitor has one attempt. No clock is involved.
                     script: `import { WorkerEntrypoint } from "cloudflare:workers";
 const visitors = new Set();
 export default class extends WorkerEntrypoint {

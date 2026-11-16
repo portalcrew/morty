@@ -5,7 +5,6 @@ import { logger } from "../../../../infra/logger.ts";
 import type { ComputerOperationSocket, RelayPeers, RelaySocket } from "./computer-relay-actor.ts";
 import { type ComputerReplyConnection, RequestRejectedEvent } from "./computer-reply-request.ts";
 
-/** What the owner of a request does with what its requester sends: a message for the Computer, a cancellation, or file credit. */
 export interface LocalComputerRequestHandlers {
     readonly message: (socket: ComputerOperationSocket, message: unknown) => Promise<void>;
     readonly cancel: (socket: ComputerOperationSocket) => void;
@@ -33,7 +32,6 @@ class LocalComputerRequest extends EventTarget implements ComputerReplyConnectio
                   readonly kind: "file-read" | "content-write";
                   readonly daemon: RelaySocket;
               } = { kind: "not-forwarded" };
-        // The Computer is asked for at most one Agent settings discovery per request: this one.
         let discovery: { readonly requestId: string; readonly harness: string } | null = null;
         this.server = {
             recordRequestDaemon: (daemon, action) => {

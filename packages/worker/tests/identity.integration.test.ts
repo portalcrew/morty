@@ -172,7 +172,6 @@ test("Given a device that opened a link and opens the next one, When the reply i
     expect((await request("/session", held)).status).toBe(401);
     const listed = await request("/identity/devices", owner.token);
     expect(v.parse(v.object({ devices: v.array(v.unknown()) }), await listed.json()).devices).toHaveLength(1);
-    // The link still adds one device: another browser's redemption is refused.
     expect((await redeem(next, randomRedemptionKey())).status).toBe(410);
 });
 
@@ -219,7 +218,6 @@ test("Given a device that shared links before and after renewing its credential,
     const openedAfterRenewal = await share(original);
     const renewed = await tokenOf(await redeem(await share(owner.token), randomRedemptionKey(), original));
     expect((await request("/session", original)).status).toBe(401);
-    // Credential replacement does not end the sharing device's access or invalidate its invitations.
     const childRedemptionKey = randomRedemptionKey();
     const child = await tokenOf(await redeem(openedAfterRenewal, childRedemptionKey));
     const unusedAfterRenewal = await share(renewed);
@@ -431,7 +429,6 @@ test("Given Computers in separate regions, When users reopen and transfer Morty 
         const redeemed = await redeem();
         expect(redeemed.status).toBe(200);
         expect(await redeemed.json()).toMatchObject({ computerId: identity.computerId });
-        // A link adds one device.
         expect((await redeem()).status).toBe(410);
     }
 });
@@ -517,7 +514,6 @@ test("Given an anonymous user, When computer access is shared, Then the link add
         }),
         await created.json(),
     );
-    // Both terms start when the link is created: ten minutes to open it, a day of access for the device it adds.
     expect(Date.parse(transfer.accessExpiresAt) - Date.parse(transfer.expiresAt)).toBe(
         24 * 60 * 60 * 1000 - 10 * 60 * 1000,
     );
@@ -703,7 +699,6 @@ test("Given a browser that opened one link, When it opens another link for the s
 
     const later = await opened(secondLink, earlier);
 
-    // The browser keeps one credential: the one it opened the later link with replaces the earlier one.
     expect((await request("/session", earlier)).status).toBe(401);
     expect((await request("/session", later)).status).toBe(200);
     expect((await request("/session", phone)).status).toBe(200);
@@ -766,7 +761,6 @@ test("Given a device with a month of access, When it opens a link that grants le
     const month = await share(owner.token, "30d");
     const phone = await opened(month.code, "iPhone · Safari");
     const guest = await opened((await share(owner.token, "1h")).code, "Guest · Chrome");
-    // The guest's link is capped at the guest's own hour.
     const guestLink = await share(guest, "30d");
     expect(Date.parse(guestLink.accessExpiresAt)).toBeLessThan(Date.parse(month.accessExpiresAt));
 
@@ -779,7 +773,6 @@ test("Given a device with a month of access, When it opens a link that grants le
     ]);
     expect((await share(reopened, "30d")).accessExpiresAt).toBe(month.accessExpiresAt);
 
-    // Ending the device's access still ends it at once.
     expect((await request("/identity/browser-access", reopened, { method: "DELETE" })).status).toBe(204);
     expect((await request("/session", reopened)).status).toBe(401);
 });
@@ -816,7 +809,6 @@ test("Given two tabs of one browser open new links at once, When the browser lat
     const links = [await share(), await share(), await share()];
     const held = await token(await redeem(v.parse(v.string(), links[0])));
 
-    // Both tabs read the same held access before either redemption finishes.
     const [first, second] = await Promise.all([
         redeem(v.parse(v.string(), links[1]), held).then(token),
         redeem(v.parse(v.string(), links[2]), held).then(token),
@@ -883,7 +875,6 @@ test("Given browsers that joined through links shared by the computer and by ano
 
     const laptop = await join(owner.token, "Mac · Chrome");
     const phone = await join(laptop, "iPhone · Safari");
-    // The same browser opening another link stays the device that first joined.
     await join(owner.token, "iPhone · Chrome", phone);
 
     const phoneAddedByLaptop = {
@@ -940,7 +931,6 @@ test("Given the owner chooses how long a shared device keeps access, When the li
     expect(created.status).toBe(201);
     const week = v.parse(link, await created.json());
     expect(week.accessDuration).toBe("7d");
-    // The device term runs from the link's creation, a week past the ten minutes the link itself stays open.
     expect(Date.parse(week.accessExpiresAt) - Date.parse(week.expiresAt)).toBe(
         7 * 24 * 60 * 60 * 1000 - 10 * 60 * 1000,
     );

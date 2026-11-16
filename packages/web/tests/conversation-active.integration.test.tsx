@@ -310,7 +310,6 @@ test("Given a message waited in the queue, When its turn starts, Then the workin
         dataTestId.queuedMessage,
         (element) => element.textContent?.includes("hold after first delta") === true,
     );
-    // The follow-up waits in the queue for a few seconds before the first turn ends.
     vi.setSystemTime(new Date("2026-10-13T08:00:04Z"));
     await daemon.continueReply("wait for steering", { outcome: "complete", output: [] });
     await app.waitForView(() => {

@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ExternalContentStore } from "../../src/engine/session/content/external-content-store.ts";
 
-/** Hashes content into a stable reference but retains nothing and resolves no request. */
 export class UnretainedExternalContentStore implements ExternalContentStore {
     readonly put: ExternalContentStore["put"] = async ({ bytes, signal }) => {
         signal.throwIfAborted();

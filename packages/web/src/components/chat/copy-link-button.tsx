@@ -3,7 +3,6 @@ import { useState } from "react";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../ui/cloud-button.tsx";
 
-/** Copies a sharing link and owns the dialog-local confirmation and fallback state. */
 export function CopyLinkButton({
     className,
     url,
@@ -15,7 +14,6 @@ export function CopyLinkButton({
     readonly url: string;
     readonly urlClassName?: string;
     readonly copyLabel?: string;
-    /** What the copied text is, as the manual-copy fallback names it. */
     readonly subject?: string;
 }) {
     const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");

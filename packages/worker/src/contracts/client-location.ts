@@ -3,7 +3,6 @@ import * as v from "valibot";
 /** Roughly where a connection came from, as Cloudflare located it: never its address. */
 export interface ClientLocation {
     readonly city: string | null;
-    /** An ISO 3166-1 alpha-2 country code. */
     readonly country: string | null;
 }
 
@@ -11,10 +10,8 @@ const citySchema = v.pipe(v.string(), v.trim(), v.regex(/^[^\p{C}]{1,80}$/u));
 const countrySchema = v.pipe(v.string(), v.regex(/^[A-Z]{2}$/u));
 const locationSchema = v.object({ city: v.nullable(citySchema), country: v.nullable(countrySchema) });
 
-/** The public Worker forwards the Cloudflare location to the selected computer. */
 export const clientLocationHeader = "Morty-Client-Location";
 
-/** The location Cloudflare attached to a request, or null when it named neither a city nor a country. */
 export function clientLocationOf(request: Request): ClientLocation | null {
     const metadata = v.safeParse(
         v.object({ city: v.optional(v.unknown()), country: v.optional(v.unknown()) }),

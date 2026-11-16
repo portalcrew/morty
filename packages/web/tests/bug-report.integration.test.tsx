@@ -308,7 +308,6 @@ function visibleMessage(container: HTMLElement, role: "status" | "alert", text: 
     });
 }
 
-// Stateful Sentry peer at its HTTP ingestion boundary, with the real browser SDK.
 async function createReportInbox() {
     const envelopes: string[] = [];
     const bodies: Buffer[] = [];
@@ -422,7 +421,6 @@ test("Given Sentry rejects a report, When the user retries after it recovers, Th
             new File([pngBytes], "retry.png", { type: "image/png" }),
         );
         await user.click(getByRole(document.body, "button", { name: "Send report" }));
-        // The application already has its startup error; the dialog owns the report error.
         const dialog = getByRole(document.body, "dialog");
         expect((await visibleMessage(dialog, "alert", "not accepted")).textContent).toContain("not accepted");
         expect(getByRole(dialog, "img", { name: "retry.png" })).toBeDefined();

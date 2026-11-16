@@ -12,9 +12,6 @@ import { expect, test } from "vitest";
 import { CodexAgentSpecification } from "../../src/engine/agent/specification/vendors/codex-agent.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 
-// A controlled Codex app-server whose turn interleaves notifications from a child (subagent)
-// thread with the parent thread's own, all on the parent's connection, then finishes the parent's
-// command after the turn has completed.
 const CONTROLLED_CODEX = `#!${process.execPath}
 import { createInterface } from "node:readline";
 

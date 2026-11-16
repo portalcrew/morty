@@ -4,10 +4,8 @@ import type { SessionManager } from "../manager/session-manager.ts";
 import { resolveSessionDirectory } from "../workspace/resolve-session-directory.ts";
 import type { WorkspaceDirectoryService } from "../workspace/workspace-directory.ts";
 
-/** A Session this Runtime holds, ready to use. */
 export interface HeldSession {
     readonly options: SessionPrepareOptions;
-    /** The directory the Session runs in, as this Runtime recorded it. */
     readonly directory: string;
     readonly directoryLabel: string;
 }
@@ -39,7 +37,6 @@ export async function resolveHeldSession(
     };
 }
 
-/** What a client is told of a Session whose Agent is prepared. */
 export function sessionReady(
     requestId: string,
     target: NativeSessionTarget,
@@ -61,7 +58,6 @@ export function sessionReady(
     };
 }
 
-/** Prepares a held Session's Agent and answers the Session as it stands now. */
 export async function prepareHeldSession(
     sessions: Pick<SessionManager, "prepareSession" | "restoreSession">,
     requestId: string,

@@ -4,7 +4,6 @@ import type {
     ComputerCredentials,
 } from "../../src/engine/runtime/connection/computer-credentials.ts";
 
-/** Keeps a Computer credential and its rotations in memory, for an embedding host that outlives no restart. */
 export function memoryComputerCredentials(initial: string): ComputerCredentials {
     let current = initial;
     let pending: ComputerCredentialRotation | null = null;

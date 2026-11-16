@@ -172,7 +172,6 @@ export function decodeEncryptedDaemonInboundMessage(
     return signature.decode(encoded, decryptor, signal);
 }
 
-/** A message that asks the Computer for an answer; liveness signals of the connection itself ask for none. */
 export type ClientRequest = Exclude<ClientCommand, { readonly kind: typeof SESSION_EVENTS_SUBSCRIBE_KIND }>;
 
 /**

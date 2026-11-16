@@ -9,13 +9,11 @@ const timestamp = v.pipe(v.string(), v.isoTimestamp());
 const identifier = v.pipe(v.string(), v.regex(IDENTIFIER_PATTERN));
 const sessionTarget = v.object({ harness: identifier, sessionId: identifier });
 
-/** Access that redeeming a continue link grants this device. */
 export const identityResponse = v.object({
     computerToken: v.pipe(v.string(), v.description("Secret. Authenticates Chat operations until the access expires.")),
     computerId: v.string(),
 });
 
-/** Whether the Computer is online, and the Agent harnesses it offers. */
 export const workspaceResponse = v.object({
     computer: v.object({
         computerId: v.string(),
@@ -32,16 +30,13 @@ const sessionCredential = {
     target: sessionTarget,
 };
 
-/** A short-lived Session credential for a Session the Computer holds. */
 export const sessionAccessResponse = v.object(sessionCredential);
 
-/** An opened Session and its Session credential. */
 export const chatAccessResponse = v.object({
     ...sessionCredential,
     ready: v.pipe(v.unknown(), v.description("The Computer's opaque encrypted Session readiness reply.")),
 });
 
-/** Returns a response body after the compiler checked it against the schema the agent API description publishes. */
 export function documented<TSchema extends v.GenericSchema>(_schema: TSchema, body: v.InferOutput<TSchema>) {
     return body;
 }

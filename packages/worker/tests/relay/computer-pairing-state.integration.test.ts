@@ -149,8 +149,6 @@ it("Given a delayed claim, When newer requests have reused expired capacity, The
     const codeHash = await hashPairingCredential(pairing.pairingCode);
     vi.setSystemTime(new Date(pairing.expiresAt));
     await app.pair("replacement");
-    // Execute the original command against the real Computer database after
-    // newer transactions, as can happen when a database request is delayed.
     const claimed = await app.storage(async (storage) =>
         new ComputerDirectoryStorage(new DurableObjectDatabase(storage)).claim(
             {
@@ -193,7 +191,6 @@ it("Given a committed redeem response is lost, When the caller retries after a r
 }) => {
     const app = await computer(signal);
     const pairing = await app.pair("lost-redeem");
-    // Discard the first result before the caller can save its credential.
     const discarded = await app.claim(pairing);
     expect(discarded.status).toBe(200);
     await discarded.body?.cancel();
@@ -202,7 +199,6 @@ it("Given a committed redeem response is lost, When the caller retries after a r
 
     vi.setSystemTime(new Date(Date.now() + 20_000));
     const response = await responseJson(await app.claim(pairing, "Retry computer"), 200);
-    // A retry returns the exact current redemption contract.
     const identity = { computerId: v.string() };
     const credential = v.pipe(v.string(), v.regex(/^[a-zA-Z0-9_-]{32,256}$/));
     const computerCredential = v.parse(

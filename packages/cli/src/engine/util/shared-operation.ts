@@ -6,11 +6,9 @@ import { waitForSharedOperation } from "./wait-for-shared-operation.ts";
  * never fails the others.
  */
 export interface SharedOperation<T> {
-    /** Joins the operation; leaving early, by `signal`, only ends this requester's wait. */
     readonly wait: (signal: AbortSignal) => Promise<T>;
     /** The operation's own outcome, for work that must see it end whoever else has left. */
     readonly completion: Promise<T>;
-    /** Resolves once the operation ended, however it ended. */
     readonly ended: Promise<void>;
     /** Whether every requester left, so the operation is being cancelled and a new requester must not join it. */
     readonly abandoned: () => boolean;

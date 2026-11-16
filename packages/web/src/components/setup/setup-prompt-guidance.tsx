@@ -18,7 +18,6 @@ export function SetupPromptCopiedHint(): ReactNode {
     );
 }
 
-/** A read-only prompt the person can select when the clipboard write is unavailable. */
 function SetupPromptField({ prompt }: { readonly prompt: string }) {
     return (
         <div className="overflow-hidden rounded-[12px] bg-muted">

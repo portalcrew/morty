@@ -2,7 +2,6 @@ import { MemorySessionEventStore, type SessionEventStore } from "../../session/h
 import { AcpExecutionError } from "../acp-error.ts";
 import type { NativeSessionPreviewKey } from "../adapter/query-scope.ts";
 
-/** Snapshot lifetime is independent of the client that produced its events. */
 export interface HistoryPreviewSnapshot {
     readonly events: SessionEventStore;
     readonly close: () => void;

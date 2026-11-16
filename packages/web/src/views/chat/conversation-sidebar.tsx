@@ -71,7 +71,6 @@ import { IdentitySharing } from "./identity-sharing.tsx";
 import { NativeSessionDialog } from "./native-session-dialog.tsx";
 import { NewDeviceNotice } from "./new-device-notice.tsx";
 
-/** Hop label in the network latency list. The icon is a round trip between the two names. */
 function NetworkHopLabel({ from, to }: { readonly from: string; readonly to: string }) {
     return (
         <span className="inline-flex items-center">
@@ -230,7 +229,6 @@ function ManagedSessionDirectoryList({
     readonly showSelectedIndicator?: boolean;
     readonly connectionStatus: BotConnectionStatus;
     readonly sessionStatuses: Parameters<typeof conversationListStatus>[1];
-    /** The open Session's pane, whose turn and delivery decide that Session's status. */
     readonly openPane: Parameters<typeof conversationListStatus>[2];
     readonly onConnectAgent: (() => void) | null;
     readonly onOpen: (session: ManagedChatSession) => void;
@@ -410,8 +408,6 @@ export function ConversationSidebar({
     readonly onOpen: (session: ManagedChatSession) => void;
     readonly onNewConversation: () => void;
 }) {
-    // The workspace owns the sidebar's dialog, remote-access, and diagnostic
-    // stores outside React; the view only subscribes.
     const dialogs = workspace.sidebar.dialogs;
     const home = useStore(workspace.home);
     const status = useStore(workspace.computer);

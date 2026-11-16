@@ -170,7 +170,6 @@ export async function createFakeAgentHarnessRuntime(options: {
                 await (await ComputerEncryptionStore.open(directory, pairing.computerId, accessSignal)).access(
                     accessSignal,
                 ),
-            /** The controlled Agent's native history can be removed independently of Morty's receipts. */
             removeNativeSession: async (sessionId: string): Promise<void> => {
                 await rm(join(harnessState, `${encodeURIComponent(sessionId)}.json`));
             },

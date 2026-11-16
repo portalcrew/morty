@@ -84,8 +84,6 @@ test("Given a history page that ends mid-compaction, When the user loads older m
         vi.useRealTimers();
     });
     await app.user.click(conversation);
-    // The latest page carries the compaction's terminal events; the page
-    // boundary falls inside the same compaction's earlier events.
     await app.waitForView(() => {
         expectCompactionSucceeded(app.elementByTestId(dataTestId.agentCompaction));
         return undefined;
@@ -97,8 +95,6 @@ test("Given a history page that ends mid-compaction, When the user loads older m
     messages.scrollTop = 0;
     flushSync(() => fireEvent.scroll(messages));
 
-    // The older page's start and summary-chunk events merge with the newer
-    // page's terminal update: one entry, full summary, no orphaned compacting twin.
     const merged = await app.waitForView(() => {
         const compaction = app.elementByTestId(dataTestId.agentCompaction);
         expectCompactionSucceeded(compaction);
@@ -209,8 +205,6 @@ test("Given a history page that starts inside an interleaved compaction, When th
     messages.scrollTop = 0;
     flushSync(() => fireEvent.scroll(messages));
 
-    // The older page's start and the newest page's settle events merge under
-    // one compaction id with the whole summary; no second, compacting twin.
     const merged = await app.waitForView(() => {
         const compaction = app.elementByTestId(dataTestId.agentCompaction);
         expectCompactionSucceeded(compaction);
@@ -241,7 +235,6 @@ test("Given a compaction is streaming in progress, When the user collapses and r
     }
 
     await sendPrompt(app, composer, "interleaved compaction hold");
-    // In-progress default: expanded, streaming summary visible.
     await app.waitForView(() => {
         const compaction = app.elementByTestId(dataTestId.agentCompaction);
         expectCompactionRunning(compaction);
@@ -258,8 +251,6 @@ test("Given a compaction is streaming in progress, When the user collapses and r
         expect(compaction.querySelector("pre")).toBeNull();
     });
 
-    // Re-expand: still in progress, the disclosure opens again (no summary has
-    // streamed yet - the chunk arrives with the settle).
     await app.user.click(getByRole(app.elementByTestId(dataTestId.agentCompaction), "button"));
     await app.waitForView(() => {
         const compaction = app.elementByTestId(dataTestId.agentCompaction);
@@ -273,8 +264,6 @@ test("Given a compaction is streaming in progress, When the user collapses and r
         outcome: "complete",
         output: [{ kind: "compaction-finish", summary: "Settled summary after re-expansion." }],
     });
-    // The explicit expanded choice survives the terminal update: no sudden
-    // auto-collapse when the compaction settles.
     await app.waitForView(() => {
         const compaction = app.elementByTestId(dataTestId.agentCompaction);
         expectCompactionSucceeded(compaction);

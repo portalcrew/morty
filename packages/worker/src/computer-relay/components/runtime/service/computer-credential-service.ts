@@ -10,7 +10,6 @@ export class ComputerCredentialService {
         this.#access = access;
     }
 
-    /** A generation is active only while the object still holds the same computer's account. */
     readonly activeGeneration = async (
         identity: { readonly computerId: string },
         signal: AbortSignal,

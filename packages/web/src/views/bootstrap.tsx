@@ -89,9 +89,7 @@ export function mountMorty(options: {
     readonly origin: string;
 }): {
     readonly application: MortyApplication;
-    /** Unmounts the React tree; the application keeps running. */
     readonly unmount: () => void;
-    /** Releases the application's resources after its last unmount. */
     readonly dispose: () => void;
 } {
     const { application, element } = assembleMorty({
@@ -103,7 +101,6 @@ export function mountMorty(options: {
         onRecoverableError: (error, info) =>
             reactErrorHandler()(error, { componentStack: info.componentStack ?? null }),
     });
-    // StrictMode replays mounts in development to show that nothing the application owns depends on React's.
     root.render(<StrictMode>{element}</StrictMode>);
     return {
         application,

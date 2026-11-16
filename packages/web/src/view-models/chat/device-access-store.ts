@@ -1,11 +1,9 @@
 import { createStore } from "zustand/vanilla";
 
-/** What a disconnection reaches: one device, named as the list showed it, or every device but this browser and the computer. */
 export type DisconnectTarget =
     | { readonly kind: "device"; readonly id: string; readonly name: string }
     | { readonly kind: "others" };
 
-/** The disconnection in progress: one at a time, confirmed before it runs. */
 type Disconnection =
     | { readonly kind: "idle" }
     | { readonly kind: "confirming" | "disconnecting" | "failed"; readonly target: DisconnectTarget };
@@ -19,13 +17,10 @@ type DeviceAccessState =
 
 export interface DeviceAccessStore {
     readonly state: DeviceAccessState;
-    /** Shows the devices with access. */
     readonly open: () => void;
     readonly close: () => void;
-    /** Asks the user to confirm disconnecting `target`. */
     readonly request: (target: DisconnectTarget) => void;
     readonly cancel: () => void;
-    /** Disconnects the confirmed target; repeating after a failure is safe. */
     readonly confirm: (signal: AbortSignal) => Promise<void>;
 }
 
@@ -36,7 +31,6 @@ export interface DeviceAccessStore {
 export function createDeviceAccessStore(options: {
     readonly endDeviceAccess: (deviceId: string, signal: AbortSignal) => Promise<void>;
     readonly endOtherBrowserAccess: (signal: AbortSignal) => Promise<void>;
-    /** Reads the linked devices again. */
     readonly readDevices: () => void;
 }) {
     return createStore<DeviceAccessStore>()((set, get) => {

@@ -17,7 +17,6 @@ import { requestTimeoutMiddleware } from "../../../../middleware/request-timeout
 import type { ComputerRouteHttpEnvironment } from "../../../http/environment.ts";
 import type { RelayProtocolRouteContext } from "./protocol-routes.ts";
 
-// The validators below decode each field into its domain value and report its own error code.
 const redeemRequestSchema = v.object({
     agents: v.unknown(),
     computerName: v.unknown(),

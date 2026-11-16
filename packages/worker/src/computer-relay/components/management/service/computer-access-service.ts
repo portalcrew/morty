@@ -31,18 +31,15 @@ export class ComputerAccessService {
         return computerId;
     };
 
-    /** The pairing generation whose daemon may act for the computer now; null while none may. */
     readonly activeGeneration = async (computerId: string, signal: AbortSignal): Promise<number | null> => {
         this.#own(computerId);
         return await this.#store.readActiveGeneration(signal);
     };
 
-    /** Refuses a request naming a computer other than the one this object holds. */
     readonly authorizeComputer = (computerId: string): void => {
         this.#own(computerId);
     };
 
-    /** The active pairing under which the holder can receive a Session credential. */
     readonly currentSessionGeneration = async (
         computerId: string,
         holder: SessionAccessHolder,
@@ -83,7 +80,6 @@ export class ComputerAccessService {
         }
     };
 
-    /** Whether `holder`'s access to the computer holds now; a Session credential is honored only while it does. */
     readonly #holdsAccess = async (holder: SessionAccessHolder, signal: AbortSignal): Promise<boolean> =>
         await this.#identities.holdsAccess(holder, Date.now(), signal);
 }

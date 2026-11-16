@@ -39,7 +39,6 @@ export async function reloadDaemon(stateDirectory: InstallationDirectory, signal
     }
 }
 
-/** Releases idle Agent processes of a running daemon; succeeds when no daemon is running. */
 export async function releaseIdleAgentProcesses(
     stateDirectory: InstallationDirectory,
     signal: AbortSignal,
@@ -211,8 +210,6 @@ async function runDaemonRuntime(
             if (typeof request !== "object" || request === null || !("kind" in request) || request.kind !== "reload") {
                 return { kind: "error", code: "unsupported_operation", message: "Unknown local control operation" };
             }
-            // A reload, such as `morty start` after the user installs or signs in to an Agent, also re-reads the
-            // Agent inventory of Computers that were already running; Computers it starts read it themselves.
             const pending = reload.then(async () => {
                 const previous = active;
                 await reconcile();

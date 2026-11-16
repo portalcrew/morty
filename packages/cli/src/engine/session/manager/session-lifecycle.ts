@@ -15,32 +15,23 @@ type SessionLifecycle =
 
 /** An operation the rule answers at once, so its check and the work that relies on it stay synchronous. */
 export type ImmediateSessionOperation =
-    /** Prepares a prompt's Agent: an open held Session, failing at once while it closes. */
     | { readonly kind: "prepare-execution" }
-    /** Acts on the open Session's Agent. */
     | { readonly kind: "use" }
     /** Runs a prompt in the open Session, which must not write a native session another operation is managing. */
     | { readonly kind: "prompt" }
     /** Needs the native session to itself: no import, fork, or history read may be managing it. */
     | { readonly kind: "native-exclusive" };
 
-/** An operation that waits out a creation or closing before it is decided. */
 export type WaitingSessionOperation =
-    /** Prepares the Session's Agent: a held Session no native operation manages. */
     | { readonly kind: "prepare" }
-    /** Archives the Session. */
     | { readonly kind: "end" }
-    /** Imports the native session, which holds it again even when it was archived. */
     | { readonly kind: "import" };
 
 type ImmediateAdmission =
     | { readonly kind: "admitted" }
     | { readonly kind: "refused"; readonly error: AcpExecutionError };
 
-type SessionAdmission =
-    | ImmediateAdmission
-    /** Decide again once `settled`; a rejection of it fails the operation. */
-    | { readonly kind: "wait"; readonly settled: Promise<void> };
+type SessionAdmission = ImmediateAdmission | { readonly kind: "wait"; readonly settled: Promise<void> };
 
 const admitted: ImmediateAdmission = { kind: "admitted" };
 
@@ -53,7 +44,6 @@ const closedRefusal = (reason: string): ImmediateAdmission => refused(reason, SE
 const notFound = (): ImmediateAdmission => refused("The Session was not found", "session_not_found");
 const managed = (): ImmediateAdmission => refused("The native session is being managed", "session_busy");
 
-/** The admission rule for an operation answered at once, from the Session's lifecycle and the store's held fact. */
 function admitNow(
     lifecycle: SessionLifecycle | undefined,
     nativeOperation: boolean,
@@ -79,7 +69,6 @@ function admitNow(
     }
 }
 
-/** The admission rule for an operation that waits out a creation or closing. */
 function admitAfterTransitions(
     lifecycle: SessionLifecycle | undefined,
     nativeOperation: boolean,
@@ -116,7 +105,6 @@ export class SessionLifecycles {
     readonly #lifecycles = new NativeSessionMap<SessionLifecycle>();
     readonly #nativeOperations = new NativeSessionSet();
 
-    /** Answers whether `operation` may act on the Session now. `held` reads the Session store when the rule needs it. */
     readonly admitNow = (
         target: NativeSessionTarget,
         operation: ImmediateSessionOperation,
@@ -135,10 +123,8 @@ export class SessionLifecycles {
     /** Whether an import, fork, or history read is managing the native session, so no prompt may write it. */
     readonly managesNativeSession = (target: NativeSessionTarget): boolean => this.#nativeOperations.has(target);
 
-    /** Whether the Session's creation is still applying its settings. */
     readonly isCreating = (target: NativeSessionTarget): boolean => this.#lifecycles.get(target)?.kind === "creating";
 
-    /** A creation of an open Session begins. */
     readonly beginCreation = (target: NativeSessionTarget, settled: Promise<void>): void => {
         const lifecycle = this.#lifecycles.get(target);
         if (lifecycle?.kind === "creating" || lifecycle?.kind === "closing") {
@@ -154,7 +140,6 @@ export class SessionLifecycles {
         }
     };
 
-    /** An open Session begins archiving. */
     readonly beginClosing = (target: NativeSessionTarget, reason: string, settled: Promise<void>): void => {
         const lifecycle = this.#lifecycles.get(target);
         if (lifecycle?.kind === "creating" || lifecycle?.kind === "closing") {
@@ -163,7 +148,6 @@ export class SessionLifecycles {
         this.#lifecycles.set(target, { kind: "closing", reason, settled });
     };
 
-    /** The Agent process was released: the archived Session is no longer held. */
     readonly endClosing = (target: NativeSessionTarget, settled: Promise<void>): void => {
         const lifecycle = this.#lifecycles.get(target);
         if (lifecycle?.kind === "closing" && lifecycle.settled === settled) {
@@ -179,7 +163,6 @@ export class SessionLifecycles {
         this.#nativeOperations.delete(target);
     };
 
-    /** The closings still releasing their Agent processes. */
     readonly closings = (): readonly Promise<void>[] =>
         [...this.#lifecycles.values()].flatMap((lifecycle) =>
             lifecycle.kind === "closing" ? [lifecycle.settled] : [],

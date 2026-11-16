@@ -5,7 +5,6 @@ import type { CodexMessageUpdate } from "./session-update.ts";
 const textInput = z.object({ type: z.literal("text"), text: z.string() });
 const imageInput = z.object({ type: z.literal("image"), url: z.string() });
 
-/** Native item identity is shared by every content block of the user message. */
 export function userMessageUpdates(
     item: Extract<ThreadItem, { readonly type: "userMessage" }>,
     submitted?: readonly ContentBlock[],

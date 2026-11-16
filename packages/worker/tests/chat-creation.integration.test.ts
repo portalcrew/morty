@@ -22,7 +22,6 @@ const test = baseTest.extend<{ readonly cloud: Awaited<ReturnType<typeof createI
         // biome-ignore lint/correctness/noEmptyPattern: Vitest fixtures declare their dependencies by destructuring.
         async ({}, use) => {
             const cloud = await createIdentityFixture({
-                // Requests reach the Relay through a real proxy that can lose an answer the Relay sent.
                 loseTurnResponses: true,
                 workerEntryPoint: fileURLToPath(new URL("./support/credential-storage-worker.ts", import.meta.url)),
             });
@@ -164,7 +163,6 @@ test("Given a computer addressed by its identity, When its owner requests access
     onTestFinished(connected.close);
     await expect(connected.sessions.readConfiguration({ harness: "codex", sessionId }, signal)).resolves.toBeDefined();
 
-    // Another computer identity opens nothing with this credential, even for a Session the caller owns.
     const anotherComputer = await cloud.createAnonymousUser();
     const otherComputer = await fixture.request(`chat/computers/${anotherComputer.computerId}/native-sessions/access`, {
         harness: "codex",
@@ -176,7 +174,6 @@ test("Given a computer addressed by its identity, When its owner requests access
     await expect(fixture.runtime.api.connectSession({ harness: "pi", sessionId }, signal)).rejects.toMatchObject({
         code: "session_not_found",
     });
-    // Archiving a Session the Computer does not hold leaves it absent, as asked.
     await expect(
         fixture.runtime.api.archiveManagedSession(
             {

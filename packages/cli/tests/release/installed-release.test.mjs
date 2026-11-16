@@ -19,9 +19,7 @@ async function installedEntry() {
         try {
             await access(candidate);
             return await realpath(candidate);
-        } catch {
-            /* Try the next npm bin directory. */
-        }
+        } catch {}
     }
     throw new Error("Run the release test with the packed Morty package installed on PATH");
 }

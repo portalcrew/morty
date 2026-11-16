@@ -29,7 +29,6 @@ export class ManagementService {
         this.#credentialKey = cx.identityOperations.credentialKey;
     }
 
-    /** The owner's Computer: where its Runtime pairing stands, read from the Relay that owns it. */
     readonly readComputer = async (computerId: string, signal: AbortSignal) => {
         const computer = await this.findComputer(computerId, signal);
         if (computer === null) {

@@ -103,7 +103,6 @@ export function createSessionTitlesStore(identityKey: string | null) {
                 const titles = new NativeSessionMap(get().titles);
                 for (const session of sessions) {
                     const current = titles.get(session.target);
-                    // A new Session keeps its first-prompt title until the Computer confirms it was prompted.
                     if (
                         (current?.kind === "created" && !session.prompted) ||
                         (current !== undefined && current !== startedWith.get(session.target))

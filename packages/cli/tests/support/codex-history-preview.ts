@@ -49,7 +49,6 @@ export async function previewCodexHistory(
     }
 }
 
-/** Reads through the normal ACP session/load lifecycle for parity assertions. */
 export async function loadCodexHistory(agent: AcpAgentDefinition, cwd: string, sessionId: string, signal: AbortSignal) {
     const { adapter, processes } = codexHistoryAdapter(agent);
     const events = new MemorySessionEventStore();

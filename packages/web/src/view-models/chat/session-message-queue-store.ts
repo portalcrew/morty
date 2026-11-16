@@ -50,11 +50,9 @@ export interface SessionMessageQueueStore {
      * Computer may have withdrawn the message, so a withdrawal it did not confirm never loses the text.
      */
     readonly editMessage: (message: ChatQueuedMessage, signal: AbortSignal) => Promise<void>;
-    /** Resolves whether the Computer took the message into the running turn. */
     readonly steerMessage: (message: ChatQueuedMessage, signal: AbortSignal) => Promise<boolean>;
 }
 
-/** The Computer's queue, enriched from the Session's sole copy of local submitted messages. */
 export function queuedMessages(
     queued: readonly QueuedCommand[],
     queue: Pick<SessionMessageQueueStore, "requests">,
@@ -99,14 +97,11 @@ function withRequest(
 export const createSessionMessageQueueStore = (options: {
     readonly sessionTarget: NativeSessionTarget;
     readonly connection: SessionOperationConnection;
-    /** The Computer confirmed it withdrew a message. */
     readonly withdrawn: (commandId: string) => void;
-    /** A message taken back for editing returns to the Session's composer. */
     readonly returned: (message: ChatQueuedMessage) => void;
     readonly failed: (failure: OperationFailure) => void;
 }) =>
     createStore<SessionMessageQueueStore>()((set, get) => {
-        /** Marks `message` with `request` while the Computer handles it, unless a request on it already runs. */
         const begin = (message: ChatQueuedMessage, request: "steering" | "deleting"): boolean => {
             if (get().requests.has(message.commandId)) {
                 return false;
@@ -114,11 +109,9 @@ export const createSessionMessageQueueStore = (options: {
             set((state) => ({ requests: withRequest(state.requests, message.commandId, request) }));
             return true;
         };
-        /** The message left the queue at the user's request; it stays hidden from then on. */
         const left = (commandId: string): void => {
             set((state) => ({ requests: withRequest(state.requests, commandId, "withdrawn") }));
         };
-        /** Sends a request on the queue within its own budget, through whichever pane follows the Session. */
         const send = async (
             request: (client: MortyClient, signal: AbortSignal) => Promise<unknown>,
             parent: AbortSignal,
@@ -151,7 +144,6 @@ export const createSessionMessageQueueStore = (options: {
                 options.withdrawn(commandId);
                 return outcome;
             }
-            // The message shows again for as long as the Computer's queue lists it.
             set((state) => ({ requests: withRequest(state.requests, commandId, null) }));
             options.failed({
                 operation: "delete-queued",

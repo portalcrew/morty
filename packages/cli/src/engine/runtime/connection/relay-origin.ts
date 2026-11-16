@@ -1,4 +1,3 @@
-/** A Relay origin read from a pairing or a saved connection: one rule for both. */
 export type RelayOrigin =
     | { readonly kind: "valid"; readonly url: URL }
     | { readonly kind: "malformed" }
@@ -6,7 +5,6 @@ export type RelayOrigin =
     | { readonly kind: "credentials" }
     | { readonly kind: "insecure-remote" };
 
-/** Reads the Relay origin `value` names, accepting plain HTTP only for this computer's own loopback Relay. */
 export function readRelayOrigin(value: string): RelayOrigin {
     let url: URL;
     try {

@@ -5,7 +5,6 @@ export interface AgentReplyMessageGroup {
     readonly messages: readonly SessionMessage[];
 }
 
-/** Groups the session projection by the user message that started each Agent reply. */
 export function agentReplyMessageGroups(messages: readonly SessionMessage[]): readonly AgentReplyMessageGroup[] {
     const groups: AgentReplyMessageGroup[] = [];
     let replyMessages: SessionMessage[] = [];
@@ -27,7 +26,6 @@ export function agentReplyMessageGroups(messages: readonly SessionMessage[]): re
     return groups;
 }
 
-/** Copies only nonempty answer Markdown after the owning reply has stopped generating. */
 export function agentReplyCopyText(
     messages: readonly SessionMessage[],
     execution: SessionExecutionState,

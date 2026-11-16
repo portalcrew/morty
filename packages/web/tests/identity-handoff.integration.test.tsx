@@ -183,7 +183,6 @@ test("Given shared Morty access, When the user continues on another device, Then
     expect(queryByRole(dialog, "link")).toBeNull();
     expect(queryByRole(dialog, "button", { name: "Confirm" })).toBeNull();
 
-    // Choosing a longer device access shares a new link in place of the one shown, with the term it grants.
     const qr = () => getByRole(dialog, "img", { name: "Continue on another device QR code" }).getAttribute("src");
     const dayLink = qr();
     const dayTerms = dialog.textContent;
@@ -447,8 +446,6 @@ test("Given the end confirmation, When the real API transport closes, Then an un
         return button;
     });
     app.transport.disconnect();
-    // A dropped bridge is an ordinary failed request: Chat keeps working and
-    // does not block the page with a connection dialog.
     expect(queryByRole(document.body, "dialog", { name: "Computer connection unavailable" })).toBeNull();
     await app.user.click(confirm);
 
@@ -663,7 +660,6 @@ for (const segment of ["a".repeat(220), "\u00e9".repeat(110)]) {
 test("Given other browsers joined this computer, When the user disconnects one from Devices and then all others, Then each loses access while this browser keeps working", {
     timeout: 60_000,
 }, async () => {
-    // This browser joins through a link, as the owner's phone does; the redeemed link then opens the computer.
     const joined = await createTestApp({ connectAgent: true, page: { kind: "share" } });
     await joined.waitForView(() => expect(new URL(window.location.href).searchParams.get("identity")).not.toBeNull());
     const app = await joined.reload();

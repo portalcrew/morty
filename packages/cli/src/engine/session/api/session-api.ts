@@ -20,7 +20,6 @@ import type { AcpContentExternalizer } from "../../acp/content/content-externali
 import type { Adapter } from "../../acp/native-history/preview-contract.ts";
 import type { NativeSessionOrigin } from "../../acp/protocol/native-session.ts";
 
-/** A new harness Session has no conversation identity until the harness opens it. */
 export interface SessionCreationOptions {
     readonly adapter: Adapter;
     readonly agent: AcpAgentDefinition;
@@ -34,7 +33,6 @@ export interface SessionPrepareOptions extends SessionCreationOptions {
     readonly origin?: NativeSessionOrigin;
 }
 
-/** A Session the Runtime created and holds, with the snapshot of its configured Agent. */
 export interface CreatedSession {
     readonly target: NativeSessionTarget;
     readonly prepared: PreparedSession;
@@ -50,11 +48,9 @@ export interface AgentSettingsInspectionOptions {
     readonly signal: AbortSignal;
 }
 
-/** A setting the Runtime applies on its own authority: a launch, stored or prompt-requested selection. */
 export type SessionConfigurationChange = SessionPrepareOptions &
     SessionConfigurationSelection & { readonly requestId: string };
 
-/** A client's edit, which applies only while the configuration still has the revision it was chosen from. */
 export type SessionConfigureOptions = SessionConfigurationChange & {
     readonly expectedConfigurationRevision: string;
 };
@@ -90,7 +86,6 @@ export type ElicitationResponseOptions = AnswerOf<SessionElicitationRespondComma
 export type PromptResult = AgentPromptResponse;
 
 export interface SessionObserver {
-    /** A process's background work started or ended: the pool re-reads which processes are busy. */
     readonly onBackgroundActivity?: () => void;
     readonly onSessionEvent?: (event: SessionLiveEvent) => void;
 }
@@ -150,7 +145,6 @@ export class AgentSettingsSnapshot {
 
 // What the runtime supplies to the session layer. The session layer never imports the runtime.
 
-/** Resolves a catalog Agent's current launch definition and its Runtime-owned adapter. */
 export type ResolveAgent = (
     harness: string,
     signal: AbortSignal,
@@ -163,7 +157,6 @@ export type ResolveAgent = (
 /** Records a failure's code and correlation identifiers in the local diagnostics log, never its text. */
 export type ReportFailure = (event: string, requestId: string, details: Readonly<Record<string, string>>) => void;
 
-/** Delivers session events to connected clients. The runtime's relay publisher implements it. */
 export interface SessionEventSink {
     readonly publish: (event: SessionLiveEvent) => void;
     readonly publishClosed: (event: SessionCloseNoticeEvent) => void;

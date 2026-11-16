@@ -22,7 +22,6 @@ export type ConversationCreationEvent =
     | { readonly kind: "draft-message-queued"; readonly message: QueuedDraftMessage }
     | { readonly kind: "session-created"; readonly commandId: string }
     | { readonly kind: "session-create-failed"; readonly commandId: string; readonly error: string }
-    /** The conversation exists and its first message now belongs to it. */
     | { readonly kind: "conversation-created"; readonly commandId: string };
 
 function isCurrentMessage(state: ConversationCreationState, commandId: string): boolean {
@@ -62,7 +61,6 @@ export function transitionConversationCreation(
                 ? { error: event.error, kind: "session-create-failed", message: state.message }
                 : state;
         case "conversation-created":
-            // The first message now belongs to its conversation; the draft starts over.
             return state.kind === "draft-message-sending" && isCurrentMessage(state, event.commandId)
                 ? { kind: "draft" }
                 : state;
@@ -80,7 +78,6 @@ export function queuedDraftMessage(state: ConversationCreationState): QueuedDraf
     }
 }
 
-/** The first message of a creation that failed, which only the creation holds until it is retried or returned. */
 export function failedDraftMessage(state: ConversationCreationState): QueuedDraftMessage | null {
     switch (state.kind) {
         case "session-create-failed":

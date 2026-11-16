@@ -5,7 +5,6 @@ import {
 } from "@portalcrew/morty-client/protocol";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 
-/** Owns the bounded HTTP record buffer and cancellation of its underlying reader. */
 export class ContentUploadReader {
     readonly #reader: ReadableStreamDefaultReader<Uint8Array>;
     #buffer = new Uint8Array(0);

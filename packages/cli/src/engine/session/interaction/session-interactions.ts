@@ -28,7 +28,6 @@ import { readString, truncate } from "../../util/value-utils.ts";
 import type { ElicitationResponseOptions, PermissionResponseOptions } from "../api/session-api.ts";
 import { PendingElicitation, PendingPermission } from "./pending-interactions.ts";
 
-/** What the user answered, as the Session records it to recognize a repeat of the same answer. */
 type ElicitationAnswer =
     | { readonly action: "accept"; readonly schema: unknown; readonly content: string }
     | { readonly action: "accept-url" }
@@ -259,7 +258,6 @@ export class SessionInteractions {
         });
     };
 
-    /** Whether `options` repeats the recorded answer; field order and JSON whitespace do not change an answer. */
     readonly #repeatsAnswer = (answered: ElicitationAnswer, options: ElicitationResponseOptions): boolean => {
         switch (answered.action) {
             case "accept":
@@ -403,7 +401,6 @@ export class SessionInteractions {
     };
 
     readonly onElicitationComplete = async (notification: CompleteElicitationNotification): Promise<void> => {
-        // Requests name the identifier at the length the protocol keeps it.
         const elicitationId = truncate(notification.elicitationId, 255);
         const accepted = this.#acceptedUrlElicitations.get(elicitationId);
         if (accepted === undefined) {

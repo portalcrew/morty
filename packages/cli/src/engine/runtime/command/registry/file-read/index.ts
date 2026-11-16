@@ -17,7 +17,6 @@ type CreditState =
     | { readonly kind: "waiting"; readonly resolve: () => void; readonly reject: (cause: unknown) => void }
     | { readonly kind: "closed" };
 
-/** One connection owns each file reader and its single outstanding download credit. */
 export function createFileReadCommands(context: CommandContext) {
     const reads = new Map<
         string,

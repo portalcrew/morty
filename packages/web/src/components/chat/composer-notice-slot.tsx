@@ -3,10 +3,8 @@ import type { ComposerAttachmentStore } from "../../view-models/chat/composer-at
 import { MortyAlert } from "../ui/morty-alert.tsx";
 import { useComposerNoticeLayout } from "../utils/use-composer-notice-layout.ts";
 
-/** Where the notice slot sits: floating over the message log, or in the pane's flow above the composer stack. */
 export type ComposerNoticePlacement = "overlay" | "in-flow";
 
-/** The composer's headline: a send failure first, then an attachment read failure. */
 export function composerErrorMessage(error: string, attachmentState: ComposerAttachmentStore["state"]): string {
     return error.length > 0 ? error : attachmentState.kind === "failed" ? attachmentState.message : "";
 }
@@ -29,8 +27,6 @@ export function ComposerNoticeSlot({
     readonly statusMessage?: string | undefined;
 }) {
     const notice = useRef<HTMLDivElement>(null);
-    // Any headline this slot shows means the connection state has to become the
-    // description's inline detail, not a second alert inside the first.
     const connection = connectionNotice?.(errorMessage.length > 0);
     const showComposerNotice = errorMessage.length > 0 || connection !== undefined || statusMessage !== undefined;
     // A send failure owns the headline, but a standing status (such as unrestored

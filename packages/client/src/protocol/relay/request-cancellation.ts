@@ -2,7 +2,6 @@ import { z } from "zod";
 import { identifierStringSchema } from "../shared/identifier.ts";
 import { decodeZodMessage, encodeZodMessage } from "../shared/message-codec.ts";
 
-/** The Worker withdraws its own in-flight native request; this is not a client command. */
 export const WORKER_REQUEST_CANCEL_KIND = "worker.request.cancel";
 const workerRequestCancelSchema = z
     .strictObject({

@@ -2,7 +2,6 @@ import { writeFile } from "node:fs/promises";
 import { executableLaunch } from "../../../src/engine/util/process/executable.ts";
 import type { CodexFixture } from "./codex.ts";
 
-/** Forward the real process protocol; inject a single transport fault selected by the test. */
 export async function writeCodexFaultLauncher(codex: CodexFixture, path: string, faultPath: string): Promise<void> {
     const launch = executableLaunch(codex.executable, []);
     await writeFile(

@@ -3,14 +3,11 @@ import { join, resolve } from "node:path";
 import type { AvailableCommand } from "@agentclientprotocol/sdk/unstable";
 import { environmentHome } from "./environment.js";
 
-/**
- * File-based slash command (mirrors pi-coding-agent semantics).
- */
 export type FileSlashCommand = {
     name: string;
     description: string;
     content: string;
-    source: string; // e.g. "(user)", "(project)", "(project:frontend)"
+    source: string;
 };
 
 function parseFrontmatter(content: string): {
@@ -97,22 +94,13 @@ function loadCommandsFromDir(dir: string, source: "user" | "project", subdir = "
                     content,
                     source: sourceStr,
                 });
-            } catch {
-                // Silently skip unreadable files.
-            }
+            } catch {}
         }
-    } catch {
-        // Silently skip unreadable dirs.
-    }
+    } catch {}
 
     return commands;
 }
 
-/**
- * Load prompt templates from pi's prompt directories (formerly "commands").
- *  - user:    ~/.pi/agent/prompts/**\/*.md
- *  - project: <cwd>/.pi/prompts/**\/*.md
- */
 export function loadSlashCommands(
     cwd: string,
     environment: Readonly<NodeJS.ProcessEnv> = process.env,
@@ -122,17 +110,12 @@ export function loadSlashCommands(
     const userDir = join(environmentHome(environment), ".pi", "agent", "prompts");
     const projectDir = resolve(cwd, ".pi", "prompts");
 
-    // Match pi ordering: user first, then project.
     commands.push(...loadCommandsFromDir(userDir, "user"));
     commands.push(...loadCommandsFromDir(projectDir, "project"));
 
     return commands;
 }
 
-/**
- * Convert file-based commands to ACP AvailableCommand objects.
- * De-dupes by name (first wins).
- */
 export function toAvailableCommands(fileCommands: FileSlashCommand[]): AvailableCommand[] {
     const seen = new Set<string>();
     const out: AvailableCommand[] = [];
@@ -153,9 +136,6 @@ export function toAvailableCommands(fileCommands: FileSlashCommand[]): Available
     return out;
 }
 
-/**
- * Parse command args (bash-style quotes).
- */
 export function parseCommandArgs(argsString: string): string[] {
     const args: string[] = [];
     let current = "";
@@ -191,9 +171,6 @@ export function parseCommandArgs(argsString: string): string[] {
     return args;
 }
 
-/**
- * Substitute $1, $2, ... and $@.
- */
 export function substituteArgs(content: string, args: string[]): string {
     let result = content;
 
@@ -206,10 +183,6 @@ export function substituteArgs(content: string, args: string[]): string {
     return result;
 }
 
-/**
- * Expand a leading /command using the loaded file commands.
- * Returns original text if it's not a known slash command.
- */
 export function expandSlashCommand(text: string, fileCommands: FileSlashCommand[]): string {
     if (!text.startsWith("/")) {
         return text;

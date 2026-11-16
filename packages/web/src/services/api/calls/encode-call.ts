@@ -11,7 +11,6 @@ export interface CallDefinition {
 }
 
 export interface ComputerCallEncoding extends ComputerCallTarget {
-    /** The resource under the Computer; empty for the Computer itself. */
     readonly path: string;
     readonly definition: CallDefinition;
     readonly body?: unknown;

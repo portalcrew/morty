@@ -27,14 +27,11 @@ const RECOVERY_STABLE_MS = 60_000;
 export function createComputerRecovery(options: {
     readonly clock: Clock;
     readonly lifetime: AbortSignal;
-    /** Whether anything failed for the Computer and is not being retried now. */
     readonly waiting: () => boolean;
-    /** Retries everything that waits. */
     readonly retry: () => void;
 }) {
     let online = false;
     let attempts = 0;
-    // When a reader last showed it works again, cleared by the next failure.
     let workingSince: number | null = null;
     let scheduled: AbortController | null = null;
     const startOver = (): void => {
@@ -74,7 +71,6 @@ export function createComputerRecovery(options: {
         );
     };
     return {
-        /** Adopts a Computer configuration the page observed. */
         observe: (configurationOnline: boolean, observation: ComputerObservation): void => {
             if (!configurationOnline || (observation.kind === "watch" && observation.afterChange)) {
                 startOver();
@@ -85,10 +81,6 @@ export function createComputerRecovery(options: {
                 schedule();
             }
         },
-        /**
-         * Something read through the Computer works again: a session opened or connected, a list loaded, or statuses
-         * are followed.
-         */
         working: (): void => {
             workingSince ??= options.clock.now();
         },

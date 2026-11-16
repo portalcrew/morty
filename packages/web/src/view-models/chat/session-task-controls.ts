@@ -5,7 +5,6 @@ import { formatError } from "../format-error.ts";
 import type { SessionOperationConnection } from "./session-operation-connection.ts";
 import type { OperationFailure } from "./session-operation-feedback.ts";
 
-/** The turn the service reports running, as the Session's execution state holds it. */
 export interface RunningTurn {
     readonly commandId: string;
 }
@@ -23,7 +22,6 @@ export interface SessionTaskControlsStore {
     readonly stop: (running: RunningTurn | null, signal: AbortSignal) => Promise<void>;
 }
 
-/** Whether the user's stop request applies to the running turn. */
 export function stopRequested(
     tasks: Pick<SessionTaskControlsStore, "stopRequest">,
     running: RunningTurn | null,

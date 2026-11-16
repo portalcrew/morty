@@ -16,7 +16,6 @@ import { jsonStorageEntry, type StorageEntry, scopedKey, stringStorageEntry } fr
  */
 
 export const centralLocalStorage = {
-    /** Reads and decodes; null when absent, undecodable, or storage is unavailable. */
     read: <T>(entry: StorageEntry<T>): T | null => {
         let raw: string | null;
         try {
@@ -26,13 +25,11 @@ export const centralLocalStorage = {
         }
         return raw === null ? null : entry.decode(raw);
     },
-    /** Removes the stored value. */
     remove: (entry: StorageEntry<never> | { readonly key: string }): void => {
         try {
             window.localStorage.removeItem(entry.key);
         } catch {}
     },
-    /** Encodes and stores; a failed encode or unavailable storage skips the write. */
     write: <T>(entry: StorageEntry<T>, value: T): boolean => {
         try {
             window.localStorage.setItem(entry.key, entry.encode(value));
@@ -61,11 +58,6 @@ export const computerEncryptionEntry = (computerId: string) =>
         ),
     });
 
-// ---------------------------------------------------------------------------
-// Chosen agent settings per Bot and agent
-// ---------------------------------------------------------------------------
-
-/** A choice the user made for one setting, in the shape the protocol states one. */
 const agentSettingPreferenceSchema = v.variant("type", [
     v.object({ booleanValue: v.boolean(), configId: settingIdentifierSchema, type: v.literal("boolean") }),
     v.object({
@@ -97,10 +89,6 @@ export const lastAgentSettingsEntry = (computerId: string, harness: string) =>
         ),
     });
 
-// ---------------------------------------------------------------------------
-// Last harness per Bot
-// ---------------------------------------------------------------------------
-
 /**
  * The harness a computer last worked in, so a new draft continues there instead of
  * falling back to whichever connected Agent happens to be listed first.
@@ -110,10 +98,6 @@ export const lastHarnessEntry = (computerId: string): StorageEntry<string> =>
         key: scopedKey("morty:last-harness:v1:", computerId),
         schema: settingIdentifierSchema,
     });
-
-// ---------------------------------------------------------------------------
-// Working-directory preferences
-// ---------------------------------------------------------------------------
 
 const directorySchema = v.custom<string>(isDirectoryPath, "Invalid directory path");
 const directoryLabelSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(MAX_WORKSPACE_PATH_LENGTH));
@@ -144,13 +128,8 @@ export const recentCwdEntry = (computerId: string) =>
         ),
     });
 
-// ---------------------------------------------------------------------------
-// Computer access tokens
-// ---------------------------------------------------------------------------
-
 const computerTokenSchema = v.pipe(v.string(), v.regex(/^morty_computer_v1_[A-Za-z0-9_-]{43}$/u));
 
-/** How many computers and their access tokens this browser remembers. */
 export const MAX_REMEMBERED_COMPUTERS = 10;
 
 const credentialComputerIdSchema = v.pipe(v.string(), v.regex(/^prj_(wn|ap|an|as)_01_[A-Za-z0-9_-]{24}$/u));
@@ -167,7 +146,6 @@ export const browserAccessEntry = jsonStorageEntry({
     ),
 });
 
-/** A stored token this version can use, or null. */
 export function readableCredential(computerId: string, token: unknown): string | null {
     return v.is(credentialComputerIdSchema, computerId) && v.is(computerTokenSchema, token) ? token : null;
 }
@@ -205,7 +183,6 @@ export const computerPreferenceEntry = (scope: { readonly computerId: string }) 
         schema: computerPreferenceSchema,
     });
 
-/** An access record names only its scope. Everything displayed about it is a preference. */
 export function readableComputer(value: unknown): RememberedComputer | null {
     const parsed = v.safeParse(v.object({ scope: identityScopeSchema }), value);
     if (!parsed.success) {
@@ -219,21 +196,12 @@ export function readableComputer(value: unknown): RememberedComputer | null {
     };
 }
 
-// ---------------------------------------------------------------------------
-// Linked devices this browser has been told about
-// ---------------------------------------------------------------------------
-
-/** When the latest device this browser was told about joined the Computer; later joins are new to it. */
 export const linkedDevicesSeenEntry = (computerId: string): StorageEntry<string> =>
     stringStorageEntry({
         key: scopedKey("morty:linked-devices-seen:v1:", computerId),
         schema: v.pipe(v.string(), v.isoTimestamp()),
     });
 
-/**
- * How far this browser was told about the access that ends at `expiresAt`: that it joined and until when, or also
- * that the access ends soon, which covers the first.
- */
 export interface AccessAcknowledgement {
     readonly expiresAt: string;
     readonly through: "joined" | "ending";

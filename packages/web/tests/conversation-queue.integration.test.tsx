@@ -69,7 +69,6 @@ for (const eventOrder of ["before refusal", "after refusal"] as const) {
         const releaseEvents = eventOrder === "after refusal" ? executionNetwork.holdSessionEvents() : () => {};
         try {
             await daemon.continueReply("wait for steering", { outcome: "complete", output: [] });
-            // This control waits for the queued prompt to reach the real ACP harness before continuing it.
             await daemon.continueReply("hold after first delta", {
                 outcome: "hold",
                 output: [{ kind: "text", text: "Queued work is now running" }],
@@ -463,7 +462,6 @@ test("Given I edit a queued follow-up, When I open another Session before the Co
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     await app.waitForView(() => expect(app.optionalElementByTestId(dataTestId.queuedMessage)).toBeNull());
-    // The Computer withdraws the message only after the user left its Session.
     expect(await release()).toMatchObject({ kind: "http.response", status: 200 });
     const running = await app.waitForView(() => {
         const entry = app
@@ -582,7 +580,6 @@ test("Given two queued submissions are accepted before their snapshot arrives, W
     });
 
     try {
-        // Admission releases the composer while the first queue snapshot is still held.
         await app.user.click(app.elementByTestId(dataTestId.messageComposer));
         await app.user.paste("Refresh the queue");
         const send = await app.waitForView(() => {
@@ -700,7 +697,6 @@ test("Given a follow-up with a file was queued from another browser, When this v
     await viewer.waitForView(() => expect(document.body.textContent).toContain("Files must be between 1 byte"));
     expect(document.body.textContent).toContain("Files attached to this message could not be restored here.");
 
-    // Leaving the Session and returning opens a new pane on it; the edited message and its explanation stay.
     const edited = viewerComposer.value;
     const sessionId = new URL(window.location.href).searchParams.get("sessionId");
     expect(sessionId).not.toBeNull();

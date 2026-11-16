@@ -6,7 +6,6 @@ import { type SessionExecutes, SessionExecutionState } from "./session-execution
 
 type QueuedTurnSnapshot = Extract<NativeSessionResult, { readonly action: "active-turn" }>["queued"];
 
-/** Runtime-owned index over per-session execution state; owns no session state itself. */
 export class SessionTurns {
     readonly #bySessionTarget = new NativeSessionMap<SessionExecutionState>();
     readonly #operations: ExecutionReceipts;
@@ -38,7 +37,6 @@ export class SessionTurns {
         this.sweep();
     };
 
-    /** The Session's running turn and the commands waiting behind it, as one synchronous read. */
     readonly executionSnapshot = (
         sessionTarget: NativeSessionTarget,
     ): { readonly turn: ReturnType<ActiveRuntimeTurn["snapshot"]>; readonly queued: QueuedTurnSnapshot } => {

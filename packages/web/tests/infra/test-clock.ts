@@ -35,7 +35,6 @@ export class TestClock implements Clock {
                 }
             }
         });
-    /** Coordinates a clock advance with a retry registering a sleep within that advance. */
     readonly waitForSleep = async (milliseconds: number, signal: AbortSignal): Promise<void> => {
         signal.throwIfAborted();
         if ([...this.#timers].some((timer) => timer.at > this.#now && timer.at - this.#now <= milliseconds)) {

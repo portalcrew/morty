@@ -1,7 +1,6 @@
 import { type RefCallback, useCallback } from "react";
 
 const markerAttribute = "data-software-keyboard";
-/** A visible height this much shorter than the tallest one seen at this width means a software keyboard is up. */
 const keyboardHeightThresholdPx = 120;
 /** Input types that take focus without opening a software keyboard. */
 const keylessInputTypes = new Set([

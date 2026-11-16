@@ -19,7 +19,6 @@ export class RuntimeLocalContext {
     }
 }
 
-/** Local Agent inventory and its explicitly registered harness adapters. */
 export class RuntimeAgentDependencies {
     readonly agents: readonly CatalogAgent[];
     readonly adapters: AdapterResolver;

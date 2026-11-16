@@ -107,7 +107,6 @@ export function ConnectionNotice({
      * would only repeat it and stack a second hierarchy inside the first.
      */
     readonly inline?: boolean;
-    /** Extra action line, such as switching to another online computer. */
     readonly footer?: ReactNode;
     readonly onRetryNow: () => void;
 }) {

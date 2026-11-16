@@ -24,7 +24,6 @@ export class ScratchDirectory {
         this.#root = join(parent, randomUUID());
     }
 
-    /** Refreshes this directory's lease and removes sibling directories whose lease is older than `leaseMilliseconds`. */
     readonly refreshLease = async (leaseMilliseconds: number): Promise<void> => {
         await mkdir(this.#root, { mode: 0o700, recursive: true });
         const now = new Date();
@@ -48,7 +47,6 @@ export class ScratchDirectory {
         }
     };
 
-    /** Writes `bytes` atomically to `<group>/<name>` with owner-only permissions and returns the path. */
     readonly write = async (group: string, name: string, bytes: Uint8Array, signal: AbortSignal): Promise<string> => {
         const directory = join(this.#root, group);
         await mkdir(directory, { mode: 0o700, recursive: true });
@@ -62,7 +60,6 @@ export class ScratchDirectory {
         await rm(path, { force: true });
     };
 
-    /** The canonical path of a written file, or null when it is gone, is not a regular file, or escapes its directory. */
     readonly resolveFile = async (path: string): Promise<string | null> => {
         try {
             const [resolvedDirectory, resolvedPath, file] = await Promise.all([
@@ -78,7 +75,6 @@ export class ScratchDirectory {
         }
     };
 
-    /** Reads a regular file owned by this scratch directory after validating its canonical path. */
     readonly read = async (path: string, signal: AbortSignal): Promise<Uint8Array | null> => {
         const resolved = await this.resolveFile(path);
         signal.throwIfAborted();

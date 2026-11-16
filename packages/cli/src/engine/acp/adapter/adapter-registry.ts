@@ -30,7 +30,6 @@ export class AdapterRegistry {
     };
 }
 
-/** The Runtime's adapters and the content externalizer they share. */
 export function createRuntimeAdapterRegistry(
     adapters: AdapterResolver,
     processes: AdapterDependencies["processes"],

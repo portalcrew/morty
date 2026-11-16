@@ -3,7 +3,6 @@ import { decodeSessionReadyEvent, type SessionConfigurationSelection } from "@po
 import { WorkerApiTransport } from "../../packages/web/src/services/api/worker-api-transport.ts";
 import { BotChatApi } from "../../packages/web/src/services/chat/bot-chat-api.ts";
 
-/** Uses the product's owner API client against the real Worker in Computer integration scenarios. */
 export function createOwnerApi(options: {
     readonly origin: string;
     readonly computerId: string;

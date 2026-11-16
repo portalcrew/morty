@@ -37,7 +37,6 @@ const identitySchema = v.object({
     computerId: v.string(),
 });
 
-// Stateful external admission port, explicitly replenished by the scenario; no real-time quota window.
 class CreationBudget {
     remaining = 1;
     readonly limit = async () => ({ success: this.remaining-- > 0 });
@@ -68,7 +67,6 @@ test("Given setup and a lost creation response without a known computer, When se
     let creations = 0;
     const failures: unknown[] = [];
     let origin = "";
-    // A real HTTP relay loses one successful response after the production Worker commits it.
     const server = createServer((incoming, outgoing) => {
         void (async () => {
             const chunks: Buffer[] = [];
@@ -113,7 +111,6 @@ test("Given setup and a lost creation response without a known computer, When se
             outgoing.destroy();
         });
     });
-    // The consolidated origin carries Computer WebSockets as well as setup HTTP requests.
     const sockets = new Set<Duplex>();
     server.on("upgrade", (incoming, socket, head) => {
         sockets.add(socket);

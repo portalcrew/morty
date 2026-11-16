@@ -2,13 +2,6 @@ import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef } from 
 
 const TOP_EDGE_PIXELS = 80;
 
-/**
- * Requests an older page when a scroll container reaches its top edge, then
- * restores the visible scroll offset after the older content is prepended.
- * Renders no UI; loading feedback belongs to the scroll content above.
- *
- * Wire {@link checkScrollEdge} into the scroll container's `onScroll` handler.
- */
 export function useLoadMoreOnScroll({
     container,
     hasMore,

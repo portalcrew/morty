@@ -6,7 +6,6 @@ import type { ToolCallState } from "./tool-renderer.ts";
 
 export const ToolCallSupplementalContent = createContext<ReactNode>(null);
 
-/** Shared trigger row for intermediate agent steps (thinking rail + tool calls). */
 export const agentThinkStepTriggerClassName =
     "group/process -mx-2 flex h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-[13px] leading-[22px] text-morty-text-3 outline-none hover:text-copy-secondary active:text-copy-secondary focus-visible:text-copy-secondary keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60";
 
@@ -26,7 +25,6 @@ export const agentThinkStepChevronClassName =
 export const agentThinkStepExpandedPanelClassName =
     "grid max-h-[280px] min-w-0 gap-2 border-l border-[#d9dde1] py-2 pl-5 [overflow-wrap:anywhere]";
 
-/** Scrollport for a collapsed step. Fades only the edge that still clips content. */
 export function AgentThinkStepExpandedPanel({ children }: { readonly children: ReactNode }) {
     return (
         <ScrollEdgeFade

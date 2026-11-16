@@ -46,8 +46,6 @@ test("Given an agent answer with reasoning and a tool call, When the user inspec
     await expect(stepChevron).toBeHidden();
     await expect(stepIcon).toHaveCSS("color", collapsedStepColor);
 
-    // The collapsed summary first proves the shared hover contract before it
-    // reveals the reasoning and tool rows it contains.
     await stepDisclosure.hover();
     await expect(stepChevron).toBeVisible();
     const hoveredStepColor = await stepDisclosure.evaluate((element) => getComputedStyle(element).color);

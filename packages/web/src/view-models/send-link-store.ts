@@ -5,16 +5,11 @@ export type SendLinkStoreApi = ReturnType<typeof createSendLinkStore>;
 
 type SendLinkState = { readonly kind: "idle" } | { readonly kind: "sending" } | { readonly kind: "failed" };
 
-/** How the setup page moves setup to the agent's computer, as the view renders it. */
 export type SetupHandoffModel =
     | { readonly kind: "copy-prompt" }
     | { readonly kind: "share"; readonly sendLink: SendLinkStoreApi }
     | { readonly kind: "copy-link" };
 
-/**
- * Sends Morty's address to another device through the system share sheet. The application owns it: `close` ends
- * its lifetime, after which a share sheet that is still open can no longer change state.
- */
 function createSendLinkStore(share: (data: ShareData) => Promise<void>) {
     const lifetime = new AbortController();
     return createStore<{
@@ -51,7 +46,6 @@ function createSendLinkStore(share: (data: ShareData) => Promise<void>) {
     }));
 }
 
-/** The view model for this device's setup handoff; a share sheet gets a store that tracks its send. */
 export function setupHandoffModel(handoff: SetupHandoff): SetupHandoffModel {
     switch (handoff.kind) {
         case "copy-prompt":

@@ -28,7 +28,6 @@ import type { AskUserQuestionInput, AskUserQuestionOutput } from "@anthropic-ai/
  *      back as the tool's `updatedInput`, which the tool's own `call()` reads.
  */
 
-/** Modes the connected client advertised support for. */
 export type ElicitationSupport = {
     form: boolean;
     url: boolean;
@@ -83,10 +82,6 @@ function acceptedElicitationContent(
     return CreateElicitationResponse.isAccept(response) ? (response.content ?? {}) : {};
 }
 
-/**
- * Map an ACP elicitation response back to the MCP `ElicitResult` the SDK expects
- * to hand back to the requesting server.
- */
 export function createElicitationResponseToElicitResult(response: CreateElicitationResponse): ElicitationResult {
     switch (response.action) {
         case "accept":
@@ -123,7 +118,6 @@ export function extractAskUserQuestions(input: Record<string, unknown>): AskUser
     return valid.length > 0 ? valid : null;
 }
 
-/** Stable form-field key for the question at the given index. */
 function questionFieldKey(index: number): string {
     return `question_${index}`;
 }
@@ -234,7 +228,6 @@ export function askUserQuestionsToCreateRequest(
     };
 }
 
-/** Outcome of an AskUserQuestion elicitation, decoupled from any transport. */
 export type AskUserQuestionOutcome =
     | { action: "answered"; updatedInput: Record<string, unknown> }
     | { action: "cancel" };
@@ -347,7 +340,6 @@ export function extractRefusalFallbackPrompt(payload: Record<string, unknown>): 
     };
 }
 
-/** Form-field key carrying the user's choice in the refusal-fallback form. */
 const REFUSAL_FALLBACK_CHOICE_KEY = "choice";
 
 /** Wire values of the dialog's result enum (CLI schema). `edit_prompt` is

@@ -25,7 +25,6 @@ test("Given my message's acceptance is still in flight after its turn and a late
 
     const acceptance = executionNetwork.holdNextResponse("/turns");
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Acceptance arrives late");
-    // The Computer ran and finished the message; only the service's answer to this browser is held back.
     const releaseAcceptance = await acceptance;
     const viewer = await app.openViewer();
     try {
@@ -44,7 +43,6 @@ test("Given my message's acceptance is still in flight after its turn and a late
                 "Another device answers",
             ),
         );
-        // The other device's turn ended here too.
         await app.waitForView(() => expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull());
 
         releaseAcceptance();

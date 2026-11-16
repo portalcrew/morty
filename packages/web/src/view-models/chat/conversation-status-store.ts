@@ -11,22 +11,18 @@ export type ConversationStatusStoreApi = ReturnType<typeof createConversationSta
 
 export type ConversationListStatus = ReportedStatus | { readonly kind: "unread" };
 
-/** A Session's work as one account reported it: the Computer's listing, or a pane that followed the Session. */
 type ReportedStatus =
     | { readonly kind: "idle" }
     | { readonly commandId: string; readonly kind: "working" }
     | { readonly kind: "failed"; readonly commandId: string | null; readonly message: string };
 
-/** What the page last learned of a Session's work, and whether a turn of it ended where the user could not see it. */
 interface SessionObservation {
     readonly status: ReportedStatus;
     /** A turn ended while the Session was not open here, and the user has not opened it since. */
     readonly unseenEnd: boolean;
-    /** When the page learned it, counted by the store's `learned`. */
     readonly observedAt: number;
 }
 
-/** The Computer owns the last turn's outcome, including the absence of failure after a later successful turn. */
 function listedStatus(status: ManagedChatSession["status"]): ReportedStatus {
     if (status.kind === "working") {
         return status;
@@ -48,10 +44,6 @@ function paneStatus(activity: SessionActivityState): ReportedStatus {
     }
 }
 
-/**
- * Folds a newer account of a Session into what the page knows. A turn that ends between two accounts the user did not
- * watch is unseen until the user opens the Session.
- */
 function observe(
     previous: SessionObservation | undefined,
     status: ReportedStatus,
@@ -102,15 +94,12 @@ export function hasUnreadConversation(
 
 interface ConversationStatusState {
     readonly observations: NativeSessionMap<SessionObservation>;
-    /** How many accounts the page has learned, which orders them. */
     readonly learned: number;
-    /** What the page had learned when the running directory load began; its snapshot is older than anything later. */
     readonly directoryBasis: number;
     readonly directoryLoadStarted: () => void;
     readonly directoryLoaded: (sessions: readonly ManagedChatSession[]) => void;
     /** The user opened this Session, so nothing it finished is unseen. */
     readonly opened: (sessionTarget: NativeSessionTarget) => void;
-    /** The open pane stopped with `activity` as its last account of the Session, or none when it had none. */
     readonly paneReleased: (sessionTarget: NativeSessionTarget, activity: SessionActivityState | null) => void;
 }
 

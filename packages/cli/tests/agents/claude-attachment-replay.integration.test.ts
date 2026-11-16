@@ -260,7 +260,6 @@ test("Given an old Claude transcript contains large attachments and ambiguous co
                 resources
                     .map(({ uri, text }, index) => {
                         const context = `\n<context ref="${uri}">\n${text}\n</context>`;
-                        // Historical context now follows the existing plain-text delivery bound.
                         return index === 0
                             ? `${context.slice(0, 999_959)}... [omit ${context.length - 999_959} characters since 999959]`
                             : context;

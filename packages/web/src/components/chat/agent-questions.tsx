@@ -17,20 +17,15 @@ export function AgentQuestions({
     questions,
     ready,
 }: {
-    /** No message followed the questions yet. */
     readonly answerable: boolean;
-    /** The suggested answer picked for each question, by position. */
     readonly choices: AgentQuestionChoices;
-    /** The Session takes no message now. */
     readonly disabled: boolean;
     readonly onAnswer: () => void;
     readonly onChoose: (questionIndex: number, answer: string) => void;
     readonly questions: readonly AgentQuestion[];
-    /** Every question that suggests answers has one picked. */
     readonly ready: boolean;
 }) {
     const id = useId();
-    // Picking an answer only needs the question to be open; sending it also needs the Session to take a message.
     const locked = !answerable || disabled;
     return (
         <section

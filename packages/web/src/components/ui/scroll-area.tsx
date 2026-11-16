@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
  * to the container's border radius without shortening the bar.
  */
 type ScrollAreaProps = ComponentProps<typeof Primitive.Root> & {
-    /** `vertical` unless the region also scrolls sideways. */
     readonly orientation?: "vertical" | "horizontal" | "both";
     readonly onViewportScroll?: UIEventHandler<HTMLDivElement>;
     readonly viewportClassName?: string;

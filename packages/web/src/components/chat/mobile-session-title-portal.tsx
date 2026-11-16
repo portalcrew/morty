@@ -3,10 +3,6 @@ import { createPortal } from "react-dom";
 import { dataTestId } from "../../data-testid.ts";
 
 /**
- * Renders the mobile session title into the header slot the chat shell
- * provides. Pure DOM plumbing: it resolves the slot once mounted.
- */
-/**
  * Recorded effect exception: the effect only resolves the portal's DOM slot
  * after mount — DOM-ephemeral state, no asynchronous workflow.
  */

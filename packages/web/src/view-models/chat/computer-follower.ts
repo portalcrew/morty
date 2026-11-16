@@ -11,7 +11,6 @@ import {
 } from "./computer-status-store.ts";
 import { startRecoveryNotice } from "./recovery-notice.ts";
 
-/** Why a Session that waits on a revoked Computer fails. */
 export const COMPUTER_REVOKED_MESSAGE = "This computer was disconnected. Run Morty setup on it again to reconnect.";
 
 /**
@@ -28,7 +27,6 @@ export interface ComputerFollowerPorts {
     >;
     readonly computer: ComputerStatusStoreApi;
     readonly clock: Clock;
-    /** Whether the New Session draft is selected, whose view follows the configuration as soon as it can. */
     readonly draftSelected: () => boolean;
     /**
      * Announced with every Computer configuration the page observes, after the Computer's status follows it: the owner
@@ -43,25 +41,16 @@ export interface ComputerFollowerPorts {
     readonly onEntered: (outcome: ComputerEntryOutcome) => void;
     /** Announced when the pairing was revoked, so a Session still loading for it fails. */
     readonly onRevoked: (message: string) => void;
-    /** Announced once setup pairs the Computer again after revocation: the owner starts the page over. */
     readonly onReplaced: () => void;
-    /** Announced when the Computer's entry completes only by starting the page over, as after setup. */
     readonly retry: () => void;
-    /** Announced when a read timed out and the page starts over. */
     readonly onRestart: () => void;
     /** Announced when the entry failed only because the Computer was unreachable and waits for it to be retried. */
     readonly onWaitingForComputer: () => void;
 }
 
 export interface ComputerFollower {
-    /**
-     * Follows the Computer until `signal` ends: reads its pairing and configuration, then watches the configuration and
-     * recovers from interruptions. Each call starts the entry request again.
-     */
     readonly follow: (signal: AbortSignal) => Promise<void>;
-    /** Resolves with how the Computer answered the current entry request, as soon as it did. */
     readonly entered: (signal: AbortSignal) => Promise<ComputerEntryOutcome>;
-    /** An operation through the Computer failed for connectivity: the follow recovers from the start. */
     readonly interrupted: () => void;
     /**
      * An operation reported the pairing revoked, so the page's last pairing read may predate it. Waiting starts from a
@@ -72,14 +61,11 @@ export interface ComputerFollower {
 
 export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFollower {
     const { requests, computer, clock } = ports;
-    // Wakes the loads waiting for the current entry request; the answer itself is the Computer's status.
     let answered = Promise.withResolvers<void>();
-    // The attempt the follow is in now; ending it makes the follow recover from the start.
     let attempt: AbortController | null = null;
     let recoveryNotice: AbortController | null = null;
     let current: AbortSignal | null = null;
 
-    /** Announces the answer the Computer's status just took. */
     const settle = (): void => {
         const outcome = computerEntryOutcome(computer.getState());
         if (outcome !== null) {
@@ -105,7 +91,6 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
             onNotice: (notice) => computer.getState().interruptionNoticed(notice),
         });
     };
-    /** Records the authoritative snapshot and announces it to the other workspace workflows. */
     const observe = (configuration: BotComputerConfiguration, observation: ComputerObservation): void => {
         clearRecoveryNotice();
         computer.getState().configurationObserved(configuration, clock.now());
@@ -150,7 +135,6 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                 await requests.waitForComputerConfigurationChange(signal, (configuration) => {
                     signal.throwIfAborted();
                     if (ports.draftSelected()) {
-                        // A recovered configuration read completes draft entry after a network outage.
                         computer.getState().entryReady();
                     }
                     observe(configuration, { kind: "watch", afterChange });
@@ -191,7 +175,6 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
             answered = Promise.withResolvers<void>();
             current = signal;
             computer.getState().entryStarted();
-            // The entry request is done once the configuration was read or the Computer answered it with a failure.
             let entryDone = false;
             let unpaired = false;
             let dropped = true;
@@ -215,16 +198,12 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                                 computer.getState().pairingDialog.getState().show();
                                 computer.getState().entryReady();
                                 settle();
-                                // An unpaired Computer waits for the pairing it just read to change; the pairing flow
-                                // completes by starting the page over.
                                 await requests.waitForComputerPairingChange(attemptSignal);
                                 signal.throwIfAborted();
                                 ports.retry();
                                 return;
                             }
                             if (unpaired) {
-                                // Pairing completed during an outage. Finish setup just as a pairing notification would,
-                                // including draft settings and the directory.
                                 ports.retry();
                                 return;
                             }
@@ -248,7 +227,6 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                     } catch (cause) {
                         signal.throwIfAborted();
                         if (own.signal.aborted) {
-                            // An operation reported the Computer unreachable: recover from the pairing read.
                             dropped = true;
                             continue;
                         }
@@ -260,7 +238,6 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                             console.error("The Morty API request failed.", cause);
                             configurationUnavailable();
                             if (!entryDone && !ports.draftSelected()) {
-                                // The request a Session load waits on failed: it becomes an operable failure.
                                 computer
                                     .getState()
                                     .entryFailed("unavailable", formatError(cause, "Chat is unavailable."));

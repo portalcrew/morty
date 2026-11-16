@@ -38,7 +38,6 @@ function allocateSessionId(): string {
     throw new Error("Controlled harness native Session allocation is exhausted");
 }
 
-/** Like Claude Code, a new session starts with the model its working directory's `.claude/settings.json` names. */
 function projectModel(cwd: string): string | undefined {
     const path = join(cwd, ".claude", "settings.json");
     if (!existsSync(path)) {

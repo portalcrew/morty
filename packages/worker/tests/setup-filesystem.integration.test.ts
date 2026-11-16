@@ -85,7 +85,6 @@ type SavedReplacement =
               | { readonly kind: "retired"; readonly computer_id: string };
       };
 
-/** The saved setup state of a ready identity, in the representation setup writes. */
 function savedSetupState(
     origin: string,
     identity: { readonly token: string; readonly computerId: string },
@@ -104,7 +103,6 @@ function savedSetupState(
     });
 }
 
-/** The ready identity setup saved in a state directory. */
 async function savedIdentity(state: string) {
     const saved = v.parse(
         v.object({
@@ -127,7 +125,6 @@ test.for(["fresh", "unknown", "revoked"] as const)(
     },
     async (replacementState, { signal }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-setup-state-root-"));
-        // The shell names the installation data of another state root, which Morty refuses.
         const owner = join(directory, "owner");
         const state = join(owner, "computer");
         await mkdir(owner, { recursive: true, mode: 0o700 });
@@ -605,17 +602,12 @@ async function setupComputer(
     deadline?: (milliseconds: number) => AbortSignal,
     run: {
         readonly harness?: string;
-        /** The Computer whose replacement the user explicitly approved. */
         readonly replaceComputer?: string;
-        /** The `--session-id` the agent passes; `null` passes none. */
         readonly sessionArgument?: string | null;
-        /** The calling agent's shell environment, where a harness exposes its current session. */
         readonly agentEnvironment?: Readonly<Record<string, string>>;
-        /** The user stops setup as soon as it reports this status. */
         readonly interruptAt?: string;
         /** Runs before setup's clock moves on, with every event setup reported so far. */
         readonly whileWaiting?: (events: readonly Readonly<Record<string, unknown>>[]) => Promise<void>;
-        /** From this progress stage on, the network stalls and every deadline setup starts has already passed. */
         readonly stallFromStage?: string;
     } = {},
 ): Promise<{ readonly code: number; readonly events: readonly Readonly<Record<string, unknown>>[] }> {
@@ -848,7 +840,6 @@ test("Given a saved uncertain replacement and a restored local pairing, When set
             JSON.parse(await readFile(configPath, "utf8")),
         );
         const computerId = v.parse(v.string(), config.identity["computer_id"]);
-        // A previous run recorded its intent, but was interrupted before it could record the response.
         await writeFile(
             configPath,
             JSON.stringify({ ...config, identity: { ...config.identity, replacement: { kind: "unknown" } } }),
@@ -1084,7 +1075,6 @@ test("Given setup replaced the Computer but stopped before ending the previous i
             ),
             await replaced.json(),
         );
-        // What setup saved before it stopped: the successor's identity, with the previous one still to end.
         await writeFile(
             join(configurationDirectory, "config.json"),
             savedSetupState(fixture.origin, current, {
@@ -1144,7 +1134,6 @@ test("Given the reply to revoking all access was lost after the Worker replaced 
     try {
         const owner = await fixture.createAnonymousUser();
         const successor = `morty_computer_v1_${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url")}`;
-        // What setup saved before the request whose reply was lost.
         const saved = JSON.parse(savedSetupState(fixture.origin, owner));
         saved.identity.credential_rotation = { successor_token: successor };
         await writeFile(join(configurationDirectory, "config.json"), JSON.stringify(saved), { mode: 0o600 });

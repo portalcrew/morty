@@ -30,7 +30,6 @@ import { createCodexClient } from "./create-client.ts";
 type CodexSession = HarnessSession<CodexAcpAgent>;
 type CodexOpened = Awaited<ReturnType<CodexAcpAgent["newSession"]>>;
 
-/** Codex owns thread access and process-tree cancellation; shared harnesses own accepted sessions. */
 export class CodexAdapter implements Adapter {
     readonly #sessions = new Map<SessionId, CodexSession>();
     readonly #lifetime = new AbortController();

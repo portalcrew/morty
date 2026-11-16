@@ -18,7 +18,6 @@ export class ComputerConnectionStorage {
         this.#database = database;
     }
 
-    /** The current connection: attached, and admitted under the generation that is still active. */
     readonly read = (): ComputerConnection | null =>
         this.#database.orm
             .select(connectionFields)
@@ -47,7 +46,6 @@ export class ComputerConnectionStorage {
             : { ...connection, kind: "disconnected", disconnectedAt };
     };
 
-    /** Makes `identity` the computer's latest connection, replacing the one before it. */
     readonly connect = (connectionEpoch: number, generation: number, now: number): void => {
         const result = this.#database.orm.transaction((transaction) => {
             transaction.delete(computerConnection).run();

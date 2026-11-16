@@ -22,7 +22,6 @@ test("Given desktop configuration, When the user opens settings and selects a mo
     await expect(fast).toBeChecked();
     await page.screenshot({ animations: "disabled", path: testInfo.outputPath("desktop-configuration.png") });
     await model.click();
-    // On desktop the options open in a submenu beside the panel, which stays in place.
     const modelOptions = page.getByRole("dialog", { name: "Model options" });
     await expect(modelOptions).toBeVisible();
     const [optionsBounds, modelBounds] = await Promise.all([modelOptions.boundingBox(), model.boundingBox()]);

@@ -9,7 +9,6 @@ function isAbsent(cause: unknown): boolean {
     return typeof cause === "object" && cause !== null && Reflect.get(cause, "code") === "ENOENT";
 }
 
-/** Morty's private log directory, or null when it is absent or unreadable; an unreadable one joins `unreadable`. */
 export async function findLogDirectory(
     root: string,
     unreadable: string[],
@@ -30,7 +29,6 @@ export async function findLogDirectory(
     return logs;
 }
 
-/** The log file names in a log directory. An unreadable directory is added to `unreadable`, relative to `root`. */
 export async function listLogFiles(directory: string, root: string, unreadable: string[]): Promise<readonly string[]> {
     try {
         const entries = await readdir(directory, { withFileTypes: true });
@@ -72,7 +70,6 @@ export type OwnedLogFileRead =
     | { readonly kind: "skipped" }
     | { readonly kind: "unreadable" };
 
-/** Reads a log file this user owns. Absent files, links and other users' files are skipped. */
 export async function readOwnedLogFile(path: string, signal: AbortSignal): Promise<OwnedLogFileRead> {
     signal.throwIfAborted();
     let handle: FileHandle | undefined;

@@ -142,7 +142,6 @@ test("Given a recent session on mobile, When the user expands the session list, 
         .filter({ hasText: "Mobile session navigation" });
     await expect(response).toBeVisible();
     const sessionUrl = page.url();
-    // New Session and Recent sessions sit in the phone's header, outside the navigation drawer.
     await page.getByRole("button", { name: "New Session" }).click();
     await expect(response).toBeHidden();
 
@@ -172,7 +171,6 @@ test("Given one browser opened two setup links in two tabs, When the user ends c
     const firstTab = runtime.page;
     await firstTab.goto(first.url);
     await expect(firstTab.getByRole("textbox", { name: "Message" })).toBeEnabled();
-    // Running setup again hands off with a new link for the same Computer.
     const second = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     expect(second.identity.computerId).toBe(first.identity.computerId);
     const secondTab = await firstTab.context().newPage();

@@ -220,7 +220,6 @@ function SessionTitleSkeleton({ centered = false }: { readonly centered?: boolea
     );
 }
 
-/** While the phone rename overlay is open, the header keeps stating the committed title. */
 const CLOSED_TITLE_EDIT: TitleEdit = { kind: "closed" };
 
 function SessionConversationTitleBar({
@@ -486,8 +485,6 @@ function OlderHistorySkeleton() {
 }
 
 export function MortySessionPane({ workspace }: { readonly workspace: ChatWorkspace }) {
-    // The workspace owns the pane outside React; the view follows it and hands its model to the pane body, which
-    // subscribes to its stores.
     const pane = useStore(workspace.pane);
     if (pane.kind === "none") {
         return <section className={chatSessionPaneFillClassName} />;
@@ -555,7 +552,6 @@ function MortySessionPaneBody({
         executionContext.available,
         pane.steeringSupported,
     );
-    // An answer to an Agent's question goes out as the composer's message would, which the Computer runs or queues.
     const answer = (messageId: string): void =>
         runAndFollow(async () => {
             await pane.store.getState().sendAnswer(messageId);
@@ -717,9 +713,6 @@ function MortySessionPaneBody({
                                                     key={group.id}
                                                     className={cn(
                                                         chatSessionMessageItemClassName,
-                                                        // The previous bubble already reserves its 32px
-                                                        // copy-button strip; mt-1 keeps the former 36px
-                                                        // bubble-to-bubble total.
                                                         group.followsUserMessage && "mt-1",
                                                     )}
                                                 >
@@ -907,8 +900,6 @@ function MortySessionPaneBody({
                                         />
                                     )}
                                     {timelinePresentation.workingIndicator !== null && (
-                                        // mt-1 keeps 4px of air under the previous bubble's reserved
-                                        // copy-button strip, matching the consecutive-message rhythm.
                                         <div className="mt-1">
                                             {timelinePresentation.workingIndicator.kind === "queued-in-owner" ? (
                                                 <OwnerQueueNotice owner={executionContext.agent} />

@@ -9,7 +9,6 @@ export type NativeSessionAgent = ChatAgentSelection & { readonly installed: bool
 
 const PI_HARNESS: Identifier = decodeIdentifier("pi");
 
-/** Computer harness tabs: connected agents plus Pi when it is not on the Computer. */
 export function nativeSessionAgentTabs(computer: ChatComputer): readonly NativeSessionAgent[] {
     const connected = connectedChatComputerAgents(computer);
     const installed = connected.map((agent) => ({
@@ -29,11 +28,9 @@ export function nativeSessionAgentTabs(computer: ChatComputer): readonly NativeS
     ];
 }
 
-/** A harness the configuration menu offers, as the Computer configuration names it. */
 export interface HarnessOption {
     readonly installed: boolean;
     readonly label: string;
-    /** The harness identifier. */
     readonly value: string;
 }
 

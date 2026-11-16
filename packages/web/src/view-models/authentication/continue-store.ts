@@ -39,7 +39,6 @@ export type ContinueState =
     | {
           readonly kind: "session-resuming";
           readonly handoff: SessionHandoff;
-          /** The redeemed access this attempt opens the session with. */
           readonly identity: AnonymousIdentity;
       }
     | {
@@ -65,7 +64,6 @@ export type ContinueState =
 
 export interface ContinueStore {
     readonly state: ContinueState;
-    /** Aborts the in-flight redeem or session-open attempt, if any. */
     readonly cancel: () => void;
     readonly redeem: (signal: AbortSignal) => Promise<void>;
     readonly retry: () => void;
@@ -101,7 +99,6 @@ function initialState(): ContinueState {
     return { code, handoff: { harness, sessionId, workspace }, kind: "session-opening" };
 }
 
-/** A same-origin destination that carries the redeemed identity in its query string. */
 function identityDestination(path: "/" | "/chat", identity: AnonymousIdentity): URL {
     const url = new URL(path, window.location.origin);
     url.searchParams.set("identity", encodeIdentityScope({ computerId: identity.computerId }));

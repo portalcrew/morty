@@ -13,7 +13,6 @@ function jsonFrame(value: string): unknown {
     }
 }
 
-/** The text of a response body as the service encoded it on the wire. */
 function decoded(encoding: string | undefined, chunks: readonly Buffer[]): string {
     const body = Buffer.concat(chunks);
     switch (encoding) {
@@ -317,7 +316,6 @@ export async function createResponseLossProxy(upstream: string) {
                     lostSubmission.client === client &&
                     frame.requestId === lostSubmission.requestId
                 ) {
-                    // The service accepted the request. Lose its response and any confirming live events.
                     interruptBrowserNetwork();
                 }
                 return;
@@ -377,7 +375,6 @@ export async function createResponseLossProxy(upstream: string) {
             }
             return body;
         },
-        /** Holds a committed Chat sharing response, then loses it when the scenario disconnects the network. */
         holdNextSharingResponse: () => {
             const received = Promise.withResolvers<string>();
             let disconnect: (() => void) | null = null;
@@ -397,7 +394,6 @@ export async function createResponseLossProxy(upstream: string) {
                 },
             };
         },
-        /** Holds one real settings edit response, letting later notifications and reads pass unchanged. */
         holdNextConfigurationResponse: () =>
             new Promise<void>((resolve) => {
                 holdConfiguration = { resolve };
@@ -408,14 +404,11 @@ export async function createResponseLossProxy(upstream: string) {
                 heldConfiguration = null;
             }
         },
-        /** Loses a pairing response after the real service commits it. */
         interruptNextComputerPairing: () => loseNextResponseWithBody(/\/pairing(?:\?|$)/u),
         interruptNextFork: () => loseNextResponse(/\/native-sessions\/forks\//u),
-        /** Loses the next Session creation before it reaches the service, which therefore creates nothing. */
         dropNextSessionCreation: () => {
             droppedRequest = /\/managed-sessions\/open(?:\?|$)/u;
         },
-        /** Loses the answer to the next Session creation; resolves with the status the service returned. */
         interruptNextSessionCreation: () => loseNextResponse(/\/managed-sessions\/open(?:\?|$)/u),
         interruptNextTurn: (delivery: "before-acceptance" | "after-acceptance") => {
             armed = delivery;

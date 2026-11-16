@@ -20,7 +20,6 @@ test("Given real pi exhausts its automatic model retries, When the last attempt 
         failureMessage: "fake provider failure",
     });
     await using agent = await PiFixture.create(provider);
-    // Keep the retry loop real but fast: one retry, then exhaustion.
     await agent.overrideSettings({ retry: { baseDelayMs: 10, maxRetries: 1 } });
     await withRealDaemon(signal, new PiAgentSpecification(), agent.environment, async (peer) => {
         const sendPrompt = (prompt: string): string => {
@@ -68,18 +67,13 @@ test("Given real pi exhausts its automatic model retries, When the last attempt 
             }
         }
 
-        // Retry lifecycle is not model output: the transcript stays empty of retry
-        // narration (no "Retrying", no false "resuming") and of any failed answer.
         expect(transcript).not.toContain("Retrying");
         expect(transcript).not.toContain("resuming");
         expect(transcript).not.toContain("Retries exhausted");
         expect(transcript).not.toContain("RETRY_SHOULD_NOT_SUCCEED");
-        // The prompt failure alone carries the real model error for the user.
         expect(failure?.code).toBe("acp_agent_error");
         expect(failure?.message).toContain("fake provider failure");
 
-        // Only the model call failed; the settled pi session still serves a
-        // follow-up turn, matching the Claude and Codex failure contracts.
         const recoveredCommandId = sendPrompt("Recovery check. Reply with a short greeting.");
         let recovered = "";
         for (;;) {
@@ -157,8 +151,6 @@ test("Given a pi turn's first model call fails retryably, When pi's automatic re
                 }
             }
         }
-        // The retried attempt's answer streamed into the same turn; no retry
-        // narration entered the transcript.
         expect(text).toContain("RETRY_RECOVERED_REPLY");
         expect(text).not.toContain("Retrying");
         expect(text).not.toContain("resuming");

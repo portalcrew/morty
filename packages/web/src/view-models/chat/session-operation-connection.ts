@@ -15,7 +15,6 @@ interface SessionFollowingPane {
     readonly failedThrough: (client: MortyClient, cause: unknown) => void;
 }
 
-/** One pane's following of the Session: it reports each change of its connection and its own stop. */
 export interface SessionConnectionFollower {
     readonly changed: () => void;
     readonly stopped: () => void;
@@ -27,9 +26,7 @@ export interface SessionConnectionFollower {
  * sent keeps the client it started with until the operation settles, even after its pane stops following it.
  */
 export interface SessionOperationConnection {
-    /** Ends viewing immediately and closes this Session's client once its operations settle. */
     readonly release: (client: MortyClient) => void;
-    /** Starts following the Session through `pane`, replacing any pane that followed it before. */
     readonly follow: (pane: SessionFollowingPane) => SessionConnectionFollower;
     /** The ready client, waiting until one is ready; rejects when the connection cannot carry operations. */
     readonly ready: (signal: AbortSignal) => Promise<MortyClient>;

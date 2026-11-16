@@ -29,7 +29,6 @@ export function pendingExecutionContext(
     switch (settings.kind) {
         case "ready":
         case "refreshing": {
-            // The draft only chose which agent runs; its names come from the Computer configuration the page follows.
             const configured = computer.computerConfiguration?.computer;
             const offered = configured?.agents.find((agent) => agent.harness === settings.selectedAgent.harness);
             return {

@@ -5,9 +5,7 @@ import type {
 } from "@portalcrew/morty-client/protocol";
 
 export interface SessionViewerIdentity {
-    /** When the viewer's Session credential ends. */
     readonly expiresAt: number;
-    /** The holder and pairing generation the viewer's Session credential carries. */
     readonly grant: SessionAccessGrant;
     readonly computerId: string;
     readonly sessionFilter: NativeSessionTarget;
@@ -23,16 +21,12 @@ export interface SessionViewer extends SessionEventObserver {
     readonly identity: SessionViewerIdentity;
 }
 
-/** A browser's request to follow one Session's live events, as its frame named the Session and the credential. */
 interface SessionEventSubscriptionRequest {
-    /** The Computer the frame's path names; the subscriber checks that it owns it. */
     readonly computerId: string;
     readonly harness: string;
     readonly sessionId: string;
-    /** The bearer credential of the frame's `authorization` header. */
     readonly credential: string;
     readonly command: SessionEventsSubscribeCommandRouting;
-    /** The caller owns cancellation for the entire subscription, including admission. */
     readonly signal: AbortSignal;
 }
 

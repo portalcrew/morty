@@ -9,10 +9,6 @@ const computerSchema = v.pipe(v.object({ computerId: identifier }), v.readonly()
 type ManagedComputer = v.InferOutput<typeof computerSchema>;
 const pairingStateSchema = v.object({ computerPairing: v.picklist(["unpaired", "paired", "revoked"]) });
 
-/**
- * Where the Computer's Runtime pairing stands: not yet paired (or its pairing request is pending or expired), paired,
- * or revoked until setup pairs it again. The Relay owns this fact; the Worker reads it for the Computer.
- */
 export type ComputerPairing = v.InferOutput<typeof pairingStateSchema>["computerPairing"];
 
 export interface ManagementApiOptions {
@@ -20,7 +16,6 @@ export interface ManagementApiOptions {
     readonly fetchRequest: ApiTransport["fetch"];
     readonly getToken: (signal: AbortSignal) => Promise<string | null>;
     readonly origin: string;
-    /** Told when the Worker refuses the access as unauthenticated; whoever owns that access decides what it means. */
     readonly credentialRejected?: () => void;
 }
 

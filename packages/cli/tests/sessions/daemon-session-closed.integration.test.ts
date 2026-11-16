@@ -25,10 +25,8 @@ import {
     withControlledDaemon as withRealDaemon,
 } from "../support/agents/real-daemon.ts";
 
-// Native identities always belong to the Agent that created them.
 const NATIVE_HARNESS = "claude";
 
-/** Each discovery or execution process receives the next endpoint index. */
 class ClosableAgentSpecification extends ControlledReadinessSpecification {
     readonly agentExecutable = "node";
     readonly harness = NATIVE_HARNESS;
@@ -62,7 +60,6 @@ async function withClosableDaemon(
     );
 }
 
-/** The next message of `kind`; unrelated traffic such as status changes is skipped. */
 async function nextMessageOfKind(peer: RealDaemonPeer, kind: string): Promise<string> {
     for (;;) {
         const message = await peer.nextMessage();
@@ -76,7 +73,6 @@ async function nextMessageOfKind(peer: RealDaemonPeer, kind: string): Promise<st
     }
 }
 
-/** The failure that answers `requestId`, which is a command id when a prompt was sent. */
 async function nextFailure(peer: RealDaemonPeer, requestId: string): Promise<SessionOperationFailedEvent> {
     for (;;) {
         const message = await peer.nextMessage();

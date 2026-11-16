@@ -9,18 +9,12 @@ import type { Clock } from "../../services/time/clock.ts";
 /** How long before this browser's access ends it is told once, so it can get a new link before work is cut off. */
 const reminderLead = 60 * 60 * 1000;
 
-/** When the reminder for access that ends at `expiresAt` is due. */
 function accessReminderAt(expiresAt: string): number {
     return Date.parse(expiresAt) - reminderLead;
 }
 
-/**
- * What this browser is told about its access, one thing at a time: that it joined and until when, once for each
- * access, and that the access ends soon, which supersedes it.
- */
 type AccessNotice = "none" | "joined" | "ending";
 
-/** What to tell this browser at `now` about access that ends at `expiresAt`, given what it was already told. */
 function accessNotice(expiresAt: string, now: number, acknowledged: AccessAcknowledgement | null): AccessNotice {
     const through = acknowledged?.expiresAt === expiresAt ? acknowledged.through : null;
     if (through === "ending") {
@@ -33,14 +27,10 @@ function accessNotice(expiresAt: string, now: number, acknowledged: AccessAcknow
 }
 
 type AccessExpiryState =
-    /** The term has not been read yet. */
     | { readonly kind: "unknown" }
-    /** The term could not be read. The next visible visit tries again. */
     | { readonly kind: "unavailable" }
-    /** `expiresAt` is null for access that does not end on its own, which has no notice. */
     | { readonly kind: "known"; readonly expiresAt: string | null; readonly notice: AccessNotice };
 
-/** The card this browser should show, or null when access has nothing new to say. */
 export function visibleAccessNotice(
     state: AccessExpiryState,
 ): { readonly expiresAt: string; readonly notice: "joined" | "ending" } | null {
@@ -52,9 +42,7 @@ export function visibleAccessNotice(
 
 export interface AccessExpiryStore {
     readonly state: AccessExpiryState;
-    /** Reads when access ends while the page is visible, and tells this browser about it at most once each way. */
     readonly onAttach: (node: HTMLElement | null) => (() => void) | undefined;
-    /** The user saw the notice shown; it is not shown again for the same access. */
     readonly dismiss: () => void;
 }
 

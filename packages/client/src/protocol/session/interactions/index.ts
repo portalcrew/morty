@@ -54,7 +54,6 @@ const elicitationFieldBase = {
 };
 const lengthBound = z.number().int().nonnegative();
 
-/** A form field holds only the default and the limits its own type takes. */
 const elicitationFieldSchema = z.discriminatedUnion("type", [
     z.object({ ...elicitationFieldBase, default: z.boolean().optional(), type: z.literal("boolean") }).readonly(),
     z
@@ -109,7 +108,6 @@ const elicitationFieldSchema = z.discriminatedUnion("type", [
 
 export type SessionElicitationField = z.infer<typeof elicitationFieldSchema>;
 
-/** The value a form field is answered with. */
 const elicitationAnswerValueSchema = z.union([
     z.string().max(100_000),
     z.number().finite(),
@@ -153,7 +151,6 @@ const sessionPermissionRespondBase = {
     target: nativeSessionTargetSchema,
 };
 
-/** An answer chooses one of the offered options, or declines them all; only a choice names an option. */
 const sessionPermissionRespondCommandSchema = z.discriminatedUnion("outcome", [
     z
         .object({
@@ -203,7 +200,6 @@ const elicitationUrlRequest = {
     url: z.string().min(1).max(4_096),
 };
 
-/** The Agent asks for a form to be filled, or for the user to visit a URL; each mode carries only its own data. */
 export const sessionElicitationRequestedEventSchema = z.discriminatedUnion("mode", [
     z
         .object({
@@ -235,10 +231,6 @@ const sessionElicitationRespondBase = {
     target: nativeSessionTargetSchema,
 };
 
-/**
- * The user's answer. A form is accepted with its content, a URL by going to it; a request of the other mode is
- * refused with invalid_elicitation_response.
- */
 const sessionElicitationRespondCommandSchema = z.discriminatedUnion("action", [
     z
         .object({
@@ -265,7 +257,6 @@ export const sessionElicitationResolvedEventSchema = z
 
 export type SessionElicitationResolvedEvent = z.infer<typeof sessionElicitationResolvedEventSchema>;
 
-/** Answers one permission or elicitation response request: the Agent received the user's answer. */
 const sessionInteractionAnsweredEventSchema = z
     .object({
         interactionId: IDENTIFIER,

@@ -69,11 +69,6 @@ const nativeUserMessageSchema = z.object({
     ]),
 });
 
-/**
- * Map pi's `stats.contextUsage` to an ACP `usage_update`. Returns null whenever pi
- * reports no trustworthy token count (e.g. `tokens: null` right after compaction) or
- * the values are not usable integers.
- */
 function toUsageUpdate(stats: PiSessionStats | null | undefined): PiSessionUpdate | null {
     const used = stats?.contextUsage?.tokens;
     const size = stats?.contextUsage?.contextWindow;
@@ -205,7 +200,6 @@ export class SessionManager {
         private readonly processes: PiProcessHost,
     ) {}
 
-    /** Dispose all sessions and their underlying pi subprocesses. */
     async disposeAll(): Promise<void> {
         await Promise.allSettled([...this.creating]);
         for (const [id] of this.sessions) {
@@ -221,15 +215,10 @@ export class SessionManager {
         }
     }
 
-    /** Get a registered session if it exists (no throw). */
     maybeGet(sessionId: string): PiAcpSession | undefined {
         return this.sessions.get(sessionId);
     }
 
-    /**
-     * Dispose a session's underlying pi process and remove it from the manager.
-     * Used when clients explicitly reload a session and we want a fresh pi subprocess.
-     */
     close(sessionId: string): void {
         const s = this.sessions.get(sessionId);
         if (!s) {
@@ -244,13 +233,10 @@ export class SessionManager {
                     /* Retain failed cleanup so disposal reports it. */
                 },
             );
-        } catch {
-            // ignore
-        }
+        } catch {}
         this.sessions.delete(sessionId);
     }
 
-    /** Close all sessions except the one with `keepSessionId`. */
     closeAllExcept(keepSessionId: string): void {
         for (const [id] of this.sessions) {
             if (id === keepSessionId) {
@@ -336,10 +322,6 @@ export class SessionManager {
         return s;
     }
 
-    /**
-     * Used by session/load: create a session object bound to an existing sessionId/proc
-     * if it isn't already registered.
-     */
     getOrCreate(
         sessionId: string,
         params: Omit<SessionCreateParams, "environment" | "piCommand" | "origin"> & { proc: PiRpcProcess },
@@ -376,15 +358,10 @@ export class PiAcpSession {
     private readonly extensionQuestions: PiExtensionQuestions;
     private readonly fileCommands: FileSlashCommand[];
 
-    // Used to map abort semantics to ACP stopReason.
-    // Applies to the currently running turn.
     private cancelRequested = false;
 
-    // Final model error reported by pi's auto_retry_end after retries were exhausted.
-    // Cleared when a turn starts; settleTurn() rejects the ACP prompt with it.
     private turnRetryFailure: string | null = null;
 
-    // Current in-flight turn (if any). Additional prompts are queued.
     private pendingTurn: PendingTurn | null = null;
     private readonly turnQueue: QueuedTurn[] = [];
     // Track tool call statuses and ensure they are monotonic (pending -> in_progress -> completed).
@@ -425,7 +402,6 @@ export class PiAcpSession {
         return this.activeCompactionId;
     }
 
-    /** Opening half of compactionId: always returns an id. */
     private openCompactionId(): string {
         return this.compactionId(true) ?? randomUUID();
     }
@@ -518,7 +494,6 @@ export class PiAcpSession {
         const turnPromise = new Promise<StopReason>((resolve, reject) => {
             const queued: QueuedTurn = { message: expandedMessage, images, resolve, reject };
 
-            // If a turn is already running, enqueue.
             if (this.pendingTurn) {
                 this.turnQueue.push(queued);
 
@@ -532,8 +507,6 @@ export class PiAcpSession {
                     },
                 });
 
-                // Also publish queue depth via session info metadata.
-                // This also not visible in the client
                 this.emit({
                     sessionUpdate: "session_info_update",
                     _meta: { piAcp: { queueDepth: this.turnQueue.length, running: true } },
@@ -542,7 +515,6 @@ export class PiAcpSession {
                 return;
             }
 
-            // No turn is running; start immediately.
             this.startTurn(queued);
         });
 
@@ -595,7 +567,6 @@ export class PiAcpSession {
     }
 
     async cancel(): Promise<void> {
-        // Cancel current and clear any queued prompts.
         this.cancelRequested = true;
         this.extensionQuestions.endTurn();
 
@@ -615,7 +586,6 @@ export class PiAcpSession {
             });
         }
 
-        // Abort the currently running turn (if any). If nothing is running, this is a no-op.
         try {
             await this.proc.abort();
         } catch (cause) {
@@ -631,7 +601,6 @@ export class PiAcpSession {
     }
 
     private emit(update: PiSessionUpdate): void {
-        // Serialize update delivery.
         this.lastEmit = this.lastEmit
             .then(() =>
                 this.conn.sessionUpdate({
@@ -703,7 +672,6 @@ export class PiAcpSession {
         }
         this.pendingTurn = null;
 
-        // Start next queued prompt, if any.
         const next = this.turnQueue.shift();
         if (next) {
             this.emit({
@@ -842,7 +810,6 @@ export class PiAcpSession {
                     this.turnRetryFailure = null;
                 }
 
-                // Stream assistant text.
                 if (ame?.type === "text_delta" && typeof ame.delta === "string") {
                     this.emit({
                         sessionUpdate: "agent_message_chunk",
@@ -916,8 +883,6 @@ export class PiAcpSession {
                                 rawInput,
                             });
                         } else {
-                            // Best-effort: keep rawInput updated while args are streaming.
-                            // Keep the existing status (pending or in_progress).
                             this.emit({
                                 sessionUpdate: "tool_call_update",
                                 toolCallId,
@@ -931,7 +896,6 @@ export class PiAcpSession {
                     break;
                 }
 
-                // Ignore other delta/event types for now.
                 break;
             }
 
@@ -985,7 +949,6 @@ export class PiAcpSession {
 
                 const locations = toToolCallLocations(args, this.cwd, line);
 
-                // If we already surfaced the tool call while the model streamed it, just transition.
                 if (!this.currentToolCalls.has(toolCallId)) {
                     this.currentToolCalls.set(toolCallId, "in_progress");
                     this.emit({
@@ -1076,9 +1039,7 @@ export class PiAcpSession {
                                 },
                             ];
                         }
-                    } catch {
-                        // ignore; fall back to text only
-                    }
+                    } catch {}
                 }
 
                 if (!content && !hasStructuredDiff && text) {

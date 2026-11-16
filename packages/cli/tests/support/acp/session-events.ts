@@ -61,7 +61,6 @@ type ExecutionState =
       }
     | { readonly kind: "closed" };
 
-/** ACP subscription lifetime, ordered delivery and harness normalization belong to the adapter. */
 export class AdapterSessionConnection {
     readonly #connection: AgentConnection;
     readonly #onBackgroundActivity: (activity: BackgroundActivity) => void;
@@ -279,7 +278,6 @@ export class AdapterSessionConnection {
     };
 }
 
-/** Query connections for the stateful controlled ACP peer. */
 export class AcpSessionConnector {
     readonly #externalizer: Pick<AcpContentExternalizer, "update">;
     constructor(externalizer: Pick<AcpContentExternalizer, "update">) {

@@ -58,7 +58,6 @@ function isIdentifiedNotification(notification: SessionNotification): notificati
     }
 }
 
-/** Stateful controlled ACP peer transport used only by daemon integration scenarios. */
 export class ControlledAcpConnection implements AgentConnection {
     readonly connection: ClientConnection;
     readonly termination: Promise<AgentTermination>;

@@ -43,7 +43,6 @@ const waitForLifecycle = async (peer: RealDaemonPeer, commandId: string, kind: s
     }
 };
 
-/** Reads the Session execution the way a reconnecting client does, optionally naming one command. */
 const readExecution = async (peer: RealDaemonPeer, commandId?: string) => {
     const requestId = randomUUID();
     peer.send(
@@ -342,7 +341,6 @@ test.for([
                             target: peer.target,
                         }),
                     );
-                    // The steering prompt and the turn it joined settle in either order.
                     const settled = new Set<string>();
                     while (!settled.has(turn) || !settled.has(steering)) {
                         const event = decodeSessionLiveEvent(JSON.parse(await peer.nextEvent()));

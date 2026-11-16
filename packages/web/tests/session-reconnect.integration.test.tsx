@@ -37,7 +37,6 @@ function retrySeconds(app: TestApp): number {
     return Number(match[1]);
 }
 
-/** How the composer notice slot is placed: floating over the log, or in flow above a queue/interaction stack. */
 function noticePlacement(app: TestApp): string | null {
     const notice = app.optionalElementByTestId(dataTestId.sessionReconnectNotice);
     return notice?.closest("[data-notice-placement]")?.getAttribute("data-notice-placement") ?? null;
@@ -112,7 +111,6 @@ test("Given native operation capacity is occupied, When I reopen a saved Session
     expectSendExplainsConnection();
     release.resolve();
     await Promise.all(reads);
-    // The first automatic retry has a five-second ceiling; advance application time past its whole countdown.
     await act(async () => clock.advanceBy(5000));
     await reloaded.waitForView(() => {
         expect(reloaded.optionalElementByTestId(dataTestId.sessionLoadFailure)).toBeNull();
@@ -446,8 +444,6 @@ test("Given a failed Agent turn, When its Computer reconnects and the conversati
         expect(composer.disabled).toBe(false);
         expect(reconnectStatusText(app)).toBeNull();
     });
-    // The restarted Computer's history restates how the turn ended from its execution receipt: once, with the summary
-    // the receipt keeps across a restart in place of the Agent's own error text.
     await app.waitForView(() => {
         expect(
             queryAllByText(document.body, "The local Agent could not complete the request", { exact: true }),
@@ -459,7 +455,6 @@ test("Given a failed Agent turn, When its Computer reconnects and the conversati
     });
     const reloaded = await app.reload();
     await reloaded.queryElementByTestId(dataTestId.messageComposer);
-    // A reload restates the same ending, once.
     await reloaded.waitForView(() => {
         expect(
             queryAllByText(document.body, "Internal error: The controlled Agent rejected this turn.", { exact: true }),
@@ -566,7 +561,6 @@ test("Given an unavailable Computer and an editable draft, When automatic retrie
     expect(
         queryByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" }),
     ).toBeNull();
-    // Retrying by hand restores the automatic retries, which reconnect once the computer is back.
     await app.user.click(getByRole(document.body, "button", { name: "Retry now" }));
     await showReconnectNotice(app, clock);
     const seconds = await app.waitForView(() => {

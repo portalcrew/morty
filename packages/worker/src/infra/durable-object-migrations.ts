@@ -1,4 +1,3 @@
-/** A committed migration of one Durable Object SQLite target, copied verbatim from its generated `.sql` file. */
 export interface DurableObjectMigration {
     readonly name: string;
     readonly sql: string;

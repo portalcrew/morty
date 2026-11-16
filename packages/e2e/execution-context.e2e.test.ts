@@ -16,7 +16,6 @@ for (const viewport of [
         const { page } = runtime;
         await page.setViewportSize(viewport);
         await runtime.openPairedChat();
-        // Wider windows keep the computer switcher in the sidebar; phones list the computer in the navigation drawer.
         const phone = viewport.width < 640;
         const computer = page.getByRole("button", { name: `Switch computer, ${computerName}` });
         const navigation = page.getByRole("button", { name: "Open navigation", exact: true });
@@ -26,13 +25,11 @@ for (const viewport of [
         const openDetails = async () => {
             await (phone ? navigation : computer).click();
             await expect(viewDetails).toBeVisible();
-            // A phone row is a 44px touch target; a desktop menu item is sized for a pointer.
             expect((await viewDetails.boundingBox())?.height).toBeGreaterThanOrEqual(phone ? 44 : 24);
             await viewDetails.click();
         };
         if (!phone) {
             await expect(computer).toHaveAccessibleDescription("Connection available");
-            // The switcher names the computer and shows its connection status.
             await expect(computer).toContainText("Online");
         }
         await page.getByRole("textbox", { name: "Message" }).fill("Verify execution context");
@@ -40,7 +37,6 @@ for (const viewport of [
         await expect(page.getByRole("article", { name: "Agent response" })).toBeVisible();
         const title = page.getByRole("button", { name: "Verify execution context", exact: true });
         if (phone) {
-            // The title, with its directory below it, stays within the header row beside the navigation button.
             const navigationBox = await navigation.boundingBox();
             const titleBox = await title.boundingBox();
             if (navigationBox === null || titleBox === null) {

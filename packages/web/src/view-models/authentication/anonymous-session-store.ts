@@ -54,10 +54,6 @@ export interface AnonymousSessionStore {
      * that no longer opens the page's computer is left, and null is returned; so is null when no access is active.
      */
     readonly currentAccess: (signal: AbortSignal) => Promise<AnonymousIdentity | null>;
-    /**
-     * A request made with the page's access was refused as unauthenticated. The access is confirmed again, once for
-     * requests refused together, and left when it no longer opens the computer. Settles once that check has.
-     */
     readonly credentialRejected: (signal: AbortSignal) => Promise<void>;
     /**
      * Another tab removed the access this page works with: it ended that access, found it ended, or replaced it with
@@ -67,7 +63,6 @@ export interface AnonymousSessionStore {
     readonly storedAccessRemoved: () => void;
 }
 
-/** The application owns and releases the workspace at these explicit transitions. */
 export type AnnounceIdentity = (session: ActiveAnonymousSession | null) => void;
 
 export const createAnonymousSessionStore = (
@@ -84,11 +79,6 @@ export const createAnonymousSessionStore = (
             set({ state });
             onIdentityChanged(state);
         };
-        /**
-         * The page's computer no longer opens with the access this browser had for it. Ended access is explained once
-         * and the page leaves that computer's address; other access that stopped opening it reports the link invalid.
-         * Neither switches to another computer by itself.
-         */
         const leave = (check: LostAccess) => {
             const fallback = lastComputerHref();
             switch (check.kind) {
@@ -188,8 +178,6 @@ export const createAnonymousSessionStore = (
                             set({ state: { kind: "unpaired" } });
                             return;
                         }
-                        // A place this browser remembered falls back to the computer's home when it is gone; a link
-                        // someone gave the user reports that it no longer opens.
                         const entry = resumesComputer() ? "restore" : "address";
                         if (scope === null) {
                             leave({ kind: "gone" });
@@ -210,8 +198,6 @@ export const createAnonymousSessionStore = (
                         activate(identity, entry, null);
                         return;
                     }
-                    // The computer whose access ended: this tab ended it before reloading, or the Worker reports that
-                    // access to a remembered computer was revoked.
                     let endedName =
                         centralSessionStorage.read(accessEndedNoticeEntry) === "ended"
                             ? (centralSessionStorage.read(accessEndedComputerEntry) ?? "the previous computer")

@@ -9,7 +9,6 @@ const placements: ReadonlyMap<string, ComputerManagementPlacement> = new Map([
     ["as", { locationHint: "apac-se" }],
 ]);
 
-/** A fixed creation reference recovers its computer; a new reference always allocates another one. */
 export async function accountComputerId(key: string, locationHint: ComputerLocationHint): Promise<string> {
     const digest = new Uint8Array(
         await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(["morty-computer-v1", key]))),
@@ -20,7 +19,6 @@ export async function accountComputerId(key: string, locationHint: ComputerLocat
     return encodeRelayComputerId({ locationHint }, localId);
 }
 
-/** Relay IDs contain a locally mapped shard code followed by a 144-bit local identifier. */
 function encodeRelayComputerId(placement: ComputerManagementPlacement, localId: string): string {
     for (const [code, candidate] of placements) {
         if (candidate.locationHint === placement.locationHint) {

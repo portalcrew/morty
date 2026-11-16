@@ -42,7 +42,6 @@ const readExecution = (peer: DaemonConnectionPeer, target: NativeSessionTarget, 
         }),
     );
 
-/** The Computer's answer to `requestId`: the execution it read, or the failure it refused the request with. */
 const answer = async (peer: DaemonConnectionPeer, requestId: string) => {
     for (;;) {
         const raw = await peer.nextMessage();

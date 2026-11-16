@@ -194,7 +194,6 @@ export class ComputerEncryptionStore {
         }
     };
 
-    /** The Computer's identity, created once: concurrent first uses publish one identity and all read it. */
     private readonly identity = async (signal: AbortSignal): Promise<EncryptionIdentity> => {
         const existing = await this.readIdentity(signal);
         if (existing !== null) {

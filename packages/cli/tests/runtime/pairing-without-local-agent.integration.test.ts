@@ -79,7 +79,6 @@ function agentlessEnvironment(stateDirectory: string): Readonly<NodeJS.ProcessEn
     });
 }
 
-/** Runs the built CLI with `input` piped to its standard input. */
 describe("pairing a computer without a local Agent", () => {
     it("Given no supported Agent is discoverable, When the computer redeems its pairing, Then it pairs and advertises an empty Agent directory", async ({
         signal,

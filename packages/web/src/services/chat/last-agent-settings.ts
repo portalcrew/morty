@@ -35,7 +35,6 @@ export function restoreLastAgentSettings(
     return { options: restored, restoredIds };
 }
 
-/** Remembers one setting the user chose, keeping their other choices for this Agent. */
 export function rememberAgentSettingChoice(
     computerId: string,
     harness: string,

@@ -31,9 +31,7 @@ const WRANGLER = path.join(REPO_ROOT, "node_modules", ".bin", "wrangler");
 const CHAT_CONFIG = "packages/e2e/fixtures/wrangler.chat.jsonc";
 const MORTY_LOCKFILE = path.join(REPO_ROOT, "pnpm-lock.yaml");
 const MORTY_INSTALLED_LOCKFILE = path.join(REPO_ROOT, "node_modules", ".pnpm", "lock.yaml");
-/** Fixed non-production Session signing secret, matching the e2e local stack. */
 const LOCAL_SESSION_SIGNING_SECRET = "local-development-only-session-signing-secret";
-/** An identifier the CLI and Relay accept for a harness or native session. */
 const HARNESS_IDENTIFIER_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/u;
 
 async function availablePort() {
@@ -266,7 +264,6 @@ function sanitizeCommandOutput(output, environment, args) {
     const values = Object.entries(environment)
         .filter(([key, value]) => sensitive.test(key) && typeof value === "string" && value.length > 0)
         .map(([, value]) => value);
-    // Also cover credentials supplied as CLI flags or Wrangler KEY:value bindings.
     for (const tokens of [args, process.argv.slice(2)]) {
         for (let index = 0; index < tokens.length; index += 1) {
             const match = /^([^:=]+)[:=](.*)$/u.exec(tokens[index]);
@@ -563,14 +560,6 @@ function readSetupRecord(line) {
     return null;
 }
 
-/**
- * Runs the installed CLI's `setup` flow with Morty's writable
- * location isolated under the stack's state directory. `morty/` isolates
- * Morty's saved setup state, CLI manager and connection
- * state, and `workspace/` is the default working directory. On success prints
- * one JSON record whose `handoffUrl` continues the setup identity in the
- * browser.
- */
 async function setup(options) {
     if (options.harness === undefined) {
         fail("--harness is required; pass the selected harness identifier, for example codex or claude");

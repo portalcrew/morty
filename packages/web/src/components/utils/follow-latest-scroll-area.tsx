@@ -15,7 +15,6 @@ import { ScrollArea } from "../ui/scroll-area.tsx";
 import { useLoadMoreOnScroll } from "./load-more-trigger.tsx";
 
 type FollowLatestScrollAreaProps = Omit<ComponentPropsWithoutRef<"div">, "ref" | "dir"> & {
-    /** Callers that need the element pass their ref; omitted, the area owns it. */
     readonly container?: RefObject<HTMLDivElement | null>;
     /**
      * Requests an older page when the top edge is reached. Providing it wires
@@ -35,21 +34,15 @@ type FollowLatestScrollAreaProps = Omit<ComponentPropsWithoutRef<"div">, "ref" |
      * re-arms.
      */
     readonly followRevision: number | null;
-    /** Shows a floating jump control while the latest content is out of view. */
     readonly jumpToLatest?: {
         readonly label: string;
         readonly working: boolean;
     };
     readonly showTopFade?: boolean;
-    /** Uses the product scrollbar while keeping this component's scroll ref on its viewport. */
     readonly useProductScrollbar?: boolean;
     readonly viewportClassName?: string;
 };
 
-/**
- * Keeps a scroll container pinned to its latest content until the user moves
- * away from the bottom. It has no knowledge of the content or its workflow.
- */
 export function FollowLatestScrollArea({
     container,
     loadOlder,

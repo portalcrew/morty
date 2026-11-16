@@ -36,7 +36,6 @@ test("Given an open conversation, When its Agent is renamed on the computer, The
 
     await daemon.replaceAgents([{ harness: "codex", label: "Codex Pro" }]);
 
-    // The conversation's own menu names the harness the way the computer now does.
     const after = await openAgentConfiguration(app);
     await app.waitForView(() => expect(getByRole(after, "heading", { name: "Codex Pro" })).toBeDefined());
 });
@@ -52,12 +51,10 @@ test("Given a new conversation draft, When its Agent is renamed on the computer,
     }
     await readyComposer(app);
     const details = await openExecutionDetails(app);
-    // The draft names its agent once its settings load.
     await app.waitForView(() => expect(details.textContent).toContain("Codex"));
     expect(details.textContent).not.toContain("Codex Pro");
 
     await daemon.replaceAgents([{ harness: "codex", label: "Codex Pro" }]);
 
-    // The open details follow the Computer configuration the page follows.
     await app.waitForView(() => expect(details.textContent).toContain("Codex Pro"));
 });

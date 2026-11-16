@@ -12,7 +12,6 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-    /* shadcn (Morty light) */
     --background: #fafafb;
     --foreground: #0e0f11;
     --card: #fafafb;
@@ -32,7 +31,6 @@
     --ring: #4f7cff;
     --focus-ring-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 20%, transparent);
 
-    /* Morty interaction layer */
     --morty-text-2: #454959;
     --morty-text-3: #666d7c;
     --morty-text-4: #bfc3c9;
@@ -41,7 +39,6 @@
     --morty-fill-opacity-3: rgba(11, 26, 57, 0.08);
     --morty-fill-opacity-4: rgba(11, 26, 57, 0.12);
 
-    /* Morty semantic tokens */
     --success: #2fb872;
     --copy-secondary: var(--morty-text-2);
     --surface-subtle: #f7f8f9;
@@ -52,7 +49,6 @@
     --surface-elevated: var(--popover);
     --primary-subtle: #e8f2ff;
 
-    /* radius (mirrors @theme) */
     --radius: 1.25rem;
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
@@ -61,7 +57,6 @@
     --radius-2xl: calc(var(--radius) * 1.6);
     --radius-overlay: 1.5rem;
 
-    /* module surfaces (chat pane, setup card, …) */
     --morty-shadow-module: 0 6px 56px rgba(0, 0, 0, 0.06);
 }
 
@@ -114,7 +109,6 @@
             transform: translateY(0);
         }
     }
-    /* The Working label sweeps a highlight across its glyphs without moving layout. */
     --animate-loading-text-shimmer: loading-text-shimmer 2.2s linear infinite;
     @keyframes loading-text-shimmer {
         from {
@@ -181,7 +175,6 @@
             opacity: 1;
         }
     }
-    /* radius */
     --radius: 1.25rem;
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
@@ -266,7 +259,6 @@
     box-shadow: var(--focus-ring-shadow);
 }
 
-/* Height travels to auto, and the close stays visible until that transition ends. */
 .disclosure-details {
     interpolate-size: allow-keywords;
 }

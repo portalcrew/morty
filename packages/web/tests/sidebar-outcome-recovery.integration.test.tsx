@@ -44,7 +44,6 @@ test("Given a background Session's failed status, When another viewer completes 
         throw new Error("Missing composer form");
     }
     const other = await first.openViewer();
-    // A conversation opens only once its page is connected; the list can show it before that.
     const established = await other.waitForView(() => {
         const row = entry(other, "Established session");
         expect(row).toHaveProperty("disabled", false);

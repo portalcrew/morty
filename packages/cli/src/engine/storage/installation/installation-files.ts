@@ -8,7 +8,6 @@ const MAXIMUM_FILE_BYTES = 16 * 1024;
 
 const installationDirectorySchema = z.string().brand<"InstallationDirectory">();
 
-/** The private directory containing daemon data. */
 export type InstallationDirectory = z.infer<typeof installationDirectorySchema>;
 
 export function installationDirectory(engineDataDir: string): InstallationDirectory {
@@ -21,7 +20,6 @@ export type InstallationFileRead =
     | { readonly kind: "unopenable"; readonly cause: unknown }
     | { readonly kind: "not-a-small-file" };
 
-/** Reads a small regular file. Errors after the file is open propagate. */
 export async function readInstallationFile(
     path: string,
     maximumBytes = MAXIMUM_FILE_BYTES,
@@ -43,7 +41,6 @@ export async function readInstallationFile(
     }
 }
 
-/** Replaces a file atomically with owner-only permissions, creating its directory when it is missing. */
 /**
  * Replaces a file with `text` durably: the new content reaches the disk before it replaces the old, and the rename
  * reaches the disk before this returns. A credential the Relay has already rotated must survive a crash or power loss.

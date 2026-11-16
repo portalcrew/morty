@@ -18,7 +18,6 @@ export class MortyApiError extends MortyError {
     }
 }
 
-/** A validated Computer reply, distinct from HTTP, malformed responses, and an attempt whose outcome is unknown. */
 export class MortyOperationError extends MortyError {
     /**
      * What the Computer's reply says of the operation: it `refused` it and nothing ran, it `applied` it already and

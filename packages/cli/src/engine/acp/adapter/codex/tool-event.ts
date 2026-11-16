@@ -58,7 +58,6 @@ function fitPayload(value: unknown): unknown {
     return { truncated: true, text: payloadText(value) };
 }
 
-/** Codex-owned fitting after media externalization, before SDK event validation. */
 export function fitCodexToolEvent(event: unknown): unknown {
     const decoded = toolEventSchema.safeParse(event);
     if (!decoded.success) {

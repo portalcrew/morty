@@ -1,11 +1,6 @@
 import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
 import type { NativeSessionTarget, SessionStatus } from "@portalcrew/morty-client/protocol";
 
-/**
- * Where the Session's current execution stands. `preparing`: the Session's Agent process is being readied and the
- * Agent does not hold the prompt; `started`: the Agent holds the prompt; `settled`: the Agent returned and the
- * execution is releasing the Session.
- */
 type ExecutionPhase = "preparing" | "started" | "settled";
 
 /**
@@ -20,7 +15,6 @@ interface Execution {
     readonly commandId: string;
     readonly phase: ExecutionPhase;
     readonly cancellation: Cancellation;
-    /** Aborts the execution's preparation; a cancellation stops a preparing execution through it. */
     readonly preparation: AbortController;
 }
 
@@ -43,11 +37,9 @@ export class ActiveExecutions {
 
     readonly isBusy = (sessionTarget: NativeSessionTarget): boolean => this.#entries.has(sessionTarget);
 
-    /** Whether the Session began executing the command and has not yet released it. */
     readonly executes = (sessionTarget: NativeSessionTarget, commandId: string): boolean =>
         this.#entries.get(sessionTarget)?.commandId === commandId;
 
-    /** A steering prompt can join only the named execution while the Agent holds it and no one is stopping it. */
     readonly acceptsSteering = (sessionTarget: NativeSessionTarget, targetCommandId: string): boolean => {
         const execution = this.#entries.get(sessionTarget);
         return (
@@ -57,7 +49,6 @@ export class ActiveExecutions {
         );
     };
 
-    /** The command whose prompt the Session's Agent holds, if any. */
     readonly agentCommand = (sessionTarget: NativeSessionTarget): string | undefined => {
         const execution = this.#entries.get(sessionTarget);
         return execution?.phase === "started" ? execution.commandId : undefined;
@@ -68,10 +59,6 @@ export class ActiveExecutions {
         return execution?.commandId === commandId && execution.cancellation.kind === "requested";
     };
 
-    /**
-     * Settles when the stop under way ends, however it ends: whoever asked for it is told its outcome, and the
-     * execution being cancelled only waits for it.
-     */
     readonly cancellation = (sessionTarget: NativeSessionTarget): Promise<void> | undefined => {
         const cancellation = this.#entries.get(sessionTarget)?.cancellation;
         return cancellation?.kind === "requested" && cancellation.attempt.kind === "stopping"
@@ -82,7 +69,6 @@ export class ActiveExecutions {
             : undefined;
     };
 
-    /** Begins the command's execution and returns the signal its preparation runs under. */
     readonly begin = (sessionTarget: NativeSessionTarget, commandId: string): AbortSignal => {
         if (this.#entries.has(sessionTarget)) {
             throw new Error("A Session executes one command at a time");

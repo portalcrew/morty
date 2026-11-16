@@ -1,6 +1,5 @@
 import * as v from "valibot";
 
-/** Creates an owner through the same public boundary as setup; no cloud service identity is seeded. */
 export async function createTestOwner(
     request: (request: Request) => Promise<Response>,
     origin: string,

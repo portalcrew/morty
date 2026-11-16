@@ -23,7 +23,6 @@ import type { ManagedSessionOperations } from "../infra/managed-session-operatio
 const OPENED_SESSION_CREDENTIAL_SECONDS = 900;
 const RENEWED_SESSION_CREDENTIAL_SECONDS = 600;
 
-/** The Relay issues no Session credential that lasts less than this. */
 export const MINIMUM_SESSION_CREDENTIAL_SECONDS = 60;
 
 /**
@@ -39,9 +38,7 @@ function sessionCredentialLifetime(usualSeconds: number, accessExpiresAt: number
 }
 
 export type ChatScope = {
-    /** When the requesting access ends, if it does; the Session credentials it obtains end no later. */
     readonly accessExpiresAt: number | null;
-    /** Whose access the request carries; the Session credentials it obtains last only while that access holds. */
     readonly holder: SessionAccessHolder;
     readonly computerId: string;
     readonly signal: AbortSignal;
@@ -154,13 +151,11 @@ export class ChatService {
         }
     };
 
-    /** The Sessions the Computer holds, most recently updated first. */
     readonly managedSessions = async (scope: ChatScope, command: SessionListCommandRouting) => {
         await this.#requirePairedComputer(scope);
         return await this.#relay.clientControl(command, scope.signal);
     };
 
-    /** The settings a new Session of this Agent starts with in the draft's directory. */
     readonly agentSettings = async (scope: ChatScope, command: AgentSettingsDiscoverCommandRouting) => {
         await this.#requirePairedComputer(scope);
         await this.#requireComputerAgent(scope, command.harness);
@@ -178,7 +173,6 @@ export class ChatService {
         );
     };
 
-    /** Issues a credential for a Session the Computer holds. */
     readonly nativeSessionAccess = async (scope: ChatScope, command: SessionPrepareCommandRouting) => {
         await this.#requirePairedComputer(scope);
         return await this.#withSession(scope, command.target, async () => {
@@ -224,7 +218,6 @@ export class ChatService {
         return await this.#relay.clientControl(input, scope.signal);
     };
 
-    /** Imports the native session a setup handoff names, found by its native identifier in the default workspace. */
     readonly continueNativeSession = async (
         scope: ChatScope,
         input: Extract<NativeSessionCommandRouting, { readonly action: "find" | "import" }>,
@@ -278,7 +271,6 @@ export class ChatService {
         input: Extract<NativeSessionCommandRouting, { readonly action: "fork" }>,
     ) => {
         await this.#requirePairedComputer(scope);
-        // Operation identity belongs to this Computer, regardless of which browser requests it.
         const scopedOperationId = await scopedNativeForkOperationId(scope.computerId, `fork\u0000${operationId}`);
         if (input.requestId !== scopedOperationId) {
             throw new ComputerManagementError("INVALID_REQUEST", "The fork operation does not match the route.", 400);
@@ -286,10 +278,6 @@ export class ChatService {
         return await this.#relay.clientControl(input, scope.signal);
     };
 
-    /**
-     * Setup's check that the computer's paired Computer offers `harness` and can open its settings in the default
-     * working directory. It records nothing: whether the Computer has a Runtime is the Relay's pairing.
-     */
     readonly verifyAgent = async (scope: ChatScope, command: AgentSettingsDiscoverCommandRouting) => {
         await this.#requireComputerAgent(scope, command.harness);
         return await this.#relay.discoverChatAgentSettings(command, scope.signal);

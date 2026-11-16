@@ -1,12 +1,5 @@
 import * as v from "valibot";
 
-/**
- * The Computer scope a Morty page carries in its URL query string
- * (`identity=<computerId>`). The matching access token lives in local
- * storage. Every component is schema-validated before use; anything that does
- * not decode is treated as absent.
- */
-
 const computerIdSchema = v.pipe(v.string(), v.regex(/^prj_(wn|ap|an|as)_01_[A-Za-z0-9_-]{24}$/u));
 
 export const identityScopeSchema = v.pipe(
@@ -18,7 +11,6 @@ export const identityScopeSchema = v.pipe(
 
 export type IdentityScope = v.InferOutput<typeof identityScopeSchema>;
 
-/** Serializes a Computer scope into its URL query value, validating it first. */
 export function encodeIdentityScope(scope: IdentityScope): string {
     const parsed = v.parse(identityScopeSchema, scope);
     return parsed.computerId;
@@ -34,7 +26,6 @@ export function hasIdentityScope(): boolean {
     return new URLSearchParams(window.location.search).has("identity");
 }
 
-/** Reads the scope of the page's current URL; null when absent or invalid. */
 export function readIdentityScope(): IdentityScope | null {
     const value = new URLSearchParams(window.location.search).get("identity");
     return value === null ? null : decodeIdentityScope(value);

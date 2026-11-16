@@ -16,7 +16,6 @@ export type SessionRenderItem =
           readonly messageId: string | null;
           readonly text: string;
           readonly questions: readonly AgentQuestion[];
-          /** No user message followed the questions yet. */
           readonly answerable: boolean;
       }
     | {

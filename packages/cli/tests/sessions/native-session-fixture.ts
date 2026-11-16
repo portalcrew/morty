@@ -41,7 +41,6 @@ class NativeSessionObserver implements SessionObserver {
             }
         }
     };
-    /** Settles once an Agent update matching `matches` arrives, or at once if one already has. */
     readonly nextUpdate = (matches: (update: AcpSessionUpdate) => boolean): Promise<void> => {
         if (this.updates.some(matches)) {
             return Promise.resolve();
@@ -72,7 +71,6 @@ export async function fixture(
     await mkdir(native);
     const previous = process.env["MORTY_FAKE_ACP_STATE_DIRECTORY"];
     process.env["MORTY_FAKE_ACP_STATE_DIRECTORY"] = native;
-    // Controlled ACP peers are used only for protocol-specific scenarios.
     const executable = join(temporary, "agent.mjs");
     await writeFile(executable, `#!${process.execPath}\nawait import(${JSON.stringify(acpUrl)});\n`, { mode: 0o700 });
     const harness = label === "Claude Code" ? "claude" : label === "Codex" ? "codex" : "pi";

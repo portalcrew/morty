@@ -87,7 +87,6 @@ export function ExecutionDetailsDialog({
                 <Dialog.Content
                     className={cn(
                         "fixed inset-x-0 bottom-0 z-[191] flex max-h-[85dvh] flex-col overflow-hidden rounded-t-[28px] pt-0 pb-[max(24px,env(safe-area-inset-bottom))] font-inter text-13 leading-5 text-foreground shadow-lg outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:flex sm:max-h-[calc(100dvh-2rem)] sm:max-w-[calc(100vw-24px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:border-white sm:bg-card sm:px-6 sm:pt-6 sm:pb-6",
-                        // Same phone-sheet surface as the other chat sheets: opaque card with a 1px white edge.
                         mobileSheetSurfaceClassName,
                         executionDetailsDialogDesktopWidthClassName,
                         overlaySurfaceRadiusClassName,
@@ -120,7 +119,6 @@ export function ExecutionDetailsDialog({
                             </Button>
                         </Dialog.Close>
                     </header>
-                    {/* 24px matches the text baseline of the other sheets' rows, which inset 16px inside their 8px list gutter. */}
                     <ScrollArea
                         className="min-h-0 flex-1 sm:-mx-1"
                         viewportClassName="h-full max-h-[inherit] px-6 sm:px-1"

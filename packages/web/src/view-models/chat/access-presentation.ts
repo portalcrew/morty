@@ -21,12 +21,10 @@ const momentFormat = new Intl.DateTimeFormat("en-US", {
     minute: "2-digit",
 });
 
-/** A moment the Worker reported, to the minute: when a device joined, or when a link or access ends. */
 export function formatMoment(time: string): string {
     return momentFormat.format(new Date(time));
 }
 
-/** Same instants as {@link formatMoment}, in fixed numeric form for compact device rows. */
 export function formatMomentNumeric(time: string): string {
     const date = new Date(time);
     const year = date.getFullYear();
@@ -48,7 +46,6 @@ function addedByLabel(device: LinkedDevice): string | null {
     }
 }
 
-/** Where a device joined from, as approximate as Cloudflare's location of its connection. */
 function joinedLocation(location: LinkedDevice["location"]): string | null {
     const city = location?.city ?? null;
     const country = location?.country ?? null;
@@ -63,10 +60,6 @@ function joinedLocation(location: LinkedDevice["location"]): string | null {
 
 export type LinkedDeviceDescriptionContext = "dialog" | "notice";
 
-/**
- * How a device that holds access through a link reads in lists: its name, then when and roughly where it joined, then
- * who added it and until when it keeps access.
- */
 export function describeLinkedDevice(
     device: LinkedDevice,
     context: LinkedDeviceDescriptionContext = "dialog",

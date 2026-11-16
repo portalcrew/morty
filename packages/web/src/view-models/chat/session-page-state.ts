@@ -34,15 +34,11 @@ import { createUserMessageCollapseStore, type UserMessageCollapseStore } from ".
  */
 export interface SessionPageState {
     readonly userMessageCollapse: UserMessageCollapseStore;
-    /** The Session's operations lifetime on this page; only its end cancels what the user asked the Session to do. */
     readonly lifetime: AbortSignal;
-    /** How the Session's operations reach the Computer through the connection of the pane following the Session. */
     readonly connection: SessionOperationConnection;
     readonly composer: StoreApi<SessionComposerStore>;
     readonly delivery: StoreApi<SessionDeliveryStore>;
-    /** The Session's execution: the one place that orders what the Computer reports about it. */
     readonly execution: StoreApi<SessionExecutionStore>;
-    /** The failure of the last operation the user asked of the Session, which the composer reports. */
     readonly feedback: StoreApi<SessionOperationFeedbackStore>;
     readonly interactions: StoreApi<SessionInteractionStore>;
     readonly queue: StoreApi<SessionMessageQueueStore>;
@@ -51,13 +47,11 @@ export interface SessionPageState {
     readonly tasks: StoreApi<SessionTaskControlsStore>;
 }
 
-/** Opens what the page holds for the Session, recovering what an earlier page persisted for it. */
 export function createSessionPageState(options: {
     readonly computerId: string;
     readonly sessionTarget: NativeSessionTarget;
     readonly clock: Clock;
     readonly refreshTitle: (signal: AbortSignal) => Promise<void>;
-    /** The page's lifetime, on which delivery and the Session's operations run. */
     readonly lifetime: AbortSignal;
 }): SessionPageState {
     const { computerId, sessionTarget } = options;
@@ -107,7 +101,6 @@ export function createSessionPageState(options: {
                 );
         },
     });
-    /** Answers the Agent through whichever pane follows the Session, within the answer's own budget. */
     const respond = async (
         interactionId: string,
         request: MortyInteractionResponseRequest,
@@ -119,7 +112,6 @@ export function createSessionPageState(options: {
             AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
         );
     };
-    // Answers typed into the Agent's questions belong to the Session, as its composer draft does.
     const answerDraftsEntry = elicitationAnswerDraftsEntry(computerId, sessionTarget);
     const interactions = createSessionInteractionStore({
         permission: (response, signal) =>
@@ -135,7 +127,6 @@ export function createSessionPageState(options: {
             }
         },
     });
-    // What the page derives from the Computer's account follows every move of the execution state.
     const execution = createSessionExecutionStore({
         changed: (previous, next) => {
             delivery.getState().observe();

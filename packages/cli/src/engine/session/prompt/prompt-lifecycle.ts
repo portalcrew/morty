@@ -44,7 +44,6 @@ function promptContent(command: SessionPromptCommand): readonly ContentBlock[] {
     return content;
 }
 
-/** The lifecycle metadata the Agent session records when it starts this claimed command. */
 export function promptLifecycle(
     command: SessionPromptCommand,
     context: PromptExecutionContext,
@@ -59,12 +58,10 @@ export function promptLifecycle(
     return { attemptId, content: promptContent(command), context, dispatch };
 }
 
-/** Whether a command started or settled, as its execution receipt records it. */
 type ExecutionProgress = Pick<ExecutionReceipts, "findUnsettledAttemptId" | "hasStarted" | "isTerminalExecution">;
 
 export class PromptLifecycle {
     readonly #sink: SessionEventSink;
-    /** Terminal events held until their command's admission and execution state are released. */
     readonly #terminal = new Map<string, SessionLiveEvent>();
     readonly #publications = new NativeSessionMap<SessionLiveEvent[]>();
     readonly #executions: ExecutionProgress;
@@ -94,7 +91,6 @@ export class PromptLifecycle {
     readonly record = (recorded: SessionLiveEvent): void => {
         const sessionTarget = recorded.target;
         if (recorded.type === "lifecycle-metadata" && isPromptTerminal(recorded.payload)) {
-            // Publish termination after prompt admission and execution state are settled.
             this.#terminal.set(recorded.payload.commandId, recorded);
             const pending = this.#publications.get(sessionTarget) ?? [];
             pending.push(recorded);

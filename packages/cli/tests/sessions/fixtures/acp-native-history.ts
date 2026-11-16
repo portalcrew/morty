@@ -215,7 +215,6 @@ export function registerHistory(agent: ReturnType<typeof acp.agent>) {
                     update: {
                         sessionUpdate: "user_message_chunk",
                         messageId: message.messageId,
-                        // Codex ACP replays persisted images as named text links.
                         content:
                             readAgentName() === "Codex"
                                 ? {

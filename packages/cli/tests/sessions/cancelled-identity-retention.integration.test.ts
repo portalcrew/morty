@@ -65,7 +65,6 @@ async function observe(peer: RealDaemonPeer, ids: readonly string[]) {
     return { started, failures, cancelled, output };
 }
 
-/** Reads the command's delivery the way a reconnecting client recovers an unconfirmed submission. */
 async function readDelivery(peer: RealDaemonPeer, commandId: string) {
     const requestId = randomUUID();
     peer.send(

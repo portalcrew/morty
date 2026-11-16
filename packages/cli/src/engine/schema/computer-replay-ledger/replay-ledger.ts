@@ -1,7 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-/** Every packet the Computer admitted that is still fresh: each fingerprint is admitted once until it expires. */
 export const replayClaim = sqliteTable(
     "replay_claim",
     {

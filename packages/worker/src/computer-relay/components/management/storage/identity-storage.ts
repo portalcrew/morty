@@ -17,7 +17,6 @@ import { type AnonymousIdentity, digest } from "./identity-storage-common.ts";
 
 type IdentityDatabase = DurableObjectDatabase["orm"];
 
-/** A link no device has used yet: it issued no credential. */
 function unusedLink(database: IdentityDatabase, linkId: SQLiteColumn = continueLink.id) {
     return notExists(
         database
@@ -95,7 +94,6 @@ function deviceAccessHeldUntil(
     return sql<number | null>`(CASE WHEN ${device.endedAt} IS NULL AND ${term} > ${now} THEN ${term} END)`;
 }
 
-/** The browser device `deviceId` holds access: it did not end and its term has not passed. */
 function deviceAccessHeld(database: IdentityDatabase, deviceId: SQLiteColumn, now: number) {
     return exists(
         database
@@ -107,17 +105,14 @@ function deviceAccessHeld(database: IdentityDatabase, deviceId: SQLiteColumn, no
     );
 }
 
-/** The browser credential's device holds access; replacing the credential keeps the device and its access. */
 function browserAccessHeld(database: IdentityDatabase, now: number) {
     return deviceAccessHeld(database, browserCredential.deviceId, now);
 }
 
-/** A browser credential that authenticates now: no newer credential of its device replaced it, and the device holds. */
 function browserCredentialInForce(database: IdentityDatabase, now: number) {
     return and(isNull(browserCredential.replacedAt), browserAccessHeld(database, now));
 }
 
-/** The one rule for the computer's own credential: it holds its own access until it is revoked. */
 function ownerAccessHeld(credential: { readonly revokedAt: SQLiteColumn } = ownerCredential) {
     return isNull(credential.revokedAt);
 }
@@ -152,7 +147,6 @@ function linkSharerHolds(database: IdentityDatabase, linkId: SQLiteColumn, now: 
     );
 }
 
-/** Ends the access of the matching browser devices whose access has not ended yet; ended access stays ended. */
 function endDevices(database: IdentityDatabase, devices: SQL | undefined, now: number) {
     return database
         .update(browserDevice)
@@ -175,7 +169,6 @@ function ownerCredentialHolds(database: IdentityDatabase, tokenHash: string) {
     );
 }
 
-/** The credential `tokenHash` still holds access: the computer's own, or a browser's whose device holds. */
 function credentialHolds(database: IdentityDatabase, tokenHash: string, now: number) {
     const browserHolds = exists(
         database
@@ -186,7 +179,6 @@ function credentialHolds(database: IdentityDatabase, tokenHash: string, now: num
     return sql`(${ownerCredentialHolds(database, tokenHash)} OR ${browserHolds})`;
 }
 
-/** How a browser joining through a link describes itself, and roughly where Cloudflare saw it connect from. */
 export interface JoiningDevice {
     readonly label: string | null;
     readonly location: ClientLocation | null;
@@ -208,7 +200,6 @@ export type StoredCredential = { readonly credentialId: string } & (
           readonly transferId: string;
           readonly deviceId: string;
           readonly replaced: boolean;
-          /** The device's term while it holds access; null once its access ended. */
           readonly accessHeldUntil: number | null;
       }
 );
@@ -322,10 +313,6 @@ export class IdentityStorage {
         return found !== undefined;
     };
 
-    /**
-     * This Computer's browser devices that hold access at `now`: each described by its first joining, with its term and who
-     * shared the link it joined through.
-     */
     readonly linkedDevices = async (now: number, signal: AbortSignal) => {
         signal.throwIfAborted();
         const database = this.#database.orm;
@@ -368,7 +355,6 @@ export class IdentityStorage {
             .where(and(eq(ownerCredential.tokenHash, tokenHash), ownerAccessHeld()))
             .get()) !== undefined;
 
-    /** Whether the credential `tokenHash` still holds access: the computer's own, or a browser's whose device holds. */
     readonly #credentialHolds = async (database: IdentityDatabase, tokenHash: string, now: number): Promise<boolean> =>
         (await this.#ownerHolds(database, tokenHash)) ||
         (await database
@@ -490,7 +476,6 @@ export class IdentityStorage {
         return await this.#credentialHolds(database, tokenHash, now);
     };
 
-    /** Claims an unopened predecessor and issues its successor atomically; retries read the committed issuance. */
     readonly createTransfer = async (
         parentToken: string,
         now: number,
@@ -557,7 +542,6 @@ export class IdentityStorage {
                         ),
                 ),
             );
-        // The unused link the issuer shared before and this one replaces; replacing it is recorded on this link alone.
         const predecessor = and(
             eq(predecessorLink.codeHash, replacesHash ?? ""),
             linkInForce(database, now, predecessorLink),
@@ -566,7 +550,6 @@ export class IdentityStorage {
         );
         const predecessorId = database.select({ id: predecessorLink.id }).from(predecessorLink).where(predecessor);
         const predecessorOpen = replacesHash === null ? undefined : exists(predecessorId);
-        // The link's columns in table order.
         const linkColumns = {
             id: sql<string>`${`transfer_${crypto.randomUUID()}`}`.as("id"),
             codeHash: sql<string>`${codeHash}`.as("code_hash"),
@@ -588,7 +571,6 @@ export class IdentityStorage {
             .insert(continueLink)
             .select(database.select(linkColumns).from(browserCredential).where(and(browserIssuer, predecessorOpen)))
             .onConflictDoNothing({ target: continueLink.codeHash });
-        // The access that shared the link is recorded in the same transaction; a link that already existed has its.
         const unshared = and(
             eq(continueLink.codeHash, codeHash),
             notExists(
@@ -671,7 +653,6 @@ export class IdentityStorage {
         const codeHash = await digest(code);
         const credentialId = `cred_${crypto.randomUUID()}`;
         const newDeviceId = `device_${crypto.randomUUID()}`;
-        // A link adds one device: only while no credential was issued through it.
         const open = and(
             eq(continueLink.codeHash, codeHash),
             linkInForce(database, now),
@@ -684,7 +665,6 @@ export class IdentityStorage {
         );
         const replacedHash = replaces === null ? null : await digest(replaces);
         const tokenHash = await digest(token);
-        // This Durable Object holds only this Computer's credentials.
         const replaced = eq(browserCredential.tokenHash, replacedHash ?? "");
         // The replaced credential may already be replaced by a concurrent or retried redemption in the same browser;
         // the device it belongs to is kept while that device holds access. The read and the writes below run with no
@@ -750,8 +730,6 @@ export class IdentityStorage {
             signal,
         );
         signal.throwIfAborted();
-        // Issued just now, or by an earlier attempt of this redemption whose reply was lost, while it still grants its
-        // device's access.
         const issuedThroughLink = await database
             .select({ id: browserCredential.id })
             .from(browserCredential)
@@ -808,7 +786,6 @@ export class IdentityStorage {
         if (meta.changes > 0) {
             return { kind: "ended" };
         }
-        // Nothing changed: the caller no longer holds access, or the device is unknown or already ended.
         if (!(await this.#credentialHolds(database, tokenHash, now))) {
             signal.throwIfAborted();
             return { kind: "callerEnded" };

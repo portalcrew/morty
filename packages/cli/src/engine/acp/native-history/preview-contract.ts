@@ -14,7 +14,6 @@ import type { PromptContent } from "../client/prompt-content.ts";
 import type { AcpContentExternalizer, ExternalizeSessionUpdate } from "../content/content-externalizer.ts";
 import type { NativeSessionInfo, NativeSessionPage } from "../protocol/native-session.ts";
 
-/** One page of a saved native session's events. */
 export interface SessionEventPage {
     readonly throughPosition: string;
     readonly events: readonly SessionEvent[];
@@ -22,23 +21,19 @@ export interface SessionEventPage {
     readonly sessionGenerationId: string;
 }
 
-/** What a caller wants to preview from a saved native session. */
 export interface NativeSessionPreviewRequest {
     readonly sessionId: string;
     readonly eventLimit: number;
     readonly cursor: string | null;
 }
 
-/** Shared runtime resources; each adapter owns the query resources it acquires. */
 export interface AdapterDependencies {
     readonly processes: AgentProcessPool;
     readonly contentExternalizer: AcpContentExternalizer;
 }
 
-/** Constructs one harness adapter for a runtime. */
 export type AdapterResolver = (agent: AcpAgentDefinition, dependencies: AdapterDependencies) => Adapter;
 
-/** Validated query scope; contains no execution-session recovery or process controls. */
 export interface NativeSessionQuery {
     readonly agent: AcpAgentDefinition;
     readonly cwd: string;
@@ -46,7 +41,6 @@ export interface NativeSessionQuery {
     readonly externalizeUpdate?: ExternalizeSessionUpdate;
 }
 
-/** Application lookup budget; null allows all entries within the page budget. */
 export interface NativeSessionLookupBudget {
     readonly maximumPages: number;
     readonly maximumEntries: number | null;
@@ -63,7 +57,6 @@ export interface AdapterPromptResult {
     readonly _meta?: PromptMetadata | null;
 }
 
-/** Normalized lifecycle output; no harness response escapes into business state. */
 export interface AdapterSessionOpened {
     readonly sessionId: string;
     readonly capabilities: SessionCapabilities;
@@ -106,7 +99,6 @@ export type NativeHistoryRevision =
     | { readonly kind: "untracked" }
     | { readonly kind: "tracked"; readonly latestEntryId: string };
 
-/** Business-facing session operations. Transport and initialization belong to the adapter. */
 export interface Adapter {
     readonly refreshAgent: (agent: AcpAgentDefinition) => void;
     readonly createSession: (params: AdapterSessionCreateParams) => Promise<AdapterSessionOpened>;
@@ -121,10 +113,9 @@ export interface Adapter {
     readonly prompt: (
         params: AdapterSessionOperation & { readonly content: PromptContent },
     ) => Promise<AdapterPromptResult>;
-    readonly steer: (params: AdapterSessionOperation & { readonly content: PromptContent }) => Promise<
-        // An Agent that reports it names the user message the steering recorded in the turn it joined.
-        { readonly outcome: "injected"; readonly messageId?: string }
-    >;
+    readonly steer: (
+        params: AdapterSessionOperation & { readonly content: PromptContent },
+    ) => Promise<{ readonly outcome: "injected"; readonly messageId?: string }>;
     readonly renameSession: (params: AdapterSessionOperation & { readonly title: string }) => Promise<void>;
     readonly configureSession: (
         params: AdapterSessionOperation & { readonly selection: SessionConfigurationSelection },

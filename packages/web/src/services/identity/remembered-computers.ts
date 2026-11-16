@@ -27,25 +27,19 @@ export function rememberComputerEncryption(access: ComputerEncryptionAccess): vo
     }
 }
 
-/**
- * The computers this browser can open, most recently used first. Each remembered Computer keeps its own access token.
- */
 export function rememberedComputers(): readonly RememberedComputer[] {
     return openable(readStoredAccess()).toSorted((a, b) => b.lastUsedAt - a.lastUsedAt);
 }
 
-/** The token this browser holds for a Computer. */
 export function storedToken(computerId: string): string | null {
     return readStoredAccess().credentials.get(computerId) ?? null;
 }
 
-/** The access this browser holds for a remembered Computer, or null when it holds none. */
 export function storedTokenForComputer(computerId: string): string | null {
     const computer = rememberedComputers().find((entry) => entry.scope.computerId === computerId);
     return computer === undefined ? null : storedToken(computer.scope.computerId);
 }
 
-/** Keeps a newly issued access: its token, and its computer behind those already visited. */
 function saveAccessWhileLocked(scope: IdentityScope, token: string): void {
     updateComputers(withComputer(rememberedComputers(), scope), { added: { computerId: scope.computerId, token } });
 }
@@ -60,10 +54,6 @@ export interface StoredAccessWriter {
     readonly forgetRejected: (scope: IdentityScope, token: string) => boolean;
 }
 
-/**
- * Runs a change to the access this browser stores while no other tab of the browser changes it: opening a link reads
- * the access it replaces and saves the new one, and ending access reads the access it ends.
- */
 export async function withStoredAccessLock<T>(
     signal: AbortSignal,
     change: (access: StoredAccessWriter) => Promise<T>,
@@ -77,7 +67,6 @@ export async function withStoredAccessLock<T>(
         : await locks.request("morty-stored-access", { signal }, perform);
 }
 
-/** The access that replaced `rejected` for this Computer, once another tab saved it, or null when none did. */
 export async function replacedToken(computerId: string, rejected: string, signal: AbortSignal): Promise<string | null> {
     return await withStoredAccessLock(signal, async () => {
         const current = storedToken(computerId);
@@ -132,10 +121,6 @@ export function computerAddress(scope: IdentityScope, destination: ComputerDesti
     return `/chat?${query}`;
 }
 
-/**
- * Where "Back to your last computer" leads: the root, which opens the computer this browser used most recently. Null
- * when the browser remembers none.
- */
 export function lastComputerHref(): string | null {
     return rememberedComputers().length > 0 ? "/" : null;
 }
@@ -151,7 +136,6 @@ export function resumeComputerAddress(scope: IdentityScope, destination: Compute
     return `${computerAddress(scope, destination)}&${RESUME_PARAMETER}=1`;
 }
 
-/** Whether the address continues where this browser left a computer. */
 export function resumesComputer(): boolean {
     return new URL(window.location.href).searchParams.has(RESUME_PARAMETER);
 }
@@ -192,12 +176,10 @@ function readStoredAccess(): StoredAccess {
     return { credentials, computers };
 }
 
-/** The computers this version can open: those whose token it can read. */
 function openable(stored: StoredAccess): readonly RememberedComputer[] {
     return stored.computers.filter((computer) => stored.credentials.has(computer.scope.computerId));
 }
 
-/** The list with this computer in it. A new computer goes last, which makes room by dropping the least recent one. */
 function withComputer(saved: readonly RememberedComputer[], scope: IdentityScope): readonly RememberedComputer[] {
     if (saved.some((computer) => computerKey(computer.scope) === computerKey(scope))) {
         return saved;

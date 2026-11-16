@@ -45,7 +45,6 @@ test("Given local and browser credentials, When their operations end access, The
         v.object({ computerToken: v.string() }),
         await (await redeem(await share())).json(),
     ).computerToken;
-    // Another device retains its independent browser access.
     expect((await redeem(await share())).status).toBe(200);
     const operations = [
         { token: owner.token, path: "/identity/local-credential" },
@@ -124,7 +123,6 @@ test("Given a browser that joined through a link, When it asks for a Computer pa
             expect(await refused.json()).toMatchObject({ error: { code: "LOCAL_IDENTITY_REQUIRED" } });
         }
     }
-    // Shared access still shares onward, as the sharing dialog offers, and still ends itself.
     expect(
         (await request(`${computerPath}/identity/transfers`, browser, "POST", { operationId: crypto.randomUUID() }))
             .status,

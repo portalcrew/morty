@@ -15,8 +15,6 @@ const DEFAULT_TAIL_BYTES = 256 * 1024;
 const DEFAULT_HEAD_BYTES = 64 * 1024;
 
 function getPiAgentDir(environment: Readonly<NodeJS.ProcessEnv>): string {
-    // pi supports overriding config dir via PI_CODING_AGENT_DIR.
-    // See pi README.
     const configured = environment["PI_CODING_AGENT_DIR"];
     return configured ? resolve(configured) : join(environmentHome(environment), ".pi", "agent");
 }
@@ -72,7 +70,6 @@ function getPiSessionDiscoveryDirs(environment: Readonly<NodeJS.ProcessEnv>): st
 function walkJsonlFiles(dir: string, out: string[]) {
     let entries: Dirent[];
     try {
-        // Force string names.
         entries = readdirSync(dir, { withFileTypes: true, encoding: "utf8" }) as unknown as Dirent[];
     } catch {
         return;
@@ -106,9 +103,7 @@ function readFirstLine(path: string): string | null {
     } finally {
         try {
             closeSync(fd);
-        } catch {
-            // ignore
-        }
+        } catch {}
     }
 }
 
@@ -125,9 +120,7 @@ function readTail(path: string, tailBytes = DEFAULT_TAIL_BYTES): string {
     } finally {
         try {
             closeSync(fd);
-        } catch {
-            // ignore
-        }
+        } catch {}
     }
 }
 
@@ -149,8 +142,6 @@ function parseSessionHeader(firstLine: string): { sessionId: string; cwd: string
 }
 
 function pickTitleFromTail(tail: string): string | null {
-    // Try to find the *latest* session_info entry (stores the user-provided name).
-    // We scan backwards line-by-line.
     const lines = tail.split(/\r?\n/);
     for (let index = lines.length - 1; index >= 0; index--) {
         const line = lines[index]?.trim() ?? "";
@@ -162,16 +153,12 @@ function pickTitleFromTail(tail: string): string | null {
             if (obj?.type === "session_info" && typeof obj?.name === "string" && obj.name.trim()) {
                 return obj.name.trim();
             }
-        } catch {
-            // ignore
-        }
+        } catch {}
     }
     return null;
 }
 
 function scanSessionInfoNameFromFile(path: string): string | null {
-    // Fallback when the session_info entry is older than our tail window.
-    // Scan the whole file line-by-line and remember the last session_info.name.
     const fd = openSync(path, "r");
     try {
         const buf = Buffer.alloc(256 * 1024);
@@ -200,9 +187,7 @@ function scanSessionInfoNameFromFile(path: string): string | null {
                     if (obj?.type === "session_info" && typeof obj?.name === "string" && obj.name.trim()) {
                         lastName = obj.name.trim();
                     }
-                } catch {
-                    // ignore
-                }
+                } catch {}
             }
         }
 
@@ -214,9 +199,7 @@ function scanSessionInfoNameFromFile(path: string): string | null {
                 if (obj?.type === "session_info" && typeof obj?.name === "string" && obj.name.trim()) {
                     lastName = obj.name.trim();
                 }
-            } catch {
-                // ignore
-            }
+            } catch {}
         }
 
         return lastName;
@@ -225,18 +208,13 @@ function scanSessionInfoNameFromFile(path: string): string | null {
     } finally {
         try {
             closeSync(fd);
-        } catch {
-            // ignore
-        }
+        } catch {}
     }
 }
 
 function pickUpdatedAtFromTail(tail: string): string | null {
-    // pi's `/resume` effectively orders sessions by last *message* activity.
-    // We scan backwards and pick the timestamp of the most recent entry with type === "message".
     const lines = tail.split(/\r?\n/);
 
-    // 1) Prefer the most recent message entry.
     for (let index = lines.length - 1; index >= 0; index--) {
         const line = lines[index]?.trim() ?? "";
         if (!line) {
@@ -255,12 +233,9 @@ function pickUpdatedAtFromTail(tail: string): string | null {
             if (Number.isFinite(d.getTime())) {
                 return d.toISOString();
             }
-        } catch {
-            // ignore
-        }
+        } catch {}
     }
 
-    // 2) Fallback: any valid timestamp (covers sessions that somehow have no messages).
     for (let index = lines.length - 1; index >= 0; index--) {
         const line = lines[index]?.trim() ?? "";
         if (!line) {
@@ -276,9 +251,7 @@ function pickUpdatedAtFromTail(tail: string): string | null {
             if (Number.isFinite(d.getTime())) {
                 return d.toISOString();
             }
-        } catch {
-            // ignore
-        }
+        } catch {}
     }
 
     return null;
@@ -309,9 +282,7 @@ function pickFallbackTitleFromHead(path: string): string | null {
                         }
                     }
                 }
-            } catch {
-                // ignore
-            }
+            } catch {}
 
             // Avoid scanning extremely large files fully.
             // If we didn't find a user message in the first ~2000 lines, give up.
@@ -320,9 +291,7 @@ function pickFallbackTitleFromHead(path: string): string | null {
                 break;
             }
         }
-    } catch {
-        // ignore
-    }
+    } catch {}
 
     return null;
 }
@@ -360,16 +329,13 @@ export function listPiSessions(environment: Readonly<NodeJS.ProcessEnv> = proces
             const tail = readTail(file);
             title = pickTitleFromTail(tail);
             updatedAt = pickUpdatedAtFromTail(tail);
-        } catch {
-            // ignore
-        }
+        } catch {}
 
         // If the session was named early and grew large, it may fall outside of the tail window.
         if (!title) {
             title = scanSessionInfoNameFromFile(file);
         }
 
-        // Fallback for updatedAt when we couldn't parse timestamps from tail.
         if (!updatedAt) {
             try {
                 updatedAt = statSync(file).mtime.toISOString();
@@ -391,7 +357,6 @@ export function listPiSessions(environment: Readonly<NodeJS.ProcessEnv> = proces
         });
     }
 
-    // Sort most recent first.
     items.sort((a, b) => {
         const aa = a.updatedAt ?? "";
         const bb = b.updatedAt ?? "";

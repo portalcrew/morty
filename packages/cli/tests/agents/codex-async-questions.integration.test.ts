@@ -91,7 +91,6 @@ test("Given a real Codex model that asks the user a question while it keeps work
                 break;
             }
         }
-        // Previewing the saved Codex thread replays it from Codex itself.
         const identity = {
             harness: "codex",
             directory: ".",

@@ -7,7 +7,6 @@ import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-ob
 import { computerObjectName } from "../../src/contracts/computer-id.ts";
 import type { RelayBindings } from "../../src/contracts/relay-bindings.ts";
 
-/** The computer's store and access as its ComputerRelay composes them over the object's storage. */
 export function computerAccess(computerId: string, storage: DurableObjectStorage) {
     const database = new DurableObjectDatabase(storage);
     const store = new ComputerRelayStore(database);
@@ -17,7 +16,6 @@ export function computerAccess(computerId: string, storage: DurableObjectStorage
     };
 }
 
-/** Seeds a committed revocation through the production store and applies it to the object's real connections. */
 export async function revokeTestComputer(bindings: RelayBindings, computerId: string, signal: AbortSignal) {
     await runInDurableObject(
         bindings.COMPUTER_RELAY.getByName(computerObjectName(computerId)),

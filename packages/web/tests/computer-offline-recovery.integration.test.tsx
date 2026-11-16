@@ -19,7 +19,6 @@ function sidebarAlerts(): (string | null)[] {
     return queryAllByRole(sidebar, "alert").map((alert) => alert.textContent);
 }
 
-/** The accessible label of the status a directory entry shows, or null when it shows none. */
 function entryStatus(app: TestApp, title: string): string | null {
     const entry = app
         .elementsByTestId(dataTestId.managedConversation)
@@ -148,9 +147,7 @@ test("Given a background reply is running when the Computer goes offline, When t
     });
     await app.user.click(app.elementByTestId(dataTestId.newConversation));
     await app.waitForView(() => expect(directoryTitles(app)).toHaveLength(1));
-    // Another page starts a reply in the background conversation that is still running when the Computer goes away.
     const viewer = await app.openViewer();
-    // A conversation opens only once its page is connected, and the draft page's composer is ready before that.
     await viewer.user.click(
         await viewer.queryElementByTestId(
             dataTestId.managedConversation,
@@ -190,7 +187,6 @@ for (const context of ["missing", "malformed", "different-session", "different-i
         }
         await sendPrompt(app, await readyComposer(app), "Private saved conversation");
         await app.waitForView(() => expect(agentAnswered(app, "Codex turn 1: Private saved conversation")).toBe(true));
-        // Browser persistence is an external input. Exercise invalid/absent data through a real page reload.
         const keys = Object.keys(window.sessionStorage).filter((key) => key.startsWith("morty:remembered-session:v1:"));
         for (const key of keys) {
             const saved = window.sessionStorage.getItem(key);
@@ -290,7 +286,6 @@ test("Given the New Session page while the computer is offline, When an attachme
         throw new Error("Expected the New Session composer form");
     }
     const form = composer.form;
-    // An empty file is rejected by the same reader the composer uses for real picks.
     fireEvent.change(getByLabelText(form, "Choose attachments"), {
         target: { files: [new File([new Uint8Array(0)], "empty.txt", { type: "text/plain" })] },
     });
@@ -304,7 +299,6 @@ test("Given the New Session page while the computer is offline, When an attachme
     if (alert === undefined) {
         throw new Error("Expected the attachment failure alert");
     }
-    // One headline, one assertive region: the offline status is its inline detail.
     expect(queryAllByRole(alert, "alert")).toHaveLength(0);
     expect(queryAllByRole(alert, "status")).toHaveLength(0);
     expect(alert.textContent).toContain("Make sure it’s awake and online.");

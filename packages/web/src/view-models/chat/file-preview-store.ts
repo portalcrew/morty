@@ -92,7 +92,6 @@ interface LocalFileResult {
     readonly name: string;
 }
 
-/** The largest file the preview opens; the file protocol bounds every read at this size. */
 const OPEN_MAX_BYTES = 128 * 1024 * 1024;
 /** Markdown images load as the document renders, so each stays within the size of an ordinary read. */
 const MARKDOWN_IMAGE_MAX_BYTES = 32 * 1024 * 1024;

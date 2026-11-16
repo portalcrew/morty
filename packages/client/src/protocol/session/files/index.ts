@@ -34,7 +34,6 @@ export const FILE_STREAM_CONTENT_TYPE = "application/vnd.morty.encrypted-file";
 export const FILE_STREAM_MAX_MESSAGE_BYTES = 12 * 1024 * 1024 + 32 * 1024;
 export const FILE_STREAM_MAX_CHUNK_BYTES = CONTENT_CHUNK_ENCRYPTED_MAX_BYTES + 255 + 9;
 export const CONTENT_WRITE_MAX_BYTES = 32 * 1024 * 1024;
-/** Maximum encrypted write, chunk and commit records for one bounded plaintext upload. */
 export const CONTENT_UPLOAD_MAX_ENCODED_BYTES =
     Math.ceil(CONTENT_WRITE_MAX_BYTES / CONTENT_CHUNK_MAX_BYTES) * (FILE_STREAM_MAX_CHUNK_BYTES + 5) +
     2 * (FILE_STREAM_MAX_MESSAGE_BYTES + 5);
@@ -140,7 +139,6 @@ export type FileStreamRecordDecode =
 
 const FILE_STREAM_HEADER_BYTES = 5;
 
-/** Preserves each original native message or binary chunk across HTTP byte-stream boundaries. */
 export function encodeFileStreamRecord(record: FileStreamRecord): Uint8Array {
     if (record.kind === "message" && record.encoded.length > FILE_STREAM_MAX_MESSAGE_BYTES) {
         throw new ProtocolMessageError("File stream message is too large");
@@ -157,7 +155,6 @@ export function encodeFileStreamRecord(record: FileStreamRecord): Uint8Array {
     return encoded;
 }
 
-/** Examines the header and bounds its declared size before accepting a complete record. */
 export function decodeFileStreamRecord(buffer: Uint8Array): FileStreamRecordDecode {
     if (buffer.byteLength < FILE_STREAM_HEADER_BYTES) {
         return { kind: "incomplete" };

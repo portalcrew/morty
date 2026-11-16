@@ -113,7 +113,6 @@ interface FileReadResult {
     readonly message: string;
 }
 
-/** Reads one file through the daemon's public file.read protocol boundary. */
 async function readSessionFile(
     peer: Parameters<Parameters<typeof withRealDaemon>[3]>[0],
     sessionTarget: Parameters<Parameters<typeof withRealDaemon>[3]>[0]["target"],
@@ -218,12 +217,10 @@ if (process.argv.includes("--version")) {
                 expect(rootRelative.kind).toBe("streamed");
                 expect(rootRelative.bytes.toString("utf8")).toContain("<title>Todo</title>");
 
-                // Absolute computer paths keep working.
                 const absolute = await readSessionFile(peer, peer.target, join(workspace, "index.html"));
                 expect(absolute.kind).toBe("streamed");
                 expect(absolute.bytes.toString("utf8")).toContain("<title>Todo</title>");
 
-                // Bare-relative references and non-ASCII or nested targets keep resolving.
                 const bareRelative = await readSessionFile(peer, peer.target, "index.html");
                 expect(bareRelative.kind).toBe("streamed");
                 expect(bareRelative.bytes.toString("utf8")).toContain("<title>Todo</title>");

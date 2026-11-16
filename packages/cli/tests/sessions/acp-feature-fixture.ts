@@ -14,7 +14,6 @@ import { createControlledAgent } from "../support/agents/controlled-agent-defini
 
 export const fakeAgentPath = fileURLToPath(new URL("./fixtures/acp-peer.ts", import.meta.url));
 
-/** Folds the live session event stream into the shapes integration tests assert on. */
 export class RecordingObserver implements SessionObserver {
     readonly elicitationResolutions: SessionElicitationResolvedEvent[] = [];
     readonly events: { readonly event: SessionEventPayload; readonly position: number }[] = [];
@@ -55,7 +54,6 @@ export class RecordingObserver implements SessionObserver {
             this.#eventWaiters.push(resolve);
         });
 
-    /** Resolves when a recorded event satisfies the predicate, checking history first. */
     readonly waitForEvent = async (predicate: (event: SessionEventPayload) => boolean): Promise<void> => {
         for (;;) {
             if (this.events.some(({ event }) => predicate(event))) {
@@ -65,7 +63,6 @@ export class RecordingObserver implements SessionObserver {
         }
     };
 
-    /** Resolves on the first recorded ACP update of a turn. */
     readonly turnStarted = (): Promise<void> => this.waitForEvent((event) => event.type === "acp");
 
     /** Concatenated agent reply text, folded from the same events clients read.
@@ -77,16 +74,13 @@ export class RecordingObserver implements SessionObserver {
                 if (update.sessionUpdate !== "agent_message_chunk" || update.content.type !== "text") {
                     return [];
                 }
-                // The controlled peer marks commentary with a progress message id.
                 return update.messageId.startsWith("progress-") ? [] : [update.content.text];
             })
             .join("");
 
-    /** Recorded ACP updates in arrival order, from the same events clients read. */
     readonly acpUpdates = (): readonly AcpSessionUpdate[] =>
         this.events.flatMap(({ event }) => (event.type === "acp" ? [event.payload] : []));
 
-    /** Recorded tool-call updates for the given tool call id, in arrival order. */
     readonly toolUpdates = (toolCallId: string): readonly AcpSessionUpdate[] =>
         this.acpUpdates().filter(
             (update): update is Extract<AcpSessionUpdate, { readonly toolCallId: string }> =>

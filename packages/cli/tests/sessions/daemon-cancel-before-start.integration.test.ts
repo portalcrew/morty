@@ -342,7 +342,6 @@ test("Given a prompt still loading its conversation's saved history, When the cl
                 const first = randomUUID();
                 peer.send(prompt(first, "Start a conversation with saved history"));
                 await completed(first);
-                // After a restart the next prompt replays the saved history before it reaches the Agent.
                 await peer.restart();
                 await writeFile(join(agentDirectory, "pause-load"), "");
                 const loading = fileCreated(agentDirectory, "load-paused");

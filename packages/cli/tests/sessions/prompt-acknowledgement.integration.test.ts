@@ -30,13 +30,11 @@ type Frame =
     | { readonly kind: "event"; readonly event: SessionLiveEvent }
     | { readonly kind: "message"; readonly message: Readonly<Record<string, unknown>> };
 
-/** Every frame the daemon sent, in order, and how far the scenario has read them. */
 interface FrameLog {
     readonly frames: Frame[];
     read: number;
 }
 
-/** Reads the daemon's frames in order until one matches; frames after it stay unread. */
 async function next(peer: RealDaemonPeer, log: FrameLog, matches: (frame: Frame) => boolean): Promise<Frame> {
     for (;;) {
         while (log.read < log.frames.length) {
@@ -125,7 +123,6 @@ test("Given a running prompt, When clients append messages and steer a turn that
                     kind: "session.queue.changed",
                 });
 
-                // A retry of the running command records nothing new and is answered directly.
                 append(peer, running, "hold after first delta");
                 const accepted = await next(
                     peer,

@@ -12,7 +12,6 @@ const WEBP_SIGNATURE = new TextEncoder().encode("WEBP");
 
 export type LocalRasterMimeType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
 
-/** A local image file identified by canonical path, read on demand. */
 export class LocalRasterImage {
     readonly mimeType: LocalRasterMimeType;
     readonly sourceUri: string;

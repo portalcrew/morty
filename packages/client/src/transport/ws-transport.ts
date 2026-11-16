@@ -34,7 +34,6 @@ export interface MortyWebSocketConnector {
 }
 
 export interface WsTransportOptions {
-    /** Opens the WebSocket; the browser's own WebSocket unless a test supplies a stateful socket. */
     readonly connector?: MortyWebSocketConnector;
 }
 

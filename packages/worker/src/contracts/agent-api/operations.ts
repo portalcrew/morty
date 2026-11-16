@@ -7,7 +7,6 @@ type WireSchema = keyof ReturnType<typeof sessionWireJsonSchemas>;
 type ProtocolRequest = Extract<WireSchema, `${string}Request`>;
 type ProtocolResult = Extract<WireSchema, `${string}Reply`>;
 
-/** A response body: the schema the route checks it against, a Session result of the protocol, or a fixed shape. */
 export type AgentApiResponse =
     | { readonly kind: "schema"; readonly schema: v.GenericSchema }
     | { readonly kind: "protocol"; readonly result: ProtocolResult }
@@ -22,11 +21,6 @@ interface AgentApiParameter {
     readonly schema: object;
 }
 
-/**
- * One operation an AI agent uses. `transport` says how it is reached: `http` operations are routes of the Worker,
- * `websocket` operations are dispatched from `http.request` frames on the Computer transport and answer 404 over HTTP.
- * The websocket entries' paths are the ones the transport's Session dispatcher decodes.
- */
 export interface AgentApiOperation {
     readonly operationId: string;
     readonly method: "get" | "post";

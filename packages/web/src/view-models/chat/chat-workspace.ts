@@ -36,10 +36,6 @@ interface ChatWorkspaceSidebar {
     readonly networkDiagnostic: StoreApi<NetworkDiagnosticStore>;
 }
 
-/**
- * The Session pane the workspace keeps. It exists while its session record is the ready selection: another target
- * closes it, a re-read replaces it, and the workspace tears it down.
- */
 type WorkspacePane =
     | { readonly kind: "none" }
     | { readonly kind: "open"; readonly model: ReturnType<typeof createSessionPaneModel> };
@@ -50,46 +46,28 @@ type ChatWorkspacePane = { readonly kind: "none" } | { readonly kind: "open"; re
 export interface ChatWorkspace {
     readonly computers: ComputerSwitcherModel;
     readonly accessNotice: string | null;
-    /** The page's one list of the other devices with access, and when this browser last looked at it. */
     readonly linkedDevices: StoreApi<LinkedDevicesStore>;
-    /** When this browser's access ends. */
     readonly accessExpiry: StoreApi<AccessExpiryStore>;
-    /** The devices with access to this computer and the disconnections made from them. */
     readonly deviceAccess: StoreApi<DeviceAccessStore>;
-    /** The chat API this workspace was composed with. */
     readonly requests: BotChatApi;
     /** The application-owned bug-report dialog state, flowing to entry points. */
     readonly bugReportDialog: BugReportDialogStore;
-    /** The authenticated computer; scopes browser persistence and diagnostics. */
     readonly computerId: string;
-    /** What the page knows of its Computer: pairing, its configuration, and the network. */
     readonly computer: ComputerStatusStoreApi;
     readonly home: BotChatHomeStoreApi;
     readonly titles: SessionTitlesStore;
     readonly directory: StoreApi<ConversationDirectoryStore>;
     readonly statuses: ConversationStatusStoreApi;
-    /** Harness and working-directory settings for the next draft message. */
     readonly draftControls: StoreApi<DraftControlsStore>;
-    /** Sidebar ephemeral UI and dialog stores; lives outside React with this workspace. */
     readonly sidebar: ChatWorkspaceSidebar;
-    /**
-     * The session pane of the currently selected conversation, built and started by the workspace in the transition
-     * that makes the selection ready for a fresh session record, and stopped when it moves on. Views subscribe to it.
-     */
     readonly pane: Pick<StoreApi<ChatWorkspacePane>, "getState" | "getInitialState" | "subscribe">;
-    /** The open pane's model, for callers outside React. */
     readonly sessionPane: () => SessionPaneModel | null;
-    /** Restarts the draft settings load, for example from its retry control. */
     readonly retryDraftControls: () => void;
-    /** Restarts the directory load, for example from the sidebar refresh button. */
     readonly refreshDirectory: () => void;
-    /** The signal of the current home loading attempt; aborted when loading restarts. */
     readonly chatSignal: () => AbortSignal;
-    /** A stable signal for user-triggered operations such as archiving and diagnostics. */
     readonly operationsSignal: () => AbortSignal;
     /** Records deliberate activity in this tab without following another tab's selection. */
     readonly recordUserActivity: () => void;
-    /** Starts the workspace's loads; the application calls this when it activates the workspace. */
     readonly start: () => void;
     readonly dispose: () => void;
 }
@@ -125,7 +103,6 @@ function historyNavigation(onDraft: () => void) {
  */
 export function createChatWorkspace(options: {
     readonly clock: Clock;
-    /** Starts the page over once its Computer is paired again after revocation; see the home store's announcement. */
     readonly onComputerReplaced: () => void;
     readonly rememberedIdentity: IdentityScope;
     readonly computers: ComputerSwitcherModel;
@@ -134,7 +111,6 @@ export function createChatWorkspace(options: {
     readonly bugReportDialog: BugReportDialogStore;
     readonly computerId: string;
     readonly requests: BotChatApi;
-    /** What this browser may do with its own access and the devices that share it. */
     readonly access: IdentityAccess;
     readonly networkDiagnostics: {
         readonly measureBrowserMorty: (signal: AbortSignal) => Promise<number>;
@@ -214,8 +190,6 @@ export function createChatWorkspace(options: {
             if (conversationId !== null) {
                 statuses.getState().opened(conversationId);
             }
-            // A pane lives while its session record is the ready selection; any other target ends it. The draft's
-            // settings live while the draft is selected.
             const selection = home.getState().selection;
             if (selection.kind !== "draft") {
                 draftControls.getState().leave();
@@ -252,9 +226,6 @@ export function createChatWorkspace(options: {
         () => computer.getState().computerConfiguration,
         () => computerRecovery.failed(),
     );
-    // Sidebar stores live with the workspace, outside React: dialogs (native
-    // session import, identity sharing, expanded state), remote access, and
-    // network diagnostics all outlive any single sidebar render.
     const sidebar: ChatWorkspaceSidebar = {
         dialogs: createSidebarDialogs({
             clock: options.clock,
@@ -295,7 +266,6 @@ export function createChatWorkspace(options: {
             }
         });
     };
-    /** Starts the page over. The Computer's follow restarts first: the loads wait for the entry it answers. */
     const startOver = (): void => {
         startComputerFollow();
         startHomeLoad();
@@ -314,7 +284,6 @@ export function createChatWorkspace(options: {
                 }
             });
     };
-    /** The draft composer's settings live while a draft is selected, independently of how the page loads. */
     const enterDraft = (): void => {
         void draftControls
             .getState()
@@ -346,14 +315,12 @@ export function createChatWorkspace(options: {
         return listed === "failed" || listed === "stale";
     };
     const draftWaitsForComputer = (): boolean => draftControls.getState().settings.kind === "unreachable";
-    /** The live pane, when its connection used up its automatic retries and waits for the Computer. */
     const paneWaitingForComputer = () => {
         const open = paneStore.getState();
         return open.kind === "open" && connectionWaitsForComputer(open.model.store.getState().connection)
             ? open.model
             : null;
     };
-    /** Retry pending reads once the computer is reachable again. */
     const computerRecovery = createComputerRecovery({
         clock: options.clock,
         lifetime: operationsLifetime.signal,
@@ -379,8 +346,6 @@ export function createChatWorkspace(options: {
             paneWaitingForComputer()?.reconnect();
         },
     });
-    // The single live pane. It lives while its session record is the ready selection: another target closes it, a
-    // re-read replaces it, and the workspace tears it down.
     const paneStore = createStore<WorkspacePane>(() => ({ kind: "none" }));
     const closePane = (): void => {
         const open = paneStore.getState();
@@ -389,7 +354,6 @@ export function createChatWorkspace(options: {
             open.model.stop();
         }
     };
-    // What the page holds for each Session, independently of pane and connection replacements.
     const sessionStates = new NativeSessionMap<SessionPageState>();
     const sessionState = (sessionTarget: NativeSessionTarget): SessionPageState => {
         const existing = sessionStates.get(sessionTarget);
@@ -432,7 +396,6 @@ export function createChatWorkspace(options: {
             rememberedSessionTarget = sessionTarget;
         }
         const sessionPage = sessionState(sessionTarget);
-        // Only the draft page that followed its first message here hands over the draft written meanwhile.
         const handoff = home.getState().takeNextDraft(sessionTarget);
         if (handoff !== null) {
             sessionPage.composer.getState().adoptHandoff(handoff.draft, handoff.attachments);

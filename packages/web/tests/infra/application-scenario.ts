@@ -66,7 +66,6 @@ export async function openAgentModelPicker(app: TestApp): Promise<void> {
     );
 }
 
-/** The message composer once it accepts input. */
 export async function readyComposer(app: TestApp): Promise<HTMLTextAreaElement> {
     const composer = await app.queryElementByTestId(
         dataTestId.messageComposer,
@@ -108,7 +107,6 @@ export async function openExecutionDetails(app: TestApp): Promise<HTMLElement> {
     return app.waitForView(() => getByRole(document.body, "dialog", { name: "Execution details" }));
 }
 
-/** Advances the clock past the bridge retry delay and waits for Chat's bridge to reconnect. */
 export async function recoverChat(app: TestApp, clock: TestClock, delayMs = 1_000): Promise<void> {
     await act(async () => {
         app.transport.open();
@@ -125,7 +123,6 @@ export async function showReconnectNotice(app: TestApp, clock: TestClock): Promi
     await app.waitForView(() => getByRole(document.body, "button", { name: "Retry now" }));
 }
 
-/** Refresh the list in this particular viewer. */
 export async function refreshSessions(app: TestApp): Promise<void> {
     const root = app.elementByTestId(dataTestId.messageComposer).closest<HTMLElement>("[data-test-app-root]");
     if (!root) {

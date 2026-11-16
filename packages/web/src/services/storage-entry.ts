@@ -11,7 +11,6 @@ export function scopedKey(prefix: string, ...parts: readonly string[]): string {
     return `${prefix}${parts.map((part) => encodeURIComponent(part)).join(":")}`;
 }
 
-/** Entry whose value is stored as JSON, encoded with `JSON.stringify`. */
 export function jsonStorageEntry<T>(options: {
     readonly key: string;
     readonly schema: v.GenericSchema<T>;
@@ -30,7 +29,6 @@ export function jsonStorageEntry<T>(options: {
     };
 }
 
-/** Entry whose value is stored as the raw string itself. */
 export function stringStorageEntry(options: {
     readonly key: string;
     readonly schema: v.GenericSchema<string>;

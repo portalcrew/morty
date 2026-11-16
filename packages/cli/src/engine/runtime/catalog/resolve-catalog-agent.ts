@@ -3,7 +3,6 @@ import type { discoverLocalAgentInventory } from "../../agent/discovery/discover
 import { revalidateExecutable } from "../../util/process/executable.ts";
 import { type RuntimeConfig, withRuntimeEnvironment } from "../config.ts";
 
-/** The definition a command for `harness` runs against, re-discovered when its executable changed. */
 export async function resolveCatalogAgent(
     config: RuntimeConfig,
     harness: string,

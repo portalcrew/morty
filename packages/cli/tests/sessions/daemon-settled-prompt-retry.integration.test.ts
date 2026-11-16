@@ -30,7 +30,6 @@ type Frame =
     | { readonly kind: "event"; readonly event: SessionLiveEvent }
     | { readonly kind: "message"; readonly message: Readonly<Record<string, unknown>> };
 
-/** Reads the daemon's frames in order until one matches. */
 async function next(peer: RealDaemonPeer, seen: Frame[], matches: (frame: Frame) => boolean): Promise<Frame> {
     for (;;) {
         const raw = await peer.nextMessage();
@@ -58,10 +57,6 @@ const accepted = (commandId: string) => (frame: Frame) =>
     frame.message["kind"] === "session.prompt.accepted" &&
     frame.message["requestId"] === commandId;
 
-/**
- * Retries a settled command and runs another one after it. Returns the outcomes published for the retried command
- * from the retry until the other command completed.
- */
 async function retrySettled(peer: RealDaemonPeer, commandId: string): Promise<readonly SessionLiveEvent[]> {
     const seen: Frame[] = [];
     submit(peer, commandId);
@@ -100,11 +95,9 @@ test("Given a completed prompt, When a client retries it before and after a daem
                     recordedAt: original.event.recordedAt,
                 };
 
-                // The same command and payload, as a client retries a submission whose response was lost.
                 expect(await retrySettled(peer, commandId)).toEqual([expect.objectContaining(restatement)]);
 
                 await peer.restart();
-                // A restart publishes each retained outcome once, restated: the previous process recorded it.
                 const recovered = await next(peer, [], completed(commandId));
                 expect(recovered).toMatchObject({ kind: "event", event: restatement });
                 expect(await retrySettled(peer, commandId)).toEqual([expect.objectContaining(restatement)]);

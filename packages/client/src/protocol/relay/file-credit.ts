@@ -2,7 +2,6 @@ import { z } from "zod";
 import { identifierStringSchema } from "../shared/identifier.ts";
 import { decodeZodMessage, encodeZodMessage } from "../shared/message-codec.ts";
 
-/** A Worker grants one chunk to an active file read on its owning connection. */
 export const WORKER_FILE_CREDIT_KIND = "worker.file.credit";
 const workerFileCreditSchema = z
     .strictObject({

@@ -16,7 +16,6 @@ function lifecycle(payload: Extract<SessionEventPayload, { readonly type: "lifec
     return { payload, type: "lifecycle-metadata" } satisfies SessionEventPayload;
 }
 
-/** A settled turn's start, as the Runtime recorded it when the turn joined the Session. */
 function turnStart(turn: SettledTurn, content: AcpSessionUpdate, steers: string | null): PlacedLifecycle[] {
     const { commandId } = turn.outcome;
     const requested =
@@ -40,22 +39,15 @@ const turnEnd = (turn: SettledTurn): PlacedLifecycle => ({
     recordedAt: turn.recordedAt,
 });
 
-/**
- * Places the lifecycle of the turns the Runtime ran among the Agent's replayed history, where they happened. A turn
- * starts at the user message its Agent recorded for it and ends before the next user message that does not steer into
- * it, or where the replay ends. A message steered into a turn joins that turn.
- */
 class ReplayedTurns {
     readonly #byMessage: ReadonlyMap<string, SettledTurn>;
     #open: SettledTurn | null = null;
-    /** The user message the latest replayed event belongs to; undefined after any other event. */
     #userMessage: { readonly messageId: string } | undefined;
 
     constructor(turns: readonly SettledTurn[]) {
         this.#byMessage = new Map(turns.map((turn) => [turn.outcome.messageId, turn]));
     }
 
-    /** The lifecycle that precedes `update` in history. */
     readonly before = (update: AcpSessionUpdate): readonly PlacedLifecycle[] => {
         if (update.sessionUpdate !== "user_message_chunk") {
             this.#userMessage = undefined;
@@ -80,7 +72,6 @@ class ReplayedTurns {
         return [...ended, ...turnStart(turn, update, null)];
     };
 
-    /** The ending of the turn still open where the replay ends. */
     readonly end = (): readonly PlacedLifecycle[] => {
         const open = this.#open;
         this.#open = null;
@@ -88,7 +79,6 @@ class ReplayedTurns {
     };
 }
 
-/** Captures ACP updates into the V2 session event log. */
 export class HistoryReplayCapture {
     readonly #events: SessionEventStore;
     readonly #sessionTarget: NativeSessionTarget;
@@ -104,7 +94,6 @@ export class HistoryReplayCapture {
         this.#replayed = new ReplayedTurns(settledTurns);
     }
 
-    /** Records an update the Agent replays from its own history, with the lifecycle of the turn it belongs to. */
     readonly replay = (rawUpdate: AcpSessionUpdate): void => {
         for (const { event, recordedAt } of this.#replayed.before(rawUpdate)) {
             this.#events.append(this.#sessionTarget, event, recordedAt);
@@ -112,7 +101,6 @@ export class HistoryReplayCapture {
         this.#events.append(this.#sessionTarget, { payload: rawUpdate, type: "acp" });
     };
 
-    /** Ends the replay: the last replayed turn ends where the Agent's history does. */
     readonly finishReplay = (): void => {
         for (const { event, recordedAt } of this.#replayed.end()) {
             this.#events.append(this.#sessionTarget, event, recordedAt);

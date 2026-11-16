@@ -58,7 +58,6 @@ test("Given two idle viewers with drafts and attachments, When both submit befor
             fireEvent.submit(participant.form);
         }
     });
-    // Whichever message arrives second waits behind the first; both run, on every viewer.
     for (const participant of participants) {
         for (const { prompt } of participants) {
             await participant.app.waitForView(() =>
