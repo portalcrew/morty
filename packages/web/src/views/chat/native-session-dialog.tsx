@@ -24,7 +24,7 @@ import type { BugReportDialogStore } from "../../view-models/bug-report-dialog-s
 import type { NativeSessionAgent } from "../../view-models/chat/native-session-agents.ts";
 import { type NativeSessionStore, nativeSessionPresentation } from "../../view-models/chat/native-session-store.ts";
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
-import { MortySessionMessage } from "./morty-session-message.tsx";
+import { NativeSessionPreviewMessages } from "./native-session-preview-messages.tsx";
 
 const sheetControlHeightClassName = "min-h-11 max-sm:[font-size:15px] sm:min-h-9";
 
@@ -359,7 +359,7 @@ export function NativeSessionDialog({
                                         <ScrollEdgeFade
                                             revealSurface
                                             edgeStroke={{
-                                                className: "border-surface-dialog-composite",
+                                                className: "border-background",
                                                 placement: "outside",
                                             }}
                                             frameClassName="hidden min-h-0 flex-1 sm:flex sm:flex-col"
@@ -466,66 +466,60 @@ export function NativeSessionDialog({
                                             </div>
                                         )}
                                         {model.preview.kind === "empty" && (
-                                            <div
-                                                aria-hidden="true"
-                                                className={cn(nativeSessionPreviewTitleBarClassName, "hidden sm:flex")}
+                                            <NativeSessionDirectoryPlaceholder
+                                                icon={MessageSquare}
+                                                title="Select a session"
+                                                description="Preview its message history here."
                                             />
                                         )}
-                                        <ScrollEdgeFade
-                                            revealSurface
-                                            edgeStroke={{ className: "border-card", placement: "outside" }}
-                                            frameClassName="flex min-h-0 flex-1 flex-col"
-                                            className={cn(
-                                                "min-h-0 flex-1 font-inter",
-                                                model.preview.kind === "ready"
-                                                    ? "px-4 pt-4 pb-4 sm:px-6 sm:pt-4 sm:pb-5"
-                                                    : model.preview.kind === "empty"
-                                                      ? undefined
-                                                      : "p-4 sm:px-6 sm:py-5",
-                                                model.preview.kind === "empty" && "flex min-h-0 flex-1 flex-col",
-                                            )}
-                                        >
-                                            {model.preview.kind === "empty" && (
-                                                <NativeSessionDirectoryPlaceholder
-                                                    icon={MessageSquare}
-                                                    title="Select a session"
-                                                    description="Preview its message history here."
-                                                />
-                                            )}
-                                            {model.preview.kind === "loading" && <NativeSessionPreviewSkeleton />}
-                                            {model.preview.kind === "failed" && (
-                                                <div role="alert" className="flex items-start gap-2 text-destructive">
-                                                    <p className="min-w-0 flex-1 break-words">
-                                                        {model.preview.message}
-                                                    </p>
-                                                    {reportButton}
-                                                </div>
-                                            )}
-                                            {model.preview.kind === "ready" && (
-                                                <div className="space-y-4">
-                                                    {model.preview.content.messages.length === 0 && (
-                                                        <p>No events in this session.</p>
-                                                    )}
-                                                    {model.preview.content.messages.map((message) => (
-                                                        <MortySessionMessage
-                                                            collapseStore={store.getState().userMessageCollapse}
-                                                            deliveryUnknownUserMessageId={null}
-                                                            key={message.firstEvent.eventId}
-                                                            message={message}
-                                                            onRemoveUnknownDelivery={() => undefined}
-                                                            onRetryUnknownDelivery={() => undefined}
-                                                            openLocalFile={() => undefined}
-                                                            retryUnknownDeliveryDisabled
-                                                        />
-                                                    ))}
-                                                    {model.preview.content.truncated && (
-                                                        <p className="text-13 text-morty-text-3">
-                                                            Showing a partial event preview.
+                                        {model.preview.kind !== "empty" && (
+                                            <ScrollEdgeFade
+                                                revealSurface
+                                                edgeStroke={{ className: "border-card", placement: "outside" }}
+                                                frameClassName="flex min-h-0 flex-1 flex-col"
+                                                viewportClassName="[&>div]:!block [&>div]:!w-full"
+                                                scrollToBottomKey={
+                                                    model.preview.kind === "ready"
+                                                        ? model.preview.entry.sessionId
+                                                        : null
+                                                }
+                                                className={cn(
+                                                    "min-h-0 flex-1 font-inter",
+                                                    model.preview.kind === "ready"
+                                                        ? "px-4 pt-4 pb-4 sm:px-6 sm:pt-4 sm:pb-5"
+                                                        : "p-4 sm:px-6 sm:py-5",
+                                                )}
+                                            >
+                                                {model.preview.kind === "loading" && <NativeSessionPreviewSkeleton />}
+                                                {model.preview.kind === "failed" && (
+                                                    <div
+                                                        role="alert"
+                                                        className="flex items-start gap-2 text-destructive"
+                                                    >
+                                                        <p className="min-w-0 flex-1 break-words">
+                                                            {model.preview.message}
                                                         </p>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </ScrollEdgeFade>
+                                                        {reportButton}
+                                                    </div>
+                                                )}
+                                                {model.preview.kind === "ready" && (
+                                                    <div>
+                                                        {model.preview.content.truncated && (
+                                                            <p className="mb-4 py-4 text-center text-13 text-morty-text-3/75">
+                                                                Showing a partial event preview.
+                                                            </p>
+                                                        )}
+                                                        {model.preview.content.messages.length === 0 && (
+                                                            <p>No events in this session.</p>
+                                                        )}
+                                                        <NativeSessionPreviewMessages
+                                                            collapseStore={store.getState().userMessageCollapse}
+                                                            messages={model.preview.content.messages}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </ScrollEdgeFade>
+                                        )}
                                     </section>
                                     {model.error !== "" && (
                                         <div

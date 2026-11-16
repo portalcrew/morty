@@ -39,7 +39,16 @@ export function createToolLifecycleAgent(beforeCancellationApplied?: () => Promi
                 return { configOptions: [] };
             })
             .onRequest(acp.methods.agent.session.resume, () => ({ configOptions: [] }))
-            .onRequest(acp.methods.agent.session.list, () => ({ sessions: [] }))
+            .onRequest(acp.methods.agent.session.list, (context) => ({
+                sessions: [...sessions.entries()]
+                    .filter(([, history]) => history.length > 0)
+                    .map(([sessionId]) => ({
+                        cwd: context.params.cwd ?? "/",
+                        sessionId,
+                        title: `Native ${sessionId}`,
+                        updatedAt: "2026-01-01T00:00:00Z",
+                    })),
+            }))
             .onRequest(acp.methods.agent.session.prompt, async (context) => {
                 const sessionId = context.params.sessionId;
                 const history = sessions.get(sessionId);
