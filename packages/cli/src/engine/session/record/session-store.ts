@@ -35,13 +35,54 @@ export class StoredSession {
     }
 }
 
+/** What a live Agent session knows of its Session, which the record follows while the Session is held. */
+export interface StoredSessionFacts {
+    readonly configurations: readonly StoredSessionConfiguration[];
+    readonly prompted: boolean;
+    readonly title: string;
+}
+
+/** The latest of the given modification times, in canonical form; a time that does not parse is no modification. */
+function latestModification(...times: readonly (string | null | undefined)[]): string | null {
+    let latest: number | null = null;
+    for (const time of times) {
+        const parsed = time === null || time === undefined ? Number.NaN : Date.parse(time);
+        if (!Number.isNaN(parsed) && (latest === null || parsed > latest)) {
+            latest = parsed;
+        }
+    }
+    return latest === null ? null : new Date(latest).toISOString();
+}
+
+/**
+ * The held Session's record after its facts change. Its modification time is the latest change anyone observed: a
+ * change at `modifiedAt` moves it forward, an earlier one (such as an Agent restating an older time) never moves it
+ * back, and `null` records facts that are no change to the conversation, such as an Agent reporting its settings.
+ */
+function updatedSession(held: StoredSession, facts: StoredSessionFacts, modifiedAt: string | null): StoredSession {
+    return new StoredSession(
+        held.target,
+        held.cwd,
+        facts.prompted,
+        facts.title,
+        latestModification(held.updatedAt, modifiedAt) ?? new Date().toISOString(),
+        facts.configurations,
+    );
+}
+
+/**
+ * The Sessions this Runtime holds. A record is the Session's existence: `hold` creates it, `update` follows the
+ * Session's facts only while it exists, so a Session that was removed is never brought back by a late change, and
+ * `remove` ends it.
+ */
 export interface SessionStore {
     readonly close: () => void;
     readonly events: SessionEventStore;
+    readonly hold: (session: StoredSession) => void;
     readonly list: () => readonly StoredSession[];
     readonly read: (target: NativeSessionTarget) => StoredSession | undefined;
     readonly remove: (target: NativeSessionTarget) => void;
-    readonly write: (session: StoredSession) => void;
+    readonly update: (target: NativeSessionTarget, facts: StoredSessionFacts, modifiedAt: string | null) => void;
 }
 
 export class MemorySessionStore implements SessionStore {
@@ -68,8 +109,15 @@ export class MemorySessionStore implements SessionStore {
         this.events.remove(target);
     };
 
-    readonly write = (session: StoredSession): void => {
+    readonly hold = (session: StoredSession): void => {
         this.#sessions.set(nativeSessionKey(session.target), session);
+    };
+
+    readonly update = (target: NativeSessionTarget, facts: StoredSessionFacts, modifiedAt: string | null): void => {
+        const held = this.#sessions.get(nativeSessionKey(target));
+        if (held !== undefined) {
+            this.#sessions.set(nativeSessionKey(target), updatedSession(held, facts, modifiedAt));
+        }
     };
 }
 
@@ -116,15 +164,24 @@ export class SqliteSessionStore implements SessionStore {
         this.#table.remove(target);
     };
 
-    readonly write = (session: StoredSession): void => {
-        this.#table.upsert({
-            harness: session.harness,
-            configurations: JSON.stringify(session.configurations),
-            cwd: session.cwd,
-            sessionId: session.sessionId,
-            prompted: session.prompted,
-            title: session.title,
-            updatedAt: session.updatedAt,
-        });
+    readonly hold = (session: StoredSession): void => this.#table.upsert(encodeStoredSession(session));
+
+    readonly update = (target: NativeSessionTarget, facts: StoredSessionFacts, modifiedAt: string | null): void => {
+        const held = this.read(target);
+        if (held !== undefined) {
+            this.#table.update(encodeStoredSession(updatedSession(held, facts, modifiedAt)));
+        }
+    };
+}
+
+function encodeStoredSession(session: StoredSession): AcpSessionRow {
+    return {
+        harness: session.harness,
+        configurations: JSON.stringify(session.configurations),
+        cwd: session.cwd,
+        sessionId: session.sessionId,
+        prompted: session.prompted,
+        title: session.title,
+        updatedAt: session.updatedAt,
     };
 }
