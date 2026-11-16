@@ -64,6 +64,7 @@ export type ContinueState =
 
 export interface ContinueStore {
     readonly state: ContinueState;
+    readonly start: () => void;
     readonly cancel: () => void;
     readonly redeem: (signal: AbortSignal) => Promise<void>;
     readonly retry: () => void;
@@ -229,6 +230,11 @@ export const createContinueStore = (transport: ApiTransport) => {
                     window.location.replace(identityDestination("/", state.identity));
                 }
             },
+            start: () => {
+                attempt?.abort(new Error("The continuation was restarted."));
+                attempt = new AbortController();
+                void get().redeem(attempt.signal);
+            },
             cancel: () => {
                 attempt?.abort(new Error("The continuation was cancelled."));
             },
@@ -341,10 +347,5 @@ export const createContinueStore = (transport: ApiTransport) => {
             },
         };
     });
-    // The transfer page's lifetime starts the redeem as soon as the page's
-    // store exists; the first state write happens after its first await, so
-    // creation stays render-safe.
-    attempt = new AbortController();
-    void store.getState().redeem(attempt.signal);
     return store;
 };
