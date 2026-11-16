@@ -71,7 +71,6 @@ function removeOldestResult(): void {
     results.delete(oldestKey);
 }
 
-/** What the cached results hold, summed from them: they are the one record of it. */
 function cachedTotals(): { readonly sourceCharacters: number; readonly tokens: number } {
     let sourceCharacters = 0;
     let tokens = 0;
