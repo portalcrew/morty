@@ -1131,6 +1131,7 @@ function MortySessionPaneBody({
                     )}
                     <FilePreview
                         onClose={preview.close}
+                        onDownload={preview.download}
                         layout={preview.layout}
                         onPanelAttach={preview.onPanelAttach}
                         onToggleExpanded={preview.toggleExpanded}

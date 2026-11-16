@@ -1,14 +1,24 @@
-import { FileText, LoaderCircle, Maximize2, Minimize2, RotateCw, X } from "lucide-react";
+import { Download, FileText, LoaderCircle, Maximize2, Minimize2, RotateCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AgentMarkdown, MAX_MARKDOWN_CHARACTERS } from "../../components/agents/agent-markdown.tsx";
 import type { SessionResourceReader } from "../../components/agents/resource-reader.ts";
 import { HighlightedCode, languageForPath } from "../../components/chat/highlighted-code.tsx";
 import { HtmlPreview } from "../../components/chat/html-preview.tsx";
 import { ImageCanvas } from "../../components/images/image-canvas.tsx";
+import { Button } from "../../components/ui/cloud-button.tsx";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import type { FilePreviewLayout, FilePreviewState } from "../../view-models/chat/file-preview-store.ts";
 import { describePageFailure } from "../../view-models/format-error.ts";
+
+const fileSizeNumber = new Intl.NumberFormat("en", { maximumFractionDigits: 1 });
+
+/** Binary units, so a size reads the same as the 128 MB limit the preview states. */
+function formatFileSize(bytes: number): string {
+    return bytes < 1024 * 1024
+        ? `${fileSizeNumber.format(bytes / 1024)} KB`
+        : `${fileSizeNumber.format(bytes / (1024 * 1024))} MB`;
+}
 
 function PreviewSource({ name, text }: { readonly name: string; readonly text: string }) {
     return (
@@ -28,11 +38,13 @@ function PreviewSource({ name, text }: { readonly name: string; readonly text: s
 
 function PreviewContent({
     state,
+    onDownload,
     onHtmlAttach,
     onMarkdownLink,
     readMarkdownImage,
 }: {
     readonly state: FilePreviewState;
+    readonly onDownload: () => void;
     readonly onHtmlAttach: (frame: HTMLIFrameElement) => () => void;
     readonly onMarkdownLink: (path: string) => void;
     readonly readMarkdownImage: SessionResourceReader;
@@ -42,8 +54,24 @@ function PreviewContent({
             return null;
         case "loading":
             return (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-                    <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> Loading file…
+                <div className="grid justify-items-center gap-3 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2" role="status">
+                        <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> Loading file…
+                    </div>
+                    {state.progress === null ? null : (
+                        <>
+                            <progress
+                                aria-label="Loading progress"
+                                className="h-1.5 w-56 accent-primary"
+                                max={state.progress.totalBytes}
+                                value={state.progress.receivedBytes}
+                            />
+                            <span className="tabular-nums">
+                                {formatFileSize(state.progress.receivedBytes)} of{" "}
+                                {formatFileSize(state.progress.totalBytes)}
+                            </span>
+                        </>
+                    )}
                 </div>
             );
         case "failed": {
@@ -88,6 +116,42 @@ function PreviewContent({
                     testId={dataTestId.filePreviewContent}
                 />
             );
+        case "file":
+            return (
+                <div className="grid w-full max-w-3xl justify-items-center gap-4 text-center">
+                    {state.player.kind === "video" ? (
+                        <video
+                            aria-label={state.name}
+                            className="max-h-[70dvh] w-full rounded-lg bg-black"
+                            controls
+                            data-testid={dataTestId.filePreviewContent}
+                            playsInline
+                            src={state.player.source}
+                        >
+                            <track kind="captions" />
+                        </video>
+                    ) : state.player.kind === "audio" ? (
+                        <audio
+                            aria-label={state.name}
+                            className="w-full"
+                            controls
+                            data-testid={dataTestId.filePreviewContent}
+                            src={state.player.source}
+                        >
+                            <track kind="captions" />
+                        </audio>
+                    ) : (
+                        <p className="text-sm leading-6 text-muted-foreground">
+                            This file can't be previewed. Download it to open it on this device.
+                        </p>
+                    )}
+                    <p className="text-sm text-muted-foreground tabular-nums">{formatFileSize(state.blob.size)}</p>
+                    <Button aria-label="Download file" onClick={onDownload}>
+                        <Download aria-hidden="true" />
+                        Download
+                    </Button>
+                </div>
+            );
         case "html":
             return state.view.kind === "source" ? (
                 <PreviewSource name={state.name} text={state.text} />
@@ -110,6 +174,7 @@ function PreviewContent({
 
 export function FilePreview({
     onClose,
+    onDownload,
     onReload,
     onView,
     onMarkdownLink,
@@ -121,6 +186,7 @@ export function FilePreview({
     state,
 }: {
     readonly onClose: () => void;
+    readonly onDownload: () => void;
     readonly onReload: () => void;
     readonly onView: (view: "preview" | "source") => void;
     readonly onMarkdownLink: (path: string) => void;
@@ -217,6 +283,7 @@ export function FilePreview({
             {state.kind === "text" || state.kind === "html" || state.kind === "markdown" || state.kind === "image" ? (
                 <div className="flex min-h-0 flex-1 items-stretch justify-stretch overflow-hidden bg-white">
                     <PreviewContent
+                        onDownload={onDownload}
                         onHtmlAttach={onHtmlAttach}
                         onMarkdownLink={onMarkdownLink}
                         readMarkdownImage={readMarkdownImage}
@@ -231,6 +298,7 @@ export function FilePreview({
                 >
                     <div className="flex min-h-full items-center justify-center">
                         <PreviewContent
+                            onDownload={onDownload}
                             onHtmlAttach={onHtmlAttach}
                             onMarkdownLink={onMarkdownLink}
                             readMarkdownImage={readMarkdownImage}

@@ -324,11 +324,13 @@ async function throwApiError(response: Response): Promise<never> {
 class RequestDeadline {
     readonly #controller = new AbortController();
     readonly #requestSignal: AbortSignal;
-    readonly #timeoutId: ReturnType<typeof globalThis.setTimeout>;
+    readonly #timeoutMilliseconds: number;
+    #timeoutId: ReturnType<typeof globalThis.setTimeout>;
     #timedOut = false;
 
     constructor(requestSignal: AbortSignal, timeoutMilliseconds: number) {
         this.#requestSignal = requestSignal;
+        this.#timeoutMilliseconds = timeoutMilliseconds;
         if (requestSignal.aborted) {
             this.#controller.abort(requestSignal.reason);
         } else {
@@ -342,6 +344,14 @@ class RequestDeadline {
     get signal(): AbortSignal {
         return this.#controller.signal;
     }
+
+    /** Restarts the timeout, so it bounds how long the operation goes without progress rather than its whole length. */
+    readonly refresh = (): void => {
+        globalThis.clearTimeout(this.#timeoutId);
+        if (!this.#controller.signal.aborted) {
+            this.#timeoutId = globalThis.setTimeout(this.abortFromTimeout, this.#timeoutMilliseconds);
+        }
+    };
 
     readonly finish = (): void => {
         globalThis.clearTimeout(this.#timeoutId);
@@ -378,11 +388,17 @@ type FileDownloadState =
     | {
           readonly kind: "chunks";
           readonly begin: FileBeginEvent;
-          readonly bytes: Uint8Array;
+          readonly bytes: Uint8Array<ArrayBuffer>;
           readonly offset: number;
           readonly sequence: number;
       }
-    | { readonly kind: "end"; readonly begin: FileBeginEvent; readonly bytes: Uint8Array };
+    | { readonly kind: "end"; readonly begin: FileBeginEvent; readonly bytes: Uint8Array<ArrayBuffer> };
+
+/** How much of a file being read has arrived. */
+export interface FileReadProgress {
+    readonly receivedBytes: number;
+    readonly totalBytes: number;
+}
 
 /** What the reader asked for: every record of the answer must carry this address and Session. */
 interface FileDownloadRequest {
@@ -454,8 +470,9 @@ async function readEncryptedFile(
     request: FileDownloadRequest,
     decryptor: PayloadDecryptor,
     signal: AbortSignal,
+    progressed: (progress: FileReadProgress) => void,
 ): Promise<{
-    readonly bytes: Uint8Array;
+    readonly bytes: Uint8Array<ArrayBuffer>;
     readonly mediaType: string;
     readonly modifiedAt: string;
     readonly name: string;
@@ -501,6 +518,9 @@ async function readEncryptedFile(
                     throw new MortyProtocolError("The encrypted file record is incomplete");
                 }
                 state = await consumeFileRecord(decoded.record, state, request, decryptor, signal);
+                if (state.kind === "chunks") {
+                    progressed({ receivedBytes: state.offset, totalBytes: state.bytes.byteLength });
+                }
                 buffer = new Uint8Array(5);
                 used = 0;
             }
@@ -612,14 +632,18 @@ export class MortyRequestExecutor {
         return reply;
     };
 
-    /** Sends the encrypted file read and returns the file only when every record of the answer answers that read. */
+    /**
+     * Sends the encrypted file read and returns the file only when every record of the answer answers that read. The
+     * endpoint's timeout bounds each wait for the next record, so a large file is not cut off while it still arrives.
+     */
     readonly readFileStream = async (
         endpoint: MortyTransportEndpoint,
         body: string,
         request: FileDownloadRequest,
         signal: AbortSignal,
+        onProgress?: (progress: FileReadProgress) => void,
     ): Promise<{
-        readonly bytes: Uint8Array;
+        readonly bytes: Uint8Array<ArrayBuffer>;
         readonly mediaType: string;
         readonly modifiedAt: string;
         readonly name: string;
@@ -650,7 +674,16 @@ export class MortyRequestExecutor {
             ) {
                 throw new MortyProtocolError("The Computer returned an invalid encrypted file response");
             }
-            return await readEncryptedFile(response, request, this.#transport.payloadEncryption, deadline.signal);
+            return await readEncryptedFile(
+                response,
+                request,
+                this.#transport.payloadEncryption,
+                deadline.signal,
+                (progress) => {
+                    deadline.refresh();
+                    onProgress?.(progress);
+                },
+            );
         } catch (cause) {
             if (!signal.aborted) {
                 this.#lifetime.signal.throwIfAborted();
@@ -958,8 +991,9 @@ export class MortySessionResources {
         path: string,
         signal: AbortSignal,
         maximumBytes = 32 * 1024 * 1024,
+        onProgress?: (progress: FileReadProgress) => void,
     ): Promise<{
-        readonly bytes: Uint8Array;
+        readonly bytes: Uint8Array<ArrayBuffer>;
         readonly mediaType: string;
         readonly modifiedAt: string;
         readonly name: string;
@@ -982,6 +1016,7 @@ export class MortySessionResources {
             body,
             { maximumBytes, requestId, target: sessionTarget },
             signal,
+            onProgress,
         );
     };
 

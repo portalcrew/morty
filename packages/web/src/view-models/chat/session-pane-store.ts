@@ -1,4 +1,5 @@
 import {
+    type FileReadProgress,
     type MortyClient,
     MortyError,
     MortyPageRequest,
@@ -1328,7 +1329,13 @@ export function createSessionPaneModel(options: {
     /** This pane's connection once ready; the pane follows the Session while it runs, so the Session's is this one. */
     const waitForConnectionReady = (signal: AbortSignal): Promise<MortyClient> =>
         options.sessionPage.connection.ready(signal);
-    const readFile = async (path: string, signal: AbortSignal) => {
+    /** The read's own timeout bounds each wait for more of the file; the caller bounds the whole read if it must. */
+    const readFile = async (
+        path: string,
+        signal: AbortSignal,
+        maximumBytes: number,
+        onProgress?: (progress: FileReadProgress) => void,
+    ) => {
         signal.throwIfAborted();
         const current = store.getState().connection;
         if (current.kind !== "ready") {
@@ -1337,15 +1344,16 @@ export function createSessionPaneModel(options: {
         return await current.client.sessions.readFile(
             sessionTarget,
             path,
-            AbortSignal.any([signal, lifetime.signal, AbortSignal.timeout(20_000)]),
-            32 * 1024 * 1024,
+            AbortSignal.any([signal, lifetime.signal]),
+            maximumBytes,
+            onProgress,
         );
     };
     const readResource = async (path: string, signal: AbortSignal) => {
         // The same bounded lifetime covers connection recovery and the file read.
         const requestSignal = AbortSignal.any([signal, lifetime.signal, AbortSignal.timeout(20_000)]);
         await waitForConnectionReady(requestSignal);
-        return await readFile(path, requestSignal);
+        return await readFile(path, requestSignal, 32 * 1024 * 1024);
     };
     const filePreview = createBrowserFilePreviewStore(readFile);
     /**

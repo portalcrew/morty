@@ -1,8 +1,10 @@
-import { MortyError } from "@portalcrew/morty-client";
+import { type FileReadProgress, MortyError } from "@portalcrew/morty-client";
 import { createStore } from "zustand/vanilla";
 import { MAX_MARKDOWN_CHARACTERS } from "../../components/agents/agent-markdown.tsx";
 import { isDisplayableImageType } from "../../components/agents/displayable-image-type.ts";
+import { playableMediaType } from "../../components/agents/playable-media-type.ts";
 import type { SessionResourceReader } from "../../components/agents/resource-reader.ts";
+import { createMediaSource } from "../../components/images/file-source.ts";
 import {
     attachFilePreviewPanel,
     createFilePreviewImage,
@@ -19,7 +21,7 @@ import { downloadLocalFile } from "../../services/chat/local-file-download.ts";
 
 export type FilePreviewState =
     | { readonly kind: "closed" }
-    | { readonly kind: "loading"; readonly path: string }
+    | { readonly kind: "loading"; readonly path: string; readonly progress: FileReadProgress | null }
     | { readonly kind: "text"; readonly name: string; readonly path: string; readonly text: string }
     | {
           readonly kind: "markdown";
@@ -51,6 +53,14 @@ export type FilePreviewState =
           readonly path: string;
       }
     | {
+          // A file Morty cannot show as text or an image. Its size is the Blob's.
+          readonly kind: "file";
+          readonly blob: Blob;
+          readonly name: string;
+          readonly path: string;
+          readonly player: { readonly kind: "none" } | { readonly kind: "video" | "audio"; readonly source: string };
+      }
+    | {
           readonly kind: "failed";
           readonly message: string;
           readonly path: string;
@@ -67,6 +77,7 @@ interface FilePreviewStore {
     readonly open: (path: string, signal: AbortSignal) => Promise<void>;
     readonly reload: (signal: AbortSignal) => Promise<void>;
     readonly showView: (view: "preview" | "source") => void;
+    readonly download: () => void;
     readonly openMarkdownLink: (path: string, signal: AbortSignal) => Promise<void>;
     readonly readMarkdownImage: SessionResourceReader;
     readonly reportHtmlFailure: (id: string, code: HtmlPreviewFailure) => void;
@@ -76,10 +87,15 @@ interface FilePreviewStore {
 }
 
 interface LocalFileResult {
-    readonly bytes: Uint8Array;
+    readonly bytes: Uint8Array<ArrayBuffer>;
     readonly mediaType: string;
     readonly name: string;
 }
+
+/** The largest file the preview opens; the file protocol bounds every read at this size. */
+const OPEN_MAX_BYTES = 128 * 1024 * 1024;
+/** Markdown images load as the document renders, so each stays within the size of an ordinary read. */
+const MARKDOWN_IMAGE_MAX_BYTES = 32 * 1024 * 1024;
 
 function desktopSize(layout: FilePreviewLayout): "side-panel" | "expanded" {
     return layout.kind === "desktop" ? layout.size : layout.desktopSize;
@@ -132,10 +148,17 @@ const HTML_FAILURE_MESSAGES: Readonly<Record<HtmlPreviewFailure, string>> = {
     script: "The page reported a script error. You can inspect its source or reload.",
 };
 
-function readFailure(cause: unknown, timedOut: boolean, path: string): Extract<FilePreviewState, { kind: "failed" }> {
+function readFailure(cause: unknown, path: string): Extract<FilePreviewState, { kind: "failed" }> {
     const code = cause instanceof MortyError ? cause.code : null;
-    if (timedOut || code === "operation_timeout") {
+    if (code === "operation_timeout") {
         return { kind: "failed", path, message: "The local file preview timed out. Try reloading." };
+    }
+    if (code === "file_too_large") {
+        return {
+            kind: "failed",
+            path,
+            message: `This file is larger than ${OPEN_MAX_BYTES / (1024 * 1024)} MB, the largest file Morty can open. Open it on the Computer instead.`,
+        };
     }
     if (code === "computer_offline" || code === "session_not_connected") {
         return {
@@ -151,18 +174,25 @@ function readFailure(cause: unknown, timedOut: boolean, path: string): Extract<F
     };
 }
 
-export function createBrowserFilePreviewStore(read: (path: string, signal: AbortSignal) => Promise<LocalFileResult>) {
+export function createBrowserFilePreviewStore(
+    read: (
+        path: string,
+        signal: AbortSignal,
+        maximumBytes: number,
+        onProgress?: (progress: FileReadProgress) => void,
+    ) => Promise<LocalFileResult>,
+) {
     const decoder = new TextDecoder("utf-8", { fatal: true });
     let active: AbortController | null = null;
     // The preview owns these resources. Refs only announce DOM availability;
     // transitions also release content before React detaches the previous view.
     let releasePanel: (() => void) | null = null;
     let releaseHtml: (() => void) | null = null;
-    let releaseImage: (() => void) | null = null;
+    let releaseSource: (() => void) | null = null;
     const releaseContent = () => {
         releaseHtml?.();
-        releaseImage?.();
-        releaseImage = null;
+        releaseSource?.();
+        releaseSource = null;
     };
     // Panel layout followers, notified at the explicit sites that change the
     // layout: the attached panel reacts without a store subscription.
@@ -250,7 +280,7 @@ export function createBrowserFilePreviewStore(read: (path: string, signal: Abort
             if (state.kind !== "markdown") {
                 throw new DOMException("The Markdown preview is closed.", "AbortError");
             }
-            return await read(markdownTargetPath(state.path, path), signal);
+            return await read(markdownTargetPath(state.path, path), signal, MARKDOWN_IMAGE_MAX_BYTES);
         },
         showView: (view) => {
             const { state } = get();
@@ -278,6 +308,12 @@ export function createBrowserFilePreviewStore(read: (path: string, signal: Abort
                 },
             });
         },
+        download: () => {
+            const { state } = get();
+            if (state.kind === "file") {
+                downloadLocalFile({ blob: state.blob, name: state.name });
+            }
+        },
         reportHtmlFailure: (id, code) => {
             const { state } = get();
             if (
@@ -303,18 +339,23 @@ export function createBrowserFilePreviewStore(read: (path: string, signal: Abort
             releaseContent();
             const controller = new AbortController();
             active = controller;
-            const timeoutSignal = AbortSignal.timeout(20_000);
-            const operationSignal = AbortSignal.any([signal, controller.signal, timeoutSignal]);
-            set({ state: { kind: "loading", path } });
+            // The read's own timeout bounds each wait for more of the file, so a large file is not cut off while it
+            // still arrives.
+            const operationSignal = AbortSignal.any([signal, controller.signal]);
+            set({ state: { kind: "loading", path, progress: null } });
             try {
-                const file = await read(path, operationSignal);
+                const file = await read(path, operationSignal, OPEN_MAX_BYTES, (progress) => {
+                    if (active === controller && !operationSignal.aborted) {
+                        set({ state: { kind: "loading", path, progress } });
+                    }
+                });
                 operationSignal.throwIfAborted();
                 if (active !== controller) {
                     return;
                 }
                 if (isDisplayableImageType(file.mediaType)) {
                     const image = createFilePreviewImage(file.bytes, file.mediaType);
-                    releaseImage = image.dispose;
+                    releaseSource = image.dispose;
                     set({
                         state: {
                             kind: "image",
@@ -362,15 +403,37 @@ export function createBrowserFilePreviewStore(read: (path: string, signal: Abort
                         return;
                     } catch {}
                 }
-                downloadLocalFile(file);
-                get().close();
+                const media = playableMediaType(file.bytes);
+                if (media === null) {
+                    set({
+                        state: {
+                            kind: "file",
+                            blob: new Blob([file.bytes]),
+                            name: file.name,
+                            path,
+                            player: { kind: "none" },
+                        },
+                    });
+                    return;
+                }
+                const source = createMediaSource(file.bytes, media);
+                releaseSource = source.release;
+                set({
+                    state: {
+                        kind: "file",
+                        blob: source.blob,
+                        name: file.name,
+                        path,
+                        player: { kind: media.kind, source: source.source },
+                    },
+                });
             } catch (cause) {
                 if (controller.signal.aborted) {
                     return;
                 }
                 signal.throwIfAborted();
                 if (active === controller) {
-                    set({ state: readFailure(cause, timeoutSignal.aborted, path) });
+                    set({ state: readFailure(cause, path) });
                 }
             } finally {
                 if (active === controller) {
