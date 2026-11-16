@@ -66,15 +66,7 @@ export function SessionAgentTabs({
                                 testId={dataTestId.harnessMark}
                             />
                             <span className="min-w-0 truncate group-data-[state=inactive]:sr-only">{agent.label}</span>
-                            {!installed && (
-                                <>
-                                    <span
-                                        aria-hidden="true"
-                                        className="size-1.5 shrink-0 rounded-full bg-destructive"
-                                    />
-                                    <span className="sr-only">not installed</span>
-                                </>
-                            )}
+                            {!installed && <span className="sr-only">not installed</span>}
                         </Tabs.Trigger>
                     );
                 })}
