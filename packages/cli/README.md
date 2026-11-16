@@ -16,7 +16,7 @@ Use Node.js 22.19+ on the 22.x line or 24.20+ on the 24.x line, and an installed
 configured Codex, Claude Code or Pi Agent. Keep the computer awake and online.
 Morty's installed package is tested on Linux, macOS and Windows.
 
-Give your coding Agent this prompt:
+Give your Agent this prompt:
 
 ```text
 Fetch https://morty.build/doc/setup.md and complete the Morty setup for me.

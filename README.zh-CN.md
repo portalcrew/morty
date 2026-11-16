@@ -40,7 +40,7 @@ Morty 把正在进行的对话带到你手边。
 
 ## 一条提示词，然后拿起手机。
 
-打开 [morty.build](https://morty.build) 复制设置提示词，或把下面的内容发给你的编程 Agent：
+打开 [morty.build](https://morty.build) 复制设置提示词，或把下面的内容发给你的 AI Agent：
 
 ```text
 Fetch https://morty.build/doc/setup.md and complete the Morty setup for me.
