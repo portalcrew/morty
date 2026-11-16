@@ -1016,6 +1016,13 @@ function MortySessionPaneBody({
                             onStop={() => run(pane.store.getState().stop)}
                             onSubmit={() => runAndFollow(pane.store.getState().send)}
                             outputState={presentation.outputState}
+                            sendBlockedMessage={
+                                executionContext.indicator.label === "Reconnecting"
+                                    ? "Can't send while reconnecting"
+                                    : executionContext.indicator.kind === "failed"
+                                      ? "Can't send while the connection is unavailable"
+                                      : undefined
+                            }
                             stopDisabled={presentation.stopDisabled}
                             submitDisabled={presentation.submitDisabled}
                         >

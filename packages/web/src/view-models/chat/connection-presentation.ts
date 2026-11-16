@@ -5,6 +5,16 @@ import type { SessionConnection } from "./session-connection.ts";
 
 /** A computer goes offline when it sleeps, loses its network, or restarts; only a restart needs the user to start Morty again. */
 const COMPUTER_OFFLINE_RECOVERY = "Make sure it’s awake and online. Your draft is saved.";
+const RECONNECTING_STATUS: ConnectionFeedback = {
+    kind: "reconnecting",
+    title: "Reconnecting…",
+    description: "Updates are paused. We’ll retry automatically. Your draft is saved.",
+};
+const RETRY_IN_PROGRESS_STATUS: ConnectionFeedback = {
+    kind: "attempting",
+    title: "Retrying…",
+    description: "Trying to reconnect now. Your draft is saved.",
+};
 /** Starts the daemon, which resumes the saved connection. */
 const MORTY_START_COMMAND = "npx @portalcrew/morty@latest start";
 /** What happened to a revoked computer, and the one step that pairs it again. */
@@ -113,8 +123,11 @@ export function connectionPresentation(
             },
         );
     }
-    if ((session?.kind === "disconnected" || session?.kind === "reconnecting") && session.notice === "quiet") {
-        return present({ kind: "recovering", label: "Reconnecting" }, { kind: "hidden" });
+    if (session?.kind === "reconnecting") {
+        return present({ kind: "recovering", label: "Reconnecting" }, RETRY_IN_PROGRESS_STATUS);
+    }
+    if (session?.kind === "disconnected" && session.notice === "quiet") {
+        return present({ kind: "recovering", label: "Reconnecting" }, RECONNECTING_STATUS);
     }
     if (session?.kind === "disconnected") {
         return present(
@@ -145,20 +158,9 @@ export function connectionPresentation(
             },
         );
     }
-    if (session?.kind === "reconnecting") {
-        return present(
-            { kind: "recovering", label: "Reconnecting" },
-            {
-                kind: "waiting",
-                title: "Reconnecting…",
-                description: "Updates are paused. Your draft is saved.",
-                restartCommand: null,
-            },
-        );
-    }
     if (computer.kind === "unavailable") {
         if (watch.kind === "unavailable" && watch.notice === "quiet") {
-            return present({ kind: "recovering", label: "Reconnecting" }, { kind: "hidden" });
+            return present({ kind: "recovering", label: "Reconnecting" }, RECONNECTING_STATUS);
         }
         return present(
             { kind: "unknown", label: "Connection status unavailable" },

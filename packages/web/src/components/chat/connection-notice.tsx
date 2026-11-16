@@ -1,4 +1,4 @@
-import { Archive, Check, Copy, type LucideIcon, WifiOff } from "lucide-react";
+import { Archive, Check, Copy, type LucideIcon, RefreshCw, WifiOff } from "lucide-react";
 import type { ReactNode } from "react";
 import { dataTestId } from "../../data-testid.ts";
 import { CopyToClipboardButton } from "../ui/copy-to-clipboard-button.tsx";
@@ -9,7 +9,11 @@ import type { ConnectionFeedback } from "./execution-context.ts";
 
 type VisibleFeedback = Exclude<ConnectionFeedback, { readonly kind: "hidden" }>;
 function noticeTestId(feedback: ConnectionFeedback): string {
-    return feedback.kind === "closed" ? dataTestId.sessionClosedNotice : dataTestId.sessionReconnectNotice;
+    return feedback.kind === "closed"
+        ? dataTestId.sessionClosedNotice
+        : feedback.kind === "reconnecting" || feedback.kind === "attempting"
+          ? dataTestId.sessionReconnectStatus
+          : dataTestId.sessionReconnectNotice;
 }
 
 /**
@@ -25,7 +29,12 @@ function noticeIcon(feedback: VisibleFeedback): LucideIcon | undefined {
     if (feedback.kind === "closed") {
         return Archive;
     }
-    return feedback.kind === "retrying" || feedback.kind === "waiting" ? WifiOff : undefined;
+    if (feedback.kind === "attempting") {
+        return RefreshCw;
+    }
+    return feedback.kind === "retrying" || feedback.kind === "waiting" || feedback.kind === "reconnecting"
+        ? WifiOff
+        : undefined;
 }
 
 function RetryAction({ className, onClick }: { readonly className: string; readonly onClick: () => void }) {
@@ -123,7 +132,7 @@ export function ConnectionNotice({
             <RestartCommand command={feedback.restartCommand} />
         ) : null;
 
-    // The waiting state reads as a quiet chip, not a card: title only, in a
+    // The waiting state reads as a compact chip: title only, in a
     // button-like shape on the chat surface so it sits left-aligned with the
     // composer instead of spanning the pane. The trailing ellipsis animates
     // dot by dot; the clipped span keeps its full width so layout never shifts.
@@ -204,6 +213,7 @@ export function ConnectionNotice({
     );
     return (
         <MortyAlert
+            className="rounded-[20px]"
             description={
                 restart !== null ? (
                     <div className="grid min-w-0 gap-y-1">
@@ -221,6 +231,7 @@ export function ConnectionNotice({
                 )
             }
             icon={noticeIcon(feedback)}
+            iconClassName={feedback.kind === "attempting" ? "animate-spin motion-reduce:animate-none" : undefined}
             testId={testId}
             tone={noticeTone(feedback)}
         >
