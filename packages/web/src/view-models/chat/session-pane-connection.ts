@@ -44,14 +44,12 @@ export const noSessionConnection = createStore<Pick<SessionConnectionStore, "con
 
 export interface SessionPaneConnection {
     readonly store: StoreApi<SessionConnectionStore>;
-    /** The client of the connection now, null while none is open. */
     readonly client: () => MortyClient | null;
     /**
      * Reports a failure of an operation sent through `connected`. A client that a reconnection replaced describes the
      * Session as it was, so only a failure through the current client can close it. True when the Session closed.
      */
     readonly failedThrough: (connected: MortyClient, cause: unknown) => boolean;
-    /** Starts the connection loop and lets the Session's operations reach the Computer through it; once per pane. */
     readonly start: (signal: AbortSignal) => void;
     readonly stop: () => void;
 }

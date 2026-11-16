@@ -27,11 +27,8 @@ import type { SessionSettingsStore } from "./session-settings-store.ts";
  * the submission in flight, or null when it submitted nothing.
  */
 export interface SessionSubmission {
-    /** Submits the composer's draft and files. */
     readonly sendDraft: () => Promise<void> | null;
-    /** Submits the answer picked for an Agent's questions. */
     readonly sendAnswer: (answer: string) => Promise<void> | null;
-    /** Submits the message delivery holds for a new Session once the Session is connected. */
     readonly sendAwaiting: () => Promise<void> | null;
     /**
      * Submits a message that failed again: one the Computer never received keeps its identity, one it rejected gets a

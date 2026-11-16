@@ -38,7 +38,6 @@ interface SessionHistoryStore {
 
 export interface SessionHistory {
     readonly store: StoreApi<SessionHistoryStore>;
-    /** Applies a live event or a reconcile to the projection and reads the history the transition asks for. */
     readonly dispatch: (input: SessionProjectionInput, connected: MortyClient, signal: AbortSignal) => Promise<void>;
     /** The command whose execution a command's message belongs to, or null when the history does not tell. */
     readonly executionOwner: (commandId: string) => string | null;
