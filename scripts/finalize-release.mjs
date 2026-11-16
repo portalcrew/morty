@@ -162,7 +162,7 @@ const { body: changes } = JSON.parse(
 );
 await writeFile(
     ".release/notes.txt",
-    `${changes}\n\nSource: ${release.revision}\n\nCLI: @portalcrew/morty@${release.version}\nSHA-256: ${release.sha256}\n\nPublished from the protected release workflow, verified against the accepted archive, and deployed to production before finalizing this release.\n\nAcceptance: https://github.com/${repository}/actions/runs/${process.env.ACCEPTANCE_RUN_ID}\nDeployment: https://github.com/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}\n`,
+    `${changes}\n\nSource: ${release.revision}\n\nCLI: @portalcrew/morty@${release.version}\nSHA-256: ${release.sha256}\n\nPublished with npm trusted publishing, verified against the accepted archive, and deployed to production before finalizing this release.\n\nAcceptance: https://github.com/${repository}/actions/runs/${process.env.ACCEPTANCE_RUN_ID}\nDeployment: https://github.com/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}\n`,
 );
 if (!existing) {
     gh(

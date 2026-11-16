@@ -9,7 +9,7 @@ if (
     process.env.GITHUB_REF !== "refs/heads/main" ||
     !process.env.ACTIONS_ID_TOKEN_REQUEST_URL
 ) {
-    throw new Error("Publishing requires the protected Morty main-branch publication job");
+    throw new Error("Publishing requires the Morty main-branch OIDC job");
 }
 // npm cannot generate public provenance for a private source repository.
 // OIDC still binds publisher authority; release.json records the tested archive and revision.
@@ -45,15 +45,11 @@ async function registryContainsAcceptedRelease() {
 }
 
 // A queued or retried old commit must never move npm latest backwards.
-async function registryLatestStatus() {
+async function registryLatestIsAcceptedRelease() {
     const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(release.name)}/latest`, {
         headers: { "cache-control": "no-cache" },
         signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
     });
-    if (response.status === 404) {
-        await response.body?.cancel();
-        return "missing";
-    }
     if (!response.ok) {
         await response.body?.cancel();
         throw new Error("Cannot verify the current published release");
@@ -71,26 +67,11 @@ async function registryLatestStatus() {
     if (difference === 0 && (published.name !== release.name || published.dist?.integrity !== release.integrity)) {
         throw new Error("Latest release integrity differs from the tested archive");
     }
-    return difference === 0 ? "accepted" : "older";
+    return difference === 0;
 }
-const latest = await registryLatestStatus();
-const alreadyPublished = await registryContainsAcceptedRelease();
-if (latest === "missing" && !alreadyPublished) {
-    // npm requires an existing package before a trusted publisher can be configured.
-    // Only a genuinely absent package may use the one-time environment credential.
-    const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(release.name)}`, {
-        headers: { "cache-control": "no-cache" },
-        signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
-    });
-    await response.body?.cancel();
-    if (response.status !== 404 || !process.env.NODE_AUTH_TOKEN) {
-        throw new Error("First publication requires an absent package and its protected bootstrap credential");
-    }
-} else if (process.env.NODE_AUTH_TOKEN && !alreadyPublished) {
-    throw new Error("Remove the bootstrap credential and configure trusted publishing before the next release");
-}
+await registryLatestIsAcceptedRelease();
 
-if (alreadyPublished) {
+if (await registryContainsAcceptedRelease()) {
     console.log("The accepted archive is already published; verifying this retry without republishing.");
 } else {
     const result = await promisify(execFile)(
@@ -107,7 +88,7 @@ if (alreadyPublished) {
     }
 }
 // Exact-version and dist-tag metadata can become visible at different times.
-while ((await registryLatestStatus()) !== "accepted") {
+while (!(await registryLatestIsAcceptedRelease())) {
     console.log("Waiting for npm latest to identify the accepted release before the setup instructions change.");
     await delay(5000, undefined, { signal });
 }
