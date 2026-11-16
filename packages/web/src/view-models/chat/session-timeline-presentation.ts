@@ -1,7 +1,7 @@
 import type { ToolThinkingEntry } from "../../components/chat/tools/tool-renderer.ts";
 import { agentReplyCopyText, agentReplyMessageGroups } from "./agent-reply-copy.ts";
 import type { SessionConnection } from "./session-connection.ts";
-import type { sessionPanePresentation } from "./session-pane-store.ts";
+import type { sessionPanePresentation } from "./session-pane-presentation.ts";
 import { type SessionExecutionMessage, sessionExecutionStates } from "./session-presentation.ts";
 import {
     agentReplySections,

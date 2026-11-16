@@ -317,7 +317,7 @@ export function createChatWorkspace(options: {
     const draftWaitsForComputer = (): boolean => draftControls.getState().settings.kind === "unreachable";
     const paneWaitingForComputer = () => {
         const open = paneStore.getState();
-        return open.kind === "open" && connectionWaitsForComputer(open.model.store.getState().connection)
+        return open.kind === "open" && connectionWaitsForComputer(open.model.connection.getState().connection)
             ? open.model
             : null;
     };

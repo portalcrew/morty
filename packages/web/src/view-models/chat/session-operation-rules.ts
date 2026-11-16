@@ -26,13 +26,18 @@ function sessionAccepts(facts: Pick<SessionOperationFacts, "connection" | "confi
     return facts.connection === "ready" && !facts.configuring;
 }
 
-export function canSubmit(facts: Pick<SessionOperationFacts, "connection" | "configuring" | "delivery">): boolean {
+/** What the Session's own state decides about a submission, whichever pane shows it. */
+export function canStartSubmission(facts: Pick<SessionOperationFacts, "configuring" | "delivery">): boolean {
     return (
+        !facts.configuring &&
         facts.delivery !== "preparing" &&
         facts.delivery !== "submitting" &&
-        facts.delivery !== "delivery-unknown" &&
-        sessionAccepts(facts)
+        facts.delivery !== "delivery-unknown"
     );
+}
+
+function canSubmit(facts: Pick<SessionOperationFacts, "connection" | "configuring" | "delivery">): boolean {
+    return facts.connection === "ready" && canStartSubmission(facts);
 }
 
 function userCanReachSession(facts: SessionOperationFacts): boolean {

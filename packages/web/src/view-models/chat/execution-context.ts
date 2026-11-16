@@ -5,7 +5,7 @@ import type { ComputerStatusStore } from "./computer-status-store.ts";
 import { connectionPresentation } from "./connection-presentation.ts";
 import type { DraftControlsStore } from "./draft-controls-store.ts";
 import type { SelectedMortySession } from "./open-session.ts";
-import type { SessionConnection } from "./session-pane-store.ts";
+import type { SessionConnection } from "./session-connection.ts";
 
 export type { ExecutionContext };
 

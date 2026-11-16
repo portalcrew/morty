@@ -2,7 +2,7 @@ import { Clock4, CornerUpLeft, LoaderCircle, MessageSquare, Pencil, Trash2 } fro
 import type { ReactNode } from "react";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { dataTestId } from "../../data-testid.ts";
-import type { sessionPanePresentation } from "../../view-models/chat/session-pane-store.ts";
+import type { sessionPanePresentation } from "../../view-models/chat/session-pane-presentation.ts";
 
 function QueueAction({
     label,

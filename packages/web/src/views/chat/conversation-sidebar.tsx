@@ -58,7 +58,7 @@ import { pendingExecutionContext, sessionExecutionContext } from "../../view-mod
 import { nativeSessionAgentTabs } from "../../view-models/chat/native-session-agents.ts";
 import { noSessionDelivery } from "../../view-models/chat/session-delivery-store.ts";
 import { noSessionExecution } from "../../view-models/chat/session-execution.ts";
-import { noSessionPane } from "../../view-models/chat/session-pane-store.ts";
+import { noSessionConnection } from "../../view-models/chat/session-pane-connection.ts";
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
 import { AccessTerm } from "./access-term.tsx";
 import {
@@ -414,7 +414,7 @@ export function ConversationSidebar({
     const draftSettings = useStore(workspace.draftControls, (state) => state.settings);
     const openPane = useStore(workspace.pane);
     const pane = openPane.kind === "open" ? openPane.model : null;
-    const paneConnection = useStore(pane?.store ?? noSessionPane, (state) => state.connection);
+    const paneConnection = useStore(pane?.connection ?? noSessionConnection, (state) => state.connection);
     const paneDelivery = useStore(pane?.delivery ?? noSessionDelivery, (state) => state.state);
     const paneExecution = useStore(pane?.execution ?? noSessionExecution, (state) => state.state);
     const executionContext =

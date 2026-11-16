@@ -228,9 +228,18 @@ export function prependToDraft(content: string, draft: string): string {
     return draft.length === 0 ? content : content.length === 0 ? draft : `${content}\n\n${draft}`;
 }
 
+/** A submission never left the browser, so the Computer cannot hold it. */
+export class SubmissionNotSentError extends MortyError {
+    constructor(options: ErrorOptions) {
+        super("submission_not_sent", "The message could not be sent.", options);
+        this.name = "SubmissionNotSentError";
+    }
+}
+
 /** Local validation and the Computer's refusals settle delivery: nothing ran. Ambiguous failures do not. */
 export function isAuthoritativeFailure(cause: unknown): boolean {
     return (
+        cause instanceof SubmissionNotSentError ||
         cause instanceof MortyValidationError ||
         (cause instanceof MortyOperationError && cause.outcome === "refused") ||
         (cause instanceof MortyApiError && cause.status >= 400 && cause.status < 500) ||

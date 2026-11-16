@@ -3,9 +3,9 @@ import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { ManagedChatSession } from "../../services/chat/bot-chat-api.ts";
 import type { SessionActivityState } from "./session-activity-machine.ts";
+import type { SessionConnection } from "./session-connection.ts";
 import type { DeliveryState } from "./session-delivery-store.ts";
-import type { SessionExecutionState } from "./session-execution.ts";
-import { paneActivity, type SessionConnection } from "./session-pane-store.ts";
+import { paneActivity, type SessionExecutionState } from "./session-execution.ts";
 
 export type ConversationStatusStoreApi = ReturnType<typeof createConversationStatusStore>;
 

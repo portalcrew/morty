@@ -1,6 +1,7 @@
 import type { MortyClient, MortyTurnAdmission } from "@portalcrew/morty-client";
 import { createStore } from "zustand/vanilla";
 import type { SessionActivityState } from "./session-activity-machine.ts";
+import type { SessionConnection } from "./session-connection.ts";
 import {
     acceptedTurn,
     type CurrentTurn,
@@ -603,6 +604,18 @@ export function sessionActivity(
         return { kind: "failed", commandId: delivery.message.commandId, ...delivery.failure };
     }
     return turn.failure === null ? { kind: "idle" } : { kind: "failed", ...turn.failure };
+}
+
+/**
+ * The Session's work as its pane accounts for it, including submissions the Computer never saw; none until the
+ * connection first reaches the Computer, as the execution state has nothing of the Computer's yet.
+ */
+export function paneActivity(
+    connection: SessionConnection,
+    execution: Pick<SessionExecutionState, "turn" | "commands">,
+    delivery: DeliveryState,
+): SessionActivityState | null {
+    return connection.kind === "first-loading" ? null : sessionActivity(execution, delivery);
 }
 
 export interface SessionExecutionStore {
