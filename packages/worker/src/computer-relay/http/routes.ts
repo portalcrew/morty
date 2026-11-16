@@ -17,6 +17,7 @@ import { computerFromPath } from "../../http/computer-target.ts";
 import { errorMiddleware } from "../../http/error-middleware.ts";
 import { json } from "../../http/json.ts";
 import { RequestDeadline } from "../../http/request-deadline.ts";
+import { readBearerToken } from "../../http/request-headers.ts";
 import { createBrowserCors } from "../../middleware/browser-cors.ts";
 import { requestTimeoutMiddleware } from "../../middleware/request-timeout-middleware.ts";
 import { createRelayProtocolRoutes } from "../components/management/http/protocol-routes.ts";
@@ -89,7 +90,7 @@ export function createComputerHttpRoutes(
                         sessionId: validateIdentifier(context.req.param("sessionId"), "session_id"),
                     },
                 } satisfies Parameters<typeof services.sessions.authorizeSession>[0];
-                const credential = (context.req.header("authorization") ?? "").match(/^Bearer ([^\s]+)$/u)?.[1];
+                const credential = readBearerToken(context.req.raw.headers);
                 if (credential === undefined) {
                     return context.json(
                         { error: { code: "session_access_required", message: "A Session credential is required" } },

@@ -1,5 +1,6 @@
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { toHttpError } from "../../../../contracts/http-error.ts";
+import { readBearerToken } from "../../../../http/request-headers.ts";
 import type { SessionAccessService } from "../service/session-access-service.ts";
 
 export type SessionContentUploadTarget = {
@@ -22,7 +23,7 @@ export async function authorizeSessionContentUpload(
     if (!/^[a-f0-9]{64}$/u.test(contentKey)) {
         return sessionContentUploadRequired();
     }
-    const credential = (request.headers.get("authorization") ?? "").match(/^Bearer ([^\s]+)$/u)?.[1];
+    const credential = readBearerToken(request.headers);
     if (credential === undefined) {
         return Response.json(
             { error: { code: "session_access_required", message: "A Session credential is required" } },

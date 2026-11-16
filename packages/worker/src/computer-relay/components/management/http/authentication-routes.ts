@@ -47,7 +47,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
                 using deadline = new RequestDeadline(context.req.raw.signal, 15_000);
                 const result = await application.services.authentication.linkComputer(
                     context.req.valid("json").computerId,
-                    readBearerToken(context.req.raw),
+                    readBearerToken(context.req.raw.headers),
                     deadline.signal,
                 );
                 switch (result.kind) {
@@ -79,7 +79,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
                     Allow: "GET",
                 });
             }
-            const token = readBearerToken(request);
+            const token = readBearerToken(request.headers);
             const result = await application.services.authentication.session(token, request.signal);
             switch (result.kind) {
                 case "authenticated":
@@ -107,7 +107,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
                 const application = applicationForRequest(ctx, context);
                 const input = context.req.valid("json");
                 const transfer = await application.services.authentication.createTransfer(
-                    readBearerToken(context.req.raw),
+                    readBearerToken(context.req.raw.headers),
                     {
                         operationId: input.operationId,
                         duration: input.accessDuration ?? defaultDeviceAccessDuration,
@@ -138,7 +138,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
         .get("/identity/devices", async (context) => {
             const application = applicationForRequest(ctx, context);
             const result = await application.services.authentication.linkedDevices(
-                readBearerToken(context.req.raw),
+                readBearerToken(context.req.raw.headers),
                 context.req.raw.signal,
             );
             if (result.kind !== "listed") {
@@ -165,7 +165,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             async (context) => {
                 const application = applicationForRequest(ctx, context);
                 const result = await application.services.authentication.revokeAllAccess(
-                    readBearerToken(context.req.raw),
+                    readBearerToken(context.req.raw.headers),
                     context.req.valid("json").successor,
                     context.req.raw.signal,
                 );
@@ -186,7 +186,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
         .delete("/identity/other-browser-access", async (context) => {
             const application = applicationForRequest(ctx, context);
             const result = await application.services.authentication.endOtherBrowserAccess(
-                readBearerToken(context.req.raw),
+                readBearerToken(context.req.raw.headers),
                 context.req.raw.signal,
             );
             switch (result.kind) {
@@ -205,7 +205,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
         .delete("/identity/devices/:deviceId", async (context) => {
             const application = applicationForRequest(ctx, context);
             const result = await application.services.authentication.endDeviceAccess(
-                readBearerToken(context.req.raw),
+                readBearerToken(context.req.raw.headers),
                 context.req.param("deviceId"),
                 context.req.raw.signal,
             );
@@ -234,7 +234,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             const application = applicationForRequest(ctx, context);
             return endAccessResponse(
                 await application.services.authentication.endBrowserAccess(
-                    readBearerToken(context.req.raw),
+                    readBearerToken(context.req.raw.headers),
                     context.req.raw.signal,
                 ),
             );
@@ -243,7 +243,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             const application = applicationForRequest(ctx, context);
             return endAccessResponse(
                 await application.services.authentication.retireLocalCredential(
-                    readBearerToken(context.req.raw),
+                    readBearerToken(context.req.raw.headers),
                     context.req.raw.signal,
                 ),
             );
