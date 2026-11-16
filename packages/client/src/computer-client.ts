@@ -356,7 +356,6 @@ export class MortyComputerClient {
         );
     };
 
-    /** A fresh credential for a Session the Computer holds, for the Session's own operations. */
     readonly prepareSession = async (target: NativeSessionTarget, signal: AbortSignal): Promise<MortySessionAccess> => {
         const requestId = crypto.randomUUID();
         const { requestId: _requestId, ...access } = await this.#executor.exchange(
@@ -470,7 +469,6 @@ export class MortyComputerClient {
         );
     };
 
-    /** Finds a Session by its identity alone, then imports it from the directory the Computer reports. */
     readonly continueNativeSession = async (
         harness: string,
         sessionId: string,

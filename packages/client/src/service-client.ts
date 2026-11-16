@@ -129,7 +129,6 @@ function connectionCauseMessages(cause: unknown): readonly string[] {
 
 export interface MortyCredentialProvider {
     readonly credential: (signal: AbortSignal) => Promise<string>;
-    /** A credential to send once more after the service rejected `rejected`, or null when none can replace it. */
     readonly replacement?: (rejected: string, signal: AbortSignal) => Promise<string | null>;
 }
 
