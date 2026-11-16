@@ -12,6 +12,13 @@ function browserCorsHeaders(origin: string, methods: readonly string[], headers:
     });
 }
 
+/** Refuses a browser origin that is not allowed; a request without an origin is not a browser's cross-origin request. */
+export function assertBrowserOriginAllowed(allowedOrigins: ReadonlySet<string>, origin: string): void {
+    if (origin.length > 0 && !allowedOrigins.has("*") && !allowedOrigins.has(origin)) {
+        throw new ComputerManagementError("browser_origin_denied", "The browser origin is not allowed", 403);
+    }
+}
+
 export function createBrowserCors(
     ctx: { readonly allowedOrigins: ReadonlySet<string> },
     methods: readonly string[],
@@ -19,10 +26,7 @@ export function createBrowserCors(
 ) {
     return createMiddleware(async (context, next) => {
         const origin = context.req.header("origin") ?? "";
-        const allowedOrigins = ctx.allowedOrigins;
-        if (origin.length > 0 && !allowedOrigins.has("*") && !allowedOrigins.has(origin)) {
-            throw new ComputerManagementError("browser_origin_denied", "The browser origin is not allowed", 403);
-        }
+        assertBrowserOriginAllowed(ctx.allowedOrigins, origin);
         if (context.req.method === "OPTIONS") {
             if (origin.length === 0) {
                 throw new ComputerManagementError("browser_origin_denied", "The browser origin is not allowed", 403);

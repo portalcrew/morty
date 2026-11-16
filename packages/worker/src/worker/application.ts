@@ -8,7 +8,7 @@ import { computerFromPath, computerFromRuntimeCredential, computerFromTransfer }
 import { controlBodyLimit } from "../http/control-body-limit.ts";
 import { errorHandler, errorMiddleware } from "../http/error-middleware.ts";
 import { RequestError } from "../http/request-error.ts";
-import { requestTimeoutMiddleware } from "../middleware/request-timeout-middleware.ts";
+import { assertBrowserOriginAllowed } from "../middleware/browser-cors.ts";
 import { instructionDocumentRoutes } from "./components/instruction-documents/http/instruction-document-routes.ts";
 import { cloudRoutes } from "./composition/cloud-http.ts";
 import { forwardToComputer } from "./gateway/computer-object-routing.ts";
@@ -16,7 +16,7 @@ import { webPages } from "./http/web-pages.ts";
 
 type ForwardingEnvironment = {
     readonly Bindings: CloudBindings;
-    readonly Variables: { readonly signal: AbortSignal; readonly computerId?: string };
+    readonly Variables: { readonly computerId?: string };
 };
 
 function createComputerForwardingRoutes() {
@@ -26,20 +26,9 @@ function createComputerForwardingRoutes() {
             throw new RequestError("NOT_FOUND", "Not found.", 404);
         }
         const authentication = relayAuthenticationFromEnvironment(relayBindings(context.env));
-        const origin = context.req.header("origin");
-        if (
-            origin !== undefined &&
-            !authentication.allowedOrigins.has("*") &&
-            !authentication.allowedOrigins.has(origin)
-        ) {
-            return context.json(
-                { error: { code: "browser_origin_denied", message: "The browser origin is not allowed" } },
-                403,
-            );
-        }
+        assertBrowserOriginAllowed(authentication.allowedOrigins, context.req.header("origin") ?? "");
         return await forwardToComputer(context.req.raw, context.env, computerId);
     };
-    const timeout = requestTimeoutMiddleware<ForwardingEnvironment>(30_000);
     const location: MiddlewareHandler<ForwardingEnvironment> = async (context, next) => {
         const headers = new Headers(context.req.raw.headers);
         const location = clientLocationOf(context.req.raw);
@@ -53,7 +42,8 @@ function createComputerForwardingRoutes() {
     return (
         new Hono<ForwardingEnvironment>()
             .onError(errorHandler)
-            .use("*", errorMiddleware, timeout, controlBodyLimit)
+            // The deadline lives where the request is forwarded: one here would cut long file uploads short.
+            .use("*", errorMiddleware, controlBodyLimit)
             .get("/morty/api/v1/computers/connect", computerFromRuntimeCredential, forward)
             .post("/morty/api/v1/computers/:computerId/pairing/redeem", computerFromPath, forward)
             .put("/morty/api/v1/computers/:computerId/catalog", computerFromPath, forward)
