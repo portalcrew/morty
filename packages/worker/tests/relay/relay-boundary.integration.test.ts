@@ -334,7 +334,7 @@ afterAll(async () => {
     await abortAllDurableObjects();
 });
 
-describe.sequential("Relay Session-only boundary", () => {
+describe("Relay Session-only boundary", { concurrent: false }, () => {
     it("Given an allowed Chat origin, When the browser preflights a Session file read, Then Relay permits Session authorization with the Session credential headers", async () => {
         const browserOrigin = "https://chat.test";
         const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration(new Set([browserOrigin])));
@@ -1556,7 +1556,7 @@ it("Given Chat reads the Session execution after missing a turn's outcome, When 
     }
 });
 
-describe.sequential("Relay Turn submission", () => {
+describe("Relay Turn submission", { concurrent: false }, () => {
     it.for(["session"] as const)(
         "Given %s access cancels a Turn, When the Computer reports cancellation or prior completion, Then the response reports the Turn's actual stop reason",
         async (access, { signal }) => {
