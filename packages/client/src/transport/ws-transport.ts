@@ -186,8 +186,6 @@ export class WsTransport {
     readonly #pending = new Map<string, PendingWsRequest>();
     readonly #subscriptions = new Map<string, LiveEventSubscription>();
     readonly #pendingLiveFanouts = new Map<string, Map<string, PendingLiveFanout>>();
-    #pendingLiveFanoutCount = 0;
-    #pendingLiveFanoutBytes = 0;
     #liveDecryptionController = new AbortController();
     #endpoint: string | null = null;
     #state: WsTransportState = { kind: "disconnected" };
@@ -634,8 +632,6 @@ export class WsTransport {
         this.#liveDecryptionController.abort(cause);
         this.#liveDecryptionController = new AbortController();
         this.#pendingLiveFanouts.clear();
-        this.#pendingLiveFanoutCount = 0;
-        this.#pendingLiveFanoutBytes = 0;
         const subscriptions = Array.from(this.#subscriptions.values());
         this.#subscriptions.clear();
         for (const subscription of subscriptions) {
@@ -657,8 +653,6 @@ export class WsTransport {
             delivery.remaining.delete(id);
             if (delivery.remaining.size === 0) {
                 pending.delete(data);
-                this.#pendingLiveFanoutCount -= 1;
-                this.#pendingLiveFanoutBytes -= delivery.bytes;
             }
         }
         if (pending.size === 0) {
@@ -672,8 +666,6 @@ export class WsTransport {
         if (existing?.remaining.delete(id)) {
             if (existing.remaining.size === 0) {
                 pending?.delete(data);
-                this.#pendingLiveFanoutCount -= 1;
-                this.#pendingLiveFanoutBytes -= existing.bytes;
                 if (pending?.size === 0) {
                     this.#pendingLiveFanouts.delete(scope);
                 }
@@ -707,10 +699,8 @@ export class WsTransport {
             return execution;
         }
         const bytes = data.length * 2;
-        if (
-            this.#pendingLiveFanoutCount >= MAX_PENDING_LIVE_FANOUTS ||
-            this.#pendingLiveFanoutBytes + bytes > MAX_PENDING_LIVE_FANOUT_BYTES
-        ) {
+        const held = this.#pendingLiveFanoutTotals();
+        if (held.count >= MAX_PENDING_LIVE_FANOUTS || held.bytes + bytes > MAX_PENDING_LIVE_FANOUT_BYTES) {
             throw new MortyProtocolError("The live Session event fanout exceeded its buffer limit");
         }
         const entries = pending ?? new Map<string, PendingLiveFanout>();
@@ -718,9 +708,20 @@ export class WsTransport {
         if (pending === undefined) {
             this.#pendingLiveFanouts.set(scope, entries);
         }
-        this.#pendingLiveFanoutCount += 1;
-        this.#pendingLiveFanoutBytes += bytes;
         return execution;
+    };
+
+    /** How many deliveries and bytes the pending fan-outs hold, summed from them: they are the one record of it. */
+    readonly #pendingLiveFanoutTotals = (): { readonly count: number; readonly bytes: number } => {
+        let count = 0;
+        let bytes = 0;
+        for (const deliveries of this.#pendingLiveFanouts.values()) {
+            for (const delivery of deliveries.values()) {
+                count += 1;
+                bytes += delivery.bytes;
+            }
+        }
+        return { count, bytes };
     };
 
     readonly #receiveSubscription = (kind: string, message: Readonly<Record<string, unknown>>): void => {

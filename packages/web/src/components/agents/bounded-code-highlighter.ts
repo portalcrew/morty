@@ -20,8 +20,6 @@ interface CachedResult {
 const highlighters = new Map<string, Promise<HighlighterCore>>();
 const results = new Map<string, CachedResult>();
 const pending = new Map<string, Set<(result: TokensResult) => void>>();
-let cachedSourceCharacters = 0;
-let cachedTokens = 0;
 
 function languageRegistration(language: string) {
     return Object.entries(bundledLanguages).find(([name]) => name === language)?.[1] ?? null;
@@ -70,12 +68,18 @@ function removeOldestResult(): void {
     if (oldestKey === undefined) {
         return;
     }
-    const oldest = results.get(oldestKey);
     results.delete(oldestKey);
-    if (oldest !== undefined) {
-        cachedSourceCharacters -= oldest.sourceCharacters;
-        cachedTokens -= oldest.tokens;
+}
+
+/** What the cached results hold, summed from them: they are the one record of it. */
+function cachedTotals(): { readonly sourceCharacters: number; readonly tokens: number } {
+    let sourceCharacters = 0;
+    let tokens = 0;
+    for (const cached of results.values()) {
+        sourceCharacters += cached.sourceCharacters;
+        tokens += cached.tokens;
     }
+    return { sourceCharacters, tokens };
 }
 
 function cacheResult(key: string, code: string, result: TokensResult): void {
@@ -83,19 +87,14 @@ function cacheResult(key: string, code: string, result: TokensResult): void {
     if (code.length > MAX_CACHED_SOURCE_CHARACTERS || tokens > MAX_CACHED_TOKENS) {
         return;
     }
-    const previous = results.get(key);
-    if (previous !== undefined) {
-        cachedSourceCharacters -= previous.sourceCharacters;
-        cachedTokens -= previous.tokens;
-        results.delete(key);
-    }
+    results.delete(key);
     results.set(key, { result, sourceCharacters: code.length, tokens });
-    cachedSourceCharacters += code.length;
-    cachedTokens += tokens;
-    while (
+    for (
+        let held = cachedTotals();
         results.size > MAX_RESULTS ||
-        cachedSourceCharacters > MAX_CACHED_SOURCE_CHARACTERS ||
-        cachedTokens > MAX_CACHED_TOKENS
+        held.sourceCharacters > MAX_CACHED_SOURCE_CHARACTERS ||
+        held.tokens > MAX_CACHED_TOKENS;
+        held = cachedTotals()
     ) {
         removeOldestResult();
     }
