@@ -8,7 +8,6 @@ updates:
       day: monday
       time: "09:00"
       timezone: Asia/Shanghai
-    # Each risk group and each major update holds its own pull request.
     open-pull-requests-limit: 10
     ignore:
       - dependency-name: "@types/node"
@@ -25,7 +24,6 @@ updates:
         update-types:
           - minor
           - patch
-      # The Workers' build and runtime toolchain.
       cloudflare:
         patterns:
           - "wrangler"

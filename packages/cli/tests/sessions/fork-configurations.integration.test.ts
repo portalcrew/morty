@@ -100,7 +100,6 @@ test.for(["", "--fork-mode-unavailable", "--fork-omits-mode", "--fork-omits-mode
                         throw new Error("Missing native source");
                     }
                     const requestId = crypto.randomUUID();
-                    // Only the harness allocates the independent fork's native target.
                     peer.send(
                         JSON.stringify({
                             ...identity,

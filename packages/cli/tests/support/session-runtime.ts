@@ -14,10 +14,8 @@ import { AgentProcessPool } from "../../src/engine/session/process/agent-process
 
 export type TestSessionPrepareOptions = Omit<SessionPrepareOptions, "adapter">;
 
-/** `Omit` that keeps each variant of a union apart. */
 type WithoutAdapter<Options> = Options extends unknown ? Omit<Options, "adapter"> : never;
 
-/** Composes real session resources for direct session scenarios, with Computer owning the adapters. */
 export class SessionRuntimeFixture {
     readonly sessions: SessionManager;
     readonly adapters: AdapterRegistry;
@@ -48,7 +46,6 @@ export class SessionRuntimeFixture {
     readonly restoreSession = (options: TestSessionPrepareOptions) =>
         this.sessions.restoreSession({ ...options, adapter: this.adapters.resolve(options.agent) });
 
-    /** A Session created with the Agent's own settings. */
     readonly createNativeSession = async (options: Omit<SessionCreationOptions, "adapter">) =>
         (
             await this.sessions.createSession(

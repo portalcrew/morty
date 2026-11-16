@@ -69,7 +69,6 @@ test("Given the Agent changed its model during a turn and the user then picked a
         throw new Error("Expected the connected Computer");
     }
     const composer = await readyComposer(app);
-    // The Agent switches its own model during a turn, as Claude Code does on entering plan mode.
     await sendPrompt(app, composer, "hold after first delta");
     await app.daemon.continueReply("hold after first delta", {
         outcome: "complete",
@@ -104,7 +103,6 @@ test("Given the Agent changed its model during a turn and the user then picked a
     );
 
     const reloaded = await app.reload();
-    // The history, which still records the Agent's own switch, has loaded.
     await reloaded.waitForView(() =>
         expect(getByRole(document.body, "log", { name: "Messages" }).textContent).toContain("hold after first delta"),
     );

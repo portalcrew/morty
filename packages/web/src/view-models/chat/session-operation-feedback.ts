@@ -1,12 +1,9 @@
 import { createStore } from "zustand/vanilla";
 import type { QueuedCommand } from "./session-execution.ts";
 
-/** Why an operation the user asked of the Session failed, with what the failure describes while it still applies. */
 export type OperationFailure =
     | { readonly operation: "rename" | "settings" | "older-history" | "delete-queued"; readonly message: string }
-    /** A failed stop describes its turn while that turn runs. */
     | { readonly operation: "stop"; readonly commandId: string; readonly message: string }
-    /** A failed steer describes its message while the Computer still queues it. */
     | { readonly operation: "steer"; readonly commandId: string; readonly message: string };
 
 /**
@@ -35,7 +32,6 @@ export const createSessionOperationFeedbackStore = () =>
         },
     }));
 
-/** What the composer reports of the last failure, while that failure still describes the Session. */
 export function operationFailureMessage(
     failure: OperationFailure | null,
     running: { readonly commandId: string } | null,

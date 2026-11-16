@@ -24,7 +24,6 @@ const agentSettingFields = {
     name: z.string().min(1).max(255),
 };
 
-/** A setting the Agent offers and its default: a select defaults to one of its values, a boolean to a flag. */
 const agentSettingSchema = z.discriminatedUnion("type", [
     z
         .object({
@@ -44,7 +43,6 @@ const agentSettingsSchema = z.array(agentSettingSchema).max(128).readonly();
 const agentSettingsDiscoverCommandSchema = z
     .object({
         harness: IDENTIFIER,
-        // The directory whose project settings the Agent reads. Omitted means the default directory.
         directory: DIRECTORY_PATH.optional(),
         kind: z.literal(AGENT_SETTINGS_DISCOVER_KIND),
         model: z.string().min(1).max(500).optional(),
@@ -59,7 +57,6 @@ const agentSettingsDiscoveredEventSchema = z
         harness: IDENTIFIER,
         agentName: z.string().max(255),
         agentVersion: z.string().max(128),
-        // The directory actually inspected.
         directory: DIRECTORY_PATH,
         kind: z.literal(AGENT_SETTINGS_DISCOVERED_KIND),
         requestId: IDENTIFIER,

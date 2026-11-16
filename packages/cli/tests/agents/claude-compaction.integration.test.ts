@@ -78,13 +78,9 @@ test("Given Claude Code compacts a conversation with content, When the daemon re
                 bannerTexts.push(update.content.text);
             }
         }
-        // One compaction: opened and settled by the same Agent-owned ID, with no
-        // synthesized "Compacting..." text banners.
         expect(statuses).toEqual(["in_progress", "completed"]);
         expect(new Set(compactionIds).size).toBe(1);
         expect(bannerTexts).toEqual([]);
-        // When the CLI streams the summary it produced, every chunk addresses the
-        // same compaction.
         for (const chunk of summaryChunks) {
             expect(chunk.length).toBeGreaterThan(0);
         }

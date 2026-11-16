@@ -22,7 +22,6 @@ function answeredBy<Kind extends keyof typeof daemonToRelayDecoders>(kind: Kind)
     return { kind, decode: daemonToRelayDecoders[kind] };
 }
 
-/** The one native success reply that answers each command. */
 const computerControlAnswers = {
     "computer.diagnostics.read": answeredBy("computer.diagnostics.result"),
     "computer.ping": answeredBy("computer.pong"),
@@ -47,13 +46,10 @@ const computerControlAnswers = {
     "workspace.list": answeredBy("workspace.entries"),
 } satisfies { readonly [K in ClientControlKind]: { readonly kind: string } };
 
-/** The success reply that answers a command of kind `K`. */
 export type ClientControlSuccess<K extends ClientControlKind> = ReturnType<
     (typeof computerControlAnswers)[K]["decode"]
 >;
-/** The failure the Computer reports for any command; its code and message are the Computer's, sealed for the client. */
 type ComputerOperationFailure = ReturnType<(typeof daemonToRelayDecoders)["session.operation.failed"]>;
-/** Everything that answers a command of kind `K`: its own success reply, or the Computer's failure. */
 export type ClientControlReply<K extends ClientControlKind> = ClientControlSuccess<K> | ComputerOperationFailure;
 
 export const computerControlSuccess: {

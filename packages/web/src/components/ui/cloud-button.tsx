@@ -21,7 +21,6 @@ const sizes = {
     xs: "h-7 gap-1 pl-3 pr-3 [font-size:12px] leading-4 [&_svg]:size-3",
     icon: "size-9 p-0 [font-size:16px] [&_svg]:size-4",
 };
-/** Icon edge only. The label edge keeps the size's pl/pr. */
 const iconEdgePadding = {
     default: { leading: "pl-3", trailing: "pr-3" },
     lg: { leading: "pl-4", trailing: "pr-4" },

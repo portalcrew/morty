@@ -302,7 +302,6 @@ async function startRuntime(signal: AbortSignal) {
     const initial = await nextPeer();
     await initial.barrier();
     return {
-        /** Flushes batched output to `peer` until it has received `count` prompt completions. */
         completions: async (peer: RelayPeer, count = 1): Promise<void> => {
             while (completions(peer.events) < count) {
                 (await timer.next(100)).run();
@@ -348,7 +347,6 @@ async function startRuntime(signal: AbortSignal) {
             );
             return { ...(await producer.nextTurn()), sessionTarget };
         },
-        /** Stops the daemon and starts it again on the same state, returning its first Relay connection. */
         restart: async (): Promise<RelayPeer> => {
             cancellation.abort();
             await runtime;
@@ -640,7 +638,6 @@ test("Given a daemon restarted with a retained outcome, When the Relay reconnect
     await runtime.completions(runtime.initial);
 
     const connections = [await runtime.restart()];
-    // Each reconnection first hands over what the previous connection left unsent.
     for (const _ of [1, 2]) {
         const retry = await runtime.disconnect(connections.at(-1) ?? runtime.initial);
         const reconnect = runtime.nextPeer();

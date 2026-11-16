@@ -42,7 +42,6 @@ test("Given pi compacts the conversation, When the daemon relays the turn, Then 
             );
         };
 
-        // Seed enough turns that pi considers the session worth compacting.
         for (const topic of ["archaeology", "bicycles", "coffee"]) {
             sendPrompt(`Talk about ${topic} with some detail`);
             for (;;) {
@@ -89,12 +88,9 @@ test("Given pi compacts the conversation, When the daemon relays the turn, Then 
                 bannerTexts.push(update.content.text);
             }
         }
-        // The adapter-reported lifecycle: opened, streamed its summary chunk, and
-        // settled, all addressed to one compaction ID — with no text banners.
         expect(statuses).toEqual(["in_progress", "completed"]);
         expect(new Set(compactionIds).size).toBe(1);
         expect(bannerTexts).toEqual([]);
-        // pi returns the summary it retained from its compact RPC.
         expect(summaryText.join("").length).toBeGreaterThan(0);
 
         // Given a compacted native session, a Computer restart must replay the

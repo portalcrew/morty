@@ -4,7 +4,6 @@ import { z } from "zod";
 import { acpSession } from "../../schema/acp-session-store/index.ts";
 import type { LocalSqliteDatabase } from "../sqlite/local-sqlite-database.ts";
 
-/** One saved session row. The list columns hold JSON text that the session record decodes. */
 export interface AcpSessionRow {
     readonly harness: string;
     readonly configurations: string;
@@ -29,7 +28,6 @@ function decodeRow(value: unknown): AcpSessionRow {
     return acpSessionRowSchema.parse(value);
 }
 
-/** The saved session rows. Closing the table closes the database it shares with the position table. */
 export class AcpSessionTable {
     readonly #database: LocalSqliteDatabase;
 

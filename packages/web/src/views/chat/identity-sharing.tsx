@@ -35,7 +35,6 @@ const identitySharingSkeletonBarClassName = "rounded-full bg-morty-fill-opacity-
 const identitySharingSkeletonPulseClassName = "animate-pulse motion-reduce:animate-none";
 const identitySharingSkeletonFieldShellClassName = "rounded-lg border-[0.5px] border-black/5 bg-white";
 const identitySharingSkeletonSelectClassName = "rounded-lg border border-border bg-background";
-/** Matches a typical wrapped continue URL beside the QR code. */
 const identitySharingUrlBoxClassName = "min-h-[4.5rem]";
 
 function IdentitySharingDeviceAccessSkeleton() {
@@ -236,14 +235,12 @@ function AgentHandoffSkeleton() {
     );
 }
 
-/** Renders the sharing dialog's transfer, whose store is created when the dialog opens. */
 export function IdentitySharing({ store }: { readonly store: StoreApi<IdentitySharingStore> }) {
     const state = useStore(store, (state) => state.state);
     const choose = useStore(store, (state) => state.choose);
     const recipient = useStore(store, (state) => state.recipient);
     const chooseRecipient = useStore(store, (state) => state.chooseRecipient);
     const recipientTransitioning = useStore(store, (state) => state.recipientTransitioning);
-    // The Worker states the duration a link grants; until the first link exists there is nothing to show.
     const duration =
         state.kind === "ready" ? state.transfer.accessDuration : state.kind === "initial" ? null : state.duration;
     const loading = state.kind === "initial" || state.kind === "loading";

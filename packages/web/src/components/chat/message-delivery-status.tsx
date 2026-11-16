@@ -1,7 +1,6 @@
 import { CircleAlert } from "lucide-react";
 import { Spinner } from "../ui/spinner.tsx";
 
-/** Marks a user message that has not reached its conversation yet, beside the message bubble. */
 export function MessageDeliveryStatus({
     delivery,
     label,

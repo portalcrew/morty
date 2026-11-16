@@ -43,7 +43,6 @@ test("Given the Agent asks me a question while it keeps working, When I pick a s
         expect(getByRole(card, "radio", { name: "Update the page" })).toHaveProperty("checked", true),
     );
 
-    // The picked answer is the user's unsent reply: it survives leaving the conversation.
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     await app.user.click(
         await app.waitForView(() => {
@@ -58,7 +57,6 @@ test("Given the Agent asks me a question while it keeps working, When I pick a s
     );
     const returned = await app.waitForView(() => getByRole(document.body, "region", { name: "Agent question" }));
     expect(getByRole(returned, "radio", { name: "Update the page" })).toHaveProperty("checked", true);
-    // Sending waits for the conversation to reconnect, as the composer does.
     const send = await app.waitForView(() => {
         const button = getByRole(returned, "button", { name: "Send answer" });
         expect(button).toHaveProperty("disabled", false);
@@ -78,7 +76,6 @@ test("Given the Agent asks me a question while it keeps working, When I pick a s
         expect(getByRole(answered, "radio", { name: "Not now" })).toHaveProperty("disabled", true);
         expect(getByRole(answered, "button", { name: "Send answer" })).toHaveProperty("disabled", true);
     });
-    // The answer is the message that follows the question; the answered card keeps no pick of its own.
     const answered = getByRole(document.body, "region", { name: "Agent question" });
     expect(getByRole(answered, "radio", { name: "Update the page" })).toHaveProperty("checked", false);
     const reloaded = await app.reload();

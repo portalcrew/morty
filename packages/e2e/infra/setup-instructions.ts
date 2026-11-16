@@ -11,9 +11,7 @@ export async function followSetupInstructions(options: {
     readonly harness: string;
     readonly instructionUrl: string;
     readonly runtime: SetupRuntime;
-    /** The user explicitly approved replacing this Computer and revoking its shared access. */
     readonly replaceComputer?: string;
-    /** The calling agent's shell environment, where its harness exposes the current session. */
     readonly agentEnvironment: Readonly<Record<string, string>>;
     readonly signal: AbortSignal;
 }) {
@@ -46,7 +44,6 @@ export async function followSetupInstructions(options: {
     assert.equal(exitCode, 0, JSON.stringify(events));
     const ready = events.find((event) => event["status"] === "ready");
     assert.ok(ready);
-    // The ready identity setup saved for this service.
     const configuration = object(
         object(JSON.parse(await readFile(join(options.state, "config.json"), "utf8")), "local configuration")[
             "identity"

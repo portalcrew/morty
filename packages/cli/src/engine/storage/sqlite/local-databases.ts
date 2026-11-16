@@ -10,7 +10,6 @@ export interface ComputerSessionDatabasePaths {
     readonly sessions: string;
 }
 
-/** Each computer keeps its saved sessions and its spilled session events in its own files. */
 export function computerSessionDatabasePaths(stateDirectory: string, computerId: string): ComputerSessionDatabasePaths {
     const computerHash = createHash("sha256").update(computerId).digest("hex");
     return {

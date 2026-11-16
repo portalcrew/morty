@@ -76,9 +76,7 @@ export function PairingInstruction({
     actionPresentation = "setup-card",
     handoff = copyPrompt,
 }: {
-    /** Setup cards use full-width rounded actions; dialogs use standard cloud buttons. */
     readonly actionPresentation?: PairingActionPresentation;
-    /** How this device moves setup to the agent's computer; copying the prompt unless the caller knows better. */
     readonly handoff?: SetupHandoffModel;
 }) {
     const setupInstruction = agentSetupPrompt();

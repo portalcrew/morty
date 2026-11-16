@@ -1,7 +1,6 @@
 import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 
-/** Allocates each Session generation's event identifiers in order. */
 export class SessionEventIdAllocator {
     readonly #allocations = new NativeSessionMap<{ readonly nextId: number; readonly sessionGenerationId: string }>();
 

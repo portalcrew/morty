@@ -29,7 +29,6 @@ export function maybeAuthRequiredError(err: unknown): RequestError | null {
         return null;
     }
 
-    // Include terminal auth method options in error data.
     return RequestError.authRequired(
         {
             authMethods: getAuthMethods(),

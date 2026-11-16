@@ -16,7 +16,6 @@ import { RequestDeadline } from "../../src/http/request-deadline.ts";
 import { createOwner, ownerOrigin } from "./owner-fixture.ts";
 import { computerAccess } from "./registered-computer.ts";
 
-/** A stateful downstream application boundary whose response is released by the scenario. */
 class PendingComputerApiBoundary {
     readonly requested = Promise.withResolvers<void>();
     readonly response = Promise.withResolvers<Response>();

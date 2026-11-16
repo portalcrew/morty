@@ -154,7 +154,6 @@ export async function createChatWorkerEnvironment(
                 });
             }
             await runtime.api.verifyAgent(agents[0]?.harness ?? "codex", connection);
-            // The second client reaches the same Worker directly; only the browser uses the failing network.
             const sessionClient = async (
                 target: { readonly harness: string; readonly sessionId: string },
                 signal: AbortSignal,
@@ -176,14 +175,12 @@ export async function createChatWorkerEnvironment(
                         },
                         signal,
                     ),
-                /** Archives a Session the way another browser window of this Computer would. */
                 archiveSession: async (sessionId: string, signal: AbortSignal): Promise<void> => {
                     await runtime.api.archiveManagedSession(
                         { harness: agents[0]?.harness ?? "codex", sessionId },
                         signal,
                     );
                 },
-                /** Applies another client's explicit model edit through the public Relay contract. */
                 selectModel: async (sessionId: string, value: string, signal: AbortSignal): Promise<void> => {
                     const target = { harness: agents[0]?.harness ?? "codex", sessionId };
                     const client = await sessionClient(target, signal);
@@ -203,7 +200,6 @@ export async function createChatWorkerEnvironment(
                         client.close();
                     }
                 },
-                /** Starts a turn through the Relay, the way another Morty client of this Computer would. */
                 submitTurn: async (
                     sessionId: string,
                     content: string,
@@ -218,7 +214,6 @@ export async function createChatWorkerEnvironment(
                         client.close();
                     }
                 },
-                /** Requests steering through another authorized client's real Computer API. */
                 steerTurn: async (sessionId: string, commandId: string, signal: AbortSignal): Promise<void> => {
                     const target = { harness: agents[0]?.harness ?? "codex", sessionId };
                     const client = await sessionClient(target, signal);
@@ -237,7 +232,6 @@ export async function createChatWorkerEnvironment(
                         client.close();
                     }
                 },
-                /** Restarts the Computer offering these Agents, as when the user installs or removes one. */
                 replaceAgents: async (replacement: readonly ControlledAgent[]): Promise<void> => {
                     const [first, ...others] = replacement;
                     if (first === undefined) {
@@ -249,7 +243,6 @@ export async function createChatWorkerEnvironment(
                         agentName: first.label,
                     });
                 },
-                /** Reads the current title through a separate client's production Computer API. */
                 readSessionTitle: async (sessionId: string, signal: AbortSignal) => {
                     const session = await runtime.api.managedSession(
                         { harness: agents[0]?.harness ?? "codex", sessionId },
@@ -257,7 +250,6 @@ export async function createChatWorkerEnvironment(
                     );
                     return session.entry.title;
                 },
-                /** Renames a Session through the Relay, the way another Morty client of this Computer would. */
                 renameSession: async (sessionId: string, title: string, signal: AbortSignal): Promise<void> => {
                     const target = { harness: agents[0]?.harness ?? "codex", sessionId };
                     const client = await sessionClient(target, signal);
@@ -269,7 +261,6 @@ export async function createChatWorkerEnvironment(
                 },
                 disconnect: runtime.disconnect,
                 reconnect: runtime.reconnect,
-                /** Revokes the Computer through the Relay, as the Relay does when its credential was reused. */
                 revoke: async (): Promise<void> => await cloud.revokeComputer(identity.computerId),
                 writeFiles: runtime.writeFiles,
             };

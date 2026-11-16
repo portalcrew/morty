@@ -2,7 +2,6 @@ import type { Page } from "@playwright/test";
 import { dataTestId } from "../web/src/data-testid.ts";
 import { expect, test } from "./infra/test.ts";
 
-/** Opens the computer list: the sidebar menu on desktop, the navigation drawer on mobile. */
 async function openComputers(page: Page, mobile: boolean, current: string) {
     if (mobile) {
         await page.getByRole("button", { name: "Open navigation", exact: true }).click();
@@ -12,7 +11,6 @@ async function openComputers(page: Page, mobile: boolean, current: string) {
             current: currentChoice,
             other: (name: string) => list.getByRole("link", { name: new RegExp(name) }),
             connect: list.getByRole("link", { name: "Connect another computer" }),
-            // Choosing the computer the page is already on only closes the drawer.
             close: async () => await currentChoice.click(),
         };
     }
@@ -25,7 +23,6 @@ async function openComputers(page: Page, mobile: boolean, current: string) {
     };
 }
 
-/** The desktop sidebar heads with the connection; on mobile the drawer lists it with the computer. */
 async function expectComputerOnline(page: Page, mobile: boolean, name: string) {
     if (!mobile) {
         await expect(page.getByTestId(dataTestId.botConnectionStatus)).toHaveAttribute(

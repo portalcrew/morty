@@ -15,7 +15,6 @@ export const mobileSheetHeaderClassName =
 export const mobileSheetSurfaceClassName =
     "max-sm:border-[1px] max-sm:border-white max-sm:border-b-0 max-sm:bg-card max-sm:backdrop-blur-none";
 
-/** Title row height shared by sheet headers, including dialogs that render their own title. */
 export const mobileSheetTitleRowClassName = "flex h-16 items-center sm:h-auto sm:py-4";
 
 /**
@@ -27,10 +26,8 @@ export const mobileSheetTitleRowClassName = "flex h-16 items-center sm:h-auto sm
 export const mobileSheetTitleClassName =
     "font-inter [font-size:16px] leading-6 font-semibold tracking-normal text-foreground";
 
-/** Inset the floating close action by the same 12px it has from the header's top edge. */
 export const mobileSheetCloseButtonPositionClassName = "max-sm:top-3! max-sm:right-3!";
 
-/** 40px session row shared by phone sheets that choose or open a saved session. */
 export const mobileSheetSessionRowClassName =
     // The size uses an arbitrary property so tailwind-merge does not read it as a text color and drop it.
     "box-border h-10 w-full min-w-0 items-center gap-2 rounded-[20px] px-4 text-left [font-size:15px] leading-[22px] font-medium text-copy-secondary outline-none transition-[background-color,color] duration-150 hover:bg-morty-fill-opacity-2 hover:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:text-copy-secondary disabled:hover:bg-transparent disabled:hover:text-copy-secondary motion-reduce:transition-none sm:h-9 sm:px-3.5 sm:[font-size:13px]";

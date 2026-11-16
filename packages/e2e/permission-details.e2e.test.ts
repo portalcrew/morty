@@ -12,11 +12,9 @@ for (const width of [1440, 390]) {
         await page.getByRole("button", { name: "Send message" }).click();
         const permission = page.getByRole("alertdialog", { name: "Agent permission request" });
         await expect(permission).toContainText("pnpm test -- --reporter=verbose");
-        // The affected paths sit behind the card's details disclosure.
         await permission.getByRole("button", { name: /^Details ·/u }).click();
         await expect(permission.getByRole("region", { name: "Affected paths" })).toContainText("src/<entry>.ts");
         await page.reload();
-        // The command reads with the directory it runs in.
         await expect(permission).toContainText("/workspace $ pnpm test -- --reporter=verbose");
         await expect(permission.getByRole("button", { name: "Deny", exact: true })).toBeVisible();
         await expect(permission.getByRole("button", { name: "Stop turn" })).toBeVisible();
@@ -92,7 +90,6 @@ test("Given a pending permission on a phone-height screen, When it appears, Then
     for (const name of ["Allow", "Deny", "Stop turn"]) {
         const decision = permission.getByRole("button", { name, exact: true });
         await expect(decision).toBeInViewport({ ratio: 1 });
-        // Nothing, including an edge fade, may cover the decision the user taps.
         expect(
             await decision.evaluate((element) => {
                 const box = element.getBoundingClientRect();

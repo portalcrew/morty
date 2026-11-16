@@ -3,21 +3,15 @@ import type { LinkedDevice } from "../../services/identity/anonymous-identity-ap
 import { centralLocalStorage, linkedDevicesSeenEntry } from "../../services/local-storage/central-local-storage.ts";
 
 interface LinkedDevicesState {
-    /** The other devices with access as the Worker last listed them; null until the first list is read. */
     readonly devices: readonly LinkedDevice[] | null;
-    /** Whether the latest read failed; the devices last read stay shown. */
     readonly failed: boolean;
-    /** When the latest device this browser was told about joined; null until it first read the list. */
     readonly seenAt: string | null;
 }
 
 export interface LinkedDevicesStore {
     readonly state: LinkedDevicesState;
-    /** Follows the list while the page is visible: reads it at once, and again whenever it changes. */
     readonly onAttach: (node: HTMLElement | null) => (() => void) | undefined;
-    /** Reads the list again now, after this page changed it or after a read failed. */
     readonly refresh: () => void;
-    /** The user saw the devices listed; only devices that join later are new to this browser. */
     readonly acknowledge: () => void;
 }
 
@@ -28,7 +22,6 @@ function latestJoin(devices: readonly LinkedDevice[]): string {
     );
 }
 
-/** The devices that joined after this browser last looked; none before it first looked. */
 export function newDevicesSince(
     devices: readonly LinkedDevice[] | null,
     seenAt: string | null,
@@ -48,19 +41,16 @@ export function newDevicesSince(
 export function createLinkedDevicesStore(options: {
     readonly computerId: string;
     readonly linkedDevices: (signal: AbortSignal) => Promise<readonly LinkedDevice[]>;
-    /** Resolves once the device list differs from the one last read. */
     readonly waitForChange: (signal: AbortSignal) => Promise<void>;
 }) {
     const seen = linkedDevicesSeenEntry(options.computerId);
     return createStore<LinkedDevicesStore>()((set, get) => {
         let restart: (() => void) | null = null;
-        /** Reads the devices; false when they could not be read. */
         const read = async (signal: AbortSignal): Promise<boolean> => {
             let devices: readonly LinkedDevice[];
             try {
                 devices = await options.linkedDevices(AbortSignal.any([signal, AbortSignal.timeout(15_000)]));
             } catch {
-                // Access that ended is handled by the request that found it.
                 if (!signal.aborted) {
                     set({ state: { ...get().state, failed: true } });
                 }

@@ -3,7 +3,6 @@ import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { releaseVersion } from "./release-artifact.mjs";
 
 const metadata = JSON.parse(await readFile("packages/cli/package.json", "utf8"));
-// The merge queue and the main release chain build release candidates; other builds keep the development version.
 const candidate = process.env.MORTY_RELEASE_CANDIDATE === "true";
 const version = candidate ? await releaseVersion() : metadata.version;
 if (candidate) {

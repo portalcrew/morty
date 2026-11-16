@@ -237,14 +237,11 @@ export class FakeAnthropicProvider implements AsyncDisposable {
             ) => Promise<void>;
             readonly disconnectsBeforeSuccess?: number;
             readonly readPath?: string;
-            /** The test prompt that runs the configured tool action (`readPath`,
-             *  `bash`, or a shell command) once. */
             readonly toolPrompt?: string;
             readonly bash?: { readonly command: string; readonly runInBackground: boolean };
             readonly subagent?: SubagentScript;
         } = {},
     ): Promise<FakeAnthropicProvider> {
-        // A subagent script's inner prompt is the subagent's tool prompt.
         const toolPrompts = [options.toolPrompt, options.subagent?.innerPrompt];
         let disconnectsRemaining = options.disconnectsBeforeSuccess ?? 0;
         const server = createServer(async (request, response) => {

@@ -1,6 +1,5 @@
 import { crc32, deflateSync } from "node:zlib";
 
-/** A real, lossless PNG fixture with visible stripes for zoom and pan journeys. */
 export function imagePreviewPng(width: number, height: number): Buffer {
     const chunk = (type: string, data: Buffer): Buffer => {
         const name = Buffer.from(type);

@@ -132,7 +132,6 @@ const permissionResponseInput = v.custom<ReturnType<typeof sessionPermissionResp
 );
 export const encryptedInteractionResponseInput = v.union([elicitationResponseInput, permissionResponseInput]);
 
-/** Decodes a Session request body; a body the operation does not accept is the caller's error. */
 export function decodeSessionRequest<TSchema extends v.GenericSchema>(
     schema: TSchema,
     value: unknown,

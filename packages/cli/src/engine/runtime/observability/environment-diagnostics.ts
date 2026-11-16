@@ -41,7 +41,6 @@ function overrideVariable(harness: string): string | null {
     }
 }
 
-/** A fresh snapshot of the definitions the Computer actually holds, including after discovery logs rotate. */
 export function runtimeEnvironmentDiagnostics(config: RuntimeConfig): readonly Readonly<Record<string, string>>[] {
     const agents = config.catalog.read();
     const timestamp = new Date().toISOString();

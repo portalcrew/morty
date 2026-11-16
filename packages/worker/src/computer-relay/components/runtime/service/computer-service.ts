@@ -30,17 +30,14 @@ const DAEMON_DETACH_TIMEOUT_MILLISECONDS = 30_000;
 // even though the Relay never saw it close, so commands sent into it would never be answered.
 const DAEMON_HEARTBEAT_SILENCE_LIMIT_MILLISECONDS = 35_000;
 
-/** Whether a heartbeat on a daemon connection has been answered, and when it last was. */
 export type DaemonHeartbeat = { readonly kind: "none" } | { readonly kind: "received"; readonly at: number };
 
-/** What a daemon socket carries across Durable Object hibernation: which Computer, and which connection of it. */
 export interface DaemonSocketIdentity {
     readonly connectionEpoch: number;
     readonly computerId: string;
 }
 
 export interface ComputerPeers extends RelayPeers {
-    /** Daemon connections with the time each one's heartbeat was last answered by the host. */
     readonly daemonConnections: () => readonly {
         readonly identity: DaemonSocketIdentity;
         readonly socket: RelaySocket;
@@ -149,7 +146,6 @@ export class ComputerService {
         // Nothing below awaits, so this admission check and accept + connect are one step.
         signal.throwIfAborted();
         const latest = this.#cx.services.connections.latest();
-        // The connections opened during an earlier generation belong to the Computer that generation paired.
         if (latest !== null && latest.generation !== generation) {
             for (const viewer of this.#cx.gateways.peers.viewers()) {
                 viewer.close(1000, "Previous daemon disconnected");
@@ -267,11 +263,6 @@ export class ComputerService {
         }
     };
 
-    /**
-     * Closes live Session views whose access ended: their credential's term passed or its grant is no longer honored.
-     * The Relay checks as soon as access to the computer ends, at each viewer's term, and periodically while views
-     * remain connected.
-     */
     readonly reauthorizeConnections = async (signal: AbortSignal): Promise<void> => {
         for (const viewer of this.#cx.gateways.peers.viewers()) {
             const grant = await this.#cx.services.credentials.authorizeViewer(viewer.identity, signal);
@@ -477,10 +468,6 @@ export class ComputerService {
         return socket.isOpen();
     };
 
-    /**
-     * Closes a daemon connection that is no longer the current one, telling a replaced daemon to reconnect and the
-     * daemon of an ended generation that its Computer was revoked. True when it closed the connection.
-     */
     private readonly fenceDaemon = (identity: ComputerConnectionIdentity, socket: RelaySocket): boolean => {
         const standing = this.#cx.services.connections.standing(identity);
         switch (standing) {
@@ -517,7 +504,6 @@ export class ComputerService {
         return this.#channel.actor;
     };
 
-    /** A viewer left: the Computer's daemon, if one is connected, stops delivering that subscription. */
     readonly detachViewer = (identity: SessionViewerIdentity): void => {
         const daemon = this.currentDaemon();
         if (daemon === undefined || daemon.identity.computerId !== identity.computerId) {

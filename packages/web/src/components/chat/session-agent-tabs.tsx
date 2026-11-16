@@ -6,11 +6,9 @@ import { HarnessMark } from "./harness-mark.tsx";
 export const sessionAgentTabsListClassName =
     "flex h-12 w-full min-w-0 gap-0.5 rounded-full bg-morty-fill-opacity-2 p-0.5 sm:h-9";
 
-/** Icon-only tab footprint; shared with the loading skeleton. */
 export const sessionAgentTabInactiveLayoutClassName =
     "box-border flex h-full w-16 max-w-16 min-w-0 shrink grow-0 items-center justify-center px-2.5 sm:w-10 sm:max-w-10 sm:shrink-0 sm:px-1.5";
 
-/** Selected tab footprint; mirrors the trigger's active state for the loading skeleton. */
 export const sessionAgentTabSelectedLayoutClassName =
     "box-border flex h-full min-w-0 flex-1 shrink grow items-center justify-center rounded-full px-2.5";
 
@@ -34,7 +32,6 @@ export function SessionAgentTabs({
         readonly label: string;
     }[];
     readonly className?: string;
-    /** When false, inactive tabs stay at full opacity (e.g. while the directory is refreshing). */
     readonly dimInactive?: boolean;
     readonly disabled: boolean;
     readonly onValueChange: (value: string) => void;

@@ -158,8 +158,6 @@ test("Given a paired Bot on desktop, When the user opens Model, Then its options
     expect(search.classList.contains("h-9")).toBe(true);
     expect(search.classList.contains("focus:border-ring")).toBe(true);
     expect(search.classList.contains("focus:ring-[3px]")).toBe(true);
-    // Opening with the pointer keeps the search field idle: no focus ring
-    // until the user explicitly clicks into it.
     expect(document.activeElement).not.toBe(search);
     await app.user.click(search);
     expect(document.activeElement).toBe(search);
@@ -708,9 +706,7 @@ test("Given another tab saved a recent directory, When this tab reopens its dire
 
     await app.user.click(await app.queryElementByTestId(dataTestId.workingDirectory));
     await app.waitForView(() => expect(recent("/project-here")).toBe(true));
-    // Another tab of the same Bot saves a directory through the same storage.
     window.localStorage.setItem(key(app.computerId), JSON.stringify([there, here]));
-    // Reopening the menu shows it, with no change made in this tab.
     await app.user.keyboard("{Escape}");
     await app.user.click(await app.queryElementByTestId(dataTestId.workingDirectory));
     await app.waitForView(() => expect(recent("/project-from-another-tab")).toBe(true));

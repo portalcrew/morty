@@ -67,7 +67,6 @@ export class ChatApi {
         this.signal = signal;
     }
 
-    /** Creates an anonymous Computer through the public boundary and holds its credential for later requests. */
     async createIdentity() {
         const created = await jsonRequest(this.origin, "/morty/api/v1/computers", {
             body: {},
@@ -106,7 +105,6 @@ export class ChatApi {
         }
     }
 
-    /** Redeem through the production continuation page, keeping the Computer secret in the local fragment. */
     async browserHandoff(encryptionAccess: ComputerEncryptionAccess) {
         const identity = this.#requireIdentity();
         if (encryptionAccess.computerId !== identity.computerId) {

@@ -64,7 +64,6 @@ function questionField(question: Question): ElicitationPropertySchema {
     }
 }
 
-/** Owns native dialog lifetimes within the ACP turn that requested them. */
 export class PiExtensionQuestions {
     private turn: QuestionTurn | null = null;
 

@@ -367,7 +367,6 @@ async function cancel(fixture: Fixture, command: SessionPromptCommand): Promise<
         }
     }
 }
-/** The turn lifecycle a history page holds, in page order. */
 const turnLifecycle = (events: readonly SessionEvent[]): readonly string[] =>
     events.flatMap((event) =>
         event.type === "lifecycle-metadata" && "commandId" in event.payload

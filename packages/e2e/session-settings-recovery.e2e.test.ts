@@ -18,7 +18,6 @@ test("Given a selected model, When the Computer restarts, Then the conversation 
     await page.keyboard.press("Escape");
     await expect(configuration).toContainText("Test Large");
 
-    // The conversation reconnects on its own once the Computer is back.
     await runtime.restartRuntime();
     await expect(composer).toBeEnabled();
     await expect(page.getByRole("button", { name: "Retry now" })).toBeHidden();

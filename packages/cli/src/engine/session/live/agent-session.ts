@@ -56,29 +56,22 @@ import { configurationRevision } from "./configuration-revision.ts";
 import { SessionConfigurations } from "./session-configurations.ts";
 import { restoredConversation, restoreOpening } from "./session-restore.ts";
 
-/** Attributes Agent requests that arrive while the Agent holds no prompt of this Session. */
 const SESSION_CONTROL_COMMAND_ID = "session-control";
 
-/** What the Session's execution authority tells its Agent session. */
 export interface SessionExecutionRecord {
-    /** The command whose prompt the Session's Agent holds. */
     readonly agentCommand: (target: NativeSessionTarget) => string | undefined;
-    /** The Session's settled turns, which a replayed history places among the Agent's own events. */
     readonly settledTurns: (target: NativeSessionTarget) => readonly SettledTurn[];
 }
 
-/** The Session's history in this process: not loaded, being replayed by the Agent, or held. */
 type SessionLoadState =
     | { readonly kind: "not-requested" }
     | {
           readonly kind: "capturing";
           readonly history: HistoryReplayCapture;
-          /** The replay, which every requester of the history shares and none of them owns. */
           readonly replay: SharedOperation<AdapterSessionOpened>;
       }
     | { readonly kind: "loaded"; readonly history: HistoryReplayCapture };
 
-/** How this process came to hold its native conversation. */
 type SessionOrigin = "created" | "reopened" | "forked";
 
 /**
@@ -98,7 +91,6 @@ type NativeIdentity =
 
 type UnboundIdentity = Exclude<NativeIdentity, { readonly kind: "bound" }>;
 
-/** The native conversation entry this process continues from, recorded after its own writes settle. */
 type NativeHistoryBaseline =
     | { readonly kind: "unavailable" }
     | { readonly kind: "recording"; readonly completion: Promise<void> }
@@ -114,7 +106,6 @@ export class AgentSession {
 
     readonly hasBackgroundActivity = (): boolean => this.#backgroundActivity !== "none";
     #backgroundActivity: BackgroundActivity = "none";
-    /** The command whose prompt the Agent is running, which only the Agent can report as delegated. */
     #delegableCommandId: string | null = null;
     #modelEffort: AgentModelEffort | null = null;
     readonly #scope: AdapterSessionScope;
@@ -139,7 +130,6 @@ export class AgentSession {
     #nativeHistoryBaseline: NativeHistoryBaseline = { kind: "unavailable" };
     #nativeHistoryWrites = 0;
     #sessionLoad: SessionLoadState = { kind: "not-requested" };
-    /** The Session's title; empty until the Agent reports one or the first prompt names it. */
     #sessionTitle = "";
 
     private constructor(
@@ -241,7 +231,6 @@ export class AgentSession {
                 try {
                     await runtime.closeProcess();
                 } finally {
-                    // A conversation the harness created for this attempt is not kept.
                     if (runtime.#identity.kind === "bound" && runtime.#identity.origin !== "reopened") {
                         store.remove(runtime.target);
                     }
@@ -351,7 +340,6 @@ export class AgentSession {
             options.adapter,
         );
 
-    /** A live process keeps the directory it started in; its Agent is the one its target names. */
     readonly runsIn = (cwd: string): boolean => this.#cwd === cwd;
 
     readonly usesEnvironment = (environment: Readonly<Record<string, string>>): boolean =>
@@ -475,7 +463,6 @@ export class AgentSession {
         this.#configOptions = opened.configOptions;
     };
 
-    /** Whether a prompt has been handed to the conversation's Agent, by this process or an earlier one. */
     readonly #prompted = (): boolean => this.#identity.kind === "bound" && this.#identity.prompted;
 
     /** A conversation this process created has no history of its own until its first prompt. */
@@ -546,7 +533,6 @@ export class AgentSession {
         return history;
     };
 
-    /** Opens the conversation with the Agent replaying its history, which this process then holds. */
     readonly #replayHistory = async (signal: AbortSignal): Promise<AdapterSessionOpened> => {
         if (this.#sessionLoad.kind !== "not-requested") {
             throw new AcpExecutionError("The Session history is already loaded", {}, "invalid_agent_session");
@@ -576,7 +562,6 @@ export class AgentSession {
         return await first;
     };
 
-    /** Reopens the established conversation the Runtime recorded or an import names. */
     readonly #restore = async (
         signal: AbortSignal,
         recovery: SessionRecovery,
@@ -639,7 +624,6 @@ export class AgentSession {
                     console.warn(`[${this.#harness}-acp] Native history revision could not be read`, error);
                     return false;
                 }
-                // Our own writes that began meanwhile record a new baseline when they settle.
                 return (
                     !this.#writingNativeHistory() &&
                     this.#nativeHistoryBaseline === baseline &&
@@ -734,7 +718,6 @@ export class AgentSession {
             return await this.#change(options, signal);
         }, options.signal);
 
-    /** Applies a setting the Runtime owns, whatever the configuration's current revision. */
     readonly applyConfiguration = async (change: SessionConfigurationChange): Promise<SessionConfigurationSnapshot> =>
         this.#configurationChanges.run(async (signal) => await this.#change(change, signal), change.signal);
 
@@ -792,7 +775,6 @@ export class AgentSession {
         return this.#identity;
     };
 
-    /** Loads what the Agent needs before it can receive a prompt; the Agent does not receive it yet. */
     readonly preparePrompt = async (signal: AbortSignal): Promise<void> => {
         if (this.#capabilities.loadSession) {
             await this.#completedHistory(signal);
@@ -895,10 +877,6 @@ export class AgentSession {
         }
     };
 
-    /**
-     * Adds a steering prompt to the prompt the Agent holds. Precondition: the Session's execution authority accepts
-     * steering into `options.targetCommandId`.
-     */
     readonly steer = async (options: SessionSteerOptions): Promise<void> => {
         if (!this.#capabilities.steering) {
             throw new AcpExecutionError(

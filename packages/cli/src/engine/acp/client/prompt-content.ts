@@ -2,19 +2,16 @@ import type { ContentBlock } from "@agentclientprotocol/sdk/unstable";
 import type { SessionCapabilities } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../acp-error.ts";
 
-/** One image attachment of a prompt, as the ACP content block will carry it. */
 export interface PromptImageInput {
     readonly data: string;
     readonly mimeType: string;
     readonly name: string;
 }
 
-/** One resource attachment of a prompt, either embedded text or a link. */
 export type PromptResourceInput =
     | { readonly type: "embedded"; readonly mimeType: string; readonly text: string; readonly uri: string }
     | { readonly type: "link"; readonly mimeType: string; readonly name: string; readonly uri: string };
 
-/** The prompt inputs that become ACP content blocks. */
 export interface PromptContent {
     readonly images: readonly PromptImageInput[];
     readonly prompt: string;

@@ -29,7 +29,6 @@ interface CreateComputerPairing {
     readonly idempotencyKey: string;
 }
 
-/** A bound value selected as a column, for rows an INSERT ... SELECT writes. */
 const bound = <T>(value: T, name: string) => sql<T>`${value}`.as(name);
 
 /**
@@ -43,7 +42,6 @@ export class ComputerDirectoryStorage {
         this.#database = database;
     }
 
-    /** A generation's request, with its registration and revocation when they happened. */
     private readonly generationQuery = (database: RelayDrizzleDatabase) =>
         database
             .select({
@@ -63,7 +61,6 @@ export class ComputerDirectoryStorage {
         return rows[0] ?? null;
     };
 
-    /** The computer's current generation; null before it was ever paired. */
     readonly readCurrentPairing = async (signal: AbortSignal): Promise<PairingClaimRow | null> => {
         const rows = await this.generationQuery(relayDrizzle(this.#database, signal))
             .where(inArray(computerPairing.generation, currentGeneration()))
@@ -110,7 +107,6 @@ export class ComputerDirectoryStorage {
         const pairing = database.insert(computerPairing).select(
             database
                 .select({
-                    // SQLite assigns the next generation in place of a null one.
                     generation: bound<number | null>(null, "generation"),
                     pairingCodeHash: bound(value.codeHash, "pairing_code_hash"),
                     pollTokenHash: bound(value.pollHash, "poll_token_hash"),
@@ -123,7 +119,6 @@ export class ComputerDirectoryStorage {
         return this.#database.run(pairing, signal).meta.changes === 1;
     };
 
-    /** Registers the daemon that presented the current generation's unexpired pairing code. */
     readonly claim = async (
         value: {
             readonly codeHash: string;
@@ -163,7 +158,6 @@ export class ComputerDirectoryStorage {
                 .from(computerPairing)
                 .where(inArray(computerPairing.generation, claimable)),
         );
-        // The credential written just above marks the generation this claim registers.
         const registration = database.insert(computerRegistration).select(
             database
                 .select({
@@ -184,13 +178,11 @@ export class ComputerDirectoryStorage {
         return results[0]?.meta.changes === 1;
     };
 
-    /** The computer's current generation as a Computer: its registration and revocation, if they happened. */
     readonly readComputer = async (signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> => {
         const row = await this.readCurrentPairing(signal);
         return row === null ? null : { revoked_at: row.revoked_at, registration: row.registration };
     };
 
-    /** Whether the token is the active generation's daemon credential. */
     readonly isActiveDaemon = async (tokenHash: string, signal: AbortSignal): Promise<boolean> => {
         const rows = await relayDrizzle(this.#database, signal)
             .select({ generation: daemonCredential.generation })
@@ -222,7 +214,6 @@ export class ComputerDirectoryStorage {
             eq(daemonCredential.tokenHash, presentedHash),
             inArray(daemonCredential.generation, active),
         );
-        // One batch: the presented credential is retired with its successor exactly when the successor replaces it.
         this.#database.batch(
             [
                 database.insert(retiredDaemonCredential).select(
@@ -275,7 +266,6 @@ export class ComputerDirectoryStorage {
         return ended.length === 0 ? { kind: "unknown" } : { kind: "revoked" };
     };
 
-    /** Ends the current generation's access, once; a repeated revocation returns the first one. */
     readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> => {
         const database = relayDrizzle(this.#database, signal);
         const current = currentGeneration();

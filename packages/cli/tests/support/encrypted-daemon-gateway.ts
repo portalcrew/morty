@@ -16,7 +16,6 @@ export interface EncryptedDaemonPeer {
     readonly observe: (listener: (message: string) => void) => void;
 }
 
-/** Owns the Computer capability and each relay-side connection using it. */
 export async function createEncryptedDaemonGateway(stateDirectory: string, computerId: string, signal: AbortSignal) {
     const frames = await createEncryptedDaemonFrames(stateDirectory, computerId, signal);
     const contentFrames = encryptedContentFrames(frames.encryption, signal);

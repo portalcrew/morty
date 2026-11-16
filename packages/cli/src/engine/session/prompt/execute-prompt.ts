@@ -15,7 +15,6 @@ import { type PromptLifecycle, promptLifecycle } from "./prompt-lifecycle.ts";
 export interface ExecutePromptOptions {
     readonly eventProjection: PromptLifecycle;
     readonly command: SessionPromptCommand;
-    /** The Session the prompt names, as this Runtime holds it. */
     readonly session: StoredSession;
     readonly resolveAgent: ResolveAgent;
     readonly readArtifact: ReadPromptArtifact;
@@ -23,9 +22,7 @@ export interface ExecutePromptOptions {
     readonly directories: WorkspaceDirectoryService;
     readonly sessions: SessionManager;
     readonly attemptId: string;
-    /** Waits for the Session to admit the prompt, and answers how it executes. */
     readonly waitForSessionAdmission: (signal: AbortSignal) => Promise<PromptDispatch>;
-    /** The prompt's own signal; aborted with a withdrawal when the prompt is cancelled before its execution begins. */
     readonly signal: AbortSignal;
 }
 

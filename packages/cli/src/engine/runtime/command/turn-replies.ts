@@ -4,7 +4,6 @@ import type { ExecutionReceipts } from "../../session/turn/execution-receipts.ts
 import type { CommandContext } from "./context.ts";
 import { replyFailure, send } from "./transport.ts";
 
-/** How a settled command ended, as the ledger's outcome records it. */
 export type SettledCommand =
     | { readonly kind: "completed"; readonly completion: PromptCompletion }
     | { readonly kind: "failed"; readonly code: string; readonly message: string }
@@ -34,7 +33,6 @@ export function reply(socket: WebSocket, encoded: string | Uint8Array): void {
     }
 }
 
-/** Answers a request with a settled command's failure, or with the loss of its outcome. */
 export async function replySettledFailure(
     context: Pick<CommandContext, "socket" | "payloadEncryption" | "signal">,
     requestId: string,

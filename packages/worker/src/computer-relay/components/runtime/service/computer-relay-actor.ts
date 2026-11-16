@@ -115,7 +115,6 @@ export interface ComputerOperationSocket extends RelaySocket {
     readonly trackAgentSettingsDiscovery: (requestId: string, harness: string) => boolean;
     readonly consumeAgentSettingsDiscovery: (requestId: string, harness: string) => boolean;
     readonly consumeAgentSettingsDiscoveryFailure: (requestId: string) => boolean;
-    /** Forgets a pending discovery; whether there was one. */
     readonly endAgentSettingsDiscovery: () => boolean;
 }
 
@@ -297,7 +296,6 @@ export class ComputerRelayActor {
         this.notifyOffline();
     };
 
-    /** The Computer went offline: its viewers close and every operation waiting on it stops waiting. */
     readonly notifyOffline = (): void => {
         for (const viewer of this.#peers.viewers()) {
             viewer.close(1000, "Computer offline");
@@ -451,7 +449,6 @@ export class ComputerRelayActor {
         }
     };
 
-    /** Sends one authorized operation to the daemon. */
     private readonly forwardControl = (
         socket: ComputerOperationSocket,
         command: OperationRouting,
@@ -488,7 +485,6 @@ export class ComputerRelayActor {
         socket.recordRequestDaemon(daemon, command.action);
     };
 
-    /** Refuses only this request; other operations on the connection remain usable. */
     private readonly refuseOffline = (socket: ComputerOperationSocket): void => {
         socket.reject("computer_offline", "The local computer is offline");
     };

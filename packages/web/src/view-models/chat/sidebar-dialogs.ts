@@ -8,19 +8,16 @@ import type { OpenMortySession } from "./open-session.ts";
 
 export type SidebarDialogs = StoreApi<SidebarDialogsState>;
 
-/** The one panel the phone shows over the page: its navigation, or the recent sessions sheet. */
 type MobilePanel =
     | { readonly kind: "closed" }
     | { readonly kind: "nav" }
     | {
           readonly kind: "sessions";
-          /** Timestamp until which the sheet ignores outside-pointer dismissals. */
           readonly dismissLockedUntil: number;
       };
 
 interface SidebarDialogsState {
     readonly mobilePanel: MobilePanel;
-    /** The Open Session dialog while it shows, with the phone sheet's drill-down step: the list, or one session's detail. */
     readonly nativeDialog: {
         readonly store: StoreApi<NativeSessionStore>;
         readonly step: "list" | "detail";
@@ -28,25 +25,18 @@ interface SidebarDialogsState {
     /** A closed dialog's store, kept so reopening the sheet returns to the session the user was reading. */
     readonly retainedNativeDialog: StoreApi<NativeSessionStore> | null;
     readonly sharing: StoreApi<IdentitySharingStore> | null;
-    /** Shows the navigation, in place of any panel shown. */
     readonly openMobileNav: () => void;
     readonly closeMobileNav: () => void;
-    /** Closes whichever panel the phone shows. */
     readonly closeMobilePanel: () => void;
     /** Opens the mobile recent-sessions sheet and locks outside-pointer dismissal briefly so the same tap that opened it cannot close it. */
     readonly openMobileRecentSessions: () => void;
     readonly closeMobileRecentSessions: () => void;
-    /** Closes the mobile recent-sessions sheet from an outside-pointer dismissal, ignored while the dismissal lock is held. */
     readonly dismissMobileRecentSessions: () => void;
     readonly openNativeDialog: () => void;
     readonly closeNativeDialog: () => void;
-    /** Stops the dialog workflow for good: after a successful open, and when the workspace ends. */
     readonly discardNativeDialog: () => void;
-    /** The phone sheet drills into the previewed session's detail. */
     readonly openNativeSessionDetail: () => void;
-    /** The phone sheet returns from the detail to the session list. */
     readonly backToNativeSessionList: () => void;
-    /** The Computer configuration the page follows changed; an open Open Session dialog follows it. */
     readonly computerChanged: () => void;
     readonly openSharing: () => void;
     readonly closeSharing: () => void;
@@ -66,7 +56,6 @@ export function createSidebarDialogs(options: {
     readonly clock: Clock;
     readonly signal: () => AbortSignal;
     readonly requests: Pick<BotChatApi, "nativeSessions" | "nativeSession" | "forkNativeSession">;
-    /** The Computer the page follows. */
     readonly computer: () => ChatComputer | null;
     readonly createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>;
     readonly onOpenSession: (session: OpenMortySession) => void;
@@ -110,8 +99,6 @@ export function createSidebarDialogs(options: {
             const retained = get().retainedNativeDialog;
             if (retained !== null) {
                 set({ nativeDialog: { store: retained, step: "list" }, retainedNativeDialog: null });
-                // Refresh the listing for the Computer the page follows now; the
-                // previewed entry stays selected when the refresh still lists it.
                 retained.getState().start();
                 return;
             }

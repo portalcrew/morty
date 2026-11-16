@@ -39,7 +39,6 @@ class DiscoveryAcpHandler implements AcpClientHandler {
     readonly onUpdate = (_notification: SessionNotification): Promise<void> => Promise.resolve();
 }
 
-/** Exercises the same adapter-owned connection used by sessions, with a bounded probe lifetime. */
 async function probeAcpReadiness(
     specification: {
         readonly acpProbeTimeoutMilliseconds: number;

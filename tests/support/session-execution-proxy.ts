@@ -2,7 +2,6 @@ import { createServer, type IncomingMessage, request } from "node:http";
 import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER } from "@portalcrew/morty-client/protocol";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
 
-/** Forwards real traffic unchanged, with controllable ordering at the Relay transport boundary. */
 export async function createSessionExecutionProxy(upstream: string) {
     const lifetime = new AbortController();
     const observers = new Map<
@@ -29,7 +28,6 @@ export async function createSessionExecutionProxy(upstream: string) {
         return held;
     };
     let hold: ((release: () => void) => void) | null = null;
-    // Requests held by the end of their path until released, each release returning the Computer's response.
     const heldReplies = new Map<string, (release: () => Promise<unknown>) => void>();
     let holdSubmission: ((release: () => void) => void) | null = null;
     let heldEvents: (() => void)[] | null = null;
@@ -353,22 +351,18 @@ export async function createSessionExecutionProxy(upstream: string) {
             new Promise<() => void>((resolve) => {
                 hold = resolve;
             }),
-        /** Holds the next turn submission before the Computer receives it, until the returned release. */
         holdNextSubmission: () =>
             new Promise<() => void>((resolve) => {
                 holdSubmission = resolve;
             }),
-        /** Holds the next steer before the Computer receives it; the release forwards it and returns the response. */
         holdNextSteer: () =>
             new Promise<() => Promise<unknown>>((resolve) => {
                 heldReplies.set("/disposition", resolve);
             }),
-        /** Holds the next withdrawal of a queued message; the release forwards it and returns the response. */
         holdNextQueuedCancellation: () =>
             new Promise<() => Promise<unknown>>((resolve) => {
                 heldReplies.set("/cancel-before-start", resolve);
             }),
-        /** Delays one real settings edit before the Computer receives its revision. */
         holdNextConfigurationChange: () =>
             new Promise<() => Promise<unknown>>((resolve) => {
                 heldReplies.set("/configuration", resolve);

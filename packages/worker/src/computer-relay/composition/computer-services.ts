@@ -21,7 +21,6 @@ export class ComputerServices {
     readonly #runtime: (computerId: string) => ComputerBackendService;
     readonly #database: () => DurableObjectDatabase;
     readonly #commitCreation: <Value>(write: (database: DurableObjectDatabase) => Value) => Value;
-    /** Commits access changes with their connection checks inside the owning object. */
     constructor(
         owns: (id: string) => boolean,
         endAccess: IdentityOperations["commitAccessEnd"],
@@ -40,7 +39,6 @@ export class ComputerServices {
 
     readonly #sessionOperations = new ManagedSessionOperations();
 
-    /** The computer this object holds; a request naming another is refused with the answer every boundary gives. */
     readonly #own = (computerId: string): string => {
         const validated = v.parse(relayIdentifier, computerId);
         if (!this.#owns(validated)) {
@@ -52,7 +50,6 @@ export class ComputerServices {
     readonly forComputer = (computerId: string, env: CloudBindings): ApplicationContext =>
         this.#application(this.#own(computerId), env);
 
-    /** Creates the computer `computerId` names with its owner, who is answered; a replacement may be repeated. */
     readonly create = async (computerId: string, input: unknown, signal: AbortSignal) => {
         signal.throwIfAborted();
         const owned = this.#own(computerId);
@@ -67,7 +64,6 @@ export class ComputerServices {
         );
     };
 
-    /** The computer's storage refuses a computer the object does not hold, before any service reads it. */
     readonly #application = (computerId: string, env: CloudBindings): ApplicationContext =>
         createApplicationDependencies({
             bindings: env,

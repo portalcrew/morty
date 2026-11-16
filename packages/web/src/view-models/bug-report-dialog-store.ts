@@ -15,7 +15,6 @@ export type BugReportDialogStore = ReturnType<typeof createBugReportDialogStore>
  */
 export const createBugReportDialogStore = (transport: () => ApiTransport | null) =>
     create<{
-        /** The open dialog's report; null while the dialog is closed. */
         readonly report: BugReportStoreApi | null;
         readonly show: (daemonSource: DaemonDiagnosticsSource | null) => void;
         readonly hide: () => void;

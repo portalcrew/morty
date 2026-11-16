@@ -24,9 +24,6 @@ import {
 } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 
-// The request bodies the Chat API accepts. Its routes validate with these schemas, and the published agent API
-// description is generated from them.
-
 export const setupInput = v.custom<AgentSettingsDiscoverCommandRouting>((value) => {
     try {
         agentSettingsDiscoverCommandCodec.decodeRouting(JSON.stringify(value));
@@ -133,7 +130,6 @@ export const sessionAccessInput = v.custom<SessionPrepareCommandRouting>((value)
         return false;
     }
 }, "An encrypted Session access request is required.");
-/** The client owns Session creation; the Worker authorizes only its declared route. */
 export const accessInput = v.custom<SessionCreateCommandRouting>((value) => {
     try {
         sessionCreateCommandCodec.decodeRouting(JSON.stringify(value));

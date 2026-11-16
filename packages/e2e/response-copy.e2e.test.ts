@@ -27,7 +27,6 @@ for (const touch of [false, true]) {
             const copy = response.getByRole("button", { name: "Copy response", exact: true });
             await expect(copy).toBeVisible();
             if (touch) {
-                // The compact icon still answers a tap anywhere in a 44px target around its center.
                 const reachable = await copy.evaluate((element) => {
                     const box = element.getBoundingClientRect();
                     const x = box.left + box.width / 2;
@@ -48,7 +47,6 @@ for (const touch of [false, true]) {
             if (touch) {
                 await copy.tap();
             } else {
-                // Reach the footer through sequential keyboard navigation from the response.
                 await copy.focus();
                 await expect(copy).toBeFocused();
                 await page.keyboard.press("Enter");

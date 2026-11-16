@@ -42,7 +42,6 @@ async function ownerHolder(computerId: string, signal: AbortSignal): Promise<Ses
     );
 }
 
-/** Session protocol scenarios start with an authorized computer and an issued Session credential. */
 export async function issueSession(
     computerId: string,
     target: NativeSessionTarget,
@@ -106,7 +105,6 @@ export const computerBackend = (computerId: string) => {
     };
 };
 
-/** Pairs through the public setup boundary and returns its current daemon credential. */
 export async function pairComputer(computerId: string) {
     const token = owners.get(computerId);
     if (token === undefined) {

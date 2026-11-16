@@ -9,7 +9,6 @@ import type { NativeSessionQuery } from "../../../src/engine/acp/native-history/
 import { type NativeSessionPage, nativeSessionPageSchema } from "../../../src/engine/acp/protocol/native-session.ts";
 import type { AcpSessionConnector, AdapterSessionConnection } from "./session-events.ts";
 
-/** Adapter-owned ACP reader. It has neither a live observer nor interactive-session state. */
 export class AcpQuerySession {
     readonly #connection: AdapterSessionConnection;
     #lifecycle: { readonly kind: "open" } | { readonly kind: "terminated" } = { kind: "open" };

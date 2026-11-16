@@ -24,7 +24,6 @@ type ProcessSlot =
     | { readonly kind: "retained"; readonly runtime: AgentProcess; readonly retention: RetainedProcessPolicy }
     | { readonly kind: "transient" | "retiring"; readonly runtime: AgentProcess };
 
-/** Owns each capacity slot from reservation until the process has stopped. */
 export class AgentProcessPool {
     readonly #maxProcesses: number;
     readonly #timer: Timer;
@@ -98,7 +97,6 @@ export class AgentProcessPool {
         await Promise.all([...this.#slots].map(async ([id, slot]) => await this.#retireIdle(id, slot)));
     };
 
-    /** Stop scheduling before Runtime shutdown and drain teardowns already in flight. */
     readonly stopIdleReclamation = async (): Promise<void> => {
         this.#stopping = true;
         for (const id of this.#idleTimeouts.keys()) {

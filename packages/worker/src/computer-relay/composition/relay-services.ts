@@ -10,7 +10,6 @@ import { SessionAccessSigner } from "../components/runtime/entity/session-access
 import type { ComputerService } from "../components/runtime/service/computer-service.ts";
 import { SessionAccessService } from "../components/runtime/service/session-access-service.ts";
 
-/** All stores and Runtime operations belong to this object; no loopback HTTP or remote-store fallback. */
 export function createComputerRelayServices(
     bindings: RelayBindings,
     computerId: string,

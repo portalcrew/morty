@@ -39,7 +39,6 @@ async function owningRoot(directory: string): Promise<string | null> {
     return null;
 }
 
-/** Refuse to create a nested root inside an existing computer installation. */
 export async function validateStateRoot(environment: Readonly<NodeJS.ProcessEnv>): Promise<void> {
     const directory = readStateDirectory(environment);
     const root = await owningRoot(directory);

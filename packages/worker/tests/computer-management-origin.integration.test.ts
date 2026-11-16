@@ -49,7 +49,6 @@ test("Given an existing Computer, When Morty moves to another origin, Then the u
         expect(originalBot.status).toBe(200);
         const bot = await originalBot.json();
 
-        // A second listener forwards to the same real Relay and its existing storage.
         const relocated = await createResponseLossProxy(fixture.origin);
         try {
             await fixture.changeAppOrigin(relocated.origin);

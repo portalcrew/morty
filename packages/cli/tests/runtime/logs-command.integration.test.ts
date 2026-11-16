@@ -12,7 +12,6 @@ afterEach(async () => {
     );
 });
 
-/** Write the Computer's logs, mirroring the store's `<root>/computer/logs` layout. */
 async function writeComputerLog(stateDirectory: string, filename: string, lines: readonly string[]): Promise<void> {
     const logs = join(stateDirectory, "computer", "logs");
     await mkdir(logs, { mode: 0o700, recursive: true });

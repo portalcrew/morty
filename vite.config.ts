@@ -33,7 +33,6 @@ export default defineConfig({
         ? {}
         : {
               experimental: {
-                  // Public files ship with the Worker; only generated assets are uploaded to R2.
                   renderBuiltUrl: (filename: string, { type }: { readonly type: "asset" | "public" }) =>
                       `${type === "public" ? assetOrigins.application : assetOrigins.generated}/${filename}`,
               },

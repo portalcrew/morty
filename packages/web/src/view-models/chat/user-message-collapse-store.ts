@@ -5,7 +5,6 @@ export interface UserMessageCollapseState {
     readonly toggle: (messageId: string) => void;
 }
 
-/** One session's disclosure choices, retained while individual messages mount and unmount. */
 export function createUserMessageCollapseStore() {
     return createStore<UserMessageCollapseState>()((set) => ({
         expandedIds: new Set<string>(),

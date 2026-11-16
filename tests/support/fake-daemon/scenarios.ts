@@ -77,7 +77,6 @@ function manySessionEvents(completion?: string): HarnessReplyPlan {
     };
 }
 
-/** Shared Morty scenario data; the protocol peer has no prompt-specific branches. */
 export function mortyReply(prompt: string, turnNumber: number, mode: "prompt" | "steer"): HarnessReplyPlan {
     if (mode === "steer") {
         return {

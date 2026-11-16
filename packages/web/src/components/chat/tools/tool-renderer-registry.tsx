@@ -21,7 +21,6 @@ import { matchesWorkdirShellCommandToolCall, WorkdirShellCommandToolCall } from 
 
 interface ToolRenderer {
     readonly Component: ComponentType<ToolRendererProps>;
-    /** Whether the matched call changes workspace files. */
     readonly editsFiles: boolean;
     readonly matches: (entry: ToolThinkingEntry) => boolean;
 }

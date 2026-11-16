@@ -12,14 +12,12 @@ import type { SessionInteraction } from "./session-pane-types.ts";
 // a lifecycle protocol change is absorbed here instead of across pane workflows.
 
 type LifecycleMetadata = Extract<SessionLiveEvent, { readonly type: "lifecycle-metadata" }>["payload"];
-/** How far the native session's owner has taken a command the Computer handed it: holding it, or running it. */
 export type DelegationStage = Extract<LifecycleMetadata, { readonly kind: "prompt.delegated" }>["stage"];
 type LifecycleEvent<Kind extends LifecycleMetadata["kind"]> = Extract<
     LifecycleMetadata,
     { readonly kind: Kind; readonly event: unknown }
 >["event"];
 
-/** What a lifecycle event means for the Session pane. */
 export type SessionLifecycleFact =
     | { readonly kind: "interaction-requested"; readonly interaction: SessionInteraction }
     | {
@@ -34,11 +32,9 @@ export type SessionLifecycleFact =
       }
     | { readonly kind: "queue-changed" }
     | { readonly kind: "turn-started"; readonly commandId: string }
-    /** The Computer handed the command to the native session's owner, such as the Codex app, which runs it or not. */
     | { readonly kind: "turn-delegated"; readonly commandId: string; readonly stage: DelegationStage }
     | { readonly kind: "turn-completed"; readonly commandId: string; readonly steered: boolean }
     | { readonly kind: "turn-failed"; readonly commandId: string; readonly code: string; readonly message: string }
-    /** The event changes nothing the pane tracks outside the message projection. */
     | { readonly kind: "none" };
 
 export function sessionLifecycleFact(payload: LifecycleMetadata): SessionLifecycleFact {
@@ -80,7 +76,6 @@ export function sessionLifecycleFact(payload: LifecycleMetadata): SessionLifecyc
     }
 }
 
-/** The pending interaction a live request or an interaction snapshot describes. */
 export function requestedInteraction(
     event:
         | SessionPermissionRequestedEvent
@@ -106,7 +101,6 @@ export function requestedInteraction(
     }
 }
 
-/** What a permission was decided to be, whichever option was chosen. */
 function permissionAnswer(event: SessionPermissionResolvedEvent): MortyPermissionAnswer {
     return event.outcome === "selected" ? { outcome: "selected", optionId: event.optionId } : { outcome: "cancelled" };
 }

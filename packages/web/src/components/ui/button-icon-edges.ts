@@ -1,6 +1,5 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 
-/** Screen-reader text does not occupy a visual edge. */
 function isScreenReaderOnly(child: ReactElement): boolean {
     const props: unknown = child.props;
     if (typeof props !== "object" || props === null || !("className" in props)) {

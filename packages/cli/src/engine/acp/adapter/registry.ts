@@ -5,7 +5,6 @@ import { ClaudeAdapter } from "./claude/adapter.ts";
 import { CodexAdapter } from "./codex/adapter.ts";
 import { PiAdapter } from "./pi/adapter.ts";
 
-/** Each supported harness owns its adapter; unregistered harnesses are rejected. */
 export const harnessAdapters: AdapterResolver = (
     agent: AcpAgentDefinition,
     dependencies: AdapterDependencies,

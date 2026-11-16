@@ -6,7 +6,6 @@ interface Mutation {
     readonly run: () => unknown;
 }
 
-/** Native SQLite for the owning computer; a batch commits as one synchronous transaction. */
 export class DurableObjectDatabase {
     readonly #storage: DurableObjectStorage;
     readonly orm;

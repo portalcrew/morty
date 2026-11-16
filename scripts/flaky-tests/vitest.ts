@@ -7,7 +7,6 @@ import { type FlakyTest, recordFlakyTests } from "./record.ts";
 const MAX_ERRORS = 5;
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_STACK_FRAMES = 6;
-// Everything a terminal or the CI log could interpret, except the line breaks that keep a message readable.
 const UNPRINTABLE = /[^\P{Cc}\n\t]/gu;
 
 function failedAttempt(test: TestCase): string[] {

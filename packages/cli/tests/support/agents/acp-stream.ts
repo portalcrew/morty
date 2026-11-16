@@ -1,4 +1,3 @@
-/** Node stream bridge for controlled ACP peers. */
 export function readableAcpStream(
     input: NodeJS.ReadableStream,
     maximumBytes = Number.POSITIVE_INFINITY,

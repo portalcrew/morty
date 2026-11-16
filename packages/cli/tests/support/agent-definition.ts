@@ -4,7 +4,6 @@ import { AcpAgentDefinition } from "../../src/engine/acp/agent/agent-definition.
 import { unsupportedSessionCapabilities } from "../../src/engine/acp/protocol/session-capabilities.ts";
 import { ExecutableIdentity } from "../../src/engine/util/process/executable.ts";
 
-/** The identity of a local executable file as it is now. */
 export function readExecutableIdentity(path: string): ExecutableIdentity {
     const resolvedPath = realpathSync(path);
     const metadata = statSync(resolvedPath);

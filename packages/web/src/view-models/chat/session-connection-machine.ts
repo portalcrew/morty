@@ -1,33 +1,21 @@
 import type { MortyClient } from "@portalcrew/morty-client";
 import { disconnectedConnection, type SessionConnection, sessionReconnectAttempt } from "./session-connection.ts";
 
-// The pane's connection to its Session is one state machine. The loop that opens, watches and retries the connection
-// performs I/O, timers and aborts; every decision about what happens next is made here, from the state and the event.
-
 type Notice = "quiet" | "visible";
 
-/** What the connection remembers across attempts. */
 interface Backoff {
-    /** The consecutive failed attempts, which sets the next retry's delay. */
     readonly failures: number;
-    /** The user or the browser asked to retry at once: the next failure starts the backoff over. */
     readonly recovery: "none" | "requested";
 }
 
-/** What a failed connection waits for. */
 type Waiting =
-    /** An automatic retry counts down. */
     | { readonly kind: "retry"; readonly remainingMs: number; readonly notice: Notice }
-    /** The automatic retries are used up: the owner retries once it sees the Computer reachable, or the user does. */
     | { readonly kind: "computer"; readonly notice: Notice }
-    /** The failure is not one waiting resolves: only the user's retry opens the connection again. */
     | { readonly kind: "user" };
 
 export type SessionConnectionState =
-    /** An attempt is in flight. `interruption` is set once an earlier attempt failed. */
     | ({
           readonly kind: "opening";
-          /** The client the attempt opened, once it has one. */
           readonly client: MortyClient | null;
           readonly interruption: { readonly message: string; readonly notice: Notice } | null;
       } & Backoff)
@@ -36,20 +24,16 @@ export type SessionConnectionState =
     /** The Computer archived the Session, so nothing this page does connects to it again. */
     | { readonly kind: "closed"; readonly reason: string | null };
 
-/** How an attempt ended, as the loop classified it. */
 type AttemptFailure =
     | { readonly kind: "session-closed"; readonly reason: string }
     | { readonly kind: "retryable"; readonly message: string; readonly notice: Notice }
     | { readonly kind: "terminal"; readonly message: string };
 
 export type SessionConnectionEvent =
-    /** The loop starts an attempt; `notice` is the interruption's notice, used when an earlier attempt failed. */
     | { readonly kind: "attempt-starting"; readonly notice: Notice }
     | { readonly kind: "client-opened"; readonly client: MortyClient }
     | { readonly kind: "subscribed" }
-    /** The subscription of `client` stayed open long enough to trust it. */
     | { readonly kind: "stable"; readonly client: MortyClient }
-    /** `jitter` in [0, 1) spreads the next retry's delay. */
     | { readonly kind: "attempt-failed"; readonly failure: AttemptFailure; readonly jitter: number }
     | { readonly kind: "retry-ticked"; readonly remainingMs: number; readonly notice: Notice }
     | { readonly kind: "notice-changed"; readonly notice: Notice }
@@ -59,11 +43,9 @@ export type SessionConnectionEvent =
     | { readonly kind: "retry-now" }
     | { readonly kind: "computer-reachable" };
 
-/** What the loop does as a result: stop what runs, or wait the way the transition says. */
 export type SessionConnectionEffect =
     | { readonly kind: "abort-attempt" }
     | { readonly kind: "interrupt-wait" }
-    /** The Session's execution settles: nothing runs or waits in a closed Session. */
     | { readonly kind: "closed" }
     | { readonly kind: "await-retry"; readonly delayMs: number }
     /** `notify`: the failure is one the Computer's return resolves, so the owner is told it is waiting. */
@@ -82,7 +64,6 @@ export const initialSessionConnection: SessionConnectionState = {
     recovery: "none",
 };
 
-/** The client the connection holds now: the one an attempt opened, or the one that is live. */
 export function sessionConnectionClient(state: SessionConnectionState): MortyClient | null {
     switch (state.kind) {
         case "opening":
@@ -106,7 +87,6 @@ function waitingView(message: string, waiting: Waiting): SessionConnection {
     }
 }
 
-/** What the views show of the connection. */
 export function sessionConnectionView(state: SessionConnectionState): SessionConnection {
     switch (state.kind) {
         case "opening":

@@ -18,7 +18,6 @@ export function getAuthMethods(opts: { command?: string; supportsTerminalAuthMet
         name: "Launch pi in the terminal",
         description: "Start pi in an interactive terminal to configure API keys or login",
 
-        // Registry-required fields
         type: "terminal",
         args: ["--terminal-login"],
         env: {},

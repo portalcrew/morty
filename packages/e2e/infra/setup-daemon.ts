@@ -16,10 +16,8 @@ type Connection = Readonly<{
     origin: string;
 }>;
 
-/** Setup's Runtime port backed by the production daemon engine and a controlled Agent harness. */
 export class ControlledSetupRuntime implements SetupRuntime {
     readonly #saved = new Map<string, Connection>();
-    /** Each saved connection's relay credential, which rotates on every connection like the daemon's saved one. */
     readonly #credentials = new Map<string, ComputerCredentials>();
     readonly #active = new Map<string, Awaited<ReturnType<typeof connectControlledAgentRuntime>>>();
     readonly #failed = Promise.withResolvers<never>();
@@ -137,7 +135,6 @@ export class ControlledSetupRuntime implements SetupRuntime {
             if (this.#active.get(pairingGeneration) !== daemon) {
                 return;
             }
-            // Like the manager's daemon, a revoked Computer stops its own connection and the others keep running.
             if (Reflect.get(Object(error), "code") === "computer_relay_revoked") {
                 this.#active.delete(pairingGeneration);
                 return;
@@ -160,14 +157,12 @@ export class ControlledSetupRuntime implements SetupRuntime {
         await Promise.all(active.map((daemon) => daemon[Symbol.asyncDispose]()));
     };
 
-    /** Restarts the production engines while keeping their persisted session directories. */
     readonly restart = async (): Promise<void> => {
         const active = Array.from(this.#active.values());
         await Promise.all(active.map((daemon) => daemon.disconnect()));
         await Promise.all(active.map((daemon) => daemon.reconnect()));
     };
 
-    /** Disconnects the real relay while retaining the daemon's persisted sessions for recovery. */
     readonly pause = async (): Promise<void> => {
         await Promise.all(Array.from(this.#active.values(), (daemon) => daemon.disconnect()));
     };
@@ -176,7 +171,6 @@ export class ControlledSetupRuntime implements SetupRuntime {
         await Promise.all(Array.from(this.#active.values(), (daemon) => daemon.reconnect()));
     };
 
-    /** Simulates the manager forgetting every saved Computer connection. */
     readonly forgetConnections = async (): Promise<void> => {
         await this.disconnect();
         this.#saved.clear();

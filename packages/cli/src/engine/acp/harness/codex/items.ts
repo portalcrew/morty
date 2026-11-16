@@ -52,7 +52,6 @@ function firstLine(value: string): string {
     return line.trim().length > 0 ? line.trim() : value.trim();
 }
 
-/** The ACP framing Morty needs to display one app-server item as a tool call. */
 interface ToolCallPresentation {
     readonly kind: ToolKind;
     readonly status: ToolCallStatus;
@@ -85,10 +84,6 @@ function collaborationStatus(status: "inProgress" | "completed" | "failed" | "in
     return status === "inProgress" ? "in_progress" : status === "completed" ? "completed" : "failed";
 }
 
-/**
- * Translates one app-server `ThreadItem` into the ACP tool-call framing, or returns null for an item
- * that is not a tool (messages, reasoning, plans, and item kinds a newer Codex added).
- */
 function presentToolItem(item: ThreadItem): ToolCallPresentation | null {
     if (item.type === "imageView") {
         return {
@@ -234,8 +229,6 @@ function presentToolItem(item: ThreadItem): ToolCallPresentation | null {
     return null;
 }
 
-/** The ACP tool-call payload for one app-server item: `tool_call` when it opens, `tool_call_update`
- *  for every later snapshot. Both carry the same fields. */
 export function toolCallUpdate(
     item: ThreadItem,
     lifecycle: "snapshot" | "started" | "completed",
@@ -266,20 +259,17 @@ export function toolCallUpdate(
     };
 }
 
-/** Parses an untrusted app-server item, returning null when the shape is not one Morty presents. */
 export function decodeThreadItem(value: unknown): ThreadItem | null {
     const decoded = threadItemSchema.safeParse(value);
     return decoded.success ? decoded.data : null;
 }
 
-/** The questions an agent message asks while Codex keeps working, with the answers each suggests. */
 export function messageQuestions(item: ThreadItem): readonly AgentQuestion[] {
     return item.type === "agentMessage"
         ? (item.questions ?? []).map((question) => ({ options: question.options ?? [], question: question.title }))
         : [];
 }
 
-/** Returns the bounded reasoning Codex exposes for a completed reasoning item. */
 export function reasoningText(item: ThreadItem): string | null {
     if (item.type !== "reasoning") {
         return null;

@@ -16,7 +16,6 @@ test("Given a session pinned to its latest reply, When an unreadable attachment 
     const article = page.getByRole("article", { name: "Agent response" }).last();
     await expect(article.getByRole("button", { name: "Copy response" })).toBeVisible();
 
-    // A zero-byte file fails the attachment size check and raises the notice.
     const empty = testInfo.outputPath("empty.txt");
     writeFileSync(empty, "");
     await page.locator("input[aria-label='Choose attachments']").setInputFiles(empty);
@@ -55,7 +54,6 @@ test.describe("Given an interactive card ending the log", () => {
         const tip = page.getByRole("region", { name: "Continue your work here" });
         await expect(tip).toBeVisible();
 
-        // A zero-byte file fails the attachment size check and raises the notice.
         const empty = testInfo.outputPath("empty.txt");
         writeFileSync(empty, "");
         await page.locator("input[aria-label='Choose attachments']").setInputFiles(empty);

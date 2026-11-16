@@ -31,12 +31,9 @@ export function Select({
         readonly title?: string;
         readonly value: string;
     }[];
-    /** Closed-field text when no value is selected. Defaults to "Select <label>". */
     readonly placeholder?: string;
     readonly disabled?: boolean;
-    /** Extra trigger classes, e.g. a caller's height or radius override. */
     readonly className?: string;
-    /** Extra classes for the scrollable options list. */
     readonly viewportClassName?: string;
 }) {
     return (

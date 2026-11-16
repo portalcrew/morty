@@ -8,7 +8,6 @@ import { MemorySessionEventStore } from "../../src/engine/session/history/sessio
 import { ControlledAcpAdapter } from "../support/controlled-acp-adapter.ts";
 import { fixture } from "./native-session-fixture.ts";
 
-/** A direct-read adapter with canned history, standing in for the Codex app-server. */
 const cannedHistoryAdapter: AdapterResolver = (agent, dependencies) => {
     const acp = new ControlledAcpAdapter(agent, dependencies);
     const events = new MemorySessionEventStore();

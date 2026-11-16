@@ -40,14 +40,12 @@ type Application = Awaited<ReturnType<Environment["createApplication"]>>;
 
 const environment = createChatWorkerEnvironment();
 const activeApps = new Set<TestApp>();
-/** The last unmet expectation of every view wait that has not settled. */
 const pendingViews = new Set<{ readonly lastFailure: () => unknown }>();
 /**
  * The running test attempt's lifetime. What an attempt starts belongs to it: an application whose setup is still
  * running when the attempt times out stops with it instead of connecting during the retry or a later test.
  */
 let attempt = new AbortController();
-/** Application setups still running, which the attempt's cleanup waits for once it has ended them. */
 const setups = new Set<Promise<unknown>>();
 
 beforeEach(({ signal }) => {
@@ -97,7 +95,6 @@ interface TestAppOptions {
     readonly environment?: Environment;
     readonly connectAgent?: boolean;
     readonly clock?: Clock;
-    /** How the device moves setup to the agent's computer; defaults to the test browser's own. */
     readonly setupHandoff?: SetupHandoff;
     readonly agent?: ControlledAgent;
     readonly agents?: readonly ControlledAgent[];
@@ -107,7 +104,6 @@ interface TestAppOptions {
               readonly kind: "continue";
               readonly harness: string;
               readonly sessionId: string;
-              /** The directory setup ran in; defaults to the system temporary directory. */
               readonly workspace?: string;
               /** Replaces the created transfer code, for example with one that cannot be redeemed. */
               readonly code?: (application: Application) => string;
@@ -375,7 +371,6 @@ afterEach(async ({ task }) => {
     // before closing the applications ends those waits.
     const unmet = task.result?.state === "fail" ? [...pendingViews].map((pending) => pending.lastFailure()) : [];
     await closeTestApps();
-    // End the attempt's lifetime, which stops any application setup still running, as one does after a timeout.
     attempt.abort(new DOMException("The test attempt ended", "AbortError"));
     await Promise.allSettled(setups);
     document.body.replaceChildren();

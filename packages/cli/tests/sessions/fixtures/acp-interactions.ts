@@ -189,7 +189,6 @@ export async function runInteractionScenario(
         }
     }
     if (prompt === "ask for many default choices") {
-        // The Agent pre-selects every one of its 200 options: far more than a string field's worth of characters.
         const choices = Array.from(
             { length: 200 },
             (_, index) => `branch-${String(index).padStart(3, "0")}-${"x".repeat(45)}`,

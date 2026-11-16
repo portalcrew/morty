@@ -20,7 +20,6 @@ export const COMPACTION_CHARACTER_LIMIT = 16 * 1024;
 
 export type SessionPresentationEvent = SessionEvent | SessionLiveEvent;
 
-/** The events of both lists once each, in first-seen order; where an event appears in both, `second` supplies it. */
 export function mergeEventsById<T extends { readonly eventId: string }>(
     first: readonly T[],
     second: readonly T[],
@@ -58,11 +57,6 @@ export type SessionMessage =
           readonly firstEvent: SessionPresentationEvent;
           readonly commandId: string | null;
           readonly contents: readonly ContentBlock[];
-          /**
-           * Whether this message starts an execution or steers the one already
-           * running. Messages reported by the Agent itself carry no lifecycle and
-           * are `unknown`.
-           */
           readonly execution: "starts" | "steers" | "unknown";
       }
     | {
@@ -74,7 +68,6 @@ export type SessionMessage =
                     readonly kind: "message";
                     readonly content: SessionContentBlock;
                     readonly messageId: string;
-                    /** Questions the message asks while the Agent keeps working; the user answers with a message. */
                     readonly questions: readonly AgentQuestion[];
                 }
               | { readonly kind: "thought"; readonly content: SessionContentBlock; readonly messageId: string }
@@ -306,9 +299,6 @@ type CompactionPresentation = Extract<SessionMessage, { role: "assistant" }>["pr
 type CompactionUpdateVariant = Extract<AcpSessionUpdate, { readonly sessionUpdate: "compaction_update" }>;
 type CompactionChunkVariant = Extract<AcpSessionUpdate, { readonly sessionUpdate: "compaction_summary_chunk" }>;
 
-/** Applies ACP compaction patch semantics: chunks append to the streamed summary;
- *  a terminal update patches status/error, and its `summary` (when concrete)
- *  replaces the streamed one. */
 function mergeCompactionPresentation(
     previous: CompactionPresentation | null,
     update: CompactionUpdateVariant | CompactionChunkVariant,
@@ -457,7 +447,6 @@ function mergeAdjacentText(previous: SessionMessage | undefined, incoming: Sessi
     ) {
         return null;
     }
-    // A message's questions arrive with one of its chunks; later chunks keep them.
     const presentation =
         incoming.presentation.kind === "message" &&
         previous.presentation.kind === "message" &&
@@ -510,14 +499,12 @@ function eventPosition(event: SessionPresentationEvent): string | null {
     return "position" in event ? event.position : null;
 }
 
-/** A turn the Computer's log says started, at the log position of the event that said it. */
 interface StartedTurnEntry {
     readonly kind: "turn-started";
     readonly commandId: string;
     readonly position: string | null;
 }
 
-/** Which execution a command's request belongs to: its own, or the one it steers. */
 interface ExecutionOwnerEntry {
     readonly kind: "execution-owner";
     readonly commandId: string;
@@ -533,7 +520,6 @@ type ReducedSessionEntry = ReducedSessionMessage | StartedTurnEntry | ExecutionO
  * so the timeline is a function of the events and the reports, and neither holds the other's facts.
  */
 export type SessionExecutionObservation =
-    /** The Computer's account of the execution through `position` of the log's `generation`. */
     | {
           readonly kind: "through";
           readonly generation: string;
@@ -541,10 +527,8 @@ export type SessionExecutionObservation =
           readonly running: string | null;
           readonly queued: readonly string[];
       }
-    /** The Computer closed the Session: nothing runs and no more events follow. */
     | { readonly kind: "closed" };
 
-/** What a report says at its place in the timeline, which the messages after it are read against. */
 type ExecutionMarker =
     | StartedTurnEntry
     | ExecutionOwnerEntry
@@ -771,7 +755,6 @@ function applySessionEvent(
     }
 }
 
-/** Reduces a page of events, which holds each turn's lifecycle where it happened, exactly as the live stream does. */
 function reduceSessionEvents(
     events: readonly SessionPresentationEvent[],
     leadingEvent: "known" | "possibly-before-page",
@@ -841,13 +824,11 @@ export function sessionReductionExecutionOwner(reduction: SessionMessageReductio
     return owner?.kind === "execution-owner" ? owner.executionCommandId : null;
 }
 
-/** Where in the log an entry begins: its first event's position, none for an entry the history page holds. */
 function entryPosition(entry: ReducedSessionEntry): bigint | null {
     const position = entry.kind === "message" ? eventPosition(entry.message.firstEvent) : entry.position;
     return position === null ? null : BigInt(position);
 }
 
-/** What the Computer's report says at its place in the timeline. */
 function observationMarkers(observation: SessionExecutionObservation): readonly ExecutionMarker[] {
     if (observation.kind === "closed" || observation.running === null) {
         // Native replay can retain unfinished tools without Morty lifecycle metadata.
@@ -866,10 +847,6 @@ function observationMarkers(observation: SessionExecutionObservation): readonly 
     ];
 }
 
-/**
- * The entries with the Computer's reports placed among them: a report follows every entry that begins at or before the
- * log position it covers. `observations` are those of this reduction's log generation that cover its history baseline.
- */
 function placeObservations(
     entries: readonly ReducedSessionEntry[],
     observations: readonly SessionExecutionObservation[],
@@ -1051,11 +1028,7 @@ export function sessionEventCommandIds(events: readonly SessionPresentationEvent
  * messages to a running execution without starting a new one, so an execution
  * can span several user messages.
  */
-export type SessionExecutionState =
-    /** Still running, or has not reported an outcome yet. */
-    | { readonly kind: "open" }
-    /** Completed, failed, or stopped before completing. */
-    | { readonly kind: "ended" };
+export type SessionExecutionState = { readonly kind: "open" } | { readonly kind: "ended" };
 
 function terminalExecutionState(message: SessionMessage): SessionExecutionState | null {
     if (message.role !== "assistant") {
@@ -1071,7 +1044,6 @@ function terminalExecutionState(message: SessionMessage): SessionExecutionState 
     return { kind: "ended" };
 }
 
-/** Returns, for each message, the state of the execution that owns it. */
 export function sessionExecutionStates(
     messages: readonly SessionExecutionMessage[],
     sessionWorking: boolean,

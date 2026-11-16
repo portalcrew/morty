@@ -31,8 +31,6 @@ function compactionStatusToToolState(status: CompactionStatusState): ToolCallSta
     }
 }
 
-/** Renders one ID-addressed context compaction: a status disclosure whose body is
- *  the retained summary the Agent streamed while compacting. */
 export function CompactionDisclosure({
     error,
     status,

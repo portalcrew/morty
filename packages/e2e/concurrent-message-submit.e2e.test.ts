@@ -33,7 +33,6 @@ test("Given two devices share an idle conversation, When both send a draft, Then
                 await participant.page.getByRole("button", { name: "Send message" }).click();
             }),
         );
-        // The Computer runs whichever message arrives first and queues the other behind it.
         const queue = page.getByLabel("Queued messages", { exact: true });
         await expect(queue).toBeVisible();
         for (const participant of participants) {
@@ -49,7 +48,6 @@ test("Given two devices share an idle conversation, When both send a draft, Then
         await secondPage.reload();
         for (const participant of participants) {
             await expect(secondPage.getByRole("log", { name: "Messages" })).toContainText(participant.prompt);
-            // Each message keeps its attachment, offered as a download.
             await expect(secondPage.getByRole("log", { name: "Messages" })).toContainText(
                 `Download ${participant.fileName}`,
             );

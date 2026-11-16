@@ -20,7 +20,6 @@ export function promptToPiMessage(blocks: readonly ContentBlock[]): {
                 break;
 
             case "resource_link":
-                // A lightweight, human-readable hint for the LLM.
                 message += `\n[Context] ${b.uri}`;
                 break;
 
@@ -40,11 +39,9 @@ export function promptToPiMessage(blocks: readonly ContentBlock[]): {
                 const uri = typeof r?.uri === "string" ? r.uri : "(unknown)";
 
                 if (typeof r?.text === "string") {
-                    // TextResourceContents
                     const mime = typeof r?.mimeType === "string" ? r.mimeType : "text/plain";
                     message += `\n[Embedded Context] ${uri} (${mime})\n${r.text}`;
                 } else if (typeof r?.blob === "string") {
-                    // BlobResourceContents
                     const mime = typeof r?.mimeType === "string" ? r.mimeType : "application/octet-stream";
                     const bytes = Buffer.byteLength(r.blob, "base64");
                     message += `\n[Embedded Context] ${uri} (${mime}, ${bytes} bytes)`;
@@ -62,7 +59,6 @@ export function promptToPiMessage(blocks: readonly ContentBlock[]): {
             }
 
             default:
-                // Ignore unknown block types for now.
                 break;
         }
     }

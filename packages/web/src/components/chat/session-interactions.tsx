@@ -47,7 +47,6 @@ function safeExternalUrl(value: string): string {
     return "";
 }
 
-/** Same surface language as `MortyAlert`: a 16px shell with a hairline border, 13px text, and a muted 14px icon. */
 const interactionCardClassName =
     "min-w-0 w-full rounded-[20px] border-[0.5px] border-border bg-surface-elevated px-4 py-4 text-13 [overflow-wrap:anywhere]";
 const interactionIconClassName = "mt-[3px] size-4 shrink-0 text-muted-foreground";
@@ -137,7 +136,6 @@ function SelectFieldControl({
     );
 }
 
-/** One field of the Agent's question, showing `value` and reporting each change; the form keeps no state itself. */
 function FieldControl({
     disabled,
     field,
@@ -260,7 +258,6 @@ function FieldControl({
     );
 }
 
-/** The shell command when this is an `execute` request carrying one. */
 function executeCommand(permission: PermissionInteraction): string | undefined {
     if (permission.toolKind !== "execute") {
         return undefined;
@@ -273,7 +270,6 @@ function executeCommand(permission: PermissionInteraction): string | undefined {
     return typeof command === "string" && command.length > 0 ? command : undefined;
 }
 
-/** What the card shows first: the change itself when the tool call carries diffs, then the command, then the raw input. */
 type PermissionPreview =
     | { readonly kind: "changes"; readonly changes: readonly PermissionFileChange[] }
     | { readonly kind: "command"; readonly command: string; readonly cwd: string }
@@ -682,15 +678,12 @@ export function SessionInteractionCards({
     error,
 }: {
     readonly elicitations: readonly ElicitationInteraction[];
-    /** What each field of each pending question shows, by interaction id and then field name. */
     readonly fieldValues: ReadonlyMap<string, ReadonlyMap<string, ElicitationFieldValue>>;
-    /** What each permission card shows of its request, by interaction id. */
     readonly permissionPresentations: ReadonlyMap<string, PermissionPresentation>;
     /** Why a question cannot be accepted yet, by interaction id, once the user tried. */
     readonly requiredNotices: ReadonlyMap<string, string>;
     readonly onElicitationAnswer: (interactionId: string, fieldName: string, value: ElicitationFieldValue) => void;
     readonly onElicitationAccept: (elicitation: FormElicitation) => void;
-    /** The diffs announced for each permission's tool call, by interaction id. */
     readonly fileChanges: ReadonlyMap<string, readonly PermissionFileChange[]>;
     readonly permissions: readonly PermissionInteraction[];
     readonly onStop: () => void;

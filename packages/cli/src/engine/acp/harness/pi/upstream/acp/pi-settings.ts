@@ -47,10 +47,6 @@ export function getAgentDir(environment: Readonly<NodeJS.ProcessEnv> = process.e
     return configured ? resolve(configured) : join(environmentHome(environment), ".pi", "agent");
 }
 
-/**
- * Mirror pi settings semantics (global + project merge, project overrides global).
- * Only returns the bits we currently need.
- */
 export function getEnableSkillCommands(cwd: string, environment: Readonly<NodeJS.ProcessEnv> = process.env): boolean {
     const merged = getMergedSettings(cwd, environment);
 

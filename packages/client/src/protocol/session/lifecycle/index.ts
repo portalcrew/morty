@@ -35,12 +35,10 @@ export const SESSION_RESTORED_KIND = "session.restored";
 export const SESSION_CLOSE_NOTICE_KIND = "session.close.notice";
 export const SESSION_ARCHIVE_KIND = "session.archive";
 export const SESSION_ARCHIVED_KIND = "session.archived";
-/** Failure code of an operation on a Session the Computer is archiving. */
 export const SESSION_CLOSED_ERROR_CODE = "session_closed";
 export const SESSION_OPERATION_FAILED_KIND = "session.operation.failed";
 export const SESSION_PROMPT_ACCEPTED_KIND = "session.prompt.accepted";
 
-/** What the Computer records of a Session, apart from which Session it is. */
 const sessionRecordFields = {
     directory: DIRECTORY_PATH,
     directoryLabel: z.string().min(1).max(MAX_WORKSPACE_PATH_LENGTH),
@@ -121,7 +119,6 @@ const sessionArchiveCommandSchema = z
 
 export type SessionArchiveCommand = z.infer<typeof sessionArchiveCommandSchema>;
 
-/** Opens an existing Session with the Agent and directory the Computer holds it with. */
 const sessionPrepareCommandSchema = z
     .object({
         kind: z.literal(SESSION_PREPARE_KIND),
@@ -149,7 +146,6 @@ const decodeSessionCreateCommand = (encoded: string): SessionCreateCommand =>
 export const encodeSessionCreateCommand = (message: SessionCreateCommand): string =>
     encode(message, sessionCreateCommandSchema);
 
-/** What a Session's preparation tells a client, apart from which Session and which request it answers. */
 const sessionReadyFields = {
     agentName: z.string().max(255),
     agentVersion: z.string().max(128),
@@ -186,7 +182,6 @@ const sessionRestoredEventSchema = z
 
 export type SessionRestoredEvent = z.infer<typeof sessionRestoredEventSchema>;
 
-/** Answers `session.archive` once the Computer no longer holds the Session. */
 const sessionArchivedEventSchema = z
     .object({
         kind: z.literal(SESSION_ARCHIVED_KIND),

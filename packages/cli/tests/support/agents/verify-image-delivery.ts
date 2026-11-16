@@ -38,7 +38,6 @@ function imageReferences(events: readonly (SessionEvent | SessionLiveEvent)[]): 
     });
 }
 
-/** Observe live delivery, restored native history, reverse reads and a subsequent prompt at the public daemon port. */
 export async function verifyImageDelivery(
     peer: RealDaemonPeer,
     input: {

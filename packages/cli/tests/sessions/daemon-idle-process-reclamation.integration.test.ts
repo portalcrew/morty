@@ -401,7 +401,6 @@ test("Given native history is loading in a retained process, When three hours pa
     await withIdleDaemon(signal, "resume", async (peer, native, timer) => {
         const sessionTarget = peer.target;
         await prompt(peer, sessionTarget, "History before a long load");
-        // A restarted daemon starts the Session in a new process.
         await peer.restart();
         peer.send(
             encodeSessionPrepareCommand({
@@ -526,7 +525,6 @@ test("Given idle process teardown is still releasing the native writer, When a n
                 expect(specification.sessions.endpointCount()).toBe(endpointsBeforeRetirement);
                 held.release();
                 await readTurn(peer);
-                // Recovery starts one capability reader and one replacement execution process.
                 expect(specification.sessions.endpointCount()).toBe(endpointsBeforeRetirement + 2);
             } finally {
                 specification.sessions.releaseAll();
@@ -578,7 +576,6 @@ test("Given a failed turn's process is still releasing the native writer, When a
                 expect(decodeSessionReadyEvent(await nextResponse(peer, "session.ready")).target).toEqual(
                     sessionTarget,
                 );
-                // Recovery starts one capability reader and one replacement execution process.
                 expect(specification.sessions.endpointCount()).toBe(endpointsBeforeFailure + 2);
             } finally {
                 specification.sessions.releaseAll();

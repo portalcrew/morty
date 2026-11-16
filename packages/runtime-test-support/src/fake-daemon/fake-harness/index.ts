@@ -177,7 +177,6 @@ class ControlledAgentState {
             await this.#apply(active, this.#options.reply(prompt, turnNumber, "prompt"));
             return await completion.promise;
         } catch (cause) {
-            // Like the Claude adapter, a failed prompt still names the user message it recorded.
             if (cause instanceof acp.RequestError) {
                 const data = typeof cause.data === "object" && cause.data !== null ? cause.data : {};
                 cause.data = { ...data, messageId };
@@ -361,7 +360,6 @@ class ControlledAgentState {
             return;
         }
         if (output.kind === "compaction") {
-            // One compaction per reply turn: open, stream the summary, settle.
             const compactionId = `compaction-${active.turnNumber.toString()}`;
             const started: acp.SessionNotification = {
                 sessionId: active.sessionId,

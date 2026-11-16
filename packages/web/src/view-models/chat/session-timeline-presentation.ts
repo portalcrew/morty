@@ -21,33 +21,23 @@ type SessionTimelineGroup =
           readonly kind: "user";
           readonly id: string;
           readonly item: SessionRenderItem;
-          /** The running generation writes this message now. */
           readonly active: boolean;
-          /** The message directly follows another user message. */
           readonly followsUserMessage: boolean;
       }
     | {
           readonly kind: "agent-reply";
           readonly id: string;
-          /** The running generation writes this reply. */
           readonly active: boolean;
-          /** The item the running generation writes now, if it is in this reply. */
           readonly activeItemId: string | null;
           readonly sections: readonly ReplyContentSection[];
-          /** The process section the running generation still works in, if it is in this reply. */
           readonly workingSectionId: string | null;
-          /** The reply's answer to copy, once the reply stopped generating. */
           readonly copyText: string | null;
       };
 
-/** The Session's timeline as the pane shows it: which reply the Agent still generates, and what stands in for history. */
 export interface SessionTimelinePresentation {
     readonly groups: readonly SessionTimelineGroup[];
-    /** The Session's first read has not shown anything yet. */
     readonly loading: boolean;
-    /** The Computer holds no history for the Session, and nothing is on its way. */
     readonly emptyHistory: boolean;
-    /** What the timeline ends with while the Agent works on the Session's turn. */
     readonly workingIndicator: SessionPanePresentation["workingIndicator"];
 }
 

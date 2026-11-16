@@ -4,17 +4,13 @@ import { cn } from "@/lib/utils";
 
 const alertChrome = "flex gap-2 rounded-md border-[0.5px] px-4 py-3 [overflow-wrap:anywhere]";
 
-/** Pale amber surface shared by warning alerts. */
 const warningAlertSurfaceClassName =
     "border-[oklch(0.62_0.14_75/0.12)] bg-[oklch(0.98_0.03_85/0.6)] text-[oklch(0.52_0.13_70)] backdrop-blur-[80px]";
 
-/** Info alert ink: brand primary. */
 const infoAlertInkClassName = "text-primary";
 
-/** Opaque brand-tinted fill shared by info alerts and sidebar access notices. */
 const infoAlertOpaqueBackgroundClassName = "bg-primary-subtle backdrop-blur-[80px]";
 
-/** Info alert surface shared by `<MortyAlert tone="info">`. */
 const infoAlertSurfaceClassName = cn("border-primary/25", infoAlertOpaqueBackgroundClassName, infoAlertInkClassName);
 
 const alertTones = {
@@ -69,7 +65,6 @@ export function MortyAlert({
     readonly description?: ReactNode;
     readonly icon?: LucideIcon | undefined;
     readonly iconClassName?: string | undefined;
-    /** Identifies the notice as a whole for interaction tests, headline included. */
     readonly testId?: string | undefined;
     readonly tone?: MortyAlertTone;
 }) {

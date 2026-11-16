@@ -10,7 +10,6 @@ const responseSchema = v.object({
     body: v.string(),
 });
 
-/** A wire-level peer for the real Worker, independent of the unchanged production client's HTTP transport. */
 export async function connectComputerApiWebSocket(origin: string, computerId: string, signal: AbortSignal) {
     const endpoint = new URL(`/morty/api/v1/computers/${computerId}/transport`, origin);
     endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";

@@ -86,7 +86,6 @@ test("Given a real claude native Session, When the active prompt is cancelled wi
             holdResponse = true;
             const active = randomUUID();
             sendPrompt(active);
-            // Model output is held; the real Agent and daemon remain in control of cancellation.
             await new Promise<void>((resolve, reject) => {
                 const abort = (): void => reject(peer.signal.reason);
                 peer.signal.addEventListener("abort", abort, { once: true });

@@ -27,7 +27,6 @@ export type SessionMode = {
     modelInfos: ModelInfo[];
     /** Prevents the model-specific Auto fallback from spamming the transcript. */
     autoModeFallbackWarningShown?: boolean;
-    /** Initial mode fallback is reported after session/new, on the first prompt. */
     autoModeFallbackWarningPending?: boolean;
 };
 
@@ -50,7 +49,6 @@ type InitializeSessionModeParams = {
     currentModelId: string;
 };
 
-/** Owns session-mode policy and the ACP/SDK synchronization it requires. */
 export class SessionModeManager<S extends SessionMode> {
     constructor(private readonly options: SessionModeManagerOptions<S>) {}
 
@@ -146,8 +144,6 @@ export class SessionModeManager<S extends SessionMode> {
         };
     }
 
-    /** Reconcile mode after a model switch. The caller rebuilds config options
-     * before publishing the returned state change. */
     async reconcileForModel(session: SessionMode, model: ModelInfo | undefined) {
         if (session.modes.currentModeId !== "auto" || model === undefined || model.supportsAutoMode === true) {
             return false;

@@ -26,7 +26,6 @@ import type { CommandHandler } from "../definition.ts";
 import { replyFailure, reportOperationFailure, send } from "../transport.ts";
 import { reply, replySettledFailure, settledCommand } from "../turn-replies.ts";
 
-/** Answers a request that waited for its Turn to end with how the Turn ended. */
 async function replyStopped(
     context: CommandContext,
     {
@@ -226,7 +225,6 @@ export const handlePromptDisposition: CommandHandler<typeof SESSION_PROMPT_DISPO
     }
     const result = turn?.promoteQueuedPrompt(message) ?? "unavailable";
     if (result === "accepted") {
-        // The steered prompt is answered once it starts inside the running Turn.
         await operations
             .progress(commandId, target, signal)
             .then(async (progress) => {

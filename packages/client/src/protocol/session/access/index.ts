@@ -5,7 +5,6 @@ import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
 
 const SESSION_ACCESS_PATTERN = /^msession_([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{43})$/u;
 
-/** Whose access a Session credential carries: a browser device's, or the computer's local or recovery credential's. */
 const sessionAccessHolderSchema = z.discriminatedUnion("kind", [
     z.strictObject({ kind: z.literal("device"), deviceId: identifierStringSchema }).readonly(),
     z.strictObject({ kind: z.literal("credential"), credentialId: identifierStringSchema }).readonly(),

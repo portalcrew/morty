@@ -20,10 +20,6 @@ type ConfigurationSnapshot = {
     readonly configurationRevision: string;
 };
 
-/**
- * A change the user asked of the Session's settings. A failed change reports its failure to the Session's operation
- * feedback.
- */
 type SettingsChange = { readonly kind: "idle" } | { readonly kind: "configuring"; readonly configId: string };
 
 export interface SessionSettingsStore {
@@ -33,9 +29,7 @@ export interface SessionSettingsStore {
     readonly configurationRevision: string;
     readonly options: readonly SessionConfigOption[];
     readonly change: SettingsChange;
-    /** Shows the settings a pane opening the Session read with it. */
     readonly opened: (snapshot: ConfigurationSnapshot) => void;
-    /** Shows settings the Computer reported. */
     readonly adopt: (snapshot: ConfigurationSnapshot) => void;
     /**
      * Refines the shown settings from an authoritative read, made whenever the
@@ -47,14 +41,9 @@ export interface SessionSettingsStore {
         read: (signal: AbortSignal) => Promise<ConfigurationSnapshot>,
         parentSignal: AbortSignal,
     ) => void;
-    /**
-     * Changes one setting through whichever pane follows the Session. The change is the Session's: switching panes
-     * neither ends it nor drops its result.
-     */
     readonly configure: (selection: SessionConfigurationSelection, signal: AbortSignal) => Promise<void>;
 }
 
-/** The Session's settings on this page and the change the user asked of them, whichever pane shows them. */
 export function createSessionSettingsStore(options: {
     readonly computerId: string;
     readonly sessionTarget: NativeSessionTarget;
@@ -148,7 +137,6 @@ export function createSessionSettingsStore(options: {
                     set({ change: { kind: "idle" } });
                 } catch (cause) {
                     signal.throwIfAborted();
-                    // The closed Session's notice says all there is to say about the change.
                     if (isSessionClosedFailure(cause)) {
                         set({ change: { kind: "idle" } });
                         return;

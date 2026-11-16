@@ -1,7 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
-/** Clips overflowing text from the start while keeping the leaf visible, or from the end with an ellipsis. */
 export function StartClippedLabel({
     value,
     clip = "start",

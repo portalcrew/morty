@@ -19,7 +19,6 @@ const envelope = z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("http.cancel"), requestId: z.string() }),
 ]);
 
-/** Stateful Worker wire contract: Computer APIs are WebSocket-only; bootstrap remains HTTP. */
 async function computerPeer(signal: AbortSignal) {
     let access: "active" | "revoked" = "active";
     const waiting = new Set<string>();

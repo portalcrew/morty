@@ -1,9 +1,7 @@
-/** Message column horizontal rhythm: 20px on mobile, 24px from `sm:` up. */
 const chatSessionContentInsetClassName = "px-5 sm:px-6";
 
 export const chatSessionColumnClassName = `mx-auto w-full min-w-0 max-w-[920px] ${chatSessionContentInsetClassName}`;
 
-/** Interaction cards keep the composer column's gutters: 12px on phones, flush to it from `sm:` up. */
 export const chatSessionInteractionColumnClassName =
     "mx-auto w-full min-w-0 px-3 sm:w-[min(920px,calc(100%-24px))] sm:px-0";
 
@@ -50,11 +48,9 @@ export const chatSessionPaneFillClassName = "flex min-h-0 min-w-0 flex-1 flex-co
  */
 export const chatSessionPaneSectionClassName = `relative z-20 ${chatSessionPaneFillClassName} sm:rounded-t-[20px] sm:rounded-b-[32px] sm:border-[1px] sm:border-white sm:bg-card/90 sm:shadow-module sm:my-2 sm:ml-0 sm:mr-2`;
 
-/** One-time cloud module entrance on the session column; stays mounted across sends within a session. */
 export const chatSessionPaneEnterClassName =
     "flex min-h-0 min-w-0 flex-1 flex-col motion-reduce:animate-none sm:animate-cloud-enter";
 
-/** Session pane top bar: title on the left, execution controls on the right. */
 export const chatSessionExecutionHeaderClassName = "flex h-12 shrink-0 items-center gap-4 px-4";
 
 export const chatSessionMessageItemClassName = "mt-4 first:mt-0";

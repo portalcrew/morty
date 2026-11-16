@@ -48,11 +48,9 @@ test("Given effort was chosen before the model it depends on, When the conversat
                 await prompt(peer, sessionTarget);
                 let revision = await configure(peer, sessionTarget, "model", "test-large", "");
                 revision = await configure(peer, sessionTarget, "reasoning_effort", "high", revision);
-                // Trying another model and returning makes the model the latest edit.
                 revision = await configure(peer, sessionTarget, "model", "test-small", revision);
                 await configure(peer, sessionTarget, "model", "test-large", revision);
 
-                // A restarted daemon reopens the conversation in a new Agent process.
                 await peer.restart();
                 expect(await prepare(peer, sessionTarget)).toEqual(
                     expect.arrayContaining([

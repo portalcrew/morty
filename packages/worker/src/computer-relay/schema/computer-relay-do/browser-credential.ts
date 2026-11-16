@@ -10,9 +10,7 @@ export const browserCredential = sqliteTable(
         id: text("id").primaryKey().notNull(),
         tokenHash: text("token_hash").notNull().unique(),
         deviceId: text("device_id").notNull(),
-        /** The link that issued it, which issues at most one credential; the device's term is the latest among its links. */
         transferId: text("transfer_id").notNull(),
-        /** When a newer credential of the same device replaced it. */
         replacedAt: integer("replaced_at"),
     },
     (table) => [

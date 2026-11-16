@@ -41,7 +41,6 @@ export function restoredConversation(
     return stored;
 }
 
-/** How the harness reopens a conversation: resuming it, or replaying its history to this process. */
 export function restoreOpening(recovery: SessionRecovery, capabilities: SessionCapabilities): "resume" | "replay" {
     if (recovery.kind === "history-required") {
         if (!capabilities.loadSession) {

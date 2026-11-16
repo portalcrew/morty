@@ -19,7 +19,6 @@ export function agentTerminationError(termination: AgentTermination): AcpExecuti
     }
 }
 
-/** Native background work, including completed tasks whose results are not yet handled. */
 export type BackgroundActivity = "none" | "running" | "awaiting-results";
 
 export type PromptDelegationStage = Extract<LifecycleMetadata, { readonly kind: "prompt.delegated" }>["stage"];

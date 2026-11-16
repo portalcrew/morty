@@ -13,7 +13,6 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
     context,
     message,
 ): Promise<void> => {
-    // A prompt names only its Session; it runs with the Agent and directory of the Session this Runtime holds.
     const session = context.sessions.findSessions([message.target])[0];
     if (session === undefined) {
         await replyFailure(
@@ -58,8 +57,6 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
         return;
     }
     if (receipt.kind === "duplicate") {
-        // A retry is answered with where the original command stands, as its receipt records it. A settled outcome
-        // is also restated for clients that missed it.
         if (context.socket.readyState === WebSocket.OPEN) {
             reply(
                 context.socket,
@@ -186,7 +183,6 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
             } finally {
                 context.sessionTurns.finish(turn);
                 context.eventProjection.publishTerminal(message.target, message.commandId);
-                // Only a prompt that entered the queue changes it by leaving.
                 if (turn.enteredQueue()) {
                     queueChanged();
                 }

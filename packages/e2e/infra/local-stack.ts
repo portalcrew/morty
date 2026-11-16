@@ -39,7 +39,6 @@ async function freePort(taken: ReadonlySet<number> = new Set()) {
     throw new Error("Could not allocate a local stack port");
 }
 
-// The local relay's Session signing secret; production supplies its own as a deployment secret.
 const sessionSigningSecret = "local-development-only-session-signing-secret";
 
 export class LocalStack {

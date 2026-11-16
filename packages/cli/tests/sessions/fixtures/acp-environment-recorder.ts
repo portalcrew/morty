@@ -1,6 +1,5 @@
 import { writeFileSync } from "node:fs";
 
-// Private subprocess fixture: records the Morty state directory this Agent inherited, then runs the controlled peer.
 const record = process.env["MORTY_TEST_ENVIRONMENT_RECORD"];
 if (record === undefined) {
     throw new Error("The environment recorder needs MORTY_TEST_ENVIRONMENT_RECORD");

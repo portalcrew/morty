@@ -15,7 +15,6 @@ export interface HarnessLifetime {
     readonly fail: (cause: unknown) => void;
 }
 
-/** Shared retirement policy for accepted writers and transient history readers. */
 export async function disposeHarnessClient(
     agent: HarnessClient,
     sessionId: SessionId,
@@ -36,7 +35,6 @@ export async function disposeHarnessClient(
     }
 }
 
-/** Owns one accepted provider session. Vendor adapters supply operations, not lifecycle policy. */
 export class HarnessSession<Client extends HarnessClient> {
     readonly sessionId: SessionId;
     readonly workspace: { readonly cwd: string };

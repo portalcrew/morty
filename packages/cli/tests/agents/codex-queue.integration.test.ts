@@ -351,9 +351,6 @@ test("Given real Codex with an active turn, When three follow-ups are accepted a
                 );
             sendPrompt(active);
             await entered.promise;
-            // While the target Turn holds the Session, each queued submission is
-            // admitted in submission order and acknowledged by its own V2 queue
-            // change before the next one enters the queue.
             for (const id of [first, cancelled, last]) {
                 sendPrompt(id);
                 for (;;) {

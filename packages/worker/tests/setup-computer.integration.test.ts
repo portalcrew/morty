@@ -88,7 +88,6 @@ test.for(["current", "another service origin", "retired configuration"] as const
         }
         if (stateKind !== "current") {
             const original = await readFile(configurationPath, "utf8");
-            // The same service reached through another origin is still another service to the saved identity.
             const requested = new URL(fixture.origin);
             requested.hostname = "localhost";
             const outcome = await run(1, stateKind === "another service origin" ? requested.origin : fixture.origin);
@@ -138,7 +137,6 @@ test("Given the answer to setup's Computer pairing is lost, When setup runs agai
     cleanup.defer(() => fixture.close());
     const network = await createResponseLossProxy(fixture.origin);
     cleanup.defer(() => network.close());
-    // Setup reaches the Worker through a network that can lose one answer; the Worker serves that origin.
     await fixture.changeAppOrigin(network.origin);
     const directory = await realpath(await mkdtemp(join(tmpdir(), "morty-setup-pairing-")));
     cleanup.defer(() => rm(directory, { recursive: true, force: true }));

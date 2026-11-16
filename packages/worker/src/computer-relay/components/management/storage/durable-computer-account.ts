@@ -15,7 +15,6 @@ export class DurableComputerAccount {
     /** Only a computer that exists gets a database: a request naming one that does not must leave none behind. */
     readonly holdsAccount = (): boolean => this.#storage.kv.get(ACCOUNT_KEY) !== undefined;
 
-    /** Records the computer; the caller commits it together with the computer's owner. */
     readonly create = (): void => {
         this.#storage.kv.put(ACCOUNT_KEY, true);
     };

@@ -213,7 +213,6 @@ try {
     }
     receipt.localCleanup = localClean;
     if (identity?.computer_id && identity?.computer_token) {
-        // Revoking all access replaces the local credential; the replacement is then retired too.
         const successor = `morty_computer_v1_${randomBytes(32).toString("base64url")}`;
         const call = (path, method, token, body) =>
             fetch(new URL(`/morty/api/v1/computers/${encodeURIComponent(identity.computer_id)}${path}`, origin), {

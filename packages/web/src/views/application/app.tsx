@@ -138,7 +138,6 @@ function ApplicationContent({ state }: { readonly state: AppState }) {
     }
 }
 
-/** Where a visitor verifies what Morty does before running setup. */
 const mortyResources = [
     ["How Morty handles data", `${mortyRepository}#what-morty-does-with-your-data`],
     ["Security", `${mortyRepository}/blob/main/SECURITY.md`],

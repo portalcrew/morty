@@ -4,7 +4,6 @@ import { type OpenMortySession, type SelectedMortySession, selectedSession } fro
 
 export type ConversationSelectionState =
     | { readonly kind: "draft"; readonly key: string }
-    /** A selected target waiting for entry prerequisites; no session request is in flight. */
     | { readonly kind: "pending"; readonly target: NativeSessionTarget }
     | { readonly kind: "loading"; readonly target: NativeSessionTarget }
     | { readonly kind: "ready"; readonly session: SelectedMortySession }

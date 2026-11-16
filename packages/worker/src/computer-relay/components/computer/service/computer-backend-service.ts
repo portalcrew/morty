@@ -9,7 +9,6 @@ import type { ClientControlCommand } from "../../runtime/service/computer-contro
 import type { LocalSessionOperations } from "../../runtime/service/local-session-operations.ts";
 import type { SessionAccessService } from "../../runtime/service/session-access-service.ts";
 
-/** Only constructed inside the ComputerRelay that owns these Computer operations. */
 export class ComputerBackendService {
     readonly computerId: string;
     readonly #context: RelayContext;

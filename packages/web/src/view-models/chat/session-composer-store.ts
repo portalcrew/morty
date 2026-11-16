@@ -19,33 +19,26 @@ import { prependToDraft } from "./session-delivery-store.ts";
 export interface SessionComposerStore {
     readonly draft: string;
     readonly attachments: StoreApi<ComposerAttachmentStore>;
-    /** The draft holds a message returned for editing whose files could not be restored on this page. */
     readonly filesRestoreNotice: boolean;
-    /** The title being edited; null while the editor is closed. */
     readonly titleDraft: string | null;
-    /** The suggested answers picked for the questions Agent messages still ask, by message: the unsent answers. */
     readonly answerChoices: ReadonlyMap<string, AgentQuestionChoices>;
     readonly setDraft: (draft: string) => void;
-    /** The composer's message left as a submission: its text, files and notice go with it. */
     readonly sent: () => void;
     /**
      * Returns a message the user takes back for editing to the composer, ahead of what was written since.
      * `filesLost` says whether files it had could not be restored here.
      */
     readonly returnMessage: (content: string, filesLost: boolean, restored: readonly ComposerAttachment[]) => void;
-    /** The draft page that followed its first message here hands over the text and files written meanwhile. */
     readonly adoptHandoff: (draft: string, attachments: StoreApi<ComposerAttachmentStore>) => void;
     readonly openTitleEdit: (title: string) => void;
     readonly setTitleDraft: (draft: string) => void;
     readonly closeTitleEdit: () => void;
-    /** Picks `answer` for a question of an open question message; picks for messages no longer open are dropped. */
     readonly chooseAnswer: (
         openMessageIds: ReadonlySet<string>,
         messageId: string,
         questionIndex: number,
         answer: string,
     ) => void;
-    /** The user sent a message, which answers or supersedes every open question: their picked answers go with it. */
     readonly questionsClosed: () => void;
 }
 

@@ -15,10 +15,8 @@ export interface SessionAccessTarget {
     readonly target: NativeSessionTarget;
 }
 
-/** A verified Session credential: the Session it selects, and the authorization of each operation on it. */
 export interface SessionAccess {
     readonly issuedAtEpochMilliseconds: number;
-    /** The holder and pairing generation the credential carries. */
     readonly grant: SessionAccessGrant;
     readonly expiresAtEpochMilliseconds: number;
     readonly computerId: string;

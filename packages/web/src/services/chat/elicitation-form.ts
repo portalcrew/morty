@@ -1,9 +1,7 @@
 import type { SessionElicitationField, SessionElicitationFormContent } from "@portalcrew/morty-client/protocol";
 
-/** What a field holds while it is answered: its text as typed, yes or no, or the options chosen. */
 export type ElicitationFieldValue = string | boolean | readonly string[];
 
-/** What a field shows before the user changes it: the Agent's default, or nothing. */
 function initialElicitationFieldValue(field: SessionElicitationField): ElicitationFieldValue {
     switch (field.type) {
         case "boolean":
@@ -31,7 +29,6 @@ export function elicitationFieldValue(
     return Object.hasOwn(answers, field.name) ? (answers[field.name] ?? "") : initialElicitationFieldValue(field);
 }
 
-/** The content an accepted request sends: each field's value as its type asks, leaving out empty optional ones. */
 export function encodeElicitationAnswers(
     fields: readonly SessionElicitationField[],
     answers: Readonly<Record<string, ElicitationFieldValue>>,

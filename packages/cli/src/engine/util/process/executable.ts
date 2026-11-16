@@ -148,7 +148,6 @@ function appendBounded(chunks: Buffer[], chunk: Buffer, currentBytes: number, li
 // Process trees are identified from each child's own lifetime, never from a process ID alone.
 const lifetimes = new WeakMap<ChildProcess, SpawnedProcess>();
 
-/** Spawns a child whose process tree `captureProcessTree` and `stopProcessTree` can identify. */
 export function spawnProcess(
     command: string,
     args: readonly string[],

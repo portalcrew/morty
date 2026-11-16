@@ -20,9 +20,7 @@ async function stopProcess(pid) {
         } catch {
             try {
                 process.kill(pid, name);
-            } catch {
-                // Already gone.
-            }
+            } catch {}
         }
     };
     signal("SIGTERM");

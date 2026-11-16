@@ -4,10 +4,8 @@ import type {
     SessionViewerIdentity,
 } from "../../../../contracts/session-event-subscription.ts";
 
-/** Direct subscriptions participate in the same expiry and revocation checks as retained viewers. */
 export class LocalSessionViewers {
     readonly #viewers = new Set<SessionViewer>();
-    /** Runs once for every viewer the Computer subscribed that leaves, whatever ended it. */
     readonly #removed: (identity: SessionViewerIdentity) => void;
     readonly viewers = () => [...this.#viewers];
 

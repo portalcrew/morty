@@ -49,7 +49,6 @@ function projectNewEvent(
     liveEvent: Extract<SessionLiveEvent, { readonly type: "acp" }>,
     eventId: string,
 ): AcpSessionEvent {
-    // History states the Session and generation once, on its page; the live event's own copies stay behind.
     const {
         position: _position,
         eventId: _liveEventId,
@@ -137,7 +136,6 @@ function patchToolCallFields(previous: ToolCall, incoming: ToolCall): ToolCallFi
                 ? {}
                 : { status: previousStatus }
             : { status }),
-        // An update that omits the title keeps the one already reported.
         ...(mergedTitle === undefined ? {} : { title: mergedTitle }),
         toolCallId: previous.toolCallId,
     };
@@ -191,7 +189,6 @@ function mergeTextChunk(previous: AcpSessionUpdate, incoming: AcpSessionUpdate):
 
 export class SessionEventHistoryProjection {
     readonly #toolCallEventIds = new Map<string, string>();
-    /** The turns this history holds: open until their ending is recorded, where the turn ended. */
     readonly #turns = new Map<string, "open" | "ended">();
     #latestEvent: SessionEvent | null = null;
 
@@ -233,10 +230,6 @@ export class SessionEventHistoryProjection {
         return { events: [event], kind: "append" };
     };
 
-    /**
-     * The projected tool call announced with this identifier, in its current
-     * merged form, or `undefined` when the projection has not recorded one.
-     */
     readonly getToolCall = (toolCallId: string, resolve: MaterializedEventsResolver): ToolCall | undefined => {
         const eventId = this.#toolCallEventIds.get(toolCallId);
         if (eventId === undefined) {

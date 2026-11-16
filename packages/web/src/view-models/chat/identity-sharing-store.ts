@@ -26,7 +26,6 @@ type IdentitySharingState =
           readonly replacedEarlier: boolean;
       };
 
-/** Who will open the link: a person's browser, or an AI agent that follows the published agent API. */
 export type SharingRecipient = "person" | "agent";
 
 export interface IdentitySharingStore {
@@ -44,7 +43,6 @@ function linkCode(transfer: IdentityTransfer): string {
     return new URLSearchParams(new URL(transfer.url).hash.slice(1)).get("code") ?? "";
 }
 
-/** The dialog owns one replacement chain. A newer choice waits for the current issuance to be confirmed. */
 export const createIdentitySharingStore = (
     createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>,
     clock: Clock,

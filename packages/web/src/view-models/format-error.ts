@@ -12,10 +12,6 @@ const computerDisconnectedFailure = {
 /** How a failure because the Computer cannot be reached reads everywhere. */
 export const computerDisconnectedMessage = `${computerDisconnectedFailure.title} ${computerDisconnectedFailure.detail}`;
 
-/**
- * What a page that failed to load tells the user: the Computer being unreachable reads one way everywhere, and any
- * other failure keeps its own message.
- */
 export type PageFailure =
     | { readonly kind: "computer-disconnected" }
     | { readonly kind: "message"; readonly message: string };
@@ -39,7 +35,6 @@ function splitFailureMessage(
     return { title: sentence.replace(/[.!?]$/u, ""), content };
 }
 
-/** What a page that failed to load shows: the Computer being unreachable reads as such, any other failure as an error. */
 export type LoadFailureCopy = {
     readonly kind: "disconnected" | "error";
     readonly title: string;

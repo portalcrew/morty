@@ -149,7 +149,6 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         return created.value;
     }
 
-    /** The store of the computer this object holds; null when `computerId` names another computer. */
     #computerStore(computerId: string): ComputerRelayStore | null {
         if (!this.#owns(computerId)) {
             return null;

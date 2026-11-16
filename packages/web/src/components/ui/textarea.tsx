@@ -2,7 +2,6 @@ import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/utils";
 
-/** Form-field shell and control used by the component gallery and product dialogs. */
 export const formFieldShellClassName =
     "rounded-md border border-border bg-background pt-2 pr-1.5 pb-1.5 pl-3 has-[:focus]:border-ring has-[:focus]:shadow-[var(--focus-ring-shadow)]";
 export const formTextareaClassName =

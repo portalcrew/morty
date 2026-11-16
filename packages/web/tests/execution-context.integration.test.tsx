@@ -35,7 +35,6 @@ test("Given a connected computer, When the user views a conversation, Then its h
     const app = await createTestApp({ connectAgent: true });
     await readyComposer(app);
     const computer = getByRole(document.body, "button", { name: /Switch computer/ });
-    // The computer heads the sidebar with its status in words, not only as a colored dot.
     expect(computer.getAttribute("aria-label")).toMatch(/, Online$/u);
     expect(queryByRole(document.body, "status", { name: "Connection" })).toBeNull();
     const details = await openExecutionDetails(app);

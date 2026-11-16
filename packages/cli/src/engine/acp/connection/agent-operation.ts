@@ -35,7 +35,6 @@ function requestErrorMessage(error: RequestError): string {
     return typeof details === "string" && details.length > 0 ? truncate(details, 500) : fallback;
 }
 
-/** Observes an already-started operation even when cancellation wins before entry. */
 export async function raceAgentOperation<T>(
     operation: Promise<T>,
     termination: Promise<AgentTermination>,

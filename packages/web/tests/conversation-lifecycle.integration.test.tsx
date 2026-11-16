@@ -308,7 +308,6 @@ test("Given conversations updated across recent dates, When the directory loads,
 }, async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
-        // The user's activity only moves forward in time, starting with the September conversation.
         vi.setSystemTime(new Date("2026-09-08T12:00:00+08:00"));
         const conversations = [
             { title: "September conversation", updatedAt: "2026-09-08T12:00:00+08:00" },
@@ -330,7 +329,6 @@ test("Given conversations updated across recent dates, When the directory loads,
             (element) => element.getAttribute("data-connection-status") === "connected",
         );
         for (const [index, conversation] of conversations.entries()) {
-            // Each conversation's latest activity is the prompt the user sends it on that date.
             vi.setSystemTime(new Date(conversation.updatedAt));
             if (index > 0) {
                 await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));

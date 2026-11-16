@@ -14,7 +14,6 @@ type UploadGate = {
     readonly chunks: { readonly requestId: string; readonly sequence: number }[];
 };
 
-/** Transparent network hop: every request still reaches the real Worker, and every Agent operation the real daemon. */
 export async function recordingRelay(upstreamOrigin: string) {
     const frames: { readonly direction: string; readonly data: string }[] = [];
     const lifetime = new AbortController();

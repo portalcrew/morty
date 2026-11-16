@@ -109,13 +109,8 @@ import { type SessionTaskControlsStore, stopRequested } from "./session-task-con
 import { type SessionTitlesStore, sessionTitle } from "./session-titles-store.ts";
 import { createSessionWelcomeStore } from "./session-welcome-store.ts";
 
-/**
- * What views see of a pane: its stores and the user's actions. Starting, stopping and reconnecting the pane is its
- * owner's.
- */
 export type SessionPaneModel = Omit<ReturnType<typeof createSessionPaneModel>, "start" | "stop" | "reconnect">;
 
-/** Renaming the Session. A failed rename closes the editor; its failure is the Session's operation feedback. */
 export type TitleEdit =
     | { readonly kind: "closed" }
     | { readonly kind: "editing"; readonly draft: string }
@@ -152,7 +147,6 @@ export function paneActivity(
     return connection.kind === "first-loading" ? null : sessionActivity(execution, delivery);
 }
 
-/** The connection of no pane, for a view that follows the open pane's connection when none is open. */
 export const noSessionPane = createStore<Pick<SessionPaneStore, "connection">>()(() => ({
     connection: { kind: "first-loading" },
 }));
@@ -183,29 +177,18 @@ export interface SessionPaneStore {
      * explanation, or null when a failed operation was the only sign of the closing.
      */
     readonly sessionClosed: (reason: string | null) => void;
-    /**
-     * Loads the page of history before the oldest message shown. The load runs on the pane's lifetime: `signal` only
-     * ends the caller's wait for it.
-     */
     readonly loadOlderMessages: (signal: AbortSignal) => Promise<void>;
     readonly setDraft: (draft: string) => void;
     readonly send: () => Promise<void>;
-    /** Picks a suggested answer to a question the user can still answer. */
     readonly chooseAnswer: (messageId: string, questionIndex: number, answer: string) => void;
-    /**
-     * Answers the questions a message asks with the picked answers, as a message of its own sent the way the
-     * composer sends it. The composer's draft stays as it is.
-     */
     readonly sendAnswer: (messageId: string) => Promise<void>;
     readonly removeUnknownDelivery: () => void;
-    /** Retries on the Session's delivery: the attempt may outlive this pane. */
     readonly retryUnknownDelivery: () => Promise<void>;
     readonly retryFailedMessage: () => Promise<void>;
     readonly editFailedMessage: () => void;
     readonly discardFailedMessage: () => void;
     readonly steerQueued: (commandId: string, signal: AbortSignal) => Promise<void>;
     readonly deleteQueued: (commandId: string, signal: AbortSignal) => Promise<void>;
-    /** Takes a queued message out of the queue and back into the composer, ahead of any draft, for editing. */
     readonly editQueued: (commandId: string, signal: AbortSignal) => Promise<void>;
     readonly configure: (selection: SessionConfigurationSelection, signal: AbortSignal) => Promise<void>;
     readonly openTitleEdit: () => void;
@@ -221,12 +204,10 @@ export interface SessionPaneStore {
  */
 type SubmissionSource = "composer" | "answer" | "held";
 
-/** The pane's state with its connection loop, which only the pane's own `start` runs. */
 interface SessionPaneState extends SessionPaneStore {
     readonly connect: (signal: AbortSignal) => Promise<void>;
 }
 
-/** The pane's state as the operation rules read it, for the presentation and the actions alike. */
 function sessionOperationFacts(
     model: Pick<SessionPaneStore, "connection">,
     execution: Pick<SessionExecutionState, "turn" | "interactions">,
@@ -248,7 +229,6 @@ function sessionOperationFacts(
     };
 }
 
-/** A message in the Computer's queue as the queue shows it, with the actions the operation rules accept now. */
 function queuedMessagePresentation(facts: SessionOperationFacts, message: ChatQueuedMessage) {
     return {
         ...message,
@@ -359,7 +339,6 @@ export function sessionPanePresentation(
         submitDisabled:
             !composerHasMessage(composer.draft, attachments.attachments.length, attachments.state.kind === "reading") ||
             !canSend(facts),
-        // An answer to an Agent's question goes out as the composer's message would, whatever the draft holds.
         answerDisabled: !canSend(facts),
         ...deliveries,
         queuedMessages: deliveries.queuedMessages.map((message) => queuedMessagePresentation(facts, message)),
@@ -419,14 +398,12 @@ async function readSessionHistory(
     return { events, nextCursor, sessionGenerationId, throughPosition };
 }
 
-/** The history a projection already shows, which a reload reads at least back to. */
 function loadedRange(
     projection: SessionProjection,
 ): Extract<SessionProjection, { readonly kind: "established" }> | null {
     return projection.kind === "established" ? projection : null;
 }
 
-/** Waits for `work` until it settles or `signal` ends the wait; the work itself goes on. */
 async function untilSettledOrAborted(work: Promise<void>, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
     await new Promise<void>((resolve, reject) => {
@@ -439,7 +416,6 @@ async function untilSettledOrAborted(work: Promise<void>, signal: AbortSignal): 
 export function createSessionPaneModel(options: {
     readonly clock: Clock;
     readonly session: SelectedMortySession;
-    /** What the page holds for the Session, which outlives this pane. */
     readonly sessionPage: SessionPageState;
     readonly attachmentSignal: AbortSignal;
     readonly computerId: string;
@@ -450,11 +426,8 @@ export function createSessionPaneModel(options: {
      */
     readonly onReleased?: ((activity: SessionActivityState | null) => void) | undefined;
     readonly titles: SessionTitlesStore;
-    /** Whether the connection header reports this Session's connection available, network and Computer included. */
     readonly connectionAvailable: (connection: SessionConnection) => boolean;
-    /** The connection reached the Session through the Computer. */
     readonly onConnected: () => void;
-    /** The connection used up its automatic retries and waits for the owner's `reconnect`. */
     readonly onWaitingForComputer: () => void;
 }) {
     const { session, computerId, requests, clock, titles } = options;
@@ -476,18 +449,14 @@ export function createSessionPaneModel(options: {
     // Session only where the user changes them: the others are the Agent's and its directory's, which the draft reads
     // for itself.
     centralLocalStorage.write(lastHarnessEntry(computerId), sessionTarget.harness);
-    // The connection is one state machine; its transitions are made only by `dispatchConnection`, and the store's
-    // `connection` is what that state shows.
     let connectionState: SessionConnectionState = initialSessionConnection;
     const currentConnection = (): SessionConnectionState => connectionState;
-    // The running connection attempt and retry wait, which the machine's effects interrupt.
     let attempt: AbortController | null = null;
     let countdownInterrupt: AbortController | null = null;
     // The pane's lifetime: its owner starts it once and stops it once, so at most one connection loop ever runs for
     // the pane. React attaching or detaching its view is not part of it.
     const lifetime = new AbortController();
     let phase: "created" | "started" | "stopped" = "created";
-    // This pane's following of the Session for its operations, from `start` until `stop`.
     let follower: SessionConnectionFollower | null = null;
     /**
      * Whether a failure through `connected` says the Session is closed now. A client that a reconnection
@@ -495,16 +464,11 @@ export function createSessionPaneModel(options: {
      */
     const closedThrough = (connected: MortyClient, cause: unknown): cause is MortyError =>
         isSessionClosedFailure(cause) && connected === sessionConnectionClient(connectionState);
-    /** Closes this pane when an operation through `connected` found the Session closed now. */
     const failedThrough = (connected: MortyClient, cause: unknown): void => {
         if (closedThrough(connected, cause)) {
             store.getState().sessionClosed(cause.message);
         }
     };
-    /**
-     * Submits through the client its owner keeps alive for the attempt. The pane releases its viewing client when
-     * it stops; delivery independently releases its own client when the attempt settles.
-     */
     const submitTurn =
         (connected: MortyClient | null): SubmitTurn =>
         async (request, signal) => {
@@ -518,7 +482,6 @@ export function createSessionPaneModel(options: {
                 throw cause;
             }
         };
-    /** The messages the timeline shows now. */
     const timelineMessages = (): readonly SessionExecutionMessage[] =>
         sessionProjectionTimeline(store.getState().projection, execution.getState().state.observations).messages;
     const queuedMessage = (commandId: string): ChatQueuedMessage | null =>
@@ -540,7 +503,6 @@ export function createSessionPaneModel(options: {
             );
         let connectionChangedAt = clock.now();
         let recoveryNoticeDeadline: AbortController | null = null;
-        /** Makes `next` the connection's state and shows what it shows, once it shows something new. */
         const showConnection = (next: SessionConnectionState): void => {
             connectionState = next;
             const previous = get().connection;
@@ -567,12 +529,6 @@ export function createSessionPaneModel(options: {
             }
             follower?.changed();
         };
-        /**
-         * Submits `commandId` through `connected`. The service's acceptance is a fact about the Session's execution: a
-         * message the Computer runs at once becomes the current turn, dated by `startedAt`, when this browser sent it,
-         * until the Computer reports its start; until then the turn is its delivery's. A message the Computer queued
-         * starts no turn yet, and one that already settled starts none at all.
-         */
         const submitCommand =
             (connected: MortyClient | null, commandId: string, startedAt: number): SubmitTurn =>
             async (request, signal) => {
@@ -582,10 +538,6 @@ export function createSessionPaneModel(options: {
                 return admission;
             };
         let historyLoadController: AbortController | null = null;
-        /**
-         * Moves the timeline to `projection`, and tells the Session's execution which commands it now shows and which
-         * `recorded` commands the history it adopted records.
-         */
         const setProjection = (projection: SessionProjection, recorded: readonly string[] = []): void => {
             set({ projection });
             execution.getState().apply({
@@ -596,16 +548,11 @@ export function createSessionPaneModel(options: {
                 recorded,
             });
         };
-        /** Applies a fact to the Session's execution. Returns whether the fact asks for a fresh read of it. */
         const applyExecution = (fact: SessionExecutionFact): boolean =>
             execution
                 .getState()
                 .apply(fact)
                 .some((effect) => effect.kind === "read");
-        /**
-         * Moves the connection by `event` and performs the effects that settle or stop what runs. It returns the effects
-         * the connect loop acts on by waiting.
-         */
         const dispatchConnection = (event: SessionConnectionEvent): readonly SessionConnectionEffect[] => {
             const result = transitionSessionConnection(connectionState, event);
             if (result.effects.some((effect) => effect.kind === "closed")) {
@@ -630,7 +577,6 @@ export function createSessionPaneModel(options: {
             }
             return result.effects;
         };
-        /** Reads the Computer's execution and applies it; the Session's execution state decides whether it is news. */
         const readExecution = async (
             connected: MortyClient,
             signal: AbortSignal,
@@ -645,7 +591,6 @@ export function createSessionPaneModel(options: {
             signal.throwIfAborted();
             await observeExecution({ kind: "read", snapshot, basis }, connected, signal);
         };
-        /** Applies a fact to the Session's execution, and performs the read it asks for through `connected`. */
         const observeExecution = async (
             fact: SessionExecutionFact,
             connected: MortyClient,
@@ -655,7 +600,6 @@ export function createSessionPaneModel(options: {
                 await readExecution(connected, signal);
             }
         };
-        /** What a lifecycle event says about the Session's execution, as this pane's timeline places it. */
         const liveExecutionChange = (
             fact: SessionLifecycleFact,
             event: SessionLiveEvent,
@@ -695,7 +639,6 @@ export function createSessionPaneModel(options: {
                     return fact satisfies never;
             }
         };
-        /** Moves the projection by `input`, and tells the Session's execution what the moved timeline shows. */
         const commitProjection = (
             input: SessionProjectionInput,
             recorded: readonly string[] = [],
@@ -843,7 +786,6 @@ export function createSessionPaneModel(options: {
                     return await submitCommand(deliveryClient, commandId, sentAt)(request, signal);
                 },
             });
-            // Only a message taken from the composer leaves it; every message closes the questions asked before it.
             if (source === "composer") {
                 composer.getState().sent();
             }
@@ -852,7 +794,6 @@ export function createSessionPaneModel(options: {
                 execution.getState().apply({ kind: "turn-submitted" });
             }
             set({ followRevision: get().followRevision + 1 });
-            // The retained submission owns its failure; the composer keeps the next draft.
             try {
                 await sending;
             } catch (cause) {
@@ -866,14 +807,12 @@ export function createSessionPaneModel(options: {
                 }
             }
         };
-        /** The message that answers a still open question message with the answers picked for it, if they are complete. */
         const pickedAnswer = (messageId: string): string | null => {
             const questions = openAgentQuestions(timelineMessages()).get(messageId);
             return questions === undefined
                 ? null
                 : agentQuestionAnswer(questions, composer.getState().answerChoices.get(messageId) ?? {});
         };
-        /** Sends a message the user wrote, which the Computer runs now or queues behind the Session's earlier work. */
         const sendMessage = async (
             content: string,
             attachments: readonly ComposerAttachment[],
@@ -891,7 +830,6 @@ export function createSessionPaneModel(options: {
                 source,
             );
         };
-        /** The load of the page before the oldest message shown that runs now, which every caller waits on. */
         let olderHistoryLoad: Promise<void> | null = null;
         const loadOlderHistory = async (): Promise<void> => {
             const pagination = sessionProjectionPagination(get().projection);
@@ -966,13 +904,11 @@ export function createSessionPaneModel(options: {
                     });
                     return "quiet";
                 };
-                // The signal is this attempt's own: the pane's lifetime, and also the closing of the Session.
                 const observeSession = async (signal: AbortSignal): Promise<void> => {
                     const access = openedAccess;
                     openedAccess = undefined;
                     const connected = await requests.connectSession(sessionTarget, signal, access);
                     dispatchConnection({ kind: "client-opened", client: connected });
-                    /** Feeds a lifecycle event to the Session's execution, which decides whether it is news. */
                     const receiveLifecycle = async (
                         fact: SessionLifecycleFact,
                         event: SessionLiveEvent,
@@ -996,8 +932,6 @@ export function createSessionPaneModel(options: {
                         reconcile: async () => {
                             await dispatchProjection({ kind: "reconcile" }, connected, signal);
                             signal.throwIfAborted();
-                            // Confirm execution once the history is adopted: the read reports what runs now, and answers
-                            // for a delivery whose outcome is unknown.
                             const submission = delivery.getState().state;
                             await readExecution(
                                 connected,
@@ -1034,13 +968,10 @@ export function createSessionPaneModel(options: {
                             // Reset backoff only after the subscription stays open; transport
                             // heartbeats detect lost connections without polling Session execution.
                             dispatchConnection({ kind: "stable", client: connected });
-                        } catch {
-                            // The subscription owns and cancels this monitor.
-                        }
+                        } catch {}
                     })();
                     try {
                         welcome.getState().connected();
-                        // The first message the Session holds is submitted by the first pane that connects.
                         const awaiting = awaitingMessage(delivery.getState().state);
                         if (awaiting !== null) {
                             await submit(awaiting, "held");
@@ -1053,7 +984,6 @@ export function createSessionPaneModel(options: {
                     signal.throwIfAborted();
                     throw sessionUpdatesEndedError();
                 };
-                /** Waits as the failed attempt's effects say: a retry counts down, or the connection waits to be retried. */
                 const wait = async (effects: readonly SessionConnectionEffect[]): Promise<void> => {
                     countdownInterrupt = new AbortController();
                     const retrySignal = AbortSignal.any([signal, countdownInterrupt.signal]);
@@ -1072,8 +1002,6 @@ export function createSessionPaneModel(options: {
                                 }
                             } else if (effect.kind === "await-computer") {
                                 if (effect.notify) {
-                                    // The automatic retries are used up: the owner retries once it sees the Computer
-                                    // reachable again, and the user can retry at any time.
                                     options.onWaitingForComputer();
                                 }
                                 await new Promise<void>((resolve) => {
@@ -1216,8 +1144,7 @@ export function createSessionPaneModel(options: {
                         ? // Nothing reached the Computer, so the message keeps its identity.
                           state.message
                         : state.kind === "failed"
-                          ? // The Computer definitively rejected this identity and will not run it again.
-                            { ...journalMessage(state.journal), commandId: crypto.randomUUID() }
+                          ? { ...journalMessage(state.journal), commandId: crypto.randomUUID() }
                           : null;
                 if (message === null || !canRetryFailedMessage(operationFacts())) {
                     return;
@@ -1350,23 +1277,16 @@ export function createSessionPaneModel(options: {
         );
     };
     const readResource = async (path: string, signal: AbortSignal) => {
-        // The same bounded lifetime covers connection recovery and the file read.
         const requestSignal = AbortSignal.any([signal, lifetime.signal, AbortSignal.timeout(20_000)]);
         await waitForConnectionReady(requestSignal);
         return await readFile(path, requestSignal, 32 * 1024 * 1024);
     };
     const filePreview = createBrowserFilePreviewStore(readFile);
-    /**
-     * Starts the pane's Session connection. The owner that created the pane starts it once; the connection then
-     * follows the Session, its interruptions and its closing until the owner stops the pane.
-     */
     const start = (): void => {
         if (phase !== "created") {
             return;
         }
         phase = "started";
-        // This pane now follows the Session for the page: it shows the settings the Session was opened with, and
-        // carries the Session's operations on its connection. What the user asked the Session stays.
         settings.getState().opened(session.ready);
         execution.getState().apply({ kind: "opened" });
         follower = options.sessionPage.connection.follow({
@@ -1407,7 +1327,6 @@ export function createSessionPaneModel(options: {
             paneActivity(store.getState().connection, execution.getState().state, delivery.getState().state),
         );
     };
-    // Views read the pane's state and invoke the user's actions; the connection loop stays with `start`.
     const paneStore: StoreApi<SessionPaneStore> = store;
     return {
         userMessageCollapse: options.sessionPage.userMessageCollapse,
@@ -1425,19 +1344,12 @@ export function createSessionPaneModel(options: {
         messageQueue,
         tasks,
         welcome,
-        /** The agent the session runs on; the harness lock offers it. */
         harness: sessionTarget.harness,
-        /** The opened session record; scopes the execution context. */
         session,
-        /** Whether the Session's Agent lets a queued message steer the running turn. */
         steeringSupported: session.ready.capabilities.steering,
         start,
         stop,
         reconnect,
-        /**
-         * The signal for what the user asks the Session to do: the Session's operations lifetime on this page, which
-         * switching panes does not end.
-         */
         operationsSignal: () => options.sessionPage.lifetime,
         readResource,
     };

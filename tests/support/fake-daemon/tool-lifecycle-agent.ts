@@ -9,7 +9,6 @@ import {
 import type { AgentTermination } from "../../../packages/cli/src/engine/acp/agent/agent-lifecycle.ts";
 import { createControlledAgent } from "../../../packages/cli/tests/support/agents/controlled-agent-definition.ts";
 
-/** Stateful ACP peer that deliberately leaves tool status updates unfinished at turn termination. */
 export function createToolLifecycleAgent(beforeCancellationApplied?: () => Promise<void>) {
     const sessions = new Map<string, acp.SessionNotification[]>();
     const steeringToolCounts = new Map<string, number>();

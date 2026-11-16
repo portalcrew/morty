@@ -1,4 +1,3 @@
-/** Where the Relay keeps this Computer, from the placement its identifier encodes. */
 export function computerLocationLabel(computerId: string): string {
     switch (computerId.split("_", 3)[1]) {
         case "wn":

@@ -31,7 +31,6 @@ export function fakeAgentHarnessCapabilities(definition: FakeAgentHarnessDefinit
     };
 }
 
-/** A controlled Agent executable behind the production daemon and ACP adapter. */
 export function fakeAgentHarness(definition: FakeAgentHarnessDefinition, stateDirectory: string): AcpAgentDefinition {
     const nativeStorage =
         definition.isolatedNativeStorage === true ? join(stateDirectory, definition.harness) : stateDirectory;

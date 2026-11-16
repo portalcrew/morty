@@ -38,12 +38,9 @@ type TitleCapableQuery = Query & {
     generateSessionTitle?: (description: string, options?: { persist?: boolean }) => Promise<string | null>;
 };
 
-/** A title already stored for the session, published when generation is
- *  unavailable or yields nothing. */
 type TitleFallback = { title: string; lastModified: number };
 
 export function sanitizeTitle(text: string): string {
-    // Replace newlines and collapse whitespace
     const sanitized = text
         .replace(/[\r\n]+/g, " ")
         .replace(/\s+/g, " ")
@@ -54,14 +51,11 @@ export function sanitizeTitle(text: string): string {
     return `${sanitized.slice(0, MAX_TITLE_LENGTH - 1)}…`;
 }
 
-/** Rolling text a title is generated from: `previous` plus `text`, keeping only
- *  the trailing {@link MAX_TITLE_CONTEXT_LENGTH} characters. */
 export function appendTitleContext(previous: string | undefined, text: string): string {
     const next = (previous ?? "") + text;
     return next.length > MAX_TITLE_CONTEXT_LENGTH ? next.slice(-MAX_TITLE_CONTEXT_LENGTH) : next;
 }
 
-/** Whether this SDK still offers on-demand title generation. */
 function supportsTitleGeneration(query: Query): boolean {
     return typeof (query as TitleCapableQuery).generateSessionTitle === "function";
 }
@@ -74,8 +68,6 @@ export class SessionTitles {
      *  title is never re-notified. Undefined until the first push. */
     private lastTitle?: string;
 
-    /** Rolling tail of this session's own user + assistant text, capped at
-     *  {@link MAX_TITLE_CONTEXT_LENGTH}. Dropped once a title exists. */
     private context?: string;
 
     /** Set once this session has a title or has asked for one. A title is
@@ -89,8 +81,6 @@ export class SessionTitles {
         private readonly sessionId: string,
     ) {}
 
-    /** Collect a prompt's own text for the title, skipping openers not worth
-     *  titling after. No-op once the title is settled. */
     onPrompt(prompt: PromptRequest["prompt"]): void {
         if (this.settled) {
             return;
@@ -157,8 +147,6 @@ export class SessionTitles {
         }
     }
 
-    /** Read the SDK's stored info for this session. A missing session file or read
-     *  error is non-fatal: the title is best-effort and another turn will retry. */
     private async readSessionInfo(session: Session): Promise<SDKSessionInfo | undefined> {
         try {
             return await getSessionInfo(this.sessionId, { dir: session.cwd });
@@ -168,7 +156,6 @@ export class SessionTitles {
         }
     }
 
-    /** Notify the client of a title, unless it is the one we last sent. */
     private async publish(rawTitle: string, lastModified: number): Promise<void> {
         const title = sanitizeTitle(rawTitle);
         if (title === this.lastTitle) {
@@ -185,8 +172,6 @@ export class SessionTitles {
         });
     }
 
-    /** Whether to ask the SDK for a generated title now: once per session, on a
-     *  live query, with enough collected text for the generator to work with. */
     private canRequest(session: Session): boolean {
         if (this.settled || session.queryClosed || session.cancelled) {
             return false;

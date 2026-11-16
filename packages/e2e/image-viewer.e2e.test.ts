@@ -12,7 +12,6 @@ test("Given a tool image is open, When the agent finishes and its tools collapse
     await runtime.openPairedChat();
     await page.getByRole("textbox", { name: "Message" }).fill("hold image tool");
     await page.getByRole("button", { name: "Send message" }).click();
-    // The agent's work sits behind its step summary until the user expands it.
     const steps = page.getByRole("button", { name: "1 step" });
     await steps.click();
     await page.getByRole("button", { name: "Generate image Tool succeeded" }).click();

@@ -52,7 +52,6 @@ const rowSchema = z
     })
     .readonly();
 
-/** The rows of one Session: its harness and native session identifier. */
 const ofSession = (target: NativeSessionTarget) =>
     and(eq(command.harness, target.harness), eq(command.sessionId, target.sessionId));
 
@@ -119,7 +118,6 @@ export class CommandLedgerTable {
         return row === undefined ? undefined : ledgerCommand(rowSchema.parse(row));
     };
 
-    /** The Session's commands in admission order. */
     readonly session = (target: NativeSessionTarget): readonly LedgerCommand[] =>
         this.#select()
             .where(ofSession(target))
@@ -127,14 +125,12 @@ export class CommandLedgerTable {
             .all()
             .map((row) => ledgerCommand(rowSchema.parse(row)));
 
-    /** Every command in admission order. */
     readonly all = (): readonly LedgerCommand[] =>
         this.#select()
             .orderBy(asc(command.admissionOrder))
             .all()
             .map((row) => ledgerCommand(rowSchema.parse(row)));
 
-    /** Admits an unseen command after every other; an identifier the ledger already holds makes this fail. */
     readonly admit = (identity: CommandIdentity): void => {
         this.#database.transaction(() => this.#insertPending(identity));
     };
@@ -175,7 +171,6 @@ export class CommandLedgerTable {
             .run();
     };
 
-    /** Records that a pending command was handed to its Agent. */
     readonly start = (commandId: string, startedAt: string): void => {
         this.#database.orm
             .update(command)
@@ -184,10 +179,6 @@ export class CommandLedgerTable {
             .run();
     };
 
-    /**
-     * Settles an unsettled command with its outcome and drops the outcomes the Session no longer keeps. Returns the
-     * commands whose outcome was dropped.
-     */
     readonly settle = (commandId: string, fate: SettledFate, outcome: string): readonly string[] =>
         this.#database.transaction(() => {
             const settled = this.#database.orm

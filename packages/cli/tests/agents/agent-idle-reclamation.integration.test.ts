@@ -60,7 +60,6 @@ test.for(["codex", "claude"] as const)(
                     const exited = waitForAgentFile(join(processes, original), false, signal);
                     timer.advance(1);
                     await exited;
-                    // Browsing re-establishes the workspace reader independently of execution.
                     peer.send(
                         encodeNativeSessionCommand({
                             kind: "native.session.request",

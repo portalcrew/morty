@@ -223,7 +223,6 @@ describe("Session Event Log V2 SDK", () => {
         }
     });
 
-    /** A Computer that answers an encrypted file read over HTTP: `answer` chooses which request the stream answers. */
     async function withFileReadServer(
         answer: (read: { readonly requestId: string }) => string,
         scenario: (client: MortyClient, target: NativeSessionTarget) => Promise<void>,

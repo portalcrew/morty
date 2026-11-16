@@ -2,7 +2,6 @@ import type { AcpAgentDefinition } from "../acp/agent/agent-definition.ts";
 import { OperationError } from "../infra/operation-error.ts";
 import { SerialTaskQueue } from "../util/serial-task-queue.ts";
 
-/** The launch definition of a cataloged Agent, as the computer names it. */
 export type CatalogAgent = AcpAgentDefinition;
 
 class LocalAgentCatalogError extends OperationError {
@@ -31,7 +30,6 @@ export class LocalAgentCatalog {
 
     readonly read = (): readonly AcpAgentDefinition[] => this.#agents;
 
-    /** Serializes replacements and publication; a failed publication restores only its own prior snapshot. */
     readonly replaceAndPublish = async (
         build: (current: readonly CatalogAgent[]) => readonly CatalogAgent[],
         publish: (signal: AbortSignal) => Promise<void>,

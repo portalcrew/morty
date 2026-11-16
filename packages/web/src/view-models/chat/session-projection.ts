@@ -49,7 +49,6 @@ export type SessionProjectionInput =
     | { readonly event: SessionLiveEvent; readonly kind: "live-event" }
     | { readonly kind: "reconcile" }
     | { readonly history: SessionEventHistory; readonly kind: "history-loaded"; readonly revision: number }
-    /** A load of the page before `revision`'s oldest message began. */
     | { readonly kind: "older-page-requested"; readonly revision: number }
     | { readonly kind: "older-page"; readonly page: SessionEventHistory; readonly revision: number }
     /** The load of the page before `revision`'s oldest message ended without a page. */
@@ -108,7 +107,6 @@ function adoptionEffect(events: readonly SessionPresentationEvent[]): readonly S
     ];
 }
 
-/** A new history baseline adopts its title, and leaves the current settings to the Computer. */
 function baselineEffects(events: readonly SessionPresentationEvent[]): readonly SessionProjectionEffect[] {
     const title = newestTitle(events);
     return [...(title === undefined ? [] : [{ kind: "adopted" as const, title }]), { kind: "read-settings" }];
@@ -279,7 +277,6 @@ function sessionProjectionMessages(
         : [];
 }
 
-/** The page before the oldest message shown, when one exists and can be loaded now. */
 export function sessionProjectionPagination(
     state: SessionProjection,
 ): { readonly generation: string; readonly nextCursor: string; readonly revision: number } | null {

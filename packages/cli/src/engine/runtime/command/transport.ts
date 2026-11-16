@@ -17,7 +17,6 @@ import { operationErrorCode, operationErrorMessage } from "../../infra/operation
 import type { CommandContext } from "./context.ts";
 import type { DaemonCommand } from "./definition.ts";
 
-/** Validates routing before decoding a client command or a Worker-owned control. */
 export async function receive(
     encoded: string,
     encryption: PayloadDecryptor,
@@ -60,7 +59,6 @@ export async function sendContentChunk(
     send(socket, await contentChunkCodec.encode({ requestId, sequence, bytes }, payloadEncryption, signal));
 }
 
-/** Answers a request with a failure. A reply that outlives its connection has no reader. */
 export async function replyFailure(
     { socket, payloadEncryption, signal }: Pick<CommandContext, "socket" | "payloadEncryption" | "signal">,
     requestId: string,
@@ -87,7 +85,6 @@ export async function replyFailure(
     }
 }
 
-/** Answers a request with the failure an error describes. */
 export async function reportOperationFailure(
     context: Pick<CommandContext, "socket" | "payloadEncryption" | "signal">,
     requestId: string,

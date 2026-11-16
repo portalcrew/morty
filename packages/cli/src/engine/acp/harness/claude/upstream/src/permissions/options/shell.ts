@@ -48,14 +48,12 @@ function displayPaths(paths: string[]): string {
         return name.endsWith(path.sep) ? name : `${name}${path.sep}`;
     });
 
-    // Native Claude labels enumerate two paths and summarize larger sets.
     if (names.length <= 2) {
         return displayList(names);
     }
     return `${names[0]}, ${names[1]} and ${names.length - 2} more`;
 }
 
-/** Plain-text port of Claude Code's generateShellSuggestionsLabel. */
 function shellSuggestionsLabel(
     toolName: "Bash" | "PowerShell",
     changeSet: DurablePermissionChangeSet,

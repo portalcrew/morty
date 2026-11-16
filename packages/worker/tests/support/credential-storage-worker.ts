@@ -4,12 +4,10 @@ import { DurableObjectDatabase } from "../../src/computer-relay/infra/durable-ob
 import type { ConfiguredRelayBindings } from "../../src/contracts/relay-bindings.ts";
 import chat from "../../src/index.ts";
 
-// The public Worker reaches the production ComputerRelay namespace.
 export default {
     fetch: async (request: Request, env: ConfiguredRelayBindings) => await chat.fetch(request, env),
 };
 
-/** Seeds persisted boundary conditions while keeping authentication and revocation on the production HTTP path. */
 export class ComputerRelay extends ProductionComputerRelay {
     override async fetch(request: Request): Promise<Response> {
         if (request.url === "https://computer.internal/revoked-computer" && request.method === "POST") {

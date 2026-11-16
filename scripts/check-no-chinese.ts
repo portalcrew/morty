@@ -62,7 +62,6 @@ function findChineseTextViolations(root: string, paths: readonly string[]): read
             continue;
         }
 
-        // Root READMEs are the bilingual product introduction; other files remain English-only.
         if (path === "README.md" || path === "README.zh-CN.md") {
             continue;
         }

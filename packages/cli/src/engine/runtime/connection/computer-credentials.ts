@@ -1,10 +1,8 @@
-/** The credentials one connection attempt presents: the current credential and the successor saved for it. */
 export interface ComputerCredentialRotation {
     readonly current: string;
     readonly successor: string;
 }
 
-/** The credentials a Computer holds: the one the Relay last accepted and the successor saved for its next connection. */
 export interface HeldComputerCredentials {
     readonly current: string;
     readonly successor: string | null;

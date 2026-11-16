@@ -174,7 +174,6 @@ test("Given Markdown table and fenced code, When the response is rendered and th
     expect(getByRole(wrapper, "table").textContent).toContain("Syntax");
     expect(getByRole(wrapper, "table").textContent).toContain("Output");
 
-    // Choosing a format runs the real download path; the menu closes only on success.
     await app.user.click(getByRole(wrapper, "button", { name: "Download table" }));
     await app.waitForView(() => {
         getByRole(wrapper, "button", { name: "CSV" });

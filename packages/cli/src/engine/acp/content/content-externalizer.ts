@@ -2,7 +2,6 @@ import type { ContentBlock, SessionUpdate, ToolCallContent } from "@agentclientp
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { z } from "zod";
 
-/** One blob pulled out of an Agent update. The caller stores it and keeps the returned key. */
 interface ExtractedContent {
     readonly bytes: Uint8Array;
     readonly kind: "image" | "audio" | "resource";
@@ -10,7 +9,6 @@ interface ExtractedContent {
     readonly name: string;
 }
 
-/** Stores an extracted blob for a session and returns its content-addressed key. */
 export type StoreExtractedContent = (
     sessionTarget: NativeSessionTarget,
     content: ExtractedContent,
@@ -120,7 +118,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Stateless: it finds embedded media in Agent output and replaces it with content references. */
 export class AcpContentExternalizer {
     readonly #store: StoreExtractedContent;
     readonly #linkedResources: FindLinkedResources;

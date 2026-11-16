@@ -1,10 +1,6 @@
-/** What presenting a Computer credential with its successor found, after any rotation it caused. */
 export type ComputerCredentialRotation =
-    /** The successor authenticates now: rotated just now, or by an earlier attempt whose reply was lost. */
     | { readonly kind: "rotated" }
-    /** A credential an earlier rotation retired, presented with another successor: a copy is in use elsewhere. */
     | { readonly kind: "reused" }
-    /** A credential of a Computer whose access has ended. */
     | { readonly kind: "revoked" }
     | { readonly kind: "unknown" };
 

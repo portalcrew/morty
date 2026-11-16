@@ -125,7 +125,6 @@ test("Given a completed replacement, When the saved Computer retries after a Wor
     const response = await replace();
     expect(response.status).toBe(201);
     const issued = v.parse(replacementAccess, await response.json());
-    // Restart with durable storage intact before retrying the replacement.
     await fixture.reload();
 
     const retry = await replace();

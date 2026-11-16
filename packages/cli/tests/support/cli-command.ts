@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
-/** Runs the built `morty` command to completion and returns what it printed. */
 export async function runCli(
     arguments_: readonly string[],
     environment: Readonly<NodeJS.ProcessEnv>,

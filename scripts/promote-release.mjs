@@ -56,7 +56,6 @@ if (candidates.some((artifact) => artifact.expired) || candidates.length > 1) {
     throw new Error("The accepted archive is expired or ambiguous");
 }
 if (candidates.length === 0) {
-    // Markdown-only changes, manual runs and direct pushes have no accepted archive.
     console.log("No merge queue archive accepted this revision; the release chain builds and tests it.");
     await output({ "run-id": "", upload: false });
     process.exit(0);

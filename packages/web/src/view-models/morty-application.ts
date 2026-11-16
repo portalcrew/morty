@@ -35,12 +35,10 @@ type SessionWorkspaceStoreApi = ReturnType<typeof createSessionWorkspaceStore>;
 const createSessionWorkspaceStore = () => createStore<{ workspace: ChatWorkspace | null }>(() => ({ workspace: null }));
 
 export interface MortyApplication {
-    /** How this device moves setup to the computer where the agent runs. */
     readonly setupHandoff: SetupHandoffModel;
     readonly anonymousSession: ReturnType<typeof createAnonymousSessionStore>;
     /** The shared bug-report dialog state for every bug-report entry point. */
     readonly bugReportDialog: ReturnType<typeof createBugReportDialogStore>;
-    /** The images on other sites the user asked to load while the page is open. */
     readonly remoteImages: ReturnType<typeof createRemoteImageConsentStore>;
     /**
      * The /continue handoff redeem. Created with the application: its store
@@ -49,7 +47,6 @@ export interface MortyApplication {
      * reloads the page, so the store always describes the link in it.
      */
     readonly continuation: ReturnType<typeof createContinueStore>;
-    /** The signed-in surface; carries the workspace for the active identity. */
     readonly sessionWorkspace: SessionWorkspaceStoreApi;
     readonly reloadIdentity: () => void;
     readonly dispose: () => void;
@@ -107,7 +104,6 @@ export function createMortyApplication(options: {
         workspace = null;
         workspaceRequests = null;
     };
-    // The anonymous session owns the page's access: every check of it, and every request refused with it, goes there.
     const currentAccess = (signal: AbortSignal) => anonymousSession.getState().currentAccess(signal);
     const credentialRejected = () => anonymousSession.getState().credentialRejected(lifetime.signal);
     const activateWorkspace = (session: ActiveAnonymousSession): void => {
@@ -185,8 +181,6 @@ export function createMortyApplication(options: {
             .getState()
             .load(AbortSignal.any([lifetime.signal, identityAttempt.signal]), { fromFailedRetry });
     };
-    // Browser lifecycle signals are hints: probe real connections and let the
-    // existing session reconciliation restore history, execution and approvals.
     let recovery: Promise<void> | null = null;
     const recover = (event: Event): void => {
         if (disposed) {

@@ -7,7 +7,6 @@ import type { FakeAgentHarnessOptions } from "./fake-harness/model.ts";
 
 export type ControlledSessionUpdate = (notification: SessionNotification) => Promise<void>;
 
-/** Adapts the controlled ACP peer to the same awaited update port used by native Agents. */
 export const controlledSessionUpdates =
     (client: AgentConnectionOptions["client"]): ControlledSessionUpdate =>
     async (notification) => {
@@ -28,7 +27,6 @@ export const controlledSessionUpdates =
 
 export { type ControlledAcpPeer, ControlledEndpointConnection } from "./controlled-connection.ts";
 
-/** Composes the production daemon's injected Agent type with a controlled ACP harness. */
 export function createFakeDaemon(options: FakeAgentHarnessOptions) {
     const harness = createFakeHarness(options);
     return {

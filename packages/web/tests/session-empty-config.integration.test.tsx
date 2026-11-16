@@ -28,11 +28,9 @@ test("Given a configured session, When the Agent removes every configurable opti
         ).toBe(true),
     );
 
-    // The panel starts with the harness model setting.
     const trigger = app.elementByTestId(dataTestId.agentConfiguration);
     expect(trigger.textContent).toContain("Test Small");
 
-    // A held turn lets the harness push an explicit empty config update.
     await sendPrompt(app, composer, "hold after first delta");
     const daemon = app.daemon;
     if (daemon === null) {

@@ -15,7 +15,6 @@ export default defineConfig({
     testMatch: ["*.e2e.test.ts", "*.browser-contract.test.ts"],
     globalSetup: "./infra/global-setup.ts",
     fullyParallel: true,
-    // Each journey starts a Wrangler Worker and a local Computer.
     workers: 1,
     // A failed journey runs once more against the same code. Passing then proves it flaky, not the change correct, so
     // the run still fails and the flaky-test reporter records the journey for CI to track.

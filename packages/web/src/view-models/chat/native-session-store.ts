@@ -11,7 +11,6 @@ type NativeSessionDirectory =
     | {
           readonly kind: "loading";
           readonly scope: "initial" | "refresh";
-          /** The listing the request in flight is for, or null while the page waits for the Computer. */
           readonly listing: string | null;
       }
     | { readonly kind: "empty" }
@@ -47,21 +46,16 @@ type ForkIntent = {
 
 export interface NativeSessionStore {
     readonly userMessageCollapse: UserMessageCollapseStore;
-    /** The agent tab the user chose, by harness; the tabs themselves come from the Computer configuration. */
     readonly selected: string;
     readonly directory: NativeSessionDirectory;
     readonly preview: NativeSessionPreview;
     readonly operation: Operation;
     readonly forkIntent: ForkIntent | null;
     readonly error: string;
-    /** Starts discovery when the dialog opens. */
     readonly start: () => void;
-    /** The signal of the dialog's discovery lifetime. */
     readonly lifetimeSignal: () => AbortSignal;
-    /** Stops discovery and preview requests when the dialog closes. */
     readonly stop: () => void;
     readonly load: (signal: AbortSignal) => Promise<void>;
-    /** The Computer configuration the page follows changed: the listing follows the agent it now offers. */
     readonly computerChanged: () => void;
     readonly selectAgent: (value: string) => void;
     readonly select: (entry: NativeSessionEntry, signal: AbortSignal) => Promise<void>;
@@ -93,7 +87,6 @@ export function nativeSessionPresentation(model: NativeSessionStore, sessions: r
     };
 }
 
-/** The agent tab a listing is for: the chosen tab while the Computer still offers it, else the first installed one. */
 function chosenAgent(agents: readonly NativeSessionAgent[], selected: string): NativeSessionAgent | undefined {
     return agents.find((item) => item.harness === selected) ?? agents.find((item) => item.installed) ?? agents[0];
 }
@@ -112,14 +105,12 @@ function relistMatch(
     return entries.find((entry) => entry.sessionId === previewed.sessionId);
 }
 
-/** What a listing shows for an agent, to tell whether the Computer configuration still matches it. */
 function listingFor(agent: NativeSessionAgent | undefined): string {
     return agent === undefined ? "empty" : `${agent.installed ? "ready" : "agent-unavailable"}:${agent.harness}`;
 }
 
 export const createNativeSessionStore = (
     requests: Pick<BotChatApi, "nativeSessions" | "nativeSession" | "forkNativeSession">,
-    /** The Computer the page follows, the one owner of which agents it offers. */
     computer: () => ChatComputer | null,
     onOpen: (session: OpenMortySession) => void,
 ) => {
@@ -154,7 +145,6 @@ export const createNativeSessionStore = (
             if (listing !== null && before.kind === "loading" && before.listing === listing) {
                 return;
             }
-            // A new listing invalidates the selected preview, including its in-flight response.
             selection?.abort();
             selection = null;
             const attempt = new AbortController();
@@ -166,7 +156,6 @@ export const createNativeSessionStore = (
             const previewedEntry = previewed.kind === "empty" ? null : previewed.entry;
             set({ directory: { kind: "loading", scope, listing }, preview: { kind: "empty" }, error: "" });
             if (current === null) {
-                // The page has not heard from the Computer yet; its first configuration starts the listing.
                 return;
             }
             try {

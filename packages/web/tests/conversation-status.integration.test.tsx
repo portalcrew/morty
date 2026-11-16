@@ -9,7 +9,6 @@ function directoryEntry(app: TestApp, title: string): HTMLElement | undefined {
     return app.elementsByTestId(dataTestId.managedConversation).find((entry) => entry.textContent?.includes(title));
 }
 
-/** The accessible label of the status a directory entry shows, or null when it shows none. */
 function entryStatus(app: TestApp, title: string): string | null {
     const entry = directoryEntry(app, title);
     return entry?.querySelector(`[data-testid="${dataTestId.sessionStatus}"]`)?.getAttribute("aria-label") ?? null;
@@ -29,7 +28,6 @@ test("Given a conversation whose turn failed, When the directory reloads with th
     await app.waitForView(() => expect(entryStatus(app, failedPrompt)).toBe("Session failed"));
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
-    // Starting another conversation reloads the directory, whose snapshot reports the failed Session as idle.
     await sendPrompt(app, await readyComposer(app), "Start another conversation");
     await app.waitForView(() => {
         expect(directoryEntry(app, "Start another conversation")).toBeDefined();
@@ -112,7 +110,6 @@ test("Given an earlier turn failed and a later one completed, When I return to t
         expect(document.body.textContent).toContain("Codex turn 2: Follow up after the failure"),
     );
 
-    // Leaving and returning reloads the conversation from its history.
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     await app.waitForView(() => expect(document.body.textContent).not.toContain("Codex turn 2"));
     const entry = directoryEntry(app, failedPrompt);

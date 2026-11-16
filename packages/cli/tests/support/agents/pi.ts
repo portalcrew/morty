@@ -83,7 +83,6 @@ export class PiFixture implements AsyncDisposable {
         });
     }
 
-    /** A real shell launcher that retains Pi as a separate child with inherited RPC pipes. */
     async createLauncher(): Promise<{
         readonly command: string;
         readonly pidFile: string;
@@ -123,7 +122,6 @@ export class PiFixture implements AsyncDisposable {
         });
     }
 
-    /** Merges a pi settings override into `.pi/agent/settings.json` under HOME. */
     async overrideSettings(settings: Record<string, unknown>): Promise<void> {
         const settingsPath = join(this.#directory, ".pi", "agent", "settings.json");
         const current = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;

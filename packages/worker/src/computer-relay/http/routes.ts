@@ -24,7 +24,6 @@ import { acceptWebSocketHttpTransport } from "../components/runtime/http/websock
 import type { ComputerRouteContext } from "../composition/computer-route-context.ts";
 import type { ComputerRouteHttpEnvironment } from "./environment.ts";
 
-/** ComputerRelay HTTP endpoints and connection upgrades. Session commands stay inside the WS dispatchers. */
 export function createComputerHttpRoutes(
     ctx: ComputerRouteContext,
     dispatchHttpRequest: (request: Request) => Promise<Response>,

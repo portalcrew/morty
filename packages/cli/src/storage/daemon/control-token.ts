@@ -11,7 +11,6 @@ function controlTokenPath(stateDirectory: InstallationDirectory): string {
     return join(stateDirectory, "daemon.token");
 }
 
-/** The secret local control clients present to the daemon, created on first use with owner-only permissions. */
 export async function readOrCreateControlToken(stateDirectory: InstallationDirectory): Promise<string> {
     const path = controlTokenPath(stateDirectory);
     try {

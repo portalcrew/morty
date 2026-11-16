@@ -42,7 +42,6 @@ type BrowserState =
           readonly page: Page;
       };
 
-/** A failed journey keeps the newest input observations; older ones are counted, not kept. */
 const INPUT_EVENT_LIMIT = 1_000;
 const INPUT_EVENT_BINDING = "__mortyE2eInputEvent";
 
@@ -203,7 +202,6 @@ export class E2EHarness {
         this.rootDirectory = rootDirectory;
         this.artifactDirectory = artifactDirectory;
         this.workDirectory = workDirectory;
-        // MORTY_E2E_ARTIFACT_ROOT only places the diagnostics: a failure keeps them, a success keeps them on request.
         this.preserveArtifacts = process.env["MORTY_E2E_KEEP_STATE"] === "1";
         this.timeoutMilliseconds = Number(process.env["MORTY_E2E_TIMEOUT_MS"] ?? 10 * 60 * 1_000);
         this.signal = AbortSignal.timeout(this.timeoutMilliseconds);
@@ -350,7 +348,6 @@ export class E2EHarness {
                 this.#droppedInputEvents += 1;
             }
         });
-        // Documents loaded from now on are observed; attach before the journey navigates.
         await context.addInitScript(observeTextInput, INPUT_EVENT_BINDING);
         await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
         this.browserState = { kind: "recording", browser, context, page };

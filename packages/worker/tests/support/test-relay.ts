@@ -2,7 +2,6 @@ import { createTestMortyRelayBindings } from "@portalcrew/morty-relay-test-suppo
 import { type ControlledAgent, createControlledAgentRuntime } from "../../../../tests/support/fake-daemon/runtime.ts";
 import { mortyFiles, mortyReply } from "../../../../tests/support/fake-daemon/scenarios.ts";
 
-/** Starts the production Relay boundary with isolated local Cloudflare storage. */
 export async function startTestRelay(
     createBindings: typeof createTestMortyRelayBindings = createTestMortyRelayBindings,
 ) {
@@ -29,7 +28,6 @@ export async function startTestRelay(
                 token: string,
                 agents: readonly ControlledAgent[] = [{ harness: "codex", label: "Codex" }],
                 sessionIds?: ReadonlySet<string>,
-                /** The caller's lifetime: the Computer stops when it ends or when the Relay closes, whichever is first. */
                 lifetime?: AbortSignal,
             ) => {
                 const runtime = await createControlledAgentRuntime({

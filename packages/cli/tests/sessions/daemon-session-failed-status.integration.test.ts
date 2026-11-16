@@ -68,7 +68,6 @@ test("Given a Session whose last turn failed, When a client that did not watch i
                 await nextPromptSettlement(peer, failed);
                 expect(await queriedStatus(peer, sessionTarget)).toEqual({ kind: "idle", failedTurn: failure });
 
-                // A client that connects later, here after a restart, reads the same failure.
                 await peer.restart();
                 expect(await queriedStatus(peer, sessionTarget)).toEqual({ kind: "idle", failedTurn: failure });
 

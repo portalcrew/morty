@@ -105,7 +105,6 @@ test("Given a slow file download, When the browser stops reading and cancels, Th
                     JSON.parse(first.data),
                 );
                 expect((await reader.read()).done).toBe(false);
-                // This response crosses the same daemon connection after the downstream sink has stopped.
                 await client.sessions.readConfiguration(target, signal);
                 let creditsBeforeCancel = 0;
                 let chunksBeforeCancel = 0;

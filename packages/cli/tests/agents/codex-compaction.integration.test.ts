@@ -55,8 +55,6 @@ test("Given Codex auto-compacts a conversation, When the daemon relays the turns
                 }
             }
         }
-        // At least one compaction opened and settled; every lifecycle update is
-        // addressed by an Agent-owned id.
         expect(compactionStatuses.length).toBeGreaterThanOrEqual(2);
         expect(compactionStatuses).toContain("in_progress");
         expect(compactionStatuses.at(-1)).toBe("completed");

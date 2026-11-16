@@ -1,6 +1,5 @@
 import type { SessionViewerIdentity } from "../../../../contracts/session-event-subscription.ts";
 
-/** Whether a held Session viewer may keep receiving its Session's events, or how it closes once it may not. */
 export type SessionViewerAccess =
     | { readonly kind: "held" }
     | { readonly kind: "ended"; readonly code: 1000 | 1008; readonly reason: string };

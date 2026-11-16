@@ -19,7 +19,6 @@ type ForwardingEnvironment = {
     readonly Variables: { readonly signal: AbortSignal; readonly computerId?: string };
 };
 
-/** Worker dispatch only. The owning DO defines and authorizes the actual endpoints. */
 function createComputerForwardingRoutes() {
     const forward: MiddlewareHandler<ForwardingEnvironment> = async (context) => {
         const computerId = context.var.computerId;
@@ -54,7 +53,6 @@ function createComputerForwardingRoutes() {
     return (
         new Hono<ForwardingEnvironment>()
             .onError(errorHandler)
-            // Every forwarded request is bounded before any route reads it, the transfer redemption's body included.
             .use("*", errorMiddleware, timeout, controlBodyLimit)
             .get("/morty/api/v1/computers/connect", computerFromRuntimeCredential, forward)
             .post("/morty/api/v1/computers/:computerId/pairing/redeem", computerFromPath, forward)
@@ -67,7 +65,6 @@ function createComputerForwardingRoutes() {
                 forward,
             )
             .post("/morty/api/v1/identity/transfers/redeem", location, computerFromTransfer, forward)
-            // Setup/CLI operations retain their HTTPS endpoints.
             .post("/morty/api/v1/computers/:computerId/setup", computerFromPath, forward)
             .post("/morty/api/v1/computers/:computerId/identity/link", computerFromPath, forward)
             .post("/morty/api/v1/computers/:computerId/identity/revoke-all-access", computerFromPath, forward)

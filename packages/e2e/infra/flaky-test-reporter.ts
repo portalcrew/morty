@@ -1,7 +1,6 @@
 import type { FullConfig, Reporter, Suite } from "@playwright/test/reporter";
 import { recordFlakyTests } from "../../../scripts/flaky-tests/record.ts";
 
-// `failOnFlakyTests` fails the run; this records which journeys failed and then passed on their retry.
 export default class FlakyTestReporter implements Reporter {
     #root: Suite | undefined;
 

@@ -11,7 +11,6 @@ export type TurnFailure = { readonly code: string; readonly message: string };
 export type CurrentTurn =
     | {
           readonly kind: "idle";
-          /** The last failure the service reported for a turn, reported until another turn starts or is submitted. */
           readonly failure: (TurnFailure & { readonly commandId: string }) | null;
       }
     | {
@@ -28,25 +27,14 @@ export type CurrentTurn =
 export type CurrentTurnEvent =
     /** This page submits a new turn, so the failure reported for an earlier one no longer describes the Session. */
     | { readonly kind: "new-turn-submitted" }
-    /**
-     * The service accepted this page's submission of a new turn, dated by `startedAt`, when this browser sent it,
-     * until the Computer reports when the turn started.
-     */
     | { readonly kind: "accepted"; readonly commandId: string; readonly startedAt: number }
-    /**
-     * The service reports the command running; it replaces any other current command. `startedAt` is when the Computer
-     * started it.
-     */
     | {
           readonly kind: "running";
           readonly commandId: string;
           readonly startedAt: number;
       }
-    /** The Computer handed the command to the native session's owner, which reached `stage` with it at `at`. */
     | { readonly kind: "delegated"; readonly commandId: string; readonly stage: DelegationStage; readonly at: number }
-    /** The service reports the command's turn ended; `failure` explains a failed one. */
     | { readonly kind: "ended"; readonly commandId: string; readonly failure: TurnFailure | null }
-    /** Nothing runs any more, as when the Session closed or a reconnect found no running turn. */
     | { readonly kind: "nothing-running" }
     /**
      * With nothing running, the service reports how its last started command ended, as when a pane opens or
@@ -69,7 +57,6 @@ export function transitionCurrentTurn(turn: CurrentTurn, event: CurrentTurnEvent
         case "new-turn-submitted":
             return turn.kind === "idle" && turn.failure !== null ? { ...turn, failure: null } : turn;
         case "accepted":
-            // A command the service already reports current, this one or another, stays as reported.
             if (turn.kind === "current") {
                 return turn;
             }
@@ -83,7 +70,6 @@ export function transitionCurrentTurn(turn: CurrentTurn, event: CurrentTurnEvent
             return {
                 kind: "current",
                 commandId: decodeIdentifier(event.commandId),
-                // A command the native session's owner runs started when the owner took it.
                 startedAt:
                     isCurrent(turn, event.commandId) && turn.delegation === "started"
                         ? turn.startedAt
@@ -136,7 +122,6 @@ export function workingIndicator(turn: CurrentTurn, waitingForInput: boolean): W
         : { kind: "working", startedAt: turn.startedAt, inOwner: turn.delegation === "started" };
 }
 
-/** The command the service accepted as the running turn. */
 export function acceptedTurn(turn: CurrentTurn): { readonly commandId: string } | null {
     return turn.kind === "current" ? { commandId: turn.commandId } : null;
 }

@@ -14,7 +14,6 @@ export const sessionContentUploadRequired = (): Response =>
         { status: 400 },
     );
 
-/** Shared by transport admission and execution; the owning router resolves the target. */
 export async function authorizeSessionContentUpload(
     request: Request,
     sessions: SessionAccessService,

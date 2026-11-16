@@ -131,7 +131,6 @@ test("Given desktop Codex owns the Session, When Morty imports it and receives s
                     disposition: SessionPromptDisposition.Append,
                 }),
             );
-            // The public prompt-started event establishes that the daemon accepted the remote turn.
             let reply = "";
             for (;;) {
                 const event = decodeSessionLiveEvent(JSON.parse(await peer.nextEvent()));

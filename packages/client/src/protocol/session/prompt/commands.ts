@@ -48,7 +48,6 @@ type SessionPromptPlacement =
     | { readonly disposition: typeof SessionPromptDisposition.Append }
     | { readonly disposition: typeof SessionPromptDisposition.Steer; readonly targetCommandId: string };
 
-/** A prompt for an existing Session. The Computer runs it with the Agent and directory of the Session it holds. */
 export type SessionPromptCommand = {
     readonly commandId: string;
     readonly requestId: string;
@@ -94,7 +93,6 @@ function decodeSessionCancelBeforeStartCommand(encoded: string): SessionCancelBe
     };
 }
 
-/** Steers a queued prompt into the running Turn; answered by `session.prompt.steered` once it has started. */
 export interface SessionPromptDispositionCommand {
     readonly commandId: string;
     readonly disposition: typeof SessionPromptDisposition.Steer;

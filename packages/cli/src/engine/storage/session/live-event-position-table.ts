@@ -12,7 +12,6 @@ const ofSession = (target: NativeSessionTarget) =>
         eq(sessionLiveEventPositionAllocation.sessionId, target.sessionId),
     );
 
-/** The highest live event position reserved for each session. */
 export class LiveEventPositionTable {
     readonly #database: LocalSqliteDatabase;
 

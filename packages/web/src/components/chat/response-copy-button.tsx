@@ -26,7 +26,6 @@ export function ResponseCopyButton({
 
     return (
         <div className="mt-3 flex flex-wrap items-center gap-x-3" ref={model.onAttach}>
-            {/* The 28px icon keeps a 44px touch target on phones through a transparent overlay, not visual size. */}
             <button
                 aria-label={copy === "copied" ? "Copied" : "Copy response"}
                 className="relative -ml-1 inline-flex size-7 before:absolute before:-inset-2 before:content-[''] sm:before:hidden shrink-0 items-center justify-center rounded-md text-morty-text-3 transition-colors hover:bg-morty-fill-opacity-2 hover:text-foreground active:bg-morty-fill-opacity-3 active:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"

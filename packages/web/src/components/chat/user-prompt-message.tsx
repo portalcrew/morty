@@ -16,7 +16,6 @@ interface UserPromptMessageProps {
     readonly messageId: string;
     readonly text: string;
     readonly attachmentLabels?: readonly { readonly name: string; readonly uri: string }[];
-    /** Shown beside the bubble, such as the message's delivery state. */
     readonly status?: ReactNode;
 }
 

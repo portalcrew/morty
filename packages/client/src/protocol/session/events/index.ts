@@ -227,10 +227,6 @@ const contentChunkFields = {
     content: contentBlockSchema,
     messageId: shortString.min(1),
 };
-/**
- * A question an Agent message asks while the Agent keeps working, with the answers it suggests (none for a free-text
- * question). The message text already states it; the user answers with an ordinary message.
- */
 const agentQuestionSchema = z
     .object({
         options: z.array(shortString).max(MAX_COLLECTION_SIZE).readonly(),
@@ -333,11 +329,9 @@ const acpSessionUpdateSchema = z.discriminatedUnion("sessionUpdate", [
 ]);
 export type AcpSessionUpdate = z.infer<typeof acpSessionUpdateSchema>;
 
-/** How far the native session's owner has taken a command the Computer handed to it. */
 export const promptDelegationStageSchema = z.enum(["queued", "started"]);
 
 const lifecycleBase = { commandId: identifier };
-/** How an admitted prompt executes: as its own turn, or by steering the running turn of `targetCommandId`. */
 const promptDispatchSchema = z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("own") }).readonly(),
     z.object({ kind: z.literal("steer"), targetCommandId: identifier }).readonly(),
@@ -430,7 +424,6 @@ const lifecycleMetadataSchema = z.discriminatedUnion("kind", [
     promptFailedSchema,
 ]);
 export type LifecycleMetadata = z.infer<typeof lifecycleMetadataSchema>;
-/** A lifecycle event that settles its prompt command: no later lifecycle event of that command follows it. */
 export type PromptTerminalLifecycle = Extract<
     LifecycleMetadata,
     { readonly kind: "prompt.completed" | "prompt.failed" | "prompt.failed-before-start" }
@@ -542,8 +535,6 @@ const sessionEventLogPageSchema = z
         events: z.array(sessionEventSchema).max(MAX_EVENT_COUNT).readonly(),
         nextCursor: z.string().min(1).max(512).nullable(),
         sessionGenerationId: identifier,
-        // The generation-scoped live position covered by this snapshot, including
-        // coalesced and omitted events.
         throughPosition: positionSchema,
     })
     .readonly();

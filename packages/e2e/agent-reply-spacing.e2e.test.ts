@@ -36,15 +36,10 @@ test("Given a completed reply with process work, When it renders, Then the turn 
     if (userBox === null || replyBox === null || stepBox === null || answerBox === null || copyBox === null) {
         throw new Error("Expected every measured turn element to have a layout box");
     }
-    // User request to agent reply: the 32px strip the bubble reserves for its copy
-    // button, then the 10px top margin on the reply group.
     expect(replyBox.y - (userBox.y + userBox.height)).toBeCloseTo(42, 5);
-    // Process summary to answer text: the 12px block margin of the process group.
     expect(answerBox.y - (stepBox.y + stepBox.height)).toBeCloseTo(12, 5);
-    // Answer text to the copy action row: 12px.
     expect(copyBox.y - (answerBox.y + answerBox.height)).toBeCloseTo(12, 5);
 
-    // Expanded reasoning content uses the 12/20 secondary typography.
     await stepDisclosure.click();
     const reasoningRow = page.locator("summary").filter({ hasText: "Show Thinking" });
     await expect(reasoningRow).toBeVisible();

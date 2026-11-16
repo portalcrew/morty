@@ -64,7 +64,6 @@ export function registerTurns(agent: ReturnType<typeof acp.agent>) {
             const respond = async (): Promise<acp.PromptResponse> => {
                 context.signal.throwIfAborted();
                 const prompt = readPromptText(context.params.prompt);
-                // Like Claude Code, the transcript keeps the user message of a prompt that then fails.
                 const transcript = nativeHistory.get(context.params.sessionId) ?? [];
                 transcript.push({
                     messageId: `user-${turnNumber.toString()}`,
@@ -82,8 +81,6 @@ export function registerTurns(agent: ReturnType<typeof acp.agent>) {
                     throw acp.RequestError.internalError(undefined, "Model unavailable: controlled/test-model");
                 }
                 if (prompt.startsWith("fail echoing the prompt ")) {
-                    // Mirrors an Agent that quotes the prompt it refused, which is how
-                    // user input reaches an error message.
                     throw acp.RequestError.internalError(
                         undefined,
                         `Rejected prompt: ${prompt.slice("fail echoing the prompt ".length)}`,

@@ -20,13 +20,10 @@ import {
 } from "./overlay-width.ts";
 import { ScrollArea } from "./scroll-area.tsx";
 
-/** Sections inside a default dialog body. The dialog header and `footer` stay outside the scroll region. */
 export const dialogBodyStackClassName = "flex flex-col gap-5";
 
-/** Subsection label inside a default dialog body (below header description). */
 export const dialogSectionTitleClassName = "text-[13px] font-medium leading-5 text-foreground";
 
-/** Pinned `footer` slot: 20px above the actions, 24px on the sides and below. */
 export const dialogPinnedFooterActionsClassName = "flex justify-end gap-2 px-6 pt-5 pb-6";
 
 function DialogShell({
@@ -98,7 +95,6 @@ function CloseButton({
     );
 }
 
-/** A centered dialog whose title and `footer` stay put; only the body scrolls once it reaches its max height. */
 export function Dialog({
     title,
     description,
@@ -117,7 +113,6 @@ export function Dialog({
     readonly size?: "standard" | "medium";
     readonly testId?: string;
     readonly headerAction?: ReactNode;
-    /** Stays below the scrolling body; the header stays above it. */
     readonly footer?: ReactNode;
     readonly children: ReactNode;
 }) {
@@ -184,10 +179,6 @@ export function Dialog({
     );
 }
 
-/**
- * A bottom sheet on mobile that becomes a large centered surface at the sm breakpoint.
- * `children` places the title itself, e.g. in a side column.
- */
 export function SheetDialog({
     title,
     onClose,

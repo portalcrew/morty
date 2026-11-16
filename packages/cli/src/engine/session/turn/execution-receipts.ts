@@ -22,7 +22,6 @@ export type RuntimeExecutionReceipt =
       }>
     | Readonly<{
           kind: "duplicate";
-          // Whether the original command has ended, as its receipt records it.
           state: "settled" | "unsettled";
       }>
     | { readonly kind: "conflict" }
@@ -30,10 +29,6 @@ export type RuntimeExecutionReceipt =
     // The Session did not admit the new command; nothing is recorded, so its identifier stays unused.
     | { readonly kind: "refused" };
 
-/**
- * An outcome a restart publishes: one the restart itself settles (a command it interrupted), or one the previous
- * process had already recorded, which is published again for clients that missed it.
- */
 export type RecoveredOutcome =
     | {
           readonly kind: "recorded";
@@ -43,38 +38,26 @@ export type RecoveredOutcome =
       }
     | { readonly kind: "restated"; readonly target: NativeSessionTarget; readonly outcome: RestatedOutcome };
 
-/**
- * An outcome the ledger already holds, restated for clients that missed it. It keeps the time it was recorded, which
- * identifies when the command ended; undefined when the ledger no longer keeps it.
- */
 export interface RestatedOutcome {
     readonly event: SessionEventPayload;
     readonly recordedAt: string | undefined;
 }
 
-/**
- * A settled turn whose Agent reported the user message the turn recorded, as the ledger keeps it. A replayed history
- * places the turn's lifecycle around that message.
- */
 export interface SettledTurn {
     readonly attemptId: string;
     readonly outcome: Extract<LifecycleMetadata, { readonly kind: "prompt.completed" | "prompt.failed" }> & {
         readonly messageId: string;
     };
-    /** When the turn started, when the ledger kept it, else when it ended. */
     readonly startedAt: string;
     readonly recordedAt: string;
 }
 
-/** A transition the ledger records for a command: it started, or it settled. */
 export type CommandProgress = "started" | "settled";
-/** How far the native session's owner has taken a command the Computer handed to it, and when it reached that stage. */
 export interface CommandDelegation {
     readonly stage: "queued" | "started";
     readonly at: string;
 }
 
-/** What a cancellation before admission found: a cancellation it recorded, or an outcome recorded earlier. */
 export type CancellationBeforeAdmission =
     | { readonly kind: "recorded"; readonly outcome: SessionEventPayload }
     | { readonly kind: "restated"; readonly outcome: RestatedOutcome }
@@ -101,19 +84,13 @@ function settledFate(fate: UnsettledFate, terminal: PromptTerminalLifecycle, out
         : { kind: "settled-before-start", outcome };
 }
 
-/** What a command identifier means to one Session: whether it may run, and what happened to it. */
 type CommandStanding =
-    // Nothing is recorded: the command may run.
     | { readonly kind: "unseen" }
-    // Another Session owns the identifier.
     | { readonly kind: "foreign" }
     // A restart failed the command before it started: it may run again.
     | { readonly kind: "retryable" }
-    // The ledger answers for the command, unsettled or with its outcome, and it does not run again.
     | { readonly kind: "retained"; readonly command: LedgerCommand }
-    // The command started, and its outcome is no longer kept.
     | { readonly kind: "expired"; readonly commandHash: string }
-    // The command was cancelled before it started, and its outcome is no longer kept.
     | { readonly kind: "cancelled" };
 
 function commandStanding(command: LedgerCommand | undefined, sessionTarget: NativeSessionTarget): CommandStanding {
@@ -148,7 +125,6 @@ const cancelledBeforeStartOutcome = (commandId: string): SessionEventPayload => 
     payload: { kind: "prompt.completed", commandId, completion: { kind: "cancelled", started: false } },
 });
 
-/** A stored outcome: the event as recorded, with its recording time. */
 const storedOutcome = (stored: string): RestatedOutcome | undefined => {
     const parsed: unknown = JSON.parse(stored);
     const event = decodeKnownSessionEventPayload(parsed);
@@ -157,10 +133,6 @@ const storedOutcome = (stored: string): RestatedOutcome | undefined => {
         : { event, recordedAt: z.object({ recordedAt: z.string() }).parse(parsed).recordedAt };
 };
 
-/**
- * The Runtime's answers about the commands it admitted, read from the command ledger, which alone records what
- * became of each command.
- */
 export class ExecutionReceipts {
     readonly #ledger: CommandLedgerTable;
     /**
@@ -168,14 +140,12 @@ export class ExecutionReceipts {
      * it never enters the ledger, which keeps the content-free form; clients of this process still read the original.
      */
     readonly #agentOutcomes = new Map<string, string>();
-    /** How far the native session's owner has taken each running command the Computer handed to it, and when. */
     readonly #delegations = new Map<string, CommandDelegation>();
     /**
      * Settlements reached while this process shuts down. They are artifacts of stopping, not of the commands, so the
      * ledger keeps the commands unsettled and the next process reports that the restart interrupted them.
      */
     readonly #shutdownSettlements = new Map<string, CommandFate>();
-    /** Requests waiting for a command's next transition; each listener hears every transition until removed. */
     readonly #watchers = new Map<string, Set<(progress: CommandProgress) => void>>();
     #closing = false;
 
@@ -193,7 +163,6 @@ export class ExecutionReceipts {
     };
     readonly #standing = (commandId: string, sessionTarget: NativeSessionTarget): CommandStanding =>
         commandStanding(this.#read(commandId), sessionTarget);
-    /** The outcome clients read for a settled command: what this process recorded, else the ledger's form. */
     readonly #outcome = ({ commandId, fate }: LedgerCommand): string | undefined => {
         if (isUnsettled(fate) || fate.outcome === null) {
             return undefined;
@@ -205,10 +174,6 @@ export class ExecutionReceipts {
             listener(progress);
         }
     };
-    /**
-     * Settles an unsettled command with `settled`, whose stored outcome is `outcome`. `agentOutcome` is the outcome with
-     * the Agent's text, when it differs.
-     */
     readonly #settle = (
         commandId: string,
         settled: SettledCommandFate,
@@ -232,7 +197,6 @@ export class ExecutionReceipts {
     readonly beginShutdown = (): void => {
         this.#closing = true;
     };
-    /** Waits for the first transition of the command that `accepts`; the waiter is released when `signal` aborts. */
     readonly #transition = (
         commandId: string,
         accepts: (progress: CommandProgress) => boolean,
@@ -265,7 +229,6 @@ export class ExecutionReceipts {
             this.#watchers.set(commandId, watchers);
             signal.addEventListener("abort", aborted, { once: true });
         });
-    /** Where the command stands now, or its next transition: `started` once it started, `settled` once it has ended. */
     readonly progress = async (
         commandId: string,
         sessionTarget: NativeSessionTarget,
@@ -279,7 +242,6 @@ export class ExecutionReceipts {
         }
         return await this.#transition(commandId, () => true, signal);
     };
-    /** Resolves once the command has ended. */
     readonly settlement = async (
         commandId: string,
         sessionTarget: NativeSessionTarget,
@@ -290,7 +252,6 @@ export class ExecutionReceipts {
         }
     };
     readonly outcome = (commandId: string): SessionEventPayload | undefined => this.restatedOutcome(commandId)?.event;
-    /** The outcome the ledger keeps for the command, with the time it was recorded. */
     readonly restatedOutcome = (commandId: string): RestatedOutcome | undefined => {
         const command = this.#read(commandId);
         const outcome = command === undefined ? undefined : this.#outcome(command);
@@ -352,14 +313,12 @@ export class ExecutionReceipts {
                 };
         }
     };
-    /** How far the native session's owner has taken a running command the Computer handed to it; null if none. */
     readonly delegation = (commandId: string, sessionTarget: NativeSessionTarget): CommandDelegation | null => {
         const command = this.#read(commandId);
         return command !== undefined && sameNativeSession(command.target, sessionTarget) && !isUnsettled(command.fate)
             ? null
             : (this.#delegations.get(commandId) ?? null);
     };
-    /** When the Session's running command started. */
     readonly startedAt = (commandId: string, sessionTarget: NativeSessionTarget): string | undefined => {
         const command = this.#read(commandId);
         return command !== undefined &&
@@ -368,7 +327,6 @@ export class ExecutionReceipts {
             ? command.fate.startedAt
             : undefined;
     };
-    /** The Session's settled turns, in admission order, whose outcomes the ledger keeps with their user message. */
     readonly settledTurns = (sessionTarget: NativeSessionTarget): readonly SettledTurn[] =>
         this.#ledger.session(sessionTarget).flatMap((command): SettledTurn[] => {
             const outcome = this.restatedOutcome(command.commandId);
@@ -504,7 +462,6 @@ export class ExecutionReceipts {
         for (const command of this.#ledger.all()) {
             const fate = command.fate;
             if (!isUnsettled(fate)) {
-                // The previous process recorded this outcome; publishing it again restates that fact.
                 const restated = fate.outcome === null ? undefined : storedOutcome(fate.outcome);
                 if (restated !== undefined) {
                     recovered.push({ kind: "restated", target: command.target, outcome: restated });

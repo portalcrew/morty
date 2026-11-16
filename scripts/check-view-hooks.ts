@@ -32,7 +32,6 @@ function hookAliases(source: string): ReadonlyMap<string, string> {
     }
     return aliases;
 }
-// The application context is the one place a view reads React context, for `useMortyApplication`.
 const CONTEXT_OWNER = "packages/web/src/views/application/application-context.tsx";
 
 const git = spawnSync("git", ["ls-files", SCANNED], { encoding: "utf8" });

@@ -33,7 +33,6 @@ export interface CommandContext {
     readonly timer: Timer;
 }
 
-/** The collaborators the Runtime builds once; every relay connection hands the same ones to its commands. */
 export type CommandServices = Pick<
     CommandContext,
     | "resolveAgent"

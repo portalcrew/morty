@@ -41,7 +41,6 @@ export interface ProcessPlatformSupport {
     ) => void;
     readonly terminateProcess: (child: ChildProcess, signal: NodeJS.Signals) => void;
     readonly readProcessTable: () => Promise<readonly ProcessTableEntry[]>;
-    /** Identifies the processes that belong to the tree of a spawned child, and no unrelated process. */
     readonly captureProcessTree: (root: SpawnedProcess) => Promise<readonly ProcessTreeIdentity[]>;
     readonly processExists: (processId: number) => boolean;
 }

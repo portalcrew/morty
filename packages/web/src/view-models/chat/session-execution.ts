@@ -19,29 +19,23 @@ import type { SessionExecutionObservation } from "./session-presentation.ts";
 // decided whether a fact is newer than what the state already holds. The page keeps this state for the Session, so it
 // outlives the pane that follows the Session; the pane feeds facts in and performs the reads the transitions ask for.
 
-/** The Computer's account of the Session's execution, as one read returns it. */
 type SessionExecutionSnapshot = Awaited<ReturnType<MortyClient["sessions"]["readSessionExecution"]>>;
 
-/** A message the Computer holds queued behind the running turn. */
 export type QueuedCommand = SessionExecutionSnapshot["queued"][number];
 
-/** A point of the Session's execution log: its generation, and a position that only grows within it. */
 type LogPosition = SessionExecutionSnapshot["executionPosition"];
 
-/** How a turn's live lifecycle says it ended. */
 type TurnOutcome =
     | { readonly kind: "completed" }
     /** Steering ended the turn, but its execution goes on; only a read tells what runs now. */
     | { readonly kind: "steered" }
     | { readonly kind: "failed"; readonly failure: TurnFailure };
 
-/** A lifecycle fact that changes the Agent's pending requests. */
 type InteractionChange = Extract<
     SessionLifecycleFact,
     { readonly kind: "interaction-requested" | "permission-resolved" | "elicitation-resolved" }
 >;
 
-/** What a lifecycle event says about the Session's execution. */
 export type LiveExecutionChange =
     | InteractionChange
     /** The Computer's queue changed; only a read tells what it holds now. */
@@ -56,7 +50,6 @@ export type LiveExecutionChange =
           readonly startedAt: number;
           readonly steers: boolean;
       }
-    /** The Computer handed the command to the native session's owner, which reached `stage` with it at `at`. */
     | {
           readonly kind: "turn-delegated";
           readonly commandId: string;
@@ -65,7 +58,6 @@ export type LiveExecutionChange =
       }
     | { readonly kind: "turn-ended"; readonly commandId: string; readonly outcome: TurnOutcome };
 
-/** A lifecycle event at `position` of the Session's log. */
 type LiveExecutionFact = {
     readonly kind: "live";
     readonly sessionGenerationId: string;
@@ -80,19 +72,11 @@ export type SessionExecutionFact =
      */
     | { readonly kind: "opened" }
     | LiveExecutionFact
-    /**
-     * The Computer's account of the execution through `snapshot.executionPosition`, for a read that began when the
-     * state's `executionReadBasis` was `basis`.
-     */
     | {
           readonly kind: "read";
           readonly snapshot: SessionExecutionSnapshot;
           readonly basis: number;
       }
-    /**
-     * The Computer admitted this page's submission of `commandId`, sent at `startedAt`, as `admission` says. An HTTP
-     * answer has no position in the Session's log.
-     */
     | {
           readonly kind: "acknowledged";
           readonly commandId: string;
@@ -101,25 +85,19 @@ export type SessionExecutionFact =
       }
     /** This page submits a new turn, so the failure reported for an earlier one no longer describes the Session. */
     | { readonly kind: "turn-submitted" }
-    /** The pane's timeline shows the `shown` commands' own messages; its history records the `recorded` commands. */
     | { readonly kind: "history"; readonly shown: readonly string[]; readonly recorded: readonly string[] }
-    /** The Computer closed the Session, which runs and queues nothing and asks nothing of the user. */
     | { readonly kind: "closed" };
 
-/** What the Computer has shown this page about one of the Session's commands. */
 interface RuntimeCommand {
     /**
      * When this page learned the Computer holds the command: how many commands it had learned of before. Commands are
      * never forgotten, so this orders them in the order they were learned.
      */
     readonly learnedAt: number;
-    /** The timeline showed the command's own message. */
     readonly shown: boolean;
-    /** The Computer reported the command's turn ended. */
     readonly ended: boolean;
 }
 
-/** How far the state reflects the Session's execution log. */
 type ExecutionCoverage =
     /**
      * No read since the pane started following the Session. The first read is the baseline, and the live facts that
@@ -127,32 +105,19 @@ type ExecutionCoverage =
      */
     | { readonly kind: "unread"; readonly held: readonly LiveExecutionFact[] }
     | { readonly kind: "covered"; readonly position: LogPosition }
-    /**
-     * A live fact came from another generation of the log than `position`. The read it asked for decides on it and
-     * on the facts that arrived after it.
-     */
     | { readonly kind: "awaiting-read"; readonly position: LogPosition; readonly held: readonly LiveExecutionFact[] };
 
 export interface SessionExecutionState {
     readonly coverage: ExecutionCoverage;
     readonly turn: CurrentTurn;
-    /** The messages the Computer holds queued, as last observed. */
     readonly queued: readonly QueuedCommand[];
-    /** The queue the last applied read listed, and the `basis` it began with: what it could not have seen. */
     readonly listing: { readonly queued: ReadonlySet<string>; readonly basis: number } | null;
-    /** The Agent's requests in arrival order, each with its latest resolution. */
     readonly interactions: readonly SessionInteraction[];
     readonly commands: ReadonlyMap<string, RuntimeCommand>;
-    /**
-     * What the Computer's reads reported of what runs and what is queued, by the log position each covers, in the order
-     * they were applied. The timeline is read against them; they hold nothing the timeline derives.
-     */
     readonly observations: readonly SessionExecutionObservation[];
 }
 
-type SessionExecutionEffect =
-    /** The state needs a fresh read of the Computer's execution before it is current again. */
-    { readonly kind: "read" };
+type SessionExecutionEffect = { readonly kind: "read" };
 
 interface SessionExecutionTransition {
     readonly state: SessionExecutionState;
@@ -175,7 +140,6 @@ function settled(state: SessionExecutionState): SessionExecutionTransition {
     return { state, effects: [] };
 }
 
-/** Records that the Computer holds `commandIds`, and that it showed or ended them. */
 function learn(
     state: SessionExecutionState,
     commandIds: readonly string[],
@@ -254,7 +218,6 @@ function transitionInteractions(
     }
 }
 
-/** Applies what a live fact says, once it is known to be newer than what the state holds. */
 function applyLiveChange(state: SessionExecutionState, change: LiveExecutionChange): SessionExecutionTransition {
     switch (change.kind) {
         case "interaction-requested":
@@ -314,7 +277,6 @@ function applyLiveChange(state: SessionExecutionState, change: LiveExecutionChan
     }
 }
 
-/** Applies a live fact against the position the state covers: an older one is already reflected. */
 function applyCoveredLive(
     state: SessionExecutionState,
     position: LogPosition,
@@ -354,7 +316,6 @@ function applyLive(state: SessionExecutionState, fact: LiveExecutionFact): Sessi
     }
 }
 
-/** Decides the live facts a read was awaited for: those of another generation than the read's are dropped. */
 function replayHeld(
     transition: SessionExecutionTransition,
     held: readonly LiveExecutionFact[],
@@ -387,7 +348,6 @@ function applyRead(
         coverage.position.sessionGenerationId === position.sessionGenerationId &&
         BigInt(position.throughPosition) < BigInt(coverage.position.throughPosition)
     ) {
-        // The state already reflects facts newer than this read.
         return replayHeld(settled({ ...state, coverage: { kind: "covered", position: coverage.position } }), held);
     }
     const running = snapshot.turn;
@@ -409,8 +369,6 @@ function applyRead(
             commandId: running.commandId,
             startedAt: Date.parse(running.startedAt),
         });
-        // How far the native session's owner has taken the command is the Computer's account, however this page
-        // learned of the turn: live, by this read after a reload, or after a missed event.
         if (running.delegation !== null) {
             turn = transitionCurrentTurn(turn, {
                 kind: "delegated",
@@ -447,7 +405,6 @@ function applyRead(
                 listing: { queued: new Set(queued), basis },
                 interactions: snapshot.interactions.map(requestedInteraction),
                 observations: [
-                    // A report of another log generation no longer describes the log this one continues.
                     ...next.observations.filter(
                         (observation) =>
                             observation.kind === "through" && observation.generation === position.sessionGenerationId,
@@ -467,7 +424,6 @@ function applyRead(
     );
 }
 
-/** Moves the Session's execution state by one fact, and says what the fact asks of the pane following the Session. */
 function applyExecutionFact(state: SessionExecutionState, fact: SessionExecutionFact): SessionExecutionTransition {
     switch (fact.kind) {
         case "opened": {
@@ -523,12 +479,10 @@ function applyExecutionFact(state: SessionExecutionState, fact: SessionExecution
     }
 }
 
-/** What a read that begins now passes back as its `basis`: the commands it can know of are those learned before. */
 export function executionReadBasis(state: SessionExecutionState): number {
     return state.commands.size;
 }
 
-/** Whether the Computer has shown it holds the command: listed, running, ended, recorded or confirmed by a receipt. */
 export function runtimeHoldsCommand(state: SessionExecutionState, commandId: string): boolean {
     return state.commands.has(commandId);
 }
@@ -560,7 +514,6 @@ export function runtimeCoversMessage(
     );
 }
 
-/** The questions the Agent asks that are still pending. */
 export function pendingQuestionIds(interactions: readonly SessionInteraction[]): ReadonlySet<string> {
     return new Set(
         interactions.flatMap((interaction) =>
@@ -571,7 +524,6 @@ export function pendingQuestionIds(interactions: readonly SessionInteraction[]):
     );
 }
 
-/** Whether the Agent waits for the user to answer one of its requests. */
 export function waitingForInput(interactions: readonly SessionInteraction[]): boolean {
     return interactions.some(
         (interaction) =>
@@ -582,11 +534,6 @@ export function waitingForInput(interactions: readonly SessionInteraction[]): bo
     );
 }
 
-/**
- * The command of the new turn this page is submitting and the service has not reported yet: a message sent as a new
- * turn while its delivery is being prepared or submitted. A message queued behind a running turn starts none, and
- * once the service reports the command running or ended, the turn is the service's account.
- */
 function submittingCommandId(
     execution: Pick<SessionExecutionState, "turn" | "commands">,
     delivery: DeliveryState,
@@ -627,15 +574,12 @@ export function sessionActivity(
     return turn.failure === null ? { kind: "idle" } : { kind: "failed", ...turn.failure };
 }
 
-/** The Session's execution state on this page, which only `apply` moves. */
 export interface SessionExecutionStore {
     readonly state: SessionExecutionState;
-    /** Applies one fact and returns what it asks of the pane following the Session. */
     readonly apply: (fact: SessionExecutionFact) => readonly SessionExecutionEffect[];
 }
 
 export function createSessionExecutionStore(ports: {
-    /** The state moved, which what the page derives from the Computer's account follows. */
     readonly changed: (previous: SessionExecutionState, next: SessionExecutionState) => void;
 }) {
     return createStore<SessionExecutionStore>()((set, get) => ({
@@ -652,7 +596,6 @@ export function createSessionExecutionStore(ports: {
     }));
 }
 
-/** The execution of no Session, for a view that follows the open Session's execution when none is open. */
 export const noSessionExecution = createStore<Pick<SessionExecutionStore, "state">>()(() => ({
     state: initialSessionExecution,
 }));

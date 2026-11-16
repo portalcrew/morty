@@ -101,7 +101,6 @@ test("Given a conversation this page created, When another client renames it, Th
 
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     await daemon.renameSession(sessionId, renamed, signal);
-    // Starting another conversation reloads the directory.
     await sendPrompt(app, await readyComposer(app), "Start another conversation");
 
     await app.waitForView(() => {
@@ -119,7 +118,6 @@ test("Given a saved title differs from the native session listing, When reopenin
     const app = await createTestApp({ connectAgent: true, sessionIds: new Set(["title-review"]) });
     await app.user.click(await app.waitForView(() => getByRole(document.body, "button", { name: "Open Session" })));
     const initialDialog = await app.waitForView(() => getByRole(document.body, "dialog", { name: "Open Session" }));
-    // The first native session is selected and previewed automatically.
     await app.waitForView(() =>
         expect(getByRole(initialDialog, "button", { name: "Native title-review" }).getAttribute("aria-pressed")).toBe(
             "true",
@@ -155,7 +153,6 @@ test("Given a saved title differs from the native session listing, When reopenin
     await reopened.user.type(input, "My renamed session");
     await reopened.user.click(getByRole(document.body, "button", { name: "Save title" }));
     await reopened.waitForView(() => getByRole(document.body, "heading", { name: "My renamed session" }));
-    // The saved title takes focus back from the editor it replaced.
     expect(document.activeElement).toBe(getByRole(document.body, "button", { name: "My renamed session" }));
     await reopened.user.click(getByRole(document.body, "button", { name: "Open Session" }));
     const renamedDialog = await reopened.waitForView(() =>
@@ -189,8 +186,6 @@ test("Given a conversation is being reopened, When the title has not loaded yet,
     await app.user.click(conversation);
     await app.waitForView(() => expect(app.elementsByTestId(dataTestId.userMessage).length).toBeGreaterThan(0));
 
-    // A title that is already on screen while the messages are still loading is
-    // withdrawn again as soon as the loaded pane waits for its own read.
     const statedTitles: string[] = [];
     const read = () => {
         const section = document.querySelector('section[aria-label="Conversation"]');
@@ -217,7 +212,6 @@ test("Given a conversation is being reopened, When the title has not loaded yet,
         throw new Error("Expected the conversation in the directory");
     }
     await app.user.click(reopened);
-    // The title is stated only once the same read that loads the messages has settled.
     await app.waitForView(() =>
         expect(
             document.querySelector(
@@ -247,7 +241,6 @@ test("Given an open session on a phone, When the user renames it from the header
         await app.waitForView(() => expect(getByRole(slot, "button", { name: original })).toBeTruthy());
         await app.user.click(getByRole(slot, "button", { name: original }));
         const editor = getByRole(document.body, "dialog", { name: "Rename conversation" });
-        // The mask dims everything else; tapping it dismisses the editor like the cancel button.
         expect(app.optionalElementByTestId(dataTestId.mobileRenameMask)).not.toBeNull();
         const input = getByRole(editor, "textbox", { name: "Conversation title" });
         expect(document.activeElement).toBe(input);
@@ -264,7 +257,6 @@ test("Given an open session on a phone, When the user renames it from the header
         await app.waitForView(() =>
             expect(queryByRole(document.body, "dialog", { name: "Rename conversation" })).toBeNull(),
         );
-        // Closing the editor returns focus to the title that opened it.
         expect(document.activeElement).toBe(getByRole(slot, "button", { name: original }));
         await app.user.click(getByRole(slot, "button", { name: original }));
         const second = getByRole(document.body, "dialog", { name: "Rename conversation" });
@@ -297,7 +289,6 @@ test("Given a new conversation still connecting, When the user saves a new title
     }
     const original = "Rename before connected";
     const renamed = "Renamed while connecting";
-    // Holding the first execution read keeps the new conversation's connection from becoming ready.
     const held = app.executionNetwork.holdNextExecution();
     await sendPrompt(app, await readyComposer(app), original);
     const release = await held;
@@ -335,7 +326,6 @@ test("Given a new conversation still connecting, When the user saves a new title
     await app.user.clear(input);
     await app.user.type(input, renamed);
     await app.user.click(getByRole(document.body, "button", { name: "Save title" }));
-    // The user moves on while the rename waits for the connection.
     await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
     release();
     await app.user.click(await app.waitForView(() => getByRole(document.body, "button", { name: `Open ${original}` })));

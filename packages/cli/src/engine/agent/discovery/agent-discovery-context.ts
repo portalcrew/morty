@@ -9,7 +9,6 @@ export interface AgentProbeDiagnostic {
 }
 
 export interface LocalAgentDiscoveryContext {
-    /** The Computer's local data directory, where Agents that Morty configures keep their Morty-owned state. */
     readonly dataDirectory: string;
     readonly defaultWorkspace: string;
     readonly environment: Readonly<NodeJS.ProcessEnv>;

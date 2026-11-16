@@ -23,7 +23,6 @@ export async function prepareTestMortyRelayBindings(workerEntryPoint?: string) {
     return () => createRelayBindings(script);
 }
 
-/** Owns the real Cloudflare adapters for Computer/Worker integration scenarios. */
 function createCloudflareRuntime(script: string) {
     const options = {
         name: "morty-test-relay",

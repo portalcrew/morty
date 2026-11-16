@@ -304,7 +304,6 @@ test("Given a browser without saved access, When I open a copied computer addres
     const app = await createTestApp({ connectAgent: true });
     await app.queryElementByTestId(dataTestId.messageComposer);
     const address = window.location.href;
-    // The other browser has the address, but none of this browser's saved access.
     window.localStorage.clear();
     window.sessionStorage.clear();
     const unpaired = await app.reload();
@@ -452,7 +451,6 @@ test("Given an open conversation, When another tab removes this browser's access
     const app = await createTestApp({ connectAgent: true });
     await startConversation(app, "Before another tab ended access");
 
-    // Another tab ended the access every tab of this browser shares.
     window.localStorage.removeItem(ANONYMOUS_CREDENTIAL_KEY_NAME);
     window.dispatchEvent(new StorageEvent("storage", { key: ANONYMOUS_CREDENTIAL_KEY_NAME }));
 
@@ -519,7 +517,6 @@ test("Given a saved computer and a failed connection, When I retry after reconne
     const sessionId = await startConversation(app, "Preserve access through a network failure");
     await app.close();
     window.location.href = `${app.origin}/`;
-    // A reload gets its own page transport; the previous one was disposed.
     const transport = new TestApiTransport(app.origin);
     transport.disconnect();
     const unavailable = await createTestApp({
@@ -651,7 +648,6 @@ test("Given a computer I keep using, When ten more computers are saved in this b
             computerId: shared.identity.computerId,
         });
         await shared.waitForView(() => expect(new URL(window.location.href).searchParams.get("identity")).toBe(scope));
-        // The redeemed link replaces the page, which then opens that computer and asks to connect its agent.
         const opened = await shared.reload();
         await opened.waitForView(() => getByRole(document.body, "dialog", { name: "Connect agent" }));
         return opened;
@@ -664,7 +660,6 @@ test("Given a computer I keep using, When ten more computers are saved in this b
         return opened;
     };
 
-    // The browser fills up with computers, and the daily one is used again before the last is saved.
     let shared = await openShared();
     const oldestScope = new URL(window.location.href).searchParams.get("identity");
     for (let saved = 1; saved < 9; saved += 1) {
@@ -756,7 +751,6 @@ test("Given a switch to a computer whose remembered conversation is gone, When o
     });
     await second.close();
 
-    // The switched-to page loses its connection while it opens the computer.
     window.location.href = firstLink.href;
     const transport = new TestApiTransport(second.origin);
     transport.disconnect();

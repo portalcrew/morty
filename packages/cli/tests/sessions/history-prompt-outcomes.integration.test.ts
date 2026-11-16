@@ -50,7 +50,6 @@ const terminal = (commandId: string) => (event: SessionLiveEvent) =>
     (event.payload.kind === "prompt.completed" || event.payload.kind === "prompt.failed") &&
     event.payload.commandId === commandId;
 
-/** The history page's user messages and turn lifecycle, in page order. */
 const timeline = (page: NativeSessionEvents): readonly string[] =>
     page.events.events.flatMap((event) => {
         if (event.type === "acp") {
@@ -111,8 +110,6 @@ test("Given a failed turn and a completed turn, When a client reads the replayed
 
                 const page = await historyPage(peer, sessionTarget);
 
-                // The replayed history holds each turn's lifecycle around the user message its Agent recorded, and
-                // each ending where its turn ended.
                 expect(timeline(page)).toEqual([
                     `prompt.requested ${failed}`,
                     `prompt.started ${failed}`,
@@ -177,7 +174,6 @@ test("Given a turn steered by a queued prompt, When a client reads the Session h
                         target: sessionTarget,
                     }),
                 );
-                // The steering prompt and the turn it joined settle in either order.
                 const settled = new Set<string>();
                 await liveUntil(peer, (event) => {
                     for (const commandId of [turn, steering]) {
@@ -190,7 +186,6 @@ test("Given a turn steered by a queued prompt, When a client reads the Session h
 
                 const page = await historyPage(peer, sessionTarget);
 
-                // The steering joins the running turn: its lifecycle follows the turn's start, and the turn ends last.
                 const order = timeline(page);
                 const position = (entry: string) => {
                     const index = order.indexOf(entry);

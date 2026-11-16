@@ -109,7 +109,6 @@ export const createConversationDirectoryStore = (
                     if (session === undefined) {
                         throw new CloudApiError("NOT_FOUND", "The Session was not found.");
                     }
-                    // The Session leaves the list only once the Computer no longer holds it.
                     await requests.archiveManagedSession(session.target, signal);
                     signal.throwIfAborted();
                     const archive: ArchiveOperation = { kind: "idle" };

@@ -44,7 +44,6 @@ function failure(kind: string): unknown {
     return error;
 }
 
-// The exported Cloudflare callback is the relay fault-injection boundary.
 export class ComputerRelay extends RelayComputerRelay {
     override async fetch(request: Request): Promise<Response> {
         if (
@@ -68,7 +67,6 @@ export class UnavailableComputer extends DurableObject {
 }
 
 interface TestBindings extends ConfiguredRelayBindings {
-    // Stands in for COMPUTER_RELAY: every request and operation sent to it fails.
     readonly UNAVAILABLE_COMPUTER: DurableObjectNamespace;
 }
 

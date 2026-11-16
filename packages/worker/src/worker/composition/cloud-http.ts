@@ -8,7 +8,6 @@ const unauthenticated = () => {
     throw new ManagementError("UNAUTHENTICATED", "Computer access is required.", 401);
 };
 
-/** Worker-level requests are routed before any computer-scoped services are constructed. */
 export const cloudRoutes = new Hono<{
     readonly Bindings: CloudBindings;
 }>()

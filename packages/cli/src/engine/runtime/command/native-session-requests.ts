@@ -41,7 +41,6 @@ export function createNativeSessionRequestHandler(dependencies: NativeRequestDep
     const handle = (command: NativeSessionCommand): void | Promise<void> => {
         const harness = command.action === "active-turn" ? command.target.harness : command.harness;
         const previous = [...pending.values()].filter((request) => request.harness === harness);
-        // Serialize native operations per Agent within the existing bounded, cancellable admission window.
         if (pending.has(command.requestId) || pending.size >= 4) {
             return reportOperationFailure(
                 dependencies,

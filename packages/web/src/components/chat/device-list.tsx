@@ -54,7 +54,6 @@ function DeviceDetailFields({
     );
 }
 
-/** One device that holds access to the computer: its name, then a line for each detail. */
 export function DeviceSummary({
     device,
     action,
@@ -64,7 +63,6 @@ export function DeviceSummary({
     readonly device: DeviceDescription;
     readonly action?: ReactNode;
     readonly icon?: LucideIcon;
-    /** `notice` lines the device icon up with the detail table in sidebar access notices. */
     readonly layout?: "default" | "notice";
 }) {
     const indentDetails = layout === "default";

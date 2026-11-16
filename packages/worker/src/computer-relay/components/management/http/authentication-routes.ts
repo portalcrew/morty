@@ -24,18 +24,14 @@ import { applicationForRequest, type ManagementRouteContext } from "./route-cont
 
 const shareInput = v.pipe(
     v.object({
-        /** Stable across retries of this exact issuance intent. */
         operationId: v.pipe(v.string(), v.uuid()),
-        /** How long the device the link adds keeps access; a day unless chosen. */
         accessDuration: v.optional(v.picklist(deviceAccessDurations)),
-        /** A link this access shared that no one opened yet; it stops working once the new one is issued. */
         replaces: v.optional(v.pipe(v.string(), v.maxLength(512))),
     }),
     v.readonly(),
 );
 const revokeAllAccessInput = v.pipe(
     v.strictObject({
-        /** The local credential that replaces the caller's; setup saved it before sending this request. */
         successor: computerToken,
     }),
     v.readonly(),
@@ -87,8 +83,6 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             const result = await application.services.authentication.session(token, request.signal);
             switch (result.kind) {
                 case "authenticated":
-                    // A browser's access ends at its device's term, the latest among the links the device opened; other
-                    // credentials have none.
                     return json(
                         {
                             ...result.session,

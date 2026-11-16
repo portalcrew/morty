@@ -3,7 +3,6 @@ import { MortyLogoMark } from "@/components/brand/morty-logo";
 import { HarnessMark } from "@/components/chat/harness-mark";
 import { cn } from "@/lib/utils";
 
-/** Soft gradient artwork painted inside the setup connection arc. */
 const setupConnectionBandArtworkUrl = "/setup-connection-band.png";
 
 /** Plate and glyph both use 70% opacity; icons were full `#171717` so they did not follow `bg-white/*` alone. */

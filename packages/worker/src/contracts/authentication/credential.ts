@@ -1,7 +1,6 @@
 import type { SessionAccessHolder } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 
-/** The computer's own credential; its holder chooses a successor by saving it before requesting it. */
 export const computerToken = v.pipe(v.string(), v.regex(/^morty_computer_v1_[A-Za-z0-9_-]{43}$/u));
 
 export type Credential = {
@@ -11,17 +10,11 @@ export type Credential = {
     | {
           readonly kind: "browser";
           readonly transferId: string;
-          /** The browser device this credential belongs to. */
           readonly deviceId: string;
-          /** When this access ends: the device's term, the latest among the links the device opened. */
           readonly accessExpiresAt: number;
       }
 );
 
-/**
- * Whose access a credential carries: a browser credential its device's, which outlives the credential's replacement;
- * the local credential its own.
- */
 export function accessHolder(credential: Credential): SessionAccessHolder {
     switch (credential.kind) {
         case "browser":
@@ -34,7 +27,6 @@ export function accessHolder(credential: Credential): SessionAccessHolder {
 const linkLifetime = 10 * 60 * 1000;
 const hour = 60 * 60 * 1000;
 
-/** How long a device added through a link keeps access, chosen when the link is shared. */
 export const deviceAccessDurations = ["1h", "1d", "7d", "30d"] as const;
 export type DeviceAccessDuration = (typeof deviceAccessDurations)[number];
 const deviceAccessLifetimes: Readonly<Record<DeviceAccessDuration, number>> = {
@@ -45,7 +37,6 @@ const deviceAccessLifetimes: Readonly<Record<DeviceAccessDuration, number>> = {
 };
 export const defaultDeviceAccessDuration: DeviceAccessDuration = "1d";
 
-/** What a shared link grants: until when it can add a device, and until when that device keeps access. */
 export interface SharedLinkTerms {
     /** The duration chosen for the device's access, which callers show rather than assume. */
     readonly accessDuration: DeviceAccessDuration;

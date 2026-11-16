@@ -53,7 +53,6 @@ import { createEncryptedDaemonFrames } from "../encrypted-daemon-frames.ts";
 import { encryptedContentFrames } from "./encrypted-content-frames.ts";
 
 export interface DaemonConnectionPeer {
-    /** Runs a `morty` command against this daemon's installation, as the user's terminal would. */
     readonly cli: (args: readonly string[]) => Promise<void>;
     readonly restart: (mode?: "crash", restoreFiles?: () => Promise<void>) => Promise<void>;
     readonly send: (message: string | Uint8Array) => void;
@@ -142,7 +141,6 @@ export const withRealDaemonConnection = (
 ): Promise<void> =>
     withDaemonConnection(signal, specification, environment, scenario, launch, undefined, systemTimer, harnessAdapters);
 
-/** The daemon and its connection live until the scenario ends or the caller's signal (the test's) aborts. */
 async function withDaemonConnection(
     testSignal: AbortSignal,
     specification: LocalAgentSpecification,
@@ -330,7 +328,6 @@ async function withDaemonConnection(
             } else {
                 execution = new AbortController();
                 runtime = runRuntime(config, AbortSignal.any([signal, execution.signal]), runtimeTimer, {
-                    // A scenario that needs process retirement shrinks the retained process budget.
                     processes: new AgentProcessPool(
                         Number(environment["MORTY_TEST_MAX_ACP_PROCESSES"] ?? "1000"),
                         runtimeTimer,
@@ -358,8 +355,6 @@ async function withDaemonConnection(
             }
             const decoded =
                 typeof message === "string" ? await encryption.decode(message) : await contentFrames.decode(message);
-            // The real Worker grants one download chunk at a time. This fixture
-            // owns that relay-side flow control while all file bytes stay encrypted.
             const requestId =
                 typeof decoded === "string"
                     ? decodeMessageKind(decoded) === "file.begin"
@@ -473,7 +468,6 @@ async function withDaemonConnection(
     }
 }
 
-/** Waits for the Computer's answer to prompt `commandId`: it was queued, began executing, or settled at once. */
 export async function nextPromptAcceptance(peer: DaemonConnectionPeer, commandId: string) {
     for (;;) {
         const message = await peer.nextMessage();
@@ -489,7 +483,6 @@ export async function nextPromptAcceptance(peer: DaemonConnectionPeer, commandId
     }
 }
 
-/** Waits for the lifecycle event that settles prompt `commandId`; the Session is idle again once it arrives. */
 export async function nextPromptSettlement(peer: DaemonConnectionPeer, commandId: string) {
     for (;;) {
         const message = await peer.nextMessage();

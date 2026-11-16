@@ -478,14 +478,11 @@ export class FakeOpenAiProvider implements AsyncDisposable {
         model: string,
         answer: string,
         options: {
-            /** Receives the conversation the model was asked to continue. */
             readonly beforeFirstText?: (signal: AbortSignal, conversation: string) => Promise<void>;
             readonly commentary?: string;
             readonly patch?: string;
             readonly readPath?: string | ((prompt: string) => string);
             readonly mcpImage?: boolean;
-            /** The test prompt that runs `toolSequence`, or else the configured tool
-             *  action (`patch`, `readPath`, `mcpImage`, or a shell command) once. */
             readonly toolPrompt?: string;
             readonly toolSequence?: readonly RequestedTool[];
             /** Fails every request whose prompt contains this text (HTTP 500), for

@@ -15,7 +15,6 @@ type ReplacementState =
           readonly previous: RetiringIdentity | { readonly kind: "retired"; readonly computerId: string };
       };
 
-/** The identity that a bootstrap or replacement returned. */
 export interface IssuedIdentity {
     readonly computerToken: string;
     readonly computerId: string;
@@ -31,7 +30,6 @@ type CredentialRotation = { readonly kind: "none" } | { readonly kind: "requeste
 
 export interface ReadyIdentity extends IssuedIdentity {
     readonly kind: "ready";
-    /** Setup owns the unfinished pairing intent; the Worker owns the final Computer binding. */
     readonly pairing: PairingIntent;
     readonly replacement: ReplacementState;
     readonly rotation: CredentialRotation;
@@ -52,10 +50,6 @@ export interface SavedState {
 /** Version of the saved state's representation; any other representation is refused, never converted. */
 const SAVED_STATE_VERSION = 4;
 
-/**
- * The service origin setup accepts: https, or http on a loopback host, with no credentials, path, query or fragment.
- * Null for any other URL; a value that is not a URL throws.
- */
 export function serviceOrigin(value: string): string | null {
     const url = new URL(value);
     if (
@@ -188,7 +182,6 @@ export function encodeSavedState(state: SavedState): SavedRepresentation {
     };
 }
 
-/** The saved state `value` holds, or null when it is not exactly the representation setup writes. */
 export function decodeSavedState(value: unknown): SavedState | null {
     const decoded = savedState.safeParse(value);
     if (!decoded.success) {

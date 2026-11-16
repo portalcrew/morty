@@ -149,7 +149,6 @@ test("Given the phone sheet lists sessions, When the user taps one, Then the she
     await app.user.click(getByRole(document.body, "button", { name: "Open Session" }));
     const dialog = await app.waitForView(() => getByRole(document.body, "dialog", { name: "Open Session" }));
     const row = await app.waitForView(() => getByRole(dialog, "button", { name: "Native second-session /" }));
-    // The sheet opens on the list step, with no detail chrome yet.
     expect(queryByRole(dialog, "button", { name: "Back to session list" })).toBeNull();
     await app.user.click(row);
 
@@ -281,7 +280,6 @@ test("Given an old native preview response, When the selected Agent changes, The
     expect(dialog.textContent).toContain("Pi is not installed");
     await act(async () => {
         release();
-        // Complete a real HTTP round trip after forwarding the held response.
         const response = await fetch(app.origin, { signal: signal });
         await response.text();
     });

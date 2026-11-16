@@ -10,14 +10,12 @@ import { describeLinkedDevice } from "../../view-models/chat/access-presentation
 import { type LinkedDevicesStore, newDevicesSince } from "../../view-models/chat/linked-devices-store.ts";
 import { AccessNotice, SidebarAccessNoticeCard, sidebarAccessNoticeActionClassName } from "./access-term.tsx";
 
-/** This browser's access card, included in the carousel only while that card has something to say. */
 type SidebarAccessNotice = {
     readonly computerName: string;
     readonly onOpenDevices: () => void;
     readonly store: StoreApi<AccessExpiryStore>;
 };
 
-/** One newly joined device, on its own card. Got it marks every new device as seen. */
 function NewDeviceCard({
     acknowledge,
     device,
@@ -76,9 +74,7 @@ export function NewDeviceNotice({
     onReviewDevices,
     store,
 }: {
-    /** This browser's access card. */
     readonly access: SidebarAccessNotice;
-    /** Opens the devices with access, where any of them can be disconnected. */
     readonly onReviewDevices: () => void;
     readonly store: StoreApi<LinkedDevicesStore>;
 }) {

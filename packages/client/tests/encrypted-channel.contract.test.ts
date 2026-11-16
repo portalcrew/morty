@@ -39,7 +39,6 @@ beforeEach(() => {
 
 afterEach(() => vi.useRealTimers());
 
-// A real socket hop records only what an untrusted transport can observe. Both endpoints use the Computer capability.
 async function opaqueHop() {
     const server = createServer();
     const sockets = new WebSocketServer({ server });

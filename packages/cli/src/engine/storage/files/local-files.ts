@@ -1,7 +1,6 @@
 import { createReadStream, type Dirent } from "node:fs";
 import { mkdir, open, readdir, readFile, realpath, stat } from "node:fs/promises";
 
-/** What a path names once symbolic links are followed. */
 type LocalPathKind = "directory" | "file" | "other";
 
 export interface LocalPathMetadata {
@@ -38,7 +37,6 @@ function entryKind(entry: Dirent): LocalDirectoryEntryKind {
     return entry.isSocket() ? "socket" : "unknown";
 }
 
-/** The absolute path with every symbolic link resolved. Fails when the path does not exist. */
 export async function canonicalPath(path: string): Promise<string> {
     return await realpath(path);
 }
@@ -58,19 +56,16 @@ export async function listDirectory(path: string): Promise<readonly LocalDirecto
     return entries.map((entry) => ({ kind: entryKind(entry), name: entry.name }));
 }
 
-/** Creates the directory and its missing parents with owner-only permissions. */
 export async function ensurePrivateDirectory(path: string): Promise<void> {
     await mkdir(path, { mode: 0o700, recursive: true });
 }
 
-/** Creates the directory when it is missing, then returns its canonical path, or null when it is not a directory. */
 export async function ensureCanonicalDirectory(path: string): Promise<string | null> {
     await ensurePrivateDirectory(path);
     const resolved = await realpath(path);
     return (await stat(resolved)).isDirectory() ? resolved : null;
 }
 
-/** The first `byteLength` bytes of a file, zero-filled when the file is shorter. */
 export async function readFileStart(path: string, byteLength: number): Promise<Uint8Array> {
     const bytes = new Uint8Array(byteLength);
     const handle = await open(path, "r");

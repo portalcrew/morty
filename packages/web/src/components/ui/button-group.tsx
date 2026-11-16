@@ -8,15 +8,14 @@ import { cn } from "@/lib/utils";
  * with buttons of the same `size`.
  */
 const buttonGroupGapClassName = {
-    default: "gap-2.5", // 36px buttons → 10px
-    lg: "gap-3", // 40px buttons → 12px
-    sm: "gap-2", // 32px buttons → 8px
-    xs: "gap-1.5", // 28px buttons → 6px
+    default: "gap-2.5",
+    lg: "gap-3",
+    sm: "gap-2",
+    xs: "gap-1.5",
 } as const;
 
 export type ButtonGroupSize = keyof typeof buttonGroupGapClassName;
 
-/** Actions that share one gap for the whole group, stacked or in a row. */
 export function ButtonGroup({
     children,
     className = "",

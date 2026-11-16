@@ -48,9 +48,7 @@ function processExists(pid: number): boolean {
             if (state === "Z" || state === "X") {
                 return false;
             }
-        } catch {
-            // Fall through when procfs is unavailable or the process has already exited.
-        }
+        } catch {}
     }
     try {
         process.kill(pid, 0);
@@ -239,7 +237,6 @@ describe("ACP conversation sessions", () => {
                 if (active === undefined) {
                     throw new Error("Expected the active conversation to remain stored");
                 }
-                // The Agent restates its older modification time; the prompt the Computer just ran is the latest change.
                 expect(active.updatedAt).toBe("2026-10-14T12:00:00.000Z");
             } finally {
                 await reopenedManager.close();

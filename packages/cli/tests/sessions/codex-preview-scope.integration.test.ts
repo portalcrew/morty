@@ -90,7 +90,6 @@ test("Given many saved Codex threads, When the user browses beyond retained prev
     expect(recent.nextCursor).not.toBeNull();
     for (let index = 2; index < 40; index += 1) {
         await fixture.read("scoped", `thread-${index}`);
-        // Reading a page keeps this still-visible conversation recently used.
         expect(messages(await fixture.read("scoped", "thread-1", recent.nextCursor))).toEqual(["scoped:thread-1:1"]);
     }
     await expect(fixture.read("scoped", "thread-0", oldest.nextCursor)).rejects.toMatchObject({

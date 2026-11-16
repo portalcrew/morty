@@ -13,13 +13,9 @@ import type { RealDaemonPeer } from "../support/agents/real-daemon.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeAnthropicProvider } from "../support/llm/anthropic.ts";
 
-/** The main-thread prompt that asks for a subagent dispatch. */
 const DISPATCH_PROMPT = "Delegate the verification to a helper agent and then summarize";
-/** The prompt handed to the spawned subagent. */
 const INNER_PROMPT = "Use a shell tool successfully, then reply with your findings";
-/** The subagent's final report text. */
 const INNER_REPORT = "SUBAGENT_REPORT: shell verified";
-/** The fixture's answer prefix, used to count assistant deliveries. */
 const ANSWER_PREFIX = "CLAUDE_SUBAGENT_DONE";
 
 test("Given Claude Code dispatches a subagent that runs tools, When the turn streams through the daemon, Then only the Agent dispatch call surfaces", async ({
@@ -72,16 +68,10 @@ interface ObservedToolCall {
 
 interface ObservedTurn {
     readonly toolCalls: readonly ObservedToolCall[];
-    /** All assistant text concatenated across the turn, used to count full
-     *  answer deliveries regardless of how the provider chunked them. */
     readonly agentText: string;
     readonly completion: { stopReason: string } | undefined;
 }
 
-/** Drains the session event stream until the prompt settles, recording the
- *  latest surfaced tool call presentation (a tool_call and its refinements are
- *  one logical call), the assistant text, and the turn outcome — answering
- *  every permission request with its one-time allowance. */
 async function observeTurn(peer: RealDaemonPeer, commandId: string): Promise<ObservedTurn> {
     const titles = new Map<string, string>();
     const rawInputs = new Map<string, unknown>();

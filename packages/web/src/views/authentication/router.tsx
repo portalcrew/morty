@@ -16,8 +16,6 @@ function ContinuePageLive({
     readonly application: MortyApplication;
     readonly continuation: ContinueStoreApi;
 }) {
-    // The application creates the redeem with itself; the page only
-    // subscribes.
     const { retry, enterMorty, state, diagnostics } = useStore(continuation);
     return (
         <>

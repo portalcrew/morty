@@ -106,7 +106,6 @@ export const handleSessionRestore: CommandHandler<typeof SESSION_RESTORE_KIND> =
             await resolveHeldSession(sessions, resolveAgent, directories, entry.target, signal),
             { kind: "history-required" },
         );
-        // The restored Session is named once, by the reply's target.
         const { target: _entryTarget, ...record } = entry;
         const { kind: _kind, requestId: _requestId, target: _readyTarget, ...body } = ready;
         send(
@@ -244,7 +243,6 @@ async function executeSessionCreate(context: CommandContext, command: SessionCre
                 input,
                 signal,
                 async (shared) => {
-                    // A Session being created starts with exactly the settings it states, by the rule a Turn's settings use.
                     const created = await context.sessions.createSession(
                         { ...agent, cwd: resolved.cwd, signal: shared },
                         async ({ target, prepared }, creationSignal) =>
@@ -261,7 +259,6 @@ async function executeSessionCreate(context: CommandContext, command: SessionCre
                                 creationSignal,
                             ),
                     );
-                    // A created Session reports the directory its creation named.
                     return sessionReady(command.requestId, created.target, created.prepared, {
                         directory: command.directory,
                         directoryLabel: resolved.directoryLabel,

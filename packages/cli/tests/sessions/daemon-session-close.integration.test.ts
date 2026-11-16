@@ -105,12 +105,10 @@ class ControlledCloseAgentSpecification extends ControlledReadinessSpecification
     readonly releaseClose = (): void => this.#closeGate.resolve();
 }
 
-/** An Agent whose teardown fails once the Computer holds its Session. */
 class FailingCloseAgentSpecification extends ControlledCloseAgentSpecification {
     #createdEndpoints = 0;
     override readonly createEndpoint = (): ControlledAcpPeer => {
         this.#createdEndpoints += 1;
-        // The first endpoint probes the Agent; the next holds the Computer's Session.
         return new ControlledCloseEndpoint(
             Promise.resolve(),
             null,

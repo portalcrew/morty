@@ -20,7 +20,6 @@ import { RelayConnectionLiveness } from "./liveness.ts";
 import { relayCredentialHeaders } from "./relay-authentication.ts";
 import type { RuntimeSessionEventPublisher } from "./session-event-publisher.ts";
 
-/** A bounded local write of the credential the Relay accepted. */
 const CREDENTIAL_SAVE_TIMEOUT_MILLISECONDS = 10_000;
 const MAX_QUEUED_INCOMING_BYTES = 32 * 1024 * 1024;
 const MAX_QUEUED_INCOMING_MESSAGES = 1024;
@@ -360,7 +359,6 @@ export async function runRelayConnection({
         await incoming;
         await Promise.allSettled([...pendingCommands]);
         await commands.settle();
-        // The next connection presents what this one saved.
         await rotationSaved.catch(() => undefined);
         relay.release(new Error("Relay connection released"));
     }

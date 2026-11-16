@@ -2,7 +2,6 @@ import type { ClientConnection } from "@agentclientprotocol/sdk/unstable";
 import type { AgentTermination, PromptDelegationStage } from "../../../src/engine/acp/agent/agent-lifecycle.ts";
 import type { AcpClientHandler } from "../acp/create-client.ts";
 
-/** Adapter-owned runtime and transport for one ACP client. */
 export interface AgentConnection {
     readonly connection: ClientConnection;
     readonly termination: Promise<AgentTermination>;

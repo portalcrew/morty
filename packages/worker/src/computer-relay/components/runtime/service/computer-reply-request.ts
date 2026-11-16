@@ -14,7 +14,6 @@ export interface ComputerReplyConnection {
     readonly send: (message: string | ArrayBuffer | ArrayBufferView) => void;
     /** Asks the Computer to stop an in-flight request; a closed request has nothing to stop. */
     readonly cancel: () => void;
-    /** Allows the Computer to send one more chunk of a file read. */
     readonly creditFile: () => void;
     readonly close: (code?: number, reason?: string) => void;
     readonly addEventListener: EventTarget["addEventListener"];

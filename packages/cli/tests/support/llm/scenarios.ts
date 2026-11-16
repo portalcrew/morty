@@ -36,7 +36,6 @@ const promptScenarios: readonly (readonly [string, FakeProviderScenario])[] = [
     [fakeProviderPrompts.twoTools, { command: "pwd", streamed: false, toolCalls: 2 }],
 ];
 
-/** A test's own tool prompt runs the provider's configured tool action once. */
 const toolPromptScenario: FakeProviderScenario = { command: "pwd", streamed: false, toolCalls: 1 };
 
 const textScenario: FakeProviderScenario = { command: "pwd", streamed: false, toolCalls: 0 };
@@ -68,8 +67,6 @@ function isToolResult(part: unknown): boolean {
     return isObject(part) && (part["type"] === "tool_result" || isObject(part["functionResponse"]));
 }
 
-/** The text a user message carries besides tool results. Claude Code sends the
- *  next prompt in the same message as the previous turn's last tool result. */
 function userText(message: JsonObject): string {
     for (const key of ["content", "parts"] as const) {
         const value = message[key];
@@ -167,8 +164,6 @@ export function countMatchingObjects(value: unknown, predicate: (object: JsonObj
     return count;
 }
 
-/** Selects the subagent-dispatch tool the real Agent advertised (the subagent
- *  spawner is named "Task" or "Agent" depending on the CLI version). */
 export function selectSubagentDispatchTool(
     tools: readonly { readonly name: string }[],
 ): { readonly name: string } | undefined {

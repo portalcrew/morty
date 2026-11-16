@@ -59,7 +59,6 @@ const notFound = (): Response =>
         { status: 404 },
     );
 
-/** Session commands belong only to the WebSocket application's route tree. */
 export function createSessionWebSocketRoutes(ctx: {
     readonly ownsComputer: (computerId: string) => boolean;
     readonly services: { readonly forComputer: (computerId: string) => SessionWebSocketServices };

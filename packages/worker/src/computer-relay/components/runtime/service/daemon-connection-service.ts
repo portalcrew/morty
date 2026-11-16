@@ -8,12 +8,10 @@ export class DaemonConnectionService {
         this.#storage = storage;
     }
 
-    /** The current connection; null when the latest one closed or the generation it was admitted under ended. */
     readonly current = () => this.#storage.read();
 
     readonly latest = () => this.#storage.latest();
 
-    /** The identity of the next connection: every connection takes a later epoch than any before it. */
     readonly next = (computerId: string): ComputerConnectionIdentity => ({
         computerId,
         connectionEpoch: (this.#storage.latest()?.connectionEpoch ?? 0) + 1,

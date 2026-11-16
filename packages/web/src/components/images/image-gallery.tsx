@@ -38,7 +38,6 @@ export function ImageViewerProvider({ children }: { readonly children: ReactNode
     );
 }
 
-/** Each message or attachment group owns a gallery; nested Markdown shares it. */
 export function ImageGallery({ children }: { readonly children: ReactNode }) {
     const parent = useContext(GalleryContext);
     const open = useContext(ViewerContext);

@@ -231,14 +231,10 @@ export const turnStartResponseSchema = z.object({ turn: turnSchema });
 
 export const threadNameUpdatedSchema = z.object({ threadName: z.string().min(1) });
 
-// Plan steps are rendered leniently: each is shown by its `step` text when it has one.
 export const turnPlanUpdatedSchema = z.object({ plan: z.array(z.unknown()) });
 
-// The item an `item/started` or `item/completed` notification carries; `decodeThreadItem` validates it.
 export const itemNotificationSchema = z.object({ item: z.unknown() });
 
-// The thread a thread-scoped notification names. One app-server connection carries every thread
-// it has loaded, including the child threads Codex runs its subagents in.
 export const threadNotificationSchema = z.object({ threadId: boundedText(256).min(1) });
 
 export const turnNotificationSchema = z.object({

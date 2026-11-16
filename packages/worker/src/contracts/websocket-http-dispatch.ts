@@ -9,12 +9,10 @@ export type WebSocketHttpOperation =
       }
     | {
           readonly kind: "upload-admission";
-          /** The signal remains live until this upload completes, fails, times out, or disconnects. */
           readonly request: Request;
           readonly byteLength: number;
       };
 
-/** The application owns routing and admission; the transport owns frames and connection resources. */
 export type WebSocketHttpDispatch = (operation: WebSocketHttpOperation) => Promise<Response>;
 
 /** A dispatch rejection retains the existing http.error envelope instead of becoming an HTTP response. */

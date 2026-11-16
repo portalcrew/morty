@@ -46,7 +46,6 @@ const sessionPath = v.pipe(
     v.description("A Session operation path with its query string."),
 );
 
-/** Each frame a client sends or receives, named by its `kind`. */
 export const transportFrames = {
     httpRequest: {
         direction: "send",

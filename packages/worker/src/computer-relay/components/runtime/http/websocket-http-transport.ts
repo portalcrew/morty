@@ -292,7 +292,6 @@ function requestIdFromMessage(value: Readonly<Record<string, unknown>>): string 
     return requestId;
 }
 
-/** The Morty API path a frame names: under the API prefix, not the transport itself, and exactly as written. */
 function framePath(value: Readonly<Record<string, unknown>>, origin: string): URL {
     const path = string(value, "path", 8_192);
     if (!path.startsWith(`${MORTY_API_PREFIX}/`) || path.startsWith(`${MORTY_API_PREFIX}/v1/transport`)) {
@@ -305,7 +304,6 @@ function framePath(value: Readonly<Record<string, unknown>>, origin: string): UR
     return endpoint;
 }
 
-/** The Session a subscription frame addresses: `.../computers/{computer}/harnesses/{harness}/sessions/{session}/events`. */
 function subscriptionAddress(endpoint: URL): {
     readonly computerId: string;
     readonly harness: string;
@@ -536,7 +534,6 @@ export function acceptWebSocketHttpTransport({
                     } catch {
                         throw transportError("invalid_message");
                     }
-                    // The same checks an ordinary request gets, in the same order: the path, then the headers.
                     const endpoint = framePath(message, new URL(request.url).origin);
                     const frameHeaders = headers(message["headers"]);
                     const address = subscriptionAddress(endpoint);

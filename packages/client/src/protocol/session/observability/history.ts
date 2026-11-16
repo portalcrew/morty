@@ -32,7 +32,6 @@ const sessionHistoryPageLoadSchema = z
     .object({ ...pageRequestFields, kind: z.literal(SESSION_HISTORY_PAGE_LOAD_KIND) })
     .readonly();
 
-// The Agent's own history on disk, read from the directory the caller browses; the target names its Agent.
 const sessionPreviewHistoryPageLoadSchema = z
     .object({
         ...pageRequestFields,

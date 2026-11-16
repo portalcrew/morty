@@ -26,14 +26,11 @@ import { type NativeSessionStore, nativeSessionPresentation } from "../../view-m
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
 import { MortySessionMessage } from "./morty-session-message.tsx";
 
-/** Touch-sized on the phone sheet, back to the dialog's compact height and type from the sm breakpoint up. */
 const sheetControlHeightClassName = "min-h-11 max-sm:[font-size:15px] sm:min-h-9";
 
-/** The preview card; the phone sheet shows it as the second step of the drill-down, desktop always. */
 const nativeSessionPreviewCardClassName =
     "min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-white bg-card shadow-module";
 
-/** Desktop insets for the in-card title bar; the phone sheet renders its header above the card. */
 const nativeSessionPreviewTitleBarClassName =
     "flex min-h-11 min-w-0 shrink-0 items-center font-inter text-14 font-semibold tracking-[-0.015em] sm:mt-[11px] sm:h-9 sm:min-h-9 sm:pr-[59px] sm:pl-6";
 
@@ -46,7 +43,6 @@ function NativeSessionDirectoryDiscovering() {
     );
 }
 
-/** Stands in for saved sessions using the same row boxes the real lists occupy. */
 const SESSION_ROW_SKELETON_WIDTHS = ["w-3/4", "w-2/3", "w-4/5", "w-1/2"] as const;
 
 function NativeSessionDirectoryListSkeleton() {
@@ -60,7 +56,6 @@ function NativeSessionDirectoryListSkeleton() {
                     </div>
                 ))}
             </div>
-            {/* Desktop rows: the same 36px height and 16px/12px gutters as the ready list. */}
             <div className="hidden pb-2 pr-3 sm:block">
                 {SESSION_ROW_SKELETON_WIDTHS.map((width) => (
                     <div className="flex h-9 items-center pr-3 pl-4" key={width}>
@@ -212,17 +207,12 @@ export function NativeSessionDialog({
     bugReportDialog,
     daemonSource,
 }: {
-    /** Created by the owner when the dialog opens; it starts discovery itself. */
     readonly store: StoreApi<NativeSessionStore>;
     readonly sessions: readonly ManagedChatSession[];
-    /** The agent tabs, as the Computer configuration the page follows offers them. */
     readonly agents: readonly NativeSessionAgent[];
     readonly onClose: () => void;
-    /** The phone sheet drills into the previewed session's detail. */
     readonly onOpenDetail: () => void;
-    /** The phone sheet returns from the detail to the session list. */
     readonly onBack: () => void;
-    /** The phone sheet's drill-down step; desktop shows both steps at once. */
     readonly step: "list" | "detail";
     readonly bugReportDialog: BugReportDialogStore;
     readonly daemonSource: DaemonDiagnosticsSource;
@@ -259,7 +249,6 @@ export function NativeSessionDialog({
                                     step === "list" ? "flex" : "hidden sm:flex",
                                 )}
                             >
-                                {/* The sheet keeps the title in its own 20px gutter and lets the list use 8px, matching Recent sessions. */}
                                 <div className="max-sm:px-5">{title}</div>
                                 <section
                                     aria-label="Native sessions"

@@ -20,7 +20,6 @@ const evidenceDirectories = (await readdir(evidenceRoot, { withFileTypes: true }
     .sort((a, b) => Number(b.split("-").at(-1)) - Number(a.split("-").at(-1)))
     .map((directory) => join(evidenceRoot, directory));
 let evidence;
-// A single artifact is extracted directly; multiple artifacts retain their names.
 for (const directory of [evidenceRoot, ...evidenceDirectories]) {
     const files = await readdir(directory);
     if (files.includes("deployment-evidence.json")) {

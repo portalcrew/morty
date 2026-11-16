@@ -14,7 +14,6 @@ import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import type { ComputerBackendService } from "../../computer/service/computer-backend-service.ts";
 import type { ClientControlCommand } from "../../runtime/service/computer-control-registry.ts";
 
-/** Application use cases call the services in their own ComputerRelay, not an HTTP client or another Worker. */
 export class LocalComputerService {
     readonly #origin: unknown;
     readonly computer: ComputerBackendService;
@@ -110,7 +109,6 @@ export class LocalComputerService {
             },
             15_000,
         );
-    /** Sends a client's command to the Computer and returns its reply. */
     readonly clientControl = async <Command extends ClientControlCommand>(command: Command, signal: AbortSignal) =>
         await this.#run(signal, (computer, signal) => computer.clientControl(command, signal));
     readonly discoverChatAgentSettings = async (command: AgentSettingsDiscoverCommandRouting, signal: AbortSignal) =>

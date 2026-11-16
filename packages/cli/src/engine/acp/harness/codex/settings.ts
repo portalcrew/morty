@@ -5,7 +5,6 @@ import type { CodexAppServerClient } from "./app-server-client.ts";
 import { type CodexModel, modelListResponseSchema } from "./app-server-protocol.ts";
 
 const APPROVAL_TIMEOUT_MILLISECONDS = 3_600_000;
-// Public ACP configuration identifiers.
 const MODEL_SETTING_ID = "model";
 const REASONING_EFFORT_SETTING_ID = "reasoning_effort";
 const MODE_SETTING_ID = "mode";
@@ -34,7 +33,6 @@ const WORKSPACE_WRITE_POLICY: Readonly<Record<string, unknown>> = Object.freeze(
     writableRoots: [],
 });
 
-/** Each approval preset carries its complete sandbox and approval policy. */
 const READ_ONLY_MODE: AgentMode = Object.freeze({
     approvalPolicy: "on-request",
     approvalsReviewer: "user",
@@ -67,11 +65,6 @@ function capitalize(value: string): string {
     return value.length === 0 ? value : value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-/**
- * The model and reasoning effort this session runs with. Codex reports the pair it resolved from its
- * own configuration on `thread/start`; a `session/set_config_option` replaces either half. Both are
- * sent on `turn/start`, which is how Codex applies them to the turn being started.
- */
 interface SessionSelection {
     readonly collaborationMode: string;
     readonly effort: string;
@@ -158,7 +151,6 @@ function modeSetting(currentValue: string): SessionConfigOption {
     };
 }
 
-/** Build and Plan choices for subsequent turns. */
 const COLLABORATION_MODES: readonly ConfigValue[] = Object.freeze([
     { description: "Codex answers and makes changes directly", name: "Build", value: "default" },
     { description: "Codex plans before making changes", name: "Plan", value: "plan" },
@@ -179,7 +171,6 @@ function collaborationModeSetting(currentValue: string): SessionConfigOption {
     };
 }
 
-/** Offer fast mode only for models that advertise a speed tier. */
 function fastModeSetting(model: CodexModel | undefined, enabled: boolean): SessionConfigOption | null {
     if (model?.additionalSpeedTiers?.includes(FAST_TIER) !== true) {
         return null;
@@ -337,7 +328,6 @@ export class CodexSettings {
         }
     };
 
-    /** The ACP settings Morty discovers and renders in Run settings. */
     readonly configOptions = (): SessionConfigOption[] => {
         const options: SessionConfigOption[] = [];
         const model = modelSetting(this.#models, this.#selection.model);
@@ -460,7 +450,6 @@ export class CodexSettings {
             const effort = supported.includes(this.#selection.effort)
                 ? this.#selection.effort
                 : (model.defaultReasoningEffort ?? supported[0] ?? "");
-            // Fast mode follows the model: a model with no speed tier drops a fast mode that was on.
             this.#selection = {
                 ...this.#selection,
                 effort,

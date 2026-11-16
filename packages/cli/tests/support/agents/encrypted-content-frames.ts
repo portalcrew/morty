@@ -1,7 +1,6 @@
 import type { PayloadDecryptor, PayloadEncryptor } from "@portalcrew/morty-client";
 import { contentChunkCodec, decodeContentChunkFrame, encodeContentChunkFrame } from "@portalcrew/morty-client/protocol";
 
-/** Translates file-transfer frames at the test peer's plaintext protocol boundary. */
 export function encryptedContentFrames(encryption: PayloadEncryptor & PayloadDecryptor, signal: AbortSignal) {
     return {
         encode: async (frame: Uint8Array): Promise<Uint8Array> =>

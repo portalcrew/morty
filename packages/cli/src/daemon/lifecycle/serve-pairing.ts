@@ -15,7 +15,6 @@ export class ComputerPairingRevokedError extends Error {
     }
 }
 
-/** Has a daemon serve the installation's current pairing, starting one when none runs. A revoked pairing is refused. */
 export async function serveCurrentPairing(
     installation: RuntimeInstallationStore,
     entry: string,
@@ -30,7 +29,6 @@ export async function serveCurrentPairing(
     return daemon;
 }
 
-/** Redeems a pairing the browser offered this computer, saves its connection, and has the daemon serve it. */
 export async function pairThisComputer(
     installation: RuntimeInstallationStore,
     pairing: MortyComputerPairingOptions,

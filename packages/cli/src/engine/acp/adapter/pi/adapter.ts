@@ -29,13 +29,11 @@ import { createPiCatalogClient, createPiClient } from "./create-client.ts";
 
 const START_TIMEOUT_MILLISECONDS = 60_000;
 
-/** The fields of Pi's new/fork/resume/load responses that describe the opened session. */
 interface PiSessionResponse {
     readonly configOptions?: unknown;
     readonly modes?: unknown;
 }
 
-/** Live Pi operations call the Pi harness directly; each native session owns one Pi client. */
 export class PiAdapter implements Adapter {
     readonly #dependencies: AdapterDependencies;
     readonly #sessions = new Map<SessionId, HarnessSession<PiAcpAgent>>();
@@ -269,7 +267,6 @@ export class PiAdapter implements Adapter {
         }
     };
 
-    /** A cancelled caller stops waiting; the session and its native configuration stay intact. */
     readonly configureSession: Adapter["configureSession"] = async (params) => {
         const session = this.#session(params);
         const { sessionId, agent } = session;

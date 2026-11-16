@@ -13,12 +13,10 @@ export function InlineEditFocus({
     editorClassName,
     label,
 }: {
-    /** Renders the control; the ref goes on the element that opens the editor. */
     readonly control: (ref: (node: HTMLElement | null) => void) => ReactNode;
     readonly editing: boolean;
     readonly editor: ReactNode;
     readonly editorClassName: string;
-    /** Names the editor group for assistive technology. */
     readonly label: string;
 }) {
     const returnFocus = useRef(false);

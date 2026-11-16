@@ -9,17 +9,14 @@ import { cn } from "../../lib/utils.ts";
 import { type AccessExpiryStore, visibleAccessNotice } from "../../view-models/chat/access-expiry-store.ts";
 import { formatMoment } from "../../view-models/chat/access-presentation.ts";
 
-/** Matches the conversation pane card: light fill, white border, module shadow. */
 const accessNoticeCardClassName =
     "pointer-events-auto relative mt-0 mb-0 w-full min-w-0 max-h-[200px] max-w-full shrink-0 text-12 text-foreground [overflow-wrap:anywhere]";
 /** Shadow sits outside the scroller so the module glow is not clipped at 200px. */
 const accessNoticeCardShadowClassName = "pointer-events-none absolute inset-0 rounded-[20px] shadow-module";
 const accessNoticeCardScrollClassName =
     "relative h-full max-h-[200px] min-h-0 rounded-[20px] border border-white bg-card/90";
-/** Title and actions stay put. Only the body, such as the new-device list, scrolls inside the card. */
 const accessNoticeCardBodyClassName =
     "pointer-events-auto relative mt-0 mb-0 flex w-full min-w-0 max-h-[200px] max-w-full shrink-0 flex-col rounded-[20px] border border-white bg-card/90 px-3 py-3 text-12 text-foreground [overflow-wrap:anywhere]";
-/** Icon lines up with the vertical center of the title's first line (text-13), not a multi-line block. */
 const accessNoticeTitleRowClassName = "flex items-start gap-2";
 const accessNoticeTitleIconClassName = "mt-[3px] size-3.5 shrink-0";
 const accessNoticeIconSpacerClassName = "size-3.5 shrink-0";
@@ -28,7 +25,6 @@ const accessNoticeTitleClassName = "text-13 font-semibold leading-5 max-sm:trunc
 const accessNoticeDetailClassName = "[font-size:var(--text-12)] leading-4 text-muted-foreground max-sm:hidden";
 export const sidebarAccessNoticeActionClassName = "max-w-full whitespace-normal";
 const accessNoticeActionsClassName = "flex flex-wrap items-center gap-1.5 pt-2 pb-1 max-sm:pt-1 max-sm:pb-0";
-/** Menu surface is bg-background (#fafafb); fill sits between that and user-message-surface (#e6e8eb). */
 const accessTermMenuCardClassName = "flex items-start gap-2 rounded-[16px] bg-[#f1f2f3] px-3 py-2.5";
 /** The menu card is already gray, so its placeholders are darker than ones drawn on white. */
 const accessTermMenuSkeletonBarClassName = "animate-pulse rounded-full bg-foreground/15 motion-reduce:animate-none";
@@ -194,7 +190,6 @@ export function AccessNotice({
     store,
 }: {
     readonly computerName: string;
-    /** Opens the devices with access. */
     readonly onOpenDevices: () => void;
     readonly store: StoreApi<AccessExpiryStore>;
 }) {

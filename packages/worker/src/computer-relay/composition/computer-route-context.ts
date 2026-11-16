@@ -3,11 +3,9 @@ import type { SessionWebSocketServices } from "../components/runtime/websocket/s
 import type { ComputerServices } from "./computer-services.ts";
 import type { RelayContext } from "./relay-services.ts";
 
-/** The owning DO composes this context once for its HTTP route groups. */
 export interface ComputerRouteContext {
     readonly bindings: ConfiguredRelayBindings;
     readonly ownsComputer: (computerId: string) => boolean;
-    /** Whether the object holds a computer: before it does, only the computer's creation is answered. */
     readonly holdsComputer: () => boolean;
     readonly services: {
         readonly browser: ComputerServices;

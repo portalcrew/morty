@@ -71,7 +71,6 @@ export class AcpExecutionConnections {
         return session;
     };
 
-    /** Resource scope only: the concrete adapter supplies the protocol operation. */
     readonly withConnection = async <T>(
         params: AdapterSessionCreateParams,
         operation: (session: AcpExecutionConnection, signal: AbortSignal) => Promise<T>,
@@ -308,7 +307,6 @@ export class AcpExecutionConnections {
         }
     };
 
-    /** Asks the harness that owns the native history for its latest conversation entry. */
     readonly readNativeHistoryRevision: Adapter["readNativeHistoryRevision"] = async ({ signal, ...target }) => {
         signal.throwIfAborted();
         const { connection } = this.#resolve(target);

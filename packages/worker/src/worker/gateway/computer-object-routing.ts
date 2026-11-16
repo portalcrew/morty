@@ -4,7 +4,6 @@ import { computerObjectName, decodeComputerPlacement } from "../../contracts/com
 import { ComputerManagementError } from "../../contracts/computer-management.ts";
 import { logger } from "../../infra/logger.ts";
 
-/** HTTP requests and WebSocket upgrades use the same computer forwarding boundary. */
 export async function forwardToComputer(
     request: Request,
     bindings: CloudBindings,

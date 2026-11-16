@@ -26,7 +26,6 @@ function selection() {
     if (newest !== revision) {
         return { release: false, reason: `main advanced to ${newest}, whose release ships this commit` };
     }
-    // The latest GitHub Release identifies the source production completed releasing.
     if (JSON.parse(gh("api", `repos/${repository}/releases?per_page=1`)).length === 0) {
         return { release: true, reason: "nothing has been released yet" };
     }

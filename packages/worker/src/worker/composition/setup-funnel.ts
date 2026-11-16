@@ -3,10 +3,8 @@ import type { CloudBindings } from "../../contracts/cloud-bindings.ts";
 
 type WorkerFetch = (request: Request, bindings: CloudBindings, context?: ExecutionContext) => Promise<Response>;
 
-/** Who made a setup request: a person's browser, or the Agent and the Morty CLI it runs. */
 type SetupClient = "browser" | "agent";
 
-/** The setup steps a new user passes, from fetching the instructions to opening Morty through the returned link. */
 const funnelSteps = [
     { event: "setup_instructions_served", method: "GET", path: /^\/doc\/setup\.md$/u },
     { event: "identity_created", method: "POST", path: /^\/morty\/api\/computers$/u },

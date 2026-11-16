@@ -14,7 +14,6 @@ type Selection =
       }
     | { readonly kind: "selected"; readonly sessionId: string };
 
-/** Buffers controlled ACP peers until their new/load response selects a session. */
 export class ControlledSessionUpdates {
     #selection: Selection = { kind: "awaiting-session", notifications: [], bytes: 0 };
     readonly #updates: AgentUpdateStream;

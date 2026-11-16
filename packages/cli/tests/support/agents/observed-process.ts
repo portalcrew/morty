@@ -3,7 +3,6 @@ import { writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { executableLaunch } from "../../../src/engine/util/process/executable.ts";
 
-/** Observe an actual Agent's process lifetime while forwarding its protocol unchanged. */
 export async function writeObservedAgentLauncher(
     executable: string,
     launcher: string,
@@ -32,7 +31,6 @@ child.once("exit", code => {
     );
 }
 
-/** File events observe process exit; the caller's signal (the test's) ends a broken scenario. */
 export async function waitForAgentFile(path: string, present: boolean, signal: AbortSignal): Promise<void> {
     if (existsSync(path) === present) {
         return;

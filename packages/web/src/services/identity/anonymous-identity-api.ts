@@ -33,20 +33,16 @@ export function transferCodeComputer(code: string): string | null {
     return parts.length === 3 && parts[0] === "morty_transfer_v1" ? (parts[1] ?? null) : null;
 }
 
-/** Stored key name of the anonymous credential map, shared with browser tests. */
 export const ANONYMOUS_CREDENTIAL_KEY_NAME = browserAccessEntry.key;
 
 const anonymousSessionSchema = v.pipe(v.object({ computerId: computerIdSchema }), v.readonly());
 const accessTermSchema = v.object({ accessExpiresAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())) });
-/** How long the device a link adds keeps access; the options this page offers; the Worker decides which it accepts. */
 export const deviceAccessDurations = ["1h", "1d", "7d", "30d"] as const;
 export type DeviceAccessDuration = (typeof deviceAccessDurations)[number];
 const transferSchema = v.pipe(
     v.object({
-        // The link opens until `expiresAt`; the device it adds keeps access until `accessExpiresAt`.
         expiresAt: v.pipe(v.string(), v.isoTimestamp()),
         accessExpiresAt: v.pipe(v.string(), v.isoTimestamp()),
-        /** The duration the Worker applied, its default unless one was chosen. */
         accessDuration: v.picklist(deviceAccessDurations),
         /** Whether the sharer's own access ends first, and so ends the added device's access earlier than chosen. */
         accessLimitedBySharer: v.boolean(),
@@ -63,7 +59,6 @@ const linkedDeviceSchema = v.pipe(
         id: v.string(),
         joinedAt: v.pipe(v.string(), v.isoTimestamp()),
         label: v.nullable(v.string()),
-        /** Roughly where it joined from, as Cloudflare located it; null when location is unavailable. */
         location: v.nullable(
             v.object({
                 city: v.nullable(v.string()),
@@ -82,23 +77,15 @@ const otherBrowserAccessEndedSchema = v.object({ status: v.literal("other_browse
 const credentialRevocationPathSchema = v.picklist(["/identity/local-credential", "/identity/browser-access"]);
 export type AnonymousIdentity = v.InferOutput<typeof identitySchema>;
 export type IdentityTransfer = v.InferOutput<typeof transferSchema>;
-/** What a new link grants, and the unopened link from this page it replaces. */
 export interface SharingTerms {
     /** The same operation is retained until its outcome is known. */
     readonly operationId: string;
-    /** The chosen duration, or null for the Worker's default. */
     readonly accessDuration: DeviceAccessDuration | null;
-    /** The code of a link this page shared that no one opened yet; it stops working. */
     readonly replaces: string | null;
 }
 
-/**
- * What checking access this browser stores found. Access that no longer opens its computer is forgotten either way;
- * `revoked` is the Worker reporting that the access was ended, `gone` is any other access that stopped opening it.
- */
 export type AccessCheck = { readonly kind: "open"; readonly identity: AnonymousIdentity } | LostAccess;
 
-/** An access check that found the access no longer opens its computer. */
 export type LostAccess = { readonly kind: "revoked" } | { readonly kind: "gone" };
 
 /** The reason the Worker gives, beside UNAUTHENTICATED, for a credential whose access was ended. */
@@ -173,7 +160,6 @@ export class AnonymousIdentityApi {
         }
     };
 
-    /** Whether the access still opens its computer. */
     readonly #checkAccess = async (identity: AnonymousIdentity, signal: AbortSignal): Promise<AccessCheck> => {
         const session = await this.#anonymousSession(identity, signal);
         signal.throwIfAborted();
@@ -237,10 +223,6 @@ export class AnonymousIdentityApi {
             ),
         );
 
-    /**
-     * Opens a link in this browser. A browser keeps one access per Computer: the access it already holds for the link's
-     * Computer is replaced by the new one, which also takes over the links it came from.
-     */
     readonly redeemTransfer = async (code: string, signal: AbortSignal): Promise<AnonymousIdentity> =>
         await withStoredAccessLock(signal, (access) => this.#redeemTransfer(code, signal, access));
 
@@ -274,7 +256,6 @@ export class AnonymousIdentityApi {
         return identity;
     };
 
-    /** Resolves once the devices holding this access through a link differ from the list this client last read. */
     readonly waitForLinkedDevicesChange = async (
         token: string,
         waitForChange: ApiTransport["waitForChange"],
@@ -297,7 +278,6 @@ export class AnonymousIdentityApi {
             ),
         ).accessExpiresAt;
 
-    /** The other devices that hold this access through a link now. */
     readonly linkedDevices = async (token: string, signal: AbortSignal): Promise<readonly LinkedDevice[]> =>
         v.parse(
             linkedDevicesSchema,
@@ -323,7 +303,6 @@ export class AnonymousIdentityApi {
         );
     };
 
-    /** Ends one other device's access and closes the chat windows open with it; repeating it after a failure is safe. */
     readonly endDeviceAccess = async (token: string, deviceId: string, signal: AbortSignal): Promise<void> => {
         v.parse(
             deviceAccessEndedSchema,
@@ -347,7 +326,6 @@ export class AnonymousIdentityApi {
             signal,
         );
         await session.body?.cancel();
-        // The Worker names the deletion that ends this credential's kind.
         const path = v.parse(credentialRevocationPathSchema, session.headers.get("Morty-Credential-Revocation"));
         const request =
             path === "/identity/local-credential"
@@ -450,7 +428,6 @@ export class AnonymousIdentityApi {
 export class IdentityApiError extends Error {
     readonly code: string;
     readonly status: number | null;
-    /** The finer cause the Worker names beside `code`, when it names one. */
     readonly reason: string | null;
     constructor(code: string, message: string, status: number | null = null, reason: string | null = null) {
         super(message);

@@ -135,7 +135,6 @@ function builtinAvailableCommands(): AvailableCommand[] {
 }
 
 function mergeCommands(a: AvailableCommand[], b: AvailableCommand[]): AvailableCommand[] {
-    // Preserve order, de-dupe by name (first wins).
     const out: AvailableCommand[] = [];
     const seen = new Set<string>();
 
@@ -180,7 +179,6 @@ export class PiAcpAgent {
         return await getSessionConfiguration(this.sessions.get(sessionId).proc);
     }
 
-    // Remember recent session cwd and use it as the default filter.
     private lastSessionCwd: string | null = null;
 
     constructor(
@@ -306,7 +304,6 @@ export class PiAcpAgent {
     }
 
     async initialize(params: InitializeRequest): Promise<InitializeResponse> {
-        // We currently only support ACP protocol version 1.
         const supportedVersion = 1;
         const requested = params.protocolVersion;
 
@@ -503,9 +500,7 @@ export class PiAcpAgent {
                         },
                     });
                     return;
-                } catch {
-                    // Fall back to file-based prompt templates (legacy behavior).
-                }
+                } catch {}
 
                 await this.conn.sessionUpdate({
                     sessionId: session.sessionId,
@@ -665,7 +660,6 @@ export class PiAcpAgent {
                     }
                 }
 
-                // Fallback if stats shape changes.
                 const text = lines.length ? lines.join("\n") : `Session stats:\n${JSON.stringify(stats, null, 2)}`;
 
                 await this.conn.sessionUpdate({
@@ -735,7 +729,6 @@ export class PiAcpAgent {
                 const state = (await session.proc.getState()) as any;
                 const current = String(state?.steeringMode ?? "");
 
-                // If no arg, just report current.
                 if (!modeRaw) {
                     await this.conn.sessionUpdate({
                         sessionId: session.sessionId,
@@ -782,7 +775,6 @@ export class PiAcpAgent {
                 const state = (await session.proc.getState()) as any;
                 const current = String(state?.followUpMode ?? "");
 
-                // If no arg, just report current.
                 if (!modeRaw) {
                     await this.conn.sessionUpdate({
                         sessionId: session.sessionId,
@@ -825,10 +817,7 @@ export class PiAcpAgent {
             }
 
             if (cmd === "changelog") {
-                // Read pi's installed CHANGELOG.md. Adapter-side, no model call.
                 const findChangelog = (): string | null => {
-                    // 1) Locate the installed pi package by resolving the `pi` executable.
-                    // On Node installs, `pi` typically resolves to .../@earendil-works/pi-coding-agent/dist/cli.js
                     try {
                         const whichCmd = process.platform === "win32" ? "where" : "which";
                         const which = spawnSync(whichCmd, ["pi"], { encoding: "utf-8" });
@@ -844,11 +833,8 @@ export class PiAcpAgent {
                                 return p;
                             }
                         }
-                    } catch {
-                        // ignore
-                    }
+                    } catch {}
 
-                    // 2) Fallback: ask npm where global modules live.
                     try {
                         const npmRoot = spawnSync("npm", ["root", "-g"], { encoding: "utf-8" });
                         const root = String(npmRoot.stdout ?? "").trim();
@@ -858,9 +844,7 @@ export class PiAcpAgent {
                                 return p;
                             }
                         }
-                    } catch {
-                        // ignore
-                    }
+                    } catch {}
 
                     return null;
                 };
@@ -1037,7 +1021,6 @@ export class PiAcpAgent {
                 }
 
                 if (enabled === null) {
-                    // toggle: read current state and invert.
                     const state = (await session.proc.getState()) as any;
                     const current = Boolean(state?.autoCompactionEnabled);
                     enabled = !current;
@@ -1129,8 +1112,6 @@ export class PiAcpAgent {
         const effectiveCwd = (params as any).cwd ?? this.lastSessionCwd;
         const filtered = effectiveCwd ? all.filter((s) => s.cwd === effectiveCwd) : all;
 
-        // Cursor-based pagination (opaque cursor). For MVP, we use a simple numeric offset.
-        // If cursor is invalid, treat as 0.
         const offset = params.cursor ? Number.parseInt(params.cursor, 10) : 0;
         const start = Number.isFinite(offset) && offset > 0 ? offset : 0;
 
@@ -1205,9 +1186,7 @@ export class PiAcpAgent {
                         },
                     });
                     return;
-                } catch {
-                    // Fall back to file-based prompt templates.
-                }
+                } catch {}
                 await this.conn.sessionUpdate({
                     sessionId: session.sessionId,
                     update: {
@@ -1285,9 +1264,7 @@ export class PiAcpAgent {
                         },
                     });
                     return;
-                } catch {
-                    // fall back
-                }
+                } catch {}
                 await this.conn.sessionUpdate({
                     sessionId: session.sessionId,
                     update: {
@@ -1431,7 +1408,6 @@ export class PiAcpAgent {
                     continue;
                 }
 
-                // Create a synthetic ACP tool call to render historic tool usage.
                 await this.conn.sessionUpdate({
                     sessionId: session.sessionId,
                     update: {
@@ -1495,9 +1471,7 @@ export class PiAcpAgent {
                         },
                     });
                     return;
-                } catch {
-                    // fall back
-                }
+                } catch {}
 
                 await this.conn.sessionUpdate({
                     sessionId: session.sessionId,
@@ -1532,9 +1506,7 @@ export class PiAcpAgent {
                 if (existsSync(sessionFile)) {
                     unlinkSync(sessionFile);
                 }
-            } catch {
-                // best-effort cleanup
-            }
+            } catch {}
         }
 
         this.store.delete(params.sessionId);
@@ -1712,7 +1684,6 @@ async function getModelState(
     availableModels: AdvertisedModel[];
     currentModelId: string;
 } | null> {
-    // Ask pi for available models.
     let availableModels: AdvertisedModel[] = [];
 
     const data =
@@ -1743,7 +1714,6 @@ async function getModelState(
         })
         .filter(Boolean) as AdvertisedModel[];
 
-    // Ask pi what model is currently active.
     let currentModelId: string | null = null;
 
     const state =
@@ -1769,7 +1739,6 @@ async function getModelState(
         return null;
     }
 
-    // Fallback if current model is unknown: use first in list.
     if (!currentModelId) {
         currentModelId = availableModels[0]?.modelId ?? "default";
     }
@@ -1803,9 +1772,6 @@ async function emitConfigOptionsUpdate(
 }
 
 async function setSessionModel(proc: PiRpcProcess, requestedModelId: string): Promise<void> {
-    // Accept either:
-    //  - "provider/model" (preferred, matches how we advertise)
-    //  - "model" (fallback, resolve via available models)
     let provider: string | null = null;
     let modelId: string | null = null;
 
@@ -1839,7 +1805,6 @@ function isSemver(v: string): boolean {
 }
 
 function compareSemver(a: string, b: string): number {
-    // Very small comparator for x.y.z (ignores pre-release/build beyond making them "not greater" unless base differs)
     const pa = a
         .split(/[.-]/)
         .slice(0, 3)
@@ -1906,7 +1871,6 @@ function buildStartupInfo(opts: {
 
     const md: string[] = [];
 
-    // pi version header
     try {
         const piVersion = spawnSync("pi", ["--version"], { encoding: "utf-8" });
         const installed = (String(piVersion.stdout ?? "").trim() || String(piVersion.stderr ?? "").trim()).replace(
@@ -1918,9 +1882,7 @@ function buildStartupInfo(opts: {
             md.push("---");
             md.push("");
         }
-    } catch {
-        // ignore
-    }
+    } catch {}
 
     const addSection = (title: string, items: string[]) => {
         const cleaned = items.map((s) => s.trim()).filter(Boolean);
@@ -1935,7 +1897,6 @@ function buildStartupInfo(opts: {
         md.push("");
     };
 
-    // Context
     const contextItems: string[] = [];
     const contextPath = join(opts.cwd, "AGENTS.md");
     if (existsSync(contextPath)) {
@@ -1943,12 +1904,10 @@ function buildStartupInfo(opts: {
     }
     addSection("Context", contextItems);
 
-    // Skills
     const skillsItems: string[] = [];
 
     const pushSkillFromRoot = (root: string) => {
         try {
-            // Direct .md files in root
             for (const e of readdirSync(root)) {
                 const p = join(root, e);
                 try {
@@ -1956,12 +1915,9 @@ function buildStartupInfo(opts: {
                     if (st.isFile() && e.toLowerCase().endsWith(".md")) {
                         skillsItems.push(p);
                     }
-                } catch {
-                    // ignore
-                }
+                } catch {}
             }
 
-            // Recursive SKILL.md under subdirectories
             const stack: string[] = [root];
             while (stack.length) {
                 const dir = stack.pop();
@@ -1976,7 +1932,6 @@ function buildStartupInfo(opts: {
                 }
 
                 for (const name of entries) {
-                    // Skip obvious noise
                     if (name === "node_modules" || name === ".git") {
                         continue;
                     }
@@ -1994,9 +1949,7 @@ function buildStartupInfo(opts: {
                     }
                 }
             }
-        } catch {
-            // ignore
-        }
+        } catch {}
     };
 
     // Global skills
@@ -2004,18 +1957,15 @@ function buildStartupInfo(opts: {
     const globalSkillsDir = join(getAgentDir(opts.environment), "skills");
     pushSkillFromRoot(globalSkillsDir);
 
-    // Also support ~/.agents/skills (pi skill discovery)
     const home = opts.environment["HOME"] ?? opts.environment["USERPROFILE"] ?? "";
     const legacyAgentsSkillsDir = join(home, ".agents", "skills");
     pushSkillFromRoot(legacyAgentsSkillsDir);
 
-    // Project skills (.pi/skills)
     const projectSkillsDir = join(opts.cwd, ".pi", "skills");
     pushSkillFromRoot(projectSkillsDir);
 
     addSection("Skills", skillsItems);
 
-    // Prompts
     const promptsItems: string[] = [];
     const promptsDir = join(home, ".pi", "agent", "prompts");
     try {
@@ -2023,12 +1973,9 @@ function buildStartupInfo(opts: {
         for (const f of prompts) {
             promptsItems.push(`/${basename(f, ".md")}`);
         }
-    } catch {
-        // ignore
-    }
+    } catch {}
     addSection("Prompts", promptsItems);
 
-    // Extensions
     const extItems: string[] = [];
     const extDir = join(home, ".pi", "agent", "extensions");
     try {
@@ -2036,11 +1983,8 @@ function buildStartupInfo(opts: {
         for (const f of exts) {
             extItems.push(join(extDir, f));
         }
-    } catch {
-        // ignore
-    }
+    } catch {}
 
-    // Also show npm packages from pi settings (global + project)
     const settingsPaths = [
         join(getAgentDir(opts.environment), "settings.json"),
         join(opts.cwd, ".pi", "settings.json"),
@@ -2057,9 +2001,7 @@ function buildStartupInfo(opts: {
                     extItems.push(s);
                 }
             }
-        } catch {
-            // ignore
-        }
+        } catch {}
     }
 
     addSection("Extensions", extItems);

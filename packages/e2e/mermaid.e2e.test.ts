@@ -66,7 +66,6 @@ test("Given a finished Mermaid diagram in a long reply, When I scroll the conver
         ],
     });
     await expect(response).toContainText("Follow-up note 30.");
-    // The diagram renders once it nears the viewport; its source disclosure is always present.
     await response.getByText("View diagram source", { exact: true }).scrollIntoViewIfNeeded();
     const diagram = response.getByRole("img", { name: "Mermaid chart", exact: true });
     await expect(diagram).toContainText("Send request");
@@ -114,7 +113,6 @@ test("Given a wide Mermaid diagram on a phone viewport, When I open it fullscree
     expect(labelBox?.height ?? 0).toBeGreaterThan(10);
     await page.screenshot({ path: testInfo.outputPath("mermaid-fullscreen-mobile.png"), fullPage: true });
 
-    // The unreadable part of the graph is reachable by panning.
     await page.mouse.move(195, 422);
     await page.mouse.down();
     await page.mouse.move(315, 422, { steps: 5 });

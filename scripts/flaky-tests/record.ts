@@ -3,18 +3,12 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// The flaky-test record is the contract between the test runners, which write it into a CI artifact, and the
-// tracker, which reads that artifact back from a run it does not trust.
-
 export interface FlakyTest {
-    /** Repository-relative path of the test file. */
     readonly file: string;
-    /** The test's titles from the outermost suite inward, which identify it within its file. */
     readonly name: string;
 }
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
-// CI names a repository-relative directory here and uploads it; a local run only prints.
 const RECORD_DIRECTORY = "MORTY_FLAKY_TESTS_DIR";
 
 const MAX_TESTS = 200;
@@ -53,7 +47,6 @@ function boundedText(value: unknown, maxLength: number): value is string {
     return typeof value === "string" && value.length > 0 && value.length <= maxLength && !CONTROL_CHARACTER.test(value);
 }
 
-/** Decodes a record read from an artifact; anything other than a well-formed record is rejected. */
 export function parseFlakyTestRecord(text: string): readonly FlakyTest[] {
     const value: unknown = JSON.parse(text);
     if (!isRecord(value) || !Array.isArray(value["tests"])) {

@@ -39,8 +39,6 @@ for (const moment of moments) {
         await app.waitForView(() => expect(app.optionalElementByTestId(dataTestId.sessionStatus)).toBeNull());
         await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
 
-        // The user goes back to the earlier conversation before the new conversation has connected and sent its
-        // first prompt.
         const prompt = "Start the new conversation";
         let switched = false;
         const observer = new MutationObserver(() => {
@@ -96,7 +94,6 @@ test("Given a first prompt whose conversation is still being created, When I sta
     await sendPrompt(app, composer, prompt);
     await app.waitForView(() => expect(restarted).toBe(true));
     observer.disconnect();
-    // The new draft gets the same text before the first conversation is created.
     const draft = await app.queryElementByTestId(
         dataTestId.messageComposer,
         (element) => element instanceof HTMLTextAreaElement && !element.disabled && element.value === "",

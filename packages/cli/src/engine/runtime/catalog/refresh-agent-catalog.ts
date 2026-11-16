@@ -17,7 +17,6 @@ export async function refreshAgentCatalog(config: RuntimeConfig, signal: AbortSi
     );
 }
 
-/** Discovers the local Agents a Runtime launches, with the workspace and environment it was configured with. */
 export async function discoverConfiguredAgents(config: RuntimeConfig, signal: AbortSignal) {
     return await discoverRuntimeAgentInventory(
         {

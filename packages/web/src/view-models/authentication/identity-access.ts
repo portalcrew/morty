@@ -11,16 +11,11 @@ import { createRemoteAccessOperations } from "../chat/remote-access-store.ts";
 export interface IdentityAccess {
     readonly createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>;
     readonly currentAccessToken: (signal: AbortSignal) => Promise<string>;
-    /** Ends the access this browser holds when it runs. */
     readonly endRemoteAccess: (signal: AbortSignal) => Promise<void>;
-    /** When this browser's access ends, or null when it does not end on its own. */
     readonly accessExpiresAt: (signal: AbortSignal) => Promise<string | null>;
     readonly linkedDevices: (signal: AbortSignal) => Promise<readonly LinkedDevice[]>;
-    /** Resolves once the linked devices differ from the list this page last read. */
     readonly waitForLinkedDevicesChange: (signal: AbortSignal) => Promise<void>;
-    /** Disconnects every other browser that joined through a link while this one keeps its access. */
     readonly endOtherBrowserAccess: (signal: AbortSignal) => Promise<void>;
-    /** Disconnects one other device; this browser and the computer keep their access. */
     readonly endDeviceAccess: (deviceId: string, signal: AbortSignal) => Promise<void>;
 }
 
@@ -46,7 +41,6 @@ export function createIdentityAccess(options: {
 }): IdentityAccess {
     const api = new AnonymousIdentityApi({ fetchRequest: options.fetchRequest, origin: options.origin });
     const remoteAccess = createRemoteAccessOperations({ ...options, onEnded: options.onAccessEnded });
-    /** A refusal of this browser's own access is reported to its owner before the caller sees it. */
     const withCurrentAccess = async <T>(signal: AbortSignal, operation: (token: string) => Promise<T>): Promise<T> => {
         try {
             return await operation(await remoteAccess.currentAccessToken(signal));

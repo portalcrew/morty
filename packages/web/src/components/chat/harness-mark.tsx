@@ -2,7 +2,6 @@ import { SquareTerminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dataTestId } from "../../data-testid.ts";
 
-/** Agent harness products with a distinct brand mark. */
 export type HarnessProduct = "claude" | "codex" | "pi" | "generic";
 
 // Brand marks are inlined rather than pulled from a package so that a harness

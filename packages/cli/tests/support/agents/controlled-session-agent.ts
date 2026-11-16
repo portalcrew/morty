@@ -18,13 +18,11 @@ export interface AgentOperation {
     readonly sessionId: string;
 }
 
-/** Keeps the requests that reach it in flight until a scenario releases them. */
 class RequestGate {
     #held: Promise<void> = Promise.resolve();
     #entered = Promise.withResolvers<void>();
     #release: () => void = () => undefined;
 
-    /** Blocks the requests that arrive from now on; `entered` settles once one of them is waiting. */
     readonly hold = (): { readonly entered: Promise<void>; readonly release: () => void } => {
         const held = Promise.withResolvers<void>();
         this.#entered = Promise.withResolvers<void>();
@@ -41,7 +39,6 @@ class RequestGate {
     };
 }
 
-/** One Agent process; records the Session requests it serves. */
 export class ControlledSessionEndpoint implements ControlledAcpPeer {
     readonly #agent: ControlledSessionAgent;
     readonly #app: AgentApp;
@@ -112,7 +109,6 @@ export class ControlledSessionAgent {
     readonly #endpoints: ControlledSessionEndpoint[] = [];
     #promptFailures = 0;
 
-    /** The next turn any of its processes runs fails. */
     readonly failNextPrompt = (): void => {
         this.#promptFailures += 1;
     };

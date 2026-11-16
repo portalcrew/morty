@@ -9,7 +9,6 @@ import { decodeAppServerMessage } from "./app-server-protocol.ts";
 const INITIALIZE_TIMEOUT_MILLISECONDS = 30_000;
 const MESSAGE_OUTPUT_LIMIT_BYTES = 32 * 1_024 * 1_024;
 
-/** A failure in the Codex app-server boundary, reported with a stable code. */
 export class CodexAppServerError extends AcpExecutionError {
     constructor(code: string, message: string, options: ErrorOptions = {}) {
         super(message, options, code);
@@ -40,10 +39,6 @@ export interface CodexAppServerOptions {
     readonly handlers: CodexAppServerHandlers;
 }
 
-/**
- * Owns one `codex app-server` child process and the newline-delimited JSON-RPC conversation over its
- * stdio. The app-server omits the `jsonrpc` field on the wire in both directions.
- */
 export class CodexAppServerClient {
     readonly #child: ChildProcess;
     readonly #handlers: CodexAppServerHandlers;
@@ -233,7 +228,6 @@ export class CodexAppServerClient {
         this.#runHandler(this.#handlers.onNotification(message.method, message.params));
     };
 
-    /** Sends a request and waits for its response, bounded by the caller's cancellation signal. */
     readonly request = async (method: string, params: unknown, signal: AbortSignal): Promise<unknown> => {
         signal.throwIfAborted();
         this.#requireOpen();
@@ -279,7 +273,6 @@ export class CodexAppServerClient {
         stdin.write(`${JSON.stringify(message)}\n`);
     };
 
-    /** Performs the `initialize` / `initialized` handshake. */
     readonly initialize = async (signal: AbortSignal): Promise<void> => {
         await this.request(
             "initialize",

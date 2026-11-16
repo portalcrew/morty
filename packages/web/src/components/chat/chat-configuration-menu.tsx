@@ -469,7 +469,6 @@ function SettingControl({
                     onOpen();
                     return;
                 }
-                // Keyboard activation uses the same focus-visible path as ArrowDown.
                 if (event.detail === 0) {
                     event.preventDefault();
                     openNestedMenu("keyboard");
@@ -588,7 +587,6 @@ export function ChatConfigurationMenu({
     settingsLoading = false,
 }: {
     readonly controls: readonly ChatConfigurationControl[];
-    /** One setting's value is being written back. Other fields stay as they are. */
     readonly loadingControlId?: string;
     readonly notice?: ReactNode;
     readonly settingsLoading?: boolean;
@@ -723,7 +721,6 @@ export function ChatConfigurationMenu({
                     <ArrowLeft aria-hidden="true" className={desktop ? "size-4" : "size-5"} />
                 </button>
             )}
-            {/* The phone sheet title comes from the shared component; the desktop popover keeps its inline label. */}
             {desktop ? (
                 <span className="min-w-0 flex-1 px-1 text-16 font-semibold">
                     {picker?.label ?? "Agent configuration"}

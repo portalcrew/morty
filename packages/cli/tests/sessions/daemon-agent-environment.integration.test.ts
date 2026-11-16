@@ -24,12 +24,9 @@ import { createEncryptedDaemonGateway, type EncryptedDaemonPeer } from "../suppo
 const recorderPath = fileURLToPath(new URL("./fixtures/acp-environment-recorder.ts", import.meta.url));
 
 async function nextMessageOfKind(socket: EncryptedDaemonPeer, kind: string): Promise<void> {
-    while (decodeMessageKind(await socket.next()) !== kind) {
-        // Read the real daemon until its correlated result arrives.
-    }
+    while (decodeMessageKind(await socket.next()) !== kind) {}
 }
 
-/** Starts a daemon whose Computer keeps its data in an installation directory, launches its Agent, and reads what the Agent inherited. */
 async function inheritedStateDirectory(daemonEnvironment: NodeJS.ProcessEnv, signal: AbortSignal): Promise<unknown> {
     const directory = await mkdtemp(join(tmpdir(), "morty-agent-environment-"));
     const installationData = join(
@@ -84,7 +81,6 @@ async function inheritedStateDirectory(daemonEnvironment: NodeJS.ProcessEnv, sig
             relayUrl,
         },
         [agent],
-        // As the worker does: the Computer's local data is this installation's directory.
         new RuntimeLocalContext(installationData, daemonEnvironment),
     );
     const cancellation = new AbortController();

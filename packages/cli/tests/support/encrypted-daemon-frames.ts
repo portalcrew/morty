@@ -7,7 +7,6 @@ import {
 } from "@portalcrew/morty-client/protocol";
 import { ComputerEncryptionStore } from "../../src/engine/runtime/connection/computer-encryption-store.ts";
 
-/** Exercises the daemon's real message codecs using its persisted Computer capability. */
 export async function createEncryptedDaemonFrames(stateDirectory: string, computerId: string, signal: AbortSignal) {
     const store = await ComputerEncryptionStore.open(stateDirectory, computerId, signal);
     const encryption = await createClientPayloadEncryption(await store.access(signal), signal);

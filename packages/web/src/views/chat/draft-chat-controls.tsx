@@ -28,7 +28,6 @@ export function DraftChatControls({
     readonly disabled: boolean;
 }) {
     const viewModel = useStore(workspace.draftControls);
-    // The picker offers the Agents the Computer offers now, which can change while the draft is open.
     const computerConfiguration = useStore(workspace.computer, (state) => state.computerConfiguration);
     const signal = workspace.chatSignal();
     const { settings } = viewModel;

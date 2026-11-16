@@ -102,7 +102,6 @@ test.for(["responsive", "stalled", "launcher-stalled"])(
                 holdResponse = true;
                 const active = randomUUID();
                 sendPrompt(active);
-                // Model output is held; the real Agent and daemon remain in control of cancellation.
                 await new Promise<void>((resolve, reject) => {
                     const abort = (): void => reject(peer.signal.reason);
                     peer.signal.addEventListener("abort", abort, { once: true });
@@ -158,9 +157,7 @@ test.for(["responsive", "stalled", "launcher-stalled"])(
             for (const pid of stopped) {
                 try {
                     process.kill(pid, "SIGKILL");
-                } catch {
-                    // The daemon already retired the stalled process.
-                }
+                } catch {}
             }
         }
     },

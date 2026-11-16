@@ -71,13 +71,11 @@ const accessSchema = v.pipe(
     }),
     v.readonly(),
 );
-/** The Session access a creation returns: its credential, and the readiness reply the Computer answered it with. */
 export type ChatAccess = Omit<v.InferOutput<typeof accessSchema>, "ready"> & { readonly ready: SessionReadyEvent };
 const managedSessionStatusSchema = v.variant("kind", [
     v.pipe(
         v.object({
             kind: v.literal("idle"),
-            /** Present when the Computer reports that the Session's last turn failed. */
             failedTurn: v.optional(
                 v.pipe(v.object({ code: v.string(), commandId: identifier, message: v.string() }), v.readonly()),
             ),
@@ -86,14 +84,12 @@ const managedSessionStatusSchema = v.variant("kind", [
     ),
     v.pipe(v.object({ commandId: identifier, kind: v.literal("working") }), v.readonly()),
 ]);
-/** A Session the Computer holds, as it describes it. */
 const managedSessionSchema = v.pipe(
     v.object({
         title: v.string(),
         updatedAt: v.pipe(v.string(), v.isoTimestamp()),
         directoryLabel: v.string(),
         directory: v.string(),
-        /** Whether the Computer has received the Session's first prompt, which gives the Session its title. */
         prompted: v.boolean(),
         target: nativeSessionTargetSchema,
         status: managedSessionStatusSchema,
@@ -151,7 +147,6 @@ const sessionAccessSchema = v.object({
     credential: sessionCredentialSchema,
     expiresAt: v.pipe(v.string(), v.isoTimestamp()),
 });
-/** The draft's option for an Agent's setting: a boolean holds its default flag, a select its default value when offered. */
 function optionFromSetting(setting: AgentSetting): SessionConfigOption {
     const { category, description, id, name } = setting;
     if (setting.type === "boolean") {
@@ -184,18 +179,12 @@ export class BotChatApi {
     readonly readComputerPairing: ManagementApi["readComputerPairing"];
     constructor(options: {
         readonly fetchRequest: ApiTransport["fetch"];
-        /** Borrow the application's Computer connection; this API owns only its Session clients. */
         readonly sessionTransport: () => WsTransport;
         readonly encryptionAccess?: () => ComputerEncryptionAccess | null;
         readonly origin: string;
         readonly computerId: string;
         readonly getToken: (signal: AbortSignal) => Promise<string | null>;
-        /**
-         * The access that replaced `rejected`, once whoever replaces it has finished, or null when nothing did. A
-         * request refused while another tab replaced its access is sent again with the replacement.
-         */
         readonly replacedToken?: (rejected: string, signal: AbortSignal) => Promise<string | null>;
-        /** Told when the Worker refuses the access as unauthenticated; whoever owns that access decides what it means. */
         readonly credentialRejected?: () => void;
         readonly waitForChange: ApiTransport["waitForChange"];
     }) {
@@ -354,7 +343,6 @@ export class BotChatApi {
         directoryLabel = access.workspaceRef,
         title = "Untitled session",
     ) => {
-        // The Session is named once, by its access; what it was opened with is the rest of its readiness reply.
         const { kind: _kind, requestId, target: _target, ...ready } = access.ready;
         return {
             target: access.target,
@@ -469,7 +457,6 @@ export class BotChatApi {
             },
         };
     };
-    /** Imports the native session a setup handoff names into the caller's Computer. */
     readonly continueNativeSession = async (harness: string, sessionId: string, signal: AbortSignal) => {
         const find = await this.#nativeSessionResult(
             chatCalls.continueNativeSession({
@@ -508,7 +495,6 @@ export class BotChatApi {
             entry,
         };
     };
-    /** The settings a new Session of the Agent starts with in the directory. */
     readonly agentSettings = async (
         harness: string,
         workspaceRef: string,
@@ -576,7 +562,6 @@ export class BotChatApi {
         }
         return entries;
     };
-    /** Resolves once the watched resource differs from the snapshot this client last read, or from its first sample. */
     readonly #waitForResourceChange = async (
         request: ApiRequest,
         parent: AbortSignal,
@@ -589,7 +574,6 @@ export class BotChatApi {
         }
         await this.#waitForChange({ ...request, headers: { authorization: `Bearer ${token}` }, signal }, onReady);
     };
-    /** Resolves once the Computer's pairing differs from the pairing this client last read. */
     readonly waitForComputerPairingChange = async (parent: AbortSignal): Promise<void> =>
         await this.#waitForResourceChange(
             managementCalls.readComputerPairing({ origin: this.#origin, computerId: this.#computerId }),

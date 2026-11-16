@@ -9,7 +9,6 @@ import {
 import type { AgentTermination } from "../../../packages/cli/src/engine/acp/agent/agent-lifecycle.ts";
 import { createControlledAgent } from "../../../packages/cli/tests/support/agents/controlled-agent-definition.ts";
 
-/** A stateful ACP peer injected through the production daemon's Agent port. */
 export function createInteractionAgent(onBackgroundPermissionReady?: (request: () => Promise<void>) => void) {
     const sessions = new Set<string>();
     const createEndpoint = (onSessionUpdate: ControlledSessionUpdate): ControlledAcpPeer => {
@@ -161,7 +160,6 @@ export function createInteractionAgent(onBackgroundPermissionReady?: (request: (
                         return { stopReason: "end_turn" };
                     }
                     if (fileEdit) {
-                        // Like Claude Code and Codex, announce the edit with its diff, then ask about it by reference.
                         const toolCallId = crypto.randomUUID();
                         await onSessionUpdate({
                             sessionId,

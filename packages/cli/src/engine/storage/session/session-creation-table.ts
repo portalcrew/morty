@@ -13,13 +13,11 @@ const receiptSchema = z
     })
     .readonly();
 
-/** A finished creation: the request it ran and the Session it created. */
 export interface SessionCreationReceipt {
     readonly requestHash: string;
     readonly target: NativeSessionTarget;
 }
 
-/** The receipts of finished creations, which answer a retry of the same operation. */
 export class SessionCreationTable {
     readonly #database: LocalSqliteDatabase;
 

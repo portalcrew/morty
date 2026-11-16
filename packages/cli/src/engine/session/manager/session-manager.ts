@@ -93,9 +93,7 @@ export class SessionManager {
         readonly processes: AgentProcessPool;
         /** Called once each time a Session becomes closed, so every client learns of it. */
         readonly onSessionClosed: (event: SessionCloseNoticeEvent) => void;
-        /** How the Session's most recent started command ended, as the execution receipts retain it. */
         readonly lastTurn: (target: NativeSessionTarget) => LastTurnOutcome | undefined;
-        /** The Session's settled turns the execution receipts retain, which a replayed history places. */
         readonly settledTurns: (target: NativeSessionTarget) => readonly SettledTurn[];
         readonly timer: Timer;
     }) {
@@ -121,7 +119,6 @@ export class SessionManager {
         return this.#store.read(target) !== undefined;
     }
 
-    /** Admits an operation the lifecycle rule answers at once; a refusal throws its typed error. */
     #admitNow(target: NativeSessionTarget, operation: ImmediateSessionOperation): void {
         const admission = this.#lifecycles.admitNow(target, operation, () => this.#isHeld(target));
         if (admission.kind === "refused") {
@@ -222,7 +219,6 @@ export class SessionManager {
         );
     }
 
-    /** Starts the Session's process, which the Runtime retains until the Session is stopped or retired. */
     async #startSession(options: SessionPrepareOptions, recovery: SessionRecovery): Promise<AgentSession> {
         return await this.#startRetainedSessionProcess(
             options,
@@ -378,7 +374,6 @@ export class SessionManager {
             }
         });
 
-    /** Keeps the process of a Session the harness just opened, unless the harness named a Session already known. */
     async #retainCreated(runtime: AgentSession): Promise<NativeSessionTarget> {
         let retained = false;
         try {
@@ -409,7 +404,6 @@ export class SessionManager {
         try {
             await this.#retireSessionProcess(target, runtime);
         } finally {
-            // The events a creation recorded leave with it.
             this.#store.remove(target);
         }
     }
@@ -505,7 +499,6 @@ export class SessionManager {
             return (await this.#replaceExecutionPreparation(existing, options)).prepared();
         });
 
-    /** Applies a client's edit only while the Session's configuration still has the revision the client read. */
     readonly configureSession = async (options: SessionConfigureOptions): Promise<SessionConfigurationSnapshot> =>
         this.#operations.run(options, async (options) => {
             return await this.#executionProcesses.use(options.target, async () => {
@@ -514,7 +507,6 @@ export class SessionManager {
             });
         });
 
-    /** Applies a setting the Runtime owns, such as one a prompt or a preparation requested. */
     readonly applySessionConfiguration = async (
         change: SessionConfigurationChange,
     ): Promise<SessionConfigurationSnapshot> =>
@@ -580,11 +572,9 @@ export class SessionManager {
             }),
         );
 
-    /** Whether the Session began executing the command and still holds it; its cancellation is then the Session's. */
     readonly executes = (target: NativeSessionTarget, commandId: string): boolean =>
         this.#executions.executes(target, commandId);
 
-    /** Whether a steering prompt can join the named execution: the one rule every steering check asks. */
     readonly acceptsSteering = (target: NativeSessionTarget, targetCommandId: string): boolean =>
         this.#executions.acceptsSteering(target, targetCommandId);
 
@@ -728,7 +718,6 @@ export class SessionManager {
         const settled = Promise.withResolvers<void>();
         const closing = await this.#admit(options.target, { kind: "end" }, options.signal, (): boolean => {
             if (!this.#isKnownSession(options.target)) {
-                // A Session this Runtime neither holds nor runs is already archived.
                 return false;
             }
             const reason = "This Session was archived.";
@@ -807,7 +796,6 @@ export class SessionManager {
             return stored !== undefined ? [stored] : [];
         });
 
-    /** The Session this Runtime holds for `target`, which a command naming only the target uses; none is refused. */
     readonly heldSession = (target: NativeSessionTarget): StoredSession => {
         const stored = this.#store.read(target);
         if (stored === undefined) {
@@ -842,7 +830,6 @@ export class SessionManager {
      */
     readonly listSessions = (limit: number) => this.#store.list().slice(0, limit);
 
-    /** The actionable requests of the Session this Runtime holds for `target`; a target it does not hold is refused. */
     readonly pendingInteractions = (target: NativeSessionTarget): SessionPendingInteractions => {
         const session = this.heldSession(target);
         // No live Agent owns an actionable request after its session process has gone away.
@@ -925,7 +912,6 @@ export class SessionManager {
         this.#operations.run(options, async (options) => {
             const source = { harness: options.agent.harness, sessionId: origin.sessionId };
             if (origin.kind === "import") {
-                // Importing opens the Session again, even when it was closed or archived.
                 await this.#admit(source, { kind: "import" }, options.signal, () => undefined);
             }
             // These checks and the start of the native operation below are synchronous.

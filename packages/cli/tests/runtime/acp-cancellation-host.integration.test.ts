@@ -13,7 +13,6 @@ test.for(["before-observation", "while-pending"])(
     async (cancellation, { signal }) => {
         const directory = await mkdtemp(join(tmpdir(), "morty-acp-cancellation-"));
         const fixture = fileURLToPath(new URL("./fixtures/acp-cancellation-host.ts", import.meta.url));
-        // The test's timeout kills a hung fixture.
         const child = spawn(process.execPath, [fixture, directory, cancellation], {
             env: { PATH: process.env["PATH"], HOME: directory, TMPDIR: directory },
             killSignal: "SIGKILL",

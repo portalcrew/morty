@@ -4,7 +4,6 @@ import type {
     SessionEventsUnsubscribeControl,
 } from "@portalcrew/morty-client/protocol";
 
-/** Tracks the relay's current Session viewers for this Computer connection. */
 export function createSessionSubscriptions(changed: () => void) {
     const subscriptions = new Map<string, NativeSessionTarget>();
     return {

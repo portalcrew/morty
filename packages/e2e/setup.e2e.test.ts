@@ -4,7 +4,6 @@ import { dirname, isAbsolute, join, relative } from "node:path";
 import { dataTestId } from "../web/src/data-testid.ts";
 import { expect, test } from "./infra/test.ts";
 
-/** How the Computer shows a directory: under the user's home directory as `~/…`, elsewhere in full. */
 function directoryLabel(path: string): string {
     const suffix = relative(homedir(), path);
     return suffix === "" ? "~" : !isAbsolute(suffix) && !suffix.startsWith("..") ? `~/${suffix}` : path;
@@ -69,7 +68,6 @@ test("Given a saved Computer the manager no longer manages, When the user approv
     expect(connected.computerId).not.toBe(original.computerId);
     const statuses = connected.events.map((event) => event["status"]);
     expect(statuses).toContain("prepared");
-    // The agent reads this to tell the user that links from the replaced Computer stopped working.
     expect(connected.events).toContainEqual(expect.objectContaining({ status: "ready", computer: "replaced" }));
 });
 
@@ -194,7 +192,6 @@ test("Given setup was previously paired in another directory, When a new project
     await expect(runtime.page.getByRole("article", { name: "Agent response" })).toContainText(
         "Verify the setup project directory",
     );
-    // Execution details live in the computer menu.
     await runtime.page.getByRole("button", { name: /^Switch computer, / }).click();
     await runtime.page.getByRole("menuitem", { name: /View execution details/ }).click();
     const details = runtime.page.getByRole("dialog", { name: "Execution details", exact: true });
