@@ -221,6 +221,23 @@ successful all-new deployment does not establish compatibility.
 - Preserve the original cause when translating an error, and expose only sanitized messages across trust boundaries.
 - Keep cancellation, timeout, retryable, and terminal failures distinct.
 
+## Code comments
+
+These rules apply to all contributors, including AI agents, in source code,
+tests, scripts, and configuration files.
+
+- Default to adding no comments. Use clear names, types, and code structure.
+- Do not add comments explaining **what** the code does or **how** it works.
+  This includes JSDoc that restates declarations, field descriptions, procedural
+  narration, and decorative section labels.
+- Add a comment only when it is necessary to explain **why**: a
+  non-obvious constraint, decision, or tradeoff that the code cannot express.
+  Keep it short and specific. If clearer code would make it unnecessary, improve
+  the code instead.
+- Preserve legally required license and attribution notices and functional
+  compiler, lint, and test directives. Keep any accompanying explanation limited
+  to the necessary rationale.
+
 ## Documentation changes
 
 - Every Markdown file except `SKILL.md` must include `metadata.change-policy` in its
@@ -233,7 +250,8 @@ successful all-new deployment does not establish compatibility.
 - Documentation defines product intent, constraints, and operational guidance.
   Do not maintain implementation maps, source-file inventories, or copies of
   protocol fields and state machines in Markdown. Make source organization,
-  names, types, and focused inline comments explain the implementation.
+  names, and types explain the implementation; comments must follow
+  [Code comments](#code-comments).
 - When changing an existing documented constraint, propose that change separately
   before implementing behavior that depends on it.
 
