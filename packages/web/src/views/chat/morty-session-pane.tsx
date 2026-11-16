@@ -164,6 +164,7 @@ function SessionRenderItemContent({
     return (
         <MortySessionMessage
             active={active}
+            collapseStore={pane.userMessageCollapse}
             deliveryUnknownUserMessageId={presentation.deliveryUnknownUserMessageId}
             failureHarness={pane.harness}
             failureComputerName={computerName}
@@ -412,11 +413,13 @@ export function MortySessionPaneLoading({ footer }: { readonly footer?: ReactNod
  * service confirms the turn.
  */
 function UnconfirmedDeliveryCard({
+    collapseStore,
     delivery,
     retryDisabled,
     onRemove,
     onRetry,
 }: {
+    readonly collapseStore: SessionPaneModel["userMessageCollapse"];
     readonly delivery: {
         readonly commandId: string;
         readonly displayPrompt: string;
@@ -432,6 +435,8 @@ function UnconfirmedDeliveryCard({
             <UserPromptMessage
                 attachments={delivery.attachments}
                 attachmentLabels={delivery.attachmentLabels}
+                collapseStore={collapseStore}
+                messageId={delivery.commandId}
                 text={delivery.displayPrompt}
             />
             <div
@@ -699,6 +704,8 @@ function MortySessionPaneBody({
                                         <div className={chatSessionMessageItemClassName}>
                                             <UserPromptMessage
                                                 attachments={initialMessage.attachments}
+                                                collapseStore={pane.userMessageCollapse}
+                                                messageId={initialMessage.commandId}
                                                 text={initialMessage.content}
                                             />
                                         </div>
@@ -834,6 +841,8 @@ function MortySessionPaneBody({
                                             <UserPromptMessage
                                                 attachments={message.attachments}
                                                 attachmentLabels={message.attachmentLabels}
+                                                collapseStore={pane.userMessageCollapse}
+                                                messageId={message.commandId}
                                                 text={message.content}
                                             />
                                         </div>
@@ -846,6 +855,8 @@ function MortySessionPaneBody({
                                             <UserPromptMessage
                                                 attachments={presentation.pendingDelivery.message.attachments}
                                                 attachmentLabels={presentation.pendingDelivery.message.attachmentLabels}
+                                                collapseStore={pane.userMessageCollapse}
+                                                messageId={presentation.pendingDelivery.message.commandId}
                                                 status={
                                                     presentation.pendingDelivery.error !== null ? (
                                                         <MessageDeliveryStatus
@@ -888,6 +899,7 @@ function MortySessionPaneBody({
                                     )}
                                     {presentation.unconfirmedDelivery !== null && (
                                         <UnconfirmedDeliveryCard
+                                            collapseStore={pane.userMessageCollapse}
                                             delivery={presentation.unconfirmedDelivery}
                                             retryDisabled={presentation.retryUnknownDeliveryDisabled}
                                             onRemove={() => pane.store.getState().removeUnknownDelivery()}

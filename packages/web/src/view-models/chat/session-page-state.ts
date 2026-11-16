@@ -22,6 +22,7 @@ import {
 import { createSessionRenameStore, type SessionRenameStore } from "./session-rename-store.ts";
 import { createSessionSettingsStore, type SessionSettingsStore } from "./session-settings-store.ts";
 import { createSessionTaskControlsStore, type SessionTaskControlsStore } from "./session-task-controls.ts";
+import { createUserMessageCollapseStore, type UserMessageCollapseStore } from "./user-message-collapse-store.ts";
 
 /**
  * What the page holds for one Session, whichever pane shows it: the Session's execution as the Computer reported it,
@@ -32,6 +33,7 @@ import { createSessionTaskControlsStore, type SessionTaskControlsStore } from ".
  * operation.
  */
 export interface SessionPageState {
+    readonly userMessageCollapse: UserMessageCollapseStore;
     /** The Session's operations lifetime on this page; only its end cancels what the user asked the Session to do. */
     readonly lifetime: AbortSignal;
     /** How the Session's operations reach the Computer through the connection of the pane following the Session. */
@@ -144,6 +146,7 @@ export function createSessionPageState(options: {
         },
     });
     return {
+        userMessageCollapse: createUserMessageCollapseStore(),
         lifetime: options.lifetime,
         connection,
         composer,

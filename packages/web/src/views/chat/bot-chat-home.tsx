@@ -339,6 +339,8 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                                             <div data-testid={dataTestId.queuedMessage}>
                                                 <UserPromptMessage
                                                     attachments={queuedInitialMessage.attachments}
+                                                    collapseStore={model.userMessageCollapse}
+                                                    messageId={queuedInitialMessage.commandId}
                                                     status={
                                                         <MessageDeliveryStatus
                                                             data-testid={dataTestId.initialMessageStatus}

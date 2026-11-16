@@ -42,6 +42,7 @@ import { canRetryFirstMessage, canSendFirstMessage, type NewConversationFacts } 
 import type { OpenMortySession } from "./open-session.ts";
 import { prependToDraft, type SubmittedMessage } from "./session-delivery-store.ts";
 import type { SessionTitles, SessionTitlesStore } from "./session-titles-store.ts";
+import { createUserMessageCollapseStore, type UserMessageCollapseStore } from "./user-message-collapse-store.ts";
 
 export type BotChatHomeStoreApi = Omit<ReturnType<typeof createBotChatHomeStore>, "setState">;
 
@@ -88,6 +89,7 @@ export interface BotChatNavigation {
 }
 
 export interface BotChatHomeStore {
+    readonly userMessageCollapse: UserMessageCollapseStore;
     readonly composerAttachments: ReturnType<typeof createComposerAttachmentStore>;
     /** The draft written while creating the Session the page followed, until that Session's composer takes it. */
     readonly draftHandoff: {
@@ -380,6 +382,7 @@ export const createBotChatHomeStore = (
             current.setDraft(restored.draft);
         };
         return {
+            userMessageCollapse: createUserMessageCollapseStore(),
             composerAttachments: createComposerAttachmentStore(),
             draftHandoff: null,
             selection,
