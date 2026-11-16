@@ -1,0 +1,533 @@
+{
+    "version": "6",
+    "dialect": "sqlite",
+    "id": "4f299ebf-3e25-44fa-a155-a1d369beb807",
+    "prevId": "080bd6dd-cf78-4924-a7f1-3c3c3b9956c6",
+    "tables": {
+        "browser_credential": {
+            "name": "browser_credential",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "token_hash": {
+                    "name": "token_hash",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "device_id": {
+                    "name": "device_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "transfer_id": {
+                    "name": "transfer_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "replaced_at": {
+                    "name": "replaced_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {
+                "browser_credential_token_hash_unique": {
+                    "name": "browser_credential_token_hash_unique",
+                    "columns": ["token_hash"],
+                    "isUnique": true
+                },
+                "browser_credential_device_idx": {
+                    "name": "browser_credential_device_idx",
+                    "columns": ["device_id"],
+                    "isUnique": false
+                },
+                "browser_credential_transfer_idx": {
+                    "name": "browser_credential_transfer_idx",
+                    "columns": ["transfer_id"],
+                    "isUnique": true
+                }
+            },
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "browser_device": {
+            "name": "browser_device",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "joined_at": {
+                    "name": "joined_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "label": {
+                    "name": "label",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "joined_city": {
+                    "name": "joined_city",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "joined_country": {
+                    "name": "joined_country",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "joined_through_transfer_id": {
+                    "name": "joined_through_transfer_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "ended_at": {
+                    "name": "ended_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "computer_connection": {
+            "name": "computer_connection",
+            "columns": {
+                "connection_epoch": {
+                    "name": "connection_epoch",
+                    "type": "integer",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "generation": {
+                    "name": "generation",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "connected_at": {
+                    "name": "connected_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "disconnected_at": {
+                    "name": "disconnected_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "computer_agent_catalogs": {
+            "name": "computer_agent_catalogs",
+            "columns": {
+                "generation": {
+                    "name": "generation",
+                    "type": "integer",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "agents": {
+                    "name": "agents",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "computer_pairings": {
+            "name": "computer_pairings",
+            "columns": {
+                "generation": {
+                    "name": "generation",
+                    "type": "integer",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": true
+                },
+                "pairing_code_hash": {
+                    "name": "pairing_code_hash",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "poll_token_hash": {
+                    "name": "poll_token_hash",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "expires_at": {
+                    "name": "expires_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "creation_idempotency_key": {
+                    "name": "creation_idempotency_key",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {
+                "computer_pairings_pairing_code_hash_unique": {
+                    "name": "computer_pairings_pairing_code_hash_unique",
+                    "columns": ["pairing_code_hash"],
+                    "isUnique": true
+                },
+                "computer_pairings_creation_idempotency_key_unique": {
+                    "name": "computer_pairings_creation_idempotency_key_unique",
+                    "columns": ["creation_idempotency_key"],
+                    "isUnique": true
+                }
+            },
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "computer_registrations": {
+            "name": "computer_registrations",
+            "columns": {
+                "generation": {
+                    "name": "generation",
+                    "type": "integer",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "machine_name": {
+                    "name": "machine_name",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "workspace_name": {
+                    "name": "workspace_name",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "computer_revocations": {
+            "name": "computer_revocations",
+            "columns": {
+                "generation": {
+                    "name": "generation",
+                    "type": "integer",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "revoked_at": {
+                    "name": "revoked_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "daemon_credentials": {
+            "name": "daemon_credentials",
+            "columns": {
+                "generation": {
+                    "name": "generation",
+                    "type": "integer",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "token_hash": {
+                    "name": "token_hash",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {
+                "daemon_credentials_token_hash_unique": {
+                    "name": "daemon_credentials_token_hash_unique",
+                    "columns": ["token_hash"],
+                    "isUnique": true
+                }
+            },
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "retired_daemon_credentials": {
+            "name": "retired_daemon_credentials",
+            "columns": {
+                "token_hash": {
+                    "name": "token_hash",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "generation": {
+                    "name": "generation",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "successor_hash": {
+                    "name": "successor_hash",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {
+                "retired_daemon_credentials_generation": {
+                    "name": "retired_daemon_credentials_generation",
+                    "columns": ["generation"],
+                    "isUnique": false
+                }
+            },
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "identity_transfer": {
+            "name": "identity_transfer",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "code_hash": {
+                    "name": "code_hash",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "request_hash": {
+                    "name": "request_hash",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "expires_at": {
+                    "name": "expires_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "access_expires_at": {
+                    "name": "access_expires_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "created_at": {
+                    "name": "created_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "replaces_transfer_id": {
+                    "name": "replaces_transfer_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "cancelled_at": {
+                    "name": "cancelled_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {
+                "identity_transfer_code_hash_unique": {
+                    "name": "identity_transfer_code_hash_unique",
+                    "columns": ["code_hash"],
+                    "isUnique": true
+                },
+                "identity_transfer_replaces_transfer_id_unique": {
+                    "name": "identity_transfer_replaces_transfer_id_unique",
+                    "columns": ["replaces_transfer_id"],
+                    "isUnique": true
+                },
+                "identity_transfer_expiry_idx": {
+                    "name": "identity_transfer_expiry_idx",
+                    "columns": ["expires_at"],
+                    "isUnique": false
+                }
+            },
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        },
+        "link_sharer": {
+            "name": "link_sharer",
+            "columns": {
+                "link_id": {
+                    "name": "link_id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "holder_kind": {
+                    "name": "holder_kind",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "holder_id": {
+                    "name": "holder_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {
+                "link_sharer_holder_kind": {
+                    "name": "link_sharer_holder_kind",
+                    "value": "\"link_sharer\".\"holder_kind\" IN ('owner', 'device')"
+                }
+            }
+        },
+        "owner_credential": {
+            "name": "owner_credential",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "type": "text",
+                    "primaryKey": true,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "token_hash": {
+                    "name": "token_hash",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false
+                },
+                "revoked_at": {
+                    "name": "revoked_at",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                }
+            },
+            "indexes": {
+                "owner_credential_token_hash_unique": {
+                    "name": "owner_credential_token_hash_unique",
+                    "columns": ["token_hash"],
+                    "isUnique": true
+                }
+            },
+            "foreignKeys": {},
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {},
+            "checkConstraints": {}
+        }
+    },
+    "views": {},
+    "enums": {},
+    "_meta": {
+        "schemas": {},
+        "tables": {},
+        "columns": {}
+    },
+    "internal": {
+        "indexes": {}
+    }
+}

@@ -1,13 +1,14 @@
 import { and, count, eq, gt, inArray, isNotNull, notInArray, or, sql } from "drizzle-orm";
+import type { AgentDescriptor } from "../../../../contracts/relay/pairing.ts";
 import type {
     ComputerCredentialRotation,
-    ComputerPairingDirectoryRow,
     ComputerPairingRow,
     PairingClaimRow,
 } from "../../../../contracts/relay/pairing-records.ts";
 import { type RelayDrizzleDatabase, relayDrizzle } from "../../../../infra/drizzle-database.ts";
 import type { DurableObjectDatabase } from "../../../infra/durable-object-database.ts";
 import {
+    computerAgentCatalog,
     computerPairing,
     computerRegistration,
     computerRevocation,
@@ -19,7 +20,6 @@ import { activeGeneration, currentGeneration } from "./computer-generation.ts";
 const registrationFields = {
     computer_name: computerRegistration.computerName,
     workspace_name: computerRegistration.workspaceName,
-    agents_json: computerRegistration.agentsJson,
 };
 interface CreateComputerPairing {
     readonly codeHash: string;
@@ -49,9 +49,11 @@ export class ComputerDirectoryStorage {
                 expires_at: computerPairing.expiresAt,
                 revoked_at: computerRevocation.revokedAt,
                 registration: registrationFields,
+                agents: computerAgentCatalog.agents,
             })
             .from(computerPairing)
             .leftJoin(computerRegistration, eq(computerRegistration.generation, computerPairing.generation))
+            .leftJoin(computerAgentCatalog, eq(computerAgentCatalog.generation, computerPairing.generation))
             .leftJoin(computerRevocation, eq(computerRevocation.generation, computerPairing.generation));
 
     readonly readPairingCode = async (codeHash: string, signal: AbortSignal): Promise<PairingClaimRow | null> => {
@@ -126,7 +128,7 @@ export class ComputerDirectoryStorage {
             readonly now: number;
             readonly computerName: string;
             readonly workspaceName: string;
-            readonly agents: string;
+            readonly agents: readonly AgentDescriptor[];
         },
         signal: AbortSignal,
     ): Promise<boolean> => {
@@ -158,13 +160,12 @@ export class ComputerDirectoryStorage {
                 .from(computerPairing)
                 .where(inArray(computerPairing.generation, claimable)),
         );
-        const registration = database.insert(computerRegistration).select(
+        // Inserted before the registration, which ends the claim's eligibility.
+        const catalog = database.insert(computerAgentCatalog).select(
             database
                 .select({
                     generation: daemonCredential.generation,
-                    computerName: bound(value.computerName, "computer_name"),
-                    workspaceName: bound(value.workspaceName, "workspace_name"),
-                    agentsJson: bound(value.agents, "agents_json"),
+                    agents: bound(JSON.stringify(value.agents), "agents"),
                 })
                 .from(daemonCredential)
                 .where(
@@ -174,13 +175,23 @@ export class ComputerDirectoryStorage {
                     ),
                 ),
         );
-        const results = this.#database.batch([credential, registration], signal);
+        const registration = database.insert(computerRegistration).select(
+            database
+                .select({
+                    generation: daemonCredential.generation,
+                    computerName: bound(value.computerName, "computer_name"),
+                    workspaceName: bound(value.workspaceName, "workspace_name"),
+                })
+                .from(daemonCredential)
+                .where(
+                    and(
+                        eq(daemonCredential.tokenHash, value.daemonHash),
+                        inArray(daemonCredential.generation, claimable),
+                    ),
+                ),
+        );
+        const results = this.#database.batch([credential, catalog, registration], signal);
         return results[0]?.meta.changes === 1;
-    };
-
-    readonly readComputer = async (signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> => {
-        const row = await this.readCurrentPairing(signal);
-        return row === null ? null : { revoked_at: row.revoked_at, registration: row.registration };
     };
 
     readonly isActiveDaemon = async (tokenHash: string, signal: AbortSignal): Promise<boolean> => {
@@ -266,7 +277,7 @@ export class ComputerDirectoryStorage {
         return ended.length === 0 ? { kind: "unknown" } : { kind: "revoked" };
     };
 
-    readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> => {
+    readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<void> => {
         const database = relayDrizzle(this.#database, signal);
         const current = currentGeneration();
         const revocation = database
@@ -279,36 +290,31 @@ export class ComputerDirectoryStorage {
             )
             .onConflictDoNothing();
         this.#database.run(revocation, signal);
-        // Reading the committed fact makes overlapping retries return the first revocation time.
-        return await this.readComputer(signal);
     };
 
-    readonly listComputers = async (signal: AbortSignal) => {
-        const row = await this.readComputer(signal);
-        return row?.registration && row.revoked_at === null ? [row.registration] : [];
-    };
-
-    readonly updateAgents = async (tokenHash: string, agents: string, signal: AbortSignal) => {
+    readonly replaceAgents = async (
+        tokenHash: string,
+        agents: readonly AgentDescriptor[],
+        signal: AbortSignal,
+    ): Promise<boolean> => {
         const database = relayDrizzle(this.#database, signal);
-        return this.#database.run(
-            database
-                .update(computerRegistration)
-                .set({ agentsJson: agents })
-                .where(
-                    inArray(
-                        computerRegistration.generation,
-                        database
-                            .select({ generation: daemonCredential.generation })
-                            .from(daemonCredential)
-                            .where(
-                                and(
-                                    eq(daemonCredential.tokenHash, tokenHash),
-                                    inArray(daemonCredential.generation, activeGeneration()),
-                                ),
-                            ),
+        const replaced = database
+            .insert(computerAgentCatalog)
+            .select(
+                database
+                    .select({
+                        generation: daemonCredential.generation,
+                        agents: bound(JSON.stringify(agents), "agents"),
+                    })
+                    .from(daemonCredential)
+                    .where(
+                        and(
+                            eq(daemonCredential.tokenHash, tokenHash),
+                            inArray(daemonCredential.generation, activeGeneration()),
+                        ),
                     ),
-                ),
-            signal,
-        );
+            )
+            .onConflictDoUpdate({ target: computerAgentCatalog.generation, set: { agents } });
+        return this.#database.run(replaced, signal).meta.changes === 1;
     };
 }

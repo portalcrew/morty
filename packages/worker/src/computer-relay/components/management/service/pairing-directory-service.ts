@@ -1,5 +1,5 @@
 import { isComputerCredentialSuccessor } from "@portalcrew/morty-client/protocol";
-import { computerPairingStatus, computerRevokedAt } from "../../../../contracts/relay/computer-pairing-state.ts";
+import { computerPairingStatus } from "../../../../contracts/relay/computer-pairing-state.ts";
 import type {
     AgentDescriptor,
     ClaimedPairing,
@@ -13,7 +13,6 @@ import {
     normalizePairingCode,
     PAIRING_LIFETIME_MILLISECONDS,
     PairingDirectoryError,
-    parseAgents,
     validateIdentifier,
     validateToken,
 } from "../../../../contracts/relay/pairing.ts";
@@ -174,7 +173,7 @@ export class PairingDirectoryService {
                 now: Date.now(),
                 computerName,
                 workspaceName,
-                agents: JSON.stringify(agents),
+                agents,
             },
             signal,
         );
@@ -189,17 +188,17 @@ export class PairingDirectoryService {
         signal: AbortSignal,
     ): Promise<readonly ComputerDescriptor[]> => {
         this.#authorizeComputer(computerId);
-        const runtimes = await this.#cx.store.listComputers(signal);
-        return runtimes.map(
-            (row) =>
-                new ComputerDescriptor(parseAgents(row.agents_json), row.computer_name, row.workspace_name, computerId),
-        );
+        const row = await this.#cx.store.readComputerPairing(signal);
+        const status = row === null ? null : computerPairingStatus(row, computerId, Date.now());
+        return status?.status === "paired"
+            ? [new ComputerDescriptor(status.agents, status.computerName, status.workspaceName, computerId)]
+            : [];
     };
 
     readonly isComputerRevoked = async (computerId: string, signal: AbortSignal): Promise<boolean> => {
         this.#authorizeComputer(computerId);
-        const row = await this.#cx.store.readComputer(signal);
-        return row !== null && computerRevokedAt(row.revoked_at) !== null;
+        const row = await this.#cx.store.readComputerPairing(signal);
+        return row !== null && computerPairingStatus(row, computerId, Date.now()).status === "revoked";
     };
 
     readonly updateAgentCatalog = async (
@@ -222,7 +221,7 @@ export class PairingDirectoryService {
                 }
                 throw cause;
             }
-            if (await storage.updateAgentCatalog(tokenHash, JSON.stringify(agents), signal)) {
+            if (await storage.replaceAgentCatalog(tokenHash, agents, signal)) {
                 return;
             }
         }

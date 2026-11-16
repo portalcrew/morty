@@ -119,18 +119,6 @@ export async function hashPairingCredential(secret: string): Promise<string> {
     return await hashSecret(`morty-pairing-v2\0${secret}`);
 }
 
-export function parseAgents(encoded: string): readonly AgentDescriptor[] {
-    let value: unknown;
-    try {
-        value = JSON.parse(encoded);
-    } catch (error) {
-        throw new PairingDirectoryError("invalid_directory_record", "The paired agent directory is invalid", {
-            cause: error,
-        });
-    }
-    return validateAgents(value);
-}
-
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }

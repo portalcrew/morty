@@ -1,8 +1,7 @@
+import type { AgentDescriptor } from "../../../../contracts/relay/pairing.ts";
 import type { ComputerIdentityCredential } from "../../../../contracts/relay/pairing-identity.ts";
 import type {
     ComputerCredentialRotation,
-    ComputerDirectoryRow,
-    ComputerPairingDirectoryRow,
     ComputerPairingRow,
     PairingClaimRow,
     PairingComputerRow,
@@ -31,7 +30,7 @@ interface ClaimPairing {
     readonly now: number;
     readonly computerName: string;
     readonly workspaceName: string;
-    readonly agents: string;
+    readonly agents: readonly AgentDescriptor[];
 }
 
 /**
@@ -50,17 +49,14 @@ export class ComputerRelayStore {
         this.#credentials = new ComputerCredentialStorage(database);
     }
 
-    readonly updateAgentCatalog = async (tokenHash: string, agents: string, signal: AbortSignal): Promise<boolean> =>
-        (await this.#computers.updateAgents(tokenHash, agents, signal)).meta.changes === 1;
+    readonly replaceAgentCatalog = async (
+        tokenHash: string,
+        agents: readonly AgentDescriptor[],
+        signal: AbortSignal,
+    ): Promise<boolean> => await this.#computers.replaceAgents(tokenHash, agents, signal);
 
     readonly readActiveGeneration = async (signal: AbortSignal): Promise<number | null> =>
         await this.#credentials.readActiveGeneration(signal);
-
-    readonly readComputer = async (signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> =>
-        await this.#computers.readComputer(signal);
-
-    readonly listComputers = async (signal: AbortSignal): Promise<readonly ComputerDirectoryRow[]> =>
-        await this.#computers.listComputers(signal);
 
     readonly requestComputerPairing = async (
         value: RequestComputerPairing,
@@ -100,11 +96,7 @@ export class ComputerRelayStore {
         );
     };
 
-    /**
-     * Revokes the Computer and returns its committed revocation; null when it was never paired. Ending its pairing
-     * generation also ends the Session credentials issued under it.
-     */
-    readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<ComputerPairingDirectoryRow | null> =>
+    readonly revokeComputer = async (now: number, signal: AbortSignal): Promise<void> =>
         await this.#computers.revokeComputer(now, signal);
 
     readonly holdsCredential = async (credential: ComputerIdentityCredential, signal: AbortSignal): Promise<boolean> =>
