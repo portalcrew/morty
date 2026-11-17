@@ -17,7 +17,7 @@ export async function conversationLoaded(page: Page): Promise<void> {
 
 /**
  * Taps the phone composer before a test types or inspects its draft. Only a focused composer stays open: an idle,
- * empty one collapses as soon as it is unfocused, as it is after a touch send.
+ * empty one collapses as soon as it is unfocused, so a still-disabled composer, which cannot take focus, is not open yet.
  */
 export async function expandMobileComposer(page: Page): Promise<void> {
     if ((page.viewportSize()?.width ?? 640) >= 640) {
@@ -29,10 +29,8 @@ export async function expandMobileComposer(page: Page): Promise<void> {
         if (!(await textbox.isVisible())) {
             await expand.click({ timeout: 2000 });
         }
-        if (await textbox.isEnabled({ timeout: 2000 })) {
-            await textbox.focus({ timeout: 2000 });
-            await expect(textbox).toBeFocused({ timeout: 2000 });
-        }
+        await textbox.focus({ timeout: 2000 });
+        await expect(textbox).toBeFocused({ timeout: 2000 });
     }).toPass({ timeout: 30_000 });
 }
 
