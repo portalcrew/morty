@@ -17,11 +17,24 @@ const MAX_NAME_LENGTH = 1000;
 const REPOSITORY_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[\w@.+-]+(?:\/[\w@.+-]+)*$/;
 const CONTROL_CHARACTER = /\p{Cc}/u;
 
-export function recordFlakyTests(runner: "vitest" | "playwright", tests: readonly FlakyTest[]): void {
-    const record = tests.map((test) => ({
-        file: relative(REPOSITORY_ROOT, test.file).replaceAll("\\", "/"),
-        name: test.name,
-    }));
+type Runner = "vitest" | "playwright";
+
+function repositoryTests(tests: readonly FlakyTest[]): FlakyTest[] {
+    return tests.map((test) => ({ file: relative(REPOSITORY_ROOT, test.file).replaceAll("\\", "/"), name: test.name }));
+}
+
+function writeRecord(file: string, tests: readonly FlakyTest[]): void {
+    const directory = process.env[RECORD_DIRECTORY];
+    if (directory === undefined || directory === "") {
+        return;
+    }
+    const target = resolve(REPOSITORY_ROOT, directory);
+    mkdirSync(target, { recursive: true });
+    writeFileSync(join(target, file), JSON.stringify({ tests }));
+}
+
+export function recordFlakyTests(runner: Runner, tests: readonly FlakyTest[]): void {
+    const record = repositoryTests(tests);
     console.error(
         [
             "",
@@ -30,13 +43,15 @@ export function recordFlakyTests(runner: "vitest" | "playwright", tests: readonl
             "",
         ].join("\n"),
     );
-    const directory = process.env[RECORD_DIRECTORY];
-    if (directory === undefined || directory === "") {
-        return;
+    writeRecord(`${runner}-${randomUUID()}.json`, record);
+}
+
+// A test that failed every attempt in this job is flaky if a rerun of the job passes against the same code. A job that
+// fails more tests than one record holds is not worth comparing: that many failures are not flakiness.
+export function recordFailedTests(runner: Runner, tests: readonly FlakyTest[]): void {
+    if (tests.length > 0 && tests.length <= MAX_TESTS) {
+        writeRecord(`${runner}-failed-${randomUUID()}.json`, repositoryTests(tests));
     }
-    const target = resolve(REPOSITORY_ROOT, directory);
-    mkdirSync(target, { recursive: true });
-    writeFileSync(join(target, `${runner}-${randomUUID()}.json`), JSON.stringify({ tests: record }));
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

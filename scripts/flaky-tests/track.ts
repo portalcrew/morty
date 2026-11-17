@@ -4,28 +4,42 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type FlakyTest, parseFlakyTestRecord } from "./record.ts";
 
-// Records each flaky test found by a failed pipeline run on one issue per test: the first occurrence opens the
-// issue, later ones add a comment, and an occurrence after the issue was closed reopens it. The artifacts come from
-// the tested code, so they are only read as data and validated; everything else comes from GitHub's run event.
+// Records each flaky test found by a pipeline run on one issue per test: the first occurrence opens the issue, later
+// ones add a comment, and an occurrence after the issue was closed reopens it. A test is flaky when it failed and then
+// passed against the same code: on its retry within a job, or when the job that failed it passes on a rerun of the
+// run. The artifacts come from the tested code, so they are only read as data and validated; everything else comes
+// from GitHub's run event and API.
 
 const ARTIFACTS_DIRECTORY = fileURLToPath(new URL("../../test-results/flaky-test-artifacts", import.meta.url));
+const PREVIOUS_ARTIFACTS_DIRECTORY = fileURLToPath(
+    new URL("../../test-results/flaky-test-artifacts-previous", import.meta.url),
+);
 const REPOSITORY = /^[\w.-]+\/[\w.-]+$/;
 const LABEL = "flaky-test";
 const MAX_RECORD_BYTES = 256 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
 const JOB_DIRECTORY = /^([a-z]+)(?:-(\d+))?$/;
-const RECORD_FILE = /^(?:vitest|playwright)-[\da-f-]{36}\.json$/;
+const RECORD_FILE = /^(?:vitest|playwright)(-failed)?-[\da-f-]{36}\.json$/;
 
 interface Run {
+    readonly id: string;
     readonly url: string;
-    readonly attempt: string;
+    readonly attempt: number;
     readonly event: string;
     readonly headSha: string;
 }
 
+interface JobRecords {
+    readonly flaky: FlakyTest[];
+    readonly failed: FlakyTest[];
+}
+
 interface Occurrence {
     readonly test: FlakyTest;
-    readonly jobs: readonly string[];
+    /** Jobs whose own retry passed the test in this attempt. */
+    readonly retried: readonly string[];
+    /** Jobs that failed the test in the previous attempt and passed when rerun in this one. */
+    readonly rerun: readonly string[];
 }
 
 interface Issue {
@@ -113,11 +127,11 @@ function readRecord(path: string): string {
     }
 }
 
-function readOccurrences(directory: string): readonly Occurrence[] {
-    const byTest = new Map<string, { test: FlakyTest; jobs: Set<string> }>();
-    // A run whose failures were all consistent uploads no record, so nothing is downloaded.
+function readRecords(directory: string): ReadonlyMap<string, JobRecords> {
+    const byJob = new Map<string, JobRecords>();
+    // A run whose jobs recorded nothing uploads no record, so nothing is downloaded.
     if (!existsSync(directory)) {
-        return [];
+        return byJob;
     }
     for (const jobDirectory of readdirSync(directory, { withFileTypes: true })) {
         const name = JOB_DIRECTORY.exec(jobDirectory.name);
@@ -125,20 +139,81 @@ function readOccurrences(directory: string): readonly Occurrence[] {
             throw new Error(`Unexpected entry ${JSON.stringify(jobDirectory.name)} among the downloaded records.`);
         }
         const job = name[2] === undefined ? name[1] : `${name[1]} (${name[2]})`;
+        const records = byJob.get(job) ?? { flaky: [], failed: [] };
+        byJob.set(job, records);
         for (const file of readdirSync(join(directory, jobDirectory.name), { withFileTypes: true })) {
             const path = join(directory, jobDirectory.name, file.name);
-            if (!file.isFile() || !RECORD_FILE.test(file.name)) {
+            const kind = RECORD_FILE.exec(file.name);
+            if (!file.isFile() || kind === null) {
                 throw new Error(`Unexpected file ${JSON.stringify(file.name)} in the records of ${jobDirectory.name}.`);
             }
-            for (const test of parseFlakyTestRecord(readRecord(path))) {
-                const key = testKey(test);
-                const entry = byTest.get(key) ?? { test, jobs: new Set<string>() };
-                entry.jobs.add(job);
-                byTest.set(key, entry);
+            (kind[1] === undefined ? records.flaky : records.failed).push(...parseFlakyTestRecord(readRecord(path)));
+        }
+    }
+    return byJob;
+}
+
+function decodeJobs(value: unknown): readonly { readonly name: string; readonly conclusion: unknown }[] {
+    if (!isRecord(value) || !Array.isArray(value["jobs"])) {
+        throw new Error("GitHub returned an unexpected job list.");
+    }
+    const jobs: unknown[] = value["jobs"];
+    return jobs.map((job) => {
+        if (!isRecord(job) || typeof job["name"] !== "string") {
+            throw new Error("GitHub returned an unexpected job.");
+        }
+        return { name: job["name"], conclusion: job["conclusion"] };
+    });
+}
+
+// A rerun attempt lists every job of the run: the ones it reran and, unchanged, the ones that had already passed.
+async function passedJobs(github: GitHub, run: Run): Promise<ReadonlySet<string>> {
+    const names: string[] = [];
+    for (let page = 1; ; page += 1) {
+        const batch = decodeJobs(
+            await github("GET", `/actions/runs/${run.id}/attempts/${run.attempt}/jobs?per_page=100&page=${page}`),
+        );
+        names.push(...batch.filter((job) => job.conclusion === "success").map((job) => job.name));
+        if (batch.length < 100) {
+            return new Set(names);
+        }
+    }
+}
+
+// Record directories name the matrix job (`web (4)`); GitHub names it within its calling workflow (`pipeline / web (4)`).
+function jobPassed(passed: ReadonlySet<string>, job: string): boolean {
+    return [...passed].some((name) => name === job || name.endsWith(` / ${job}`));
+}
+
+function collectOccurrences(
+    current: ReadonlyMap<string, JobRecords>,
+    previous: ReadonlyMap<string, JobRecords>,
+    passed: ReadonlySet<string>,
+): readonly Occurrence[] {
+    const byTest = new Map<string, { test: FlakyTest; retried: Set<string>; rerun: Set<string> }>();
+    const add = (test: FlakyTest, job: string, kind: "retried" | "rerun"): void => {
+        const key = testKey(test);
+        const entry = byTest.get(key) ?? { test, retried: new Set<string>(), rerun: new Set<string>() };
+        entry[kind].add(job);
+        byTest.set(key, entry);
+    };
+    for (const [job, records] of current) {
+        for (const test of records.flaky) {
+            add(test, job, "retried");
+        }
+    }
+    for (const [job, records] of previous) {
+        if (jobPassed(passed, job)) {
+            for (const test of records.failed) {
+                add(test, job, "rerun");
             }
         }
     }
-    return [...byTest.values()].map(({ test, jobs }) => ({ test, jobs: [...jobs].sort() }));
+    return [...byTest.values()].map(({ test, retried, rerun }) => ({
+        test,
+        retried: [...retried].sort(),
+        rerun: [...rerun].sort(),
+    }));
 }
 
 function testKey(test: FlakyTest): string {
@@ -202,7 +277,7 @@ async function listTrackedIssues(github: GitHub): Promise<readonly Issue[]> {
 function issueBody(test: FlakyTest, fileUrl: string): string {
     return [
         "A test failed and then passed when retried against the same code, so its result does not depend only on the code.",
-        "The run that found it failed. Each occurrence is listed in the comments below.",
+        "Each occurrence is listed in the comments below.",
         "",
         `- **File:** [${code(test.file)}](${fileUrl})`,
         `- **Test:** ${code(test.name)}`,
@@ -213,14 +288,27 @@ function issueBody(test: FlakyTest, fileUrl: string): string {
     ].join("\n");
 }
 
-function occurrenceComment(run: Run, jobs: readonly string[]): string {
-    return `Flaky in [this run](${run.url}/attempts/${run.attempt}) (attempt ${run.attempt}, ${code(run.event)}, ${code(run.headSha.slice(0, 12))}), job ${jobs.map(code).join(", ")}.`;
+function occurrenceComment(run: Run, { retried, rerun }: Occurrence): string {
+    const context = `${code(run.event)}, ${code(run.headSha.slice(0, 12))}`;
+    const lines: string[] = [];
+    if (retried.length > 0) {
+        lines.push(
+            `Flaky in [this run](${run.url}/attempts/${run.attempt}) (attempt ${run.attempt}, ${context}), job ${retried.map(code).join(", ")}.`,
+        );
+    }
+    if (rerun.length > 0) {
+        lines.push(
+            `Failed in [attempt ${run.attempt - 1}](${run.url}/attempts/${run.attempt - 1}) and passed when job ${rerun.map(code).join(", ")} was rerun in [attempt ${run.attempt}](${run.url}/attempts/${run.attempt}) (${context}).`,
+        );
+    }
+    return lines.join("\n\n");
 }
 
 async function track(github: GitHub, serverRepositoryUrl: string, run: Run, occurrences: readonly Occurrence[]) {
     await ensureLabel(github);
     const issues = await listTrackedIssues(github);
-    for (const { test, jobs } of occurrences) {
+    for (const occurrence of occurrences) {
+        const { test } = occurrence;
         // A concurrent run may have opened a second issue for the test; the oldest one stays the record.
         const existing = issues
             .filter((issue) => issue.body.includes(marker(test)))
@@ -244,25 +332,37 @@ async function track(github: GitHub, serverRepositoryUrl: string, run: Run, occu
                 console.log(`Reopened #${number} for ${test.file} > ${test.name}`);
             }
         }
-        await github("POST", `/issues/${number}/comments`, { body: occurrenceComment(run, jobs) });
+        await github("POST", `/issues/${number}/comments`, { body: occurrenceComment(run, occurrence) });
     }
 }
 
+const attempt = Number(requiredEnvironment("RUN_ATTEMPT"));
+if (!Number.isSafeInteger(attempt) || attempt < 1) {
+    throw new Error("RUN_ATTEMPT must be a positive integer.");
+}
+const runId = requiredEnvironment("RUN_ID");
+if (!/^\d+$/.test(runId)) {
+    throw new Error("RUN_ID must be a numeric run ID.");
+}
 const run: Run = {
+    id: runId,
     url: requiredEnvironment("RUN_URL"),
-    attempt: requiredEnvironment("RUN_ATTEMPT"),
+    attempt,
     event: requiredEnvironment("RUN_EVENT"),
     headSha: requiredEnvironment("RUN_HEAD_SHA"),
 };
-const occurrences = readOccurrences(ARTIFACTS_DIRECTORY);
+const current = readRecords(ARTIFACTS_DIRECTORY);
+const previous = attempt > 1 ? readRecords(PREVIOUS_ARTIFACTS_DIRECTORY) : new Map<string, JobRecords>();
+const repository = requiredEnvironment("GITHUB_REPOSITORY");
+const github = createGitHub(repository, requiredEnvironment("GITHUB_TOKEN"));
+const rerunCandidates = [...previous.values()].some((records) => records.failed.length > 0);
+const occurrences = collectOccurrences(
+    current,
+    previous,
+    rerunCandidates ? await passedJobs(github, run) : new Set<string>(),
+);
 if (occurrences.length === 0) {
     console.log("No flaky tests were recorded by this run.");
 } else {
-    const repository = requiredEnvironment("GITHUB_REPOSITORY");
-    await track(
-        createGitHub(repository, requiredEnvironment("GITHUB_TOKEN")),
-        `https://github.com/${repository}`,
-        run,
-        occurrences,
-    );
+    await track(github, `https://github.com/${repository}`, run, occurrences);
 }

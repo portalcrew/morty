@@ -1,6 +1,6 @@
 import type { Plugin } from "vite";
 import type { Reporter, TestCase, TestModule } from "vitest/node";
-import { type FlakyTest, recordFlakyTests } from "./record.ts";
+import { type FlakyTest, recordFailedTests, recordFlakyTests } from "./record.ts";
 
 // A test that passed on its retry keeps the errors of its failed attempt, which the default reporter never prints.
 // They are the only evidence of why it failed, so the job log shows them, bounded.
@@ -34,13 +34,17 @@ function failedAttempt(test: TestCase): string[] {
 const flakyTestReporter: Reporter = {
     onTestRunEnd: (testModules: readonly TestModule[]) => {
         const flaky: { readonly record: FlakyTest; readonly test: TestCase }[] = [];
+        const failed: FlakyTest[] = [];
         for (const testModule of testModules) {
             for (const test of testModule.children.allTests()) {
                 if (test.diagnostic()?.flaky === true) {
                     flaky.push({ record: { file: testModule.moduleId, name: test.fullName }, test });
+                } else if (test.result().state === "failed") {
+                    failed.push({ file: testModule.moduleId, name: test.fullName });
                 }
             }
         }
+        recordFailedTests("vitest", failed);
         if (flaky.length === 0) {
             return;
         }
