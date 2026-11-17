@@ -220,6 +220,7 @@ export function FollowLatestScrollArea({
                         following.current = true;
                         setJumpToLatestVisible(false);
                     }}
+                    onMouseDown={(event) => event.preventDefault()}
                     size="icon"
                     tabIndex={jumpToLatestVisible ? undefined : -1}
                     variant="outline"

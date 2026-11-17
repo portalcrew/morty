@@ -21,6 +21,9 @@ for (const viewport of [
         await page.reload();
         await expect(userMessage).toContainText(prompt);
         await expect(response).toContainText(prompt);
+        if (viewport.width < 640) {
+            await page.getByRole("button", { name: "Expand message composer" }).click();
+        }
         await page.getByRole("textbox", { name: "Message" }).fill("hold after first delta");
         await page.getByRole("button", { name: "Send message" }).click();
         const messages = page.getByRole("log", { name: "Messages" });

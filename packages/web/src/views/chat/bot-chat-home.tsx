@@ -201,9 +201,6 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
         read: (signal) => workspace.requests.daemonDiagnostics(signal),
         readNetwork: (signal) => workspace.requests.networkDiagnostic(signal),
     };
-    const reportButton = (
-        <BugReportButton appearance="icon" daemonSource={sessionDiagnostics} dialog={workspace.bugReportDialog} />
-    );
     // Centered failure cards keep every row on the midline, so their report entry is a
     // labelled tertiary action below the recovery actions instead of an inline icon.
     const reportEntry = (
@@ -351,17 +348,19 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                                             {creationError.length > 0 && (
                                                 <div
                                                     aria-live="assertive"
-                                                    className="ml-auto flex max-w-[85%] items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-right text-xs text-destructive"
+                                                    className="ml-auto flex max-w-[85%] flex-col items-end gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-right text-xs text-destructive"
                                                     role="alert"
                                                 >
-                                                    <span className="min-w-0 flex-1 break-words">{creationError}</span>
-                                                    <Button
-                                                        disabled={presentation.retryDisabled}
-                                                        onClick={createConversation}
-                                                    >
-                                                        Retry message
-                                                    </Button>
-                                                    {reportButton}
+                                                    <span className="min-w-0 break-words">{creationError}</span>
+                                                    <div className="flex flex-wrap justify-end gap-2">
+                                                        <Button
+                                                            disabled={presentation.retryDisabled}
+                                                            onClick={createConversation}
+                                                        >
+                                                            Retry message
+                                                        </Button>
+                                                        {reportEntry}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>

@@ -73,6 +73,9 @@ for (const viewport of [
         await expect(dialog).toContainText("Claude Code");
         await expect(dialog).toContainText("Connected");
         await expect(dialog).toContainText("Online");
+        if (phone) {
+            await expect(dialog).toHaveCSS("transform", "none");
+        }
         const fullPath = await dialog.getByTestId(dataTestId.executionDirectory).textContent();
         expect(fullPath).toMatch(/\/workspace$/);
         const box = await dialog.boundingBox();

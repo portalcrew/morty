@@ -3,7 +3,7 @@ import { connect, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 import type { WebSocket } from "playwright-core";
 import { dataTestId } from "../web/src/data-testid.ts";
-import { test as base, conversationLoaded, expect } from "./infra/test.ts";
+import { test as base, conversationLoaded, expandMobileComposer, expect } from "./infra/test.ts";
 
 type Network = {
     readonly url: string;
@@ -163,6 +163,7 @@ test("Given a healthy conversation, when the stability timer and foreground sign
     await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
+    await expandMobileComposer(page);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
     await conversationLoaded(page);
@@ -171,6 +172,7 @@ test("Given a healthy conversation, when the stability timer and foreground sign
     await expect(page.getByRole("article", { name: "Agent response" })).toContainText(
         "Establish a healthy conversation.",
     );
+    await expandMobileComposer(page);
     await composer.fill("Keep this draft across a healthy resume.");
     const before = connections;
     await runtime.clock.runFor(25000);
@@ -209,12 +211,14 @@ test("Given an interrupted browser connection, when a task completes before fore
     await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
+    await expandMobileComposer(page);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
     await conversationLoaded(page);
     await composer.fill("hold after first delta");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("article", { name: "Agent response" })).toContainText("Partial reply");
+    await expandMobileComposer(page);
     await composer.fill("Preserve this unsent draft.");
     const closed = Promise.all(
         [...sockets].map((socket) => new Promise<void>((resolve) => socket.once("close", () => resolve()))),
@@ -265,6 +269,7 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
         await runtime.clock.install({ time: new Date("2026-10-23T00:00:00Z") });
         const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
         await page.goto(connected.url);
+        await expandMobileComposer(page);
         const composer = page.getByRole("textbox", { name: "Message" });
         await expect(composer).toBeEnabled();
         await conversationLoaded(page);
@@ -273,6 +278,7 @@ for (const recovery of ["automatic", "online", "manual"] as const) {
         await expect(page.getByRole("article", { name: "Agent response" })).toContainText(
             "Keep this conversation available.",
         );
+        await expandMobileComposer(page);
         await composer.fill("Preserve my unsent draft.");
         if (recovery === "manual") {
             await runtime.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
@@ -336,6 +342,7 @@ for (const route of ["session", "suspended"] as const) {
         await runtime.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
         const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
         await page.goto(connected.url);
+        await expandMobileComposer(page);
         const composer = page.getByRole("textbox", { name: "Message" });
         await expect(composer).toBeEnabled();
         await conversationLoaded(page);
@@ -344,6 +351,7 @@ for (const route of ["session", "suspended"] as const) {
         await expect(page.getByRole("article", { name: "Agent response" })).toContainText(
             "Remember the first response.",
         );
+        await expandMobileComposer(page);
         await composer.fill("Continue after resuming.");
         network.blackhole();
         runtime.clock.holdOpenTransports();
@@ -389,6 +397,7 @@ test("Given a silently stalled session without a lifecycle event, when its liven
     await runtime.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
+    await expandMobileComposer(page);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
     await conversationLoaded(page);
@@ -397,6 +406,7 @@ test("Given a silently stalled session without a lifecycle event, when its liven
     await expect(page.getByRole("article", { name: "Agent response" }).last()).toContainText(
         "Establish the conversation before the network stalls.",
     );
+    await expandMobileComposer(page);
     await composer.fill("Preserve this draft until transport recovery.");
     network.blackhole();
     runtime.clock.holdOpenTransports();
@@ -428,6 +438,7 @@ test("Given a live Session stream with stalled requests, when foreground hints p
     await runtime.clock.pauseAt(new Date("2026-10-23T00:01:00Z"));
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
+    await expandMobileComposer(page);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
     await conversationLoaded(page);
@@ -436,6 +447,7 @@ test("Given a live Session stream with stalled requests, when foreground hints p
     await expect(page.getByRole("article", { name: "Agent response" }).last()).toContainText(
         "Establish a live stream before stalling requests.",
     );
+    await expandMobileComposer(page);
     await composer.fill("Keep this draft on the live connection.");
     const before = connections;
     network.stallSessionRequests();
@@ -472,6 +484,7 @@ test("Given a mobile browser with an unsent draft, when its network is disabled 
     await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
+    await expandMobileComposer(page);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
     await conversationLoaded(page);
@@ -481,6 +494,7 @@ test("Given a mobile browser with an unsent draft, when its network is disabled 
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toContainText("No network connection");
     await expect(composer).toBeEnabled();
     await expect(page.getByRole("button", { name: "Send message" })).toBeDisabled();
+    await expandMobileComposer(page);
     await composer.fill("Keep this draft and my offline edits");
     await page.context().setOffline(false);
     await runtime.clock.runFor(5000);
@@ -501,6 +515,7 @@ test("Given an active turn on mobile, when the browser goes offline and the user
     await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
+    await expandMobileComposer(page);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
     await conversationLoaded(page);
@@ -510,6 +525,7 @@ test("Given an active turn on mobile, when the browser goes offline and the user
     await expect(page.getByRole("button", { name: "Stop agent output" })).toBeEnabled();
     await page.context().setOffline(true);
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toContainText("No network connection");
+    await expandMobileComposer(page);
     await composer.fill("Keep this follow-up");
     await expect(page.getByTestId(dataTestId.sendMessage)).toBeDisabled();
     await composer.press("Enter");

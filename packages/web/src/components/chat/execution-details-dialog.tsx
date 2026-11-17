@@ -83,10 +83,11 @@ export function ExecutionDetailsDialog({
     return (
         <Dialog.Root open={open} onOpenChange={onOpenChange}>
             <Dialog.Portal>
-                <Dialog.Overlay className="fixed inset-0 z-[190] bg-black/30" />
+                <Dialog.Overlay className="fixed inset-0 z-[190] bg-black/30 motion-safe:data-[state=open]:animate-cloud-enter motion-safe:data-[state=closed]:animate-sheet-backdrop-exit" />
                 <Dialog.Content
                     className={cn(
                         "fixed inset-x-0 bottom-0 z-[191] flex max-h-[85dvh] flex-col overflow-hidden rounded-t-[28px] pt-0 pb-[max(24px,env(safe-area-inset-bottom))] font-inter text-13 leading-5 text-foreground shadow-lg outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:flex sm:max-h-[calc(100dvh-2rem)] sm:max-w-[calc(100vw-24px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:border-white sm:bg-card sm:px-6 sm:pt-6 sm:pb-6",
+                        "motion-safe:max-sm:data-[state=open]:animate-sheet-enter motion-safe:max-sm:data-[state=closed]:animate-sheet-exit motion-safe:sm:data-[state=open]:animate-cloud-enter",
                         mobileSheetSurfaceClassName,
                         executionDetailsDialogDesktopWidthClassName,
                         "sm:rounded-overlay",

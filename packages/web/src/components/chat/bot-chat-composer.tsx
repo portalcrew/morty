@@ -9,6 +9,7 @@ import {
     useState,
 } from "react";
 import { dataTestId } from "../../data-testid.ts";
+import { cn } from "../../lib/utils.ts";
 import type { ComposerAttachmentStore } from "../../view-models/chat/composer-attachment-store.ts";
 import { createFileSource } from "../images/file-source.ts";
 import { ImageGallery, PreviewImage } from "../images/image-gallery.tsx";
@@ -18,6 +19,7 @@ import { Textarea } from "../ui/textarea.tsx";
 import { useToast } from "../ui/toast.tsx";
 import { useAutoGrowingTextarea } from "../utils/use-auto-growing-textarea.ts";
 import { useComposerFocus } from "../utils/use-composer-focus.ts";
+import { useMobileComposerActive } from "../utils/use-mobile-composer-active.ts";
 import { useScrollClippedEdges } from "../utils/use-scroll-clipped-edges.ts";
 import { useSoftwareKeyboardMarker } from "../utils/use-software-keyboard-marker.ts";
 import { chatSessionComposerClassName } from "./chat-session-layout.ts";
@@ -152,6 +154,14 @@ export function BotChatComposer({
     const clipped = useScrollClippedEdges(scrollViewport, composerScrollEdgeThresholdPx);
     const { attachments, state: attachmentState } = attachmentModel;
     const showToast = useToast();
+    const { active, activate, mobile, setActive } = useMobileComposerActive(textarea);
+    const collapsed =
+        mobile &&
+        !active &&
+        draft.trim().length === 0 &&
+        attachments.length === 0 &&
+        attachmentState.kind !== "reading" &&
+        outputState === "idle";
     const explainBlockedSend =
         outputState === "idle" &&
         submitDisabled &&
@@ -217,6 +227,13 @@ export function BotChatComposer({
 
     return (
         <form className={chatSessionComposerClassName} onSubmit={submit} ref={attachKeyboardMarker}>
+            <div
+                aria-hidden="true"
+                className={cn(
+                    "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-background from-50% to-transparent sm:hidden",
+                    collapsed ? "h-[calc(100%+3rem)]" : "h-[calc(100%+6rem)]",
+                )}
+            />
             {noticePlacement === "overlay" && (
                 <ComposerNoticeSlot
                     connectionNotice={connectionNotice}
@@ -225,119 +242,180 @@ export function BotChatComposer({
                     statusMessage={statusMessage}
                 />
             )}
-            <div className="flex max-h-64 flex-col rounded-[24px] border-[0.5px] border-border bg-surface-elevated px-3 pt-3 pb-2.5 shadow-[0_8px_28px_rgba(23,30,36,0.06)] has-[:focus]:border-[var(--color-border)] sm:min-h-[128px] sm:pb-3">
-                {attachments.length > 0 && (
-                    <ImageGallery>
-                        <ul aria-label="Attachments" className="mb-2 flex list-none flex-wrap gap-2 p-0">
-                            {attachments.map((attachment, index) => (
-                                <AttachmentPreview
-                                    attachment={attachment}
-                                    disabled={disabled}
-                                    key={`${attachment.kind}:${attachmentName(attachment)}:${index.toString()}`}
-                                    onRemove={() => attachmentModel.remove(index)}
-                                />
-                            ))}
-                        </ul>
-                    </ImageGallery>
+            <input
+                aria-label="Choose attachments"
+                accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,.svg,application/pdf,.pdf,text/*,.md,.json,.csv,.yaml,.yml,.xml"
+                className="sr-only"
+                disabled={disabled}
+                multiple
+                onChange={(event) => {
+                    if (event.currentTarget.files !== null) {
+                        setActive(true);
+                        attachmentModel.addFiles(Array.from(event.currentTarget.files), attachmentSignal);
+                        event.currentTarget.value = "";
+                    }
+                }}
+                ref={fileInput}
+                type="file"
+            />
+            <div
+                className={cn(
+                    "relative flex max-h-64 flex-col rounded-[24px] border-[0.5px] border-border bg-surface-elevated px-3 pt-3 pb-2.5 shadow-[0_8px_28px_rgba(23,30,36,0.06)] transition-[height,border-radius,padding] duration-250 ease-in-out motion-reduce:transition-none max-sm:overflow-hidden max-sm:border-[1px] max-sm:border-white max-sm:bg-card sm:min-h-[128px] sm:pb-3 sm:has-[:focus]:border-[var(--color-border)]",
+                    "max-sm:shadow-[0_4px_16px_0_rgba(0,0,0,0.04),0_4px_24px_0_rgba(0,0,0,0.06)]",
+                    !collapsed && draft.length === 0 && attachments.length === 0 && "max-sm:h-[128px]",
+                    collapsed && "max-sm:h-14 max-sm:rounded-[28px] max-sm:px-2 max-sm:py-2",
                 )}
-                <div className="relative flex min-h-0 flex-1 flex-col">
-                    <ScrollArea
-                        className="-mx-3 flex min-h-0 flex-1 flex-col"
-                        type="auto"
-                        viewportClassName="min-h-0 flex-1"
-                        viewportRef={scrollViewport}
-                        viewportStyle={{ maxHeight: composerTextareaMaxHeightPx }}
+            >
+                <div
+                    aria-hidden={!collapsed}
+                    className={cn(
+                        "absolute inset-0 flex items-center justify-between px-3 transition-[opacity,visibility] duration-250 ease-in-out motion-reduce:transition-none sm:hidden",
+                        collapsed ? "opacity-100" : "pointer-events-none invisible opacity-0",
+                    )}
+                >
+                    <button
+                        aria-label="Expand message composer"
+                        className="absolute inset-0 rounded-[28px] bg-card pr-12 pl-12 text-left text-[15px] text-morty-text-3 outline-none"
+                        onClick={activate}
+                        type="button"
                     >
-                        <Textarea
-                            aria-describedby="chat-composer-keyboard-hint"
-                            aria-label="Message"
-                            className="mb-2 min-h-[56px] w-full resize-none overflow-hidden px-4 pt-0 pb-1 text-14 placeholder:text-14 sm:min-h-[64px]"
-                            data-testid={dataTestId.messageComposer}
-                            disabled={disabled}
-                            onChange={(event) => onDraftChange(event.target.value)}
-                            onKeyDown={handleKeyDown}
-                            onPaste={handlePaste}
-                            placeholder="Ask me anything"
-                            ref={attachTextarea}
-                            value={draft}
-                        />
-                    </ScrollArea>
-                    <div
-                        aria-hidden="true"
-                        className={`pointer-events-none absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-surface-elevated to-surface-elevated/0 transition-opacity duration-150 motion-reduce:transition-none ${clipped.top ? "opacity-100" : "opacity-0"}`}
-                    />
-                    <div
-                        aria-hidden="true"
-                        className={`pointer-events-none absolute inset-x-0 -bottom-1 h-8 bg-gradient-to-t from-surface-elevated to-surface-elevated/0 transition-opacity duration-150 motion-reduce:transition-none ${clipped.bottom ? "opacity-100" : "opacity-0"}`}
-                    />
+                        Ask me anything
+                    </button>
+                    <button
+                        aria-label="Add attachment"
+                        className="relative z-10 flex size-9 items-center justify-center rounded-full text-copy-secondary outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 disabled:opacity-50"
+                        disabled={disabled || !canAttach}
+                        onClick={() => fileInput.current?.click()}
+                        title="Add attachment"
+                        type="button"
+                    >
+                        <Plus aria-hidden="true" className="size-4" />
+                    </button>
+                    <Button
+                        aria-label="Send message"
+                        className={`${composerActionButtonClassName} pointer-events-none relative z-10`}
+                        disabled
+                        size="icon"
+                    >
+                        <ArrowUp aria-hidden="true" className="size-[18px]" />
+                    </Button>
                 </div>
-                <div className="mt-1 flex shrink-0 items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-1">
-                        <button
-                            aria-label="Add attachment"
-                            className="flex size-9 items-center justify-center rounded-full text-copy-secondary outline-none transition-colors duration-150 hover:bg-black/[0.045] hover:text-foreground active:bg-black/[0.07] active:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 disabled:opacity-50 motion-reduce:transition-none"
-                            disabled={disabled || !canAttach}
-                            onClick={() => fileInput.current?.click()}
-                            title="Add attachment"
-                            type="button"
+                <div
+                    aria-hidden={collapsed || undefined}
+                    className={cn(
+                        "flex min-h-0 flex-col transition-[opacity,visibility,transform] duration-250 ease-in-out motion-reduce:transition-none",
+                        collapsed &&
+                            "max-sm:pointer-events-none max-sm:invisible max-sm:translate-y-2 max-sm:opacity-0",
+                    )}
+                >
+                    {attachments.length > 0 && (
+                        <ImageGallery>
+                            <ul aria-label="Attachments" className="mb-2 flex list-none flex-wrap gap-2 p-0">
+                                {attachments.map((attachment, index) => (
+                                    <AttachmentPreview
+                                        attachment={attachment}
+                                        disabled={disabled}
+                                        key={`${attachment.kind}:${attachmentName(attachment)}:${index.toString()}`}
+                                        onRemove={() => attachmentModel.remove(index)}
+                                    />
+                                ))}
+                            </ul>
+                        </ImageGallery>
+                    )}
+                    <div className="relative flex min-h-0 flex-1 flex-col">
+                        <ScrollArea
+                            className="-mx-3 flex min-h-0 flex-1 flex-col"
+                            type="auto"
+                            viewportClassName="min-h-0 flex-1"
+                            viewportRef={scrollViewport}
+                            viewportStyle={{ maxHeight: composerTextareaMaxHeightPx }}
                         >
-                            {attachmentState.kind === "reading" ? (
-                                <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
-                            ) : (
-                                <Plus className="size-4" />
-                            )}
-                        </button>
-                        <input
-                            aria-label="Choose attachments"
-                            accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,.svg,application/pdf,.pdf,text/*,.md,.json,.csv,.yaml,.yml,.xml"
-                            className="sr-only"
-                            disabled={disabled}
-                            multiple
-                            onChange={(event) => {
-                                if (event.currentTarget.files !== null) {
-                                    attachmentModel.addFiles(Array.from(event.currentTarget.files), attachmentSignal);
-                                    event.currentTarget.value = "";
-                                }
-                            }}
-                            ref={fileInput}
-                            type="file"
-                        />
-                        <ScrollArea className="min-w-0" orientation="horizontal" viewportClassName="w-full">
-                            <div className="flex w-max min-w-full items-center gap-1">{children}</div>
+                            <Textarea
+                                aria-describedby="chat-composer-keyboard-hint"
+                                aria-label="Message"
+                                className="mb-2 min-h-[56px] w-full resize-none overflow-hidden px-4 pt-0 pb-1 text-14 placeholder:text-14 max-sm:visible sm:min-h-[64px]"
+                                data-testid={dataTestId.messageComposer}
+                                disabled={disabled}
+                                onBlur={(event) => {
+                                    if (
+                                        !(event.relatedTarget instanceof Node) ||
+                                        !event.currentTarget.form?.contains(event.relatedTarget)
+                                    ) {
+                                        setActive(false);
+                                    }
+                                }}
+                                onChange={(event) => onDraftChange(event.target.value)}
+                                onFocus={() => setActive(true)}
+                                onKeyDown={handleKeyDown}
+                                onPaste={handlePaste}
+                                placeholder="Ask me anything"
+                                ref={attachTextarea}
+                                tabIndex={collapsed ? -1 : undefined}
+                                value={draft}
+                            />
                         </ScrollArea>
+                        <div
+                            aria-hidden="true"
+                            className={`pointer-events-none absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-surface-elevated to-surface-elevated/0 transition-opacity duration-150 motion-reduce:transition-none max-sm:from-card max-sm:to-card/0 ${clipped.top ? "opacity-100" : "opacity-0"}`}
+                        />
+                        <div
+                            aria-hidden="true"
+                            className={`pointer-events-none absolute inset-x-0 -bottom-1 h-8 bg-gradient-to-t from-surface-elevated to-surface-elevated/0 transition-opacity duration-150 motion-reduce:transition-none max-sm:from-card max-sm:to-card/0 ${clipped.bottom ? "opacity-100" : "opacity-0"}`}
+                        />
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                        <Button
-                            aria-busy={outputState === "sending"}
-                            aria-disabled={explainBlockedSend || undefined}
-                            aria-label={
-                                outputState === "sending"
-                                    ? "Sending message"
-                                    : outputState === "stopping"
-                                      ? "Stopping agent output"
-                                      : submitAction
-                                        ? "Send message"
-                                        : "Stop agent output"
-                            }
-                            className={`${composerActionButtonClassName}${explainBlockedSend ? " opacity-50" : ""}`}
-                            data-testid={dataTestId.sendMessage}
-                            disabled={
-                                outputState === "sending" ||
-                                outputState === "stopping" ||
-                                (outputState === "idle" && submitDisabled && !explainBlockedSend) ||
-                                (outputState === "running" && stopDisabled)
-                            }
-                            onClick={outputState === "running" && !submitAction ? onStop : undefined}
-                            size="icon"
-                            title={explainBlockedSend ? sendBlockedMessage : undefined}
-                            type={submitAction ? "submit" : "button"}
-                        >
-                            {submitAction || outputState === "sending" ? (
-                                <ArrowUp aria-hidden="true" className="size-[18px]" />
-                            ) : (
-                                <Square aria-hidden="true" className="size-3! fill-current" />
-                            )}
-                        </Button>
+                    <div className="mt-1 flex shrink-0 items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-1">
+                            <button
+                                aria-label="Add attachment"
+                                className="flex size-9 items-center justify-center rounded-full text-copy-secondary outline-none transition-colors duration-150 hover:bg-black/[0.045] hover:text-foreground active:bg-black/[0.07] active:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 disabled:opacity-50 motion-reduce:transition-none"
+                                disabled={disabled || !canAttach}
+                                onClick={() => fileInput.current?.click()}
+                                title="Add attachment"
+                                type="button"
+                            >
+                                {attachmentState.kind === "reading" ? (
+                                    <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
+                                ) : (
+                                    <Plus className="size-4" />
+                                )}
+                            </button>
+                            <ScrollArea className="min-w-0" orientation="horizontal" viewportClassName="w-full">
+                                <div className="flex w-max min-w-full items-center gap-1">{children}</div>
+                            </ScrollArea>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                            <Button
+                                aria-busy={outputState === "sending"}
+                                aria-disabled={explainBlockedSend || undefined}
+                                aria-label={
+                                    outputState === "sending"
+                                        ? "Sending message"
+                                        : outputState === "stopping"
+                                          ? "Stopping agent output"
+                                          : submitAction
+                                            ? "Send message"
+                                            : "Stop agent output"
+                                }
+                                className={`${composerActionButtonClassName}${explainBlockedSend ? " opacity-50" : ""}`}
+                                data-testid={dataTestId.sendMessage}
+                                disabled={
+                                    outputState === "sending" ||
+                                    outputState === "stopping" ||
+                                    (outputState === "idle" && submitDisabled && !explainBlockedSend) ||
+                                    (outputState === "running" && stopDisabled)
+                                }
+                                onClick={outputState === "running" && !submitAction ? onStop : undefined}
+                                size="icon"
+                                title={explainBlockedSend ? sendBlockedMessage : undefined}
+                                type={submitAction ? "submit" : "button"}
+                            >
+                                {submitAction || outputState === "sending" ? (
+                                    <ArrowUp aria-hidden="true" className="size-[18px]" />
+                                ) : (
+                                    <Square aria-hidden="true" className="size-3! fill-current" />
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>

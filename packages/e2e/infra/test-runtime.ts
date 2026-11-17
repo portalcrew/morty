@@ -129,6 +129,9 @@ export async function createTestRuntime(
                 await chat.bindAgent(harness, access);
                 await chat.readBinding(harness);
                 await page.goto(await chat.browserHandoff(access));
+                if ((page.viewportSize()?.width ?? 640) < 640) {
+                    await page.getByRole("button", { name: "Expand message composer" }).click();
+                }
             },
             disconnectRuntime: async () => await runtime.disconnect(),
             restartRuntime: async () => await runtime.restart(),
