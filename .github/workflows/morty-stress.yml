@@ -1,0 +1,87 @@
+name: Morty stress
+
+# Every browser journey runs several times against main on a runner held to one CPU, as a degraded runner is. A journey
+# whose result depends on timing then fails and passes against the same code here, before it does in the merge queue.
+# The run fails like any flaky run, and flaky-tests.yml tracks each such journey. Pull requests never wait on it.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: morty-stress
+  cancel-in-progress: false
+
+jobs:
+  # The pipeline pins the browser image and the real Codex boundary; reading its pins keeps them defined once, so a
+  # stress run exercises exactly what the merge queue exercises.
+  environment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      image: ${{ steps.pins.outputs.image }}
+      codex: ${{ steps.pins.outputs.codex }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read the pipeline's browser pins
+        id: pins
+        run: |
+          pipeline=.github/workflows/morty-pipeline.yml
+          image="$(grep -oE 'mcr\.microsoft\.com/playwright:v[0-9.]+-[a-z]+@sha256:[0-9a-f]{64}' "$pipeline" | sort -u)"
+          codex="$(grep -oE '@openai/codex@[0-9]+\.[0-9]+\.[0-9]+' "$pipeline" | sort -u)"
+          test "$(printf '%s' "$image" | grep -c '')" = 1
+          test "$(printf '%s' "$codex" | grep -c '')" = 1
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "codex=$codex" >> "$GITHUB_OUTPUT"
+
+  browser:
+    needs: environment
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.environment.outputs.image }} # zizmor: ignore[unpinned-images] The pipeline's image, read only when pinned by its sha256 digest.
+      options: --user 1001 --cpus 1
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:cli
+      - name: Install the accepted real Codex boundary dependency
+        env:
+          CODEX_PACKAGE: ${{ needs.environment.outputs.codex }}
+        run: npm install --global "$CODEX_PACKAGE"
+      - run: pnpm test:e2e --shard=${{ matrix.shard }}/8 --repeat-each=3
+        env:
+          MORTY_E2E_ARTIFACT_ROOT: e2e-diagnostics
+          MORTY_FLAKY_TESTS_DIR: test-results/flaky-tests/browser-${{ matrix.shard }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: browser-failure-${{ matrix.shard }}
+          path: |
+            packages/e2e/test-results
+            packages/e2e/e2e-diagnostics
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: flaky-tests-${{ github.run_attempt }}-browser-${{ matrix.shard }}
+          path: test-results/flaky-tests/
+          if-no-files-found: ignore
