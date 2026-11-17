@@ -1,5 +1,6 @@
 import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
-import type { NativeSessionTarget, SessionStatus } from "@portalcrew/morty-client/protocol";
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
+import type { ExecutionReceipts } from "./execution-receipts.ts";
 
 type ExecutionPhase = "preparing" | "started" | "settled";
 
@@ -22,16 +23,15 @@ export type ExecutionActivity =
 
 interface Execution {
     readonly commandId: string;
-    readonly phase: ExecutionPhase;
     readonly cancellation: Cancellation;
     readonly preparation: AbortController;
 }
 
 /**
- * The single authority for which command each Session is executing and in what phase. Every reader asks it: the
- * Session rules decide from its `activity`, a cancellation stops only the execution it names, and the Session's
- * working/idle status is derived from it. From the moment an execution begins, its cancellation is recorded here and
- * nowhere else.
+ * Which command each Session is executing, and that execution's cancellation and preparation. Every reader asks it:
+ * the Session rules decide from its `activity`, and a cancellation stops only the execution it names. From the moment
+ * an execution begins, its cancellation is recorded here and nowhere else. How far the command went is its execution
+ * receipt's: the phase is read from there, never kept here.
  *
  * Contract: admission is the only owner of whether a Session is busy, so `begin` requires an idle Session. Each
  * transition names its command and is ignored for any other. All operations are synchronous, so a check and the
@@ -39,6 +39,7 @@ interface Execution {
  */
 export class ActiveExecutions {
     readonly #entries = new NativeSessionMap<Execution>();
+    readonly #received: ExecutionReceipts["received"];
     readonly #onStopChanged: (sessionTarget: NativeSessionTarget, commandId: string, stopping: boolean) => void;
 
     /**
@@ -46,13 +47,27 @@ export class ActiveExecutions {
      * before the stop runs, so it precedes whatever stopping records. Before its start a command is no turn of the
      * Session, and once it settled its terminal event has told how it ended.
      */
-    constructor(onStopChanged: (sessionTarget: NativeSessionTarget, commandId: string, stopping: boolean) => void) {
+    constructor(
+        received: ExecutionReceipts["received"],
+        onStopChanged: (sessionTarget: NativeSessionTarget, commandId: string, stopping: boolean) => void,
+    ) {
+        this.#received = received;
         this.#onStopChanged = onStopChanged;
     }
 
-    readonly status = (sessionTarget: NativeSessionTarget): SessionStatus => {
-        const execution = this.#entries.get(sessionTarget);
-        return execution === undefined ? { kind: "idle" } : { commandId: execution.commandId, kind: "working" };
+    readonly #phase = (sessionTarget: NativeSessionTarget, commandId: string): ExecutionPhase => {
+        const received = this.#received(commandId, sessionTarget);
+        switch (received.kind) {
+            case "unseen":
+            case "pending":
+                return "preparing";
+            case "started":
+                return "started";
+            case "settled":
+                return "settled";
+            default:
+                return received satisfies never;
+        }
     };
 
     readonly activity = (sessionTarget: NativeSessionTarget): ExecutionActivity => {
@@ -62,7 +77,7 @@ export class ActiveExecutions {
             : {
                   kind: "running",
                   commandId: execution.commandId,
-                  phase: execution.phase,
+                  phase: this.#phase(sessionTarget, execution.commandId),
                   cancellationRequested: execution.cancellation.kind === "requested",
               };
     };
@@ -72,7 +87,9 @@ export class ActiveExecutions {
 
     readonly agentCommand = (sessionTarget: NativeSessionTarget): string | undefined => {
         const execution = this.#entries.get(sessionTarget);
-        return execution?.phase === "started" ? execution.commandId : undefined;
+        return execution !== undefined && this.#phase(sessionTarget, execution.commandId) === "started"
+            ? execution.commandId
+            : undefined;
     };
 
     readonly cancellationRequested = (sessionTarget: NativeSessionTarget, commandId: string): boolean => {
@@ -105,32 +122,8 @@ export class ActiveExecutions {
             throw new Error("A Session executes one command at a time");
         }
         const preparation = new AbortController();
-        this.#entries.set(sessionTarget, {
-            commandId,
-            phase: "preparing",
-            cancellation: { kind: "none" },
-            preparation,
-        });
+        this.#entries.set(sessionTarget, { commandId, cancellation: { kind: "none" }, preparation });
         return preparation.signal;
-    };
-
-    /** The Agent receives the prompt. A cancelled execution must not start. */
-    readonly start = (sessionTarget: NativeSessionTarget, commandId: string): void => {
-        const execution = this.#entries.get(sessionTarget);
-        if (execution?.commandId !== commandId || execution.phase !== "preparing") {
-            throw new Error("Only the Session's preparing execution can start");
-        }
-        if (execution.cancellation.kind !== "none") {
-            throw new Error("A cancelled execution cannot start");
-        }
-        this.#entries.set(sessionTarget, { ...execution, phase: "started" });
-    };
-
-    readonly settle = (sessionTarget: NativeSessionTarget, commandId: string): void => {
-        const execution = this.#entries.get(sessionTarget);
-        if (execution?.commandId === commandId) {
-            this.#entries.set(sessionTarget, { ...execution, phase: "settled" });
-        }
     };
 
     /**
@@ -156,10 +149,11 @@ export class ActiveExecutions {
             ...execution,
             cancellation: { kind: "requested", attempt: { kind: "stopping", completion: completion.promise } },
         });
-        if (execution.phase === "preparing") {
+        const phase = this.#phase(sessionTarget, commandId);
+        if (phase === "preparing") {
             execution.preparation.abort(new Error("The Agent turn was cancelled before it started"));
         }
-        if (execution.phase === "started") {
+        if (phase === "started") {
             this.#onStopChanged(sessionTarget, commandId, true);
         }
         void (async () => await stop())().then(completion.resolve, (error: unknown) => {
@@ -182,7 +176,7 @@ export class ActiveExecutions {
                 ...execution,
                 cancellation: { kind: "requested", attempt: { kind: "failed" } },
             });
-            if (execution.phase === "started") {
+            if (this.#phase(sessionTarget, commandId) === "started") {
                 this.#onStopChanged(sessionTarget, commandId, false);
             }
         }

@@ -86,7 +86,6 @@ describe("ACP conversation sessions", () => {
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -148,7 +147,6 @@ describe("ACP conversation sessions", () => {
             store,
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -196,7 +194,6 @@ describe("ACP conversation sessions", () => {
                 store,
                 adapters: acpAdapters,
                 onSessionClosed: () => undefined,
-                lastEndedTurn: () => undefined,
                 settledTurns: () => [],
                 hasUnsettledTurn: () => false,
                 contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -716,7 +713,6 @@ describe("ACP conversation sessions", () => {
             store: firstStore,
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -763,7 +759,6 @@ describe("ACP conversation sessions", () => {
             store: restartedStore,
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -824,7 +819,6 @@ child.once("exit", (code) => process.exit(code ?? 84));
                 store: new MemorySessionStore(),
                 adapters: acpAdapters,
                 onSessionClosed: () => undefined,
-                lastEndedTurn: () => undefined,
                 settledTurns: () => [],
                 hasUnsettledTurn: () => false,
                 contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -868,6 +862,11 @@ child.once("exit", (code) => process.exit(code ?? 84));
                 const hangingTurn = manager.runPrompt({
                     agent,
                     commandId: "pi-hanging-command",
+                    lifecycle: {
+                        attemptId: "pi-hanging-command-attempt",
+                        content: [{ text: "hold after first delta", type: "text" }],
+                        dispatch: { kind: "own" },
+                    },
                     cwd: process.cwd(),
                     images: [],
                     prompt: "hold after first delta",
@@ -929,7 +928,6 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1013,7 +1011,6 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1107,7 +1104,6 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store,
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1148,6 +1144,11 @@ child.once("exit", (code) => process.exit(code ?? 84));
         const activeTurn = manager.runPrompt({
             agent,
             commandId: "conversation-1-active",
+            lifecycle: {
+                attemptId: "conversation-1-active-attempt",
+                content: [{ text: "wait until cancelled", type: "text" }],
+                dispatch: { kind: "own" },
+            },
             cwd: temporaryDirectory,
             images: [],
             prompt: "wait until cancelled",
@@ -1221,7 +1222,6 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1278,7 +1278,6 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1331,7 +1330,6 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1396,7 +1394,6 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1463,7 +1460,6 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1536,6 +1532,11 @@ agent.once("exit", (code) => process.exit(code ?? 84));
             const cancelledTurn = manager.runPrompt({
                 agent,
                 commandId: "command-cancelled-tree",
+                lifecycle: {
+                    attemptId: "command-cancelled-tree-attempt",
+                    content: [{ text: "wait until cancelled", type: "text" }],
+                    dispatch: { kind: "own" },
+                },
                 cwd: temporaryDirectory,
                 images: [],
                 prompt: "wait until cancelled",
@@ -1587,7 +1588,6 @@ agent.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>

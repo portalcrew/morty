@@ -40,7 +40,6 @@ export async function codexFixture(
         store,
         adapters,
         onSessionClosed: () => undefined,
-        lastEndedTurn: () => undefined,
         settledTurns: () => [],
         hasUnsettledTurn: () => false,
         contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -74,6 +73,7 @@ export async function codexFixture(
         directories,
         sessions.sessions,
         creations,
+        () => ({ kind: "idle" }),
         () => ({
             turn: null,
             queued: [],

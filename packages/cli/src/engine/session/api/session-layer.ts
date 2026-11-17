@@ -72,7 +72,7 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         store: sessionStore,
         processes: options.processes,
         onSessionClosed: sink.publishClosed,
-        lastEndedTurn: operations.lastEndedTurn,
+        received: operations.received,
         settledTurns: operations.settledTurns,
         hasUnsettledTurn: activeSessions.hasUnsettledTurn,
         timer,
@@ -95,30 +95,20 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         directories,
         manager,
         sessionCreations,
-        (request): SessionExecution => {
-            const interactions = manager.pendingInteractions(request.target);
-            const { turn, queued } = activeSessions.executionSnapshot(request.target);
-            const read = {
-                queued,
-                executionPosition: standings.position(request.target),
-                interactions,
-                ...(request.deliveryCommandId === undefined
-                    ? {}
-                    : {
-                          delivery: {
-                              commandId: request.deliveryCommandId,
-                              standing: standings.standing(request.deliveryCommandId, request.target),
-                          },
-                      }),
-            };
-            // How the last started command ended is told only while the Session executes none; a command still
-            // preparing has not started, so it is no `turn` yet.
-            if (turn !== null || manager.isExecuting(request.target)) {
-                return { ...read, turn };
-            }
-            const lastTurn = operations.lastTurn(request.target);
-            return { ...read, turn: null, ...(lastTurn === undefined ? {} : { lastTurn }) };
-        },
+        activeSessions.status,
+        (request): SessionExecution => ({
+            ...activeSessions.execution(request.target),
+            executionPosition: standings.position(request.target),
+            interactions: manager.pendingInteractions(request.target),
+            ...(request.deliveryCommandId === undefined
+                ? {}
+                : {
+                      delivery: {
+                          commandId: request.deliveryCommandId,
+                          standing: standings.standing(request.deliveryCommandId, request.target),
+                      },
+                  }),
+        }),
     );
     // Outcomes retained across a restart are published once. The sink keeps them until the Relay connects,
     // and a later reconnect does not replay events it already sent. An outcome the previous process recorded is

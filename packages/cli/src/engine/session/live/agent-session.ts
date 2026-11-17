@@ -787,8 +787,8 @@ export class AgentSession {
     };
 
     /**
-     * Hands a prepared prompt to the Agent. Precondition: `preparePrompt` completed and the Session's execution
-     * authority records this command as started. `cancellationRequested` reads that authority's cancellation of it.
+     * Hands a prepared prompt to the Agent. Precondition: `preparePrompt` completed and the Session executes this
+     * command. `cancellationRequested` reads that execution's cancellation.
      */
     readonly prompt = async (
         options: SessionTurnOptions & { readonly cancellationRequested: () => boolean },

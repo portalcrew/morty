@@ -15,7 +15,8 @@ export interface SessionExecutions {
 
 /**
  * One session's in-flight turns: FIFO admission, steering, and interaction recording. Admission is the only place
- * that decides whether the Session is busy; whether a turn started is read from its execution receipt.
+ * that decides whether the Session is working: its `working` turn is the one every later prompt waits behind. Whether
+ * a turn started is read from its execution receipt.
  */
 export class SessionExecutionState {
     readonly #sessionTarget: NativeSessionTarget;
@@ -45,15 +46,18 @@ export class SessionExecutionState {
             () => this.#executions.stopping(this.#sessionTarget, command.commandId),
         );
         this.#turnsByCommandId.set(command.commandId, turn);
-        if (command.disposition !== SessionPromptDisposition.Steer && this.#head() !== turn) {
+        if (command.disposition !== SessionPromptDisposition.Steer && this.working() !== turn) {
             turn.enqueue();
             onQueued();
         }
         return turn;
     };
 
-    /** The earliest turn that owns an execution: a promoted prompt steers instead and holds no place. */
-    readonly #head = (): ActiveRuntimeTurn | undefined =>
+    /**
+     * The turn the Session is working on, from its arrival, through preparation and execution, until it ends: the
+     * earliest turn that owns an execution. A promoted prompt steers instead and holds no place.
+     */
+    readonly working = (): ActiveRuntimeTurn | undefined =>
         [...this.#turnsByCommandId.values()].find((candidate) => !candidate.isSteering());
 
     readonly get = (commandId: string): ActiveRuntimeTurn | undefined => this.#turnsByCommandId.get(commandId);
@@ -86,7 +90,7 @@ export class SessionExecutionState {
         }
         for (;;) {
             waitSignal.throwIfAborted();
-            const first = this.#head();
+            const first = this.working();
             if (first === undefined || first === turn) {
                 return turn.admit({ kind: "own" });
             }

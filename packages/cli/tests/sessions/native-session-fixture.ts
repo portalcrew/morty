@@ -110,7 +110,6 @@ export async function fixture(
         store,
         adapters,
         onSessionClosed: () => undefined,
-        lastEndedTurn: () => undefined,
         settledTurns: () => [],
         hasUnsettledTurn: () => false,
         contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -144,6 +143,7 @@ export async function fixture(
         directories,
         sessions.sessions,
         creations,
+        () => ({ kind: "idle" }),
         () => ({
             turn: null,
             queued: [],
@@ -163,7 +163,6 @@ export async function fixture(
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -241,7 +240,6 @@ export async function fixture(
                 store,
                 adapters,
                 onSessionClosed: () => undefined,
-                lastEndedTurn: () => undefined,
                 settledTurns: () => [],
                 hasUnsettledTurn: () => false,
                 contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -262,6 +260,7 @@ export async function fixture(
                 directories,
                 sessions.sessions,
                 creations,
+                () => ({ kind: "idle" }),
                 () => ({
                     turn: null,
                     queued: [],
