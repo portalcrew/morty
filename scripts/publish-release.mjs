@@ -17,7 +17,8 @@ const provenance = process.env.GITHUB_REPOSITORY_VISIBILITY === "public";
 const interrupted = new AbortController();
 process.once("SIGINT", () => interrupted.abort());
 process.once("SIGTERM", () => interrupted.abort());
-const signal = AbortSignal.any([interrupted.signal, AbortSignal.timeout(8 * 60_000)]);
+// npm has taken about ten minutes to show an accepted version and its latest tag.
+const signal = AbortSignal.any([interrupted.signal, AbortSignal.timeout(25 * 60_000)]);
 const registryUrl = `https://registry.npmjs.org/${encodeURIComponent(release.name)}/${release.version}`;
 
 async function registryContainsAcceptedRelease() {

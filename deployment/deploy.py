@@ -188,7 +188,12 @@ def main():
                 with urllib.request.urlopen(urllib.request.Request(expected['asset_origin'] + '/' + entry['key'], headers={'Origin': expected['morty_origin'], 'User-Agent': 'Morty-Deployment/1.0'}), timeout=40) as response:
                     if hashlib.sha256(response.read()).hexdigest() != hashlib.sha256(Path(entry['file']).read_bytes()).hexdigest() or response.headers.get('Access-Control-Allow-Origin') != expected['morty_origin'] or 'immutable' not in response.headers.get('Cache-Control', ''):
                         raise ValueError('Asset content, CORS, or cache verification failed')
-            deployed = cloud(deployments)['deployments'][0]
+            # The deployments API can still list the previous deployment shortly after Wrangler returns.
+            for _ in range(24):
+                deployed = cloud(deployments)['deployments'][0]
+                if deployed.get('annotations', {}).get('workers/message') == 'morty ' + manifest['revision']:
+                    break
+                time.sleep(5)
             if len(deployed['versions']) != 1 or deployed['versions'][0]['percentage'] != 100:
                 raise ValueError('Unexpected gradual deployment')
             if deployed.get('annotations', {}).get('workers/message') != 'morty ' + manifest['revision']:
