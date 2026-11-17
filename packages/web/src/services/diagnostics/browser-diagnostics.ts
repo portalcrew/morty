@@ -1,36 +1,52 @@
 import type { MortyLiveEventsObservation, MortyRequestObservation } from "@portalcrew/morty-client";
 import type { ComputerDiagnosticsResult } from "@portalcrew/morty-client/protocol";
+import {
+    BROWSER_DIAGNOSTICS_MAX_ENTRIES,
+    type BrowserDiagnostic,
+    browserDiagnosticsEntry,
+    centralSessionStorage,
+} from "../session-storage/central-session-storage.ts";
 import type { ChatDiagnostics } from "./model-catalog.ts";
 import type { ServerNetworkOperations } from "./network-diagnostics.ts";
 
-export interface BrowserDiagnostic {
-    readonly at: string;
-    readonly component: "worker" | "relay" | "web";
-    readonly operation: string;
-    readonly outcome: string;
-    readonly requestId: string;
-    readonly elapsedMs: number;
-    readonly attempt?: number;
-}
-const entries: BrowserDiagnostic[] = [];
-let discarded = 0;
+const RETENTION_MILLISECONDS = 24 * 60 * 60 * 1_000;
+// Records that could not be stored; counted so a report never passes a gap off as a quiet history.
+let unstored = 0;
+
+/**
+ * Records are kept, oldest first, in this tab's session storage. Records older than a day or beyond the newest
+ * hundred are dropped and counted as discarded.
+ */
 export function recordBrowserDiagnostic(entry: BrowserDiagnostic): void {
-    entries.push({
-        ...entry,
-        operation: entry.operation.slice(0, 80),
-        outcome: entry.outcome.slice(0, 64),
-        requestId: entry.requestId.slice(0, 64),
+    const stored = centralSessionStorage.read(browserDiagnosticsEntry) ?? { entries: [], discarded: 0 };
+    const recordedAt = Date.parse(entry.at);
+    const retained = stored.entries.filter(({ at }) => recordedAt - Date.parse(at) <= RETENTION_MILLISECONDS);
+    const entries = [
+        ...retained,
+        {
+            ...entry,
+            operation: entry.operation.slice(0, 80),
+            outcome: entry.outcome.slice(0, 64),
+            requestId: entry.requestId.slice(0, 64),
+        },
+    ];
+    const overflow = Math.max(0, entries.length - BROWSER_DIAGNOSTICS_MAX_ENTRIES);
+    const written = centralSessionStorage.write(browserDiagnosticsEntry, {
+        entries: entries.slice(overflow),
+        discarded: stored.discarded + (stored.entries.length - retained.length) + overflow,
     });
-    if (entries.length > 100) {
-        entries.shift();
-        discarded += 1;
+    if (!written) {
+        unstored += 1;
     }
 }
 interface BrowserDiagnosticsSnapshot {
     readonly entries: readonly BrowserDiagnostic[];
     readonly discarded: number;
 }
-export const browserDiagnosticsSnapshot = (): BrowserDiagnosticsSnapshot => ({ entries: [...entries], discarded });
+export const browserDiagnosticsSnapshot = (): BrowserDiagnosticsSnapshot => {
+    const stored = centralSessionStorage.read(browserDiagnosticsEntry) ?? { entries: [], discarded: 0 };
+    return { entries: stored.entries, discarded: stored.discarded + unstored };
+};
 
 export interface DaemonDiagnosticsSource extends ServerNetworkOperations {
     readonly computerId: string;
