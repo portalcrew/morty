@@ -15,7 +15,10 @@ export async function conversationLoaded(page: Page): Promise<void> {
     ).toBeHidden();
 }
 
-/** Opens the compact phone composer before a test types or inspects its draft. */
+/**
+ * Taps the phone composer before a test types or inspects its draft. Only a focused composer stays open: an idle,
+ * empty one collapses as soon as it is unfocused, as it is after a touch send.
+ */
 export async function expandMobileComposer(page: Page): Promise<void> {
     if ((page.viewportSize()?.width ?? 640) >= 640) {
         return;
@@ -23,11 +26,13 @@ export async function expandMobileComposer(page: Page): Promise<void> {
     const expand = page.getByRole("button", { name: "Expand message composer" });
     const textbox = page.getByRole("textbox", { name: "Message" });
     await expect(async () => {
-        if (await textbox.isVisible()) {
-            return;
+        if (!(await textbox.isVisible())) {
+            await expand.click({ timeout: 2000 });
         }
-        await expand.click({ timeout: 2000 });
-        await expect(textbox).toBeVisible({ timeout: 2000 });
+        if (await textbox.isEnabled({ timeout: 2000 })) {
+            await textbox.focus({ timeout: 2000 });
+            await expect(textbox).toBeFocused({ timeout: 2000 });
+        }
     }).toPass({ timeout: 30_000 });
 }
 
