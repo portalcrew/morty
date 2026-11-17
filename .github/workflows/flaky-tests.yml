@@ -5,7 +5,7 @@ name: Flaky tests
 # flaky tests are tracked until they are fixed.
 on:
   workflow_run: # zizmor: ignore[dangerous-triggers] Runs only default-branch code; the tested run's artifacts are validated as data and never executed.
-    workflows: [Morty CI, Morty CLI]
+    workflows: [Morty CI, Morty CLI, Morty stress]
     types: [completed]
 
 permissions: {}
