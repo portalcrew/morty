@@ -185,3 +185,57 @@ test("Given an unconfirmed message after a reload, When another device runs a tu
         ),
     );
 });
+
+test("Given a message whose delivery is unknown, When I remove it and the Computer then receives that same prompt, Then the Computer does not run it and the conversation does not show it", {
+    timeout: dedicatedEnvironmentTimeout,
+}, async ({ signal }) => {
+    const environment = await createChatWorkerEnvironment(true);
+    onTestFinished(() => environment.close());
+    const clock = new TestClock("2026-10-30T08:00:00Z");
+    const app = await createTestApp({ environment, connectAgent: true, clock });
+    const { network, daemon } = app;
+    if (network === null || daemon === null) {
+        throw new Error("Expected the controllable network and real Computer");
+    }
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Established session");
+    await app.waitForView(() => {
+        expect(app.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain("Established session");
+        expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
+    });
+    const sessionId = new URL(window.location.href).searchParams.get("sessionId");
+    if (sessionId === null) {
+        throw new Error("Expected an open Session");
+    }
+    network.interruptNextTurn("before-acceptance");
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "Never run this message");
+    await app.waitForView(() => getByRole(document.body, "button", { name: "Retry message with unknown delivery" }));
+    const original = await app.readSubmission(network.submissions.at(-1), signal);
+    network.reconnect();
+    const reloaded = await app.reload();
+    const remove = await reloaded.waitForView(() => {
+        const button = getByRole(document.body, "button", { name: "Remove message" });
+        expect(button.hasAttribute("disabled")).toBe(false);
+        return button;
+    });
+    await reloaded.user.click(remove);
+    await reloaded.waitForView(() => {
+        expect(queryByRole(document.body, "button", { name: "Retry message with unknown delivery" })).toBeNull();
+        expect(getByRole(document.body, "log", { name: "Messages" }).textContent).not.toContain(
+            "Never run this message",
+        );
+    });
+
+    await expect(daemon.submitTurn(sessionId, original.prompt, signal, original.commandId)).rejects.toMatchObject({
+        code: "command_identity_conflict",
+    });
+    await sendPrompt(reloaded, await reloaded.queryElementByTestId(dataTestId.messageComposer), "Keep chatting");
+    await reloaded.waitForView(() => {
+        expect(reloaded.elementsByTestId(dataTestId.agentResponse).at(-1)?.textContent).toContain("Keep chatting");
+        expect(reloaded.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
+    });
+    expect(getByRole(document.body, "log", { name: "Messages" }).textContent).not.toContain("Never run this message");
+    expect(reloaded.elementsByTestId(dataTestId.userMessage).map((message) => message.textContent)).toEqual([
+        "Established session",
+        "Keep chatting",
+    ]);
+});

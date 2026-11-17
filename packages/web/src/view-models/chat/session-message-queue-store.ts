@@ -51,6 +51,11 @@ export interface SessionMessageQueueStore {
      */
     readonly editMessage: (message: ChatQueuedMessage, signal: AbortSignal) => Promise<void>;
     readonly steerMessage: (message: ChatQueuedMessage, signal: AbortSignal) => Promise<boolean>;
+    /**
+     * Withdraws a message whose delivery is unconfirmed, as a queued one is deleted: the Computer withdraws it if
+     * queued, and reserves an identity it has not seen so the message never runs. True when the Computer withdrew it.
+     */
+    readonly withdrawUnconfirmed: (commandId: string, signal: AbortSignal) => Promise<boolean>;
 }
 
 export function queuedMessages(
@@ -132,8 +137,11 @@ export const createSessionMessageQueueStore = (options: {
                 return isAuthoritativeFailure(cause) ? { kind: "refused", cause } : { kind: "unconfirmed", cause };
             }
         };
-        const withdraw = async (message: ChatQueuedMessage, signal: AbortSignal): Promise<QueueRequestOutcome> => {
-            const { commandId } = message;
+        const withdraw = async (
+            commandId: string,
+            failure: { readonly operation: "delete-queued" | "remove-unconfirmed"; readonly fallback: string },
+            signal: AbortSignal,
+        ): Promise<QueueRequestOutcome> => {
             const outcome = await send(
                 (client, requestSignal) => client.turns.cancelQueued(options.sessionTarget, commandId, requestSignal),
                 signal,
@@ -143,24 +151,27 @@ export const createSessionMessageQueueStore = (options: {
                 return outcome;
             }
             set((state) => ({ requests: withRequest(state.requests, commandId, null) }));
-            options.failed({
-                operation: "delete-queued",
-                message: formatError(outcome.cause, "The queued message could not be deleted."),
-            });
+            options.failed({ operation: failure.operation, message: formatError(outcome.cause, failure.fallback) });
             return outcome;
         };
+        const deleteQueued = (message: ChatQueuedMessage, signal: AbortSignal): Promise<QueueRequestOutcome> =>
+            withdraw(
+                message.commandId,
+                { operation: "delete-queued", fallback: "The queued message could not be deleted." },
+                signal,
+            );
         return {
             requests: new Map(),
             deleteMessage: async (message, signal) => {
                 if (begin(message, "deleting")) {
-                    await withdraw(message, signal);
+                    await deleteQueued(message, signal);
                 }
             },
             editMessage: async (message, signal) => {
                 if (!begin(message, "deleting")) {
                     return;
                 }
-                const outcome = await withdraw(message, signal);
+                const outcome = await deleteQueued(message, signal);
                 switch (outcome.kind) {
                     case "done":
                         options.returned(message);
@@ -203,5 +214,13 @@ export const createSessionMessageQueueStore = (options: {
                 });
                 return false;
             },
+            withdrawUnconfirmed: async (commandId, signal) =>
+                (
+                    await withdraw(
+                        commandId,
+                        { operation: "remove-unconfirmed", fallback: "The message could not be removed." },
+                        signal,
+                    )
+                ).kind === "done",
         };
     });

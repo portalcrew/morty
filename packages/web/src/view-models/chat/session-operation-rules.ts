@@ -32,7 +32,8 @@ export function canStartSubmission(facts: Pick<SessionOperationFacts, "configuri
         !facts.configuring &&
         facts.delivery !== "preparing" &&
         facts.delivery !== "submitting" &&
-        facts.delivery !== "delivery-unknown"
+        facts.delivery !== "delivery-unknown" &&
+        facts.delivery !== "withdrawing"
     );
 }
 
@@ -62,6 +63,16 @@ export function canRetryFailedMessage(facts: SessionOperationFacts): boolean {
  */
 export function canRetryUnknownDelivery(facts: SessionOperationFacts): boolean {
     return facts.delivery === "delivery-unknown" && userCanReachSession(facts) && sessionAccepts(facts);
+}
+
+/**
+ * Removing a message whose delivery is unknown withdraws it on the Computer under its identity, so it never runs. Like
+ * deleting a queued message, it needs the Session reachable.
+ */
+export function canRemoveUnknownDelivery(
+    facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "delivery">,
+): boolean {
+    return facts.delivery === "delivery-unknown" && facts.connectionAvailable && facts.connection === "ready";
 }
 
 /**

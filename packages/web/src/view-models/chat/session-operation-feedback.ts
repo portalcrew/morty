@@ -2,7 +2,10 @@ import { createStore } from "zustand/vanilla";
 import type { QueuedCommand } from "./session-execution.ts";
 
 export type OperationFailure =
-    | { readonly operation: "rename" | "settings" | "older-history" | "delete-queued"; readonly message: string }
+    | {
+          readonly operation: "rename" | "settings" | "older-history" | "delete-queued" | "remove-unconfirmed";
+          readonly message: string;
+      }
     | { readonly operation: "stop"; readonly commandId: string; readonly message: string }
     | { readonly operation: "steer"; readonly commandId: string; readonly message: string };
 
@@ -49,6 +52,7 @@ export function operationFailureMessage(
         case "settings":
         case "older-history":
         case "delete-queued":
+        case "remove-unconfirmed":
             return failure.message;
         default:
             return failure satisfies never;

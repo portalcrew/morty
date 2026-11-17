@@ -3,7 +3,7 @@ import type { SessionComposerStore } from "./session-composer-store.ts";
 import type { SessionConnection } from "./session-connection.ts";
 import { acceptedTurn, ownerRunsTurn, workingIndicator } from "./session-current-turn.ts";
 import { sessionDeliveryPresentation } from "./session-delivery-presentation.ts";
-import { journalMessage, type SessionDeliveryStore, settledDelivery } from "./session-delivery-store.ts";
+import { type SessionDeliveryStore, settledDelivery, unconfirmedJournal } from "./session-delivery-store.ts";
 import { type SessionExecutionState, sessionActivity, waitingForInput } from "./session-execution.ts";
 import type { ChatQueuedMessage, SessionMessageQueueStore } from "./session-message-queue-store.ts";
 import { operationFailureMessage, type SessionOperationFeedbackStore } from "./session-operation-feedback.ts";
@@ -11,6 +11,7 @@ import {
     canChangeSettings,
     canDeleteQueued,
     canEditQueued,
+    canRemoveUnknownDelivery,
     canRetryFailedMessage,
     canRetryUnknownDelivery,
     canSend,
@@ -110,7 +111,7 @@ export function sessionPanePresentation(input: {
     const stopping = facts.stopping;
     const composerInputDisabled =
         connection.kind === "closed" || facts.configuring || facts.waitingForInput || stopping;
-    const unknownDelivery = delivery.state.kind === "delivery-unknown" ? journalMessage(delivery.state.journal) : null;
+    const unknownDelivery = unconfirmedJournal(delivery.state);
     const deliveries = sessionDeliveryPresentation(timeline.messages, execution, delivery, input.queue);
     const pendingDelivery = deliveries.pendingDelivery;
     const hasFailureCard =
@@ -172,6 +173,7 @@ export function sessionPanePresentation(input: {
         workingIndicator: workingIndicator(execution.turn, facts.waitingForInput),
         retryFailedDisabled: pendingDelivery === null || !canRetryFailedMessage(facts),
         retryUnknownDeliveryDisabled: unknownDelivery === null || !canRetryUnknownDelivery(facts),
+        removeUnknownDeliveryDisabled: !canRemoveUnknownDelivery(facts),
         submitDisabled:
             !composerHasMessage(composer.draft, attachments.attachments.length, attachments.state.kind === "reading") ||
             !canSend(facts),

@@ -156,6 +156,7 @@ function UserMessage({
     onRetryUnknownDelivery,
     openLocalFile,
     readImage,
+    removeUnknownDeliveryDisabled,
     retryUnknownDeliveryDisabled,
 }: {
     readonly message: Extract<SessionMessage, { readonly role: "user" }>;
@@ -165,6 +166,7 @@ function UserMessage({
     readonly onRetryUnknownDelivery: () => void;
     readonly openLocalFile: (path: string) => void;
     readonly readImage?: MarkdownImageReader | undefined;
+    readonly removeUnknownDeliveryDisabled: boolean;
     readonly retryUnknownDeliveryDisabled: boolean;
 }) {
     const deliveryUnknown = deliveryUnknownUserMessageId !== null && message.commandId === deliveryUnknownUserMessageId;
@@ -248,7 +250,12 @@ function UserMessage({
                     <span className="min-w-0 flex-1">
                         Delivery wasn’t confirmed. This message won’t be sent again unless you retry it.
                     </span>
-                    <button aria-label="Remove failed message" onClick={onRemoveUnknownDelivery} type="button">
+                    <button
+                        aria-label="Remove message"
+                        disabled={removeUnknownDeliveryDisabled}
+                        onClick={onRemoveUnknownDelivery}
+                        type="button"
+                    >
                         <X aria-hidden="true" className="size-4" />
                     </button>
                 </div>
@@ -289,6 +296,7 @@ export function MortySessionMessage({
     onRemoveUnknownDelivery,
     onRetryUnknownDelivery,
     readImage,
+    removeUnknownDeliveryDisabled,
     retryUnknownDeliveryDisabled,
     openLocalFile,
     active = false,
@@ -303,6 +311,7 @@ export function MortySessionMessage({
     readonly onRemoveUnknownDelivery: () => void;
     readonly onRetryUnknownDelivery: () => void;
     readonly readImage?: MarkdownImageReader | undefined;
+    readonly removeUnknownDeliveryDisabled: boolean;
     readonly retryUnknownDeliveryDisabled: boolean;
     readonly openLocalFile: (path: string) => void;
     readonly active?: boolean;
@@ -317,6 +326,7 @@ export function MortySessionMessage({
                 onRetryUnknownDelivery={onRetryUnknownDelivery}
                 openLocalFile={openLocalFile}
                 readImage={readImage}
+                removeUnknownDeliveryDisabled={removeUnknownDeliveryDisabled}
                 retryUnknownDeliveryDisabled={retryUnknownDeliveryDisabled}
             />
         );
