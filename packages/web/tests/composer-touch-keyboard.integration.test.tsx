@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true},"navigator":{"maxTouchPoints":5}}}
-import { getByRole } from "@testing-library/dom";
+import { getByRole, queryByRole } from "@testing-library/dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
 import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
@@ -23,7 +23,7 @@ test("Given a touch device, When I send a message, Then the composer releases fo
     expect(app.elementByTestId(dataTestId.messageComposer)).not.toBe(document.activeElement);
 });
 
-test("Given an empty mobile composer, When I expand and tap its close control, Then it returns to the compact input", {
+test("Given an empty mobile composer, When I expand it, Then it has no close control and tapping outside compacts it", {
     timeout: 30_000,
 }, async () => {
     const desktopViewport = { height: window.innerHeight, width: window.innerWidth };
@@ -34,10 +34,34 @@ test("Given an empty mobile composer, When I expand and tap its close control, T
 
         await app.user.click(getByRole(document.body, "button", { name: "Expand message composer" }));
         expect(app.elementByTestId(dataTestId.messageComposer)).toBe(document.activeElement);
+        expect(queryByRole(document.body, "button", { name: "Collapse message composer" })).toBeNull();
 
-        await app.user.click(getByRole(document.body, "button", { name: "Collapse message composer" }));
+        await app.user.click(getByRole(document.body, "button", { name: "Open navigation" }));
+        await app.user.click(getByRole(document.body, "button", { name: "Close navigation", expanded: true }));
         expect(app.elementByTestId(dataTestId.messageComposer)).not.toBe(document.activeElement);
         expect(getByRole(document.body, "button", { name: "Expand message composer" })).toBeDefined();
+    } finally {
+        window.happyDOM.setViewport(desktopViewport);
+    }
+});
+
+test("Given an expanded empty mobile composer, When I use its controls, Then it stays expanded", {
+    timeout: 30_000,
+}, async () => {
+    const desktopViewport = { height: window.innerHeight, width: window.innerWidth };
+    window.happyDOM.setViewport({ height: 844, width: 413 });
+    try {
+        const app = await createTestApp({ connectAgent: true });
+        await readyComposer(app);
+
+        await app.user.click(getByRole(document.body, "button", { name: "Expand message composer" }));
+        await app.user.click(await app.queryElementByTestId(dataTestId.agentConfiguration));
+        const configuration = getByRole(document.body, "dialog", { name: "Agent configuration" });
+        await app.user.click(getByRole(configuration, "button", { name: "Close Agent configuration" }));
+
+        expect(queryByRole(document.body, "button", { name: "Expand message composer" })).toBeNull();
+        await app.user.click(getByRole(document.body, "button", { name: "Add attachment" }));
+        expect(queryByRole(document.body, "button", { name: "Expand message composer" })).toBeNull();
     } finally {
         window.happyDOM.setViewport(desktopViewport);
     }
