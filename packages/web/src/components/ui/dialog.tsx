@@ -184,12 +184,14 @@ export function SheetDialog({
     title,
     onClose,
     busy = false,
+    contentOwnsScroll = false,
     pinnedTitle = false,
     children,
 }: {
     readonly title: string;
     readonly onClose: () => void;
     readonly busy?: boolean;
+    readonly contentOwnsScroll?: boolean;
     readonly pinnedTitle?: boolean;
     readonly children: (title: ReactNode) => ReactNode;
 }) {
@@ -215,7 +217,9 @@ export function SheetDialog({
             )}
             onClose={onClose}
         >
-            {pinnedTitle ? (
+            {contentOwnsScroll ? (
+                <div className="flex min-h-0 flex-1 flex-col sm:block sm:p-2">{children(header)}</div>
+            ) : pinnedTitle ? (
                 <>
                     <div className="shrink-0 px-5">{header}</div>
                     <ScrollEdgeFade

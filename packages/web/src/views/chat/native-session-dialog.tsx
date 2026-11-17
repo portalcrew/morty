@@ -26,8 +26,6 @@ import { type NativeSessionStore, nativeSessionPresentation } from "../../view-m
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
 import { NativeSessionPreviewMessages } from "./native-session-preview-messages.tsx";
 
-const sheetControlHeightClassName = "min-h-11 max-sm:[font-size:15px] sm:min-h-9";
-
 const nativeSessionPreviewCardClassName =
     "min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-white bg-card shadow-module";
 
@@ -48,8 +46,8 @@ const SESSION_ROW_SKELETON_WIDTHS = ["w-3/4", "w-2/3", "w-4/5", "w-1/2"] as cons
 function NativeSessionDirectoryListSkeleton() {
     return (
         <div aria-hidden="true" className="animate-pulse motion-reduce:animate-none">
-            {/* Phone rows: 40px tall in the 8px list gutter, without the desktop card or gaps between rows. */}
-            <div className="pr-1 pb-1 sm:hidden">
+            {/* Phone rows: 40px tall within the sheet's 20px content gutter. */}
+            <div className="pb-1 sm:hidden">
                 {SESSION_ROW_SKELETON_WIDTHS.map((width) => (
                     <div className="flex h-10 items-center px-4" key={width}>
                         <div className={cn("h-3.5 rounded-full bg-morty-fill-opacity-3", width)} />
@@ -95,12 +93,10 @@ function NativeSessionFooterSkeleton() {
             {/* Render the real buttons as inert blocks so the placeholder keeps their exact box. */}
             {["Open", "Fork"].map((label) => (
                 <Button
-                    className={cn(
-                        "border-transparent bg-morty-fill-opacity-3 disabled:opacity-100",
-                        sheetControlHeightClassName,
-                    )}
+                    className="border-transparent bg-morty-fill-opacity-3 disabled:opacity-100"
                     disabled
                     key={label}
+                    size="lg"
                 >
                     <span className="invisible">{label}</span>
                 </Button>
@@ -123,7 +119,7 @@ function NativeSessionLoadMore({
             {busy ? (
                 <Spinner label="Loading more sessions" />
             ) : (
-                <Button className={sheetControlHeightClassName} disabled={disabled} onClick={onMore} variant="ghost">
+                <Button disabled={disabled} onClick={onMore} size="lg" variant="ghost">
                     Load more
                 </Button>
             )}
@@ -140,7 +136,7 @@ function NativeSessionDialogDiscoveringSkeleton({ title }: { readonly title: Rea
                     <div className="max-sm:px-5">{title}</div>
                     <section
                         aria-label="Native sessions"
-                        className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 max-sm:px-2 sm:-mx-2.5"
+                        className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 max-sm:px-5 sm:-mx-2.5"
                     >
                         <NativeSessionAgentTabsSkeleton />
                         <NativeSessionDirectoryListSkeleton />
@@ -236,23 +232,26 @@ export function NativeSessionDialog({
             title="Open Session"
             onClose={closeDialog}
             busy={model.operation === "import" || model.operation === "fork"}
+            contentOwnsScroll
         >
             {(title) => (
                 <>
                     {model.directory.kind === "loading" && model.directory.scope === "initial" ? (
                         <NativeSessionDialogDiscoveringSkeleton title={title} />
                     ) : (
-                        <div className="grid min-h-0 min-w-0 grid-cols-1 flex-1 grid-rows-[minmax(0,1fr)] sm:h-[min(72dvh,40rem)] sm:grid-cols-[minmax(15rem,16.5rem)_minmax(0,1fr)] sm:grid-rows-1">
+                        <div className="relative grid min-h-0 min-w-0 grid-cols-1 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden sm:h-[min(72dvh,40rem)] sm:grid-cols-[minmax(15rem,16.5rem)_minmax(0,1fr)] sm:grid-rows-1 sm:overflow-visible">
                             <div
                                 className={cn(
-                                    "min-h-0 min-w-0 flex-col gap-1 px-0 sm:px-3",
-                                    step === "list" ? "flex" : "hidden sm:flex",
+                                    "flex min-h-0 min-w-0 flex-col gap-1 px-0 transition-[translate,opacity,visibility] duration-200 ease-out motion-reduce:transition-none max-sm:absolute max-sm:inset-0 sm:px-3 sm:transition-none",
+                                    step === "list"
+                                        ? "visible translate-x-0 opacity-100"
+                                        : "invisible pointer-events-none -translate-x-6 opacity-0 sm:visible sm:pointer-events-auto sm:translate-x-0 sm:opacity-100",
                                 )}
                             >
                                 <div className="max-sm:px-5">{title}</div>
                                 <section
                                     aria-label="Native sessions"
-                                    className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 max-sm:px-2 sm:-mx-2.5"
+                                    className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 max-sm:px-5 sm:-mx-2.5"
                                 >
                                     {agents.length > 0 && (
                                         <SessionAgentTabs
@@ -307,9 +306,10 @@ export function NativeSessionDialog({
                                             <ScrollEdgeFade
                                                 revealSurface
                                                 frameClassName="flex min-h-0 flex-1 flex-col"
+                                                viewportClassName="[&>div]:!block [&>div]:!w-full"
                                                 className={cn(
                                                     // The 40px rows are already the touch target; extra vertical gaps only make the list longer.
-                                                    "min-h-0 flex-1 space-y-0 pr-1 pb-1",
+                                                    "min-h-0 flex-1 space-y-0 pb-1",
                                                 )}
                                             >
                                                 {model.directory.entries.map((entry) => (
@@ -329,12 +329,9 @@ export function NativeSessionDialog({
                                                                     await store.getState().select(entry, signal),
                                                             );
                                                         }}
-                                                        className={cn(
-                                                            "group flex aria-pressed:bg-morty-fill-opacity-3 aria-pressed:text-foreground aria-pressed:hover:bg-morty-fill-opacity-4",
-                                                            mobileSheetSessionRowClassName,
-                                                        )}
+                                                        className={cn("group flex", mobileSheetSessionRowClassName)}
                                                     >
-                                                        <span className="w-full min-w-0 truncate font-medium text-copy-secondary group-aria-pressed:text-foreground">
+                                                        <span className="w-full min-w-0 truncate font-medium text-copy-secondary">
                                                             {entry.displayTitle}
                                                         </span>
                                                     </button>
@@ -357,6 +354,7 @@ export function NativeSessionDialog({
                                                 placement: "outside",
                                             }}
                                             frameClassName="hidden min-h-0 flex-1 sm:flex sm:flex-col"
+                                            viewportClassName="[&>div]:!block [&>div]:!w-full"
                                             className={cn("min-h-0 flex-1 space-y-0 pr-3 pb-2")}
                                         >
                                             {model.directory.entries.map((entry) => (
@@ -394,46 +392,49 @@ export function NativeSessionDialog({
                             </div>
                             <div
                                 className={cn(
-                                    "min-h-0 min-w-0 flex-1 flex-col gap-2 px-0 sm:px-0",
-                                    step === "detail" ? "flex" : "hidden sm:flex",
+                                    "flex min-h-0 min-w-0 flex-1 flex-col gap-2 px-0 transition-[translate,opacity,visibility] duration-200 ease-out motion-reduce:transition-none max-sm:absolute max-sm:inset-0 sm:transition-none",
+                                    step === "detail"
+                                        ? "visible translate-x-0 opacity-100"
+                                        : "invisible pointer-events-none translate-x-6 opacity-0 sm:visible sm:pointer-events-auto sm:translate-x-0 sm:opacity-100",
                                 )}
                             >
                                 {/*
-                                 * The phone sheet renders this header only on its detail step; desktop hides it.
+                                 * The phone sheet shows this header on its detail step and keeps it mounted for the exit animation; desktop hides it.
                                  * Both gutters are 12px like the actions' distance from the top edge of the 64px row,
                                  * and the right padding clears the 40px close action floating 12px from the sheet edge.
                                  * The title keeps at least 16px from either action: the gap holds 16px after the back
                                  * button, and the right padding is 12px edge + 40px close action + 16px gap.
                                  */}
-                                {step === "detail" && (
-                                    <div className="flex h-16 shrink-0 items-center gap-4 pr-[68px] pl-3 sm:hidden">
-                                        <button
-                                            type="button"
-                                            aria-label="Back to session list"
-                                            onClick={onBack}
-                                            className={cn(
-                                                mobileHeaderIconButtonClassName,
-                                                "flex shrink-0 items-center justify-center",
-                                            )}
+                                <div
+                                    aria-hidden={step !== "detail"}
+                                    className="flex h-16 shrink-0 items-center gap-4 pr-[68px] pl-3 sm:hidden"
+                                >
+                                    <button
+                                        type="button"
+                                        aria-label="Back to session list"
+                                        onClick={onBack}
+                                        className={cn(
+                                            mobileHeaderIconButtonClassName,
+                                            "flex shrink-0 items-center justify-center",
+                                        )}
+                                    >
+                                        <ChevronLeft aria-hidden="true" className="size-5" />
+                                    </button>
+                                    {(model.preview.kind === "ready" || model.preview.kind === "failed") && (
+                                        <MobileSheetTitle
+                                            className="min-w-0 flex-1 truncate"
+                                            title={model.preview.entry.displayTitle}
                                         >
-                                            <ChevronLeft aria-hidden="true" className="size-5" />
-                                        </button>
-                                        {(model.preview.kind === "ready" || model.preview.kind === "failed") && (
-                                            <MobileSheetTitle
-                                                className="min-w-0 flex-1 truncate"
-                                                title={model.preview.entry.displayTitle}
-                                            >
-                                                {model.preview.entry.displayTitle}
-                                            </MobileSheetTitle>
-                                        )}
-                                        {model.preview.kind === "loading" && (
-                                            <div
-                                                aria-hidden="true"
-                                                className="h-3.5 w-2/5 min-w-0 animate-pulse rounded-full bg-morty-fill-opacity-3 motion-reduce:animate-none"
-                                            />
-                                        )}
-                                    </div>
-                                )}
+                                            {model.preview.entry.displayTitle}
+                                        </MobileSheetTitle>
+                                    )}
+                                    {model.preview.kind === "loading" && (
+                                        <div
+                                            aria-hidden="true"
+                                            className="h-3.5 w-2/5 min-w-0 animate-pulse rounded-full bg-morty-fill-opacity-3 motion-reduce:animate-none"
+                                        />
+                                    )}
+                                </div>
                                 <div
                                     className={cn(nativeSessionPreviewCardClassName, "flex min-h-0 flex-1 max-sm:mx-2")}
                                 >
@@ -526,8 +527,8 @@ export function NativeSessionDialog({
                                     {model.preview.kind !== "empty" && (
                                         <footer className="flex shrink-0 justify-end gap-2 px-4 py-3 sm:px-5">
                                             <Button
-                                                className={sheetControlHeightClassName}
                                                 variant="outline"
+                                                size="lg"
                                                 disabled={
                                                     model.preview.kind !== "ready" ||
                                                     model.operation !== "idle" ||
@@ -544,7 +545,7 @@ export function NativeSessionDialog({
                                                 {model.operation === "import" ? "Opening…" : "Open"}
                                             </Button>
                                             <Button
-                                                className={sheetControlHeightClassName}
+                                                size="lg"
                                                 disabled={model.preview.kind !== "ready" || model.operation !== "idle"}
                                                 onClick={() =>
                                                     withSignal(
