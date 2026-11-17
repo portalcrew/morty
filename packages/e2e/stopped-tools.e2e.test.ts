@@ -26,6 +26,9 @@ for (const width of [1440, 390]) {
         await composer.fill("hold unfinished tools");
         await page.getByRole("button", { name: "Send message" }).click();
         await expectTools(page, "Tool running", 2);
+        if (width < 640) {
+            await expandMobileComposer(page);
+        }
         await composer.fill("Add another verification");
         await page.getByRole("button", { name: "Send message" }).click();
         await page.getByRole("button", { name: "Steer queued message: Add another verification" }).click();

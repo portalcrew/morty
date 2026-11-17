@@ -191,7 +191,7 @@ test("Given a healthy conversation, when the stability timer and foreground sign
         "Keep this draft across a healthy resume.",
     );
     await runtime.clock.runFor(5000);
-    await expect(composer).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Expand message composer" })).toBeEnabled();
     await expect(page.getByRole("alert")).toHaveCount(0);
     expect(connections).toBe(before);
 });
