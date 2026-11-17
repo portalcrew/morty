@@ -43,7 +43,7 @@ import { type DraftControlsStore, draftConfiguration } from "./draft-controls-st
 import { canRetryFirstMessage, canSendFirstMessage, type NewConversationFacts } from "./new-conversation-rules.ts";
 import type { OpenMortySession } from "./open-session.ts";
 import { prependToDraft, type SubmittedMessage } from "./session-delivery-store.ts";
-import type { SessionTitles, SessionTitlesStore } from "./session-titles-store.ts";
+import type { SessionTitlesStore } from "./session-titles-store.ts";
 import { createUserMessageCollapseStore, type UserMessageCollapseStore } from "./user-message-collapse-store.ts";
 
 export type BotChatHomeStoreApi = Omit<ReturnType<typeof createBotChatHomeStore>, "setState">;
@@ -278,14 +278,14 @@ export const createBotChatHomeStore = (
         };
         const acceptLoadedSelection = (
             event: Extract<ConversationSelectionEvent, { readonly kind: "session-loaded" }>,
-            startedWith: SessionTitles,
+            readStartedAt: number,
         ): void => {
             const previous = get().selection;
             const selection = transitionConversationSelection(previous, event);
             if (selection === previous) {
                 return;
             }
-            titles.getState().sessionLoaded(event.session.target, event.session.entry.title, startedWith);
+            titles.getState().sessionLoaded(event.session.target, event.session.entry.title, readStartedAt);
             set({ selection });
             announceSelection();
         };
@@ -364,7 +364,7 @@ export const createBotChatHomeStore = (
             load: async (signal) => {
                 signal.throwIfAborted();
                 titles.getState().restore();
-                const startedWith = titles.getState().titles;
+                const readStartedAt = titles.getState().readStarted();
                 if (!firstLoadStarted) {
                     firstLoadStarted = true;
                     const selected = get().selection;
@@ -432,7 +432,7 @@ export const createBotChatHomeStore = (
                     const target = current.target;
                     const session = await requests.managedSession(target, signal);
                     signal.throwIfAborted();
-                    acceptLoadedSelection({ kind: "session-loaded", session, target }, startedWith);
+                    acceptLoadedSelection({ kind: "session-loaded", session, target }, readStartedAt);
                 } catch (cause) {
                     if (signal.aborted) {
                         return;

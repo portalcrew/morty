@@ -177,11 +177,11 @@ export const createConversationDirectoryStore = (
                 if (mode === "foreground" || current.kind !== "ready") {
                     set({ state: cached === null ? { kind: "loading" } : { kind: "refreshing", sessions: cached } });
                 }
-                const startedWith = titles.getState().titles;
+                const readStartedAt = titles.getState().readStarted();
                 try {
                     const reported = await requests.managedSessions(signal);
                     signal.throwIfAborted();
-                    titles.getState().directoryLoaded(reported, startedWith);
+                    titles.getState().directoryLoaded(reported, readStartedAt);
                     const sessions = reported.map(({ title: _title, ...session }) => session);
                     set({ state: { kind: "ready", sessions } });
                     onLoaded(reported, cached);
