@@ -68,8 +68,8 @@ const shareMethodGridClassName =
     "grid min-w-0 grid-cols-1 items-start gap-y-2.5 sm:grid-cols-[auto_auto_minmax(0,1fr)] sm:gap-x-6";
 const shareMethodOrDividerClassName =
     "col-start-1 row-start-3 flex items-center gap-3 sm:col-start-2 sm:row-start-2 sm:min-h-0 sm:shrink-0 sm:flex-col sm:gap-0 sm:self-stretch";
-const shareMethodQrSectionClassName = "col-start-1 row-start-2 flex min-w-0 flex-col items-center gap-3 sm:items-start";
-const shareMethodQrShellClassName = "w-fit shrink-0 rounded-lg border-[0.5px] border-black/5 bg-white p-3";
+const shareMethodQrSectionClassName = "col-start-1 row-start-2 flex min-w-0 flex-wrap items-center gap-3";
+const shareMethodQrCardClassName = "rounded-lg border-[0.5px] border-black/5 bg-white p-3";
 
 type IdentitySharingTransferSectionProps =
     | { readonly loading: true; readonly allowQrDownload: boolean }
@@ -98,8 +98,13 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
                     >
                         Link sharing
                     </p>
-                    <div className={shareMethodQrSectionClassName}>
-                        <div className={shareMethodQrShellClassName}>
+                    <div
+                        className={cn(
+                            shareMethodQrSectionClassName,
+                            props.allowQrDownload && shareMethodQrCardClassName,
+                        )}
+                    >
+                        <div className={cn("w-fit shrink-0", !props.allowQrDownload && shareMethodQrCardClassName)}>
                             {loading ? (
                                 <div
                                     aria-hidden="true"
@@ -116,23 +121,34 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
                                 />
                             )}
                         </div>
-                        {props.allowQrDownload &&
-                            (loading ? (
-                                <div
-                                    aria-hidden="true"
-                                    className={cn(
-                                        "h-9 w-36 rounded-lg bg-morty-fill-opacity-3",
-                                        identitySharingSkeletonPulseClassName,
-                                    )}
-                                />
-                            ) : (
-                                <Button asChild variant="outline">
-                                    <a download="morty-access-qr.png" href={props.image}>
-                                        <Download aria-hidden="true" />
-                                        Save QR code
-                                    </a>
-                                </Button>
-                            ))}
+                        {props.allowQrDownload && (
+                            <div className="@container/qr-actions flex min-w-9 flex-1 flex-col items-start gap-2">
+                                <p className="text-14 leading-5 text-morty-text-3">
+                                    Long press the QR code or tap the button to save it.
+                                </p>
+                                {loading ? (
+                                    <div
+                                        aria-hidden="true"
+                                        className={cn(
+                                            "size-9 rounded-full bg-morty-fill-opacity-3 @min-[150px]/qr-actions:w-36 @min-[150px]/qr-actions:rounded-lg",
+                                            identitySharingSkeletonPulseClassName,
+                                        )}
+                                    />
+                                ) : (
+                                    <Button
+                                        asChild
+                                        variant="primary"
+                                        size="icon"
+                                        className="@min-[150px]/qr-actions:w-auto @min-[150px]/qr-actions:gap-1.5 @min-[150px]/qr-actions:px-4 @min-[150px]/qr-actions:[font-size:13px]"
+                                    >
+                                        <a aria-label="Save QR code" download="morty-access-qr.png" href={props.image}>
+                                            <Download aria-hidden="true" />
+                                            <span className="hidden @min-[150px]/qr-actions:inline">Save QR code</span>
+                                        </a>
+                                    </Button>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <div aria-hidden="true" className={shareMethodOrDividerClassName}>
                         <div className="h-[0.5px] min-w-0 flex-1 bg-border/60 sm:h-auto sm:min-h-0 sm:w-[0.5px]" />

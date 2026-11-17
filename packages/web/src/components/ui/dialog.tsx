@@ -238,7 +238,7 @@ export function SheetDialog({
             )}
             <CloseButton
                 busy={busy}
-                className={`absolute top-3 right-2 text-morty-text-3 hover:bg-morty-fill-opacity-2 hover:text-foreground sm:top-5 sm:right-5 sm:size-9 ${mobileHeaderIconButtonBelowSmClassName} ${mobileSheetCloseButtonPositionClassName}`}
+                className={`absolute top-3 right-2 text-morty-text-3 hover:bg-morty-fill-opacity-2 hover:text-foreground sm:top-5 sm:right-5 sm:size-9 ${mobileHeaderIconButtonBelowSmClassName} ${mobileSheetCloseButtonPositionClassName} ${pinnedTitle ? "z-20" : ""}`}
                 iconClassName="size-4 max-sm:size-5"
             />
         </DialogShell>

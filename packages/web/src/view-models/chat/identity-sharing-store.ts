@@ -43,6 +43,33 @@ function linkCode(transfer: IdentityTransfer): string {
     return new URLSearchParams(new URL(transfer.url).hash.slice(1)).get("code") ?? "";
 }
 
+async function transferQrImage(url: string): Promise<string> {
+    const options = { errorCorrectionLevel: "H" as const, margin: 2, width: 320 };
+    try {
+        const canvas = document.createElement("canvas");
+        await QRCode.toCanvas(canvas, url, options);
+        const context = canvas.getContext("2d");
+        if (context === null) {
+            throw new Error("QR canvas is unavailable.");
+        }
+        const logo = new Image();
+        logo.src = "/morty-logo.svg";
+        await logo.decode();
+        const badgeSize = Math.round(canvas.width * 0.16);
+        const logoSize = Math.round(badgeSize * 0.88);
+        const badgeStart = (canvas.width - badgeSize) / 2;
+        const logoStart = (canvas.width - logoSize) / 2;
+        context.fillStyle = "#fff";
+        context.beginPath();
+        context.roundRect(badgeStart, badgeStart, badgeSize, badgeSize, Math.round(badgeSize * 0.22));
+        context.fill();
+        context.drawImage(logo, logoStart, logoStart, logoSize, logoSize);
+        return canvas.toDataURL("image/png");
+    } catch {
+        return QRCode.toDataURL(url, options);
+    }
+}
+
 export const createIdentitySharingStore = (
     createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>,
     clock: Clock,
@@ -141,7 +168,7 @@ export const createIdentitySharingStore = (
                 url.hash = fragment.toString();
                 const transfer = { ...issued, url: url.toString() };
                 signal.throwIfAborted();
-                const image = await QRCode.toDataURL(transfer.url, { margin: 1, width: 224 });
+                const image = await transferQrImage(transfer.url);
                 signal.throwIfAborted();
                 const current = store.getState().state;
                 if (current.kind !== "loading") {
