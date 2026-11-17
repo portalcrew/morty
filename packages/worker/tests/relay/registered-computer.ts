@@ -26,6 +26,7 @@ export async function revokeTestComputer(bindings: RelayBindings, computerId: st
                 computerId,
                 database: new DurableObjectDatabase(state.storage),
                 access: () => access,
+                computerChanged: () => undefined,
             });
             await runtime.services.runtime.revokeComputer(signal);
         },

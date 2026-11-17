@@ -45,7 +45,7 @@ export class ComputerAccessService {
     ): Promise<number | null> => {
         this.#own(computerId);
         const [holds, generation] = await Promise.all([
-            this.#holdsAccess(holder, signal),
+            this.holdsAccess(holder, signal),
             this.#store.readActiveGeneration(signal),
         ]);
         return holds ? generation : null;
@@ -78,6 +78,7 @@ export class ComputerAccessService {
         }
     };
 
-    readonly #holdsAccess = async (holder: SessionAccessHolder, signal: AbortSignal): Promise<boolean> =>
+    /** Whether `holder` still holds access to this computer, whatever its pairing. */
+    readonly holdsAccess = async (holder: SessionAccessHolder, signal: AbortSignal): Promise<boolean> =>
         await this.#identities.holdsAccess(holder, Date.now(), signal);
 }

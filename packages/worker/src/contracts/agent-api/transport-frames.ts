@@ -1,8 +1,13 @@
 import {
+    CHANGES_CHANGED_KIND,
+    CHANGES_ERROR_KIND,
+    CHANGES_FOLLOW_KIND,
+    CHANGES_READY_KIND,
     COMPUTER_HEARTBEAT_ACK_KIND,
     COMPUTER_HEARTBEAT_KIND,
     COMPUTER_HEARTBEAT_MESSAGE,
     MORTY_API_PREFIX,
+    RELAY_CHANGE_TOPICS,
 } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 
@@ -145,6 +150,31 @@ export const transportFrames = {
             code: v.string(),
             status: v.optional(v.pipe(v.number(), v.integer())),
             message: v.optional(v.string()),
+        }),
+    },
+    changesFollow: {
+        direction: "send",
+        summary: "Be told when the Computer or its linked devices change, instead of polling for them.",
+        schema: v.object({ kind: v.literal(CHANGES_FOLLOW_KIND), headers }),
+    },
+    changesReady: {
+        direction: "receive",
+        summary: "Changes are followed from now on; read the resources once to start from their current state.",
+        schema: v.object({ kind: v.literal(CHANGES_READY_KIND) }),
+    },
+    changesChanged: {
+        direction: "receive",
+        summary: "A resource changed; read it again.",
+        schema: v.object({ kind: v.literal(CHANGES_CHANGED_KIND), topic: v.picklist(RELAY_CHANGE_TOPICS) }),
+    },
+    changesError: {
+        direction: "receive",
+        summary: "Changes are no longer followed; read the resources to learn why, then follow again.",
+        schema: v.object({
+            kind: v.literal(CHANGES_ERROR_KIND),
+            code: v.string(),
+            status: v.pipe(v.number(), v.integer()),
+            message: v.string(),
         }),
     },
     heartbeat: {

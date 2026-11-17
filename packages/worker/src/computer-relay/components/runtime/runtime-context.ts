@@ -22,6 +22,7 @@ export function createRuntimeContext(cx: {
     };
     readonly utilities: {
         readonly waitUntil: (operation: Promise<void>) => void;
+        readonly computerChanged: () => void;
     };
 }) {
     const requests = new LocalComputerRequests(cx.utilities.waitUntil);

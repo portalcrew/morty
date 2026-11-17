@@ -17,6 +17,7 @@ export function createComputerRelayServices(
     runtime: ComputerService,
     access: ComputerAccessService,
     credentialKey: IdentityOperations["credentialKey"],
+    computerChanged: () => void,
 ) {
     const sessionAccess = new SessionAccessService(
         access,
@@ -26,6 +27,7 @@ export function createComputerRelayServices(
         computerId,
         store,
         credentialKey,
+        computerChanged,
         services: {
             identities: new ComputerIdentityService(computerId, store),
             computerAccounts: access,

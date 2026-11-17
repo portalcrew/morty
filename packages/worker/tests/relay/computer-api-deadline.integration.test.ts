@@ -46,6 +46,7 @@ it("Given a Computer API with a 120-second deadline mounted beside Session route
                     computerId: owner.computerId,
                     database: new DurableObjectDatabase(state.storage),
                     access: () => access,
+                    computerChanged: () => undefined,
                 });
                 const api = new PendingComputerApiBoundary();
                 const router = createSessionWebSocketRoutes({

@@ -910,6 +910,7 @@ async function connectComputerDaemon(
     const sessionRequest = (request: Request) =>
         requestBrowserOperation((operation) => worker.fetch(operation, environment), request);
     return {
+        appCredential,
         credential: text(sessionAccess, "credential"),
         transport: () =>
             worker.fetch(
@@ -3805,6 +3806,35 @@ it("Given a page following an idle Session, When the Relay hibernates, Then the 
     } finally {
         browser.close();
         runtime.daemon.close(1000, "Hibernated viewer scenario completed");
+    }
+});
+
+it("Given a page following its idle Computer, When the Computer disconnects while the Relay sleeps, Then the page is told without asking", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("followed-computer", signal);
+    const browser = (await runtime.transport()).webSocket;
+    if (browser === null) {
+        throw new Error("Expected the browser transport");
+    }
+    const browserMessages = new SocketMessages(browser);
+    browser.accept();
+    try {
+        browser.send(
+            JSON.stringify({
+                kind: "changes.follow",
+                headers: [["authorization", `Bearer ${runtime.appCredential}`]],
+            }),
+        );
+        expect(JSON.parse(await browserMessages.next())).toEqual({ kind: "changes.ready" });
+
+        await evictDurableObject(env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)), {
+            webSockets: "hibernate",
+        });
+        runtime.daemon.close(1000, "Computer stopped");
+        expect(JSON.parse(await browserMessages.next())).toEqual({ kind: "changes.changed", topic: "computer" });
+    } finally {
+        browser.close();
     }
 });
 

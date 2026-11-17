@@ -1,4 +1,7 @@
 import {
+    CHANGES_ERROR_KIND,
+    CHANGES_FOLLOW_KIND,
+    CHANGES_READY_KIND,
     CONTENT_UPLOAD_MAX_ENCODED_BYTES,
     decodeContentChunkFrame,
     FILE_STREAM_CONTENT_TYPE,
@@ -22,6 +25,7 @@ import {
     RESPONSE_KIND,
 } from "../../../../contracts/agent-api/transport-frames.ts";
 import { type HttpError, toHttpError } from "../../../../contracts/http-error.ts";
+import type { ChangeFollow, FollowChanges } from "../../../../contracts/relay-changes.ts";
 import type {
     RestoreSessionEvents,
     SessionViewerIdentity,
@@ -45,12 +49,14 @@ export interface BrowserTransportConnection {
     readonly computerId: string;
     readonly subscriptions: readonly SessionViewerIdentity[];
     readonly saveSubscriptions: (subscriptions: readonly SessionViewerIdentity[]) => void;
+    readonly saveFollow: (follow: ChangeFollow | null) => Promise<void>;
 }
 
 export interface BrowserTransportPorts {
     readonly dispatch: WebSocketHttpDispatch;
     readonly subscribe: SubscribeSessionEvents;
     readonly restore: RestoreSessionEvents;
+    readonly follow: FollowChanges;
 }
 
 export interface BrowserTransport {
@@ -598,6 +604,31 @@ export function openBrowserTransport(
             }
             const message = record(decoded);
             const kind = string(message, "kind", 32);
+            if (kind === CHANGES_FOLLOW_KIND) {
+                const credential = readBearerToken(headers(message["headers"]));
+                try {
+                    await connection.saveFollow(
+                        await ports.follow(connection.computerId, credential, controller.signal),
+                    );
+                } catch (cause) {
+                    if (controller.signal.aborted) {
+                        return;
+                    }
+                    await connection.saveFollow(null);
+                    const error = toHttpError(cause);
+                    server.send(
+                        JSON.stringify({
+                            kind: CHANGES_ERROR_KIND,
+                            code: error.body.error.code,
+                            message: error.body.error.message,
+                            status: error.status,
+                        }),
+                    );
+                    return;
+                }
+                server.send(JSON.stringify({ kind: CHANGES_READY_KIND }));
+                return;
+            }
             if (kind === CANCEL_KIND) {
                 const cancelledId = string(message, "requestId", 128);
                 requests.get(cancelledId)?.abort(new DOMException("Request cancelled", "AbortError"));

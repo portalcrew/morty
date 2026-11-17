@@ -12,7 +12,7 @@ export const chatCalls = Object.freeze({
                 operation: "workspace",
                 transport: { kind: "websocket", cancellation: "remote" },
                 timeoutMilliseconds: 45_000,
-                watch: "snapshot",
+                watch: { kind: "changes", topic: "computer" },
             },
         }),
 });

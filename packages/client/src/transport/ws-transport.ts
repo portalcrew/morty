@@ -1,4 +1,8 @@
 import {
+    CHANGES_CHANGED_KIND,
+    CHANGES_ERROR_KIND,
+    CHANGES_FOLLOW_KIND,
+    CHANGES_READY_KIND,
     COMPUTER_HEARTBEAT_ACK_MESSAGE,
     COMPUTER_HEARTBEAT_MESSAGE,
     CONTENT_CHUNK_MAX_BYTES,
@@ -6,6 +10,8 @@ import {
     encodeContentChunkFrame,
     isIdentifier,
     MORTY_API_PREFIX,
+    RELAY_CHANGE_TOPICS,
+    type RelayChangeTopic,
 } from "@portalcrew/morty-client/protocol";
 import type { MortyTransportCall, MortyTransportRequest } from "../calls/call.ts";
 import { computerEncryptionAccessCodec } from "../calls/encryption.ts";
@@ -183,6 +189,16 @@ export class WsTransport {
     #state: WsTransportState = { kind: "disconnected" };
     #access: ComputerEncryptionAccess | null = null;
     #payload: PayloadConnectionState = { kind: "idle" };
+    #changes:
+        | { readonly kind: "idle" }
+        | { readonly kind: "following"; readonly socket: WebSocket; readonly ready: PromiseWithResolvers<void> } = {
+        kind: "idle",
+    };
+    readonly #changeWaiters = new Set<{
+        readonly topic: RelayChangeTopic;
+        readonly resolve: () => void;
+        readonly reject: (cause: unknown) => void;
+    }>();
     #heartbeat:
         | { readonly kind: "inactive" }
         | { readonly kind: "waiting" | "awaiting"; readonly timer: ReturnType<typeof globalThis.setTimeout> } = {
@@ -456,6 +472,41 @@ export class WsTransport {
         }
         this.#failPending(new MortyConnectionError("The Morty WebSocket transport closed"));
         this.#failSubscriptions(new MortyConnectionError("The live Session event transport closed"));
+        this.#failChanges(new MortyConnectionError("The Morty WebSocket transport closed"));
+    };
+
+    /**
+     * Follows the Computer's changes on this transport's connection, authorized by `request`'s headers, and resolves
+     * once the Relay follows them. A change after that is told through `nextChange`, so a caller that follows, reads,
+     * and then waits misses none. A refusal rejects with the Relay's error; a lost connection ends the following.
+     */
+    readonly followChanges = async (request: MortyTransportCall): Promise<void> => {
+        request.signal.throwIfAborted();
+        const socket = await this.#socket(request);
+        request.signal.throwIfAborted();
+        if (this.#changes.kind !== "following" || this.#changes.socket !== socket) {
+            const ready = Promise.withResolvers<void>();
+            ready.promise.catch(() => undefined);
+            this.#changes = { kind: "following", socket, ready };
+            socket.send(JSON.stringify({ kind: CHANGES_FOLLOW_KIND, headers: Object.entries(request.headers) }));
+        }
+        await abortable(this.#changes.ready.promise, request.signal);
+    };
+
+    /** Resolves when `topic` next changes; rejects when the following ends first. */
+    readonly nextChange = (topic: RelayChangeTopic, signal: AbortSignal): Promise<void> => {
+        if (this.#changes.kind !== "following") {
+            return Promise.reject(new MortyConnectionError("The Computer's changes are not followed"));
+        }
+        const waiters = this.#changeWaiters;
+        return abortable(
+            new Promise<void>((resolve, reject) => {
+                const waiter = { topic, resolve, reject };
+                waiters.add(waiter);
+                signal.addEventListener("abort", () => waiters.delete(waiter), { once: true });
+            }),
+            signal,
+        );
     };
 
     readonly #socket = async (request: MortyTransportCall): Promise<WebSocket> => {
@@ -564,6 +615,10 @@ export class WsTransport {
             const value: unknown = JSON.parse(event.data);
             const message = wsRecord(value);
             const kind = wsString(message, "kind", 32);
+            if (kind.startsWith("changes.")) {
+                this.#receiveChange(kind, message);
+                return;
+            }
             if (kind.startsWith("session.events.")) {
                 this.#receiveSubscription(kind, message);
                 return;
@@ -604,6 +659,7 @@ export class WsTransport {
         } catch (cause) {
             this.#failPending(cause);
             this.#failSubscriptions(cause);
+            this.#failChanges(cause);
         }
     };
 
@@ -615,6 +671,52 @@ export class WsTransport {
         this.#state = { kind: "disconnected" };
         this.#failPending(cause);
         this.#failSubscriptions(cause);
+        this.#failChanges(cause);
+    };
+
+    readonly #failChanges = (cause: unknown): void => {
+        if (this.#changes.kind === "following") {
+            this.#changes.ready.reject(cause);
+        }
+        this.#changes = { kind: "idle" };
+        const waiters = Array.from(this.#changeWaiters);
+        this.#changeWaiters.clear();
+        for (const waiter of waiters) {
+            waiter.reject(cause);
+        }
+    };
+
+    readonly #receiveChange = (kind: string, message: Readonly<Record<string, unknown>>): void => {
+        if (kind === CHANGES_READY_KIND) {
+            if (this.#changes.kind === "following") {
+                this.#changes.ready.resolve();
+            }
+            return;
+        }
+        if (kind === CHANGES_ERROR_KIND) {
+            const status = message["status"];
+            if (typeof status !== "number" || !Number.isSafeInteger(status) || status < 400 || status > 599) {
+                throw new MortyProtocolError("The Computer's change following returned an invalid status");
+            }
+            this.#failChanges(
+                new MortyApiError(wsString(message, "code", 128), wsString(message, "message", 1_024), status),
+            );
+            return;
+        }
+        if (kind !== CHANGES_CHANGED_KIND) {
+            throw new MortyProtocolError("The Computer's change following returned an unsupported message");
+        }
+        const topic = wsString(message, "topic", 32);
+        const known = RELAY_CHANGE_TOPICS.find((candidate) => candidate === topic);
+        if (known === undefined) {
+            return;
+        }
+        for (const waiter of Array.from(this.#changeWaiters)) {
+            if (waiter.topic === known) {
+                this.#changeWaiters.delete(waiter);
+                waiter.resolve();
+            }
+        }
     };
 
     readonly #failPending = (cause: unknown): void => {
@@ -843,4 +945,24 @@ export class WsTransport {
             }, HEARTBEAT_INTERVAL_MILLISECONDS),
         };
     };
+}
+
+function abortable<Value>(promise: Promise<Value>, signal: AbortSignal): Promise<Value> {
+    if (signal.aborted) {
+        return Promise.reject(signal.reason);
+    }
+    return new Promise<Value>((resolve, reject) => {
+        const abort = (): void => reject(signal.reason);
+        signal.addEventListener("abort", abort, { once: true });
+        promise.then(
+            (value) => {
+                signal.removeEventListener("abort", abort);
+                resolve(value);
+            },
+            (cause: unknown) => {
+                signal.removeEventListener("abort", abort);
+                reject(cause);
+            },
+        );
+    });
 }

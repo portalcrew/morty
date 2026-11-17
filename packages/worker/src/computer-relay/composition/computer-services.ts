@@ -18,6 +18,7 @@ export class ComputerServices {
     readonly #owns: (id: string) => boolean;
     readonly #endAccess: IdentityOperations["commitAccessEnd"];
     readonly #credentialKey: IdentityOperations["credentialKey"];
+    readonly #linkedDevicesChanged: IdentityOperations["linkedDevicesChanged"];
     readonly #runtime: (computerId: string) => ComputerBackendService;
     readonly #database: () => DurableObjectDatabase;
     readonly #commitCreation: <Value>(write: (database: DurableObjectDatabase) => Value) => Value;
@@ -25,6 +26,7 @@ export class ComputerServices {
         owns: (id: string) => boolean,
         endAccess: IdentityOperations["commitAccessEnd"],
         credentialKey: IdentityOperations["credentialKey"],
+        linkedDevicesChanged: IdentityOperations["linkedDevicesChanged"],
         runtime: (computerId: string) => ComputerBackendService,
         database: () => DurableObjectDatabase,
         commitCreation: <Value>(write: (database: DurableObjectDatabase) => Value) => Value,
@@ -32,6 +34,7 @@ export class ComputerServices {
         this.#owns = owns;
         this.#endAccess = endAccess;
         this.#credentialKey = credentialKey;
+        this.#linkedDevicesChanged = linkedDevicesChanged;
         this.#runtime = runtime;
         this.#database = database;
         this.#commitCreation = commitCreation;
@@ -71,6 +74,10 @@ export class ComputerServices {
             identity: { computerId },
             identities: new IdentityStorage(this.#database(), computerId),
             sessionOperations: this.#sessionOperations,
-            identityOperations: { commitAccessEnd: this.#endAccess, credentialKey: this.#credentialKey },
+            identityOperations: {
+                commitAccessEnd: this.#endAccess,
+                credentialKey: this.#credentialKey,
+                linkedDevicesChanged: this.#linkedDevicesChanged,
+            },
         });
 }

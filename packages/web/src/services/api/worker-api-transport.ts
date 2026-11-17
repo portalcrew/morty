@@ -51,6 +51,18 @@ export class WorkerApiTransport {
         }
         return transport;
     };
+    readonly #computerCall = (request: ApiCall, computerId: string) => ({
+        endpoint: {
+            computerId,
+            method: request.endpoint.method,
+            path: `${request.endpoint.url.pathname}${request.endpoint.url.search}`,
+            transport: request.endpoint.transport,
+            timeoutMilliseconds: request.endpoint.timeoutMilliseconds,
+        },
+        origin: new URL(this.#origin),
+        headers: request.headers,
+        body: request.body ?? null,
+    });
     readonly #request = async (request: ApiCall, requestId: string): Promise<Response> => {
         const endpoint = request.endpoint;
         switch (endpoint.target.kind) {
@@ -64,16 +76,7 @@ export class WorkerApiTransport {
                 });
             case "computer":
                 return await this.computerTransport(endpoint.target.computerId).fetch({
-                    endpoint: {
-                        computerId: endpoint.target.computerId,
-                        method: endpoint.method,
-                        path: `${endpoint.url.pathname}${endpoint.url.search}`,
-                        transport: endpoint.transport,
-                        timeoutMilliseconds: endpoint.timeoutMilliseconds,
-                    },
-                    origin: new URL(this.#origin),
-                    headers: request.headers,
-                    body: request.body ?? null,
+                    ...this.#computerCall(request, endpoint.target.computerId),
                     requestId,
                     signal: request.signal,
                 });
@@ -93,7 +96,7 @@ export class WorkerApiTransport {
             signal.throwIfAborted();
             const raw = await this.#request({ ...request, signal }, requestId);
             const response = new Response(raw.body, raw);
-            if (request.endpoint.watch === "snapshot") {
+            if (request.endpoint.watch !== "none") {
                 this.#baselines.set(this.#key(request), `${response.status}\0${await response.clone().text()}`);
             }
             response.headers.set("x-morty-request-id", requestId);
@@ -133,15 +136,30 @@ export class WorkerApiTransport {
         }
         return Math.round(performance.now() - start);
     };
+    /**
+     * Reads `request` until it answers differently from its baseline. Between reads it waits for the Relay to tell that
+     * the resource's topic changed, following those changes before each read so none is missed; it never polls a
+     * reachable Relay, which lets an idle Relay hibernate. Without the following, it reads again after a pause.
+     */
     readonly waitForChange = async (request: ApiCall, ready?: (snapshot: ApiResponseSnapshot) => void) => {
-        const url = request.endpoint.url;
-        if (url.origin !== this.#origin || request.endpoint.watch !== "snapshot") {
+        const { url, watch, target } = request.endpoint;
+        if (url.origin !== this.#origin || watch === "none" || target.kind !== "computer") {
             throw new Error("Invalid Morty watch request.");
         }
+        const transport = this.computerTransport(target.computerId);
         const signal = AbortSignal.any([request.signal, this.#lifetime.signal]);
         let baseline = ready ? undefined : this.#baselines.get(this.#key(request));
         while (true) {
             signal.throwIfAborted();
+            let change: Promise<void> | null = null;
+            try {
+                await transport.followChanges({ ...this.#computerCall(request, target.computerId), signal });
+                change = transport.nextChange(watch.topic, signal);
+                change.catch(() => undefined);
+            } catch {
+                // A refused or lost following must not hide what the read itself answers.
+                signal.throwIfAborted();
+            }
             let response: Response;
             try {
                 response = await this.#request(
@@ -176,8 +194,18 @@ export class WorkerApiTransport {
                 baseline = value;
             } else {
                 await response.body?.cancel();
+                change = null;
             }
-            await systemClock.sleep(5000, signal);
+            try {
+                if (change === null) {
+                    await systemClock.sleep(5000, signal);
+                } else {
+                    await change;
+                }
+            } catch {
+                signal.throwIfAborted();
+                await systemClock.sleep(5000, signal);
+            }
         }
     };
 }

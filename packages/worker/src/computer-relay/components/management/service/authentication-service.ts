@@ -120,6 +120,7 @@ export class AuthenticationService {
      * closes the live connections it ended.
      */
     readonly #commitAccessEnd: IdentityOperations["commitAccessEnd"];
+    readonly #linkedDevicesChanged: IdentityOperations["linkedDevicesChanged"];
     readonly #computerId: string;
 
     readonly linkComputer = async (
@@ -144,6 +145,7 @@ export class AuthenticationService {
     }) {
         this.identities = cx.storages.identities;
         this.#commitAccessEnd = cx.identityOperations.commitAccessEnd;
+        this.#linkedDevicesChanged = cx.identityOperations.linkedDevicesChanged;
         this.#computerId = cx.identity.computerId;
     }
 
@@ -237,8 +239,13 @@ export class AuthenticationService {
         joining: JoiningDevice,
         token: string,
         signal: AbortSignal,
-    ): Promise<AnonymousIdentity | null> =>
-        await this.identities.redeemTransfer(code, replaces, joining, token, Date.now(), signal);
+    ): Promise<AnonymousIdentity | null> => {
+        const identity = await this.identities.redeemTransfer(code, replaces, joining, token, Date.now(), signal);
+        if (identity !== null) {
+            this.#linkedDevicesChanged();
+        }
+        return identity;
+    };
 
     /** The other devices that hold this access through a link now, so its holder can tell when one is new. */
     readonly linkedDevices = async (

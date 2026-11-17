@@ -83,7 +83,7 @@ export const identityCalls = Object.freeze({
                 method: "GET",
                 operation: "devices",
                 timeoutMilliseconds: 30_000,
-                watch: "snapshot",
+                watch: { kind: "changes", topic: "linked-devices" },
                 transport: { kind: "websocket", cancellation: "remote" },
             },
         }),

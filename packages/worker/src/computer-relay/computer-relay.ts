@@ -6,8 +6,10 @@ import { ComputerManagementError } from "../contracts/computer-management.ts";
 import { computerNotFound } from "../contracts/management-error.ts";
 import type { ConfiguredRelayBindings } from "../contracts/relay-bindings.ts";
 import { errorHandler } from "../http/error-middleware.ts";
+import { RequestDeadline } from "../http/request-deadline.ts";
 import { logger } from "../infra/logger.ts";
 import { ComputerBackendService } from "./components/computer/service/computer-backend-service.ts";
+import { credentialRejected } from "./components/management/http/authenticated-session.ts";
 import { ComputerAccessService } from "./components/management/service/computer-access-service.ts";
 import { ComputerRelayStore } from "./components/management/storage/computer-relay-store.ts";
 import { DurableComputerAccount } from "./components/management/storage/durable-computer-account.ts";
@@ -44,6 +46,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         (id) => this.#owns(id),
         (change) => this.#endAccess(change),
         this.#credentialKey.read,
+        () => this.#routes.browser.announce("linked-devices"),
         (computerId) => this.#backendServices(computerId),
         () => this.#computerDatabase,
         (write) => this.#commitCreation(write),
@@ -83,8 +86,18 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
                 ...websocketApplication,
                 restore: (computerId, identity, observer, signal) =>
                     ctx.services.sessions(computerId).operations.restoreSessionEvents(identity, observer, signal),
+                follow: async (computerId, credential, signal) => {
+                    const authenticated = await this.#browserServices
+                        .forComputer(computerId, this.env)
+                        .services.authentication.session(credential, signal);
+                    if (authenticated.kind !== "authenticated") {
+                        throw credentialRejected(authenticated.kind);
+                    }
+                    return { holder: authenticated.holder, accessExpiresAt: authenticated.accessExpiresAt };
+                },
             },
             (computerId) => this.#connectionsFor(computerId),
+            () => this.#scheduleConnectionChecks(),
         );
         const http = new Hono<ComputerRouteHttpEnvironment>()
             .onError(errorHandler)
@@ -116,6 +129,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
             computerId,
             database: this.#computerDatabase,
             access: () => this.#accessFor(computerId),
+            computerChanged: this.#computerChanged,
         });
         return {
             context,
@@ -202,14 +216,26 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
      * live views the change no longer authorizes. Requests read the identities, so the committed
      * change is already in force; the check only ends the open connections, and the alarm retries it until it runs.
      */
-    readonly #endAccess = async (change: () => Promise<boolean>): Promise<boolean> =>
-        await this.ctx.storage.transaction(async (transaction) => {
+    readonly #endAccess = async (change: () => Promise<boolean>): Promise<boolean> => {
+        const ended = await this.ctx.storage.transaction(async (transaction) => {
             if (!(await change())) {
                 return false;
             }
             await transaction.setAlarm(Date.now());
             return true;
         });
+        if (ended) {
+            this.#routes.browser.announce("computer");
+            this.#routes.browser.announce("linked-devices");
+        }
+        return ended;
+    };
+
+    /** Tells followers the Computer changed, and keeps checking on it while they follow. */
+    readonly #computerChanged = (): void => {
+        this.#routes.browser.announce("computer");
+        this.ctx.waitUntil(this.#scheduleConnectionChecks());
+    };
 
     override async fetch(request: Request): Promise<Response> {
         const response = await this.#routes.http.fetch(request, this.env);
@@ -240,6 +266,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
             this.#connectionsFor(computerId).context.services.runtime,
             this.#accessFor(computerId),
             this.#credentialKey.read,
+            this.#computerChanged,
         );
         return this.#servicesCache;
     }
@@ -269,6 +296,19 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         if (silence !== null) {
             checks.push(silence);
         }
+        const follows = this.#routes.browser.follows();
+        if (follows.length > 0) {
+            // Nothing reads the Computer while its followers wait, so its silence is checked for them.
+            const daemonSilence = this.#connections?.context.services.runtime.silenceDeadline() ?? null;
+            if (daemonSilence !== null) {
+                checks.push(daemonSilence);
+            }
+            for (const { follow } of follows) {
+                if (follow.accessExpiresAt !== null) {
+                    checks.push(follow.accessExpiresAt);
+                }
+            }
+        }
         if (checks.length === 0) {
             await this.ctx.storage.deleteAlarm();
             return;
@@ -283,6 +323,15 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         // The alarm may wake a hibernated Relay that forgot its browser connections and their viewers.
         this.#routes.browser.wake();
         this.#routes.browser.closeSilent(Date.now());
+        if (this.#routes.browser.follows().length > 0) {
+            using deadline = new RequestDeadline(new AbortController().signal, 30_000);
+            await this.#connections?.context.services.runtime.expireSilentDaemons();
+            await this.#routes.browser.endFollows(
+                async (computerId, follow) =>
+                    (follow.accessExpiresAt !== null && follow.accessExpiresAt <= Date.now()) ||
+                    !(await this.#accessFor(computerId).holdsAccess(follow.holder, deadline.signal)),
+            );
+        }
         try {
             await this.#connections?.daemonWebSocket.reauthorizeConnections();
         } finally {

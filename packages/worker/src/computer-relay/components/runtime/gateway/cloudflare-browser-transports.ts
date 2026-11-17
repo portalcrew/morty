@@ -1,4 +1,6 @@
+import { CHANGES_CHANGED_KIND, CHANGES_ERROR_KIND, type RelayChangeTopic } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
+import type { ChangeFollow } from "../../../../contracts/relay-changes.ts";
 import type { SessionViewerIdentity } from "../../../../contracts/session-event-subscription.ts";
 import {
     type BrowserTransport,
@@ -12,11 +14,21 @@ const BROWSER_TAG = "browser";
 const SILENCE_LIMIT_MILLISECONDS = 60_000;
 
 const identifier = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
+const holder = v.variant("kind", [
+    v.object({ kind: v.literal("device"), deviceId: identifier }),
+    v.object({ kind: v.literal("credential"), credentialId: identifier }),
+]);
 
-/** What a browser connection must keep through hibernation: whose Computer it is, when it began, and its viewers. */
+/**
+ * What a browser connection must keep through hibernation: whose Computer it is, when it began, its viewers, and the
+ * access it follows changes under.
+ */
 const attachmentSchema = v.object({
     computerId: identifier,
     acceptedAt: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    follow: v.nullable(
+        v.object({ holder, accessExpiresAt: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0))) }),
+    ),
     subscriptions: v.pipe(
         v.array(
             v.object({
@@ -24,10 +36,7 @@ const attachmentSchema = v.object({
                 sessionFilter: v.object({ harness: identifier, sessionId: identifier }),
                 expiresAt: v.pipe(v.number(), v.integer(), v.minValue(0)),
                 grant: v.object({
-                    holder: v.variant("kind", [
-                        v.object({ kind: v.literal("device"), deviceId: identifier }),
-                        v.object({ kind: v.literal("credential"), credentialId: identifier }),
-                    ]),
+                    holder,
                     generation: v.pipe(v.number(), v.integer(), v.minValue(1)),
                 }),
             }),
@@ -39,6 +48,7 @@ const attachmentSchema = v.object({
 interface BrowserAttachment {
     readonly computerId: string;
     readonly acceptedAt: number;
+    readonly follow: ChangeFollow | null;
     readonly subscriptions: readonly SessionViewerIdentity[];
 }
 
@@ -51,13 +61,23 @@ export class CloudflareBrowserTransports {
     readonly #state: DurableObjectState;
     readonly #ports: BrowserTransportPorts;
     readonly #wake: (computerId: string) => void;
+    readonly #followsChanged: () => Promise<void>;
     readonly #open = new Map<WebSocket, BrowserTransport>();
 
-    /** `wake` prepares the Relay for `computerId`, reopening every connection it forgot through `restore`. */
-    constructor(state: DurableObjectState, ports: BrowserTransportPorts, wake: (computerId: string) => void) {
+    /**
+     * `wake` prepares the Relay for `computerId`, reopening every connection it forgot through `restore`;
+     * `followsChanged` lets the Relay schedule the checks the followed changes need.
+     */
+    constructor(
+        state: DurableObjectState,
+        ports: BrowserTransportPorts,
+        wake: (computerId: string) => void,
+        followsChanged: () => Promise<void>,
+    ) {
         this.#state = state;
         this.#ports = ports;
         this.#wake = wake;
+        this.#followsChanged = followsChanged;
     }
 
     readonly accept = (request: Request, computerId: string): Response => {
@@ -69,7 +89,7 @@ export class CloudflareBrowserTransports {
         }
         const pair = new WebSocketPair();
         const server = pair[1];
-        const attachment: BrowserAttachment = { computerId, acceptedAt: Date.now(), subscriptions: [] };
+        const attachment: BrowserAttachment = { computerId, acceptedAt: Date.now(), follow: null, subscriptions: [] };
         server.serializeAttachment(attachment);
         this.#state.acceptWebSocket(server, [BROWSER_TAG]);
         this.#open.set(server, this.#openTransport(server, attachment));
@@ -129,6 +149,44 @@ export class CloudflareBrowserTransports {
         return due.length === 0 ? null : Math.min(...due);
     };
 
+    /** Tells every connection that follows changes that `topic` changed, so it reads it again. */
+    readonly announce = (topic: RelayChangeTopic): void => {
+        const notice = JSON.stringify({ kind: CHANGES_CHANGED_KIND, topic });
+        for (const socket of this.#openSockets()) {
+            if (readAttachment(socket)?.follow) {
+                socket.send(notice);
+            }
+        }
+    };
+
+    /** The changes followed now: their connections' Computer and the access each follows under. */
+    readonly follows = (): readonly { readonly computerId: string; readonly follow: ChangeFollow }[] =>
+        this.#openSockets().flatMap((socket) => {
+            const attachment = readAttachment(socket);
+            return attachment?.follow ? [{ computerId: attachment.computerId, follow: attachment.follow }] : [];
+        });
+
+    /** Stops following changes for every connection whose access `ended`, telling it why. */
+    readonly endFollows = async (
+        ended: (computerId: string, follow: ChangeFollow) => Promise<boolean>,
+    ): Promise<void> => {
+        for (const socket of this.#openSockets()) {
+            const attachment = readAttachment(socket);
+            if (!attachment?.follow || !(await ended(attachment.computerId, attachment.follow))) {
+                continue;
+            }
+            saveAttachment(socket, { follow: null });
+            socket.send(
+                JSON.stringify({
+                    kind: CHANGES_ERROR_KIND,
+                    code: "access_ended",
+                    status: 401,
+                    message: "This access has ended",
+                }),
+            );
+        }
+    };
+
     readonly #openSockets = (): readonly WebSocket[] =>
         this.#state.getWebSockets(BROWSER_TAG).filter((socket) => socket.readyState === WebSocket.OPEN);
 
@@ -156,9 +214,10 @@ export class CloudflareBrowserTransports {
                 socket,
                 computerId: attachment.computerId,
                 subscriptions: attachment.subscriptions,
-                saveSubscriptions: (subscriptions: readonly SessionViewerIdentity[]) => {
-                    const saved: BrowserAttachment = { ...attachment, subscriptions };
-                    socket.serializeAttachment(saved);
+                saveSubscriptions: (subscriptions) => saveAttachment(socket, { subscriptions }),
+                saveFollow: async (follow) => {
+                    saveAttachment(socket, { follow });
+                    await this.#followsChanged();
                 },
             },
             this.#ports,
@@ -168,4 +227,16 @@ export class CloudflareBrowserTransports {
 function readAttachment(socket: WebSocket): BrowserAttachment | null {
     const parsed = v.safeParse(attachmentSchema, socket.deserializeAttachment());
     return parsed.success ? parsed.output : null;
+}
+
+/** The attachment is the connection's one record, so each change rewrites it from what is saved. */
+function saveAttachment(
+    socket: WebSocket,
+    change: Pick<BrowserAttachment, "follow"> | Pick<BrowserAttachment, "subscriptions">,
+): void {
+    const saved = readAttachment(socket);
+    if (saved !== null) {
+        const next: BrowserAttachment = { ...saved, ...change };
+        socket.serializeAttachment(next);
+    }
 }

@@ -136,16 +136,25 @@ export async function requestBrowserOperation(
  * The production browser transport over an ordinary socket, for scenarios about its protocol rather than about the
  * Relay that hosts it; such a transport never hibernates, so it is never restored.
  */
-export function openTestBrowserTransport(ports: Omit<BrowserTransportPorts, "restore">): Response {
+export function openTestBrowserTransport(ports: Omit<BrowserTransportPorts, "restore" | "follow">): Response {
     const pair = new WebSocketPair();
     const server = pair[1];
     server.accept();
     const transport = openBrowserTransport(
-        { socket: server, computerId: "computer", subscriptions: [], saveSubscriptions: () => undefined },
+        {
+            socket: server,
+            computerId: "computer",
+            subscriptions: [],
+            saveSubscriptions: () => undefined,
+            saveFollow: async () => undefined,
+        },
         {
             ...ports,
             restore: () => {
                 throw new Error("A test transport never hibernates");
+            },
+            follow: () => {
+                throw new Error("A test transport follows no changes");
             },
         },
     );

@@ -472,6 +472,7 @@ export function createChatWorkspace(options: {
         computerId: options.computerId,
         linkedDevices: options.access.linkedDevices,
         waitForChange: options.access.waitForLinkedDevicesChange,
+        clock: options.clock,
     });
     const accessExpiry = createAccessExpiryStore({
         computerId: options.computerId,
