@@ -1,4 +1,4 @@
-import { ArrowUp, FileText, LoaderCircle, Plus, Square, X } from "lucide-react";
+import { ArrowUp, ChevronDown, FileText, LoaderCircle, Plus, Square, X } from "lucide-react";
 import {
     type ClipboardEvent,
     type FormEvent,
@@ -155,13 +155,12 @@ export function BotChatComposer({
     const { attachments, state: attachmentState } = attachmentModel;
     const showToast = useToast();
     const { active, activate, mobile, setActive } = useMobileComposerActive(textarea);
-    const collapsed =
-        mobile &&
-        !active &&
+    const canCollapse =
         draft.trim().length === 0 &&
         attachments.length === 0 &&
         attachmentState.kind !== "reading" &&
         outputState === "idle";
+    const collapsed = mobile && !active && canCollapse;
     const explainBlockedSend =
         outputState === "idle" &&
         submitDisabled &&
@@ -308,6 +307,19 @@ export function BotChatComposer({
                             "max-sm:pointer-events-none max-sm:invisible max-sm:translate-y-2 max-sm:opacity-0",
                     )}
                 >
+                    {mobile && !collapsed && canCollapse && (
+                        <button
+                            aria-label="Collapse message composer"
+                            className="absolute top-2 right-3 z-10 flex size-8 items-center justify-center rounded-full text-copy-secondary hover:bg-black/[0.045] active:bg-black/[0.07] keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60"
+                            onClick={() => {
+                                textarea.current?.blur();
+                                setActive(false);
+                            }}
+                            type="button"
+                        >
+                            <ChevronDown aria-hidden="true" className="size-4" />
+                        </button>
+                    )}
                     {attachments.length > 0 && (
                         <ImageGallery>
                             <ul aria-label="Attachments" className="mb-2 flex list-none flex-wrap gap-2 p-0">
@@ -333,7 +345,7 @@ export function BotChatComposer({
                             <Textarea
                                 aria-describedby="chat-composer-keyboard-hint"
                                 aria-label="Message"
-                                className="mb-2 min-h-[56px] w-full resize-none overflow-hidden px-4 pt-0 pb-1 text-14 placeholder:text-14 max-sm:visible sm:min-h-[64px]"
+                                className="mb-2 min-h-[56px] w-full resize-none overflow-hidden px-4 pt-0 pb-1 text-14 placeholder:text-14 max-sm:visible max-sm:pr-12 sm:min-h-[64px]"
                                 data-testid={dataTestId.messageComposer}
                                 disabled={disabled}
                                 onBlur={(event) => {
