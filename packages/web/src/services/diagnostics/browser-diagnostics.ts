@@ -38,15 +38,31 @@ export interface DaemonDiagnosticsSource extends ServerNetworkOperations {
     readonly context?: () => ChatDiagnostics;
     readonly read: (signal: AbortSignal) => Promise<ComputerDiagnosticsResult>;
 }
-// Never store arbitrary error messages: they may contain prompts, paths or credentials.
+// Morty error codes are snake_case in either letter case; error names are class identifiers.
+const FAILURE_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/u;
+
+/**
+ * How a failure is recorded: by its code, else by its error name. Never by its message, which may quote prompts,
+ * paths or credentials.
+ */
+export function failureOutcome(cause: unknown): string {
+    if (!(cause instanceof Error)) {
+        return "error";
+    }
+    const code: unknown = Reflect.get(cause, "code");
+    if (typeof code === "string" && FAILURE_IDENTIFIER_PATTERN.test(code)) {
+        return code;
+    }
+    return FAILURE_IDENTIFIER_PATTERN.test(cause.name) ? cause.name : "error";
+}
+
 export function recordBrowserError(operation: string, cause?: unknown): void {
-    const code: unknown = cause instanceof Error ? Reflect.get(cause, "code") : undefined;
     const requestId: unknown = cause instanceof Error ? Reflect.get(cause, "requestId") : undefined;
     recordBrowserDiagnostic({
         at: new Date().toISOString(),
         component: "web",
         operation,
-        outcome: typeof code === "string" && /^[A-Z][A-Z_]{1,63}$/u.test(code) ? code : "error",
+        outcome: failureOutcome(cause),
         requestId: typeof requestId === "string" && /^[a-f0-9-]{36}$/u.test(requestId) ? requestId : "",
         elapsedMs: 0,
     });
