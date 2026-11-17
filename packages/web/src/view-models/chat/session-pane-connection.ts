@@ -8,13 +8,12 @@ import type { Clock } from "../../services/time/clock.ts";
 import { formatError, isRetryableComputerConnectionFailure, isSessionClosedFailure } from "../format-error.ts";
 import { reportApplicationError } from "../report-error.ts";
 import { startRecoveryNotice } from "./recovery-notice.ts";
-import { type SessionConnection, sessionUpdatesEndedError } from "./session-connection.ts";
+import { sessionUpdatesEndedError } from "./session-connection.ts";
 import {
     initialSessionConnection,
     type SessionConnectionEffect,
     type SessionConnectionEvent,
     type SessionConnectionState,
-    sameSessionConnection,
     sessionConnectionClient,
     sessionConnectionView,
     transitionSessionConnection,
@@ -24,7 +23,7 @@ import type { SessionConnectionFollower, SessionOperationConnection } from "./se
 export type { SessionConnection } from "./session-connection.ts";
 
 export interface SessionConnectionStore {
-    readonly connection: SessionConnection;
+    readonly state: SessionConnectionState;
     readonly retryNow: () => void;
     /**
      * The owner sees the Computer reachable again: a connection that used up its automatic retries tries once more,
@@ -39,8 +38,8 @@ export interface SessionConnectionStore {
     readonly recover: (signal: AbortSignal) => Promise<void>;
 }
 
-export const noSessionConnection = createStore<Pick<SessionConnectionStore, "connection">>()(() => ({
-    connection: { kind: "first-loading" },
+export const noSessionConnection = createStore<Pick<SessionConnectionStore, "state">>()(() => ({
+    state: initialSessionConnection,
 }));
 
 export interface SessionPaneConnection {
@@ -71,15 +70,13 @@ export function createSessionPaneConnection(options: {
     readonly onClosed: () => void;
 }): SessionPaneConnection {
     const { clock, sessionTarget } = options;
-    let connectionState: SessionConnectionState = initialSessionConnection;
     let attempt: AbortController | null = null;
     let countdownInterrupt: AbortController | null = null;
     let recoveryNoticeDeadline: AbortController | null = null;
     let connectionChangedAt = clock.now();
     let follower: SessionConnectionFollower | null = null;
-    const currentConnection = (): SessionConnectionState => connectionState;
     const store = createStore<SessionConnectionStore>()(() => ({
-        connection: { kind: "first-loading" },
+        state: initialSessionConnection,
         retryNow: () => {
             dispatch({ kind: "retry-now" });
         },
@@ -94,19 +91,19 @@ export function createSessionPaneConnection(options: {
             dispatch({ kind: "browser-resumed" });
         },
     }));
-    const showConnection = (next: SessionConnectionState): void => {
-        connectionState = next;
-        const previous = store.getState().connection;
-        const shown = sessionConnectionView(next);
-        if (sameSessionConnection(previous, shown)) {
+    const currentConnection = (): SessionConnectionState => store.getState().state;
+    const enter = (next: SessionConnectionState): void => {
+        const previous = currentConnection();
+        if (next === previous) {
             return;
         }
-        store.setState({ connection: shown });
+        store.setState({ state: next });
+        const shown = sessionConnectionView(next);
         if (shown.kind !== "reconnecting" && (shown.kind !== "disconnected" || shown.retry.kind === "exhausted")) {
             recoveryNoticeDeadline?.abort();
             recoveryNoticeDeadline = null;
         }
-        if (shown.kind !== previous.kind) {
+        if (shown.kind !== sessionConnectionView(previous).kind) {
             const now = clock.now();
             recordBrowserDiagnostic({
                 at: new Date().toISOString(),
@@ -121,11 +118,11 @@ export function createSessionPaneConnection(options: {
         follower?.changed();
     };
     const dispatch = (event: SessionConnectionEvent): readonly SessionConnectionEffect[] => {
-        const result = transitionSessionConnection(connectionState, event);
+        const result = transitionSessionConnection(currentConnection(), event);
         if (result.effects.some((effect) => effect.kind === "closed")) {
             options.onClosed();
         }
-        showConnection(result.state);
+        enter(result.state);
         for (const effect of result.effects) {
             switch (effect.kind) {
                 case "abort-attempt":
@@ -145,7 +142,7 @@ export function createSessionPaneConnection(options: {
         return result.effects;
     };
     const failedThrough = (connected: MortyClient, cause: unknown): boolean => {
-        if (isSessionClosedFailure(cause) && connected === sessionConnectionClient(connectionState)) {
+        if (isSessionClosedFailure(cause) && connected === sessionConnectionClient(currentConnection())) {
             dispatch({ kind: "session-closed", reason: cause.message });
             return true;
         }
@@ -158,7 +155,7 @@ export function createSessionPaneConnection(options: {
         // One grace period per interruption, shared by backoff and reconciliation.
         // Successful recovery or a terminal outcome cancels it when the connection shows it.
         const recoveryNotice = (): "quiet" | "visible" => {
-            const current = store.getState().connection;
+            const current = sessionConnectionView(currentConnection());
             if (recoveryNoticeDeadline !== null && !recoveryNoticeDeadline.signal.aborted) {
                 return current.kind === "disconnected" || current.kind === "reconnecting" ? current.notice : "quiet";
             }
@@ -287,11 +284,11 @@ export function createSessionPaneConnection(options: {
     };
     return {
         store,
-        client: () => sessionConnectionClient(connectionState),
+        client: () => sessionConnectionClient(currentConnection()),
         failedThrough,
         start: (signal) => {
             follower = options.operations.follow({
-                connection: () => store.getState().connection,
+                connection: () => sessionConnectionView(currentConnection()),
                 failedThrough: (client, cause) => {
                     failedThrough(client, cause);
                 },

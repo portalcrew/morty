@@ -12,6 +12,7 @@ import type { Clock } from "../../services/time/clock.ts";
 import { agentQuestionAnswer, openAgentQuestions } from "./agent-question-answer.ts";
 import { createBrowserFilePreviewStore } from "./file-preview-store.ts";
 import type { SelectedMortySession } from "./open-session.ts";
+import { sessionConnectionView } from "./session-connection-machine.ts";
 import { acceptedTurn } from "./session-current-turn.ts";
 import { deliveryMessages, settledDelivery, unconfirmedJournal } from "./session-delivery-store.ts";
 import { visibleQueue } from "./session-execution.ts";
@@ -145,7 +146,7 @@ export function createSessionPaneModel(options: {
         },
     });
     const connection = paneConnection.store;
-    const shownConnection = (): SessionConnection => connection.getState().connection;
+    const shownConnection = (): SessionConnection => sessionConnectionView(connection.getState().state);
 
     const operationFacts = (): SessionOperationFacts =>
         sessionOperationFacts({

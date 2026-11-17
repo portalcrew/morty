@@ -50,6 +50,7 @@ import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { canAddAttachments } from "../../view-models/chat/composer-attachment-store.ts";
 import { sessionExecutionContext } from "../../view-models/chat/execution-context.ts";
 import { sessionHarnessSelection } from "../../view-models/chat/native-session-agents.ts";
+import { sessionConnectionView } from "../../view-models/chat/session-connection-machine.ts";
 import { sessionInteractionPresentation } from "../../view-models/chat/session-interaction-store.ts";
 import {
     sessionPanePresentation,
@@ -476,7 +477,7 @@ function MortySessionPaneBody({
     const computer = useStore(workspace.computer);
     const computerConfiguration = computer.computerConfiguration;
     const model = useStore(pane.store);
-    const { connection } = useStore(pane.connection);
+    const connection = sessionConnectionView(useStore(pane.connection, (state) => state.state));
     const { projection } = useStore(pane.history);
     const composer = useStore(pane.composer);
     const rename = useStore(pane.rename);
