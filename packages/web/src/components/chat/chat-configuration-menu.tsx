@@ -58,7 +58,7 @@ function HarnessSelect({
 }) {
     return (
         <div className="flex flex-col gap-1.5">
-            <span className="px-3.5 text-13 text-copy-secondary">{harness.label}</span>
+            <span className="px-3.5 text-13 text-copy-secondary max-sm:[font-size:15px]">{harness.label}</span>
             <div
                 aria-label={harness.label}
                 className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(88px,1fr))] gap-1.5"
@@ -75,7 +75,7 @@ function HarnessSelect({
                             aria-disabled={!installed || harness.disabled}
                             aria-description={installed ? undefined : "Not installed"}
                             className={cn(
-                                "flex min-h-11 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-[16px] border px-2 py-2 text-center text-[13px] outline-none transition-colors keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/50 motion-reduce:transition-none disabled:cursor-not-allowed",
+                                "flex min-h-11 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-[16px] border px-2 py-2 text-center text-[13px] outline-none transition-colors max-sm:min-h-12 max-sm:[font-size:15px] keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/50 motion-reduce:transition-none disabled:cursor-not-allowed",
                                 selected
                                     ? "border-foreground bg-foreground font-medium text-background hover:border-foreground hover:bg-foreground hover:text-background"
                                     : "border-border bg-background text-foreground hover:border-foreground/20 hover:bg-accent",
@@ -117,7 +117,7 @@ function SettingsDataSkeleton() {
             {SETTINGS_DATA_SKELETON_ROWS.map((row) => (
                 <div
                     aria-hidden="true"
-                    className="my-2 flex min-h-9 items-center justify-between gap-4 py-0 pr-2.5 pl-3.5"
+                    className="my-2 flex min-h-9 items-center justify-between gap-4 py-0 pr-2.5 pl-3.5 max-sm:min-h-11"
                     key={row.key}
                 >
                     <span
@@ -140,7 +140,9 @@ function SettingsDataSkeleton() {
     );
 }
 
-type ConfigurationPage = { readonly kind: "overview" } | { readonly kind: "picker"; readonly controlId: string };
+type ConfigurationPage =
+    | { readonly kind: "overview"; readonly transition: "none" | "back" }
+    | { readonly kind: "picker"; readonly controlId: string };
 
 type NestedMenuHoverHandlers = {
     readonly keepOpen: () => void;
@@ -242,7 +244,7 @@ function SettingPicker({
                     <input
                         aria-label="Search models"
                         autoComplete="off"
-                        className="h-9 w-full rounded-lg border border-border bg-background pr-3 pl-9 text-base outline-none focus:border-ring focus:ring-[3px] focus:ring-ring/20"
+                        className="h-9 w-full rounded-full border border-border bg-background pr-3 pl-9 text-base outline-none max-sm:h-11 max-sm:[font-size:16px] focus:border-ring focus:ring-[3px] focus:ring-ring/20"
                         data-testid={dataTestId.modelSearch}
                         onChange={(event) => {
                             if (searchHeight === null && pickerRef.current !== null) {
@@ -300,7 +302,7 @@ function SettingPicker({
                     <button
                         aria-selected={option.value === control.value}
                         className={cn(
-                            "flex h-9 w-full items-center justify-between gap-3 rounded-full px-3 py-2 text-left text-sm outline-none hover:bg-accent keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-inset keyboard-focus:focus-visible:ring-ring/50",
+                            "flex h-9 w-full items-center justify-between gap-3 rounded-full px-3 py-2 text-left text-sm outline-none max-sm:h-11 max-sm:[font-size:15px] hover:bg-accent keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-inset keyboard-focus:focus-visible:ring-ring/50",
                             !nested && "aria-selected:bg-accent",
                         )}
                         data-testid={dataTestId.sessionConfigValue(option.value)}
@@ -317,7 +319,7 @@ function SettingPicker({
                     </button>
                 ))}
                 {options.length === 0 && (
-                    <p className="px-3 py-6 text-sm text-morty-text-3" role="status">
+                    <p className="px-3 py-6 text-sm text-morty-text-3 max-sm:[font-size:15px]" role="status">
                         No models found.
                     </p>
                 )}
@@ -455,7 +457,7 @@ function SettingControl({
                 : { role: "switch", "aria-checked": control.checked })}
             aria-label={control.label}
             className={cn(
-                "group my-2 flex h-9 w-full items-center justify-between gap-4 rounded-full py-0 pr-2.5 pl-3.5 text-left text-13 outline-none hover:bg-accent data-[state=open]:bg-accent keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/50 disabled:cursor-not-allowed",
+                "group my-2 flex h-9 w-full items-center justify-between gap-4 rounded-full py-0 pr-2.5 pl-3.5 text-left text-13 outline-none max-sm:h-11 max-sm:[font-size:15px] hover:bg-accent data-[state=open]:bg-accent keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/50 disabled:cursor-not-allowed",
                 mutedWhenDisabled && "disabled:opacity-50",
             )}
             data-testid={control.testId}
@@ -536,7 +538,7 @@ function SettingControl({
                 {control.kind === "select" ? (
                     <ChevronRight
                         aria-hidden="true"
-                        className="size-3.5 shrink-0 text-morty-text-3 transition-colors duration-150 group-hover:text-foreground group-active:text-foreground group-data-[state=open]:text-foreground motion-reduce:transition-none"
+                        className="size-3.5 shrink-0 text-morty-text-3 transition-colors duration-150 max-sm:size-4 group-hover:text-foreground group-active:text-foreground group-data-[state=open]:text-foreground motion-reduce:transition-none"
                     />
                 ) : (
                     <span
@@ -596,7 +598,7 @@ export function ChatConfigurationMenu({
     const nestedControlIdRef = useRef<string | null>(null);
     const viewport = useConfigurationViewport();
     const desktop = viewport.desktop;
-    const [page, setPage] = useState<ConfigurationPage>({ kind: "overview" });
+    const [page, setPage] = useState<ConfigurationPage>({ kind: "overview", transition: "none" });
     const pickerId = useId();
     const buttonsRef = useRef(new Map<string, HTMLButtonElement>());
     const nestedMenuContentsRef = useRef(new Map<string, HTMLElement>());
@@ -637,14 +639,14 @@ export function ChatConfigurationMenu({
             nestedControlIdRef.current = null;
             nestedMenuPointerGraceRef.current = null;
             setNestedControlId(null);
-            setPage({ kind: "overview" });
+            setPage({ kind: "overview", transition: "none" });
             restoreFocusRef.current = null;
         }
     };
     const goBack = () => {
         if (page.kind === "picker") {
             restoreFocusRef.current = page.controlId;
-            setPage({ kind: "overview" });
+            setPage({ kind: "overview", transition: "back" });
         }
     };
     const onEscapeKeyDown = (event: KeyboardEvent) => {
@@ -721,6 +723,7 @@ export function ChatConfigurationMenu({
                     <ArrowLeft aria-hidden="true" className={desktop ? "size-4" : "size-5"} />
                 </button>
             )}
+            {/* The phone sheet title comes from the shared component; the desktop popover keeps its inline label. */}
             {desktop ? (
                 <span className="min-w-0 flex-1 px-1 text-16 font-semibold">
                     {picker?.label ?? "Agent configuration"}
@@ -765,7 +768,7 @@ export function ChatConfigurationMenu({
                         <Tooltip.Provider delayDuration={150}>
                             <Tooltip.Root>
                                 <Tooltip.Trigger asChild>
-                                    <h3 className="flex min-w-0 items-center gap-2 text-14 font-medium text-copy-secondary">
+                                    <h3 className="flex min-w-0 items-center gap-2 text-14 font-medium text-copy-secondary max-sm:[font-size:15px]">
                                         <HarnessMark harness={selectedHarness.value} label={selectedHarness.label} />
                                         <span className="min-w-0 truncate">{selectedHarness.label}</span>
                                     </h3>
@@ -957,7 +960,7 @@ export function ChatConfigurationMenu({
             <Dialog.Root onOpenChange={changeOpen} open={open}>
                 <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
                 <Dialog.Portal>
-                    <Dialog.Overlay className="fixed inset-0 z-[120] bg-black/30 motion-safe:animate-cloud-enter" />
+                    <Dialog.Overlay className="fixed inset-0 z-[120] bg-black/30 motion-safe:data-[state=open]:animate-cloud-enter motion-safe:data-[state=closed]:animate-sheet-backdrop-exit" />
                     <Dialog.Content
                         aria-label="Agent configuration"
                         onEscapeKeyDown={onEscapeKeyDown}
@@ -966,7 +969,7 @@ export function ChatConfigurationMenu({
                             bottom: viewport.bottom,
                         }}
                         className={cn(
-                            "fixed inset-x-0 bottom-0 z-[121] flex h-auto min-h-0 flex-col overflow-hidden rounded-t-overlay outline-none",
+                            "fixed inset-x-0 bottom-0 z-[121] flex h-auto min-h-0 flex-col overflow-hidden rounded-t-overlay outline-none motion-safe:data-[state=open]:animate-sheet-enter motion-safe:data-[state=closed]:animate-sheet-exit",
                             overlaySurfacePanelClassName,
                             mobileSheetSurfaceClassName,
                         )}
@@ -977,7 +980,17 @@ export function ChatConfigurationMenu({
                         <Dialog.Description className="sr-only">
                             Configure the Agent used for this conversation.
                         </Dialog.Description>
-                        {panelContents}
+                        <div
+                            className={cn(
+                                "flex min-h-0 flex-auto flex-col",
+                                page.kind === "picker"
+                                    ? "motion-safe:animate-configuration-page-forward"
+                                    : page.transition === "back" && "motion-safe:animate-configuration-page-back",
+                            )}
+                            key={page.kind}
+                        >
+                            {panelContents}
+                        </div>
                     </Dialog.Content>
                 </Dialog.Portal>
             </Dialog.Root>

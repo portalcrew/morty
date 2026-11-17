@@ -74,6 +74,55 @@
             opacity: 1;
         }
     }
+    --animate-sheet-enter: sheet-enter 240ms cubic-bezier(0.2, 0, 0, 1);
+    @keyframes sheet-enter {
+        from {
+            transform: translateY(100%);
+        }
+        to {
+            transform: translateY(0);
+        }
+    }
+    --animate-sheet-exit: sheet-exit 180ms ease-in;
+    @keyframes sheet-exit {
+        from {
+            transform: translateY(0);
+        }
+        to {
+            transform: translateY(100%);
+        }
+    }
+    --animate-sheet-backdrop-exit: sheet-backdrop-exit 180ms ease-in;
+    @keyframes sheet-backdrop-exit {
+        from {
+            opacity: 1;
+        }
+        to {
+            opacity: 0;
+        }
+    }
+    --animate-configuration-page-forward: configuration-page-forward 200ms ease-out;
+    @keyframes configuration-page-forward {
+        from {
+            opacity: 0;
+            transform: translateX(24px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+    --animate-configuration-page-back: configuration-page-back 200ms ease-out;
+    @keyframes configuration-page-back {
+        from {
+            opacity: 0;
+            transform: translateX(-24px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
     /* Stays hidden through short waits so quick operations do not flash a pending state. */
     --animate-delayed-reveal: cloud-enter 160ms ease-out 400ms both;
     --animate-reconnect-ellipsis: reconnect-ellipsis 1.2s step-end infinite;
