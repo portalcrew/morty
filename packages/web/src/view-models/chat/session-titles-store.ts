@@ -10,6 +10,8 @@ import {
 type SessionTitle = {
     readonly kind: "known" | "created";
     readonly title: string;
+    /** When its source was observed or its read started, in this page's read order. */
+    readonly since: number;
 };
 
 export type SessionTitles = Pick<NativeSessionMap<SessionTitle>, "get" | "has" | typeof Symbol.iterator>;
@@ -23,9 +25,13 @@ export function sessionTitle(
     return (sessionTarget === null ? undefined : titles.get(sessionTarget)?.title) ?? fallback;
 }
 
-/** One display title per Session. The Computer is authoritative; in-flight reads cannot undo newer observations. */
+/**
+ * One display title per Session. The Computer is authoritative; a read's answer replaces a title only when the read
+ * started after that title's source, so neither an in-flight read nor a slower older one undoes newer knowledge.
+ */
 export function createSessionTitlesStore(identityKey: string | null) {
     let rememberedId: NativeSessionTarget | null = null;
+    let order = 0;
     return createStore<{
         readonly titles: SessionTitles;
         readonly restore: () => void;
@@ -33,8 +39,10 @@ export function createSessionTitlesStore(identityKey: string | null) {
         readonly forget: (sessionTarget: NativeSessionTarget) => void;
         readonly observed: (sessionTarget: NativeSessionTarget, title: string) => void;
         readonly created: (sessionTarget: NativeSessionTarget, title: string) => void;
-        readonly sessionLoaded: (sessionTarget: NativeSessionTarget, title: string, startedWith: SessionTitles) => void;
-        readonly directoryLoaded: (sessions: readonly ManagedChatSession[], startedWith: SessionTitles) => void;
+        /** Marks the start of a read whose answer `sessionLoaded` or `directoryLoaded` receives. */
+        readonly readStarted: () => number;
+        readonly sessionLoaded: (sessionTarget: NativeSessionTarget, title: string, startedAt: number) => void;
+        readonly directoryLoaded: (sessions: readonly ManagedChatSession[], startedAt: number) => void;
     }>()((set, get) => {
         const persist = (): void => {
             if (identityKey === null || rememberedId === null) {
@@ -65,6 +73,7 @@ export function createSessionTitlesStore(identityKey: string | null) {
                             titles: new NativeSessionMap(state.titles).set(saved.target, {
                                 kind: "known",
                                 title: saved.title,
+                                since: 0,
                             }),
                         }));
                     }
@@ -87,29 +96,27 @@ export function createSessionTitlesStore(identityKey: string | null) {
                     return { titles };
                 });
             },
-            observed: (sessionTarget, title) => put(sessionTarget, { kind: "known", title }),
-            created: (sessionTarget, title) => put(sessionTarget, { kind: "created", title }),
-            sessionLoaded: (sessionTarget, title, startedWith) => {
+            observed: (sessionTarget, title) => put(sessionTarget, { kind: "known", title, since: ++order }),
+            created: (sessionTarget, title) => put(sessionTarget, { kind: "created", title, since: ++order }),
+            readStarted: () => ++order,
+            sessionLoaded: (sessionTarget, title, startedAt) => {
                 const current = get().titles.get(sessionTarget);
-                if (
-                    current?.kind === "created" ||
-                    (current !== undefined && current !== startedWith.get(sessionTarget))
-                ) {
+                if (current?.kind === "created" || (current !== undefined && current.since > startedAt)) {
                     return;
                 }
-                put(sessionTarget, { kind: "known", title });
+                put(sessionTarget, { kind: "known", title, since: startedAt });
             },
-            directoryLoaded: (sessions, startedWith) => {
+            directoryLoaded: (sessions, startedAt) => {
                 const titles = new NativeSessionMap(get().titles);
                 for (const session of sessions) {
                     const current = titles.get(session.target);
                     if (
                         (current?.kind === "created" && !session.prompted) ||
-                        (current !== undefined && current !== startedWith.get(session.target))
+                        (current !== undefined && current.since > startedAt)
                     ) {
                         continue;
                     }
-                    titles.set(session.target, { kind: "known", title: session.title });
+                    titles.set(session.target, { kind: "known", title: session.title, since: startedAt });
                 }
                 set({ titles });
                 persist();
