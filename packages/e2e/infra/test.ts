@@ -22,10 +22,13 @@ export async function expandMobileComposer(page: Page): Promise<void> {
     }
     const expand = page.getByRole("button", { name: "Expand message composer" });
     const textbox = page.getByRole("textbox", { name: "Message" });
-    await expect.poll(async () => (await expand.isVisible()) || (await textbox.isVisible())).toBe(true);
-    if (await expand.isVisible()) {
-        await expand.click();
-    }
+    await expect(async () => {
+        if (await textbox.isVisible()) {
+            return;
+        }
+        await expand.click({ timeout: 2000 });
+        await expect(textbox).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 30_000 });
 }
 
 function runtimeTest() {
