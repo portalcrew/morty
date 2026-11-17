@@ -213,7 +213,6 @@ function SessionConversationTitleBar({
     readonly onCancelTitleEdit: () => void;
     readonly onConfirmTitleEdit: () => void;
 }) {
-    const displayTitle = title || "Untitled session";
     const titleTextClassName = centered ? "text-[14px] leading-5" : "text-sm";
     const titleHarnessMark = (loading: boolean) =>
         centered ? null : (
@@ -257,12 +256,12 @@ function SessionConversationTitleBar({
                     titleTextClassName,
                     centered ? "w-full max-w-full justify-center gap-1" : "gap-2.5",
                 )}
-                title={displayTitle}
+                title={title}
             >
                 {titleHarnessMark(false)}
                 <button
                     type="button"
-                    aria-label={displayTitle}
+                    aria-label={title}
                     className={cn(
                         "min-w-0 max-w-full cursor-pointer truncate outline-none hover:text-primary keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/70",
                         centered ? "text-center" : "text-left",
@@ -271,7 +270,7 @@ function SessionConversationTitleBar({
                     onClick={onOpenTitleEdit}
                     ref={ref}
                 >
-                    {displayTitle}
+                    {title}
                 </button>
             </h2>
         );
@@ -292,7 +291,7 @@ function SessionConversationTitleBar({
                         )}
                         disabled={saving}
                         maxLength={500}
-                        value={titleEdit.kind === "closed" ? displayTitle : titleEdit.draft}
+                        value={titleEdit.kind === "closed" ? title : titleEdit.draft}
                         onChange={(event) => onSetTitleDraft(event.target.value)}
                         onKeyDown={(event) => {
                             if (event.key === "Enter") {
@@ -476,7 +475,10 @@ function MortySessionPaneBody({
     const composer = useStore(pane.composer);
     const rename = useStore(pane.rename);
     const titleEdit = sessionTitleEdit(composer.titleDraft, rename.rename);
-    const title = useStore(workspace.titles, (state) => sessionTitle(state.titles, pane.session.target));
+    const title = useStore(
+        workspace.titles,
+        (state) => sessionTitle(state.titles, pane.session.target) || "Untitled session",
+    );
     const attachmentModel = useStore(pane.composerAttachments);
     const execution = useStore(pane.execution, (state) => state.state);
     const timeline = sessionProjectionTimeline(projection, execution.observations);
@@ -601,6 +603,7 @@ function MortySessionPaneBody({
         <DesktopChatLayout>
             {(desktop) => (
                 <>
+                    {sessionMessagesLoading ? null : <title>{`${title} · Morty`}</title>}
                     <section className={chatSessionPaneFillClassName}>
                         {desktop ? (
                             <header className={chatSessionExecutionHeaderClassName}>
