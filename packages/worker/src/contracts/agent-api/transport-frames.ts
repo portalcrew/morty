@@ -1,4 +1,9 @@
-import { MORTY_API_PREFIX } from "@portalcrew/morty-client/protocol";
+import {
+    COMPUTER_HEARTBEAT_ACK_KIND,
+    COMPUTER_HEARTBEAT_KIND,
+    COMPUTER_HEARTBEAT_MESSAGE,
+    MORTY_API_PREFIX,
+} from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 
 // The JSON text frames of the Computer WebSocket transport. The transport reads frames with these limits, and the
@@ -123,7 +128,6 @@ export const transportFrames = {
         schema: v.object({
             kind: v.literal("session.events.event"),
             subscriptionId: v.string(),
-            seqId: v.pipe(v.number(), v.integer()),
             data: v.pipe(v.string(), v.description("The event, JSON-encoded.")),
         }),
     },
@@ -143,14 +147,14 @@ export const transportFrames = {
             message: v.optional(v.string()),
         }),
     },
-    ping: {
+    heartbeat: {
         direction: "send",
-        summary: "Keep an idle connection open.",
-        schema: v.strictObject({ kind: v.literal("ping") }),
+        summary: `Keep an idle connection open. Send exactly ${COMPUTER_HEARTBEAT_MESSAGE}, byte for byte; the Relay's host answers it without waking the Relay.`,
+        schema: v.strictObject({ kind: v.literal(COMPUTER_HEARTBEAT_KIND) }),
     },
-    pong: {
+    heartbeatAck: {
         direction: "receive",
-        summary: "The answer to ping.",
-        schema: v.object({ kind: v.literal("pong") }),
+        summary: "The answer to heartbeat.",
+        schema: v.strictObject({ kind: v.literal(COMPUTER_HEARTBEAT_ACK_KIND) }),
     },
 } as const;

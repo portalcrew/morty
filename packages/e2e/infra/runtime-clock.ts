@@ -1,5 +1,6 @@
 import { mock } from "node:test";
 import { test } from "@playwright/test";
+import { COMPUTER_HEARTBEAT_ACK_KIND, COMPUTER_HEARTBEAT_KIND } from "@portalcrew/morty-client/protocol";
 import type { Page, WebSocket } from "playwright-core";
 
 /**
@@ -61,8 +62,8 @@ function afterSent(
             );
         case "session.events.unsubscribe":
             return without(awaiting, `subscription ${field(message, "subscriptionId")}`);
-        case "ping":
-            return new Map(awaiting).set("ping", "heartbeat ping");
+        case COMPUTER_HEARTBEAT_KIND:
+            return new Map(awaiting).set("heartbeat", "heartbeat");
         default:
             return awaiting;
     }
@@ -80,8 +81,8 @@ function afterReceived(
         case "session.events.error":
         case "session.events.end":
             return without(awaiting, `subscription ${field(message, "subscriptionId")}`);
-        case "pong":
-            return without(awaiting, "ping");
+        case COMPUTER_HEARTBEAT_ACK_KIND:
+            return without(awaiting, "heartbeat");
         default:
             return awaiting;
     }

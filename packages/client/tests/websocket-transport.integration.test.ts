@@ -13,6 +13,7 @@ import {
     type MortyWebSocketConnector,
     WsTransport,
 } from "../src/index.ts";
+import { COMPUTER_HEARTBEAT_ACK_MESSAGE, COMPUTER_HEARTBEAT_MESSAGE } from "../src/protocol/index.ts";
 import { sessionEventEnvelopeCodec, sessionEventsSubscribeCommandCodec } from "../src/protocol/session/events/index.ts";
 
 // Only the Relay verifies the credential; routing uses the explicit endpoint target.
@@ -101,15 +102,17 @@ class BrowserWebSocket extends EventTarget implements WebSocket {
         if (typeof data !== "string") {
             throw new Error("Expected a text WebSocket request");
         }
+        if (data === COMPUTER_HEARTBEAT_MESSAGE) {
+            if (this.liveness === "responsive") {
+                queueMicrotask(() =>
+                    this.dispatchEvent(new MessageEvent("message", { data: COMPUTER_HEARTBEAT_ACK_MESSAGE })),
+                );
+            }
+            return;
+        }
         const value: unknown = JSON.parse(data);
         if (typeof value !== "object" || value === null) {
             throw new Error("Expected a WebSocket message");
-        }
-        if ("kind" in value && value.kind === "ping") {
-            if (this.liveness === "responsive") {
-                queueMicrotask(() => this.dispatchEvent(new MessageEvent("message", { data: '{"kind":"pong"}' })));
-            }
-            return;
         }
         if ("subscriptionId" in value) {
             if (typeof value.subscriptionId !== "string") {
@@ -193,13 +196,17 @@ async function liveEventPeer(liveness: "responsive" | "silent" = "responsive") {
         webSockets.handleUpgrade(request, socket, head, (connection) => {
             webSockets.emit("connection", connection, request);
             connection.on("message", async (data) => {
+                if (data.toString() === COMPUTER_HEARTBEAT_MESSAGE) {
+                    if (liveness === "responsive") {
+                        connection.send(COMPUTER_HEARTBEAT_ACK_MESSAGE);
+                    }
+                    return;
+                }
                 const value: unknown = JSON.parse(data.toString());
                 if (typeof value !== "object" || value === null || !("kind" in value)) {
                     throw new Error("Expected a protocol message");
                 }
-                if (value.kind === "ping" && liveness === "responsive") {
-                    connection.send(JSON.stringify({ kind: "pong" }));
-                } else if (
+                if (
                     value.kind === "session.events.subscribe" &&
                     "subscriptionId" in value &&
                     typeof value.subscriptionId === "string"
@@ -286,7 +293,6 @@ async function liveEventPeer(liveness: "responsive" | "silent" = "responsive") {
                     JSON.stringify({
                         kind: "session.events.event",
                         subscriptionId,
-                        seqId: 1,
                         eventId: "event-1",
                         data: wire,
                     }),
@@ -303,7 +309,6 @@ async function liveEventPeer(liveness: "responsive" | "silent" = "responsive") {
                 JSON.stringify({
                     kind: "session.events.event",
                     subscriptionId,
-                    seqId: 1,
                     eventId: "event-1",
                     data: wire,
                 }),
@@ -584,7 +589,6 @@ it("Given a quiet subscription with connection heartbeats, When minutes pass, Th
                 data: JSON.stringify({
                     kind: "session.events.event",
                     subscriptionId,
-                    seqId: 1,
                     eventId: "event-1",
                     data: "event-after-idle",
                 }),
@@ -592,7 +596,7 @@ it("Given a quiet subscription with connection heartbeats, When minutes pass, Th
         );
         await expect(reader.read()).resolves.toEqual({
             done: false,
-            value: { seqId: 1, eventId: "event-1", data: "event-after-idle" },
+            value: { eventId: "event-1", data: "event-after-idle" },
         });
     } finally {
         transport.close();
@@ -677,7 +681,6 @@ it("Given a replacement WebSocket carries a live subscription, When the old sock
                 data: "event-data",
                 eventId: "event-1",
                 kind: "session.events.event",
-                seqId: 1,
                 subscriptionId,
             }),
         }),
@@ -685,7 +688,7 @@ it("Given a replacement WebSocket carries a live subscription, When the old sock
 
     expect(await events.getReader().read()).toEqual({
         done: false,
-        value: { data: "event-data", eventId: "event-1", seqId: 1 },
+        value: { data: "event-data", eventId: "event-1" },
     });
     expect(connector.sockets).toHaveLength(2);
 

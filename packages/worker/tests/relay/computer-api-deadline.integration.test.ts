@@ -3,7 +3,6 @@ import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { afterAll, expect, it, vi } from "vitest";
 import { SessionAccessSigner } from "../../src/computer-relay/components/runtime/entity/session-access-credential.ts";
-import { acceptWebSocketHttpTransport } from "../../src/computer-relay/components/runtime/http/websocket-http-transport.ts";
 import { createLocalSessionOperations } from "../../src/computer-relay/components/runtime/service/local-session-operations.ts";
 import { SessionAccessService } from "../../src/computer-relay/components/runtime/service/session-access-service.ts";
 import { createSessionWebSocketRoutes } from "../../src/computer-relay/components/runtime/websocket/session-websocket-routes.ts";
@@ -13,7 +12,8 @@ import { computerObjectName } from "../../src/contracts/computer-id.ts";
 import type { SubscribeSessionEvents } from "../../src/contracts/session-event-subscription.ts";
 import { WebSocketDispatchError } from "../../src/contracts/websocket-http-dispatch.ts";
 import { RequestDeadline } from "../../src/http/request-deadline.ts";
-import { createOwner, ownerOrigin } from "./owner-fixture.ts";
+import { openTestBrowserTransport } from "./browser-session.ts";
+import { createOwner } from "./owner-fixture.ts";
 import { computerAccess } from "./registered-computer.ts";
 
 class PendingComputerApiBoundary {
@@ -65,10 +65,7 @@ it("Given a Computer API with a 120-second deadline mounted beside Session route
                         api.fetch(context.req.raw),
                     ),
                 );
-                const response = acceptWebSocketHttpTransport({
-                    request: new Request(`${ownerOrigin}/morty/api/v1/computers/${owner.computerId}/transport`, {
-                        headers: { Upgrade: "websocket" },
-                    }),
+                const response = openTestBrowserTransport({
                     dispatch: async (operation) => await router.fetch(operation.request, { operation }),
                     subscribe: api.subscribe,
                 });

@@ -22,7 +22,11 @@ import {
     RESPONSE_KIND,
 } from "../../../../contracts/agent-api/transport-frames.ts";
 import { type HttpError, toHttpError } from "../../../../contracts/http-error.ts";
-import type { SubscribeSessionEvents } from "../../../../contracts/session-event-subscription.ts";
+import type {
+    RestoreSessionEvents,
+    SessionViewerIdentity,
+    SubscribeSessionEvents,
+} from "../../../../contracts/session-event-subscription.ts";
 import { WebSocketDispatchError, type WebSocketHttpDispatch } from "../../../../contracts/websocket-http-dispatch.ts";
 import { readBearerToken } from "../../../../http/request-headers.ts";
 import { diagnosticText } from "../../../../infra/log-diagnostics.ts";
@@ -30,8 +34,29 @@ import { logger } from "../../../../infra/logger.ts";
 import { WebSocketUploadCapacity } from "../service/websocket-upload-capacity.ts";
 
 const BINARY_REQUEST_TIMEOUT_MILLISECONDS = 30_000;
-const IDLE_TIMEOUT_MILLISECONDS = 60_000;
 const MAX_SUBSCRIPTION_DIAGNOSTICS = 8;
+// A connection's open subscriptions are saved with it, which bounds them by the attachment size.
+export const MAX_SUBSCRIPTIONS_PER_CONNECTION = 16;
+// Requests from a browser are dispatched inside the Relay, where only their path routes them.
+const RELAY_INTERNAL_ORIGIN = "https://relay.internal";
+
+export interface BrowserTransportConnection {
+    readonly socket: WebSocket;
+    readonly computerId: string;
+    readonly subscriptions: readonly SessionViewerIdentity[];
+    readonly saveSubscriptions: (subscriptions: readonly SessionViewerIdentity[]) => void;
+}
+
+export interface BrowserTransportPorts {
+    readonly dispatch: WebSocketHttpDispatch;
+    readonly subscribe: SubscribeSessionEvents;
+    readonly restore: RestoreSessionEvents;
+}
+
+export interface BrowserTransport {
+    readonly receive: (data: string | ArrayBuffer) => Promise<void>;
+    readonly release: () => void;
+}
 
 type WebSocketTransportErrorCode =
     | "invalid_headers"
@@ -345,7 +370,6 @@ function bearerCredential(frameHeaders: Headers): string {
 function requestFromMessage(
     value: Readonly<Record<string, unknown>>,
     origin: string,
-    browserOrigin: string | null,
     signal: AbortSignal,
     binaryBody?: Uint8Array,
 ): { readonly request: Request; readonly body: string } {
@@ -357,9 +381,6 @@ function requestFromMessage(
     const textBody = requestBody(value);
     const body = binaryBody ?? textBody;
     const requestHeaders = headers(value["headers"]);
-    if (browserOrigin !== null) {
-        requestHeaders.set("origin", browserOrigin);
-    }
     return {
         request: new Request(endpoint, {
             body: body.length === 0 || method === "GET" ? null : typeof body === "string" ? body : body.slice().buffer,
@@ -377,54 +398,130 @@ function responseHeaders(response: Response): readonly (readonly [string, string
     );
 }
 
-export function acceptWebSocketHttpTransport({
-    request,
-    dispatch,
-    subscribe,
-}: {
-    readonly request: Request;
-    readonly dispatch: WebSocketHttpDispatch;
-    readonly subscribe: SubscribeSessionEvents;
-}): Response {
-    if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
-        return Response.json(
-            { error: { code: "websocket_upgrade_required", message: "A WebSocket upgrade is required" } },
-            { status: 426 },
-        );
-    }
-    const pair = new WebSocketPair();
-    const client = pair[0];
-    const server = pair[1];
+/**
+ * One browser connection. Its open subscriptions are the only state that must outlive the Relay's memory: each change
+ * to them is saved through `saveSubscriptions`, and the ones in `subscriptions` are reopened when the transport opens.
+ */
+export function openBrowserTransport(
+    connection: BrowserTransportConnection,
+    ports: BrowserTransportPorts,
+): BrowserTransport {
+    const server = connection.socket;
+    const { dispatch, subscribe } = ports;
     const controller = new AbortController();
     const subscriptions = new Map<
         string,
         | { readonly kind: "pending"; readonly controller: AbortController }
-        | { readonly kind: "open"; readonly controller: AbortController }
+        | { readonly kind: "open"; readonly controller: AbortController; readonly identity: SessionViewerIdentity }
     >();
     const connectionUploads = new WebSocketUploadCapacity();
     const binaryRequests = new Map<string, PendingBinaryUpload>();
     const requests = new Map<string, AbortController>();
-    const browserOrigin = request.headers.get("origin");
     let subscriptionDiagnosticCount = 0;
-    let lastActivityAt = Date.now();
-    let idleTimeout: ReturnType<typeof setTimeout>;
-    const touch = (): void => {
-        clearTimeout(idleTimeout);
-        if (server.readyState !== WebSocket.OPEN) {
-            return;
-        }
-        lastActivityAt = Date.now();
-        idleTimeout = setTimeout(checkIdleDeadline, IDLE_TIMEOUT_MILLISECONDS);
+    const saveSubscriptions = (): void => {
+        connection.saveSubscriptions(
+            [...subscriptions.values()].flatMap((subscription) =>
+                subscription.kind === "open" ? [subscription.identity] : [],
+            ),
+        );
     };
-    const checkIdleDeadline = (): void => {
-        const remaining = IDLE_TIMEOUT_MILLISECONDS - (Date.now() - lastActivityAt);
-        if (remaining > 0) {
-            idleTimeout = setTimeout(checkIdleDeadline, remaining);
-        } else {
-            controller.abort(new Error("WebSocket transport became inactive"));
-            server.close(1001, "WebSocket transport idle timeout");
-            release();
-        }
+    const sendSubscriptionError = (subscriptionId: string, cause: unknown): void => {
+        const error = toHttpError(cause);
+        server.send(
+            JSON.stringify({
+                kind: "session.events.error",
+                subscriptionId,
+                code: error.body.error.code,
+                message: error.body.error.message,
+                status: error.status,
+            }),
+        );
+    };
+    /**
+     * Delivers one subscription's events and ends it when its viewer closes. The delivery figures in its diagnostic
+     * cover only this Relay instance; they are not kept across hibernation.
+     */
+    const observeSubscription = (subscriptionId: string, subscriptionController: AbortController, path: string) => {
+        const openedAt = Date.now();
+        let delivered = 0;
+        let lastMessageAt: number | null = null;
+        const pendingMessages: string[] = [];
+        let pendingBytes = 0;
+        const close = (code: number, reason: string): void => {
+            const current = subscriptions.get(subscriptionId);
+            if (current?.controller === subscriptionController) {
+                subscriptions.delete(subscriptionId);
+                if (current.kind === "open") {
+                    saveSubscriptions();
+                }
+                if (server.readyState === WebSocket.OPEN) {
+                    const unexpected = code !== 1000 && code !== 1001;
+                    // A flapping subscription must not produce an unbounded log stream.
+                    // Normal unsubscribe, browser close, and clean upstream close remain quiet.
+                    if (unexpected && subscriptionDiagnosticCount < MAX_SUBSCRIPTION_DIAGNOSTICS) {
+                        subscriptionDiagnosticCount += 1;
+                        const now = Date.now();
+                        logger.warn(
+                            {
+                                event: "session_event_subscription_disconnected",
+                                source: "upstream_close",
+                                path,
+                                subscriptionId,
+                                elapsedMilliseconds: Math.max(0, now - openedAt),
+                                lastMessageAgeMilliseconds:
+                                    lastMessageAt === null ? null : Math.max(0, now - lastMessageAt),
+                                messageCount: delivered,
+                                closeCode: code,
+                                closeReason: diagnosticText(reason, 256),
+                                wasClean: !unexpected,
+                            },
+                            "Session event subscription disconnected",
+                        );
+                    }
+                    server.send(
+                        JSON.stringify(
+                            current.kind === "pending"
+                                ? {
+                                      kind: "session.events.error",
+                                      subscriptionId,
+                                      code: "session_unavailable",
+                                      status: 502,
+                                      message: "The Session event subscription is unavailable",
+                                  }
+                                : { kind: "session.events.end", subscriptionId },
+                        ),
+                    );
+                }
+            }
+            subscriptionController.abort(new DOMException("Session event subscription closed", "AbortError"));
+        };
+        const message = (data: string): void => {
+            const current = subscriptions.get(subscriptionId);
+            if (current?.controller !== subscriptionController) {
+                return;
+            }
+            // Admission may await alarm persistence after the listener is registered.
+            if (current.kind === "pending") {
+                pendingBytes += new TextEncoder().encode(data).byteLength;
+                if (pendingBytes > MAX_BODY_BYTES) {
+                    close(1013, "Session subscription backpressure");
+                } else {
+                    pendingMessages.push(data);
+                }
+                return;
+            }
+            if (server.readyState === WebSocket.OPEN) {
+                lastMessageAt = Date.now();
+                delivered += 1;
+                server.send(JSON.stringify({ data, eventId: "", kind: "session.events.event", subscriptionId }));
+            }
+        };
+        const flush = (): void => {
+            for (const data of pendingMessages.splice(0)) {
+                message(data);
+            }
+        };
+        return { message, close, flush };
     };
     const releaseBinaryRequest = (requestId: string) => {
         const upload = binaryRequests.get(requestId);
@@ -442,375 +539,266 @@ export function acceptWebSocketHttpTransport({
     };
     const release = () => {
         controller.abort(new Error("WebSocket transport closed"));
-        clearTimeout(idleTimeout);
-        for (const subscription of subscriptions.values()) {
+        const ended = [...subscriptions.values()];
+        subscriptions.clear();
+        // The saved record must not outlive the subscriptions, or a later wake would reopen them for a closed socket.
+        saveSubscriptions();
+        for (const subscription of ended) {
             subscription.controller.abort(new DOMException("WebSocket transport closed", "AbortError"));
         }
-        subscriptions.clear();
         releaseAllBinaryRequests();
         for (const pending of requests.values()) {
             pending.abort(new DOMException("WebSocket transport closed", "AbortError"));
         }
         requests.clear();
     };
-    const receive = (data: string | ArrayBuffer) => {
-        touch();
-        void (async () => {
-            let requestId = "unknown";
-            let operation: PendingRequest | null = null;
-            try {
-                let decoded: unknown;
-                let binaryBody: Uint8Array | undefined;
-                if (typeof data === "string") {
-                    decoded = JSON.parse(data);
-                } else {
-                    const arrayBuffer =
-                        typeof data === "object" && data !== null ? Reflect.get(data, "arrayBuffer") : undefined;
-                    const binary =
-                        typeof arrayBuffer === "function" ? await Reflect.apply(arrayBuffer, data, []) : data;
-                    const chunk = decodeContentChunkFrame(binary);
-                    requestId = chunk.requestId;
-                    const upload = binaryRequests.get(chunk.requestId);
-                    if (upload === undefined || chunk.sequence !== upload.sequence) {
-                        releaseBinaryRequest(chunk.requestId);
-                        throw transportError("invalid_message");
-                    }
-                    upload.sequence += 1;
-                    upload.receivedBytes += chunk.bytes.byteLength;
-                    if (upload.receivedBytes > upload.byteLength) {
-                        releaseBinaryRequest(chunk.requestId);
-                        throw transportError("request_too_large");
-                    }
-                    upload.chunks.push(chunk.bytes);
-                    if (upload.receivedBytes < upload.byteLength) {
-                        return;
-                    }
-                    if (!(await upload.authorization) || binaryRequests.get(chunk.requestId) !== upload) {
-                        return;
-                    }
-                    const completed = releaseBinaryRequest(chunk.requestId);
-                    if (completed === undefined) {
-                        throw transportError("invalid_message");
-                    }
-                    binaryBody = new Uint8Array(completed.byteLength);
-                    let offset = 0;
-                    for (const bytes of completed.chunks) {
-                        binaryBody.set(bytes, offset);
-                        offset += bytes.byteLength;
-                    }
-                    decoded = completed.message;
+    const receive = async (data: string | ArrayBuffer): Promise<void> => {
+        let requestId = "unknown";
+        let operation: PendingRequest | null = null;
+        try {
+            let decoded: unknown;
+            let binaryBody: Uint8Array | undefined;
+            if (typeof data === "string") {
+                decoded = JSON.parse(data);
+            } else {
+                const arrayBuffer =
+                    typeof data === "object" && data !== null ? Reflect.get(data, "arrayBuffer") : undefined;
+                const binary = typeof arrayBuffer === "function" ? await Reflect.apply(arrayBuffer, data, []) : data;
+                const chunk = decodeContentChunkFrame(binary);
+                requestId = chunk.requestId;
+                const upload = binaryRequests.get(chunk.requestId);
+                if (upload === undefined || chunk.sequence !== upload.sequence) {
+                    releaseBinaryRequest(chunk.requestId);
+                    throw transportError("invalid_message");
                 }
-                const message = record(decoded);
-                const kind = string(message, "kind", 32);
-                if (kind === "ping" && Object.keys(message).length === 1) {
-                    server.send('{"kind":"pong"}');
+                upload.sequence += 1;
+                upload.receivedBytes += chunk.bytes.byteLength;
+                if (upload.receivedBytes > upload.byteLength) {
+                    releaseBinaryRequest(chunk.requestId);
+                    throw transportError("request_too_large");
+                }
+                upload.chunks.push(chunk.bytes);
+                if (upload.receivedBytes < upload.byteLength) {
                     return;
                 }
-                if (kind === CANCEL_KIND) {
-                    const cancelledId = string(message, "requestId", 128);
-                    requests.get(cancelledId)?.abort(new DOMException("Request cancelled", "AbortError"));
-                    releaseBinaryRequest(cancelledId);
+                if (!(await upload.authorization) || binaryRequests.get(chunk.requestId) !== upload) {
                     return;
                 }
-                if (kind === EVENT_UNSUBSCRIBE_KIND) {
-                    const subscriptionId = string(message, "subscriptionId", 128);
-                    const subscription = subscriptions.get(subscriptionId);
-                    subscriptions.delete(subscriptionId);
-                    subscription?.controller.abort(new DOMException("Session event subscription closed", "AbortError"));
+                const completed = releaseBinaryRequest(chunk.requestId);
+                if (completed === undefined) {
+                    throw transportError("invalid_message");
+                }
+                binaryBody = new Uint8Array(completed.byteLength);
+                let offset = 0;
+                for (const bytes of completed.chunks) {
+                    binaryBody.set(bytes, offset);
+                    offset += bytes.byteLength;
+                }
+                decoded = completed.message;
+            }
+            const message = record(decoded);
+            const kind = string(message, "kind", 32);
+            if (kind === CANCEL_KIND) {
+                const cancelledId = string(message, "requestId", 128);
+                requests.get(cancelledId)?.abort(new DOMException("Request cancelled", "AbortError"));
+                releaseBinaryRequest(cancelledId);
+                return;
+            }
+            if (kind === EVENT_UNSUBSCRIBE_KIND) {
+                const subscriptionId = string(message, "subscriptionId", 128);
+                const subscription = subscriptions.get(subscriptionId);
+                subscriptions.delete(subscriptionId);
+                if (subscription?.kind === "open") {
+                    saveSubscriptions();
+                }
+                subscription?.controller.abort(new DOMException("Session event subscription closed", "AbortError"));
+                return;
+            }
+            if (kind === EVENT_SUBSCRIBE_KIND) {
+                const subscriptionId = string(message, "subscriptionId", 128);
+                if (!FRAME_IDENTIFIER_PATTERN.test(subscriptionId) || subscriptions.has(subscriptionId)) {
+                    throw transportError("invalid_message");
+                }
+                requestId = subscriptionId;
+                const encoded = requestBody(message);
+                let subscription: SessionEventsSubscribeCommandRouting;
+                try {
+                    subscription = sessionEventsSubscribeCommandCodec.decodeRouting(encoded);
+                    if (subscription.subscriptionId !== subscriptionId) {
+                        throw transportError("invalid_message");
+                    }
+                } catch {
+                    throw transportError("invalid_message");
+                }
+                const endpoint = framePath(message, RELAY_INTERNAL_ORIGIN);
+                const frameHeaders = headers(message["headers"]);
+                const address = subscriptionAddress(endpoint);
+                const credential = bearerCredential(frameHeaders);
+                if (subscriptions.size >= MAX_SUBSCRIPTIONS_PER_CONNECTION) {
+                    sendSubscriptionError(subscriptionId, transportError("request_capacity_exceeded"));
                     return;
                 }
-                if (kind === EVENT_SUBSCRIBE_KIND) {
-                    const subscriptionId = string(message, "subscriptionId", 128);
-                    if (!FRAME_IDENTIFIER_PATTERN.test(subscriptionId) || subscriptions.has(subscriptionId)) {
-                        throw transportError("invalid_message");
-                    }
-                    requestId = subscriptionId;
-                    const encoded = requestBody(message);
-                    let subscription: SessionEventsSubscribeCommandRouting;
-                    try {
-                        subscription = sessionEventsSubscribeCommandCodec.decodeRouting(encoded);
-                        if (subscription.subscriptionId !== subscriptionId) {
-                            throw transportError("invalid_message");
-                        }
-                    } catch {
-                        throw transportError("invalid_message");
-                    }
-                    const endpoint = framePath(message, new URL(request.url).origin);
-                    const frameHeaders = headers(message["headers"]);
-                    const address = subscriptionAddress(endpoint);
-                    const credential = bearerCredential(frameHeaders);
-                    const subscriptionController = new AbortController();
-                    subscriptions.set(subscriptionId, { controller: subscriptionController, kind: "pending" });
-                    let nextSequenceId = 1;
-                    const openedAt = Date.now();
-                    let lastMessageAt: number | null = null;
-                    const pendingMessages: string[] = [];
-                    let pendingBytes = 0;
-                    const finish = (code: number, reason: string): void => {
-                        const current = subscriptions.get(subscriptionId);
-                        if (
-                            current?.controller === subscriptionController &&
-                            subscriptions.delete(subscriptionId) &&
-                            server.readyState === WebSocket.OPEN
-                        ) {
-                            const unexpected = code !== 1000 && code !== 1001;
-                            // A flapping subscription must not produce an unbounded log stream.
-                            // Normal unsubscribe, browser close, and clean upstream close remain quiet.
-                            if (unexpected && subscriptionDiagnosticCount < MAX_SUBSCRIPTION_DIAGNOSTICS) {
-                                subscriptionDiagnosticCount += 1;
-                                const now = Date.now();
-                                logger.warn(
-                                    {
-                                        event: "session_event_subscription_disconnected",
-                                        source: "upstream_close",
-                                        cfRay: request.headers.get("cf-ray")?.slice(0, 128) ?? null,
-                                        path: endpoint.pathname,
-                                        subscriptionId,
-                                        elapsedMilliseconds: Math.max(0, now - openedAt),
-                                        lastMessageAgeMilliseconds:
-                                            lastMessageAt === null ? null : Math.max(0, now - lastMessageAt),
-                                        messageCount: nextSequenceId - 1,
-                                        closeCode: code,
-                                        closeReason: diagnosticText(reason, 256),
-                                        wasClean: !unexpected,
-                                    },
-                                    "Session event subscription disconnected",
-                                );
-                            }
-                            server.send(
-                                JSON.stringify(
-                                    current.kind === "pending"
-                                        ? {
-                                              kind: "session.events.error",
-                                              subscriptionId,
-                                              code: "session_unavailable",
-                                              status: 502,
-                                              message: "The Session event subscription is unavailable",
-                                          }
-                                        : { kind: "session.events.end", subscriptionId },
-                                ),
-                            );
-                        }
-                        subscriptionController.abort(
-                            new DOMException("Session event subscription closed", "AbortError"),
-                        );
-                    };
-                    const messageReceived = (data: string): void => {
-                        const current = subscriptions.get(subscriptionId);
-                        if (current?.controller !== subscriptionController) {
-                            return;
-                        }
-                        // Admission may await alarm persistence after the listener is registered.
-                        if (current.kind === "pending") {
-                            pendingBytes += new TextEncoder().encode(data).byteLength;
-                            if (pendingBytes > MAX_BODY_BYTES) {
-                                finish(1013, "Session subscription backpressure");
-                            } else {
-                                pendingMessages.push(data);
-                            }
-                            return;
-                        }
-                        if (server.readyState === WebSocket.OPEN) {
-                            lastMessageAt = Date.now();
-                            server.send(
-                                JSON.stringify({
-                                    data,
-                                    eventId: "",
-                                    kind: "session.events.event",
-                                    seqId: nextSequenceId,
-                                    subscriptionId,
-                                }),
-                            );
-                            nextSequenceId += 1;
-                            touch();
-                        }
-                    };
-                    try {
-                        await subscribe(
-                            { ...address, credential, command: subscription, signal: subscriptionController.signal },
-                            { message: messageReceived, close: finish },
-                        );
-                        subscriptionController.signal.throwIfAborted();
-                    } catch (cause) {
-                        if (subscriptions.get(subscriptionId)?.controller === subscriptionController) {
-                            subscriptions.delete(subscriptionId);
-                        }
-                        const cancelled = subscriptionController.signal.aborted;
-                        subscriptionController.abort(cause);
-                        if (cancelled) {
-                            return;
-                        }
-                        if (cause instanceof WebSocketDispatchError) {
-                            throw cause;
-                        }
-                        const error = toHttpError(cause);
-                        server.send(
-                            JSON.stringify({
-                                kind: "session.events.error",
-                                subscriptionId,
-                                code: error.body.error.code,
-                                message: error.body.error.message,
-                                status: error.status,
-                            }),
-                        );
-                        return;
-                    }
-                    subscriptions.set(subscriptionId, { kind: "open", controller: subscriptionController });
-                    server.send(
-                        JSON.stringify({
-                            kind: "session.events.ready",
-                            subscriptionId,
-                        }),
+                const subscriptionController = new AbortController();
+                subscriptions.set(subscriptionId, { controller: subscriptionController, kind: "pending" });
+                const observer = observeSubscription(subscriptionId, subscriptionController, endpoint.pathname);
+                let identity: SessionViewerIdentity;
+                try {
+                    identity = await subscribe(
+                        { ...address, credential, command: subscription, signal: subscriptionController.signal },
+                        observer,
                     );
-                    for (const data of pendingMessages) {
-                        messageReceived(data);
+                    subscriptionController.signal.throwIfAborted();
+                } catch (cause) {
+                    if (subscriptions.get(subscriptionId)?.controller === subscriptionController) {
+                        subscriptions.delete(subscriptionId);
                     }
-                    pendingMessages.length = 0;
-                    touch();
+                    const cancelled = subscriptionController.signal.aborted;
+                    subscriptionController.abort(cause);
+                    if (cancelled) {
+                        return;
+                    }
+                    if (cause instanceof WebSocketDispatchError) {
+                        throw cause;
+                    }
+                    sendSubscriptionError(subscriptionId, cause);
                     return;
                 }
-                const bodyByteLength = message["bodyByteLength"];
-                if (binaryBody === undefined && bodyByteLength !== undefined) {
-                    requestId = requestIdFromMessage(message);
-                    if (
-                        !Number.isSafeInteger(bodyByteLength) ||
-                        typeof bodyByteLength !== "number" ||
-                        bodyByteLength < 1 ||
-                        requestBody(message).length !== 0 ||
-                        binaryRequests.has(requestId)
-                    ) {
-                        throw transportError("invalid_message");
-                    }
-                    const declaration = requestFromMessage(
-                        message,
-                        new URL(request.url).origin,
-                        browserOrigin,
-                        controller.signal,
-                        new Uint8Array(0),
-                    );
-                    if (declaration.request.method === "GET") {
-                        throw transportError("invalid_message");
-                    }
-                    const encryptedUpload = isEncryptedContentUpload(declaration.request);
-                    if (bodyByteLength > (encryptedUpload ? CONTENT_UPLOAD_MAX_ENCODED_BYTES : MAX_BODY_BYTES)) {
-                        throw transportError("invalid_message");
-                    }
-                    const upload = new PendingBinaryUpload(
-                        bodyByteLength,
-                        message,
-                        connectionUploads,
-                        encryptedUpload,
-                        async (cause) => {
-                            if (binaryRequests.get(requestId) !== upload) {
-                                return;
-                            }
-                            releaseBinaryRequest(requestId);
-                            if (cause instanceof Response) {
-                                const body = await cause.text();
-                                if (server.readyState === WebSocket.OPEN) {
-                                    server.send(
-                                        JSON.stringify({
-                                            body,
-                                            headers: responseHeaders(cause),
-                                            kind: RESPONSE_KIND,
-                                            requestId,
-                                            status: cause.status,
-                                        }),
-                                    );
-                                }
-                            } else if (server.readyState === WebSocket.OPEN) {
-                                const error = toHttpError(cause);
+                subscriptions.set(subscriptionId, { kind: "open", controller: subscriptionController, identity });
+                saveSubscriptions();
+                server.send(
+                    JSON.stringify({
+                        kind: "session.events.ready",
+                        subscriptionId,
+                    }),
+                );
+                observer.flush();
+                return;
+            }
+            const bodyByteLength = message["bodyByteLength"];
+            if (binaryBody === undefined && bodyByteLength !== undefined) {
+                requestId = requestIdFromMessage(message);
+                if (
+                    !Number.isSafeInteger(bodyByteLength) ||
+                    typeof bodyByteLength !== "number" ||
+                    bodyByteLength < 1 ||
+                    requestBody(message).length !== 0 ||
+                    binaryRequests.has(requestId)
+                ) {
+                    throw transportError("invalid_message");
+                }
+                const declaration = requestFromMessage(
+                    message,
+                    RELAY_INTERNAL_ORIGIN,
+                    controller.signal,
+                    new Uint8Array(0),
+                );
+                if (declaration.request.method === "GET") {
+                    throw transportError("invalid_message");
+                }
+                const encryptedUpload = isEncryptedContentUpload(declaration.request);
+                if (bodyByteLength > (encryptedUpload ? CONTENT_UPLOAD_MAX_ENCODED_BYTES : MAX_BODY_BYTES)) {
+                    throw transportError("invalid_message");
+                }
+                const upload = new PendingBinaryUpload(
+                    bodyByteLength,
+                    message,
+                    connectionUploads,
+                    encryptedUpload,
+                    async (cause) => {
+                        if (binaryRequests.get(requestId) !== upload) {
+                            return;
+                        }
+                        releaseBinaryRequest(requestId);
+                        if (cause instanceof Response) {
+                            const body = await cause.text();
+                            if (server.readyState === WebSocket.OPEN) {
                                 server.send(
                                     JSON.stringify({
-                                        code: error.body.error.code,
-                                        kind: ERROR_KIND,
-                                        message: error.body.error.message,
+                                        body,
+                                        headers: responseHeaders(cause),
+                                        kind: RESPONSE_KIND,
                                         requestId,
-                                        status: error.status,
+                                        status: cause.status,
                                     }),
                                 );
                             }
-                        },
-                    );
-                    binaryRequests.set(requestId, upload);
-                    void upload.authorize(declaration.request, dispatch);
-                    return;
-                }
-                requestId = requestIdFromMessage(message);
-                const converted = requestFromMessage(
-                    message,
-                    new URL(request.url).origin,
-                    browserOrigin,
-                    controller.signal,
-                    binaryBody,
+                        } else if (server.readyState === WebSocket.OPEN) {
+                            const error = toHttpError(cause);
+                            server.send(
+                                JSON.stringify({
+                                    code: error.body.error.code,
+                                    kind: ERROR_KIND,
+                                    message: error.body.error.message,
+                                    requestId,
+                                    status: error.status,
+                                }),
+                            );
+                        }
+                    },
                 );
-                operation = new PendingRequest(requestId, controller.signal, requests);
-                const response = await dispatch({
-                    kind: "request",
-                    request: converted.request,
-                    body: converted.body,
-                    enableCancellation: operation.enableCancellation,
-                });
-                operation.throwIfAborted();
-                const mediaType = response.headers.get("content-type") ?? "";
-                if (mediaType.startsWith("text/event-stream")) {
-                    throw transportError("streaming_response_unsupported");
-                }
-                const body = await response.text();
-                if (new TextEncoder().encode(body).byteLength > MAX_BODY_BYTES) {
-                    throw transportError("response_too_large");
-                }
-                server.send(
-                    JSON.stringify({
-                        body,
-                        headers: responseHeaders(response),
-                        kind: RESPONSE_KIND,
-                        requestId,
-                        status: response.status,
-                    }),
-                );
-                touch();
-            } catch (cause) {
-                if (controller.signal.aborted || server.readyState !== WebSocket.OPEN || operation?.cancelled()) {
-                    return;
-                }
-                logger.error({ err: cause, requestId }, "Morty WebSocket transport request failed");
-                const httpError = toHttpError(operation === null ? cause : operation.failure(cause));
-                server.send(
-                    JSON.stringify({
-                        code: httpError.body.error.code,
-                        kind: ERROR_KIND,
-                        message: httpError.body.error.message,
-                        requestId,
-                        status: httpError.status,
-                    }),
-                );
-            } finally {
-                operation?.release();
+                binaryRequests.set(requestId, upload);
+                void upload.authorize(declaration.request, dispatch);
+                return;
             }
-        })();
+            requestId = requestIdFromMessage(message);
+            const converted = requestFromMessage(message, RELAY_INTERNAL_ORIGIN, controller.signal, binaryBody);
+            operation = new PendingRequest(requestId, controller.signal, requests);
+            const response = await dispatch({
+                kind: "request",
+                request: converted.request,
+                body: converted.body,
+                enableCancellation: operation.enableCancellation,
+            });
+            operation.throwIfAborted();
+            const mediaType = response.headers.get("content-type") ?? "";
+            if (mediaType.startsWith("text/event-stream")) {
+                throw transportError("streaming_response_unsupported");
+            }
+            const body = await response.text();
+            if (new TextEncoder().encode(body).byteLength > MAX_BODY_BYTES) {
+                throw transportError("response_too_large");
+            }
+            server.send(
+                JSON.stringify({
+                    body,
+                    headers: responseHeaders(response),
+                    kind: RESPONSE_KIND,
+                    requestId,
+                    status: response.status,
+                }),
+            );
+        } catch (cause) {
+            if (controller.signal.aborted || server.readyState !== WebSocket.OPEN || operation?.cancelled()) {
+                return;
+            }
+            logger.error({ err: cause, requestId }, "Morty WebSocket transport request failed");
+            const httpError = toHttpError(operation === null ? cause : operation.failure(cause));
+            server.send(
+                JSON.stringify({
+                    code: httpError.body.error.code,
+                    kind: ERROR_KIND,
+                    message: httpError.body.error.message,
+                    requestId,
+                    status: httpError.status,
+                }),
+            );
+        } finally {
+            operation?.release();
+        }
     };
-    server.accept();
-    server.addEventListener("message", (event) => receive(event.data));
-    server.addEventListener(
-        "close",
-        () => {
-            release();
-            server.close(1000, "WebSocket transport closed");
-        },
-        { once: true },
-    );
-    server.addEventListener(
-        "error",
-        () => {
-            release();
-            server.close(1011, "WebSocket transport failed");
-        },
-        { once: true },
-    );
-    touch();
-    return new Response(null, {
-        status: 101,
-        webSocket: client,
-    });
+    for (const identity of connection.subscriptions) {
+        const subscriptionController = new AbortController();
+        subscriptions.set(identity.subscriptionId, { kind: "open", controller: subscriptionController, identity });
+        ports.restore(
+            connection.computerId,
+            identity,
+            observeSubscription(
+                identity.subscriptionId,
+                subscriptionController,
+                `${MORTY_API_PREFIX}/v1/computers/${connection.computerId}/harnesses/${identity.sessionFilter.harness}/sessions/${identity.sessionFilter.sessionId}/events`,
+            ),
+            subscriptionController.signal,
+        );
+    }
+    return { receive, release };
 }

@@ -589,7 +589,6 @@ describe("Relay Session-only boundary", { concurrent: false }, () => {
                     },
                 },
             });
-            // Browser transports are not hibernatable. Finish the subscription before waking the daemon again.
             await closeBrowserSocket(v2Socket, new AbortController().signal);
             expect(decodeWorkerToDaemonMessage(await daemonMessages.next())).toMatchObject({
                 kind: "session.events.unsubscribe",
@@ -729,7 +728,6 @@ describe("Relay Session-only boundary", { concurrent: false }, () => {
                 data: answer,
                 eventId: "",
                 kind: "session.events.event",
-                seqId: 1,
                 subscriptionId: "subscription-1",
             });
             expect(JSON.parse(await otherMessages.next())).toMatchObject({
@@ -748,8 +746,8 @@ describe("Relay Session-only boundary", { concurrent: false }, () => {
                 kind: "session.events.unsubscribe",
                 subscriptionId: "subscription-1",
             });
-            otherBrowser.send('{"kind":"ping"}');
-            expect(await otherMessages.next()).toBe('{"kind":"pong"}');
+            otherBrowser.send(COMPUTER_HEARTBEAT_MESSAGE);
+            expect(await otherMessages.next()).toBe(COMPUTER_HEARTBEAT_ACK_MESSAGE);
             await closeBrowserSocket(otherBrowser, new AbortController().signal);
             expect(decodeWorkerToDaemonMessage(await daemonMessages.next())).toMatchObject({
                 kind: "session.events.unsubscribe",
@@ -1174,7 +1172,6 @@ it("Given an encrypted live subscription, When a still-connected daemon is repla
         const replacementMessages = new SocketMessages(replacement);
         replacement.accept();
         expect(decodeWorkerToDaemonMessage(await replacementMessages.next()).kind).toBe("computer.liveness.ready");
-        original.socket.send('{"kind":"ping"}');
         expect(JSON.parse(await original.messages.next())).toMatchObject({
             kind: "session.events.end",
             subscriptionId: original.admission["subscriptionId"],
@@ -2468,7 +2465,6 @@ describe("Relay Turn submission", { concurrent: false }, () => {
             const statuses = await runInDurableObject(
                 env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)),
                 async (_instance, state) => {
-                    // A new deployment retains the daemon attachment, not the old browser transport's in-memory listeners.
                     const rotated = new RelayComputerRelay(state, {
                         ...bindings(),
                         MORTY_ALLOWED_ORIGINS: '["*"]',
@@ -2476,21 +2472,51 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                     });
                     await rotated.alarm();
                     const cleanup: (() => Promise<void>)[] = [];
-                    const connect = async (credential: string) =>
-                        await openBrowserSubscription(
-                            (request) => rotated.fetch(request),
+                    const connect = async (credential: string) => {
+                        const earlier = new Set(state.getWebSockets("browser"));
+                        const opened = await rotated.fetch(
                             new Request(
-                                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/events`,
-                                { headers: { authorization: `Bearer ${credential}`, Upgrade: "websocket" } },
+                                `${relayOrigin}${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/transport`,
+                                {
+                                    headers: { upgrade: "websocket" },
+                                },
                             ),
-                            (close) => {
-                                cleanup.push(close);
-                            },
                         );
+                        const socket = opened.webSocket;
+                        const server = state.getWebSockets("browser").find((candidate) => !earlier.has(candidate));
+                        if (socket === null || server === undefined) {
+                            throw new Error("Expected a browser transport");
+                        }
+                        const messages = new SocketMessages(socket);
+                        socket.accept();
+                        cleanup.push(() => closeBrowserSocket(socket, new AbortController().signal));
+                        const encryption = await endpointEncryption(runtime.computerId, signal);
+                        const subscriptionId = crypto.randomUUID();
+                        // The platform delivers a hibernatable socket's events to the code now running, here the
+                        // rotated deployment.
+                        await rotated.webSocketMessage(
+                            server,
+                            JSON.stringify({
+                                kind: "session.events.subscribe",
+                                subscriptionId,
+                                path: `${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/events`,
+                                headers: [
+                                    ["authorization", `Bearer ${credential}`],
+                                    ["content-type", "application/json"],
+                                ],
+                                body: await sessionEventsSubscribeCommandCodec.encode(
+                                    { kind: "session.events.subscribe", subscriptionId, target: runtime.sessionTarget },
+                                    encryption.client,
+                                    signal,
+                                ),
+                            }),
+                        );
+                        return record(JSON.parse(await messages.next()));
+                    };
                     try {
                         const rejected = await connect(runtime.credential);
                         const accepted = await connect(reissued);
-                        return { old: rejected.admission, current: accepted.admission };
+                        return { old: rejected, current: accepted };
                     } finally {
                         // These sockets belong to this DO execution, not to the test runner's later cleanup hook.
                         for (const close of cleanup) {
@@ -3723,6 +3749,62 @@ it("Given a page loading Session history from a Computer that does not answer, W
     } finally {
         browser.close();
         runtime.daemon.close(1000, "Unanswered history scenario completed");
+    }
+});
+
+it("Given a page following an idle Session, When the Relay hibernates, Then the page stays connected and receives the Session's next update", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("hibernated-viewer", signal);
+    const browser = (await runtime.transport()).webSocket;
+    if (browser === null) {
+        throw new Error("Expected the browser transport");
+    }
+    const browserMessages = new SocketMessages(browser);
+    browser.accept();
+    try {
+        const encryption = await endpointEncryption(runtime.computerId, signal);
+        browser.send(
+            JSON.stringify({
+                kind: "session.events.subscribe",
+                subscriptionId: "idle-view",
+                body: await sessionEventsSubscribeCommandCodec.encode(
+                    { kind: "session.events.subscribe", subscriptionId: "idle-view", target: runtime.sessionTarget },
+                    encryption.client,
+                    signal,
+                ),
+                path: `${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/events`,
+                headers: [
+                    ["authorization", `Bearer ${runtime.credential}`],
+                    ["content-type", "application/json"],
+                ],
+            }),
+        );
+        expect(JSON.parse(await browserMessages.next())).toMatchObject({
+            kind: "session.events.ready",
+            subscriptionId: "idle-view",
+        });
+        expect(
+            await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),
+        ).toMatchObject({ kind: "session.events.subscribe", subscriptionId: "idle-view" });
+
+        await evictDurableObject(env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)), {
+            webSockets: "hibernate",
+        });
+        const update = await sessionEventEnvelopeCodec.encode(
+            JSON.parse(liveEvent(runtime.sessionTarget, "Written while the Relay slept")),
+            encryption.computer,
+            signal,
+        );
+        runtime.daemon.send(update);
+        expect(JSON.parse(await browserMessages.next())).toMatchObject({
+            kind: "session.events.event",
+            subscriptionId: "idle-view",
+            data: update,
+        });
+    } finally {
+        browser.close();
+        runtime.daemon.close(1000, "Hibernated viewer scenario completed");
     }
 });
 

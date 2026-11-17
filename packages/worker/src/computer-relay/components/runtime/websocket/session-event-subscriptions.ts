@@ -26,7 +26,7 @@ export function createSessionEventSubscriptions(ctx: {
             deadline.signal,
         );
         await access.authorize(deadline.signal);
-        await services.operations.subscribeSessionEvents(
+        const identity = await services.operations.subscribeSessionEvents(
             target,
             request.command,
             { grant: access.grant, expiresAt: access.expiresAtEpochMilliseconds },
@@ -35,5 +35,6 @@ export function createSessionEventSubscriptions(ctx: {
         );
         await ctx.connectionOpened();
         deadline.signal.throwIfAborted();
+        return identity;
     };
 }
