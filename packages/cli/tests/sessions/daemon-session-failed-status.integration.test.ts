@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sameNativeSession } from "@portalcrew/morty-client/native-session";
@@ -22,6 +22,7 @@ import {
     withControlledDaemon,
 } from "../support/agents/real-daemon.ts";
 import { writeControlledAcpExecutable } from "../support/controlled-acp-executable.ts";
+import { fileCreated } from "../support/file-created.ts";
 
 const submit = (peer: RealDaemonPeer, sessionTarget: RealDaemonPeer["target"], commandId: string, prompt: string) =>
     peer.send(
@@ -120,6 +121,51 @@ test("Given a Session whose last turn failed, When a client that did not watch i
                 expect(await queriedStatus(peer, sessionTarget)).toEqual({
                     kind: "idle",
                     lastTurn: { commandId: completed, state: "completed", stopReason: "end_turn" },
+                });
+            },
+        );
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+}, 120_000);
+
+test("Given a prompt still applying its Agent settings, When another client lists the Session, Then it reports the Session working on that prompt", async ({
+    signal,
+}) => {
+    const directory = await mkdtemp(join(tmpdir(), "preparing-status-"));
+    try {
+        const agentDirectory = join(directory, "agent");
+        await mkdir(agentDirectory, { recursive: true });
+        const executableDirectory = await writeControlledAcpExecutable(directory);
+        await withControlledDaemon(
+            signal,
+            new ControlledAcpAgentSpecification(),
+            { MORTY_FAKE_ACP_STATE_DIRECTORY: agentDirectory, PATH: executableDirectory },
+            async (peer) => {
+                const sessionTarget = await prepareNewRealSession(peer, "controlled-acp");
+                await writeFile(join(agentDirectory, "pause-configuration"), "");
+                const configuring = fileCreated(agentDirectory, "configuration-paused");
+                const commandId = randomUUID();
+                peer.send(
+                    encodeSessionPromptCommand({
+                        attachments: [],
+                        commandId,
+                        requestId: commandId,
+                        disposition: "append",
+                        kind: "session.prompt",
+                        prompt: "The request completes",
+                        sessionConfigurations: [{ configId: "model", type: "select", value: "test-large" }],
+                        target: sessionTarget,
+                    }),
+                );
+                await configuring;
+                expect(await queriedStatus(peer, sessionTarget)).toEqual({ kind: "working", commandId });
+
+                await rm(join(agentDirectory, "pause-configuration"));
+                await nextPromptSettlement(peer, commandId);
+                expect(await queriedStatus(peer, sessionTarget)).toEqual({
+                    kind: "idle",
+                    lastTurn: { commandId, state: "completed", stopReason: "end_turn" },
                 });
             },
         );

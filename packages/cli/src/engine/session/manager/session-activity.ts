@@ -49,7 +49,7 @@ const closedRefusal = (reason: string): ImmediateAdmission => refused(reason, SE
 const notFound = (): ImmediateAdmission => refused("The Session was not found", "session_not_found");
 const managed = (): ImmediateAdmission => refused("The native session is being managed", "session_busy");
 
-export const isExecuting = (activity: SessionActivity): boolean => activity.execution.kind === "running";
+const isExecuting = (activity: SessionActivity): boolean => activity.execution.kind === "running";
 
 const hasBackgroundActivity = (activity: SessionActivity): boolean =>
     activity.process.agent.kind === "ready" && activity.process.agent.backgroundActivity;

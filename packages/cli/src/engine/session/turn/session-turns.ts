@@ -1,15 +1,20 @@
 import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
 import type {
     CommandStanding,
-    NativeSessionResult,
     NativeSessionTarget,
+    SessionExecution,
     SessionPromptCommand,
+    SessionStatus,
 } from "@portalcrew/morty-client/protocol";
 import type { ActiveRuntimeTurn, PromptDispatch } from "./active-turn.ts";
 import type { ExecutionReceipts } from "./execution-receipts.ts";
 import { SessionExecutionState, type SessionExecutions } from "./session-execution.ts";
 
-type QueuedTurnSnapshot = Extract<NativeSessionResult, { readonly action: "active-turn" }>["queued"];
+type TurnRead = SessionExecution extends infer Read
+    ? Read extends unknown
+        ? Omit<Read, "executionPosition" | "interactions" | "delivery">
+        : never
+    : never;
 
 export class SessionTurns {
     readonly #bySessionTarget = new NativeSessionMap<SessionExecutionState>();
@@ -55,12 +60,26 @@ export class SessionTurns {
         this.#onFinished(turn.command.target);
     };
 
-    readonly executionSnapshot = (
-        sessionTarget: NativeSessionTarget,
-    ): { readonly turn: ReturnType<ActiveRuntimeTurn["snapshot"]>; readonly queued: QueuedTurnSnapshot } => {
-        const current = this.#bySessionTarget.get(sessionTarget)?.turns() ?? [];
-        const turn = current.map((candidate) => candidate.snapshot()).find((snapshot) => snapshot !== null) ?? null;
-        const queued = current
+    /**
+     * Whether the Session is working, and on which command: from a prompt's arrival until it ends, as admission makes
+     * every later prompt wait. It states the turn that ended last, so a client that did not watch the Session knows
+     * whether one ended since.
+     */
+    readonly status = (sessionTarget: NativeSessionTarget): SessionStatus => {
+        const working = this.#bySessionTarget.get(sessionTarget)?.working();
+        const status: SessionStatus =
+            working === undefined ? { kind: "idle" } : { kind: "working", commandId: working.command.commandId };
+        const lastTurn = this.#operations.lastEndedTurn(sessionTarget);
+        return lastTurn === undefined ? status : { ...status, lastTurn };
+    };
+
+    /**
+     * The turn the Session is working on, once it started, and the prompts queued behind it. How the last turn ended
+     * is told only while the Session is not working.
+     */
+    readonly execution = (sessionTarget: NativeSessionTarget): TurnRead => {
+        const session = this.#bySessionTarget.get(sessionTarget);
+        const queued = (session?.turns() ?? [])
             .filter(
                 (candidate) =>
                     candidate.isQueued() &&
@@ -71,7 +90,12 @@ export class SessionTurns {
                 prompt: candidate.command.prompt,
                 attachments: candidate.command.attachments,
             }));
-        return { turn, queued };
+        const working = session?.working();
+        if (working !== undefined) {
+            return { turn: working.snapshot(), queued };
+        }
+        const lastTurn = this.#operations.lastTurn(sessionTarget);
+        return { turn: null, queued, ...(lastTurn === undefined ? {} : { lastTurn }) };
     };
 
     /** Where the command stands: the receipts tell whether it arrived, started or ended, admission whether it waits. */

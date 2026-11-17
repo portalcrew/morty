@@ -1,14 +1,12 @@
 import { nativeSessionKey } from "@portalcrew/morty-client/native-session";
 import {
     isIdentifier,
-    type LastTurnOutcome,
     type NativeSessionTarget,
     SESSION_CLOSE_NOTICE_KIND,
     type SessionCapabilities,
     type SessionCloseNoticeEvent,
     type SessionEventPayload,
     type SessionPendingInteractions,
-    type SessionStatus,
 } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import { unsupportedSessionCapabilities } from "../../acp/protocol/session-capabilities.ts";
@@ -27,14 +25,13 @@ import {
 } from "../record/session-store.ts";
 import { isModelOption } from "../settings/configuration-dependencies.ts";
 import { ActiveExecutions } from "../turn/active-executions.ts";
-import type { SettledTurn } from "../turn/execution-receipts.ts";
+import type { ExecutionReceipts, SettledTurn } from "../turn/execution-receipts.ts";
 import { RuntimeOperations } from "./operation-drain.ts";
 import {
     admitAfterTransitions,
     admitNow,
     type ImmediateSessionOperation,
     isBusy,
-    isExecuting,
     isKnownSession,
     type SessionActivity,
     type WaitingSessionOperation,
@@ -83,7 +80,6 @@ export class SessionManager {
         agentCommand: (target) => this.#executions.agentCommand(target),
         settledTurns: (target) => this.#settledTurns(target),
     };
-    readonly #lastEndedTurn: (target: NativeSessionTarget) => LastTurnOutcome | undefined;
     readonly #agentSettingsObserver: SessionObserver = {};
     readonly #lifecycles = new SessionLifecycles();
     readonly #store: SessionStore;
@@ -96,7 +92,7 @@ export class SessionManager {
         store,
         processes,
         onSessionClosed,
-        lastEndedTurn,
+        received,
         settledTurns,
         hasUnsettledTurn,
         timer,
@@ -106,7 +102,7 @@ export class SessionManager {
         readonly processes: AgentProcessPool;
         /** Called once each time a Session becomes closed, so every client learns of it. */
         readonly onSessionClosed: (event: SessionCloseNoticeEvent) => void;
-        readonly lastEndedTurn: (target: NativeSessionTarget) => LastTurnOutcome | undefined;
+        readonly received: ExecutionReceipts["received"];
         readonly settledTurns: (target: NativeSessionTarget) => readonly SettledTurn[];
         readonly hasUnsettledTurn: (target: NativeSessionTarget) => boolean;
         readonly timer: Timer;
@@ -114,10 +110,9 @@ export class SessionManager {
         this.#observer = observer;
         this.#processes = processes;
         this.#store = store;
-        this.#lastEndedTurn = lastEndedTurn;
         this.#settledTurns = settledTurns;
         this.#hasUnsettledTurn = hasUnsettledTurn;
-        this.#executions = new ActiveExecutions((target, commandId, stopping) => {
+        this.#executions = new ActiveExecutions(received, (target, commandId, stopping) => {
             this.recordLifecycleEvent(target, {
                 payload: { commandId, kind: stopping ? "prompt.stopping" : "prompt.stop-failed" },
                 type: "lifecycle-metadata",
@@ -646,7 +641,7 @@ export class SessionManager {
 
     readonly runPrompt = async (options: SessionTurnOptions): Promise<PromptResult> =>
         this.#operations.run(options, async (options) => {
-            // A close can land after the prompt was prepared; fail before the Session is reported working.
+            // A close can land after the prompt was prepared; fail before the execution begins.
             this.#admitNow(options.target, { kind: "prompt" });
             const preparation = AbortSignal.any([
                 options.signal,
@@ -668,7 +663,6 @@ export class SessionManager {
                     if (cancelled()) {
                         return { stopReason: "cancelled" };
                     }
-                    this.#executions.start(options.target, options.commandId);
                     const result = await runtime.prompt({
                         ...options,
                         cancellationRequested: cancelled,
@@ -680,8 +674,6 @@ export class SessionManager {
                         return { stopReason: "cancelled" };
                     }
                     throw error;
-                } finally {
-                    this.#executions.settle(options.target, options.commandId);
                 }
             } catch (error) {
                 const failedRuntime = this.#executionProcesses.get(options.target);
@@ -754,8 +746,8 @@ export class SessionManager {
         const release = (async (): Promise<void> => {
             try {
                 try {
-                    const execution = this.#executions.status(options.target);
-                    if (execution.kind === "working") {
+                    const execution = this.#executions.activity(options.target);
+                    if (execution.kind === "running") {
                         // Closing deliberately stops this turn. Record that intent through the cancellation owner
                         // before releasing the Agent, so its teardown cannot become a retained turn failure.
                         await this.cancelPrompt(options.target, execution.commandId);
@@ -825,21 +817,9 @@ export class SessionManager {
         return stored;
     };
 
-    /** Whether the Session is executing a command, from its preparation until the execution releases it. */
-    readonly isExecuting = (target: NativeSessionTarget): boolean => isExecuting(this.#activity(target));
-
     readonly turnFinished = (target: NativeSessionTarget): void => {
         this.#executionProcesses.touch(target);
         this.#processes.notifyChanged();
-    };
-
-    readonly sessionStatus = (target: NativeSessionTarget): SessionStatus =>
-        this.#reported(target, this.#executions.status(target));
-
-    /** A Session states the turn that ended last, so a client that did not watch it knows whether one ended since. */
-    readonly #reported = (target: NativeSessionTarget, status: SessionStatus): SessionStatus => {
-        const lastTurn = this.#lastEndedTurn(target);
-        return lastTurn === undefined ? status : { ...status, lastTurn };
     };
 
     /**

@@ -1,3 +1,4 @@
+import { isPromptTerminal } from "@portalcrew/morty-client/protocol";
 import { AdapterRegistry } from "../../src/engine/acp/adapter/adapter-registry.ts";
 import type { AcpContentExternalizer } from "../../src/engine/acp/content/content-externalizer.ts";
 import type { AdapterResolver } from "../../src/engine/acp/native-history/preview-contract.ts";
@@ -11,6 +12,7 @@ import type {
 import { SessionManager } from "../../src/engine/session/manager/session-manager.ts";
 import { nativeSessionQuery } from "../../src/engine/session/native/native-query.ts";
 import { AgentProcessPool } from "../../src/engine/session/process/agent-process-pool.ts";
+import type { ReceivedCommand } from "../../src/engine/session/turn/execution-receipts.ts";
 
 export type TestSessionPrepareOptions = Omit<SessionPrepareOptions, "adapter">;
 
@@ -21,7 +23,7 @@ export class SessionRuntimeFixture {
     readonly adapters: AdapterRegistry;
 
     constructor(
-        options: Omit<ConstructorParameters<typeof SessionManager>[0], "processes"> & {
+        options: Omit<ConstructorParameters<typeof SessionManager>[0], "processes" | "received"> & {
             readonly adapters: AdapterResolver;
             readonly contentExternalizer: AcpContentExternalizer;
             readonly maxProcesses: number | null;
@@ -32,7 +34,28 @@ export class SessionRuntimeFixture {
             processes,
             contentExternalizer: options.contentExternalizer,
         });
-        this.sessions = new SessionManager({ ...options, processes });
+        // Stands in for the execution receipts: a prompt starts when its Session records `prompt.started`, and its
+        // terminal event settles it.
+        const received = new Map<string, ReceivedCommand>();
+        this.sessions = new SessionManager({
+            ...options,
+            processes,
+            received: (commandId) => received.get(commandId) ?? { kind: "pending" },
+            observer: {
+                onBackgroundActivity: () => options.observer.onBackgroundActivity?.(),
+                onSessionEvent: (event) => {
+                    if (event.type === "lifecycle-metadata") {
+                        const payload = event.payload;
+                        if (payload.kind === "prompt.started" && received.get(payload.commandId) === undefined) {
+                            received.set(payload.commandId, { kind: "started", startedAt: event.recordedAt });
+                        } else if (isPromptTerminal(payload)) {
+                            received.set(payload.commandId, { kind: "settled" });
+                        }
+                    }
+                    options.observer.onSessionEvent?.(event);
+                },
+            },
+        });
     }
 
     readonly resolveAgent = async (agent: SessionPrepareOptions["agent"]) => ({

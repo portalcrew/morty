@@ -10,6 +10,7 @@ import {
     type SessionMetadata,
     type SessionReadyBody,
     type SessionReadyEvent,
+    type SessionStatus,
 } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../acp/acp-error.ts";
 import type { NativeSessionInfo } from "../../acp/protocol/native-session.ts";
@@ -86,6 +87,7 @@ export class NativeSessionService {
     readonly #directories: WorkspaceDirectoryService;
     readonly #sessions: SessionManager;
     readonly #creations: SessionCreations;
+    readonly #status: (target: NativeSessionTarget) => SessionStatus;
     readonly #activeTurn: (
         command: Extract<NativeSessionCommand, { readonly action: "active-turn" }>,
     ) => SessionExecution;
@@ -95,12 +97,14 @@ export class NativeSessionService {
         directories: WorkspaceDirectoryService,
         sessions: SessionManager,
         creations: SessionCreations,
+        status: (target: NativeSessionTarget) => SessionStatus,
         activeTurn: (command: Extract<NativeSessionCommand, { readonly action: "active-turn" }>) => SessionExecution,
     ) {
         this.#resolveAgent = resolveAgent;
         this.#directories = directories;
         this.#sessions = sessions;
         this.#creations = creations;
+        this.#status = status;
         this.#activeTurn = activeTurn;
     }
 
@@ -350,7 +354,7 @@ export class NativeSessionService {
                 directoryLabel: directory.label,
                 prompted: session.prompted,
                 target: session.target,
-                status: this.#sessions.sessionStatus(session.target),
+                status: this.#status(session.target),
                 title: displayTitle(session.title),
                 updatedAt: session.updatedAt,
             });
