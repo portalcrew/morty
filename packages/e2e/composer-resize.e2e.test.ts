@@ -73,14 +73,14 @@ test.describe("message composer resizing", () => {
         }
         expect(Math.abs(inset.left - inset.right)).toBeLessThan(0.5);
         expect(Math.abs(inset.scrollbarInset)).toBeLessThan(0.5);
-        const bottomFadeGap = await composerSurface.evaluate((element) => {
-            const bottomFade = element.querySelector('[aria-hidden="true"]:last-of-type');
-            const toolbar = element.querySelector("div.mt-1");
-            if (bottomFade === null || toolbar === null) {
-                return Number.POSITIVE_INFINITY;
-            }
-            return toolbar.getBoundingClientRect().top - bottomFade.getBoundingClientRect().bottom;
-        });
+        const [bottomFade, toolbar] = await Promise.all([
+            fades.nth(1).boundingBox(),
+            composerSurface.locator("div.mt-1").boundingBox(),
+        ]);
+        if (bottomFade === null || toolbar === null) {
+            throw new Error("Expected the composer bottom fade and toolbar");
+        }
+        const bottomFadeGap = toolbar.y - (bottomFade.y + bottomFade.height);
         expect(Math.abs(bottomFadeGap)).toBeLessThan(0.5);
     });
 

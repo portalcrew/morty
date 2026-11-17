@@ -15,6 +15,19 @@ export async function conversationLoaded(page: Page): Promise<void> {
     ).toBeHidden();
 }
 
+/** Opens the compact phone composer before a test types or inspects its draft. */
+export async function expandMobileComposer(page: Page): Promise<void> {
+    if ((page.viewportSize()?.width ?? 640) >= 640) {
+        return;
+    }
+    const expand = page.getByRole("button", { name: "Expand message composer" });
+    const textbox = page.getByRole("textbox", { name: "Message" });
+    await expect.poll(async () => (await expand.isVisible()) || (await textbox.isVisible())).toBe(true);
+    if (await expand.isVisible()) {
+        await expand.click();
+    }
+}
+
 function runtimeTest() {
     return base.extend<{
         readonly stack: LocalStack;

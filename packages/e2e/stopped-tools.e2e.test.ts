@@ -1,4 +1,4 @@
-import { expect, test } from "./infra/test.ts";
+import { expandMobileComposer, expect, test } from "./infra/test.ts";
 import type { createTestRuntime } from "./infra/test-runtime.ts";
 
 type E2EPage = Awaited<ReturnType<typeof createTestRuntime>>["page"];
@@ -41,6 +41,9 @@ for (const width of [1440, 390]) {
         // History holds the turn's ending where it ended, so a reload shows the stop as the live view did.
         await expect(page.getByText("Turn stopped.", { exact: true })).toHaveCount(1);
         await page.screenshot({ path: testInfo.outputPath(`stopped-tools-${width}.png`), fullPage: true });
+        if (width < 640) {
+            await expandMobileComposer(page);
+        }
         await composer.fill("complete unfinished tools");
         await page.getByRole("button", { name: "Send message" }).click();
         await expectTools(page, "Tool interrupted", 5);

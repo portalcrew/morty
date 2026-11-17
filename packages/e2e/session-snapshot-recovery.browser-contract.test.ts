@@ -4,7 +4,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { sessionEventEnvelopeCodec } from "../client/src/protocol/session/events/index.ts";
 import { sessionHistoryPageLoadedCodec } from "../client/src/protocol/session/observability/history.ts";
 import { dataTestId } from "../web/src/data-testid.ts";
-import { test as base, conversationLoaded, expect } from "./infra/test.ts";
+import { test as base, conversationLoaded, expandMobileComposer, expect } from "./infra/test.ts";
 
 type Gate = {
     readonly reached: Promise<void>;
@@ -294,6 +294,7 @@ for (const schedule of ["before-snapshot", "after-snapshot", "after-recovery"] a
         };
         try {
             await page.goto(connected.url);
+            await expandMobileComposer(page);
             const composer = page.getByRole("textbox", { name: "Message" });
             const responses = page.getByRole("article", { name: "Agent response" });
             await expect(composer).toBeEnabled();
@@ -371,6 +372,7 @@ test("Given a partial reply, when it finishes while the browser is disconnected,
     await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
+    await expandMobileComposer(page);
     const composer = page.getByRole("textbox", { name: "Message" });
     const responses = page.getByRole("article", { name: "Agent response" });
     await expect(composer).toBeEnabled();
@@ -378,6 +380,7 @@ test("Given a partial reply, when it finishes while the browser is disconnected,
     await composer.fill("wait for steering");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(responses).toContainText("Waiting for steering");
+    await expandMobileComposer(page);
     await composer.fill("Preserve this draft.");
     network.interrupt();
     // Closing the proxy socket is asynchronous in WebKit. Observe the interruption before finishing the reply.
@@ -407,10 +410,12 @@ test("Given the user has loaded older messages, when the connection recovers, th
     await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
     await page.goto(connected.url);
+    await expandMobileComposer(page);
     const composer = page.getByRole("textbox", { name: "Message" });
     await expect(composer).toBeEnabled();
     await expect(page.getByRole("status", { name: "Loading messages", exact: true })).toBeHidden();
     for (let index = 1; index <= 7; index += 1) {
+        await expandMobileComposer(page);
         await composer.fill(`many session events: Saved message ${index}`);
         await page.getByRole("button", { name: "Send message", exact: true }).click();
         await expect(page.getByRole("article", { name: "Agent response" }).last()).toContainText(
@@ -432,6 +437,7 @@ test("Given the user has loaded older messages, when the connection recovers, th
     await expect(page.getByRole("status", { name: "Loading older messages" })).toBeHidden();
     const loaded = await messages.allTextContents();
     expect(loaded.length).toBeGreaterThan(initial.length);
+    await expandMobileComposer(page);
     await composer.fill("Keep my history draft.");
     const reading = messages.nth(1);
     await reading.evaluate((element) => element.scrollIntoView({ block: "center" }));

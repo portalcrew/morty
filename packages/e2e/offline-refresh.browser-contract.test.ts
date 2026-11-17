@@ -1,4 +1,4 @@
-import { conversationLoaded, expect, test } from "./infra/test.ts";
+import { conversationLoaded, expandMobileComposer, expect, test } from "./infra/test.ts";
 
 test.use({ browserName: "webkit" });
 test.setTimeout(120_000);
@@ -19,6 +19,9 @@ for (const layout of ["desktop", "mobile"] as const) {
             await runtime.clock.install({ time: new Date("2026-10-26T00:00:00Z") });
             const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
             await page.goto(connected.url);
+            if (layout === "mobile") {
+                await expandMobileComposer(page);
+            }
             const composer = page.getByRole("textbox", { name: "Message" });
             await expect(composer).toBeEnabled();
             await conversationLoaded(page);
@@ -27,6 +30,9 @@ for (const layout of ["desktop", "mobile"] as const) {
             await expect(page.getByRole("article", { name: "Agent response" })).toContainText(
                 "Remember this offline conversation",
             );
+            if (layout === "mobile") {
+                await expandMobileComposer(page);
+            }
             await composer.fill("Preserve this unsent follow-up");
             await page.getByTitle("Rename conversation", { exact: true }).click();
             await page.getByRole("textbox", { name: "Conversation title" }).fill("Offline refresh acceptance");
@@ -46,6 +52,9 @@ for (const layout of ["desktop", "mobile"] as const) {
             }
             await page.screenshot({ path: testInfo.outputPath("offline-refresh.png") });
             await runtime.resumeRuntime();
+            if (layout === "mobile") {
+                await expandMobileComposer(page);
+            }
             await expect(composer).toBeEnabled();
             await expect(composer).toHaveValue("Preserve this unsent follow-up");
             await expect(

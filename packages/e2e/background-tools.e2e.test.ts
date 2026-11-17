@@ -14,6 +14,9 @@ for (const width of [1440, 390]) {
         await page.getByRole("button", { name: "Send message" }).click();
         await page.getByRole("button", { name: "1 step · 1 running in background" }).click();
         await expect(page.getByText("Running in background", { exact: true })).toBeVisible();
+        if (width < 640) {
+            await page.getByRole("button", { name: "Expand message composer" }).click();
+        }
         await expect(composer).toBeEnabled();
         await page.screenshot({
             path: fileURLToPath(new URL(`../../test-results/background-running-${width}.png`, import.meta.url)),

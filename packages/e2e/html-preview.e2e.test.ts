@@ -66,6 +66,7 @@ test.describe("touch preview", () => {
         await page.getByRole("textbox", { name: "Message" }).fill("show interactive result");
         await page.getByRole("button", { name: "Send message" }).tap();
         await page.getByRole("button", { name: "Open delivery review" }).waitFor();
+        await page.getByRole("button", { name: "Expand message composer" }).tap();
         await page.getByRole("textbox", { name: "Message" }).fill("Please refine this result");
         await page.getByRole("button", { name: "Open delivery review" }).tap();
 

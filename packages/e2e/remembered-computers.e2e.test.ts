@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { dataTestId } from "../web/src/data-testid.ts";
-import { expect, test } from "./infra/test.ts";
+import { expandMobileComposer, expect, test } from "./infra/test.ts";
 
 async function openComputers(page: Page, mobile: boolean, current: string) {
     if (mobile) {
@@ -99,6 +99,9 @@ for (const viewport of [
         await expect(page.getByRole("article", { name: "Agent response" })).toContainText(
             "Computer B release checklist",
         );
+        if (mobile) {
+            await expandMobileComposer(page);
+        }
         await page.getByRole("textbox", { name: "Message" }).fill("Unsent work on B");
         await runtime.restartRuntime();
         await expectComputerOnline(otherTab, mobile, "Browser test Runtime");
@@ -108,7 +111,13 @@ for (const viewport of [
         await expect(page.getByRole("article", { name: "Agent response" })).toContainText(
             "Computer B release checklist",
         );
+        if (mobile) {
+            await expandMobileComposer(page);
+        }
         await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue("Unsent work on B");
+        if (mobile) {
+            await expandMobileComposer(otherTab);
+        }
         await expect(otherTab.getByRole("textbox", { name: "Message" })).toHaveValue("");
         expect(new URL(page.url()).searchParams.get("identity")).toBe(
             new URL(secondAddress).searchParams.get("identity"),

@@ -1,4 +1,4 @@
-import { expect, test } from "./infra/test.ts";
+import { expandMobileComposer, expect, test } from "./infra/test.ts";
 
 test.use({ runtimeAgent: { harness: "interaction-test", name: "Interaction Agent" } });
 for (const width of [1440, 390]) {
@@ -27,6 +27,9 @@ for (const width of [1440, 390]) {
             "Selected branch: feature/permissions",
         );
         await expect(permission).toBeHidden();
+        if (width < 640) {
+            await expandMobileComposer(page);
+        }
         await page.getByRole("textbox", { name: "Message" }).fill("request session permission");
         await page.getByRole("button", { name: "Send message" }).click();
         await expect(permission.getByRole("button", { name: "Allow for this session", exact: true })).toBeVisible();
