@@ -14,7 +14,7 @@ import {
 import type { SessionExecutionStore } from "./session-execution.ts";
 import type { SessionOperationConnection } from "./session-operation-connection.ts";
 import { composerHasMessage, settingsAllowMessages } from "./session-operation-rules.ts";
-import type { SessionSettingsStore } from "./session-settings-store.ts";
+import { type SessionSettingsStore, settingsChanging } from "./session-settings-store.ts";
 
 /**
  * The messages this page submits to the Session and how a submission recovers. The attempt belongs to the Session,
@@ -84,7 +84,7 @@ export function createSessionSubmission(ports: {
         submit,
     };
     const settingsSettled = (): boolean =>
-        settingsAllowMessages({ configuring: settings.getState().change.kind === "configuring" });
+        settingsAllowMessages({ configuring: settingsChanging(settings.getState()) });
     const began = (started: StartedDelivery): Promise<void> => {
         // A new turn retires the failure reported for an earlier one.
         if (started.placement === "turn") {
