@@ -177,7 +177,11 @@ export function transitionSessionConnection(
                       state: {
                           kind: "opening",
                           client: null,
-                          interruption: { message: state.message, notice: event.notice },
+                          // Someone is waiting on a requested attempt, so its progress shows at once.
+                          interruption: {
+                              message: state.message,
+                              notice: state.recovery === "requested" ? "visible" : event.notice,
+                          },
                           failures: state.failures,
                           recovery: state.recovery,
                       },
