@@ -163,7 +163,7 @@ export function createSessionHistory(options: {
         return result.effects;
     };
     const readSettings = (connected: MortyClient, signal: AbortSignal): void => {
-        settings
+        void settings
             .getState()
             .readInBackground((readSignal) => connected.sessions.readConfiguration(sessionTarget, readSignal), signal);
     };
