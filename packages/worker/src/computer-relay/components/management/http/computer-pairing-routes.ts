@@ -12,7 +12,6 @@ import { bodyParser } from "../../../../http/body-parser.ts";
 import { computerFromPath, computerFromRuntimeCredential } from "../../../../http/computer-target.ts";
 import { errorMiddleware, rethrowHonoError } from "../../../../http/error-middleware.ts";
 import { protocolBodyLimit } from "../../../../http/protocol-body-limit.ts";
-import { pairingTimeoutMiddleware } from "../../../../middleware/pairing-timeout-middleware.ts";
 import { requestTimeoutMiddleware } from "../../../../middleware/request-timeout-middleware.ts";
 import type { ComputerRouteHttpEnvironment } from "../../../http/environment.ts";
 import type { RelayProtocolRouteContext } from "./protocol-routes.ts";
@@ -31,9 +30,8 @@ export function createComputerPairingRoutes(ctx: RelayProtocolRouteContext) {
         .use("*", errorMiddleware)
         .post(
             "/computers/:computerId/pairing/redeem",
-            timeout,
+            requestTimeoutMiddleware<ComputerRouteHttpEnvironment>(15_000),
             computerFromPath,
-            pairingTimeoutMiddleware("Computer pairing redemption timed out"),
             protocolBodyLimit,
             bodyParser<ComputerRouteHttpEnvironment, typeof redeemRequestSchema>(redeemRequestSchema),
             async (context) => {
