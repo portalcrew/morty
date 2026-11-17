@@ -57,7 +57,7 @@ import { conversationListStatus, hasUnreadConversation } from "../../view-models
 import { pendingExecutionContext, sessionExecutionContext } from "../../view-models/chat/execution-context.ts";
 import { nativeSessionAgentTabs } from "../../view-models/chat/native-session-agents.ts";
 import { noSessionDelivery } from "../../view-models/chat/session-delivery-store.ts";
-import { noSessionExecution } from "../../view-models/chat/session-execution.ts";
+import { noSessionExecution, pageActivity } from "../../view-models/chat/session-execution.ts";
 import { noSessionConnection } from "../../view-models/chat/session-pane-connection.ts";
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
 import { AccessTerm } from "./access-term.tsx";
@@ -205,6 +205,55 @@ function SidebarActionTooltip({
     );
 }
 
+/** Subscribes to the page's account of one Session, so its status follows what the page learns after the pane left. */
+function SessionStatusIndicator({
+    session,
+    record,
+    page,
+    selected,
+}: {
+    readonly session: ManagedChatSession;
+    readonly record: Parameters<typeof conversationListStatus>[1];
+    readonly page: ReturnType<ChatWorkspace["sessionPage"]>;
+    readonly selected: boolean;
+}) {
+    const execution = useStore(page?.execution ?? noSessionExecution, (state) => state.state);
+    const delivery = useStore(page?.delivery ?? noSessionDelivery, (state) => state.state);
+    const status = conversationListStatus(session, record, pageActivity(execution, delivery));
+    return status.kind === "working" ? (
+        <span
+            aria-label="Session working"
+            className="inline-flex -mr-[3px] size-4 items-center justify-center text-copy-secondary"
+            data-testid={dataTestId.sessionStatus}
+            role="status"
+        >
+            <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" />
+        </span>
+    ) : status.kind === "failed" ? (
+        <span
+            aria-label="Session failed"
+            className="text-xs text-destructive"
+            data-testid={dataTestId.sessionStatus}
+            role="status"
+        >
+            Failed
+        </span>
+    ) : status.kind === "unread" ? (
+        <span
+            aria-label="Unread response"
+            className="inline-flex -mr-[3px] size-4 items-center justify-center"
+            data-testid={dataTestId.sessionStatus}
+            role="status"
+        >
+            <span className="size-2 rounded-full bg-primary" />
+        </span>
+    ) : selected ? (
+        <span aria-hidden="true" className="inline-flex -mr-[3px] size-4 items-center justify-center">
+            <Check className="size-4" />
+        </span>
+    ) : null;
+}
+
 function ManagedSessionDirectoryList({
     directory,
     archive,
@@ -214,7 +263,7 @@ function ManagedSessionDirectoryList({
     showSelectedIndicator = false,
     connectionStatus,
     sessionStatuses,
-    openPane,
+    sessionPage,
     onConnectAgent,
     onOpen,
     archiveSession,
@@ -228,8 +277,8 @@ function ManagedSessionDirectoryList({
     /** The phone sheet has no persistent selection elsewhere, so it marks the open Session with a check. */
     readonly showSelectedIndicator?: boolean;
     readonly connectionStatus: BotConnectionStatus;
-    readonly sessionStatuses: Parameters<typeof conversationListStatus>[1];
-    readonly openPane: Parameters<typeof conversationListStatus>[2];
+    readonly sessionStatuses: Parameters<typeof hasUnreadConversation>[1];
+    readonly sessionPage: ChatWorkspace["sessionPage"];
     readonly onConnectAgent: (() => void) | null;
     readonly onOpen: (session: ManagedChatSession) => void;
     readonly archiveSession: ConversationDirectoryStore["archiveSession"];
@@ -277,7 +326,6 @@ function ManagedSessionDirectoryList({
                         {group.label}
                     </h3>
                     {group.sessions.map((session) => {
-                        const status = conversationListStatus(session, sessionStatuses, openPane);
                         const sessionButton = (
                             <button
                                 data-testid={dataTestId.managedConversation}
@@ -296,46 +344,16 @@ function ManagedSessionDirectoryList({
                                 )}
                             >
                                 <span className="min-w-0 truncate">{session.title}</span>
-                                {status.kind === "working" ? (
-                                    <span
-                                        aria-label="Session working"
-                                        className="inline-flex -mr-[3px] size-4 items-center justify-center text-copy-secondary"
-                                        data-testid={dataTestId.sessionStatus}
-                                        role="status"
-                                    >
-                                        <LoaderCircle
-                                            aria-hidden="true"
-                                            className="size-3.5 animate-spin motion-reduce:animate-none"
-                                        />
-                                    </span>
-                                ) : status.kind === "failed" ? (
-                                    <span
-                                        aria-label="Session failed"
-                                        className="text-xs text-destructive"
-                                        data-testid={dataTestId.sessionStatus}
-                                        role="status"
-                                    >
-                                        Failed
-                                    </span>
-                                ) : status.kind === "unread" ? (
-                                    <span
-                                        aria-label="Unread response"
-                                        className="inline-flex -mr-[3px] size-4 items-center justify-center"
-                                        data-testid={dataTestId.sessionStatus}
-                                        role="status"
-                                    >
-                                        <span className="size-2 rounded-full bg-primary" />
-                                    </span>
-                                ) : showSelectedIndicator &&
-                                  activeTarget !== null &&
-                                  sameNativeSession(activeTarget, session.target) ? (
-                                    <span
-                                        aria-hidden="true"
-                                        className="inline-flex -mr-[3px] size-4 items-center justify-center"
-                                    >
-                                        <Check className="size-4" />
-                                    </span>
-                                ) : null}
+                                <SessionStatusIndicator
+                                    page={sessionPage(session.target)}
+                                    record={sessionStatuses.get(session.target)}
+                                    selected={
+                                        showSelectedIndicator &&
+                                        activeTarget !== null &&
+                                        sameNativeSession(activeTarget, session.target)
+                                    }
+                                    session={session}
+                                />
                             </button>
                         );
                         const sessionTrigger =
@@ -415,8 +433,6 @@ export function ConversationSidebar({
     const openPane = useStore(workspace.pane);
     const pane = openPane.kind === "open" ? openPane.model : null;
     const paneConnection = useStore(pane?.connection ?? noSessionConnection, (state) => state.connection);
-    const paneDelivery = useStore(pane?.delivery ?? noSessionDelivery, (state) => state.state);
-    const paneExecution = useStore(pane?.execution ?? noSessionExecution, (state) => state.state);
     const executionContext =
         home.selection.kind === "ready" && pane !== null
             ? sessionExecutionContext(pane.session, home, status, paneConnection)
@@ -466,21 +482,13 @@ export function ConversationSidebar({
         activeTarget,
         connectionStatus,
         sessionStatuses,
-        openPane:
-            home.selection.kind === "ready" && pane !== null
-                ? {
-                      sessionTarget: pane.session.target,
-                      connection: paneConnection,
-                      execution: paneExecution,
-                      delivery: paneDelivery,
-                  }
-                : null,
+        sessionPage: workspace.sessionPage,
         onConnectAgent,
         onOpen: openSession,
         archiveSession: workspace.directory.getState().archiveSession,
         operationsSignal: workspace.operationsSignal,
     };
-    const unreadReplies = hasUnreadConversation(sessions, sessionStatuses, sessionListProps.openPane);
+    const unreadReplies = hasUnreadConversation(sessions, sessionStatuses);
     const accessNotices = (
         <SidebarAccessNoticeHost
             attachAccess={workspace.accessExpiry.getState().onAttach}
