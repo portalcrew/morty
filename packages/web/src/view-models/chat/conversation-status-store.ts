@@ -87,6 +87,18 @@ export function hasUnreadConversation(
     return (sessions ?? []).some((session) => conversationListStatus(session, records, open).kind === "unread");
 }
 
+export function hasWorkingBackgroundConversation(
+    sessions: readonly ListedSession[],
+    records: Pick<NativeSessionMap<SessionRecord>, "get">,
+    selected: NativeSessionTarget | null,
+): boolean {
+    return sessions.some(
+        (session) =>
+            (selected === null || !sameNativeSession(selected, session.target)) &&
+            conversationListStatus(session, records, null).kind === "working",
+    );
+}
+
 interface ConversationStatusState {
     readonly records: NativeSessionMap<SessionRecord>;
     readonly directoryLoadStarted: () => void;
