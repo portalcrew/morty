@@ -266,6 +266,11 @@ async function withDaemonConnection(
                     connection.send(COMPUTER_HEARTBEAT_ACK_MESSAGE);
                     return;
                 }
+                // A restart ends the scenario's view of the old connection: frames it still delivers were sealed by the
+                // previous daemon and may predate a clock change the scenario made since.
+                if (connection !== socket) {
+                    return;
+                }
 
                 if (waiter === undefined) {
                     messages.push(message);
@@ -383,6 +388,7 @@ async function withDaemonConnection(
         await scenario({
             restart: async (mode, restoreFiles) => {
                 await sendTail;
+                socket = undefined;
                 messages.length = 0;
                 pendingEvents.length = 0;
                 connected = Promise.withResolvers<void>();
