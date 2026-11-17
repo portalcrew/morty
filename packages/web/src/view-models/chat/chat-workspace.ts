@@ -33,6 +33,7 @@ import { createLinkedDevicesStore, type LinkedDevicesStore } from "./linked-devi
 import { createNetworkDiagnosticStore, type NetworkDiagnosticStore } from "./network-diagnostic-store.ts";
 import { createRemoteAccessStore, type RemoteAccessStore } from "./remote-access-store.ts";
 import { connectionWaitsForComputer } from "./session-connection.ts";
+import { submittingCommandId } from "./session-execution.ts";
 import { createSessionPageState, type SessionPageState } from "./session-page-state.ts";
 import { createSessionPaneModel, type SessionPaneModel } from "./session-pane-store.ts";
 import { createSessionTitlesStore, type SessionTitlesStore } from "./session-titles-store.ts";
@@ -320,7 +321,12 @@ export function createChatWorkspace(options: {
     };
     const followDirectory = async (signal: AbortSignal, mode: DirectoryLoadMode): Promise<void> => {
         do {
-            statuses.getState().directoryLoadStarted();
+            const submitting = [...sessionStates].flatMap(([target, state]) =>
+                submittingCommandId(state.execution.getState().state, state.delivery.getState().state) === null
+                    ? []
+                    : [target],
+            );
+            statuses.getState().directoryLoadStarted(submitting);
             await directory.getState().load(signal, mode);
             signal.throwIfAborted();
             if (listWaitsForComputer()) {

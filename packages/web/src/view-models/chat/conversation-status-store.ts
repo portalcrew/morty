@@ -26,10 +26,9 @@ type SessionRecord =
     /** A turn ended while the Session was not open here, and the user has not opened it since. */
     | { readonly kind: "unseen-end" }
     /**
-     * What the pane showed when the user left the Session. It outranks a listing read before the user left; a directory
-     * load that began afterwards replaces it, and `newerThanLoad` says whether the load in flight began before that.
+     * A listing read before the user left or before their submission was confirmed cannot supersede the pane's account.
      */
-    | { readonly kind: "left"; readonly status: ReportedStatus; readonly newerThanLoad: boolean };
+    | { readonly kind: "left"; readonly status: ReportedStatus; readonly retainAfterLoad: boolean };
 
 function listedStatus(status: ManagedChatSession["status"]): ReportedStatus {
     if (status.kind === "working") {
@@ -101,7 +100,7 @@ export function hasWorkingBackgroundConversation(
 
 interface ConversationStatusState {
     readonly records: NativeSessionMap<SessionRecord>;
-    readonly directoryLoadStarted: () => void;
+    readonly directoryLoadStarted: (submitting: readonly NativeSessionTarget[]) => void;
     /** `previous` is the listing the load replaced, or null when there was none. */
     readonly directoryLoaded: (sessions: readonly ListedSession[], previous: readonly ListedSession[] | null) => void;
     /** The user opened this Session, so nothing it finished is unseen. */
@@ -117,12 +116,17 @@ export function createConversationStatusStore(selectedSessionId: () => NativeSes
 
     return createStore<ConversationStatusState>((set) => ({
         records: new NativeSessionMap(),
-        directoryLoadStarted: () =>
+        directoryLoadStarted: (submitting) =>
             set((state) => ({
                 records: new NativeSessionMap(
                     [...state.records].map(([target, record]): readonly [NativeSessionTarget, SessionRecord] => [
                         target,
-                        record.kind === "left" ? { ...record, newerThanLoad: false } : record,
+                        record.kind === "left"
+                            ? {
+                                  ...record,
+                                  retainAfterLoad: submitting.some((pending) => sameNativeSession(pending, target)),
+                              }
+                            : record,
                     ]),
                 ),
             })),
@@ -131,7 +135,7 @@ export function createConversationStatusStore(selectedSessionId: () => NativeSes
                 const records = new NativeSessionMap<SessionRecord>();
                 for (const session of sessions) {
                     const record = state.records.get(session.target);
-                    if (record?.kind === "left" && record.newerThanLoad) {
+                    if (record?.kind === "left" && record.retainAfterLoad) {
                         records.set(session.target, record);
                         continue;
                     }
@@ -162,7 +166,7 @@ export function createConversationStatusStore(selectedSessionId: () => NativeSes
                     records: new NativeSessionMap(state.records).set(sessionTarget, {
                         kind: "left",
                         status: paneStatus(activity),
-                        newerThanLoad: true,
+                        retainAfterLoad: true,
                     }),
                 }));
             }
