@@ -83,6 +83,9 @@ for (const viewport of [
             const tip = page.getByRole("region", { name: "Continue your work here" });
             await expect(tip).toBeVisible();
             await expect(tip).toContainText("Your original session is open.");
+            if (viewport.name === "mobile") {
+                await page.getByRole("button", { name: "Expand message composer" }).click();
+            }
             const composer = page.getByRole("textbox", { name: "Message" });
             await expect(composer).toBeEnabled();
             await expect(page.getByTestId(dataTestId.userMessage)).toHaveCount(0);
@@ -111,10 +114,16 @@ for (const viewport of [
             await page.screenshot({ path: testInfo.outputPath(`05-first-reply-${viewport.name}.png`), fullPage: true });
 
             await page.reload();
+            if (viewport.name === "mobile") {
+                await page.getByRole("button", { name: "Expand message composer" }).click();
+            }
             await expect(composer).toBeEnabled();
             await expect(tip).toHaveCount(0);
             await page.goto(connected.url);
             await expect(page).toHaveURL(sessionUrl);
+            if (viewport.name === "mobile") {
+                await page.getByRole("button", { name: "Expand message composer" }).click();
+            }
             await expect(composer).toBeEnabled();
             await expect(tip).toHaveCount(0);
             await expect(page.getByRole("article", { name: "Agent response" })).toContainText(
