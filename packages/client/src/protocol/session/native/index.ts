@@ -20,7 +20,7 @@ import {
 import { sessionReadyBodySchema } from "../lifecycle/index.ts";
 import { promptAttachmentReplySchema } from "../prompt/commands.ts";
 import { commandStandingSchema, sessionLogPositionSchema } from "../shared/command-standing.ts";
-import { sessionCapabilitiesSchema } from "../shared/index.ts";
+import { lastTurnOutcomeSchema, sessionCapabilitiesSchema } from "../shared/index.ts";
 import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
 
 export const NATIVE_SESSION_REQUEST_KIND = "native.session.request";
@@ -63,26 +63,6 @@ const commandDeliverySchema = z
         standing: commandStandingSchema,
     })
     .readonly();
-
-/**
- * How the Session's most recent started command ended, from the Computer's execution receipts.
- * A client that missed the live outcome, after leaving, reloading or reconnecting, shows it from
- * this. While the Computer retains the live receipt, a failure carries its bounded client-facing
- * lifecycle message. After a Computer restart, it carries the sanitized
- * durable summary: Agent error text may quote user input and is not persisted in receipts.
- */
-const lastTurnOutcomeSchema = z.discriminatedUnion("state", [
-    z.object({ commandId: identifier, state: z.literal("completed"), stopReason: z.string().max(2_048) }).readonly(),
-    z
-        .object({
-            code: identifier,
-            commandId: identifier,
-            message: z.string().min(1).max(500),
-            state: z.literal("failed"),
-        })
-        .readonly(),
-]);
-export type LastTurnOutcome = z.infer<typeof lastTurnOutcomeSchema>;
 
 const requestEnvelope = {
     ...envelope,

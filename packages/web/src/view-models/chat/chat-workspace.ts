@@ -33,7 +33,7 @@ import { createLinkedDevicesStore, type LinkedDevicesStore } from "./linked-devi
 import { createNetworkDiagnosticStore, type NetworkDiagnosticStore } from "./network-diagnostic-store.ts";
 import { createRemoteAccessStore, type RemoteAccessStore } from "./remote-access-store.ts";
 import { connectionWaitsForComputer } from "./session-connection.ts";
-import { pageActivity, submittingCommandId } from "./session-execution.ts";
+import { commandEnded, pageActivity, submittingCommandId } from "./session-execution.ts";
 import { createSessionPageState, type SessionPageState } from "./session-page-state.ts";
 import { createSessionPaneModel, type SessionPaneModel } from "./session-pane-store.ts";
 import { createSessionTitlesStore, type SessionTitlesStore } from "./session-titles-store.ts";
@@ -237,6 +237,10 @@ export function createChatWorkspace(options: {
     const statuses = createConversationStatusStore({
         selectedSessionId: () => selectedConversationTarget(home.getState().selection),
         activity: (sessionTarget) => sessionPageActivity(sessionTarget),
+        endObserved: (sessionTarget, commandId) => {
+            const state = sessionStates.get(sessionTarget);
+            return state !== undefined && commandEnded(state.execution.getState().state, commandId);
+        },
     });
     const draftControls = createDraftControlsStore(
         computerId,

@@ -1,5 +1,5 @@
 import { NativeSessionMap, sameNativeSession } from "@portalcrew/morty-client/native-session";
-import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
+import type { NativeSessionTarget, SessionStatus } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { ManagedChatSession } from "../../services/chat/bot-chat-api.ts";
 import type { SessionActivityState } from "./session-activity-machine.ts";
@@ -29,13 +29,58 @@ type SessionRecord =
      */
     | { readonly kind: "followed"; readonly newerThanLoad: boolean };
 
-function listedStatus(status: ManagedChatSession["status"]): ReportedStatus {
-    if (status.kind === "working") {
-        return status;
+function listedStatus(status: SessionStatus): ReportedStatus {
+    switch (status.kind) {
+        case "working":
+            return { kind: "working", commandId: status.commandId };
+        case "idle":
+            switch (status.lastTurn?.state) {
+                case undefined:
+                case "completed":
+                    return { kind: "idle" };
+                case "failed":
+                    return { kind: "failed", commandId: status.lastTurn.commandId, message: status.lastTurn.message };
+                default:
+                    return status.lastTurn satisfies never;
+            }
+        default:
+            return status satisfies never;
     }
-    return status.failedTurn === undefined
-        ? { kind: "idle" }
-        : { kind: "failed", commandId: status.failedTurn.commandId, message: status.failedTurn.message };
+}
+
+/**
+ * What the page knew of a Session's ended turns before a listing: the page's own account of a Session a pane followed
+ * since the last listing was read, otherwise the listing the new one replaces, if it listed the Session.
+ */
+type EndBasis =
+    | { readonly kind: "none" }
+    | { readonly kind: "listing"; readonly status: SessionStatus }
+    | { readonly kind: "page"; readonly observed: (commandId: string) => boolean };
+
+/** Whether a listing reports a turn that ended unseen: the Session is idle after a turn whose end its basis did not know. */
+function endedUnseen(status: SessionStatus, basis: EndBasis): boolean {
+    switch (status.kind) {
+        case "working":
+            return false;
+        case "idle": {
+            const commandId = status.lastTurn?.commandId;
+            if (commandId === undefined) {
+                return false;
+            }
+            switch (basis.kind) {
+                case "none":
+                    return false;
+                case "listing":
+                    return basis.status.lastTurn?.commandId !== commandId;
+                case "page":
+                    return !basis.observed(commandId);
+                default:
+                    return basis satisfies never;
+            }
+        }
+        default:
+            return status satisfies never;
+    }
 }
 
 function pageStatus(activity: SessionActivityState): ReportedStatus {
@@ -110,6 +155,8 @@ export function createConversationStatusStore(ports: {
     readonly selectedSessionId: () => NativeSessionTarget | null;
     /** The page's account of the Session, or null while it has none. */
     readonly activity: (sessionTarget: NativeSessionTarget) => SessionActivityState | null;
+    /** Whether the page's account of the Session learned that the command ended. */
+    readonly endObserved: (sessionTarget: NativeSessionTarget, commandId: string) => boolean;
 }) {
     const selected = (target: NativeSessionTarget): boolean => {
         const current = ports.selectedSessionId();
@@ -146,16 +193,14 @@ export function createConversationStatusStore(ports: {
                     if (records.has(session.target)) {
                         continue;
                     }
-                    const status = listedStatus(session.status);
-                    const activity = record?.kind === "followed" ? ports.activity(session.target) : null;
                     const earlier = previous?.find((candidate) => sameNativeSession(candidate.target, session.target));
-                    const before =
-                        activity !== null
-                            ? pageStatus(activity)
+                    const basis: EndBasis =
+                        record?.kind === "followed" && ports.activity(session.target) !== null
+                            ? { kind: "page", observed: (commandId) => ports.endObserved(session.target, commandId) }
                             : earlier === undefined
-                              ? null
-                              : listedStatus(earlier.status);
-                    const ended = before?.kind === "working" && status.kind !== "working";
+                              ? { kind: "none" }
+                              : { kind: "listing", status: earlier.status };
+                    const ended = endedUnseen(session.status, basis);
                     if (!selected(session.target) && (ended || record?.kind === "unseen-end")) {
                         records.set(session.target, { kind: "unseen-end" });
                     }

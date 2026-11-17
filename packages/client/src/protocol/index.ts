@@ -272,7 +272,6 @@ export {
     sessionsQueriedEventCodec,
 } from "./session/lifecycle/index.ts";
 export type {
-    LastTurnOutcome,
     NativeSessionCommand,
     NativeSessionCommandRouting,
     NativeSessionEntry,
@@ -349,6 +348,7 @@ export type {
     SessionLogPosition,
 } from "./session/shared/command-standing.ts";
 export type {
+    LastTurnOutcome,
     SessionCapabilities,
     SessionCommand,
     SessionConfigValue,

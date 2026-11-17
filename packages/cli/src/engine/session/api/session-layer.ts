@@ -69,7 +69,7 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         store: sessionStore,
         processes: options.processes,
         onSessionClosed: sink.publishClosed,
-        lastTurn: operations.lastTurn,
+        lastTurn: operations.lastEndedTurn,
         settledTurns: operations.settledTurns,
         hasUnsettledTurn: activeSessions.hasUnsettledTurn,
         timer,
@@ -108,8 +108,8 @@ export function buildSessionLayer(options: SessionLayerOptions) {
                           },
                       }),
             };
-            // How the last started command ended is told only while the Session executes none, as its listing tells a
-            // failed turn only when idle; a command still preparing has not started, so it is no `turn` yet.
+            // How the last started command ended is told only while the Session executes none; a command still
+            // preparing has not started, so it is no `turn` yet.
             if (turn !== null || manager.isExecuting(request.target)) {
                 return { ...read, turn };
             }

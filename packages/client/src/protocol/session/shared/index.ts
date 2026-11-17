@@ -15,25 +15,42 @@ export const workspaceEntrySchema = z
 
 export type WorkspaceEntry = z.infer<typeof workspaceEntrySchema>;
 
+/**
+ * How the Session's most recent started command ended, from the Computer's execution receipts.
+ * A client that missed the live outcome, after leaving, reloading or reconnecting, shows it from
+ * this. While the Computer retains the live receipt, a failure carries its bounded client-facing
+ * lifecycle message. After a Computer restart, it carries the sanitized
+ * durable summary: Agent error text may quote user input and is not persisted in receipts.
+ */
+export const lastTurnOutcomeSchema = z.discriminatedUnion("state", [
+    z.object({ commandId: IDENTIFIER, state: z.literal("completed"), stopReason: z.string().max(2_048) }).readonly(),
+    z
+        .object({
+            code: IDENTIFIER,
+            commandId: IDENTIFIER,
+            message: z.string().min(1).max(500),
+            state: z.literal("failed"),
+        })
+        .readonly(),
+]);
+export type LastTurnOutcome = z.infer<typeof lastTurnOutcomeSchema>;
+
+/**
+ * `lastTurn`, whatever the kind: the latest turn that ended, while the Computer retains its outcome, even while a later
+ * one runs. Its command identity tells a client that did not watch the Session whether another turn ended since.
+ */
 export const sessionStatusSchema = z.discriminatedUnion("kind", [
     z
         .object({
             kind: z.literal("idle"),
-            /**
-             * Present when the Session's most recent started command failed, while the Computer retains its receipt, so
-             * a client that did not watch it can still show the Session failed until another command starts. It
-             * carries what the execution's `lastTurn` reports for that failure.
-             */
-            failedTurn: z
-                .object({ code: IDENTIFIER, commandId: IDENTIFIER, message: z.string().min(1).max(500) })
-                .readonly()
-                .optional(),
+            lastTurn: lastTurnOutcomeSchema.optional(),
         })
         .readonly(),
     z
         .object({
             commandId: IDENTIFIER,
             kind: z.literal("working"),
+            lastTurn: lastTurnOutcomeSchema.optional(),
         })
         .readonly(),
 ]);

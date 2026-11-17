@@ -217,7 +217,7 @@ function runsBeyond(state: SessionExecutionState, commandId: string, through: Lo
     return answered?.answer.state === "running" && answerBeyond(answered, through);
 }
 
-function commandEnded(state: Pick<SessionExecutionState, "commands">, commandId: string): boolean {
+export function commandEnded(state: Pick<SessionExecutionState, "commands">, commandId: string): boolean {
     return state.commands.get(commandId)?.ended === true;
 }
 
