@@ -10,7 +10,12 @@ import {
 import { act } from "@testing-library/react";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { readyComposer, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
+import {
+    readyComposer,
+    retryOnceComputerReturns,
+    sendPrompt,
+    showReconnectNotice,
+} from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./support/chat-worker.ts";
@@ -368,7 +373,7 @@ test("Given an interrupted conversation, When recovery lasts thirty seconds acro
     await act(async () => clock.advanceBy(29_999));
     expect(reconnectStatusText(app)).toBeNull();
     await act(async () => clock.advanceBy(1));
-    const retry = await app.waitForView(() => getByRole(document.body, "button", { name: "Retry now" }));
+    await app.waitForView(() => getByRole(document.body, "button", { name: "Retry now" }));
     expect(app.optionalElementByTestId(dataTestId.sessionReconnectStatus)).toBeNull();
     expect(app.elementsByTestId(dataTestId.sessionReconnectNotice)).toHaveLength(1);
     const retrying = app.waitForView(() => {
@@ -377,7 +382,7 @@ test("Given an interrupted conversation, When recovery lasts thirty seconds acro
         expect(notice.querySelector("svg")?.classList.contains("animate-spin")).toBe(true);
     });
     await app.daemon.reconnect();
-    await app.user.click(retry);
+    await retryOnceComputerReturns(app);
     await retrying;
     await app.waitForView(() =>
         getByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" }),
@@ -485,11 +490,7 @@ test("Given a failed Agent turn, When its Computer reconnects and the conversati
         queryAllByText(document.body, "Internal error: The controlled Agent rejected this turn.", { exact: true }),
     ).toHaveLength(1);
     await app.daemon.reconnect();
-    const retry = queryByRole(form, "button", { name: "Retry now" });
-    if (!(retry instanceof HTMLButtonElement)) {
-        throw new Error("Expected manual reconnect control");
-    }
-    await app.user.click(retry);
+    await retryOnceComputerReturns(app, form);
     await app.waitForView(() => {
         getByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" });
         expect(composer.disabled).toBe(false);
