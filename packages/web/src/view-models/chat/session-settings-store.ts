@@ -35,12 +35,13 @@ export interface SessionSettingsStore {
      * Refines the shown settings from an authoritative read, made whenever the
      * history is loaded again. The conversation stays usable while the
      * read runs, a Computer that cannot answer keeps the current settings, and settings adopted after the
-     * read started win. A newer read replaces an unfinished one.
+     * read started win. A newer read replaces an unfinished one. Settles once this read, or the newer one that
+     * replaced it, has settled; it never rejects.
      */
     readonly readInBackground: (
         read: (signal: AbortSignal) => Promise<ConfigurationSnapshot>,
         parentSignal: AbortSignal,
-    ) => void;
+    ) => Promise<void>;
     readonly configure: (selection: SessionConfigurationSelection, signal: AbortSignal) => Promise<void>;
 }
 
@@ -51,11 +52,11 @@ export function createSessionSettingsStore(options: {
     readonly failed: (failure: OperationFailure) => void;
 }) {
     return createStore<SessionSettingsStore>()((set, get) => {
-        let pendingRead: AbortController | null = null;
+        let pendingRead: { readonly controller: AbortController; readonly settled: Promise<void> } | null = null;
         const openedAt = new Date().toISOString();
         // A mutation response acknowledges the edit; it may already be older than another client's edit.
         // All refreshes use the same read lifetime so newer observations invalidate older reads.
-        const refresh = (signal: AbortSignal): void =>
+        const refresh = (signal: AbortSignal): Promise<void> =>
             get().readInBackground(
                 (readSignal) =>
                     options.connection.send(
@@ -73,7 +74,7 @@ export function createSessionSettingsStore(options: {
             configurationRevision: "",
             change: { kind: "idle" },
             opened: ({ configOptions, configurationRevision }) => {
-                pendingRead?.abort(new DOMException("The Session was opened again", "AbortError"));
+                pendingRead?.controller.abort(new DOMException("The Session was opened again", "AbortError"));
                 pendingRead = null;
                 const now = new Date().toISOString();
                 set({
@@ -85,7 +86,7 @@ export function createSessionSettingsStore(options: {
                 });
             },
             adopt: ({ configOptions, configurationRevision }) => {
-                pendingRead?.abort(new DOMException("Newer settings were adopted", "AbortError"));
+                pendingRead?.controller.abort(new DOMException("Newer settings were adopted", "AbortError"));
                 pendingRead = null;
                 set({
                     options: configOptions,
@@ -95,11 +96,12 @@ export function createSessionSettingsStore(options: {
                 });
             },
             readInBackground: (read, parentSignal) => {
-                pendingRead?.abort(new DOMException("A newer settings read replaced this one", "AbortError"));
+                pendingRead?.controller.abort(
+                    new DOMException("A newer settings read replaced this one", "AbortError"),
+                );
                 const controller = new AbortController();
-                pendingRead = controller;
                 const signal = AbortSignal.any([parentSignal, controller.signal, AbortSignal.timeout(45_000)]);
-                void read(signal)
+                const settled = read(signal)
                     .then(
                         (result) => {
                             if (!parentSignal.aborted && !controller.signal.aborted) {
@@ -113,10 +115,13 @@ export function createSessionSettingsStore(options: {
                         },
                     )
                     .finally(() => {
-                        if (pendingRead === controller) {
+                        if (pendingRead?.controller === controller) {
                             pendingRead = null;
                         }
-                    });
+                    })
+                    .then(() => (pendingRead === null ? undefined : pendingRead.settled));
+                pendingRead = { controller, settled };
+                return settled;
             },
             configure: async (selection, signal) => {
                 set({ change: { configId: selection.configId, kind: "configuring" } });
@@ -133,7 +138,10 @@ export function createSessionSettingsStore(options: {
                     );
                     signal.throwIfAborted();
                     rememberAgentSettingChoice(options.computerId, options.sessionTarget.harness, selection);
-                    refresh(signal);
+                    // The change ends once the page holds settings at or after the edit, so the next edit carries
+                    // the revision this one produced.
+                    await refresh(signal);
+                    signal.throwIfAborted();
                     set({ change: { kind: "idle" } });
                 } catch (cause) {
                     signal.throwIfAborted();
@@ -145,7 +153,8 @@ export function createSessionSettingsStore(options: {
                         (cause instanceof MortyApiError || cause instanceof MortyOperationError) &&
                         cause.code === "session_configuration_conflict"
                     ) {
-                        refresh(signal);
+                        await refresh(signal);
+                        signal.throwIfAborted();
                     }
                     set({ change: { kind: "idle" } });
                     options.failed({
