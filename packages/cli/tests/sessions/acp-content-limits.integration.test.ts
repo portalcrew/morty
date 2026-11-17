@@ -21,7 +21,7 @@ describe("acp content limits", () => {
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -85,7 +85,7 @@ describe("acp content limits", () => {
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -145,7 +145,7 @@ describe("acp content limits", () => {
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -195,7 +195,7 @@ describe("acp content limits", () => {
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -265,7 +265,7 @@ describe("acp content limits", () => {
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -317,7 +317,7 @@ describe("acp content limits", () => {
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -371,7 +371,7 @@ describe("acp content limits", () => {
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>

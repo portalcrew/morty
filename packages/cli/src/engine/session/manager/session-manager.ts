@@ -83,7 +83,7 @@ export class SessionManager {
         agentCommand: (target) => this.#executions.agentCommand(target),
         settledTurns: (target) => this.#settledTurns(target),
     };
-    readonly #lastTurn: (target: NativeSessionTarget) => LastTurnOutcome | undefined;
+    readonly #lastEndedTurn: (target: NativeSessionTarget) => LastTurnOutcome | undefined;
     readonly #agentSettingsObserver: SessionObserver = {};
     readonly #lifecycles = new SessionLifecycles();
     readonly #store: SessionStore;
@@ -96,7 +96,7 @@ export class SessionManager {
         store,
         processes,
         onSessionClosed,
-        lastTurn,
+        lastEndedTurn,
         settledTurns,
         hasUnsettledTurn,
         timer,
@@ -106,8 +106,7 @@ export class SessionManager {
         readonly processes: AgentProcessPool;
         /** Called once each time a Session becomes closed, so every client learns of it. */
         readonly onSessionClosed: (event: SessionCloseNoticeEvent) => void;
-        /** The latest turn that ended, even while a later one runs, as the Session status states it. */
-        readonly lastTurn: (target: NativeSessionTarget) => LastTurnOutcome | undefined;
+        readonly lastEndedTurn: (target: NativeSessionTarget) => LastTurnOutcome | undefined;
         readonly settledTurns: (target: NativeSessionTarget) => readonly SettledTurn[];
         readonly hasUnsettledTurn: (target: NativeSessionTarget) => boolean;
         readonly timer: Timer;
@@ -115,7 +114,7 @@ export class SessionManager {
         this.#observer = observer;
         this.#processes = processes;
         this.#store = store;
-        this.#lastTurn = lastTurn;
+        this.#lastEndedTurn = lastEndedTurn;
         this.#settledTurns = settledTurns;
         this.#hasUnsettledTurn = hasUnsettledTurn;
         this.#executions = new ActiveExecutions((target, commandId, stopping) => {
@@ -839,7 +838,7 @@ export class SessionManager {
 
     /** A Session states the turn that ended last, so a client that did not watch it knows whether one ended since. */
     readonly #reported = (target: NativeSessionTarget, status: SessionStatus): SessionStatus => {
-        const lastTurn = this.#lastTurn(target);
+        const lastTurn = this.#lastEndedTurn(target);
         return lastTurn === undefined ? status : { ...status, lastTurn };
     };
 

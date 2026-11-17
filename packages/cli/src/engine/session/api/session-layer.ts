@@ -72,7 +72,7 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         store: sessionStore,
         processes: options.processes,
         onSessionClosed: sink.publishClosed,
-        lastTurn: operations.lastEndedTurn,
+        lastEndedTurn: operations.lastEndedTurn,
         settledTurns: operations.settledTurns,
         hasUnsettledTurn: activeSessions.hasUnsettledTurn,
         timer,

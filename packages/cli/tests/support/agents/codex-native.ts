@@ -40,7 +40,7 @@ export async function codexFixture(
         store,
         adapters,
         onSessionClosed: () => undefined,
-        lastTurn: () => undefined,
+        lastEndedTurn: () => undefined,
         settledTurns: () => [],
         hasUnsettledTurn: () => false,
         contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
