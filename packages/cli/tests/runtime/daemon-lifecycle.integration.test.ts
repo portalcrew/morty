@@ -175,7 +175,7 @@ async function _startRelay(ready = true): Promise<{ readonly origin: URL; readon
             }
         });
         if (ready) {
-            socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
+            socket.send(JSON.stringify({ kind: "computer.liveness.ready", connectionEpoch: 1 }));
         }
     });
     await listen(server);

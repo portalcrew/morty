@@ -37,7 +37,7 @@ async function catalogRelay() {
     });
     const sockets = new WebSocketServer({ server: relay });
     sockets.on("connection", (socket) => {
-        socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
+        socket.send(JSON.stringify({ kind: "computer.liveness.ready", connectionEpoch: 1 }));
     });
     await new Promise<void>((resolve_, reject) => {
         relay.once("error", reject);

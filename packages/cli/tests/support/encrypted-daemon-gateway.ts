@@ -87,7 +87,7 @@ export async function createEncryptedDaemonGateway(stateDirectory: string, compu
             void receiveTail.catch(fail);
         });
         connections.set(socket, () => Promise.allSettled([receiveTail, sendTail]));
-        socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
+        socket.send(JSON.stringify({ kind: "computer.liveness.ready", connectionEpoch: 1 }));
         for (const target of subscriptions.values()) {
             void subscribe(target).catch(fail);
         }

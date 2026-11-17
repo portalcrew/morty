@@ -334,6 +334,7 @@ describe("daemon relay connection liveness", () => {
                 socket,
                 JSON.stringify({
                     kind: COMPUTER_LIVENESS_READY_KIND,
+                    connectionEpoch: daemonSockets.length,
                 }),
             );
             upgradeWaiters.shift()?.();
@@ -539,7 +540,10 @@ describe("daemon relay connection liveness", () => {
             expect(decodeMessageKind((await barrier).text)).toBe(WORKSPACE_ENTRIES_KIND);
             expect(statuses).not.toContain("online");
             const heartbeat = readClientFrame(socket);
-            writeServerTextFrame(socket, encodeComputerLivenessReadyEvent({ kind: COMPUTER_LIVENESS_READY_KIND }));
+            writeServerTextFrame(
+                socket,
+                encodeComputerLivenessReadyEvent({ kind: COMPUTER_LIVENESS_READY_KIND, connectionEpoch: 1 }),
+            );
             expect(decodeMessageKind((await heartbeat).text)).toBe(COMPUTER_HEARTBEAT_KIND);
             await online.promise;
             expect(statuses).toContain("online");
@@ -816,6 +820,7 @@ describe("daemon relay connection liveness", () => {
                 socket,
                 JSON.stringify({
                     kind: COMPUTER_LIVENESS_READY_KIND,
+                    connectionEpoch: connectionCount,
                 }),
             );
             upgradeWaiters.shift()?.();
@@ -1029,6 +1034,7 @@ describe("daemon relay connection liveness", () => {
                 socket,
                 encodeComputerLivenessReadyEvent({
                     kind: COMPUTER_LIVENESS_READY_KIND,
+                    connectionEpoch: daemonSockets.length,
                 }),
             );
             if (daemonSockets.length === 2) {

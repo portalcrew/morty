@@ -165,7 +165,7 @@ test("Given a completed foreground turn, When its Agent requests background perm
     const runtime = runRuntime(config, cancellation.signal);
     try {
         const socket = await connected.promise;
-        socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
+        socket.send(JSON.stringify({ kind: "computer.liveness.ready", connectionEpoch: 1 }));
         const send = async (message: string): Promise<void> => {
             socket.send(await encryption.encode(message));
         };
