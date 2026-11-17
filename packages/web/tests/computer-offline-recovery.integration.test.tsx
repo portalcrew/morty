@@ -1,4 +1,4 @@
-import { fireEvent, getByLabelText, getByRole, queryAllByRole, queryByRole } from "@testing-library/dom";
+import { fireEvent, getByLabelText, getByRole, getByText, queryAllByRole, queryByRole } from "@testing-library/dom";
 import { act } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
@@ -120,7 +120,9 @@ test("Given a saved conversation, When a new-session page opens while the Comput
     await reopened.waitForView(() => {
         expect(connectionStatus(reopened)).toBe("disconnected");
         expect(sidebarAlerts()).toEqual([]);
-        expect(document.body.textContent).toContain("Computer is offline. Sessions will appear when it reconnects.");
+        const sidebar = getByRole(document.body, "complementary", { name: "Morty navigation" });
+        expect(getByText(sidebar, "Computer is offline")).toBeTruthy();
+        expect(getByText(sidebar, "Sessions will appear when it reconnects.")).toBeTruthy();
         expect(directoryTitles(reopened)).toHaveLength(0);
     });
 

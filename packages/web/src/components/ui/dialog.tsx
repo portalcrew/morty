@@ -10,6 +10,7 @@ import {
     mobileSheetTitleRowClassName,
 } from "../chat/mobile-sheet.ts";
 import { MobileSheetTitle } from "../chat/mobile-sheet-title.tsx";
+import { ScrollEdgeFade } from "../utils/scroll-edge-fade.tsx";
 import { useDialogBodyClippedEdges } from "../utils/use-dialog-body-clipped-edges.ts";
 import { Button } from "./cloud-button.tsx";
 import { overlaySurfacePanelClassName, overlaySurfaceRadiusClassName } from "./overlay-surface.ts";
@@ -183,11 +184,13 @@ export function SheetDialog({
     title,
     onClose,
     busy = false,
+    pinnedTitle = false,
     children,
 }: {
     readonly title: string;
     readonly onClose: () => void;
     readonly busy?: boolean;
+    readonly pinnedTitle?: boolean;
     readonly children: (title: ReactNode) => ReactNode;
 }) {
     const header = (
@@ -211,15 +214,31 @@ export function SheetDialog({
             )}
             onClose={onClose}
         >
-            <ScrollArea
-                className="min-h-0 max-h-[calc(100dvh-2rem)] max-sm:flex-1"
-                viewportClassName="max-h-[inherit] max-sm:h-full pt-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-2"
-            >
-                {children(header)}
-            </ScrollArea>
+            {pinnedTitle ? (
+                <>
+                    <div className="shrink-0 px-5">{header}</div>
+                    <ScrollEdgeFade
+                        className="h-full min-h-0"
+                        fadeFromClassName="from-card"
+                        fadeToClassName="to-card/0"
+                        frameClassName="min-h-0 flex-1"
+                        viewportClassName="pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+                        viewportLabel={`${title} content`}
+                    >
+                        {children(null)}
+                    </ScrollEdgeFade>
+                </>
+            ) : (
+                <ScrollArea
+                    className="min-h-0 max-h-[calc(100dvh-2rem)] max-sm:flex-1"
+                    viewportClassName="max-h-[inherit] max-sm:h-full pt-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-2 max-sm:[&>div]:flex! max-sm:[&>div]:min-h-full max-sm:[&>div]:flex-col"
+                >
+                    {children(header)}
+                </ScrollArea>
+            )}
             <CloseButton
                 busy={busy}
-                className={`absolute top-3 right-2 text-morty-text-3 hover:bg-morty-fill-opacity-2 hover:text-foreground sm:top-5 sm:right-5 sm:size-9 ${mobileHeaderIconButtonBelowSmClassName} ${mobileSheetCloseButtonPositionClassName}`}
+                className={`absolute top-3 right-2 text-morty-text-3 hover:bg-morty-fill-opacity-2 hover:text-foreground sm:top-5 sm:right-5 sm:size-9 ${mobileHeaderIconButtonBelowSmClassName} ${mobileSheetCloseButtonPositionClassName} ${pinnedTitle ? "z-20" : ""}`}
                 iconClassName="size-4 max-sm:size-5"
             />
         </DialogShell>

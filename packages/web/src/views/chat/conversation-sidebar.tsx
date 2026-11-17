@@ -34,7 +34,7 @@ import { SidebarAccessNoticeHost } from "../../components/chat/sidebar-access-no
 import { panelMotionClassName } from "../../components/chat/sidebar-panel-presence.ts";
 import { SidebarUserMenu } from "../../components/chat/sidebar-user-menu.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
-import { Dialog } from "../../components/ui/dialog.tsx";
+import { Dialog, SheetDialog } from "../../components/ui/dialog.tsx";
 import { MortyAlert } from "../../components/ui/morty-alert.tsx";
 import { MortyTooltipContent } from "../../components/ui/morty-tooltip-content.tsx";
 import { type OverlayContentOpenAutoFocus, preventOverlayOpenAutoFocus } from "../../components/ui/overlay-surface.ts";
@@ -254,6 +254,22 @@ function SessionStatusIndicator({
     ) : null;
 }
 
+function SidebarConnectionMessage({ message }: { readonly message: string }) {
+    const separator = message.indexOf(". ");
+    const title = separator === -1 ? message : message.slice(0, separator);
+    const description = separator === -1 ? null : message.slice(separator + 2);
+
+    return (
+        <div role="status" className="flex min-w-0 items-start gap-2.5 px-2 py-3">
+            <ComputerOfflineIcon small />
+            <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium leading-5 text-foreground">{title}</p>
+                {description && <p className="mt-0.5 text-xs leading-4 text-muted-foreground">{description}</p>}
+            </div>
+        </div>
+    );
+}
+
 function ManagedSessionDirectoryList({
     directory,
     archive,
@@ -288,13 +304,7 @@ function ManagedSessionDirectoryList({
         <Tooltip.Provider delayDuration={150}>
             {(directory.kind === "failed" || directory.kind === "stale") &&
                 (directory.failure === "connection" ? (
-                    <div
-                        role="status"
-                        className="flex flex-col items-start gap-2 px-2 py-3 text-xs text-muted-foreground"
-                    >
-                        <ComputerOfflineIcon />
-                        <p>{directory.message}</p>
-                    </div>
+                    <SidebarConnectionMessage message={directory.message} />
                 ) : (
                     <MortyAlert>{directory.message}</MortyAlert>
                 ))}
@@ -800,42 +810,48 @@ export function ConversationSidebar({
                                                                 aria-label="Connection actions"
                                                                 className={cn(
                                                                     mobileDrawerCardClassName,
-                                                                    mobileDrawerOptionDividerClassName,
-                                                                    "mt-4 sm:hidden",
+                                                                    "mt-4 bg-morty-fill-opacity-2 sm:hidden",
                                                                 )}
                                                             >
                                                                 <AccessTerm
                                                                     layout="card"
                                                                     store={workspace.accessExpiry}
                                                                 />
-                                                                <SidebarSessionOption
-                                                                    disabled={access.state.kind === "loading"}
-                                                                    icon={MonitorSmartphone}
-                                                                    label="Devices"
-                                                                    variant="card"
-                                                                    onClick={deviceAccess.getState().open}
-                                                                />
-                                                                <SidebarSessionOption
-                                                                    disabled={access.state.kind === "loading"}
-                                                                    icon={Wifi}
-                                                                    label="Network latency"
-                                                                    variant="card"
-                                                                    onClick={measureNetwork}
-                                                                />
-                                                                <SidebarSessionOption
-                                                                    disabled={
-                                                                        access.state.kind === "loading" ||
-                                                                        access.state.kind === "ending"
-                                                                    }
-                                                                    icon={LogOut}
-                                                                    label="End current access"
-                                                                    variant="card"
-                                                                    onClick={() => {
-                                                                        void access.requestEnd(
-                                                                            workspace.operationsSignal(),
-                                                                        );
-                                                                    }}
-                                                                />
+                                                                <div
+                                                                    className={cn(
+                                                                        mobileDrawerOptionDividerClassName,
+                                                                        "overflow-hidden rounded-t-lg bg-morty-fill-white",
+                                                                    )}
+                                                                >
+                                                                    <SidebarSessionOption
+                                                                        disabled={access.state.kind === "loading"}
+                                                                        icon={MonitorSmartphone}
+                                                                        label="Devices"
+                                                                        variant="card"
+                                                                        onClick={deviceAccess.getState().open}
+                                                                    />
+                                                                    <SidebarSessionOption
+                                                                        disabled={access.state.kind === "loading"}
+                                                                        icon={Wifi}
+                                                                        label="Network latency"
+                                                                        variant="card"
+                                                                        onClick={measureNetwork}
+                                                                    />
+                                                                    <SidebarSessionOption
+                                                                        disabled={
+                                                                            access.state.kind === "loading" ||
+                                                                            access.state.kind === "ending"
+                                                                        }
+                                                                        icon={LogOut}
+                                                                        label="End current access"
+                                                                        variant="card"
+                                                                        onClick={() => {
+                                                                            void access.requestEnd(
+                                                                                workspace.operationsSignal(),
+                                                                            );
+                                                                        }}
+                                                                    />
+                                                                </div>
                                                             </nav>
                                                         ) : null}
                                                         {desktop && access.state.kind !== "ended" ? (
@@ -904,7 +920,7 @@ export function ConversationSidebar({
                                                 daemonSource={sessionDiagnostics}
                                             />
                                         )}
-                                        {sharingStore !== null && (
+                                        {sharingStore !== null && desktop && (
                                             <Dialog
                                                 size="medium"
                                                 title="Continue on another device"
@@ -913,6 +929,23 @@ export function ConversationSidebar({
                                             >
                                                 <IdentitySharing store={sharingStore} />
                                             </Dialog>
+                                        )}
+                                        {sharingStore !== null && !desktop && (
+                                            <SheetDialog
+                                                title="Continue on another device"
+                                                pinnedTitle
+                                                onClose={dialogs.getState().closeSharing}
+                                            >
+                                                {() => (
+                                                    <div className="px-5 pb-5">
+                                                        <p className="mb-5 text-sm leading-5 text-muted-foreground">
+                                                            Share this computer with a person on another device, or with
+                                                            an AI agent.
+                                                        </p>
+                                                        <IdentitySharing allowQrDownload store={sharingStore} />
+                                                    </div>
+                                                )}
+                                            </SheetDialog>
                                         )}
                                         {diagnostic.state.kind !== "closed" && (
                                             <Dialog
