@@ -1,4 +1,5 @@
-import { expandMobileComposer, expect, test } from "./infra/test.ts";
+import { expandMobileComposer } from "./infra/mobile-composer.ts";
+import { expect, test } from "./infra/test.ts";
 import type { createTestRuntime } from "./infra/test-runtime.ts";
 
 type E2EPage = Awaited<ReturnType<typeof createTestRuntime>>["page"];

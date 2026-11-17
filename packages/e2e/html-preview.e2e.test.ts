@@ -1,4 +1,5 @@
 import { interactiveHtml } from "../../tests/support/fake-daemon/html-preview.ts";
+import { expandMobileComposer } from "./infra/mobile-composer.ts";
 import { expect, test } from "./infra/test.ts";
 
 test("Given an agent links an HTML result, When the user opens it, Then they can interact, inspect source and return to the conversation", async ({
@@ -66,7 +67,7 @@ test.describe("touch preview", () => {
         await page.getByRole("textbox", { name: "Message" }).fill("show interactive result");
         await page.getByRole("button", { name: "Send message" }).tap();
         await page.getByRole("button", { name: "Open delivery review" }).waitFor();
-        await page.getByRole("button", { name: "Expand message composer" }).tap();
+        await expandMobileComposer(page);
         await page.getByRole("textbox", { name: "Message" }).fill("Please refine this result");
         await page.getByRole("button", { name: "Open delivery review" }).tap();
 

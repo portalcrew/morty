@@ -4,7 +4,8 @@ import { WebSocket, WebSocketServer } from "ws";
 import { sessionEventEnvelopeCodec } from "../client/src/protocol/session/events/index.ts";
 import { sessionHistoryPageLoadedCodec } from "../client/src/protocol/session/observability/history.ts";
 import { dataTestId } from "../web/src/data-testid.ts";
-import { test as base, conversationLoaded, expandMobileComposer, expect } from "./infra/test.ts";
+import { expandMobileComposer } from "./infra/mobile-composer.ts";
+import { test as base, conversationLoaded, expect } from "./infra/test.ts";
 
 type Gate = {
     readonly reached: Promise<void>;

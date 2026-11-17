@@ -11,7 +11,7 @@ import { dataTestId } from "../web/src/data-testid.ts";
 import { ChatApi, object, text } from "./infra/chat-api.ts";
 import { E2EHarness } from "./infra/harness.ts";
 import { LocalStack } from "./infra/local-stack.ts";
-import { expandMobileComposer } from "./infra/test.ts";
+import { expandMobileComposer } from "./infra/mobile-composer.ts";
 
 // Keep CI's WebKit coverage; allow local verification where the OS's frozen WebKit is unsupported.
 const selectedBrowser = process.env["MORTY_E2E_BORROWED_BROWSER"] ?? "webkit";

@@ -5,6 +5,7 @@ import { ANONYMOUS_CREDENTIAL_KEY_NAME } from "../../web/src/services/identity/a
 import { encodeIdentityScope } from "../../web/src/services/identity/identity-scope-url.ts";
 import { ChatApi, text } from "./chat-api.ts";
 import type { LocalStack } from "./local-stack.ts";
+import { expandMobileComposer } from "./mobile-composer.ts";
 import { RuntimeClock } from "./runtime-clock.ts";
 import { ControlledSetupRuntime } from "./setup-daemon.ts";
 import { followSetupInstructions } from "./setup-instructions.ts";
@@ -129,9 +130,7 @@ export async function createTestRuntime(
                 await chat.bindAgent(harness, access);
                 await chat.readBinding(harness);
                 await page.goto(await chat.browserHandoff(access));
-                if ((page.viewportSize()?.width ?? 640) < 640) {
-                    await page.getByRole("button", { name: "Expand message composer" }).click();
-                }
+                await expandMobileComposer(page);
             },
             disconnectRuntime: async () => await runtime.disconnect(),
             restartRuntime: async () => await runtime.restart(),
