@@ -123,6 +123,15 @@ export async function showReconnectNotice(app: TestApp, clock: TestClock): Promi
     await app.waitForView(() => getByRole(document.body, "button", { name: "Retry now" }));
 }
 
+/**
+ * Retries the way a user does once the Computer is back: the page learns that at once and redraws its notice, so the
+ * Retry now button is the one shown after the page reports the Computer online, not one found before.
+ */
+export async function retryOnceComputerReturns(app: TestApp, scope: HTMLElement = document.body): Promise<void> {
+    await app.waitForView(() => getByRole(document.body, "button", { name: /Switch computer, .*, Online/ }));
+    await app.user.click(getByRole(scope, "button", { name: "Retry now" }));
+}
+
 export async function refreshSessions(app: TestApp): Promise<void> {
     const root = app.elementByTestId(dataTestId.messageComposer).closest<HTMLElement>("[data-test-app-root]");
     if (!root) {

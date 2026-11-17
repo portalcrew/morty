@@ -11,7 +11,12 @@ import {
 import { act } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { recoverChat, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
+import {
+    recoverChat,
+    retryOnceComputerReturns,
+    sendPrompt,
+    showReconnectNotice,
+} from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 
@@ -275,7 +280,7 @@ test("Given a reply is streaming, When the Computer restarts, Then the partial r
     await daemon.disconnect();
     await showReconnectNotice(app, clock);
     await daemon.reconnect();
-    await app.user.click(getByRole(document.body, "button", { name: "Retry now" }));
+    await retryOnceComputerReturns(app);
 
     await app.waitForView(() => {
         expect(getByRole(document.body, "alert").textContent).toContain(

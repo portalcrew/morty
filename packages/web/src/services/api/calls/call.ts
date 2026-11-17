@@ -1,4 +1,5 @@
 import type { MortyTransportPolicy } from "@portalcrew/morty-client";
+import type { RelayChangeTopic } from "@portalcrew/morty-client/protocol";
 
 export interface ComputerCallTarget {
     readonly origin: string;
@@ -14,7 +15,8 @@ export type ApiEndpoint = {
     readonly url: URL;
     readonly method: "GET" | "POST" | "DELETE";
     readonly operation: string;
-    readonly watch: "snapshot" | "none";
+    /** A watched resource is read again when the Relay tells that its topic changed. */
+    readonly watch: "none" | { readonly kind: "changes"; readonly topic: RelayChangeTopic };
     readonly timeoutMilliseconds: number;
 } & (
     | {

@@ -2,7 +2,13 @@ import { getByRole, queryByRole } from "@testing-library/dom";
 import type { DetachedWindowAPI } from "happy-dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { openExecutionDetails, readyComposer, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
+import {
+    openExecutionDetails,
+    readyComposer,
+    retryOnceComputerReturns,
+    sendPrompt,
+    showReconnectNotice,
+} from "./infra/application-scenario.ts";
 import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 
@@ -114,7 +120,7 @@ test("Given a connected Computer, When a saved conversation disconnects and reco
     expect(app.elementByTestId(dataTestId.executionDirectory, interrupted).textContent).toBe(directoryName);
     await app.user.keyboard("{Escape}");
     await app.daemon.reconnect();
-    await app.user.click(getByRole(document.body, "button", { name: "Retry now" }));
+    await retryOnceComputerReturns(app);
     await app.waitForView(() =>
         getByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" }),
     );

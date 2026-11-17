@@ -63,6 +63,8 @@ interface RuntimeContext {
     };
     readonly utilities: {
         readonly waitUntil: (operation: Promise<void>) => void;
+        /** Whether the Computer is online or paired changed; followers read it again. */
+        readonly computerChanged: () => void;
     };
     readonly logger: typeof logger;
 }
@@ -194,6 +196,7 @@ export class ComputerService {
                 if (replaced) {
                     this.#cx.services.relay.endViewers({ kind: "daemon_replaced", replacement: identity });
                 }
+                this.#cx.utilities.computerChanged();
             } catch (error) {
                 if (this.#cx.services.connections.isCurrent(identity)) {
                     this.closeDaemon(identity, socket, { kind: "attachment_failed" }, error);
@@ -241,6 +244,7 @@ export class ComputerService {
         if (connected) {
             this.#cx.services.relay.refuseOperationsOffline();
         }
+        this.#cx.utilities.computerChanged();
     };
 
     readonly reauthorizeConnections = async (signal: AbortSignal): Promise<void> => {
@@ -533,6 +537,17 @@ export class ComputerService {
         }
         this.#cx.services.connections.disconnected(identity.connectionEpoch, Date.now());
         this.#cx.services.relay.detachDaemon(identity);
+        this.#cx.utilities.computerChanged();
+    };
+
+    /** When the current daemon counts as silent unless it heartbeats first; null without one. */
+    readonly silenceDeadline = (): number | null => {
+        const daemon = this.currentDaemon();
+        if (daemon === undefined) {
+            return null;
+        }
+        const heardAt = daemon.heartbeat.kind === "received" ? daemon.heartbeat.at : this.firstHeartbeatDue();
+        return heardAt === null ? null : heardAt + DAEMON_HEARTBEAT_SILENCE_LIMIT_MILLISECONDS + 1;
     };
 
     private readonly closeSilentDaemons = (): readonly ComputerConnectionIdentity[] => {

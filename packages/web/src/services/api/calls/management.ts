@@ -25,7 +25,7 @@ export const managementCalls = Object.freeze({
                 operation: "pairing-state",
                 transport: { kind: "websocket", cancellation: "remote" },
                 timeoutMilliseconds: 15_000,
-                watch: "snapshot",
+                watch: { kind: "changes", topic: "computer" },
             },
         }),
 });

@@ -1,7 +1,12 @@
 import { getByRole, getByText, queryByRole } from "@testing-library/dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
-import { readyComposer, sendPrompt, showReconnectNotice } from "./infra/application-scenario.ts";
+import {
+    readyComposer,
+    retryOnceComputerReturns,
+    sendPrompt,
+    showReconnectNotice,
+} from "./infra/application-scenario.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
 
@@ -53,7 +58,7 @@ for (const agent of [
                 expect(app.elementByTestId(dataTestId.sessionReconnectNotice).textContent).toContain("Retrying in"),
             );
             await app.daemon.reconnect();
-            await app.user.click(getByRole(document.body, "button", { name: "Retry now" }));
+            await retryOnceComputerReturns(app);
             await app.waitForView(() => {
                 getByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" });
                 expect(app.optionalElementByTestId(dataTestId.sessionReconnectNotice)).toBeNull();

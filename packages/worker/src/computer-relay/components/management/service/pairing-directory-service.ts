@@ -28,6 +28,8 @@ export interface PairingDirectoryInfrastructure {
     readonly store: ComputerRelayStore;
     /** The key pairing secrets derive from, so a retry derives the secrets its request stored. */
     readonly credentialKey: IdentityOperations["credentialKey"];
+    /** The Computer's pairing or Agent catalog changed; followers read it again. */
+    readonly computerChanged: () => void;
     readonly services: {
         readonly identities: ComputerIdentityService;
         readonly computerAccounts: Pick<ComputerAccessService, "authorizeComputer">;
@@ -180,6 +182,7 @@ export class PairingDirectoryService {
         if (!claimed) {
             throw new PairingDirectoryError("invalid_pairing_code", "The pairing code is invalid or expired");
         }
+        this.#cx.computerChanged();
         return { computerId: boundComputerId, daemonToken };
     };
 
@@ -222,6 +225,7 @@ export class PairingDirectoryService {
                 throw cause;
             }
             if (await storage.replaceAgentCatalog(tokenHash, agents, signal)) {
+                this.#cx.computerChanged();
                 return;
             }
         }

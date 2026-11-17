@@ -1,6 +1,7 @@
 import { createStore } from "zustand/vanilla";
 import type { LinkedDevice } from "../../services/identity/anonymous-identity-api.ts";
 import { centralLocalStorage, linkedDevicesSeenEntry } from "../../services/local-storage/central-local-storage.ts";
+import type { Clock } from "../../services/time/clock.ts";
 
 interface LinkedDevicesState {
     readonly devices: readonly LinkedDevice[] | null;
@@ -42,6 +43,7 @@ export function createLinkedDevicesStore(options: {
     readonly computerId: string;
     readonly linkedDevices: (signal: AbortSignal) => Promise<readonly LinkedDevice[]>;
     readonly waitForChange: (signal: AbortSignal) => Promise<void>;
+    readonly clock: Clock;
 }) {
     const seen = linkedDevicesSeenEntry(options.computerId);
     return createStore<LinkedDevicesStore>()((set, get) => {
@@ -65,13 +67,38 @@ export function createLinkedDevicesStore(options: {
             return true;
         };
         /**
+         * Waits until the list may differ: the Relay tells when a device joins or an access ends, but a device whose
+         * access runs out changes nothing there, so the list is read again when the earliest term ends.
+         */
+        const nextChange = async (signal: AbortSignal): Promise<void> => {
+            const now = options.clock.now();
+            const terms = (get().state.devices ?? [])
+                .map((device) => Date.parse(device.accessExpiresAt))
+                .filter((term) => term > now);
+            if (terms.length === 0) {
+                await options.waitForChange(signal);
+                return;
+            }
+            const settled = new AbortController();
+            const waiting = AbortSignal.any([signal, settled.signal]);
+            const changed = options.waitForChange(waiting);
+            const expired = options.clock.sleep(Math.min(...terms) - now, waiting);
+            changed.catch(() => undefined);
+            expired.catch(() => undefined);
+            try {
+                await Promise.race([changed, expired]);
+            } finally {
+                settled.abort();
+            }
+        };
+        /**
          * Reads, then reads again whenever the list differs from that read, until the page is hidden. A list that
          * cannot be read stops following: the watch would otherwise report that same difference again at once.
          */
         const follow = async (signal: AbortSignal): Promise<void> => {
             while (await read(signal)) {
                 try {
-                    await options.waitForChange(signal);
+                    await nextChange(signal);
                 } catch {
                     return;
                 }

@@ -1,4 +1,12 @@
 export {
+    CHANGES_CHANGED_KIND,
+    CHANGES_ERROR_KIND,
+    CHANGES_FOLLOW_KIND,
+    CHANGES_READY_KIND,
+    RELAY_CHANGE_TOPICS,
+    type RelayChangeTopic,
+} from "./computer/changes.ts";
+export {
     COMPUTER_SUCCESSOR_CREDENTIAL_HEADER,
     computerCredentialSuccessor,
     isComputerCredentialSuccessor,

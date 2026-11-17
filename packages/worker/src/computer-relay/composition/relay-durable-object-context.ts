@@ -9,13 +9,17 @@ export function createRelayDurableObjectContext(
         readonly computerId: string;
         readonly database: DurableObjectDatabase;
         readonly access: () => ComputerAccessService;
+        readonly computerChanged: () => void;
     },
 ) {
     return createRuntimeContext({
         computerId: storage.computerId,
         services: { access: storage.access },
         gateways: { peers: new CloudflareRelayPeers(state, storage.computerId) },
-        utilities: { waitUntil: (operation) => state.waitUntil(operation) },
+        utilities: {
+            waitUntil: (operation) => state.waitUntil(operation),
+            computerChanged: storage.computerChanged,
+        },
         doDatabase: storage.database,
     });
 }
