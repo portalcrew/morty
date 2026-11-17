@@ -560,7 +560,7 @@ export function runtimeHoldsCommand(state: SessionExecutionState, commandId: str
 }
 
 /** The latest answer about a command, or null while the page holds none. */
-export function commandAnswer(state: SessionExecutionState, commandId: string): CommandAnswer | null {
+function commandAnswer(state: SessionExecutionState, commandId: string): CommandAnswer | null {
     return state.commands.get(commandId)?.answer?.answer ?? null;
 }
 
@@ -588,7 +588,8 @@ export function acceptedPlacement(state: SessionExecutionState, commandId: strin
  * Whether the Computer's own account now shows a message it accepted, so the page no longer needs its copy. A message
  * that runs as a turn is covered once the timeline shows it; history names each turn's command. A queued message keeps
  * its files there until it starts or ends, or a listing that covers its answer no longer holds it. One withdrawn, or
- * steered into the running turn, left the queue for good.
+ * steered into the running turn, left the queue for good. One the Computer answers settled ended: if it started, its
+ * timeline shows it; if it never started, no account ever will, and the page keeps nothing of it.
  */
 export function runtimeCoversMessage(state: SessionExecutionState, commandId: string): boolean {
     const command = state.commands.get(commandId);
@@ -606,6 +607,7 @@ export function runtimeCoversMessage(state: SessionExecutionState, commandId: st
     switch (answered.answer.state) {
         case "withdrawn":
         case "steered":
+        case "settled":
             return true;
         case "queued":
             return (
@@ -617,7 +619,6 @@ export function runtimeCoversMessage(state: SessionExecutionState, commandId: st
             );
         case "preparing":
         case "running":
-        case "settled":
             return false;
         default:
             return answered.answer satisfies never;

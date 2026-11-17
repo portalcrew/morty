@@ -11,12 +11,7 @@ import { createStore } from "zustand/vanilla";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
 import { SessionStorageWriteError } from "../../services/session-storage/central-session-storage.ts";
 import { formatError } from "../format-error.ts";
-import {
-    commandAnswer,
-    runtimeCoversMessage,
-    runtimeHoldsCommand,
-    type SessionExecutionState,
-} from "./session-execution.ts";
+import { runtimeCoversMessage, runtimeHoldsCommand, type SessionExecutionState } from "./session-execution.ts";
 
 type SubmitRequest = Parameters<MortyClient["turns"]["submit"]>[1];
 export type SubmitTurn = (request: SubmitRequest, signal: AbortSignal) => Promise<void>;
@@ -176,30 +171,11 @@ type WithdrawCommand = (commandId: string, signal: AbortSignal) => Promise<boole
 
 export type DeliveryRecord = Pick<SessionDeliveryStore, "state" | "accepted">;
 
-/** Whether the Computer's answer leaves a message to show until its account shows it: it waits or runs. */
-function awaitsAccount(runtime: SessionExecutionState, commandId: string): boolean {
-    const answer = commandAnswer(runtime, commandId);
-    switch (answer?.state) {
-        case "preparing":
-        case "queued":
-        case "running":
-            return true;
-        case "settled":
-        case "withdrawn":
-        case "steered":
-        case undefined:
-            return false;
-        default:
-            return answer satisfies never;
-    }
-}
-
 /**
  * Delivery as the Computer's account leaves it. An unknown delivery the Computer holds was delivered: it is idle, and
- * accepted while the Computer's answer says it waits or runs. An accepted message the Computer's account covers is
- * dropped, which releases the files the page kept for editing it; nothing reads them once the account shows the
- * message. A delivery being withdrawn waits for the answer to its withdrawal instead: the Computer also holds a command
- * it withdrew.
+ * accepted like any other. An accepted message the Computer's account covers is dropped, which releases the files the
+ * page kept for editing it; nothing reads them once the account shows the message. A delivery being withdrawn waits
+ * for the answer to its withdrawal instead: the Computer also holds a command it withdrew.
  */
 export function settledDelivery(delivery: DeliveryRecord, runtime: SessionExecutionState): DeliveryRecord {
     const { state } = delivery;
@@ -207,12 +183,10 @@ export function settledDelivery(delivery: DeliveryRecord, runtime: SessionExecut
         state.kind === "delivery-unknown" && runtimeHoldsCommand(runtime, state.journal.commandId)
             ? {
                   state: { kind: "idle" },
-                  accepted: awaitsAccount(runtime, state.journal.commandId)
-                      ? [
-                            ...delivery.accepted.filter((message) => message.commandId !== state.journal.commandId),
-                            acceptedJournal(state.journal),
-                        ]
-                      : delivery.accepted,
+                  accepted: [
+                      ...delivery.accepted.filter((message) => message.commandId !== state.journal.commandId),
+                      acceptedJournal(state.journal),
+                  ],
               }
             : delivery;
     return {
