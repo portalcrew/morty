@@ -1,6 +1,8 @@
 import { SELF } from "cloudflare:test";
 import { createClientPayloadEncryption, exportE2EPublicKey, generateE2EIdentity } from "@portalcrew/morty-client";
 import {
+    COMPUTER_HEARTBEAT_ACK_MESSAGE,
+    COMPUTER_HEARTBEAT_MESSAGE,
     CONTENT_CHUNK_MAX_BYTES,
     CONTENT_UPLOAD_MAX_ENCODED_BYTES,
     encodeContentChunkFrame,
@@ -8,10 +10,10 @@ import {
     sessionEventsSubscribeCommandCodec,
 } from "@portalcrew/morty-client/protocol";
 import { expect, it, vi } from "vitest";
-import { acceptWebSocketHttpTransport } from "../../src/computer-relay/components/runtime/http/websocket-http-transport.ts";
 import { SessionRuntimeError } from "../../src/contracts/relay/session.ts";
 import type { SubscribeSessionEvents } from "../../src/contracts/session-event-subscription.ts";
 import type { WebSocketHttpOperation } from "../../src/contracts/websocket-http-dispatch.ts";
+import { openTestBrowserTransport } from "./browser-session.ts";
 import { createOwner, issueSession, ownerOrigin, ownerRequest, pairComputer } from "./owner-fixture.ts";
 
 class FailingDaemonBoundary {
@@ -151,8 +153,8 @@ it("Given a browser connection, When it heartbeats through the public Relay tran
     socket.accept();
     try {
         const heartbeat = nextMessage(socket);
-        socket.send('{"kind":"ping"}');
-        expect(await heartbeat).toBe('{"kind":"pong"}');
+        socket.send(COMPUTER_HEARTBEAT_MESSAGE);
+        expect(await heartbeat).toBe(COMPUTER_HEARTBEAT_ACK_MESSAGE);
         const result = nextMessage(socket);
         socket.send(
             JSON.stringify({
@@ -219,8 +221,8 @@ it.for([
                 status: 400,
             });
             const heartbeat = nextMessage(socket);
-            socket.send('{"kind":"ping"}');
-            expect(await heartbeat).toBe('{"kind":"pong"}');
+            socket.send(COMPUTER_HEARTBEAT_MESSAGE);
+            expect(await heartbeat).toBe(COMPUTER_HEARTBEAT_ACK_MESSAGE);
         } finally {
             socket.close();
         }
@@ -371,90 +373,12 @@ class SubscriptionDaemonBoundary {
     readonly subscribe: SubscribeSessionEvents = async (request) => {
         this.requestSignal = request.signal;
         request.signal.addEventListener("abort", () => this.closed.resolve(), { once: true });
-    };
-}
-
-class MultipleSubscriptionDaemonBoundary {
-    readonly downstreams: { readonly send: (data: string) => void }[] = [];
-
-    readonly fetch = (_operation: WebSocketHttpOperation): Promise<Response> => {
-        throw new Error("Subscriptions must not be dispatched as HTTP requests");
-    };
-    readonly subscribe: SubscribeSessionEvents = async (request, observer) => {
-        this.downstreams.push({
-            send: (data) => {
-                if (!request.signal.aborted) {
-                    observer.message(data);
-                }
-            },
-        });
-    };
-}
-
-it("Given two quiet subscriptions, When multiple heartbeat intervals pass, Then one connection heartbeat suffices and both subscriptions still deliver", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
-    const daemon = new MultipleSubscriptionDaemonBoundary();
-    const response = acceptWebSocketHttpTransport({
-        request: new Request("https://relay.test/morty/api/v1/transport", {
-            headers: { Upgrade: "websocket" },
-        }),
-        dispatch: daemon.fetch,
-        subscribe: daemon.subscribe,
-    });
-    const socket = response.webSocket;
-    if (socket === null) {
-        throw new Error("Expected a WebSocket transport");
-    }
-    socket.accept();
-    try {
-        for (const subscriptionId of ["first-stream", "second-stream"]) {
-            const ready = nextMessage(socket);
-            socket.send(
-                JSON.stringify({
-                    kind: "session.events.subscribe",
-                    subscriptionId,
-                    path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
-                    body: await subscriptionBody(subscriptionId),
-                    headers: [
-                        ["authorization", "Bearer browser-credential"],
-                        ["content-type", "application/json"],
-                    ],
-                }),
-            );
-            expect(JSON.parse(await ready)).toEqual({
-                kind: "session.events.ready",
-                subscriptionId,
-            });
-        }
-        for (let interval = 0; interval < 4; interval += 1) {
-            const heartbeat = nextMessage(socket);
-            await vi.advanceTimersByTimeAsync(20_000);
-            socket.send('{"kind":"ping"}');
-            expect(await heartbeat).toBe('{"kind":"pong"}');
-        }
-        for (const [index, downstream] of daemon.downstreams.entries()) {
-            const delivered = nextMessage(socket);
-            downstream.send(`stream-${index}`);
-            expect(JSON.parse(await delivered)).toMatchObject({
-                kind: "session.events.event",
-                data: `stream-${index}`,
-                subscriptionId: index === 0 ? "first-stream" : "second-stream",
-            });
-        }
-    } finally {
-        socket.close();
-        vi.useRealTimers();
-    }
-});
-
-class PendingDaemonBoundary {
-    readonly response = Promise.withResolvers<Response>();
-    readonly requested = Promise.withResolvers<AbortSignal>();
-
-    readonly fetch = (operation: WebSocketHttpOperation): Promise<Response> => {
-        this.requested.resolve(operation.request.signal);
-        return this.response.promise;
+        return {
+            subscriptionId: request.command.subscriptionId,
+            sessionFilter: { harness: request.harness, sessionId: request.sessionId },
+            expiresAt: Date.now() + 60_000,
+            grant: { holder: { kind: "credential", credentialId: "browser-credential" }, generation: 1 },
+        };
     };
 }
 
@@ -475,14 +399,21 @@ class TextDaemonBoundary {
     };
 }
 
+class PendingDaemonBoundary {
+    readonly response = Promise.withResolvers<Response>();
+    readonly requested = Promise.withResolvers<AbortSignal>();
+
+    readonly fetch = (operation: WebSocketHttpOperation): Promise<Response> => {
+        this.requested.resolve(operation.request.signal);
+        return this.response.promise;
+    };
+}
+
 it("Given a Unicode JSON request and response, When the relay carries them over WebSocket, Then it transfers their text without Base64 wrapping", async () => {
     const requestBody = JSON.stringify({ prompt: "show café ☕" });
     const responseBody = JSON.stringify({ message: "Olá, Morty" });
     const daemon = new TextDaemonBoundary(responseBody);
-    const response = acceptWebSocketHttpTransport({
-        request: new Request("https://relay.test/morty/api/v1/transport", {
-            headers: { Upgrade: "websocket" },
-        }),
+    const response = openTestBrowserTransport({
         dispatch: daemon.fetch,
         subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
@@ -517,8 +448,7 @@ it("Given a Unicode JSON request and response, When the relay carries them over 
 
 it("Given an invalid binary declaration, When the request ID is reused for a valid upload, Then validation happens before buffering", async () => {
     const daemon = new TextDaemonBoundary("uploaded");
-    const response = acceptWebSocketHttpTransport({
-        request: new Request("https://relay.test/morty/api/v1/transport", { headers: { Upgrade: "websocket" } }),
+    const response = openTestBrowserTransport({
         dispatch: daemon.fetch,
         subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
@@ -568,8 +498,7 @@ it("Given an invalid binary declaration, When the request ID is reused for a val
 
 it("Given a binary upload sends an invalid chunk, When it retries the same request ID, Then the failed buffer was released", async () => {
     const daemon = new TextDaemonBoundary("uploaded");
-    const response = acceptWebSocketHttpTransport({
-        request: new Request("https://relay.test/morty/api/v1/transport", { headers: { Upgrade: "websocket" } }),
+    const response = openTestBrowserTransport({
         dispatch: daemon.fetch,
         subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
@@ -608,10 +537,7 @@ it("Given an incomplete upload consumes the aggregate byte budget, When its dead
     vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
     try {
         const daemon = new TextDaemonBoundary("uploaded");
-        const response = acceptWebSocketHttpTransport({
-            request: new Request("https://relay.test/morty/api/v1/transport", {
-                headers: { Upgrade: "websocket" },
-            }),
+        const response = openTestBrowserTransport({
             dispatch: daemon.fetch,
             subscribe: new SubscriptionDaemonBoundary().subscribe,
         });
@@ -685,8 +611,7 @@ it("Given an incomplete upload consumes the aggregate byte budget, When its dead
 
 it("Given binary requests, when their declared sizes exceed their owning limits, then ordinary requests and encrypted uploads are both refused", async () => {
     const daemon = new TextDaemonBoundary("uploaded");
-    const response = acceptWebSocketHttpTransport({
-        request: new Request("https://relay.test/morty/api/v1/transport", { headers: { Upgrade: "websocket" } }),
+    const response = openTestBrowserTransport({
         dispatch: daemon.fetch,
         subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
@@ -734,8 +659,7 @@ it("Given binary requests, when their declared sizes exceed their owning limits,
 
 it("Given many incomplete binary uploads, When their count reaches the pending limit, Then another declaration is rejected", async () => {
     const daemon = new TextDaemonBoundary("unused");
-    const response = acceptWebSocketHttpTransport({
-        request: new Request("https://relay.test/morty/api/v1/transport", { headers: { Upgrade: "websocket" } }),
+    const response = openTestBrowserTransport({
         dispatch: daemon.fetch,
         subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
@@ -779,10 +703,7 @@ it("Given many incomplete binary uploads, When their count reaches the pending l
 
 it("Given a daemon request fails with a 5XX error, When the WebSocket transport reports it, Then the client receives its detailed code and message", async () => {
     const daemon = new FailingDaemonBoundary();
-    const response = acceptWebSocketHttpTransport({
-        request: new Request("https://relay.test/morty/api/v1/transport", {
-            headers: { Upgrade: "websocket" },
-        }),
+    const response = openTestBrowserTransport({
         dispatch: daemon.fetch,
         subscribe: new SubscriptionDaemonBoundary().subscribe,
     });
@@ -817,10 +738,7 @@ it("Given a daemon request fails with a 5XX error, When the WebSocket transport 
 
 it("Given an established event subscription, When the browser transport closes, Then its subscription is cancelled without an internal HTTP upgrade", async () => {
     const daemon = new SubscriptionDaemonBoundary();
-    const response = acceptWebSocketHttpTransport({
-        request: new Request("https://relay.test/morty/api/v1/transport", {
-            headers: { Upgrade: "websocket" },
-        }),
+    const response = openTestBrowserTransport({
         dispatch: daemon.fetch,
         subscribe: daemon.subscribe,
     });
@@ -857,126 +775,9 @@ it("Given an established event subscription, When the browser transport closes, 
     expect(requestSignal.aborted).toBe(true);
 });
 
-it("Given two live subscriptions, When each receives event batches, Then delivery sequence IDs start at one and advance per subscription", async () => {
-    const daemon = new MultipleSubscriptionDaemonBoundary();
-    const response = acceptWebSocketHttpTransport({
-        request: new Request("https://relay.test/morty/api/v1/transport", {
-            headers: { Upgrade: "websocket" },
-        }),
-        dispatch: daemon.fetch,
-        subscribe: daemon.subscribe,
-    });
-    const socket = response.webSocket;
-    if (socket === null) {
-        throw new Error("Expected a WebSocket transport response");
-    }
-    socket.accept();
-    for (const subscriptionId of ["subscription-1", "subscription-2"]) {
-        const ready = nextMessage(socket);
-        socket.send(
-            JSON.stringify({
-                body: await subscriptionBody(subscriptionId, subscriptionId),
-                headers: [
-                    ["authorization", "Bearer browser-credential"],
-                    ["content-type", "application/json"],
-                ],
-                kind: "session.events.subscribe",
-                path: `/morty/api/v1/computers/computer/harnesses/claude/sessions/${subscriptionId}/events`,
-                subscriptionId,
-            }),
-        );
-        expect(JSON.parse(await ready)).toMatchObject({ kind: "session.events.ready", subscriptionId });
-    }
-    const first = daemon.downstreams[0];
-    const second = daemon.downstreams[1];
-    if (first === undefined || second === undefined) {
-        throw new Error("Expected two downstream subscriptions");
-    }
-
-    let delivered = nextMessage(socket);
-    first.send("first batch");
-    expect(JSON.parse(await delivered)).toEqual({
-        data: "first batch",
-        eventId: "",
-        kind: "session.events.event",
-        seqId: 1,
-        subscriptionId: "subscription-1",
-    });
-    delivered = nextMessage(socket);
-    first.send("second batch");
-    expect(JSON.parse(await delivered)).toEqual({
-        data: "second batch",
-        eventId: "",
-        kind: "session.events.event",
-        seqId: 2,
-        subscriptionId: "subscription-1",
-    });
-    delivered = nextMessage(socket);
-    second.send("independent batch");
-    expect(JSON.parse(await delivered)).toEqual({
-        data: "independent batch",
-        eventId: "",
-        kind: "session.events.event",
-        seqId: 1,
-        subscriptionId: "subscription-2",
-    });
-    socket.close(1000, "Test complete");
-});
-
-it("Given an established event subscription is quiet, When the transport idle deadline passes, Then the browser remains connected", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-09-26T00:00:00.000Z"));
-    try {
-        const daemon = new SubscriptionDaemonBoundary();
-        const response = acceptWebSocketHttpTransport({
-            request: new Request("https://relay.test/morty/api/v1/transport", {
-                headers: { Upgrade: "websocket" },
-            }),
-            dispatch: daemon.fetch,
-            subscribe: daemon.subscribe,
-        });
-        const socket = response.webSocket;
-        if (socket === null) {
-            throw new Error("Expected a WebSocket transport response");
-        }
-        socket.accept();
-        const ready = nextMessage(socket);
-        socket.send(
-            JSON.stringify({
-                body: await subscriptionBody("subscription-1"),
-                headers: [
-                    ["authorization", "Bearer browser-credential"],
-                    ["content-type", "application/json"],
-                ],
-                kind: "session.events.subscribe",
-                path: "/morty/api/v1/computers/computer/harnesses/claude/sessions/session/events",
-                subscriptionId: "subscription-1",
-            }),
-        );
-        expect(JSON.parse(await ready)).toMatchObject({
-            kind: "session.events.ready",
-            subscriptionId: "subscription-1",
-        });
-
-        for (let interval = 0; interval < 4; interval += 1) {
-            const heartbeat = nextMessage(socket);
-            await vi.advanceTimersByTimeAsync(20_000);
-            socket.send('{"kind":"ping"}');
-            expect(await heartbeat).toBe('{"kind":"pong"}');
-        }
-        expect(socket.readyState).toBe(WebSocket.OPEN);
-        socket.close(1000, "Test complete");
-    } finally {
-        vi.useRealTimers();
-    }
-});
-
 it("Given a finite request is in flight, When the browser transport closes, Then the dispatched request can finish without disconnecting its downstream transport", async () => {
     const daemon = new PendingDaemonBoundary();
-    const response = acceptWebSocketHttpTransport({
-        request: new Request("https://relay.test/morty/api/v1/transport", {
-            headers: { Upgrade: "websocket" },
-        }),
+    const response = openTestBrowserTransport({
         dispatch: daemon.fetch,
         subscribe: new SubscriptionDaemonBoundary().subscribe,
     });

@@ -14,6 +14,7 @@ import { DurableComputerAccount } from "./components/management/storage/durable-
 import { DurableCredentialKey } from "./components/management/storage/durable-credential-key.ts";
 import { IdentityStorage } from "./components/management/storage/identity-storage.ts";
 import { DaemonWebSocketRoutes } from "./components/runtime/daemon-websocket-routes.ts";
+import { CloudflareBrowserTransports } from "./components/runtime/gateway/cloudflare-browser-transports.ts";
 import { daemonSocketComputerId } from "./components/runtime/gateway/cloudflare-relay-peers.ts";
 import { createLocalSessionOperations } from "./components/runtime/service/local-session-operations.ts";
 import {
@@ -48,9 +49,9 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         (write) => this.#commitCreation(write),
     );
 
-    readonly #http = this.#createHttpRoutes();
+    readonly #routes = this.#createRoutes();
 
-    #createHttpRoutes() {
+    #createRoutes() {
         const storeFor = (computerId: string) => {
             const store = this.#computerStore(computerId);
             if (store === null) {
@@ -76,15 +77,25 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         };
         const httpApplication = createComputerHttpApplication(ctx);
         const websocketApplication = createComputerWebSocketApplication(ctx);
-        return new Hono<ComputerRouteHttpEnvironment>()
+        const browser = new CloudflareBrowserTransports(
+            this.ctx,
+            {
+                ...websocketApplication,
+                restore: (computerId, identity, observer, signal) =>
+                    ctx.services.sessions(computerId).operations.restoreSessionEvents(identity, observer, signal),
+            },
+            (computerId) => this.#connectionsFor(computerId),
+        );
+        const http = new Hono<ComputerRouteHttpEnvironment>()
             .onError(errorHandler)
-            .route("/", createComputerHttpRoutes(ctx, httpApplication, websocketApplication))
+            .route("/", createComputerHttpRoutes(ctx, httpApplication, browser))
             .notFound(() =>
                 Response.json(
                     { error: { code: "not_found", message: "The requested Morty resource does not exist" } },
                     { status: 404 },
                 ),
             );
+        return { http, browser };
     }
     #connections:
         | {
@@ -125,7 +136,12 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         if (!this.#owns(computerId)) {
             throw new ComputerManagementError("computer_id_mismatch", "The computer is unavailable", 421);
         }
-        this.#connections ??= this.#createConnections(computerId);
+        if (this.#connections === undefined) {
+            this.#connections = this.#createConnections(computerId);
+            // A Relay that woke from hibernation still holds its browser connections; their viewers must be back
+            // before the daemon's next event is routed.
+            this.#routes.browser.restore();
+        }
         return this.#connections;
     }
 
@@ -196,7 +212,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         });
 
     override async fetch(request: Request): Promise<Response> {
-        const response = await this.#http.fetch(request, this.env);
+        const response = await this.#routes.http.fetch(request, this.env);
         if (response.status === 101) {
             await this.#scheduleConnectionChecks();
         }
@@ -239,14 +255,19 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
     }
 
     /**
-     * Sets the alarm for the earliest open connection check: a viewer's expiry, or the next re-authorization of the
-     * viewers. A pending check that is earlier is kept, so new connections never postpone it.
+     * Sets the alarm for the earliest open connection check: a viewer's expiry, the next re-authorization of the
+     * viewers, or a browser connection falling silent. A pending check that is earlier is kept, so new connections
+     * never postpone it.
      */
     readonly #scheduleConnectionChecks = async (): Promise<void> => {
         const viewers = this.#connections?.context.gateways.peers.viewers() ?? [];
         const checks = viewers.map(({ identity }) => identity.expiresAt);
         if (viewers.length > 0) {
             checks.push(Date.now() + REAUTHORIZATION_INTERVAL_MILLISECONDS);
+        }
+        const silence = this.#routes.browser.nextSilenceCheck();
+        if (silence !== null) {
+            checks.push(silence);
         }
         if (checks.length === 0) {
             await this.ctx.storage.deleteAlarm();
@@ -259,6 +280,9 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
     };
 
     override async alarm(): Promise<void> {
+        // The alarm may wake a hibernated Relay that forgot its browser connections and their viewers.
+        this.#routes.browser.wake();
+        this.#routes.browser.closeSilent(Date.now());
         try {
             await this.#connections?.daemonWebSocket.reauthorizeConnections();
         } finally {
@@ -266,15 +290,27 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         }
     }
 
-    override async webSocketMessage(socket: WebSocket, message: unknown): Promise<void> {
+    override async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
+        if (this.#routes.browser.owns(socket)) {
+            await this.#routes.browser.receive(socket, message);
+            return;
+        }
         await this.#daemonRoutes(socket).webSocketMessage(socket, message);
     }
 
     override async webSocketClose(socket: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
+        if (this.#routes.browser.owns(socket)) {
+            this.#routes.browser.closed(socket, 1000, "WebSocket transport closed");
+            return;
+        }
         await this.#daemonRoutes(socket).webSocketClose(socket, { code, reason, wasClean });
     }
 
     override webSocketError(socket: WebSocket, error: unknown): void {
+        if (this.#routes.browser.owns(socket)) {
+            this.#routes.browser.closed(socket, 1011, "WebSocket transport failed");
+            return;
+        }
         try {
             this.#daemonRoutes(socket).webSocketError(socket, error);
         } catch (cause) {

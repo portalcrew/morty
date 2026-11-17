@@ -7,6 +7,8 @@ import {
     type PayloadEncryptionConnection,
 } from "@portalcrew/morty-client";
 import {
+    COMPUTER_HEARTBEAT_ACK_MESSAGE,
+    COMPUTER_HEARTBEAT_MESSAGE,
     COMPUTER_SUCCESSOR_CREDENTIAL_HEADER,
     computerCredentialSuccessor,
     decodeSessionEventEnvelope,
@@ -177,8 +179,8 @@ it("Given a disconnected Computer, When a Session requests its encrypted configu
     expect(rejected).toMatchObject({ requestId: "offline-http", status: 503 });
     expect(JSON.parse(rejected.body)).toMatchObject({ error: { code: "computer_offline" } });
     expect(socket.readyState).toBe(WebSocket.OPEN);
-    inbox.send('{"kind":"ping"}');
-    expect(await inbox.next()).toEqual({ kind: "pong" });
+    inbox.send(COMPUTER_HEARTBEAT_MESSAGE);
+    expect(await inbox.next()).toEqual(JSON.parse(COMPUTER_HEARTBEAT_ACK_MESSAGE));
 });
 
 it("Given an authorized Session, When a browser sends a plaintext prompt, Then the Worker rejects it and the same connection still carries a valid encrypted prompt", async ({
@@ -779,8 +781,8 @@ it("Given a forwarded native Session request, When the browser cancels it, Then 
     expect(await computer.daemonInbox.next()).toEqual(JSON.parse(command));
     socket.send(JSON.stringify({ kind: "http.cancel", requestId: "cancel-http" }));
     expect(await computer.daemonInbox.next()).toEqual({ kind: "worker.request.cancel", requestId: "native-cancel-id" });
-    inbox.send('{"kind":"ping"}');
-    expect(await inbox.next()).toEqual({ kind: "pong" });
+    inbox.send(COMPUTER_HEARTBEAT_MESSAGE);
+    expect(await inbox.next()).toEqual(JSON.parse(COMPUTER_HEARTBEAT_ACK_MESSAGE));
 });
 
 it("Given a native request forwarded to an earlier daemon, When the daemon is replaced and the caller cancels, Then the replacement receives no stale cancellation", async ({
@@ -842,8 +844,8 @@ it("Given a native request forwarded to an earlier daemon, When the daemon is re
     onTestFinished(() => daemon.close(1000, "Test complete"));
     expect(await daemonInbox.next()).toEqual({ kind: "computer.liveness.ready", connectionEpoch: expect.any(Number) });
     browser.send(JSON.stringify({ kind: "http.cancel", requestId: "old-http" }));
-    inbox.send('{"kind":"ping"}');
-    expect(await inbox.next()).toEqual({ kind: "pong" });
+    inbox.send(COMPUTER_HEARTBEAT_MESSAGE);
+    expect(await inbox.next()).toEqual(JSON.parse(COMPUTER_HEARTBEAT_ACK_MESSAGE));
     const next = await sessionConfigReadCommandCodec.encode(
         { kind: "session.config.read", requestId: "new-request", target },
         nextCrypto.receiver,
@@ -924,8 +926,8 @@ it("Given a forwarded prompt, When the browser cancels its HTTP request, Then th
     );
     expect(await computer.daemonInbox.next()).toEqual(JSON.parse(prompt));
     socket.send(JSON.stringify({ kind: "http.cancel", requestId: "prompt-http" }));
-    socket.send('{"kind":"ping"}');
-    expect(await inbox.next()).toEqual({ kind: "pong" });
+    socket.send(COMPUTER_HEARTBEAT_MESSAGE);
+    expect(await inbox.next()).toEqual(JSON.parse(COMPUTER_HEARTBEAT_ACK_MESSAGE));
     const native = await nativeSessionCommandCodec.encode(
         { kind: "native.session.request", requestId: "next-native", action: "active-turn", target },
         nativeEncryption.receiver,

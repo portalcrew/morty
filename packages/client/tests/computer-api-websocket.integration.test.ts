@@ -4,6 +4,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { z } from "zod";
 import { type MortyTransportEndpoint, type MortyTransportRequest, WsTransport } from "../src/index.ts";
+import { COMPUTER_HEARTBEAT_ACK_MESSAGE, COMPUTER_HEARTBEAT_MESSAGE } from "../src/protocol/index.ts";
 
 const operation = z.object({
     kind: z.literal("http.request"),
@@ -15,7 +16,6 @@ const operation = z.object({
 });
 const envelope = z.discriminatedUnion("kind", [
     operation,
-    z.object({ kind: z.literal("ping") }),
     z.object({ kind: z.literal("http.cancel"), requestId: z.string() }),
 ]);
 
@@ -53,12 +53,12 @@ async function computerPeer(signal: AbortSignal) {
     server.on("upgrade", (request, socket, head) => {
         sockets.handleUpgrade(request, socket, head, (connection) => {
             connection.on("message", (bytes) => {
-                const decoded: unknown = JSON.parse(bytes.toString());
-                const message = envelope.parse(decoded);
-                if (message.kind === "ping") {
-                    connection.send(JSON.stringify({ kind: "pong" }));
+                if (bytes.toString() === COMPUTER_HEARTBEAT_MESSAGE) {
+                    connection.send(COMPUTER_HEARTBEAT_ACK_MESSAGE);
                     return;
                 }
+                const decoded: unknown = JSON.parse(bytes.toString());
+                const message = envelope.parse(decoded);
                 if (message.kind === "http.cancel") {
                     if (waiting.delete(message.requestId)) {
                         cancelled.resolve();

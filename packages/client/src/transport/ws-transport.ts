@@ -1,4 +1,6 @@
 import {
+    COMPUTER_HEARTBEAT_ACK_MESSAGE,
+    COMPUTER_HEARTBEAT_MESSAGE,
     CONTENT_CHUNK_MAX_BYTES,
     ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     encodeContentChunkFrame,
@@ -26,7 +28,6 @@ const MAX_PENDING_LIVE_FANOUT_BYTES = 32 * 1024 * 1024;
 export interface MortyTransportSessionEvent {
     readonly data: string;
     readonly eventId: string;
-    readonly seqId: number;
 }
 
 export interface MortyWebSocketConnector {
@@ -102,14 +103,6 @@ function wsRecord(value: unknown): Readonly<Record<string, unknown>> {
 function wsString(value: Readonly<Record<string, unknown>>, field: string, maximum: number): string {
     const candidate = value[field];
     if (typeof candidate !== "string" || candidate.length > maximum) {
-        throw new MortyProtocolError("The WebSocket transport returned an invalid message");
-    }
-    return candidate;
-}
-
-function wsPositiveInteger(value: Readonly<Record<string, unknown>>, field: string): number {
-    const candidate = value[field];
-    if (typeof candidate !== "number" || !Number.isSafeInteger(candidate) || candidate < 1) {
         throw new MortyProtocolError("The WebSocket transport returned an invalid message");
     }
     return candidate;
@@ -562,15 +555,15 @@ export class WsTransport {
             if (typeof event.data !== "string") {
                 throw new MortyProtocolError("The WebSocket transport returned a binary message");
             }
-            const value: unknown = JSON.parse(event.data);
-            const message = wsRecord(value);
-            const kind = wsString(message, "kind", 32);
-            if (kind === "pong" && Object.keys(message).length === 1 && this.#heartbeat.kind === "awaiting") {
-                if (this.#state.kind === "connected") {
+            if (event.data === COMPUTER_HEARTBEAT_ACK_MESSAGE) {
+                if (this.#heartbeat.kind === "awaiting" && this.#state.kind === "connected") {
                     this.#scheduleHeartbeat(this.#state.socket);
                 }
                 return;
             }
+            const value: unknown = JSON.parse(event.data);
+            const message = wsRecord(value);
+            const kind = wsString(message, "kind", 32);
             if (kind.startsWith("session.events.")) {
                 this.#receiveSubscription(kind, message);
                 return;
@@ -803,7 +796,6 @@ export class WsTransport {
         const delivery: MortyTransportSessionEvent = {
             data,
             eventId: wsString(message, "eventId", 512),
-            seqId: wsPositiveInteger(message, "seqId"),
         };
         registerLiveDelivery(delivery, this.#liveDelivery(id, subscription.scope, delivery.data));
         subscription.controller.enqueue(delivery);
@@ -839,7 +831,8 @@ export class WsTransport {
                     }, HEARTBEAT_TIMEOUT_MILLISECONDS),
                 };
                 try {
-                    socket.send('{"kind":"ping"}');
+                    // The Relay's host answers this exact text without waking the Relay, so an idle page lets it hibernate.
+                    socket.send(COMPUTER_HEARTBEAT_MESSAGE);
                 } catch (cause) {
                     this.#disconnected(
                         socket,

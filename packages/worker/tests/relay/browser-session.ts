@@ -1,6 +1,10 @@
 import { CONTENT_CHUNK_MAX_BYTES, encodeContentChunkFrame, MORTY_API_PREFIX } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { onTestFinished } from "vitest";
+import {
+    type BrowserTransportPorts,
+    openBrowserTransport,
+} from "../../src/computer-relay/components/runtime/http/websocket-http-transport.ts";
 import { RequestDeadline } from "../../src/http/request-deadline.ts";
 
 type Fetch = (request: Request) => Response | Promise<Response>;
@@ -126,4 +130,33 @@ export async function requestBrowserOperation(
             await closeBrowserSocket(socket, deadline.signal);
         }
     }
+}
+
+/**
+ * The production browser transport over an ordinary socket, for scenarios about its protocol rather than about the
+ * Relay that hosts it; such a transport never hibernates, so it is never restored.
+ */
+export function openTestBrowserTransport(ports: Omit<BrowserTransportPorts, "restore">): Response {
+    const pair = new WebSocketPair();
+    const server = pair[1];
+    server.accept();
+    const transport = openBrowserTransport(
+        { socket: server, computerId: "computer", subscriptions: [], saveSubscriptions: () => undefined },
+        {
+            ...ports,
+            restore: () => {
+                throw new Error("A test transport never hibernates");
+            },
+        },
+    );
+    server.addEventListener("message", (event) => void transport.receive(event.data));
+    server.addEventListener(
+        "close",
+        () => {
+            transport.release();
+            server.close(1000, "WebSocket transport closed");
+        },
+        { once: true },
+    );
+    return new Response(null, { status: 101, webSocket: pair[0] });
 }

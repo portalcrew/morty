@@ -11,7 +11,7 @@ import {
 } from "@portalcrew/morty-client/protocol";
 import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
-import type { SessionEventObserver } from "../../../../contracts/session-event-subscription.ts";
+import type { SessionEventObserver, SessionViewerIdentity } from "../../../../contracts/session-event-subscription.ts";
 import { RequestDeadline } from "../../../../http/request-deadline.ts";
 import type { RuntimeContext } from "../runtime-context.ts";
 import type { ClientControlCommand } from "./computer-control-registry.ts";
@@ -89,7 +89,7 @@ export function createLocalSessionOperations(cx: RuntimeContext) {
             },
             observer: SessionEventObserver,
             signal: AbortSignal,
-        ): Promise<void> => {
+        ): Promise<SessionViewerIdentity> => {
             checkTarget();
             signal.throwIfAborted();
             await cx.services.runtime.expireSilentDaemons();
@@ -104,23 +104,28 @@ export function createLocalSessionOperations(cx: RuntimeContext) {
             ) {
                 throw new PairingDirectoryError("invalid_request", "The subscription identifier is already in use");
             }
+            const identity: SessionViewerIdentity = {
+                sessionFilter: sessionTarget,
+                subscriptionId: subscription.subscriptionId,
+                expiresAt: credential.expiresAt,
+                grant: credential.grant,
+            };
             // The viewer is registered before the Computer is told, so events that arrive while it admits are buffered.
-            const release = cx.gateways.viewers.open(
-                {
-                    sessionFilter: sessionTarget,
-                    subscriptionId: subscription.subscriptionId,
-                    expiresAt: credential.expiresAt,
-                    grant: credential.grant,
-                },
-                observer,
-                signal,
-            );
+            const release = cx.gateways.viewers.open(identity, observer, signal);
             try {
                 await cx.services.runtime.registerSessionSubscription(sessionTarget, subscription, signal);
             } catch (cause) {
                 release();
                 throw cause;
             }
+            return identity;
+        },
+        restoreSessionEvents: (
+            identity: SessionViewerIdentity,
+            observer: SessionEventObserver,
+            signal: AbortSignal,
+        ) => {
+            cx.gateways.viewers.open(identity, observer, signal);
         },
         readSessionFile: async (command: FileReadCommandRouting, signal: AbortSignal): Promise<Response> => {
             checkTarget();

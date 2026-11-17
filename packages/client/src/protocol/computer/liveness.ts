@@ -18,8 +18,9 @@ export const COMPUTER_PING_KIND = "computer.ping";
 export const COMPUTER_PONG_KIND = "computer.pong";
 
 /**
- * The Relay's host answers this exact text without waking the Relay, so a heartbeat and its
- * acknowledgement carry no per-heartbeat data and must keep this byte-for-byte encoding.
+ * Every connection to the Relay, a Computer's or a browser's, heartbeats with this exact text. The Relay's host answers it
+ * without waking the Relay, which allows one such answer per Relay, so the text carries no per-heartbeat data and must
+ * keep this byte-for-byte encoding.
  */
 export const COMPUTER_HEARTBEAT_MESSAGE = `{"kind":"${COMPUTER_HEARTBEAT_KIND}"}`;
 export const COMPUTER_HEARTBEAT_ACK_MESSAGE = `{"kind":"${COMPUTER_HEARTBEAT_ACK_KIND}"}`;

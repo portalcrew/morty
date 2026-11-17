@@ -29,7 +29,19 @@ interface SessionEventSubscriptionRequest {
     readonly signal: AbortSignal;
 }
 
+/** Admits a subscription and answers the viewer identity it was opened under. */
 export type SubscribeSessionEvents = (
     request: SessionEventSubscriptionRequest,
     observer: SessionEventObserver,
-) => Promise<void>;
+) => Promise<SessionViewerIdentity>;
+
+/**
+ * Reopens a viewer the Computer still holds after the Relay woke from hibernation. Its access is checked again by the
+ * Relay's periodic viewer checks, as it was before hibernating.
+ */
+export type RestoreSessionEvents = (
+    computerId: string,
+    identity: SessionViewerIdentity,
+    observer: SessionEventObserver,
+    signal: AbortSignal,
+) => void;

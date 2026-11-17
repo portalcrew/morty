@@ -11,8 +11,6 @@ import { COMPUTER_INTERNAL_PREFIX } from "../../contracts/computer-relay-http.ts
 import { computerNotFound } from "../../contracts/management-error.ts";
 import { PairingDirectoryError, validateIdentifier } from "../../contracts/relay/pairing.ts";
 import { relayAuthenticationFromEnvironment } from "../../contracts/relay-authentication-environment.ts";
-import type { SubscribeSessionEvents } from "../../contracts/session-event-subscription.ts";
-import type { WebSocketHttpDispatch } from "../../contracts/websocket-http-dispatch.ts";
 import { computerFromPath } from "../../http/computer-target.ts";
 import { errorMiddleware } from "../../http/error-middleware.ts";
 import { json } from "../../http/json.ts";
@@ -21,14 +19,13 @@ import { readBearerToken } from "../../http/request-headers.ts";
 import { createBrowserCors } from "../../middleware/browser-cors.ts";
 import { requestTimeoutMiddleware } from "../../middleware/request-timeout-middleware.ts";
 import { createRelayProtocolRoutes } from "../components/management/http/protocol-routes.ts";
-import { acceptWebSocketHttpTransport } from "../components/runtime/http/websocket-http-transport.ts";
 import type { ComputerRouteContext } from "../composition/computer-route-context.ts";
 import type { ComputerRouteHttpEnvironment } from "./environment.ts";
 
 export function createComputerHttpRoutes(
     ctx: ComputerRouteContext,
     dispatchHttpRequest: (request: Request) => Promise<Response>,
-    websocket: { readonly dispatch: WebSocketHttpDispatch; readonly subscribe: SubscribeSessionEvents },
+    browser: { readonly accept: (request: Request, computerId: string) => Response },
 ) {
     const filePath = `${MORTY_API_PREFIX}/v1/computers/:computerId/harnesses/:harness/sessions/:sessionId/files/content`;
     const timeout = requestTimeoutMiddleware<ComputerRouteHttpEnvironment>(30_000);
@@ -72,13 +69,7 @@ export function createComputerHttpRoutes(
                 timeout,
                 computerFromPath,
                 authorizeTarget,
-                (context) => {
-                    return acceptWebSocketHttpTransport({
-                        request: context.req.raw,
-                        dispatch: websocket.dispatch,
-                        subscribe: websocket.subscribe,
-                    });
-                },
+                (context) => browser.accept(context.req.raw, context.var.computerId),
             )
             .options(filePath, timeout, computerFromPath, authorizeTarget, cors)
             .post(filePath, timeout, computerFromPath, authorizeTarget, cors, fileReadLimit, async (context) => {
