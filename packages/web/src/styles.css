@@ -257,6 +257,51 @@
     box-shadow: var(--focus-ring-shadow);
 }
 
+@property --code-scroll-fade-start {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
+}
+
+@property --code-scroll-fade-end {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
+}
+
+@keyframes code-scroll-fade {
+    from {
+        --code-scroll-fade-start: 0px;
+        --code-scroll-fade-end: 2rem;
+    }
+    10% {
+        --code-scroll-fade-start: 2rem;
+    }
+    90% {
+        --code-scroll-fade-end: 2rem;
+    }
+    to {
+        --code-scroll-fade-start: 2rem;
+        --code-scroll-fade-end: 0px;
+    }
+}
+
+/* Touch browsers hide scrollbars until a swipe, so a fade on each edge that still has code beyond it is the only
+   sign that a line continues. Without overflow the timeline is inactive and both edges stay sharp. */
+@utility code-scroll-fade {
+    @supports (animation-timeline: scroll()) {
+        mask-image: linear-gradient(
+            to right,
+            transparent,
+            #000 var(--code-scroll-fade-start),
+            #000 calc(100% - var(--code-scroll-fade-end)),
+            transparent
+        );
+        animation: code-scroll-fade linear both;
+        animation-timeline: scroll(self inline);
+    }
+}
+
 .disclosure-details {
     interpolate-size: allow-keywords;
 }
