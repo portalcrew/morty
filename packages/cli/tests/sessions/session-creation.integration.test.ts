@@ -19,7 +19,7 @@ it("Given a Session's creation is cancelled while its settings are applied, When
         store: new MemorySessionStore(),
         adapters: acpAdapters,
         onSessionClosed: () => undefined,
-        lastTurn: () => undefined,
+        lastEndedTurn: () => undefined,
         settledTurns: () => [],
         hasUnsettledTurn: () => false,
         contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>

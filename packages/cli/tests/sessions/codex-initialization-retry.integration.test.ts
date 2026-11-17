@@ -22,7 +22,7 @@ test("Given Codex initialization fails once, When the user creates a conversatio
         store: new MemorySessionStore(),
         adapters: harnessAdapters,
         onSessionClosed: () => undefined,
-        lastTurn: () => undefined,
+        lastEndedTurn: () => undefined,
         settledTurns: () => [],
         hasUnsettledTurn: () => false,
         contentExternalizer: new AcpContentExternalizer((target, content, signal) =>

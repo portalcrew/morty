@@ -47,7 +47,7 @@ function createManager(store: MemorySessionStore | SqliteSessionStore): SessionM
         store,
         adapters: acpAdapters,
         onSessionClosed: () => undefined,
-        lastTurn: () => undefined,
+        lastEndedTurn: () => undefined,
         settledTurns: () => [],
         hasUnsettledTurn: () => false,
         contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>

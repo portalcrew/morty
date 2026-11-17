@@ -86,7 +86,7 @@ describe("ACP conversation sessions", () => {
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -148,7 +148,7 @@ describe("ACP conversation sessions", () => {
             store,
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -196,7 +196,7 @@ describe("ACP conversation sessions", () => {
                 store,
                 adapters: acpAdapters,
                 onSessionClosed: () => undefined,
-                lastTurn: () => undefined,
+                lastEndedTurn: () => undefined,
                 settledTurns: () => [],
                 hasUnsettledTurn: () => false,
                 contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -716,7 +716,7 @@ describe("ACP conversation sessions", () => {
             store: firstStore,
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -763,7 +763,7 @@ describe("ACP conversation sessions", () => {
             store: restartedStore,
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -824,7 +824,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
                 store: new MemorySessionStore(),
                 adapters: acpAdapters,
                 onSessionClosed: () => undefined,
-                lastTurn: () => undefined,
+                lastEndedTurn: () => undefined,
                 settledTurns: () => [],
                 hasUnsettledTurn: () => false,
                 contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -929,7 +929,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1013,7 +1013,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1107,7 +1107,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store,
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1221,7 +1221,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1278,7 +1278,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1331,7 +1331,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1396,7 +1396,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1463,7 +1463,7 @@ child.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
@@ -1587,7 +1587,7 @@ agent.once("exit", (code) => process.exit(code ?? 84));
             store: new MemorySessionStore(),
             adapters: acpAdapters,
             onSessionClosed: () => undefined,
-            lastTurn: () => undefined,
+            lastEndedTurn: () => undefined,
             settledTurns: () => [],
             hasUnsettledTurn: () => false,
             contentExternalizer: new AcpContentExternalizer((sessionTarget, content, signal) =>
