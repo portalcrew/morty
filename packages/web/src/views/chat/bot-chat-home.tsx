@@ -11,6 +11,7 @@ import {
     chatSessionPaneEnterClassName,
     chatSessionPaneSectionClassName,
 } from "../../components/chat/chat-session-layout.ts";
+import { ChatVisibleViewport } from "../../components/chat/chat-visible-viewport.tsx";
 import { ComputerOfflineIcon } from "../../components/chat/computer-offline-icon.tsx";
 import { ConnectionNotice } from "../../components/chat/connection-notice.tsx";
 import { CwdSelector } from "../../components/chat/cwd-selector.tsx";
@@ -224,10 +225,10 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
     );
 
     return (
-        <main
+        <ChatVisibleViewport
             aria-label="Chat"
             data-chat-state={model.selection.kind === "ready" ? "connected" : "disconnected"}
-            className="fixed inset-0 flex min-h-0 overflow-hidden bg-card/90 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] text-foreground max-sm:flex-col sm:flex-row sm:bg-sidebar"
+            className="group/chat fixed inset-0 flex min-h-0 overflow-hidden bg-card/90 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] text-foreground max-sm:flex-col sm:flex-row sm:bg-sidebar"
             onPointerDownCapture={workspace.recordUserActivity}
             onKeyDownCapture={workspace.recordUserActivity}
             onInputCapture={workspace.recordUserActivity}
@@ -435,6 +436,6 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                     <PairingInstruction actionPresentation="dialog" />
                 </Dialog>
             )}
-        </main>
+        </ChatVisibleViewport>
     );
 }

@@ -557,7 +557,7 @@ export function ConversationSidebar({
                                                         }
                                                     }}
                                                 >
-                                                    <MortyLogoMark size={24} />
+                                                    <MortyLogoMark size={26} />
                                                 </button>
                                                 {desktop ? (
                                                     <>
@@ -658,7 +658,11 @@ export function ConversationSidebar({
                                                 </Tooltip.Provider>
                                             </div>
                                         </header>
-                                        {!desktop ? <div className="relative z-[115] pb-1">{accessNotices}</div> : null}
+                                        {!desktop ? (
+                                            <div className="relative z-[115] pb-1 group-has-[form[data-software-keyboard=open]]/chat:hidden">
+                                                {accessNotices}
+                                            </div>
+                                        ) : null}
                                         {navigationMotion.present ? (
                                             <button
                                                 type="button"
