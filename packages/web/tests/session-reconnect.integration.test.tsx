@@ -16,7 +16,9 @@ import { TestClock } from "./infra/test-clock.ts";
 import { createChatWorkerEnvironment, dedicatedEnvironmentTimeout } from "./support/chat-worker.ts";
 
 function reconnectStatusText(app: TestApp): string | null {
-    const notice = app.optionalElementByTestId(dataTestId.sessionReconnectNotice);
+    const notice =
+        app.optionalElementByTestId(dataTestId.sessionReconnectNotice) ??
+        app.optionalElementByTestId(dataTestId.sessionReconnectStatus);
     if (notice === null) {
         return null;
     }
@@ -244,7 +246,7 @@ test("Given an online computer and a saved session, When the session first loads
     expect(reconnectStatusText(app)).toBeNull();
 });
 
-test("Given an open conversation with a draft, When recovery after two background suspensions takes twelve seconds, Then it keeps a recovery status without sending the draft", {
+test("Given an open conversation with a draft, When recovery after two background suspensions takes twelve seconds, Then it stays quiet without sending the draft", {
     timeout: dedicatedEnvironmentTimeout,
 }, async () => {
     const clock = new TestClock(CLOCK_ORIGIN);
@@ -280,13 +282,66 @@ test("Given an open conversation with a draft, When recovery after two backgroun
             release();
         }
         await app.waitForView(() =>
-            expect(getByRole(document.body, "button", { name: "Send message" })).toHaveProperty("disabled", false),
+            getByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" }),
         );
         await act(async () => clock.advanceBy(30_000));
         expect(reconnectStatusText(app)).toBeNull();
         expect(composer.value).toBe("Keep writing through recovery");
         expect(getByRole(document.body, "log", { name: "Messages" }).textContent).not.toContain(composer.value);
     }
+});
+
+test("Given an open conversation with a draft, When the phone returns from the background while it is still reconnecting, Then no connection notice appears, Send explains the wait, and the draft survives", {
+    timeout: dedicatedEnvironmentTimeout,
+}, async () => {
+    const clock = new TestClock(CLOCK_ORIGIN);
+    const environment = await createChatWorkerEnvironment(false, true);
+    onTestFinished(() => environment.close());
+    const app = await createTestApp({ environment, connectAgent: true, clock });
+    const composer = await openSavedConversation(app, "Back from the background");
+    if (app.daemon === null || app.executionNetwork === null) {
+        throw new Error("Expected the connected Computer and real execution-read proxy");
+    }
+    await app.user.type(composer, "Reply after returning");
+    const notices: string[] = [];
+    const observer = new MutationObserver(() => {
+        const notice = reconnectStatusText(app);
+        if (notice !== null) {
+            notices.push(notice);
+        }
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    onTestFinished(() => observer.disconnect());
+    await app.daemon.disconnect();
+    await app.waitForView(() =>
+        getByRole(document.body, "button", { name: /Switch computer/, description: "Reconnecting" }),
+    );
+    await act(async () => {
+        window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+        clock.advanceBy(30_000);
+    });
+    const held = app.executionNetwork.holdNextExecution();
+    await app.daemon.reconnect();
+    await act(async () => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    const release = await held;
+    try {
+        await act(async () => clock.advanceBy(5_000));
+        expect(notices).toEqual([]);
+        await app.user.click(getByRole(document.body, "button", { name: "Send message" }));
+        expect(document.body.textContent).toContain("Can't send while reconnecting");
+    } finally {
+        release();
+    }
+    await app.waitForView(() =>
+        getByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" }),
+    );
+    await app.user.click(getByRole(document.body, "button", { name: "Send message" }));
+    await app.waitForView(() =>
+        expect(getByRole(document.body, "log", { name: "Messages" }).textContent).toContain(
+            "Codex turn 2: Reply after returning",
+        ),
+    );
+    expect(notices).toEqual([]);
 });
 
 test("Given an interrupted conversation, When recovery lasts thirty seconds across attempts, Then one actionable notice appears and clears on recovery", {
@@ -304,8 +359,6 @@ test("Given an interrupted conversation, When recovery lasts thirty seconds acro
         getByRole(document.body, "button", { name: /Switch computer/, description: "Reconnecting" }),
     );
     expectSendExplainsConnection();
-    expect(app.elementByTestId(dataTestId.sessionReconnectStatus).textContent).toMatch(/Reconnecting|Retrying/u);
-    expect(app.elementByTestId(dataTestId.sessionReconnectStatus).getAttribute("role")).toBe("status");
     await app.user.click(getByRole(document.body, "button", { name: "Send message" }));
     expect(document.body.textContent).toContain("Can't send while reconnecting");
     expect(document.body.textContent).toContain("Your draft is saved. Try again when the connection returns.");
@@ -313,13 +366,11 @@ test("Given an interrupted conversation, When recovery lasts thirty seconds acro
     expect(getByRole(document.body, "log", { name: "Messages" }).textContent).not.toContain("Still unsent");
     expect(reconnectStatusText(app)).toBeNull();
     await act(async () => clock.advanceBy(29_999));
-    expect(app.elementByTestId(dataTestId.sessionReconnectStatus).textContent).toMatch(/Reconnecting|Retrying/u);
     expect(reconnectStatusText(app)).toBeNull();
     await act(async () => clock.advanceBy(1));
-    await app.waitForView(() => expect(reconnectStatusText(app)).not.toBeNull());
+    const retry = await app.waitForView(() => getByRole(document.body, "button", { name: "Retry now" }));
     expect(app.optionalElementByTestId(dataTestId.sessionReconnectStatus)).toBeNull();
     expect(app.elementsByTestId(dataTestId.sessionReconnectNotice)).toHaveLength(1);
-    const retry = await app.waitForView(() => getByRole(document.body, "button", { name: "Retry now" }));
     const retrying = app.waitForView(() => {
         const notice = app.elementByTestId(dataTestId.sessionReconnectStatus);
         expect(notice.textContent).toContain("Retrying…");
@@ -562,6 +613,7 @@ test("Given an unavailable Computer and an editable draft, When automatic retrie
         queryByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" }),
     ).toBeNull();
     await app.user.click(getByRole(document.body, "button", { name: "Retry now" }));
+    await app.waitForView(() => expect(reconnectStatusText(app)).toMatch(/Retrying/u));
     await showReconnectNotice(app, clock);
     const seconds = await app.waitForView(() => {
         const match = /Retrying in (\d+) s/u.exec(document.body.textContent ?? "");

@@ -32,7 +32,6 @@ type RestartCommand = string | null;
 
 export type ConnectionFeedback =
     | { readonly kind: "hidden" }
-    | { readonly kind: "reconnecting"; readonly title: string; readonly description: string }
     | { readonly kind: "attempting"; readonly title: string; readonly description: string }
     | {
           readonly kind: "waiting";

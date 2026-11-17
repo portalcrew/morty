@@ -11,7 +11,7 @@ type VisibleFeedback = Exclude<ConnectionFeedback, { readonly kind: "hidden" }>;
 function noticeTestId(feedback: ConnectionFeedback): string {
     return feedback.kind === "closed"
         ? dataTestId.sessionClosedNotice
-        : feedback.kind === "reconnecting" || feedback.kind === "attempting"
+        : feedback.kind === "attempting"
           ? dataTestId.sessionReconnectStatus
           : dataTestId.sessionReconnectNotice;
 }
@@ -32,9 +32,7 @@ function noticeIcon(feedback: VisibleFeedback): LucideIcon | undefined {
     if (feedback.kind === "attempting") {
         return RefreshCw;
     }
-    return feedback.kind === "retrying" || feedback.kind === "waiting" || feedback.kind === "reconnecting"
-        ? WifiOff
-        : undefined;
+    return feedback.kind === "retrying" || feedback.kind === "waiting" ? WifiOff : undefined;
 }
 
 function RetryAction({ className, onClick }: { readonly className: string; readonly onClick: () => void }) {
