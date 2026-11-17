@@ -162,6 +162,11 @@ test("Given desktop Codex owns a conversation, When I open it in Morty and queue
         await expect(steer).toBeDisabled();
         await page.screenshot({ path: testInfo.outputPath("borrowed-queue.png"), fullPage: true });
         release.resolve();
+        // An empty Morty queue only means Morty handed the follow-ups to Codex's own queue; each has run once its
+        // reply shows, after the desktop and owner turns' replies.
+        await expect(
+            page.getByRole("article", { name: "Agent response" }).filter({ hasText: "BORROWED_REPLY" }),
+        ).toHaveCount(4);
         await expect(page.getByRole("button", { name: "Stop agent output", exact: true })).toBeHidden();
         await expect(page.getByTestId(dataTestId.queuedMessage)).toHaveCount(0);
         await expect(
@@ -170,9 +175,6 @@ test("Given desktop Codex owns a conversation, When I open it in Morty and queue
         const history = await owner.request("thread/read", { threadId, includeTurns: true }, signal);
         expect(JSON.stringify(history)).toContain("First remote follow-up");
         expect(JSON.stringify(history)).toContain("Second remote follow-up");
-        await expect(
-            page.getByRole("article", { name: "Agent response" }).filter({ hasText: "BORROWED_REPLY" }).last(),
-        ).toBeVisible();
         success = true;
     } catch (cause) {
         await harness.diagnose(cause);
