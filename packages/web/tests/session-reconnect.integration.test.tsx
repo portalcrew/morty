@@ -614,14 +614,11 @@ test("Given an unavailable Computer and an editable draft, When automatic retrie
         queryByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" }),
     ).toBeNull();
     await app.user.click(getByRole(document.body, "button", { name: "Retry now" }));
-    await app.waitForView(() => expect(reconnectStatusText(app)).toMatch(/Retrying/u));
-    await showReconnectNotice(app, clock);
+    // "Reconnecting" lasts only while the requested attempt is in flight; the page settles on the offline countdown.
     const seconds = await app.waitForView(() => {
-        const match = /Retrying in (\d+) s/u.exec(document.body.textContent ?? "");
-        if (match === null) {
-            throw new Error("Waiting for the restored retry countdown");
-        }
-        return Number(match[1]);
+        getByRole(document.body, "button", { name: /Switch computer, .*, Offline/, description: "Computer offline" });
+        getByRole(document.body, "button", { name: "Retry now" });
+        return retrySeconds(app);
     });
     await app.daemon.reconnect();
     await act(async () => clock.advanceBy(seconds * 1000));
