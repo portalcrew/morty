@@ -229,7 +229,10 @@ export function BotChatComposer({
         <form className={chatSessionComposerClassName} onSubmit={submit} ref={attachKeyboardMarker}>
             <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-[calc(100%+4.5rem)] bg-gradient-to-t from-background via-background/80 to-transparent sm:hidden"
+                className={cn(
+                    "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-background from-50% to-transparent sm:hidden",
+                    collapsed ? "h-[calc(100%+3rem)]" : "h-[calc(100%+6rem)]",
+                )}
             />
             {noticePlacement === "overlay" && (
                 <ComposerNoticeSlot
@@ -258,7 +261,7 @@ export function BotChatComposer({
             <div
                 className={cn(
                     "relative flex max-h-64 flex-col rounded-[24px] border-[0.5px] border-border bg-surface-elevated px-3 pt-3 pb-2.5 shadow-[0_8px_28px_rgba(23,30,36,0.06)] transition-[height,border-radius,padding] duration-250 ease-in-out motion-reduce:transition-none max-sm:overflow-hidden max-sm:border-[1px] max-sm:border-white max-sm:bg-card sm:min-h-[128px] sm:pb-3 sm:has-[:focus]:border-[var(--color-border)]",
-                    "max-sm:shadow-none",
+                    "max-sm:shadow-[0_4px_16px_0_rgba(0,0,0,0.04),0_4px_24px_0_rgba(0,0,0,0.06)]",
                     !collapsed && draft.length === 0 && attachments.length === 0 && "max-sm:h-[128px]",
                     collapsed && "max-sm:h-14 max-sm:rounded-[28px] max-sm:px-2 max-sm:py-2",
                 )}

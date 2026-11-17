@@ -22,13 +22,13 @@ export const chatSessionMessageColumnClassName = `${chatSessionColumnClassName} 
  * provides them). The pane section uses `overflow-clip`, so a full-bleed card
  * would have its shadow clipped away at the section edge.
  *
- * The bottom margin clears the iOS home indicator. iOS keeps reporting the full
- * safe-area inset while the software keyboard covers the indicator, so the
- * composer drops back to the plain 12px gutter while `useSoftwareKeyboardMarker`
- * reports the keyboard open, instead of floating above it.
+ * Mobile bottom padding keeps the gradient dock behind the iOS home indicator
+ * while its input stays above the safe area. iOS keeps reporting the full inset
+ * while the software keyboard covers the indicator, so the composer drops back
+ * to a 12px gutter while `useSoftwareKeyboardMarker` reports the keyboard open.
  */
 export const chatSessionComposerClassName =
-    "relative z-10 mx-auto w-full min-w-0 shrink-0 px-3 mb-[max(0.75rem,env(safe-area-inset-bottom))] data-[software-keyboard=open]:mb-3 sm:mt-0 sm:px-0 sm:w-[min(920px,calc(100%-24px))]";
+    "relative z-10 mx-auto w-full min-w-0 shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] data-[software-keyboard=open]:pb-3 sm:mt-0 sm:mb-[max(0.75rem,env(safe-area-inset-bottom))] sm:w-[min(920px,calc(100%-24px))] sm:px-0 sm:pb-0";
 
 /**
  * Fills the conversation card. Background, radius, and the outer inset stay on

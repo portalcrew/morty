@@ -658,7 +658,7 @@ export function ConversationSidebar({
                                                 </Tooltip.Provider>
                                             </div>
                                         </header>
-                                        {!desktop ? <div className="relative z-[115] pb-3">{accessNotices}</div> : null}
+                                        {!desktop ? <div className="relative z-[115] pb-1">{accessNotices}</div> : null}
                                         {navigationMotion.present ? (
                                             <button
                                                 type="button"
