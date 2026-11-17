@@ -296,7 +296,7 @@ function bindingNextStep(code: string, harness: string): string {
         case "authentication_required":
             return `Ask the user to sign in to ${harness} on this computer; you cannot sign in for them. When they confirm, rerun setup; it reuses this Computer.`;
         case "TIMEOUT":
-        case "RELAY_TIMEOUT":
+        case "operation_timeout":
         case "RELAY_UNAVAILABLE":
             return `Rerun setup without changing anything; it reuses this Computer. The Morty service or ${harness} may have been briefly unavailable. If it fails the same way again, confirm ${harness} answers a prompt in the working directory.`;
         default:

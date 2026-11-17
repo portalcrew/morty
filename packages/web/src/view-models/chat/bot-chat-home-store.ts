@@ -1,4 +1,4 @@
-import { MortyError, MortyTimeoutError } from "@portalcrew/morty-client";
+import { MortyError } from "@portalcrew/morty-client";
 import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import { type NativeSessionTarget, readNativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
@@ -16,7 +16,7 @@ import {
     newConversationUnsentMessagesEntry,
 } from "../../services/session-storage/central-session-storage.ts";
 import type { Clock } from "../../services/time/clock.ts";
-import { formatError, type PageFailure } from "../format-error.ts";
+import { formatError, isTimeoutFailure, type PageFailure } from "../format-error.ts";
 import { type ComposerAttachmentStore, createComposerAttachmentStore } from "./composer-attachment-store.ts";
 import { returnToComposer } from "./composer-return.ts";
 import { COMPUTER_REVOKED_MESSAGE } from "./computer-follower.ts";
@@ -459,10 +459,7 @@ export const createBotChatHomeStore = (
                         get().newConversation();
                         return;
                     }
-                    if (
-                        cause instanceof MortyTimeoutError ||
-                        (cause instanceof DOMException && cause.name === "TimeoutError")
-                    ) {
+                    if (isTimeoutFailure(cause)) {
                         onRestart();
                         return;
                     }

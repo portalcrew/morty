@@ -3,7 +3,7 @@ import { isApiConnectionError } from "../../services/api/worker-api-transport.ts
 import type { BotChatApi, BotComputerConfiguration } from "../../services/chat/bot-chat-api.ts";
 import { isComputerConnectionFailure } from "../../services/management/management-api.ts";
 import type { Clock } from "../../services/time/clock.ts";
-import { formatError } from "../format-error.ts";
+import { formatError, isTimeoutFailure } from "../format-error.ts";
 import type { ComputerObservation } from "./computer-recovery.ts";
 import {
     type ComputerEntryOutcome,
@@ -141,7 +141,7 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                     observe(configuration, { kind: "watch", afterChange });
                 });
             } catch (cause) {
-                if (cause instanceof DOMException && cause.name === "TimeoutError") {
+                if (isTimeoutFailure(cause)) {
                     continue;
                 }
                 throw cause;
@@ -231,7 +231,7 @@ export function createComputerFollower(ports: ComputerFollowerPorts): ComputerFo
                             dropped = true;
                             continue;
                         }
-                        if (cause instanceof DOMException && cause.name === "TimeoutError") {
+                        if (isTimeoutFailure(cause)) {
                             ports.onRestart();
                             return;
                         }

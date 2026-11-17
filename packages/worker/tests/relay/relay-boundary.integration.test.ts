@@ -3642,6 +3642,61 @@ it("Given the Computer rejects a Fork, When the same operation is retried, Then 
     }
 });
 
+it("Given a page loading Session history from a Computer that does not answer, When the Relay's Session deadline passes, Then the page is told the load timed out", async ({
+    signal,
+}) => {
+    const runtime = await connectComputerDaemon("unanswered-history", signal);
+    const browser = (await runtime.transport()).webSocket;
+    if (browser === null) {
+        throw new Error("Expected the browser transport");
+    }
+    const browserMessages = new SocketMessages(browser);
+    browser.accept();
+    try {
+        const encryption = await endpointEncryption(runtime.computerId, signal);
+        vi.useFakeTimers({ now: new Date("2026-09-18T00:00:00.000Z"), toFake: ["Date", "setTimeout", "clearTimeout"] });
+        browser.send(
+            JSON.stringify({
+                kind: "http.request",
+                requestId: "unanswered-history",
+                method: "GET",
+                path: `${MORTY_API_PREFIX}/v1/computers/${runtime.computerId}/harnesses/${runtime.sessionTarget.harness}/sessions/${runtime.sessionTarget.sessionId}/events?limit=50`,
+                headers: [
+                    ["authorization", `Bearer ${runtime.credential}`],
+                    ["content-type", "application/json"],
+                ],
+                body: await sessionHistoryPageLoadCodec.encode(
+                    {
+                        kind: "session.live-history.v2.page.load",
+                        requestId: "unanswered-history",
+                        target: runtime.sessionTarget,
+                        eventLimit: 50,
+                        cursor: null,
+                    },
+                    encryption.client,
+                    signal,
+                ),
+            }),
+        );
+        expect(
+            await decodeEncryptedDaemonInboundMessage(await runtime.daemonMessages.next(), encryption.computer, signal),
+        ).toMatchObject({ kind: "session.live-history.v2.page.load", target: runtime.sessionTarget });
+        await runInDurableObject(
+            env.COMPUTER_RELAY.getByName(computerObjectName(runtime.computerId)),
+            async () => await vi.advanceTimersByTimeAsync(30_000),
+        );
+        expect(JSON.parse(await browserMessages.next())).toMatchObject({
+            kind: "http.error",
+            requestId: "unanswered-history",
+            code: "operation_timeout",
+            status: 504,
+        });
+    } finally {
+        browser.close();
+        runtime.daemon.close(1000, "Unanswered history scenario completed");
+    }
+});
+
 it("Given an anonymous browser knows a Computer, When it declares a full-budget upload, Then it is rejected and an authorized browser can still upload", async ({
     signal,
 }) => {
