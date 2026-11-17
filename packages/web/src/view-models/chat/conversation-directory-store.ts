@@ -12,6 +12,8 @@ import { type SessionTitles, type SessionTitlesStore, sessionTitle } from "./ses
 
 type DirectorySession = Omit<ManagedChatSession, "title">;
 
+export type DirectoryLoadMode = "foreground" | "background";
+
 type ConversationDirectoryState =
     | { readonly kind: "loading" }
     | { readonly kind: "ready"; readonly sessions: readonly DirectorySession[] }
@@ -37,7 +39,7 @@ export interface ConversationDirectoryStore {
     readonly calendarDay: number;
     readonly followCalendar: (signal: AbortSignal) => Promise<void>;
     readonly archiveSession: (sessionTarget: NativeSessionTarget, signal: AbortSignal) => Promise<void>;
-    readonly load: (signal: AbortSignal) => Promise<void>;
+    readonly load: (signal: AbortSignal, mode?: DirectoryLoadMode) => Promise<void>;
 }
 
 /** Titles are joined at read time, so the list, pane and dialogs share the same Session fact. */
@@ -166,13 +168,15 @@ export const createConversationDirectoryStore = (
                     }
                 }
             },
-            load: async (signal) => {
+            load: async (signal, mode = "foreground") => {
                 const current = get().state;
                 const cached =
                     current.kind === "ready" || current.kind === "refreshing" || current.kind === "stale"
                         ? current.sessions
                         : null;
-                set({ state: cached === null ? { kind: "loading" } : { kind: "refreshing", sessions: cached } });
+                if (mode === "foreground" || current.kind !== "ready") {
+                    set({ state: cached === null ? { kind: "loading" } : { kind: "refreshing", sessions: cached } });
+                }
                 const startedWith = titles.getState().titles;
                 try {
                     const reported = await requests.managedSessions(signal);

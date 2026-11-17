@@ -566,7 +566,7 @@ export function waitingForInput(interactions: readonly SessionInteraction[]): bo
     );
 }
 
-function submittingCommandId(
+export function submittingCommandId(
     execution: Pick<SessionExecutionState, "turn" | "commands">,
     delivery: DeliveryState,
 ): string | null {

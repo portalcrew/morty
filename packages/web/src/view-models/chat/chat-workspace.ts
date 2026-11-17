@@ -15,16 +15,25 @@ import { createComputerRecovery } from "./computer-recovery.ts";
 import { type ComputerStatusStoreApi, createComputerStatusStore } from "./computer-status-store.ts";
 import type { ComputerSwitcherModel } from "./computer-switcher-store.ts";
 import { connectionPresentation } from "./connection-presentation.ts";
-import { type ConversationDirectoryStore, createConversationDirectoryStore } from "./conversation-directory-store.ts";
+import {
+    type ConversationDirectoryStore,
+    createConversationDirectoryStore,
+    type DirectoryLoadMode,
+} from "./conversation-directory-store.ts";
 import type { ConversationSelectionState } from "./conversation-selection-machine.ts";
 import { selectedConversationTarget } from "./conversation-selection-machine.ts";
-import { type ConversationStatusStoreApi, createConversationStatusStore } from "./conversation-status-store.ts";
+import {
+    type ConversationStatusStoreApi,
+    createConversationStatusStore,
+    hasWorkingBackgroundConversation,
+} from "./conversation-status-store.ts";
 import { createDeviceAccessStore, type DeviceAccessStore } from "./device-access-store.ts";
 import { createDraftControlsStore, type DraftControlsStore, draftConfiguration } from "./draft-controls-store.ts";
 import { createLinkedDevicesStore, type LinkedDevicesStore } from "./linked-devices-store.ts";
 import { createNetworkDiagnosticStore, type NetworkDiagnosticStore } from "./network-diagnostic-store.ts";
 import { createRemoteAccessStore, type RemoteAccessStore } from "./remote-access-store.ts";
 import { connectionWaitsForComputer } from "./session-connection.ts";
+import { submittingCommandId } from "./session-execution.ts";
 import { createSessionPageState, type SessionPageState } from "./session-page-state.ts";
 import { createSessionPaneModel, type SessionPaneModel } from "./session-pane-store.ts";
 import { createSessionTitlesStore, type SessionTitlesStore } from "./session-titles-store.ts";
@@ -198,6 +207,9 @@ export function createChatWorkspace(options: {
             if (open.kind === "open" && (selection.kind !== "ready" || selection.session !== open.model.session)) {
                 closePane();
             }
+            if (backgroundConversationIsWorking()) {
+                startDirectoryLoad("background");
+            }
         },
         url: window.location.href,
     });
@@ -290,25 +302,44 @@ export function createChatWorkspace(options: {
             .enter(operationsLifetime.signal)
             .catch(() => undefined);
     };
-    const startDirectoryLoad = (): void => {
+    const startDirectoryLoad = (mode: DirectoryLoadMode = "foreground"): void => {
         directoryLifetime.abort(new Error("Directory loading restarted."));
         directoryLifetime = new AbortController();
         const signal = directoryLifetime.signal;
-        statuses.getState().directoryLoadStarted();
-        void directory
-            .getState()
-            .load(signal)
-            .catch(() => undefined)
-            .finally(() => {
-                if (signal.aborted) {
-                    return;
-                }
-                if (listWaitsForComputer()) {
-                    computerRecovery.failed();
-                } else {
-                    computerRecovery.working();
-                }
-            });
+        void followDirectory(signal, mode).catch(() => undefined);
+    };
+    const backgroundConversationIsWorking = (): boolean => {
+        const state = directory.getState().state;
+        return (
+            "sessions" in state &&
+            hasWorkingBackgroundConversation(
+                state.sessions,
+                statuses.getState().records,
+                selectedConversationTarget(home.getState().selection),
+            )
+        );
+    };
+    const followDirectory = async (signal: AbortSignal, mode: DirectoryLoadMode): Promise<void> => {
+        do {
+            const submitting = [...sessionStates].flatMap(([target, state]) =>
+                submittingCommandId(state.execution.getState().state, state.delivery.getState().state) === null
+                    ? []
+                    : [target],
+            );
+            statuses.getState().directoryLoadStarted(submitting);
+            await directory.getState().load(signal, mode);
+            signal.throwIfAborted();
+            if (listWaitsForComputer()) {
+                computerRecovery.failed();
+                return;
+            }
+            computerRecovery.working();
+            if (!backgroundConversationIsWorking()) {
+                return;
+            }
+            await options.clock.sleep(2_000, signal);
+            mode = "background";
+        } while (backgroundConversationIsWorking());
     };
     const listWaitsForComputer = (): boolean => {
         const listed = directory.getState().state.kind;
