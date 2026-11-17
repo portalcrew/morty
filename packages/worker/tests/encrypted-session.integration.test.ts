@@ -257,6 +257,7 @@ test("Given interrupted content uploads, when their request identities are reuse
                     origin: new URL("/morty/api/", bindings.origin),
                     headers: { authorization: `Bearer ${access.credential}`, "content-type": FILE_STREAM_CONTENT_TYPE },
                     body,
+                    requestId: crypto.randomUUID(),
                     signal,
                 });
             const pack = (records: readonly Uint8Array[]): Uint8Array => {
@@ -608,6 +609,7 @@ test("Given a locally paired encrypted client, when it submits a prompt and read
                 origin: new URL(network.origin),
                 headers: { authorization: `Bearer ${access.credential}`, "content-type": "application/json" },
                 body: separatelyAddressed,
+                requestId: crypto.randomUUID(),
                 signal,
             });
             expect(acceptedResponse.status).toBe(200);

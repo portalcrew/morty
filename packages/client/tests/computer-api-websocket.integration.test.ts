@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { expect, it, onTestFinished, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import { z } from "zod";
-import { type MortyTransportCall, type MortyTransportEndpoint, WsTransport } from "../src/index.ts";
+import { type MortyTransportEndpoint, type MortyTransportRequest, WsTransport } from "../src/index.ts";
 
 const operation = z.object({
     kind: z.literal("http.request"),
@@ -120,7 +120,7 @@ async function computerPeer(signal: AbortSignal) {
                 readonly signal?: AbortSignal;
                 readonly transport?: "http" | "websocket";
             } = {},
-        ): MortyTransportCall => ({
+        ): MortyTransportRequest => ({
             endpoint: {
                 computerId: "computer-1",
                 method: init.method ?? "GET",
@@ -131,6 +131,7 @@ async function computerPeer(signal: AbortSignal) {
             origin: new URL(origin),
             headers: { authorization: "Bearer owner" },
             body: null,
+            requestId: crypto.randomUUID(),
             signal: init.signal ?? signal,
         }),
     };

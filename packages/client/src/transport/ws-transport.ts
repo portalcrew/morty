@@ -5,7 +5,7 @@ import {
     isIdentifier,
     MORTY_API_PREFIX,
 } from "@portalcrew/morty-client/protocol";
-import type { MortyTransportCall } from "../calls/call.ts";
+import type { MortyTransportCall, MortyTransportRequest } from "../calls/call.ts";
 import { computerEncryptionAccessCodec } from "../calls/encryption.ts";
 import {
     type ComputerEncryptionAccess,
@@ -326,7 +326,7 @@ export class WsTransport {
         }
     };
 
-    readonly fetch = async (request: MortyTransportCall): Promise<Response> => {
+    readonly fetch = async (request: MortyTransportRequest): Promise<Response> => {
         request.signal.throwIfAborted();
         if (this.#state.kind === "closed") {
             throw new MortyConnectionError("The Morty WebSocket transport is closed");
@@ -343,7 +343,10 @@ export class WsTransport {
         }
         const socket = await this.#socket(request);
         request.signal.throwIfAborted();
-        const requestId = crypto.randomUUID();
+        const requestId = request.requestId;
+        if (!isIdentifier(requestId) || this.#pending.has(requestId)) {
+            throw new MortyValidationError("The request identifier is invalid or already in use");
+        }
         const binaryBody = request.body instanceof Uint8Array ? request.body : null;
         const body = typeof request.body === "string" ? request.body : "";
         request.signal.throwIfAborted();
@@ -583,7 +586,9 @@ export class WsTransport {
                     throw new MortyProtocolError("The WebSocket transport returned an invalid error status");
                 }
                 pending.reject(
-                    new MortyApiError(wsString(message, "code", 128), wsString(message, "message", 1_024), status),
+                    new MortyApiError(wsString(message, "code", 128), wsString(message, "message", 1_024), status, {
+                        requestId,
+                    }),
                 );
                 this.#pending.delete(requestId);
                 return;

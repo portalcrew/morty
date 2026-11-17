@@ -9,7 +9,7 @@ import { createComputerPayloadEncryption, exportE2EPublicKey, generateE2EIdentit
 import {
     MortyClient,
     MortyConnectionError,
-    type MortyTransportCall,
+    type MortyTransportRequest,
     type MortyWebSocketConnector,
     WsTransport,
 } from "../src/index.ts";
@@ -35,7 +35,7 @@ function computerRequest(
     address: string,
     init?: { readonly body?: string; readonly headers?: HeadersInit; readonly method?: "GET" | "POST" | "PUT" },
     computerId = "computer-1",
-): MortyTransportCall {
+): MortyTransportRequest {
     const url = new URL(address);
     if (!url.pathname.startsWith("/morty/api/v1/computers/")) {
         url.pathname = `/morty/api/v1/computers/computer-1/harnesses/claude/sessions/session-1${url.pathname}`;
@@ -55,6 +55,7 @@ function computerRequest(
         origin: url,
         headers: Object.fromEntries(headers.entries()),
         body: init?.body ?? null,
+        requestId: crypto.randomUUID(),
         signal: new AbortController().signal,
     };
 }

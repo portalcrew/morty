@@ -21,3 +21,8 @@ export interface MortyTransportCall {
     readonly body: string | Uint8Array | null;
     readonly signal: AbortSignal;
 }
+
+/** One attempt of a request. Its ID names the attempt on the wire, so the client and the Relay record one identity. */
+export interface MortyTransportRequest extends MortyTransportCall {
+    readonly requestId: string;
+}

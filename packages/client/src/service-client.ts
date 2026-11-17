@@ -179,17 +179,27 @@ function validateCredential(value: unknown): string {
     return value;
 }
 
-export interface MortyResponseMetadata {
-    readonly elapsedMilliseconds: number;
+export type MortyRequestOutcome =
+    | { readonly kind: "answered"; readonly status: number; readonly serverTiming: string | null }
+    | { readonly kind: "failed"; readonly failure: unknown };
+
+/** One request attempt as it settled. `requestId` is the identity the attempt carried on the wire. */
+export interface MortyRequestObservation {
+    readonly requestId: string;
     readonly operation: string;
-    readonly serverTiming: string | null;
-    readonly status: number;
+    readonly elapsedMilliseconds: number;
+    readonly outcome: MortyRequestOutcome;
 }
+
+export type MortyLiveEventsObservation =
+    | { readonly kind: "opened"; readonly subscriptionId: string }
+    | { readonly kind: "ended"; readonly subscriptionId: string; readonly failure: unknown };
 
 export interface MortyEndpointOptions {
     readonly credentialProvider: MortyCredentialProvider;
     readonly endpoint: string;
-    readonly observeResponse?: (metadata: MortyResponseMetadata) => void;
+    readonly observeRequest?: (observation: MortyRequestObservation) => void;
+    readonly observeLiveEvents?: (observation: MortyLiveEventsObservation) => void;
     readonly observeUnsupportedEntries?: (entries: readonly UnsupportedSessionEntry[]) => void;
     readonly operationTimeoutMilliseconds?: number;
 }
@@ -265,12 +275,7 @@ function throwOperationFailure(
     throw new MortyOperationError(failure.code, failure.message, { cause: failure });
 }
 
-function responseRequestId(response: Response): string {
-    return response.headers.get("x-morty-request-id") ?? response.headers.get("x-request-id") ?? "";
-}
-
-async function throwApiError(response: Response): Promise<never> {
-    const requestId = responseRequestId(response);
+async function throwApiError(response: Response, requestId: string): Promise<never> {
     let error: Readonly<Record<string, unknown>> | null;
     try {
         error = record(record(await response.json())["error"]);
@@ -535,7 +540,8 @@ export class MortyRequestExecutor {
     readonly #credentialProvider: MortyCredentialProvider;
     readonly #endpoint: URL;
     readonly #operationTimeoutMilliseconds: number | undefined;
-    readonly #observeResponse: ((metadata: MortyResponseMetadata) => void) | undefined;
+    readonly #observeRequest: ((observation: MortyRequestObservation) => void) | undefined;
+    readonly observeLiveEvents: (observation: MortyLiveEventsObservation) => void;
     readonly observeUnsupportedEntries: (entries: readonly UnsupportedSessionEntry[]) => void;
     readonly #transport: WsTransport;
     readonly #lifetime = new AbortController();
@@ -548,7 +554,8 @@ export class MortyRequestExecutor {
             options.operationTimeoutMilliseconds === undefined
                 ? undefined
                 : validatePositiveInteger(options.operationTimeoutMilliseconds, "operation timeout");
-        this.#observeResponse = options.observeResponse;
+        this.#observeRequest = options.observeRequest;
+        this.observeLiveEvents = (observation) => options.observeLiveEvents?.(observation);
         this.observeUnsupportedEntries = (entries) => {
             if (entries.length > 0) {
                 options.observeUnsupportedEntries?.(entries);
@@ -632,6 +639,8 @@ export class MortyRequestExecutor {
             AbortSignal.any([signal, this.#lifetime.signal]),
             this.#operationTimeoutMilliseconds ?? endpoint.timeoutMilliseconds,
         );
+        const started = performance.now();
+        const requestId = crypto.randomUUID();
         try {
             const credential = validateCredential(await this.#credentialProvider.credential(deadline.signal));
             const response = await this.#transport.fetch({
@@ -642,16 +651,16 @@ export class MortyRequestExecutor {
                     ...this.authenticationHeaders(credential, "application/vnd.morty.encrypted-file"),
                     "content-type": "application/json",
                 },
+                requestId,
                 signal: deadline.signal,
             });
-            this.#observeResponse?.({
-                elapsedMilliseconds: 0,
-                operation: endpoint.operation,
-                serverTiming: response.headers.get("server-timing"),
+            this.#observe(requestId, endpoint, started, {
+                kind: "answered",
                 status: response.status,
+                serverTiming: response.headers.get("server-timing"),
             });
             if (!response.ok) {
-                await throwApiError(response);
+                await throwApiError(response, requestId);
             }
             if (
                 response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !==
@@ -676,7 +685,7 @@ export class MortyRequestExecutor {
             if (cause instanceof ProtocolMessageError) {
                 throw new MortyProtocolError("The Computer returned an invalid encrypted file", { cause });
             }
-            return deadline.translate(cause);
+            return this.#settleFailure(deadline, cause, requestId, endpoint, started);
         } finally {
             deadline.finish();
         }
@@ -747,10 +756,11 @@ export class MortyRequestExecutor {
             AbortSignal.any([signal, this.#lifetime.signal]),
             this.#operationTimeoutMilliseconds ?? endpoint.timeoutMilliseconds,
         );
+        let started = performance.now();
+        let requestId = crypto.randomUUID();
         try {
-            const started = performance.now();
-            const send = async (credential: string): Promise<Response> =>
-                await this.#transport.fetch({
+            const send = async (credential: string): Promise<Response> => {
+                const response = await this.#transport.fetch({
                     endpoint,
                     origin: this.#endpoint,
                     body,
@@ -758,32 +768,36 @@ export class MortyRequestExecutor {
                         ...this.authenticationHeaders(validateCredential(credential), "application/json"),
                         "content-type": contentType,
                     },
+                    requestId,
                     signal: deadline.signal,
                 });
+                this.#observe(requestId, endpoint, started, {
+                    kind: "answered",
+                    status: response.status,
+                    serverTiming: response.headers.get("server-timing"),
+                });
+                return response;
+            };
             const credential = await this.#credentialProvider.credential(deadline.signal);
             let response = await send(credential);
             if (response.status === 401 && this.#credentialProvider.replacement !== undefined) {
                 const replacement = await this.#credentialProvider.replacement(credential, deadline.signal);
                 if (replacement !== null) {
                     await response.body?.cancel();
+                    started = performance.now();
+                    requestId = crypto.randomUUID();
                     response = await send(replacement);
                 }
             }
-            this.#observeResponse?.({
-                elapsedMilliseconds: Math.round(performance.now() - started),
-                operation: endpoint.operation,
-                serverTiming: response.headers.get("server-timing"),
-                status: response.status,
-            });
             if (!response.ok) {
-                await throwApiError(response);
+                await throwApiError(response, requestId);
             }
             return await response.text();
         } catch (cause) {
             if (!signal.aborted) {
                 this.#lifetime.signal.throwIfAborted();
             }
-            return deadline.translate(cause);
+            return this.#settleFailure(deadline, cause, requestId, endpoint, started);
         } finally {
             deadline.finish();
         }
@@ -793,6 +807,41 @@ export class MortyRequestExecutor {
         credential: string,
         accept: string,
     ): Readonly<Record<string, string>> => ({ accept, authorization: `Bearer ${credential}` });
+
+    readonly #observe = (
+        requestId: string,
+        endpoint: MortyOperationEndpoint,
+        started: number,
+        outcome: MortyRequestOutcome,
+    ): void => {
+        this.#observeRequest?.({
+            requestId,
+            operation: endpoint.operation,
+            elapsedMilliseconds: Math.round(performance.now() - started),
+            outcome,
+        });
+    };
+
+    /**
+     * Records the attempt's failure as the caller will see it, then throws it. An error the attempt was answered with
+     * is already recorded with its status.
+     */
+    readonly #settleFailure = (
+        deadline: RequestDeadline,
+        cause: unknown,
+        requestId: string,
+        endpoint: MortyOperationEndpoint,
+        started: number,
+    ): never => {
+        try {
+            return deadline.translate(cause);
+        } catch (failure) {
+            if (!(failure instanceof MortyApiError && failure.requestId === requestId)) {
+                this.#observe(requestId, endpoint, started, { kind: "failed", failure });
+            }
+            throw failure;
+        }
+    };
 }
 
 export class MortySessionResources {
@@ -1321,8 +1370,8 @@ export class MortyLiveEventSubscription {
     ): Promise<void> => {
         let connected = false;
         let connection: LiveEventConnection | null = null;
+        const subscriptionId = crypto.randomUUID();
         try {
-            const subscriptionId = crypto.randomUUID();
             connection = await this.#executor.openLiveEventStream(
                 this.#endpoint,
                 await sessionEventsSubscribeCommandCodec.encode(
@@ -1339,6 +1388,7 @@ export class MortyLiveEventSubscription {
             );
             await this.#observer.reconcile();
             connected = true;
+            this.#executor.observeLiveEvents({ kind: "opened", subscriptionId });
             resolveConnected();
             const reader = connection.events.getReader();
             try {
@@ -1411,6 +1461,7 @@ export class MortyLiveEventSubscription {
                 return;
             }
             const failure = liveStreamFailure(cause);
+            this.#executor.observeLiveEvents({ kind: "ended", subscriptionId, failure });
             if (!connected) {
                 rejectConnected(failure);
             }

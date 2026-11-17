@@ -106,6 +106,7 @@ test("Given a prompt with a separate reply address, when it is retried or confli
                                 "content-type": "application/json",
                             },
                             body,
+                            requestId: crypto.randomUUID(),
                             signal,
                         });
                         expect(response.ok).toBe(true);
