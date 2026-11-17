@@ -211,7 +211,7 @@ export function createChatWorkspace(options: {
                 closePane();
             }
             if (backgroundConversationIsWorking()) {
-                startDirectoryLoad("background");
+                void startDirectoryLoad("background");
             }
         },
         url: window.location.href,
@@ -226,7 +226,7 @@ export function createChatWorkspace(options: {
         (sessionTarget) => {
             // Closing changes directory membership. Replace any read started before that change in the same
             // lifecycle that owns refreshes, so its delayed answer cannot put the closed Session back.
-            startDirectoryLoad();
+            void startDirectoryLoad();
             const selected = selectedConversationTarget(home.getState().selection);
             if (selected === null || !sameNativeSession(selected, sessionTarget)) {
                 return;
@@ -291,7 +291,7 @@ export function createChatWorkspace(options: {
     const startOver = (): void => {
         startComputerFollow();
         startHomeLoad();
-        startDirectoryLoad();
+        void startDirectoryLoad();
     };
     const startHomeLoad = (): void => {
         chatLifetime.abort(new Error("Chat loading restarted."));
@@ -312,11 +312,16 @@ export function createChatWorkspace(options: {
             .enter(operationsLifetime.signal)
             .catch(() => undefined);
     };
-    const startDirectoryLoad = (mode: DirectoryLoadMode = "foreground"): void => {
+    /** Settles once this load's first listing was read, or it ended without one; it never rejects. */
+    const startDirectoryLoad = (mode: DirectoryLoadMode = "foreground"): Promise<void> => {
         directoryLifetime.abort(new Error("Directory loading restarted."));
         directoryLifetime = new AbortController();
         const signal = directoryLifetime.signal;
-        void followDirectory(signal, mode).catch(() => undefined);
+        const loaded = Promise.withResolvers<void>();
+        void followDirectory(signal, mode, loaded.resolve)
+            .catch(() => undefined)
+            .finally(loaded.resolve);
+        return loaded.promise;
     };
     const backgroundConversationIsWorking = (): boolean => {
         const state = directory.getState().state;
@@ -330,7 +335,7 @@ export function createChatWorkspace(options: {
             )
         );
     };
-    const followDirectory = async (signal: AbortSignal, mode: DirectoryLoadMode): Promise<void> => {
+    const followDirectory = async (signal: AbortSignal, mode: DirectoryLoadMode, loaded: () => void): Promise<void> => {
         do {
             const open = paneStore.getState();
             const following = [...sessionStates].flatMap(([target, state]) =>
@@ -341,6 +346,7 @@ export function createChatWorkspace(options: {
             );
             statuses.getState().directoryLoadStarted(following);
             await directory.getState().load(signal, mode);
+            loaded();
             signal.throwIfAborted();
             if (listWaitsForComputer()) {
                 computerRecovery.failed();
@@ -377,7 +383,7 @@ export function createChatWorkspace(options: {
             if (homeWaitsForComputer(home.getState(), computer.getState())) {
                 home.getState().retry();
             } else if (listWaitsForComputer()) {
-                startDirectoryLoad();
+                void startDirectoryLoad();
             }
             // A late offline response can arrive after the online watch snapshot.
             // Draft settings need the same bounded recovery as the list and statuses.
@@ -408,13 +414,7 @@ export function createChatWorkspace(options: {
             computerId,
             sessionTarget,
             clock: options.clock,
-            refreshTitle: async (signal) => {
-                // Acknowledgements identify an operation, not the current title. Newer observations still win.
-                const startedWith = titles.getState().titles;
-                const sessions = await requests.managedSessions(signal);
-                signal.throwIfAborted();
-                titles.getState().directoryLoaded(sessions, startedWith);
-            },
+            refreshDirectory: () => startDirectoryLoad(),
             lifetime: operationsLifetime.signal,
         });
         sessionStates.set(sessionTarget, state);
