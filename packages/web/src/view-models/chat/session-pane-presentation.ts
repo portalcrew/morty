@@ -28,7 +28,7 @@ import {
     sessionProjectionTimeline,
 } from "./session-projection.ts";
 import type { SessionRename } from "./session-rename-store.ts";
-import type { SessionSettingsStore } from "./session-settings-store.ts";
+import { type SessionSettingsStore, settingsChanging } from "./session-settings-store.ts";
 import { type SessionTaskControlsStore, stopInFlight } from "./session-task-controls.ts";
 
 export type TitleEdit =
@@ -69,7 +69,7 @@ export function sessionOperationFacts(input: {
         connection: input.connection.kind,
         // This page's own request counts until the Computer's account reflects it or the turn ends.
         stopping: turn.kind === "current" && (turn.stop === "stopping" || stopInFlight(input.tasks, turn.commandId)),
-        configuring: input.settings.change.kind === "configuring",
+        configuring: settingsChanging(input.settings),
         delivery: settledDelivery(input.delivery, execution).state,
         waitingForInput: waitingForInput(execution.interactions, input.interactions.submissions),
         ownerRunsTurn: ownerRunsTurn(execution.turn),

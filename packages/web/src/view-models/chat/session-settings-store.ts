@@ -42,7 +42,16 @@ export interface SessionSettingsStore {
         read: (signal: AbortSignal) => Promise<ConfigurationSnapshot>,
         parentSignal: AbortSignal,
     ) => Promise<void>;
+    /**
+     * Changes one setting, one change at a time: a selection made while another change is in flight is refused, since
+     * it would carry the revision that change replaces.
+     */
     readonly configure: (selection: SessionConfigurationSelection, signal: AbortSignal) => Promise<void>;
+}
+
+/** A settings change is in flight; messages wait for it, and no second change starts. */
+export function settingsChanging(settings: Pick<SessionSettingsStore, "change">): boolean {
+    return settings.change.kind === "configuring";
 }
 
 export function createSessionSettingsStore(options: {
@@ -124,6 +133,9 @@ export function createSessionSettingsStore(options: {
                 return settled;
             },
             configure: async (selection, signal) => {
+                if (settingsChanging(get())) {
+                    return;
+                }
                 set({ change: { configId: selection.configId, kind: "configuring" } });
                 try {
                     await options.connection.send(
