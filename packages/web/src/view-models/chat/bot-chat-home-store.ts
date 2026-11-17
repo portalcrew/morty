@@ -16,7 +16,7 @@ import {
     newConversationUnsentMessagesEntry,
 } from "../../services/session-storage/central-session-storage.ts";
 import type { Clock } from "../../services/time/clock.ts";
-import { formatError, isTimeoutFailure, type PageFailure } from "../format-error.ts";
+import { formatError, isSessionNotFoundFailure, isTimeoutFailure, type PageFailure } from "../format-error.ts";
 import { type ComposerAttachmentStore, createComposerAttachmentStore } from "./composer-attachment-store.ts";
 import { returnToComposer } from "./composer-return.ts";
 import { COMPUTER_REVOKED_MESSAGE } from "./computer-follower.ts";
@@ -437,12 +437,8 @@ export const createBotChatHomeStore = (
                         return;
                     }
                     const failedTarget = get().selection;
-                    if (
-                        cause instanceof MortyError &&
-                        ["NOT_FOUND", "SESSION_NOT_FOUND", "FORBIDDEN", "UNAUTHENTICATED"].includes(
-                            cause.code.toUpperCase(),
-                        )
-                    ) {
+                    const notFound = isSessionNotFoundFailure(cause);
+                    if (notFound || (cause instanceof MortyError && cause.code === "UNAUTHENTICATED")) {
                         const target = selectedConversationTarget(failedTarget);
                         if (target !== null) {
                             titles.getState().forget(target);
@@ -452,8 +448,7 @@ export const createBotChatHomeStore = (
                         restoredTarget !== null &&
                         (failedTarget.kind === "pending" || failedTarget.kind === "loading") &&
                         sameNativeSession(failedTarget.target, restoredTarget) &&
-                        cause instanceof MortyError &&
-                        ["NOT_FOUND", "session_not_found"].includes(cause.code)
+                        notFound
                     ) {
                         restoredTarget = null;
                         get().newConversation();
