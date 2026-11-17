@@ -3,7 +3,8 @@ import { connect, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 import type { WebSocket } from "playwright-core";
 import { dataTestId } from "../web/src/data-testid.ts";
-import { test as base, conversationLoaded, expandMobileComposer, expect } from "./infra/test.ts";
+import { expandMobileComposer } from "./infra/mobile-composer.ts";
+import { test as base, conversationLoaded, expect } from "./infra/test.ts";
 
 type Network = {
     readonly url: string;

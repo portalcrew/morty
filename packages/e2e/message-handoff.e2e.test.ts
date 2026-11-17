@@ -1,5 +1,6 @@
 import { dataTestId } from "../web/src/data-testid.ts";
-import { expandMobileComposer, expect, test } from "./infra/test.ts";
+import { expandMobileComposer } from "./infra/mobile-composer.ts";
+import { expect, test } from "./infra/test.ts";
 
 for (const mobile of [false, true]) {
     test.describe(mobile ? "Mobile" : "Desktop", () => {

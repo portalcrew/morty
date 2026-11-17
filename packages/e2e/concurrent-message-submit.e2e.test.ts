@@ -1,3 +1,4 @@
+import { expandMobileComposer } from "./infra/mobile-composer.ts";
 import { expect, test } from "./infra/test.ts";
 
 test("Given two devices share an idle conversation, When both send a draft, Then both messages run without losing text or attachments", async ({
@@ -13,7 +14,7 @@ test("Given two devices share an idle conversation, When both send a draft, Then
     try {
         await secondPage.setViewportSize({ width: 390, height: 844 });
         await secondPage.goto(page.url());
-        await secondPage.getByRole("button", { name: "Expand message composer" }).click();
+        await expandMobileComposer(secondPage);
         const participants = [
             { page, prompt: "hold after first delta", fileName: "first.json" },
             { page: secondPage, prompt: "wait for steering", fileName: "second.json" },
@@ -34,10 +35,7 @@ test("Given two devices share an idle conversation, When both send a draft, Then
                 await participant.page.getByRole("button", { name: "Send message" }).click();
             }),
         );
-        const expand = secondPage.getByRole("button", { name: "Expand message composer" });
-        if (await expand.isVisible()) {
-            await expand.click();
-        }
+        await expandMobileComposer(secondPage);
         const queue = page.getByLabel("Queued messages", { exact: true });
         await expect(queue).toBeVisible();
         for (const participant of participants) {

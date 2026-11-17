@@ -1,4 +1,5 @@
-import { conversationLoaded, expandMobileComposer, expect, test } from "./infra/test.ts";
+import { expandMobileComposer } from "./infra/mobile-composer.ts";
+import { conversationLoaded, expect, test } from "./infra/test.ts";
 
 test.use({ browserName: "webkit" });
 test.setTimeout(120_000);

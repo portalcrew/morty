@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { dataTestId } from "../web/src/data-testid.ts";
-import { expandMobileComposer, expect, test } from "./infra/test.ts";
+import { expandMobileComposer } from "./infra/mobile-composer.ts";
+import { expect, test } from "./infra/test.ts";
 
 async function openComputers(page: Page, mobile: boolean, current: string) {
     if (mobile) {

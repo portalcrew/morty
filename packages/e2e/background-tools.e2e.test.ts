@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { expandMobileComposer } from "./infra/mobile-composer.ts";
 import { expect, test } from "./infra/test.ts";
 
 test.use({ runtimeAgent: { harness: "tool-lifecycle-test", name: "Tool Lifecycle Agent" } });
@@ -14,9 +15,7 @@ for (const width of [1440, 390]) {
         await page.getByRole("button", { name: "Send message" }).click();
         await page.getByRole("button", { name: "1 step · 1 running in background" }).click();
         await expect(page.getByText("Running in background", { exact: true })).toBeVisible();
-        if (width < 640) {
-            await page.getByRole("button", { name: "Expand message composer" }).click();
-        }
+        await expandMobileComposer(page);
         await expect(composer).toBeEnabled();
         await page.screenshot({
             path: fileURLToPath(new URL(`../../test-results/background-running-${width}.png`, import.meta.url)),
