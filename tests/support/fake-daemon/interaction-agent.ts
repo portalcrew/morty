@@ -159,6 +159,29 @@ export function createInteractionAgent(onBackgroundPermissionReady?: (request: (
                         });
                         return { stopReason: "end_turn" };
                     }
+                    if (
+                        context.params.prompt.some(
+                            (content) => content.type === "text" && content.text === "request account connection",
+                        )
+                    ) {
+                        const connection = await context.client.request(
+                            acp.methods.client.elicitation.create,
+                            {
+                                sessionId,
+                                mode: "url",
+                                elicitationId: crypto.randomUUID(),
+                                message: "Connect your test account",
+                                url: "https://accounts.example.test/connect",
+                            },
+                            { cancellationSignal: signal },
+                        );
+                        if (connection.action !== "accept") {
+                            return { stopReason: "end_turn" };
+                        }
+                        // The account flow never completes here, so the turn waits until it is stopped.
+                        await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+                        return { stopReason: "cancelled" };
+                    }
                     if (fileEdit) {
                         const toolCallId = crypto.randomUUID();
                         await onSessionUpdate({

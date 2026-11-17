@@ -25,13 +25,97 @@ type InteractionOperation =
     | { readonly kind: "submitted" }
     | { readonly kind: "failed"; readonly message: string };
 
+type InteractionResponses = ReadonlyMap<string, InteractionOperation>;
+
+/**
+ * A request the Computer still holds pending: it needs the user's answer, or this page's answer is on its way. An answer
+ * the Computer accepted counts as on its way until the Computer's account reflects it.
+ */
+type AnswerNeed = { readonly kind: "answer"; readonly failure: string | null } | { readonly kind: "sending" };
+
+type ResolvedNeed = { readonly kind: "resolved" };
+
+type PermissionNeed = AnswerNeed | ResolvedNeed;
+
+/** A URL request the user accepted waits for the Agent to confirm that its external flow completed. */
+type ElicitationNeed = AnswerNeed | { readonly kind: "awaiting-completion" } | ResolvedNeed;
+
+/** A request the conversation shows, with what it needs from the user. */
+export interface ShownPermission {
+    readonly permission: PermissionInteraction;
+    readonly need: Exclude<PermissionNeed, ResolvedNeed>;
+}
+
+export interface ShownElicitation {
+    readonly elicitation: ElicitationInteraction;
+    readonly need: Exclude<ElicitationNeed, ResolvedNeed>;
+}
+
+function answerNeed(response: InteractionOperation | undefined): AnswerNeed {
+    switch (response?.kind) {
+        case undefined:
+            return { kind: "answer", failure: null };
+        case "failed":
+            return { kind: "answer", failure: response.message };
+        case "submitting":
+        case "submitted":
+            return { kind: "sending" };
+        default:
+            return response satisfies never;
+    }
+}
+
+const resolvedNeed: ResolvedNeed = { kind: "resolved" };
+
+function permissionNeed(permission: PermissionInteraction, responses: InteractionResponses): PermissionNeed {
+    switch (permission.state.kind) {
+        case "pending":
+            return answerNeed(responses.get(permission.interactionId));
+        case "resolved":
+            return resolvedNeed;
+        default:
+            return permission.state satisfies never;
+    }
+}
+
+function elicitationNeed(elicitation: ElicitationInteraction, responses: InteractionResponses): ElicitationNeed {
+    switch (elicitation.state.kind) {
+        case "pending":
+            return answerNeed(responses.get(elicitation.interactionId));
+        case "awaiting-completion":
+            return { kind: "awaiting-completion" };
+        case "resolved":
+            return resolvedNeed;
+        default:
+            return elicitation.state satisfies never;
+    }
+}
+
+function interactionNeed(
+    interaction: SessionInteraction,
+    responses: InteractionResponses,
+): PermissionNeed | ElicitationNeed {
+    return interaction.kind === "permission"
+        ? permissionNeed(interaction.permission, responses)
+        : elicitationNeed(interaction.elicitation, responses);
+}
+
+function awaitsAnswer(need: PermissionNeed | ElicitationNeed): need is AnswerNeed {
+    return need.kind === "answer" || need.kind === "sending";
+}
+
+/** Whether the Agent waits on the user: a request the Computer holds pending still needs the user's answer. */
+export function waitingForInput(interactions: readonly SessionInteraction[], responses: InteractionResponses): boolean {
+    return interactions.some((interaction) => awaitsAnswer(interactionNeed(interaction, responses)));
+}
+
 /** The answers typed so far into each pending question, by question and then by field. */
 export type ElicitationAnswerDrafts = ReadonlyMap<string, Readonly<Record<string, ElicitationFieldValue>>>;
 
 export interface SessionInteractionStore {
     readonly answerDrafts: ElicitationAnswerDrafts;
     readonly editAnswer: (interactionId: string, fieldName: string, value: ElicitationFieldValue) => void;
-    readonly submissions: ReadonlyMap<string, InteractionOperation>;
+    readonly submissions: InteractionResponses;
     /** The questions the user tried to accept, so a required answer still missing is pointed out. */
     readonly acceptAttempts: ReadonlySet<string>;
     readonly respondToPermission: (response: PermissionInteractionResponse, signal: AbortSignal) => void;
@@ -60,18 +144,29 @@ export function createSessionInteractionStore(ports: {
     readonly elicitation: (response: ElicitationInteractionResponse, signal: AbortSignal) => Promise<void>;
     readonly answerDrafts: ElicitationAnswerDrafts;
     readonly answerDraftsChanged: (drafts: ElicitationAnswerDrafts) => void;
-    /** The questions the Computer's account leaves pending, or null while the page has no account of them. */
-    readonly pendingQuestions: () => ReadonlySet<string> | null;
+    /** The Agent's requests as the Computer's account holds them, or null while the page has no account of them. */
+    readonly interactions: () => readonly SessionInteraction[] | null;
 }) {
     return createStore<SessionInteractionStore>()((set, get) => {
-        // Drafts last only while their question is pending: whenever drafts are stored, an answered or withdrawn
-        // question's draft is dropped, and the presentation reads only the drafts of questions that are pending.
+        // Drafts last only while their question awaits an answer: whenever drafts are stored, an answered or withdrawn
+        // question's draft is dropped, and the presentation reads only the drafts of questions it shows.
         const replaceAnswerDrafts = (drafts: ElicitationAnswerDrafts): void => {
-            const pending = ports.pendingQuestions();
+            const interactions = ports.interactions();
+            const awaiting =
+                interactions === null
+                    ? null
+                    : new Set(
+                          interactions.flatMap((interaction) =>
+                              interaction.kind === "elicitation" &&
+                              awaitsAnswer(elicitationNeed(interaction.elicitation, get().submissions))
+                                  ? [interaction.elicitation.interactionId]
+                                  : [],
+                          ),
+                      );
             const retained =
-                pending === null
+                awaiting === null
                     ? drafts
-                    : new Map([...drafts].filter(([interactionId]) => pending.has(interactionId)));
+                    : new Map([...drafts].filter(([interactionId]) => awaiting.has(interactionId)));
             set({ answerDrafts: retained });
             ports.answerDraftsChanged(retained);
         };
@@ -172,29 +267,30 @@ export function sessionInteractionPresentation(
     interactions: readonly SessionInteraction[],
     messages: readonly SessionMessage[],
 ) {
-    const permissions = interactions.flatMap((interaction) =>
-        interaction.kind === "permission" &&
-        interaction.permission.state.kind === "pending" &&
-        model.submissions.get(interaction.permission.interactionId)?.kind !== "submitted"
-            ? [interaction.permission]
-            : [],
-    );
-    const elicitations = interactions.flatMap((interaction) =>
-        interaction.kind === "elicitation" &&
-        interaction.elicitation.state.kind === "pending" &&
-        model.submissions.get(interaction.elicitation.interactionId)?.kind !== "submitted"
-            ? [interaction.elicitation]
-            : [],
-    );
-    const visibleIds = new Set([...permissions, ...elicitations].map((interaction) => interaction.interactionId));
+    const permissions = interactions.flatMap((interaction): ShownPermission[] => {
+        if (interaction.kind !== "permission") {
+            return [];
+        }
+        const need = permissionNeed(interaction.permission, model.submissions);
+        return need.kind === "resolved" ? [] : [{ permission: interaction.permission, need }];
+    });
+    const elicitations = interactions.flatMap((interaction): ShownElicitation[] => {
+        if (interaction.kind !== "elicitation") {
+            return [];
+        }
+        const need = elicitationNeed(interaction.elicitation, model.submissions);
+        return need.kind === "resolved" ? [] : [{ elicitation: interaction.elicitation, need }];
+    });
     return {
         permissions,
         permissionPresentations: new Map(
-            permissions.map((permission) => [permission.interactionId, permissionPresentation(permission)] as const),
+            permissions.map(
+                ({ permission }) => [permission.interactionId, permissionPresentation(permission)] as const,
+            ),
         ),
-        // What each field of a pending question shows: the user's answer so far, or the Agent's default.
+        // What each field of a shown question shows: the user's answer so far, or the Agent's default.
         fieldValues: new Map(
-            elicitations.flatMap((elicitation) =>
+            elicitations.flatMap(({ elicitation }) =>
                 elicitation.mode === "form"
                     ? [
                           [
@@ -217,14 +313,14 @@ export function sessionInteractionPresentation(
             ),
         ),
         fileChanges: new Map(
-            permissions.map((permission) => [
+            permissions.map(({ permission }) => [
                 permission.interactionId,
                 requestedFileChanges(messages, permission.toolCallId),
             ]),
         ),
         elicitations,
         requiredNotices: new Map(
-            elicitations.flatMap((elicitation) => {
+            elicitations.flatMap(({ elicitation }) => {
                 if (elicitation.mode !== "form" || !model.acceptAttempts.has(elicitation.interactionId)) {
                     return [];
                 }
@@ -237,12 +333,9 @@ export function sessionInteractionPresentation(
                     : [[elicitation.interactionId, `Select an option for ${missing.title}.`] as const];
             }),
         ),
-        busyInteractionIds: new Set(
-            Array.from(model.submissions).flatMap(([id, operation]) => (operation.kind === "submitting" ? [id] : [])),
-        ),
         error:
-            Array.from(model.submissions).flatMap(([id, operation]) =>
-                visibleIds.has(id) && operation.kind === "failed" ? [operation.message] : [],
+            [...permissions, ...elicitations].flatMap(({ need }) =>
+                need.kind === "answer" && need.failure !== null ? [need.failure] : [],
             )[0] ?? "",
     };
 }

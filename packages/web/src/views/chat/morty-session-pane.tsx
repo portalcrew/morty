@@ -521,6 +521,7 @@ function MortySessionPaneBody({
         connection,
         projection,
         execution,
+        interactions: interactionModel,
         composer,
         delivery,
         tasks: taskControls,
@@ -890,7 +891,6 @@ function MortySessionPaneBody({
                                     }
                                     fileChanges={interactions.fileChanges}
                                     permissions={interactions.permissions}
-                                    busyInteractionIds={interactions.busyInteractionIds}
                                     error={interactions.error}
                                     onElicitationResponse={respondToElicitation}
                                     onPermissionResponse={respondToPermission}
