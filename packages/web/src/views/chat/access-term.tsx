@@ -4,24 +4,20 @@ import type { ReactNode } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
 import { Button } from "../../components/ui/cloud-button.tsx";
-import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { cn } from "../../lib/utils.ts";
 import { type AccessExpiryStore, visibleAccessNotice } from "../../view-models/chat/access-expiry-store.ts";
 import { formatMoment } from "../../view-models/chat/access-presentation.ts";
 
 const accessNoticeCardClassName =
-    "pointer-events-auto relative mt-0 mb-0 w-full min-w-0 max-h-[200px] max-w-full shrink-0 text-12 text-foreground [overflow-wrap:anywhere]";
-/** Shadow sits outside the scroller so the module glow is not clipped at 200px. */
+    "pointer-events-auto relative mt-0 mb-0 w-full min-w-0 max-w-full shrink-0 rounded-[20px] border border-white bg-card/90 px-3 py-3 text-12 text-foreground [overflow-wrap:anywhere]";
 const accessNoticeCardShadowClassName = "pointer-events-none absolute inset-0 rounded-[20px] shadow-module";
-const accessNoticeCardScrollClassName =
-    "relative h-full max-h-[200px] min-h-0 rounded-[20px] border border-white bg-card/90";
 const accessNoticeCardBodyClassName =
     "pointer-events-auto relative mt-0 mb-0 flex w-full min-w-0 max-h-[200px] max-w-full shrink-0 flex-col rounded-[20px] border border-white bg-card/90 px-3 py-3 text-12 text-foreground [overflow-wrap:anywhere]";
 const accessNoticeTitleRowClassName = "flex items-start gap-2";
 const accessNoticeTitleIconClassName = "mt-[3px] size-3.5 shrink-0";
 const accessNoticeIconSpacerClassName = "size-3.5 shrink-0";
 const accessNoticeIndentedRowClassName = "flex items-start gap-2";
-const accessNoticeTitleClassName = "text-13 font-semibold leading-5 max-sm:truncate";
+const accessNoticeTitleClassName = "text-13 font-semibold leading-5";
 const accessNoticeDetailClassName = "[font-size:var(--text-12)] leading-4 text-muted-foreground max-sm:hidden";
 export const sidebarAccessNoticeActionClassName = "max-w-full whitespace-normal";
 const accessNoticeActionsClassName = "flex flex-wrap items-center gap-1.5 pt-2 pb-1 max-sm:pt-1 max-sm:pb-0";
@@ -54,22 +50,17 @@ export function SidebarAccessNoticeCard({
         return (
             <section aria-label={label} className={accessNoticeCardClassName} role="status">
                 <div aria-hidden="true" className={accessNoticeCardShadowClassName} />
-                <ScrollArea
-                    className={accessNoticeCardScrollClassName}
-                    viewportClassName="h-full max-h-[inherit] px-3 py-3 max-sm:[&>div]:block!"
-                >
-                    <div className={accessNoticeTitleRowClassName}>
-                        <Icon aria-hidden="true" className={accessNoticeTitleIconClassName} />
-                        <p className={cn(accessNoticeTitleClassName, "min-w-0 flex-1")}>{title}</p>
+                <div className={accessNoticeTitleRowClassName}>
+                    <Icon aria-hidden="true" className={accessNoticeTitleIconClassName} />
+                    <p className={cn(accessNoticeTitleClassName, "min-w-0 flex-1")}>{title}</p>
+                </div>
+                <div className={cn(accessNoticeIndentedRowClassName, "mt-1")}>
+                    <div aria-hidden="true" className={accessNoticeIconSpacerClassName} />
+                    <div className="min-w-0 flex-1">
+                        <p className={accessNoticeDetailClassName}>{detail}</p>
+                        <div className={accessNoticeActionsClassName}>{actions}</div>
                     </div>
-                    <div className={cn(accessNoticeIndentedRowClassName, "mt-1")}>
-                        <div aria-hidden="true" className={accessNoticeIconSpacerClassName} />
-                        <div className="min-w-0 flex-1">
-                            <p className={accessNoticeDetailClassName}>{detail}</p>
-                            <div className={accessNoticeActionsClassName}>{actions}</div>
-                        </div>
-                    </div>
-                </ScrollArea>
+                </div>
             </section>
         );
     }
