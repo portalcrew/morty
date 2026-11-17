@@ -78,7 +78,7 @@ export function SidebarAccessNoticeCarousel({ children }: { readonly children: R
     }, []);
 
     useEffect(() => {
-        if (!transitionEnabled && step === 0) {
+        if (!transitionEnabled && step < slides.length) {
             const frame = requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     setTransitionEnabled(true);
@@ -89,34 +89,45 @@ export function SidebarAccessNoticeCarousel({ children }: { readonly children: R
             };
         }
         return;
-    }, [step, transitionEnabled]);
+    }, [slides.length, step, transitionEnabled]);
 
     const moveToStep = (nextStep: number) => {
-        setTransitionEnabled(true);
-        setFromStep(step);
-        setStep(nextStep);
+        const recoveringLoop = step >= slides.length;
+        const settledStep = recoveringLoop ? nextStep % slides.length : nextStep;
+        setTransitionEnabled(!recoveringLoop);
+        setFromStep(recoveringLoop ? settledStep : step);
+        setStep(settledStep);
     };
 
     const advanceForward = useCallback(() => {
-        if (slides.length <= 1 || step >= slides.length) {
+        if (slides.length <= 1) {
             return;
         }
-        setTransitionEnabled(true);
-        setFromStep(step);
-        setStep(step + 1);
+        const recoveringLoop = step >= slides.length;
+        const nextStep = recoveringLoop ? 1 : step + 1;
+        setTransitionEnabled(!recoveringLoop);
+        setFromStep(recoveringLoop ? nextStep : step);
+        setStep(nextStep);
     }, [slides.length, step]);
 
     const forwardToDisplayIndex = (targetIndex: number) => {
         const current = step % slides.length;
         const forwardSteps = (targetIndex - current + slides.length) % slides.length;
-        if (forwardSteps === 0 || step >= slides.length) {
+        if (forwardSteps === 0) {
             return;
         }
         moveToStep(step + forwardSteps);
     };
 
     const retreatBackward = () => {
-        if (slides.length <= 1 || step >= slides.length) {
+        if (slides.length <= 1) {
+            return;
+        }
+        if (step >= slides.length) {
+            const previousStep = slides.length - 1;
+            setTransitionEnabled(false);
+            setFromStep(previousStep);
+            setStep(previousStep);
             return;
         }
         if (step > 0) {
@@ -180,10 +191,6 @@ export function SidebarAccessNoticeCarousel({ children }: { readonly children: R
         if (slides.length <= 1 || paused) {
             return;
         }
-        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-            return;
-        }
-
         let intervalId = 0;
         const advance = () => {
             if (document.visibilityState !== "visible") {
@@ -238,22 +245,15 @@ export function SidebarAccessNoticeCarousel({ children }: { readonly children: R
                 event.stopPropagation();
             }}
             onFocus={() => {
-                setPaused(true);
-            }}
-            onMouseEnter={() => {
-                setPaused(true);
-            }}
-            onMouseLeave={() => {
-                if (swipeRef.current?.axis === "horizontal") {
-                    return;
+                if (document.documentElement.getAttribute("data-input-modality") === "keyboard") {
+                    setPaused(true);
                 }
-                setPaused(false);
             }}
             onPointerCancel={(event) => {
                 endSwipe(event, false);
             }}
             onPointerDown={(event) => {
-                if (event.button !== 0 || slides.length <= 1 || step >= slides.length) {
+                if (event.button !== 0 || slides.length <= 1) {
                     return;
                 }
                 suppressClickRef.current = false;
@@ -265,7 +265,15 @@ export function SidebarAccessNoticeCarousel({ children }: { readonly children: R
                     startY: event.clientY,
                 };
             }}
+            onPointerEnter={(event) => {
+                if (event.pointerType === "mouse") {
+                    setPaused(true);
+                }
+            }}
             onPointerLeave={(event) => {
+                if (event.pointerType === "mouse" && swipeRef.current?.axis !== "horizontal") {
+                    setPaused(false);
+                }
                 if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                     return;
                 }
@@ -356,7 +364,7 @@ export function SidebarAccessNoticeCarousel({ children }: { readonly children: R
                                 aria-hidden="true"
                                 className={cn(
                                     "block h-2 w-2 shrink-0 overflow-visible transition-colors duration-300 ease-out motion-reduce:transition-none",
-                                    slideIndex === displayIndex ? "text-foreground/80" : "text-morty-text-3",
+                                    slideIndex === displayIndex ? "text-foreground/80" : "text-morty-text-4",
                                 )}
                                 height="8"
                                 viewBox="0 0 8 8"

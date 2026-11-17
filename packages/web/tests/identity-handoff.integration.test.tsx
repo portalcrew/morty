@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { getByRole, getByTestId, queryByRole } from "@testing-library/dom";
 import { act } from "@testing-library/react";
 import * as v from "valibot";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
 import { centralLocalStorage, linkedDevicesSeenEntry } from "../src/services/local-storage/central-local-storage.ts";
 import { sendPrompt } from "./infra/application-scenario.ts";
@@ -820,6 +820,77 @@ test("Given a new device and this browser's access in the sidebar, When the user
         );
         expect(queryByRole(carousel, "status", { name: "This browser's access" })).toBeNull();
     });
+});
+
+test("Given multiple mobile notices, When time advances and the user swipes, Then the notices keep cycling", {
+    timeout: 60_000,
+}, async () => {
+    const viewport = { height: window.innerHeight, width: window.innerWidth };
+    window.happyDOM.setViewport({ height: 844, width: 390 });
+    try {
+        const joined = await createTestApp({ connectAgent: true, page: { kind: "share" } });
+        await joined.waitForView(() =>
+            expect(new URL(window.location.href).searchParams.get("identity")).not.toBeNull(),
+        );
+        const code = new URL(await joined.createTransferUrl()).hash.slice("#code=".length);
+        const redeemed = await joined.transport.request(
+            new Request(`${joined.origin}/morty/api/v1/identity/transfers/redeem`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ code, device: "iPhone · Safari" }),
+            }),
+        );
+        expect(redeemed.status).toBe(200);
+        centralLocalStorage.write(linkedDevicesSeenEntry(joined.identity.computerId), new Date(0).toISOString());
+        vi.useFakeTimers({ now: new Date("2026-11-18T00:00:00Z"), toFake: ["setInterval", "clearInterval"] });
+        const app = await joined.reload();
+        const carousel = await app.waitForView(() => getByRole(document.body, "region", { name: "Access notices" }));
+        const first = getByRole(carousel, "button", { name: "Notice 1 of 2" });
+        const second = getByRole(carousel, "button", { name: "Notice 2 of 2" });
+        expect(first.getAttribute("aria-current")).toBe("true");
+
+        await act(async () => vi.advanceTimersByTime(6000));
+        expect(second.getAttribute("aria-current")).toBe("true");
+
+        await app.user.pointer([
+            { keys: "[TouchA>]", target: carousel, coords: { x: 40, y: 40 } },
+            { pointerName: "TouchA", target: carousel, coords: { x: 220, y: 40 } },
+            { keys: "[/TouchA]", target: carousel, coords: { x: 220, y: 40 } },
+        ]);
+        await app.waitForView(() => expect(first.getAttribute("aria-current")).toBe("true"));
+        await app.user.pointer([
+            { keys: "[TouchB>]", target: carousel, coords: { x: 220, y: 40 } },
+            { pointerName: "TouchB", target: carousel, coords: { x: 40, y: 40 } },
+            { keys: "[/TouchB]", target: carousel, coords: { x: 40, y: 40 } },
+        ]);
+        await app.waitForView(() => expect(second.getAttribute("aria-current")).toBe("true"));
+        await act(async () => vi.advanceTimersByTime(6000));
+        expect(first.getAttribute("aria-current")).toBe("true");
+        await app.user.pointer([
+            { keys: "[TouchC>]", target: carousel, coords: { x: 40, y: 40 } },
+            { pointerName: "TouchC", target: carousel, coords: { x: 220, y: 40 } },
+            { keys: "[/TouchC]", target: carousel, coords: { x: 220, y: 40 } },
+        ]);
+        await app.waitForView(() => expect(second.getAttribute("aria-current")).toBe("true"));
+        await app.user.pointer([
+            { keys: "[TouchA>]", target: carousel, coords: { x: 220, y: 40 } },
+            { pointerName: "TouchA", target: carousel, coords: { x: 40, y: 40 } },
+            { keys: "[/TouchA]", target: carousel, coords: { x: 40, y: 40 } },
+        ]);
+        await app.waitForView(() => expect(first.getAttribute("aria-current")).toBe("true"));
+        await act(async () => vi.advanceTimersByTime(6000));
+        expect(second.getAttribute("aria-current")).toBe("true");
+        await app.user.pointer([
+            { keys: "[TouchA>]", target: first },
+            { keys: "[/TouchA]", target: first },
+        ]);
+        await app.waitForView(() => expect(first.getAttribute("aria-current")).toBe("true"));
+        await act(async () => vi.advanceTimersByTime(6000));
+        expect(second.getAttribute("aria-current")).toBe("true");
+    } finally {
+        vi.useRealTimers();
+        window.happyDOM.setViewport(viewport);
+    }
 });
 
 test("Given this browser already dismissed its access notice, When a new device joins, Then the sidebar shows that card without a blank carousel page", {
