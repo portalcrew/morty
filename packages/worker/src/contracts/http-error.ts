@@ -14,12 +14,21 @@ export function isHttpError(error: unknown): error is HttpError {
     return error instanceof Error && "toHttpJson" in error && typeof error.toHttpJson === "function";
 }
 
+// Every deadline aborts with the platform's TimeoutError, so this is the one place a timeout gets its wire code.
 export function toHttpError(error: unknown): HttpErrorJson {
-    return isHttpError(error)
-        ? error.toHttpJson()
-        : {
-              body: { error: { code: "internal_error", message: "The request could not be completed" } },
-              status: 500,
-              headers: {},
-          };
+    if (isHttpError(error)) {
+        return error.toHttpJson();
+    }
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+        return {
+            body: { error: { code: "operation_timeout", message: "The Morty operation timed out" } },
+            status: 504,
+            headers: {},
+        };
+    }
+    return {
+        body: { error: { code: "internal_error", message: "The request could not be completed" } },
+        status: 500,
+        headers: {},
+    };
 }

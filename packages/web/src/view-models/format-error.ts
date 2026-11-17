@@ -61,12 +61,7 @@ export function describePageFailure(
 
 // A revoked Session credential is replaced on the next attempt, which asks Chat again and so learns whether the
 // access behind it ended.
-const retryableComputerFailureCodes = new Set([
-    "computer_offline",
-    "service_unavailable",
-    "credential_revoked",
-    "operation_timeout",
-]);
+const retryableComputerFailureCodes = new Set(["computer_offline", "service_unavailable", "credential_revoked"]);
 
 /**
  * Map a caught error to the single user-facing message for it. Known error
@@ -97,12 +92,16 @@ export function isRetryableComputerConnectionFailure(cause: unknown): boolean {
     if (cause instanceof MortyOperationError) {
         return cause.outcome === "unknown";
     }
-    if (
-        isApiConnectionError(cause) ||
-        isComputerConnectionFailure(cause) ||
-        (cause instanceof DOMException && cause.name === "TimeoutError")
-    ) {
+    if (isApiConnectionError(cause) || isComputerConnectionFailure(cause) || isTimeoutFailure(cause)) {
         return true;
     }
     return cause instanceof MortyError && retryableComputerFailureCodes.has(cause.code);
+}
+
+/** Whether a wait ran out, here or at Morty; whatever was waited on may still succeed on another attempt. */
+export function isTimeoutFailure(cause: unknown): boolean {
+    return (
+        (cause instanceof DOMException && cause.name === "TimeoutError") ||
+        (cause instanceof MortyError && cause.code === "operation_timeout")
+    );
 }

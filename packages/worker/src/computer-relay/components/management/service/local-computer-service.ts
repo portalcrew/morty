@@ -49,9 +49,7 @@ export class LocalComputerService {
             return await operation(this.computer, signal);
         } catch (cause) {
             parent.throwIfAborted();
-            if (deadline.signal.aborted) {
-                throw new ComputerManagementError("RELAY_TIMEOUT", "Morty did not respond in time.", 504, { cause });
-            }
+            deadline.signal.throwIfAborted();
             if (cause instanceof ComputerManagementError || isHttpError(cause)) {
                 throw cause;
             }
