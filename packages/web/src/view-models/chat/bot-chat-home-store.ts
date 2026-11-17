@@ -28,6 +28,7 @@ import {
 } from "./computer-status-store.ts";
 import {
     type ConversationCreationState,
+    createsSessionFor,
     failedDraftMessage,
     type QueuedDraftMessage,
     transitionConversationCreation,
@@ -658,12 +659,6 @@ export const createBotChatHomeStore = (
                 try {
                     access = await requests.createConversation(creationKey(commandId, settings), settings, signal);
                     signal.throwIfAborted();
-                    set((state) => ({
-                        creation: transitionConversationCreation(state.creation, {
-                            commandId,
-                            kind: "session-created",
-                        }),
-                    }));
                 } catch (cause) {
                     signal.throwIfAborted();
                     set((state) => ({
@@ -683,8 +678,7 @@ export const createBotChatHomeStore = (
                 titles.getState().created(conversationId, queuedMessage.summary);
                 // The conversation exists, so its first message belongs to it from now on, whatever is on screen.
                 // The page follows it only if the user is still on this draft.
-                const sending = get().creation;
-                const following = sending.kind === "draft-message-sending" && sending.message.commandId === commandId;
+                const following = createsSessionFor(get().creation, commandId);
                 let session: OpenMortySession | null = null;
                 if (following) {
                     session = requests.conversationSession(access, settings.workspaceLabel, title);

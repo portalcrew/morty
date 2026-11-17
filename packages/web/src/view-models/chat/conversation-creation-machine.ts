@@ -14,25 +14,20 @@ export type ConversationCreationState =
           readonly kind: "session-create-failed";
           readonly error: string;
           readonly message: QueuedDraftMessage;
-      }
-    | { readonly kind: "draft-message-sending"; readonly message: QueuedDraftMessage };
+      };
 
 export type ConversationCreationEvent =
     | { readonly kind: "reset" }
     | { readonly kind: "draft-message-queued"; readonly message: QueuedDraftMessage }
-    | { readonly kind: "session-created"; readonly commandId: string }
     | { readonly kind: "session-create-failed"; readonly commandId: string; readonly error: string }
     | { readonly kind: "conversation-created"; readonly commandId: string };
 
-function isCurrentMessage(state: ConversationCreationState, commandId: string): boolean {
-    switch (state.kind) {
-        case "draft":
-            return false;
-        case "session-creating":
-        case "session-create-failed":
-        case "draft-message-sending":
-            return state.message.commandId === commandId;
-    }
+/** Whether the draft is still creating the Session for this message, so the page follows that Session. */
+export function createsSessionFor(
+    state: ConversationCreationState,
+    commandId: string,
+): state is Extract<ConversationCreationState, { readonly kind: "session-creating" }> {
+    return state.kind === "session-creating" && state.message.commandId === commandId;
 }
 
 export function transitionConversationCreation(
@@ -48,22 +43,15 @@ export function transitionConversationCreation(
                 case "session-create-failed":
                     return { kind: "session-creating", message: event.message };
                 case "session-creating":
-                case "draft-message-sending":
                     return state;
             }
             return state;
-        case "session-created":
-            return state.kind === "session-creating" && isCurrentMessage(state, event.commandId)
-                ? { kind: "draft-message-sending", message: state.message }
-                : state;
         case "session-create-failed":
-            return state.kind === "session-creating" && isCurrentMessage(state, event.commandId)
+            return createsSessionFor(state, event.commandId)
                 ? { error: event.error, kind: "session-create-failed", message: state.message }
                 : state;
         case "conversation-created":
-            return state.kind === "draft-message-sending" && isCurrentMessage(state, event.commandId)
-                ? { kind: "draft" }
-                : state;
+            return createsSessionFor(state, event.commandId) ? { kind: "draft" } : state;
     }
 }
 
@@ -73,7 +61,6 @@ export function queuedDraftMessage(state: ConversationCreationState): QueuedDraf
             return null;
         case "session-creating":
         case "session-create-failed":
-        case "draft-message-sending":
             return state.message;
     }
 }
@@ -84,7 +71,6 @@ export function failedDraftMessage(state: ConversationCreationState): QueuedDraf
             return state.message;
         case "draft":
         case "session-creating":
-        case "draft-message-sending":
             return null;
     }
 }
@@ -97,8 +83,6 @@ export function conversationCreationStatus(state: ConversationCreationState): st
             return "Sending message";
         case "session-create-failed":
             return "Session creation failed";
-        case "draft-message-sending":
-            return "Sending message";
     }
 }
 
@@ -108,7 +92,6 @@ export function conversationCreationError(state: ConversationCreationState): str
             return state.error;
         case "draft":
         case "session-creating":
-        case "draft-message-sending":
             return "";
     }
 }
@@ -116,7 +99,6 @@ export function conversationCreationError(state: ConversationCreationState): str
 export function conversationCreationBusy(state: ConversationCreationState): boolean {
     switch (state.kind) {
         case "session-creating":
-        case "draft-message-sending":
             return true;
         case "draft":
         case "session-create-failed":
@@ -130,7 +112,6 @@ export function conversationComposerLocked(state: ConversationCreationState): bo
             return false;
         case "session-creating":
         case "session-create-failed":
-        case "draft-message-sending":
             return true;
     }
 }
