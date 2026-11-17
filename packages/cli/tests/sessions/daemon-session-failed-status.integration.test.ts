@@ -5,9 +5,12 @@ import { join } from "node:path";
 import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     decodeMessageKind,
+    decodeSessionEventEnvelope,
     decodeSessionsQueriedEvent,
+    encodeSessionCancelCommand,
     encodeSessionPromptCommand,
     encodeSessionQueryCommand,
+    SESSION_EVENT_KIND,
     type SessionStatus,
 } from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
@@ -33,6 +36,23 @@ const submit = (peer: RealDaemonPeer, sessionTarget: RealDaemonPeer["target"], c
         }),
     );
 
+async function nextPromptStart(peer: RealDaemonPeer, commandId: string): Promise<void> {
+    for (;;) {
+        const message = await peer.nextMessage();
+        if (
+            decodeMessageKind(message) === SESSION_EVENT_KIND &&
+            decodeSessionEventEnvelope(message).events.some(
+                (event) =>
+                    event.type === "lifecycle-metadata" &&
+                    event.payload.kind === "prompt.started" &&
+                    event.payload.commandId === commandId,
+            )
+        ) {
+            return;
+        }
+    }
+}
+
 async function queriedStatus(
     peer: RealDaemonPeer,
     sessionTarget: RealDaemonPeer["target"],
@@ -50,7 +70,7 @@ async function queriedStatus(
     }
 }
 
-test("Given a Session whose last turn failed, When a client that did not watch it reads its status, Then the Session reports that failure until another turn completes, and then reports that turn", async ({
+test("Given a Session whose last turn failed, When a client that did not watch it reads its status, Then the Session reports that failure, also while a later turn runs, until another turn ends, and then reports that turn", async ({
     signal,
 }) => {
     const directory = await mkdtemp(join(tmpdir(), "failed-status-"));
@@ -75,6 +95,24 @@ test("Given a Session whose last turn failed, When a client that did not watch i
 
                 await peer.restart();
                 expect(await queriedStatus(peer, sessionTarget)).toEqual({ kind: "idle", lastTurn: failure });
+
+                const held = randomUUID();
+                submit(peer, sessionTarget, held, "interleave progress and hold");
+                await nextPromptStart(peer, held);
+                expect(await queriedStatus(peer, sessionTarget)).toEqual({
+                    kind: "working",
+                    commandId: held,
+                    lastTurn: failure,
+                });
+                peer.send(
+                    encodeSessionCancelCommand({
+                        kind: "session.cancel",
+                        requestId: randomUUID(),
+                        commandId: held,
+                        target: sessionTarget,
+                    }),
+                );
+                await nextPromptSettlement(peer, held);
 
                 const completed = randomUUID();
                 submit(peer, sessionTarget, completed, "The request completes");

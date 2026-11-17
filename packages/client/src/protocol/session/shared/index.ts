@@ -35,14 +35,14 @@ export const lastTurnOutcomeSchema = z.discriminatedUnion("state", [
 ]);
 export type LastTurnOutcome = z.infer<typeof lastTurnOutcomeSchema>;
 
+/**
+ * `lastTurn`, whatever the kind: the latest turn that ended, while the Computer retains its outcome, even while a later
+ * one runs. Its command identity tells a client that did not watch the Session whether another turn ended since.
+ */
 export const sessionStatusSchema = z.discriminatedUnion("kind", [
     z
         .object({
             kind: z.literal("idle"),
-            /**
-             * The turn that ended last, as the execution read reports it, while the Computer retains its outcome. Its
-             * command identity tells a client that did not watch the Session whether another turn ended since.
-             */
             lastTurn: lastTurnOutcomeSchema.optional(),
         })
         .readonly(),
@@ -50,6 +50,7 @@ export const sessionStatusSchema = z.discriminatedUnion("kind", [
         .object({
             commandId: IDENTIFIER,
             kind: z.literal("working"),
+            lastTurn: lastTurnOutcomeSchema.optional(),
         })
         .readonly(),
 ]);

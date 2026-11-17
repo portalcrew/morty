@@ -300,7 +300,21 @@ export class ExecutionReceipts {
      * interrupted it) keeps its own outcome. Undefined while the latest turn runs or its outcome is no longer kept.
      */
     readonly lastTurn = (sessionTarget: NativeSessionTarget): LastTurnOutcome | undefined => {
-        let last: { readonly commandId: string; readonly outcome: SessionEventPayload | undefined } | undefined;
+        const last = this.#turns(sessionTarget).at(-1);
+        return last === undefined ? undefined : endedTurn(last.commandId, last.outcome);
+    };
+    /** The latest of the Session's turns, as `lastTurn` counts them, that has ended, even while a later one runs. */
+    readonly lastEndedTurn = (sessionTarget: NativeSessionTarget): LastTurnOutcome | undefined => {
+        let last: LastTurnOutcome | undefined;
+        for (const turn of this.#turns(sessionTarget)) {
+            last = endedTurn(turn.commandId, turn.outcome) ?? last;
+        }
+        return last;
+    };
+    readonly #turns = (
+        sessionTarget: NativeSessionTarget,
+    ): readonly { readonly commandId: string; readonly outcome: SessionEventPayload | undefined }[] => {
+        const turns: { readonly commandId: string; readonly outcome: SessionEventPayload | undefined }[] = [];
         for (const stored of this.#ledger.session(sessionTarget)) {
             const command = this.#withShutdownSettlement(stored);
             const outcome = this.outcome(command.commandId);
@@ -309,29 +323,10 @@ export class ExecutionReceipts {
             const steered = payload?.kind === "prompt.completed" && payload.completion.kind === "steered";
             const kept = command.fate.kind === "started" || outcome !== undefined;
             if (kept && (isStarted(command.fate) || failedBeforeStart) && !steered) {
-                last = { commandId: command.commandId, outcome };
+                turns.push({ commandId: command.commandId, outcome });
             }
         }
-        const outcome = last?.outcome;
-        if (last === undefined || outcome?.type !== "lifecycle-metadata" || !isPromptTerminal(outcome.payload)) {
-            return undefined;
-        }
-        switch (outcome.payload.kind) {
-            case "prompt.completed":
-                return {
-                    commandId: last.commandId,
-                    state: "completed",
-                    stopReason: promptStopReason(outcome.payload.completion),
-                };
-            case "prompt.failed":
-            case "prompt.failed-before-start":
-                return {
-                    code: outcome.payload.code,
-                    commandId: last.commandId,
-                    message: outcome.payload.message,
-                    state: "failed",
-                };
-        }
+        return turns;
     };
     readonly delegation = (commandId: string, sessionTarget: NativeSessionTarget): CommandDelegation | null => {
         const command = this.#read(commandId);
@@ -586,4 +581,17 @@ export class ExecutionReceipts {
         this.#delegations.clear();
         this.#shutdownSettlements.clear();
     };
+}
+
+function endedTurn(commandId: string, outcome: SessionEventPayload | undefined): LastTurnOutcome | undefined {
+    if (outcome?.type !== "lifecycle-metadata" || !isPromptTerminal(outcome.payload)) {
+        return undefined;
+    }
+    switch (outcome.payload.kind) {
+        case "prompt.completed":
+            return { commandId, state: "completed", stopReason: promptStopReason(outcome.payload.completion) };
+        case "prompt.failed":
+        case "prompt.failed-before-start":
+            return { code: outcome.payload.code, commandId, message: outcome.payload.message, state: "failed" };
+    }
 }

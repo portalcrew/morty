@@ -106,6 +106,7 @@ export class SessionManager {
         readonly processes: AgentProcessPool;
         /** Called once each time a Session becomes closed, so every client learns of it. */
         readonly onSessionClosed: (event: SessionCloseNoticeEvent) => void;
+        /** The latest turn that ended, even while a later one runs, as the Session status states it. */
         readonly lastTurn: (target: NativeSessionTarget) => LastTurnOutcome | undefined;
         readonly settledTurns: (target: NativeSessionTarget) => readonly SettledTurn[];
         readonly hasUnsettledTurn: (target: NativeSessionTarget) => boolean;
@@ -828,11 +829,8 @@ export class SessionManager {
     readonly sessionStatus = (target: NativeSessionTarget): SessionStatus =>
         this.#reported(target, this.#executions.status(target));
 
-    /** An idle Session states the turn that ended last, so a client that did not watch it knows whether one ended. */
+    /** A Session states the turn that ended last, so a client that did not watch it knows whether one ended since. */
     readonly #reported = (target: NativeSessionTarget, status: SessionStatus): SessionStatus => {
-        if (status.kind !== "idle") {
-            return status;
-        }
         const lastTurn = this.#lastTurn(target);
         return lastTurn === undefined ? status : { ...status, lastTurn };
     };

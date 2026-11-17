@@ -32,7 +32,7 @@ type SessionRecord =
 function listedStatus(status: SessionStatus): ReportedStatus {
     switch (status.kind) {
         case "working":
-            return status;
+            return { kind: "working", commandId: status.commandId };
         case "idle":
             switch (status.lastTurn?.state) {
                 case undefined:
@@ -71,24 +71,13 @@ function endedUnseen(status: SessionStatus, basis: EndBasis): boolean {
                 case "none":
                     return false;
                 case "listing":
-                    return listedEnd(basis.status) !== commandId;
+                    return basis.status.lastTurn?.commandId !== commandId;
                 case "page":
                     return !basis.observed(commandId);
                 default:
                     return basis satisfies never;
             }
         }
-        default:
-            return status satisfies never;
-    }
-}
-
-function listedEnd(status: SessionStatus): string | null {
-    switch (status.kind) {
-        case "working":
-            return null;
-        case "idle":
-            return status.lastTurn?.commandId ?? null;
         default:
             return status satisfies never;
     }
