@@ -1,4 +1,4 @@
-import { ArrowUp, ChevronDown, FileText, LoaderCircle, Plus, Square, X } from "lucide-react";
+import { ArrowUp, FileText, LoaderCircle, Plus, Square, X } from "lucide-react";
 import {
     type ClipboardEvent,
     type FormEvent,
@@ -155,11 +155,29 @@ export function BotChatComposer({
     const { attachments, state: attachmentState } = attachmentModel;
     const showToast = useToast();
     const { active, activate, mobile, setActive } = useMobileComposerActive(textarea);
+    useEffect(() => {
+        if (!mobile) {
+            return;
+        }
+        const collapseOnOutsideClick = (event: MouseEvent): void => {
+            const form = textarea.current?.form;
+            // Composer controls can open a sheet outside the form; its dismissal must not collapse the composer.
+            if (
+                event.target instanceof Node &&
+                !form?.contains(event.target) &&
+                !form?.querySelector('[data-state="open"]')
+            ) {
+                setActive(false);
+            }
+        };
+        document.addEventListener("click", collapseOnOutsideClick);
+        return () => document.removeEventListener("click", collapseOnOutsideClick);
+    }, [mobile, setActive]);
     const canCollapse =
         draft.trim().length === 0 &&
         attachments.length === 0 &&
         attachmentState.kind !== "reading" &&
-        outputState === "idle";
+        outputState !== "sending";
     const collapsed = mobile && !active && canCollapse;
     const explainBlockedSend =
         outputState === "idle" &&
@@ -175,6 +193,7 @@ export function BotChatComposer({
             // Touch devices drop the software keyboard so the reply is visible; keyboard users keep typing.
             if (window.matchMedia("(pointer: coarse)").matches) {
                 textarea.current?.blur();
+                setActive(false);
             } else {
                 textarea.current?.focus({ preventScroll: true });
             }
@@ -291,12 +310,28 @@ export function BotChatComposer({
                         <Plus aria-hidden="true" className="size-4" />
                     </button>
                     <Button
-                        aria-label="Send message"
-                        className={`${composerActionButtonClassName} pointer-events-none relative z-10`}
-                        disabled
+                        aria-label={
+                            outputState === "stopping"
+                                ? "Stopping agent output"
+                                : outputState === "running"
+                                  ? "Stop agent output"
+                                  : "Send message"
+                        }
+                        className={cn(
+                            composerActionButtonClassName,
+                            "relative z-10",
+                            outputState === "idle" && "pointer-events-none",
+                        )}
+                        disabled={outputState !== "running" || stopDisabled}
+                        onClick={outputState === "running" ? onStop : undefined}
                         size="icon"
+                        type="button"
                     >
-                        <ArrowUp aria-hidden="true" className="size-[18px]" />
+                        {outputState === "running" || outputState === "stopping" ? (
+                            <Square aria-hidden="true" className="size-3! fill-current" />
+                        ) : (
+                            <ArrowUp aria-hidden="true" className="size-[18px]" />
+                        )}
                     </Button>
                 </div>
                 <div
@@ -307,19 +342,6 @@ export function BotChatComposer({
                             "max-sm:pointer-events-none max-sm:invisible max-sm:translate-y-2 max-sm:opacity-0",
                     )}
                 >
-                    {mobile && !collapsed && canCollapse && (
-                        <button
-                            aria-label="Collapse message composer"
-                            className="absolute top-2 right-3 z-10 flex size-8 items-center justify-center rounded-full text-copy-secondary hover:bg-black/[0.045] active:bg-black/[0.07] keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60"
-                            onClick={() => {
-                                textarea.current?.blur();
-                                setActive(false);
-                            }}
-                            type="button"
-                        >
-                            <ChevronDown aria-hidden="true" className="size-4" />
-                        </button>
-                    )}
                     {attachments.length > 0 && (
                         <ImageGallery>
                             <ul aria-label="Attachments" className="mb-2 flex list-none flex-wrap gap-2 p-0">
@@ -345,17 +367,9 @@ export function BotChatComposer({
                             <Textarea
                                 aria-describedby="chat-composer-keyboard-hint"
                                 aria-label="Message"
-                                className="mb-2 min-h-[56px] w-full resize-none overflow-hidden px-4 pt-0 pb-1 text-14 placeholder:text-14 max-sm:visible max-sm:pr-12 sm:min-h-[64px]"
+                                className="mb-2 min-h-[56px] w-full resize-none overflow-hidden px-4 pt-0 pb-1 text-14 placeholder:text-14 max-sm:visible sm:min-h-[64px]"
                                 data-testid={dataTestId.messageComposer}
                                 disabled={disabled}
-                                onBlur={(event) => {
-                                    if (
-                                        !(event.relatedTarget instanceof Node) ||
-                                        !event.currentTarget.form?.contains(event.relatedTarget)
-                                    ) {
-                                        setActive(false);
-                                    }
-                                }}
                                 onChange={(event) => onDraftChange(event.target.value)}
                                 onFocus={() => setActive(true)}
                                 onKeyDown={handleKeyDown}
