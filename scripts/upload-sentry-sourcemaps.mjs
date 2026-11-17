@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
-import SentryCli from "@sentry/cli";
+import { SentryCli } from "@sentry/cli";
 
 const directory = resolve(process.argv[2] ?? ".release/cloud");
 const manifest = JSON.parse(await readFile(resolve(directory, "release.json"), "utf8"));
