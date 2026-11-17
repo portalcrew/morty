@@ -48,6 +48,29 @@ export const centralSessionStorage = {
 
 const messageDraftSchema = v.pipe(v.string(), v.maxLength(100_000));
 
+const browserDiagnosticSchema = v.object({
+    at: v.pipe(v.string(), v.isoTimestamp()),
+    component: v.picklist(["worker", "relay", "web"]),
+    operation: v.pipe(v.string(), v.maxLength(80)),
+    outcome: v.pipe(v.string(), v.maxLength(64)),
+    requestId: v.pipe(v.string(), v.maxLength(64)),
+    elapsedMs: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    attempt: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+});
+
+export type BrowserDiagnostic = Readonly<v.InferOutput<typeof browserDiagnosticSchema>>;
+
+export const BROWSER_DIAGNOSTICS_MAX_ENTRIES = 100;
+
+// Kept for this tab only, so a refresh keeps the failure that prompted a report and closing the tab clears it.
+export const browserDiagnosticsEntry = jsonStorageEntry({
+    key: "morty:browser-diagnostics:v1",
+    schema: v.object({
+        entries: v.pipe(v.array(browserDiagnosticSchema), v.maxLength(BROWSER_DIAGNOSTICS_MAX_ENTRIES)),
+        discarded: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    }),
+});
+
 export const accessEndedEntry = jsonStorageEntry({
     key: "morty:access-ended:v2",
     schema: v.object({ computerName: v.pipe(v.string(), v.minLength(1), v.maxLength(256)) }),
