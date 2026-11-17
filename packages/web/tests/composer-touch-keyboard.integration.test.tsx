@@ -66,3 +66,34 @@ test("Given an expanded empty mobile composer, When I use its controls, Then it 
         window.happyDOM.setViewport(desktopViewport);
     }
 });
+
+test("Given a mobile reply is generating with an empty inactive composer, When I view its compact input, Then Stop remains available", {
+    timeout: 30_000,
+}, async () => {
+    const desktopViewport = { height: window.innerHeight, width: window.innerWidth };
+    window.happyDOM.setViewport({ height: 844, width: 413 });
+    try {
+        const app = await createTestApp({
+            connectAgent: true,
+            agent: { harness: "tool-lifecycle-test", label: "Controlled Agent" },
+        });
+        await sendPrompt(app, await readyComposer(app), "answer then hold");
+        await app.waitForView(() => expect(document.body.textContent).toContain("Partial answer before stopping."));
+
+        const composer = app.elementByTestId(dataTestId.messageComposer);
+        expect(composer).toHaveProperty("value", "");
+        expect(composer).not.toBe(document.activeElement);
+        expect(getByRole(document.body, "button", { name: "Expand message composer" })).toBeDefined();
+
+        const stop = getByRole(document.body, "button", { name: "Stop agent output" });
+        expect(stop).toHaveProperty("disabled", false);
+        await app.user.click(stop);
+        await app.waitForView(() =>
+            expect(app.elementsByTestId(dataTestId.agentReplyStatus).map((element) => element.textContent)).toContain(
+                "Turn stopped.",
+            ),
+        );
+    } finally {
+        window.happyDOM.setViewport(desktopViewport);
+    }
+});

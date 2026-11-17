@@ -177,7 +177,7 @@ export function BotChatComposer({
         draft.trim().length === 0 &&
         attachments.length === 0 &&
         attachmentState.kind !== "reading" &&
-        outputState === "idle";
+        outputState !== "sending";
     const collapsed = mobile && !active && canCollapse;
     const explainBlockedSend =
         outputState === "idle" &&
@@ -310,12 +310,28 @@ export function BotChatComposer({
                         <Plus aria-hidden="true" className="size-4" />
                     </button>
                     <Button
-                        aria-label="Send message"
-                        className={`${composerActionButtonClassName} pointer-events-none relative z-10`}
-                        disabled
+                        aria-label={
+                            outputState === "stopping"
+                                ? "Stopping agent output"
+                                : outputState === "running"
+                                  ? "Stop agent output"
+                                  : "Send message"
+                        }
+                        className={cn(
+                            composerActionButtonClassName,
+                            "relative z-10",
+                            outputState === "idle" && "pointer-events-none",
+                        )}
+                        disabled={outputState !== "running" || stopDisabled}
+                        onClick={outputState === "running" ? onStop : undefined}
                         size="icon"
+                        type="button"
                     >
-                        <ArrowUp aria-hidden="true" className="size-[18px]" />
+                        {outputState === "running" || outputState === "stopping" ? (
+                            <Square aria-hidden="true" className="size-3! fill-current" />
+                        ) : (
+                            <ArrowUp aria-hidden="true" className="size-[18px]" />
+                        )}
                     </Button>
                 </div>
                 <div
