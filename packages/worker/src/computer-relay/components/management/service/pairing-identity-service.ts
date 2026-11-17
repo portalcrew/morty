@@ -1,7 +1,6 @@
 import type { VerifiedComputerAccess } from "../../../../contracts/relay/pairing.ts";
 import { PairingDirectoryError, validateIdentifier } from "../../../../contracts/relay/pairing.ts";
 import type { ComputerIdentityCredential } from "../../../../contracts/relay/pairing-identity.ts";
-import { DatabaseError } from "../../../../infra/sql-database.ts";
 import type { ComputerRelayStore } from "../storage/computer-relay-store.ts";
 
 function unmatchedCredential(credential: ComputerIdentityCredential): PairingDirectoryError {
@@ -47,9 +46,6 @@ export class ComputerIdentityService {
             if (cause instanceof PairingDirectoryError) {
                 throw cause;
             }
-            if (cause instanceof DatabaseError && cause.code === "database_timeout") {
-                throw new PairingDirectoryError("directory_timeout", "The Computer directory timed out", { cause });
-            }
             throw new PairingDirectoryError("directory_unavailable", "The Computer directory is unavailable", {
                 cause,
             });
@@ -75,9 +71,6 @@ export class ComputerIdentityService {
             signal.throwIfAborted();
             if (cause instanceof PairingDirectoryError) {
                 throw cause;
-            }
-            if (cause instanceof DatabaseError && cause.code === "database_timeout") {
-                throw new PairingDirectoryError("directory_timeout", "The Computer directory timed out", { cause });
             }
             throw new PairingDirectoryError("directory_unavailable", "The Computer directory is unavailable", {
                 cause,

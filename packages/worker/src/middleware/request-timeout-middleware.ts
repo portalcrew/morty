@@ -5,9 +5,12 @@ interface RequestSignalEnvironment extends Env {
     readonly Variables: { readonly signal: AbortSignal };
 }
 
+/**
+ * Owns the request's deadline. Once it expires, the request fails with the deadline's own TimeoutError, whatever an
+ * inner layer made of its abort.
+ */
 export function requestTimeoutMiddleware<TEnvironment extends RequestSignalEnvironment>(
     timeoutMilliseconds: number,
-    timeoutError?: (cause: unknown) => Error,
 ): MiddlewareHandler<TEnvironment> {
     return async (context, next) => {
         const requestSignal = context.req.raw.signal;
@@ -17,10 +20,10 @@ export function requestTimeoutMiddleware<TEnvironment extends RequestSignalEnvir
         try {
             await next();
         } catch (error) {
-            if (requestSignal.aborted || !signal.aborted || timeoutError === undefined) {
-                throw error;
+            if (!requestSignal.aborted) {
+                signal.throwIfAborted();
             }
-            throw timeoutError(error);
+            throw error;
         }
     };
 }

@@ -5,7 +5,6 @@ import type { ComputerLocationHint } from "../../contracts/computer-location.ts"
 import { ComputerManagementError, relayIdentifier } from "../../contracts/computer-management.ts";
 import type { ConfiguredRelayBindings } from "../../contracts/relay-bindings.ts";
 import { RequestDeadline } from "../../http/request-deadline.ts";
-import { DatabaseError } from "../../infra/sql-database.ts";
 
 export class ComputerRelayGateway {
     readonly #bindings: ConfiguredRelayBindings;
@@ -37,11 +36,8 @@ export class ComputerRelayGateway {
             return await deadline.wait(operation(stub, deadline.signal));
         } catch (cause) {
             signal.throwIfAborted();
-            throw new DatabaseError(
-                deadline.signal.aborted ? "database_timeout" : "database_unavailable",
-                "Computer storage is unavailable",
-                { cause },
-            );
+            deadline.signal.throwIfAborted();
+            throw new ComputerManagementError("RELAY_UNAVAILABLE", "Computer storage is unavailable.", 503, { cause });
         }
     };
 
