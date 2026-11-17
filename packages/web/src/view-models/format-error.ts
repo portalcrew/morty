@@ -83,6 +83,14 @@ export function isSessionClosedFailure(cause: unknown): cause is MortyError {
     return cause instanceof MortyError && cause.code === SESSION_CLOSED_ERROR_CODE;
 }
 
+// The Computer, the Worker and the Relay each answer a missing resource with their own code.
+const notFoundCodes = new Set(["session_not_found", "NOT_FOUND", "not_found"]);
+
+/** Whether an operation failed because the Session it names does not exist. */
+export function isSessionNotFoundFailure(cause: unknown): cause is MortyError {
+    return cause instanceof MortyError && notFoundCodes.has(cause.code);
+}
+
 /**
  * Whether a Session connection failure comes from the Computer being unreachable.
  * Such failures heal once the Computer returns (for example after a daemon
