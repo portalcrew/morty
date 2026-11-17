@@ -24,6 +24,7 @@ export function createSessionExecutionFeed(options: {
             case "permission-resolved":
             case "elicitation-resolved":
             case "queue-changed":
+            case "turn-stop-changed":
                 return fact;
             case "turn-started": {
                 const owner = options.executionOwner(fact.commandId);

@@ -412,6 +412,10 @@ const lifecycleMetadataSchema = z.discriminatedUnion("kind", [
     // owner began running it, so only the owner can stop it and cancelling it here leaves it running. Computers before
     // this event never delegate.
     z.object({ ...lifecycleBase, kind: z.literal("prompt.delegated"), stage: promptDelegationStageSchema }).readonly(),
+    // The Computer accepted a request to stop the running command and is stopping it; the command's terminal event
+    // follows once the Agent stops. `prompt.stop-failed`: that attempt ended without stopping it, so it still runs.
+    z.object({ ...lifecycleBase, kind: z.literal("prompt.stopping") }).readonly(),
+    z.object({ ...lifecycleBase, kind: z.literal("prompt.stop-failed") }).readonly(),
     promptCompletedSchema,
     z
         .object({
@@ -437,6 +441,8 @@ export const isPromptTerminal = (payload: LifecycleMetadata): payload is PromptT
         case "prompt.requested":
         case "prompt.started":
         case "prompt.delegated":
+        case "prompt.stopping":
+        case "prompt.stop-failed":
         case "session.queue.changed":
         case "session.permission.requested":
         case "session.permission.resolved":

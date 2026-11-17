@@ -53,6 +53,7 @@ export class ActiveRuntimeTurn {
     readonly #startedAt: () => string | undefined;
     readonly #delegation: () => CommandDelegation | null;
     readonly #executing: () => boolean;
+    readonly #stopping: () => boolean;
     #admission: TurnAdmission = { kind: "waiting" };
 
     constructor(
@@ -61,6 +62,7 @@ export class ActiveRuntimeTurn {
         startedAt: () => string | undefined,
         delegation: () => CommandDelegation | null,
         executing: () => boolean,
+        stopping: () => boolean,
     ) {
         this.command = command;
         this.#controller = new AbortController();
@@ -68,6 +70,7 @@ export class ActiveRuntimeTurn {
         this.#startedAt = startedAt;
         this.#delegation = delegation;
         this.#executing = executing;
+        this.#stopping = stopping;
     }
 
     readonly enqueue = (): void => {
@@ -170,6 +173,7 @@ export class ActiveRuntimeTurn {
             commandId: decodeIdentifier(this.command.commandId),
             startedAt,
             delegation: this.#delegation(),
+            stop: this.#stopping() ? "stopping" : "none",
         };
     };
 

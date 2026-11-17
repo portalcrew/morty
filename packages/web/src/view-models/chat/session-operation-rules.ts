@@ -9,7 +9,7 @@ import type { ChatQueuedMessage } from "./session-message-queue-store.ts";
 export interface SessionOperationFacts {
     readonly connectionAvailable: boolean;
     readonly connection: SessionConnection["kind"];
-    /** The user asked to stop the running turn. */
+    /** The running turn is being stopped. */
     readonly stopping: boolean;
     readonly configuring: boolean;
     readonly delivery: SessionDeliveryStore["state"]["kind"];
@@ -91,17 +91,14 @@ export function canChangeSettings(
     );
 }
 
-/** Stopping the running turn: the Session is reachable, and the turn is Morty's to stop rather than its owner's. */
+/**
+ * Stopping the running turn: the Session is reachable, the turn is Morty's to stop rather than its owner's, and it is
+ * not already being stopped.
+ */
 export function canStop(
-    facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "ownerRunsTurn">,
-): boolean {
-    return facts.connectionAvailable && facts.connection === "ready" && !facts.ownerRunsTurn;
-}
-
-export function canStopFromSettings(
     facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "ownerRunsTurn" | "stopping">,
 ): boolean {
-    return canStop(facts) && !facts.stopping;
+    return facts.connectionAvailable && facts.connection === "ready" && !facts.ownerRunsTurn && !facts.stopping;
 }
 
 function canActOnQueued(

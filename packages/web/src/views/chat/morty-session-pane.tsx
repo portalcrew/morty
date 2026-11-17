@@ -945,7 +945,7 @@ function MortySessionPaneBody({
                                             <p>{presentation.settingsNotice}</p>
                                             <button
                                                 className="mt-1 rounded-sm text-foreground underline underline-offset-4 outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/50 disabled:opacity-50"
-                                                disabled={presentation.settingsStopDisabled}
+                                                disabled={presentation.stopDisabled}
                                                 onClick={() => run(pane.store.getState().stop)}
                                                 type="button"
                                             >

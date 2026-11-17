@@ -5,28 +5,24 @@ import { formatError } from "../format-error.ts";
 import type { SessionOperationConnection } from "./session-operation-connection.ts";
 import type { OperationFailure } from "./session-operation-feedback.ts";
 
-export interface RunningTurn {
+interface RunningTurn {
     readonly commandId: string;
 }
 
 /**
- * The stop control. Which turn runs belongs to the Session's execution state; this store keeps what the user asked of
- * it: a stop request for a command, which applies only while that command runs. A failed request reports its failure to
- * the Session's operation feedback. The request is the Session's: switching to another pane neither ends it nor forgets
- * it.
+ * The stop control. Which turn runs, and whether the Computer is stopping it, belong to the Session's execution state;
+ * this store keeps only the stop request this page has sent and not yet heard back about, which the Computer's account
+ * may not reflect yet. A failed request reports its failure to the Session's operation feedback. The request is the
+ * Session's: switching to another pane neither ends it nor forgets it.
  */
 export interface SessionTaskControlsStore {
-    /** The command the user last asked to stop; it applies while that command's turn runs. */
-    readonly stopRequest: { readonly commandId: string } | null;
+    readonly stopInFlight: { readonly commandId: string } | null;
     /** Asks the Computer to stop `running`, the turn the Session's execution state holds running. */
     readonly stop: (running: RunningTurn | null, signal: AbortSignal) => Promise<void>;
 }
 
-export function stopRequested(
-    tasks: Pick<SessionTaskControlsStore, "stopRequest">,
-    running: RunningTurn | null,
-): boolean {
-    return running !== null && tasks.stopRequest?.commandId === running.commandId;
+export function stopInFlight(tasks: Pick<SessionTaskControlsStore, "stopInFlight">, commandId: string): boolean {
+    return tasks.stopInFlight?.commandId === commandId;
 }
 
 export const createSessionTaskControlsStore = (options: {
@@ -36,9 +32,9 @@ export const createSessionTaskControlsStore = (options: {
     readonly failed: (failure: OperationFailure) => void;
 }) =>
     createStore<SessionTaskControlsStore>()((set, get) => ({
-        stopRequest: null,
+        stopInFlight: null,
         stop: async (running, parent) => {
-            if (running === null || stopRequested(get(), running)) {
+            if (running === null) {
                 return;
             }
             const request = { commandId: running.commandId };
@@ -48,21 +44,27 @@ export const createSessionTaskControlsStore = (options: {
                 () => deadline.abort(new DOMException("The stop request timed out.", "TimeoutError")),
                 () => {},
             );
-            set({ stopRequest: request });
+            const retire = (): boolean => {
+                if (get().stopInFlight !== request) {
+                    return false;
+                }
+                set({ stopInFlight: null });
+                return true;
+            };
+            set({ stopInFlight: request });
             try {
                 await options.connection.send(async (client, requestSignal) => {
                     await client.turns.cancel(options.sessionTarget, running.commandId, requestSignal);
                 }, signal);
+                retire();
             } catch (cause) {
                 if (signal.aborted && parent.aborted) {
                     throw cause;
                 }
-                // A request for a later turn replaced this one, whose failure then has nothing left to report. A turn
-                // that ended while the request was in flight retires the failure, which describes only its turn.
-                if (get().stopRequest !== request) {
+                // A request for a later turn replaced this one, whose failure then has nothing left to report.
+                if (!retire()) {
                     return;
                 }
-                set({ stopRequest: null });
                 options.failed({
                     operation: "stop",
                     commandId: running.commandId,

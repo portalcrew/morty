@@ -118,7 +118,12 @@ export class SessionManager {
         this.#lastTurn = lastTurn;
         this.#settledTurns = settledTurns;
         this.#hasUnsettledTurn = hasUnsettledTurn;
-        this.#executions = new ActiveExecutions();
+        this.#executions = new ActiveExecutions((target, commandId, stopping) => {
+            this.recordLifecycleEvent(target, {
+                payload: { commandId, kind: stopping ? "prompt.stopping" : "prompt.stop-failed" },
+                type: "lifecycle-metadata",
+            });
+        });
         this.#onSessionClosed = onSessionClosed;
         this.#timer = timer;
     }
@@ -591,6 +596,9 @@ export class SessionManager {
 
     readonly executes = (target: NativeSessionTarget, commandId: string): boolean =>
         this.#executions.executes(target, commandId);
+
+    readonly stopping = (target: NativeSessionTarget, commandId: string): boolean =>
+        this.#executions.stopping(target, commandId);
 
     readonly acceptsSteering = (target: NativeSessionTarget, targetCommandId: string): boolean =>
         admitNow(this.#activity(target), { kind: "steer", targetCommandId }).kind === "admitted";

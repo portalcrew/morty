@@ -7,7 +7,11 @@ import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts"
 import { ActiveRuntimeTurn, type PromptDispatch } from "./active-turn.ts";
 import type { ExecutionReceipts } from "./execution-receipts.ts";
 
-export type SessionExecutes = (sessionTarget: NativeSessionTarget, commandId: string) => boolean;
+/** The Session execution authority's account of a command: whether the Session executes it, and is stopping it. */
+export interface SessionExecutions {
+    readonly executes: (sessionTarget: NativeSessionTarget, commandId: string) => boolean;
+    readonly stopping: (sessionTarget: NativeSessionTarget, commandId: string) => boolean;
+}
 
 /**
  * One session's in-flight turns: FIFO admission, steering, and interaction recording. Admission is the only place
@@ -17,12 +21,12 @@ export class SessionExecutionState {
     readonly #sessionTarget: NativeSessionTarget;
     readonly #turnsByCommandId = new Map<string, ActiveRuntimeTurn>();
     readonly #operations: ExecutionReceipts;
-    readonly #executes: SessionExecutes;
+    readonly #executions: SessionExecutions;
 
-    constructor(sessionTarget: NativeSessionTarget, operations: ExecutionReceipts, executes: SessionExecutes) {
+    constructor(sessionTarget: NativeSessionTarget, operations: ExecutionReceipts, executions: SessionExecutions) {
         this.#sessionTarget = sessionTarget;
         this.#operations = operations;
-        this.#executes = executes;
+        this.#executions = executions;
     }
 
     readonly isEmpty = (): boolean => this.#turnsByCommandId.size === 0;
@@ -37,7 +41,8 @@ export class SessionExecutionState {
             () => this.#operations.hasStarted(command.commandId, this.#sessionTarget),
             () => this.#operations.startedAt(command.commandId, this.#sessionTarget),
             () => this.#operations.delegation(command.commandId, this.#sessionTarget),
-            () => this.#executes(this.#sessionTarget, command.commandId),
+            () => this.#executions.executes(this.#sessionTarget, command.commandId),
+            () => this.#executions.stopping(this.#sessionTarget, command.commandId),
         );
         this.#turnsByCommandId.set(command.commandId, turn);
         if (command.disposition !== SessionPromptDisposition.Steer && this.#head() !== turn) {

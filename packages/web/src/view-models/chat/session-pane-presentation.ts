@@ -17,7 +17,6 @@ import {
     canSend,
     canSteerQueued,
     canStop,
-    canStopFromSettings,
     composerHasMessage,
     queuedMessageEditable,
     type SessionOperationFacts,
@@ -29,7 +28,7 @@ import {
 } from "./session-projection.ts";
 import type { SessionRename } from "./session-rename-store.ts";
 import type { SessionSettingsStore } from "./session-settings-store.ts";
-import { type SessionTaskControlsStore, stopRequested } from "./session-task-controls.ts";
+import { type SessionTaskControlsStore, stopInFlight } from "./session-task-controls.ts";
 
 export type TitleEdit =
     | { readonly kind: "closed" }
@@ -56,16 +55,18 @@ export function sessionOperationFacts(input: {
     readonly connection: SessionConnection;
     readonly execution: SessionExecutionState;
     readonly delivery: Pick<SessionDeliveryStore, "state" | "accepted">;
-    readonly tasks: Pick<SessionTaskControlsStore, "stopRequest">;
+    readonly tasks: Pick<SessionTaskControlsStore, "stopInFlight">;
     readonly settings: Pick<SessionSettingsStore, "change">;
     readonly connectionAvailable: boolean;
     readonly steeringSupported: boolean;
 }): SessionOperationFacts {
     const { execution } = input;
+    const { turn } = execution;
     return {
         connectionAvailable: input.connectionAvailable,
         connection: input.connection.kind,
-        stopping: stopRequested(input.tasks, acceptedTurn(execution.turn)),
+        // This page's own request counts until the Computer's account reflects it or the turn ends.
+        stopping: turn.kind === "current" && (turn.stop === "stopping" || stopInFlight(input.tasks, turn.commandId)),
         configuring: input.settings.change.kind === "configuring",
         delivery: settledDelivery(input.delivery, execution).state.kind,
         waitingForInput: waitingForInput(execution.interactions),
@@ -135,7 +136,6 @@ export function sessionPanePresentation(input: {
         composerInputDisabled,
         settingsDisabled: !canChangeSettings(facts),
         settingsNotice: controlRunning ? "New settings may not affect this response." : null,
-        settingsStopDisabled: !canStopFromSettings(facts),
         stopDisabled: !canStop(facts),
         canSuggestProgress:
             !controlRunning &&
@@ -155,7 +155,8 @@ export function sessionPanePresentation(input: {
                         activity.message
                       : null) ??
                   (delivery.state.kind === "failed" ? delivery.state.failure.message : null) ??
-                  operationFailureMessage(feedback.failure, running, visibleQueue(execution)) ??
+                  // A turn being stopped is not offered to stop again, so a stop failure no longer describes it.
+                  operationFailureMessage(feedback.failure, stopping ? null : running, visibleQueue(execution)) ??
                   ""),
         deliveryUnknownUserMessageId: unknownDelivery?.commandId ?? null,
         hasOlderHistory: timeline.hasOlderHistory,

@@ -359,10 +359,16 @@ async function cancel(fixture: Fixture, command: SessionPromptCommand): Promise<
             target: command.target,
         }),
     );
+    let stopping = false;
     for (;;) {
         const event = await nextLive(fixture);
+        if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.stopping") {
+            expect(event.payload.commandId).toBe(command.commandId);
+            stopping = true;
+        }
         if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
             expect(event.payload.completion).toMatchObject({ kind: "cancelled" });
+            expect(stopping).toBe(true);
             return;
         }
     }
@@ -1139,7 +1145,7 @@ describe("daemon V2 live delivery", () => {
             await fixture.close();
         }
     });
-    it("Given a 300k character current turn, When a viewer opens history and then cancels, Then recovery contains the complete output and the active turn is released", async ({
+    it("Given a 300k character current turn, When a viewer opens history and then cancels, Then recovery contains the complete output, the Computer reports stopping it, and the active turn is released", async ({
         signal,
     }) => {
         const fixture = await startControlledDaemon({ signal });
@@ -1162,7 +1168,7 @@ describe("daemon V2 live delivery", () => {
                 }
             }
             expect(text).toBe("x".repeat(300_000));
-            expect(await activeTurn(fixture, command)).not.toBeNull();
+            expect(await activeTurn(fixture, command)).toMatchObject({ commandId: command.commandId, stop: "none" });
             const page = await history(fixture, command);
             // The running Agent can emit metadata after its last text chunk.
             // The snapshot must cover every observed event, including that text.
@@ -1180,6 +1186,11 @@ describe("daemon V2 live delivery", () => {
             expect(recovered).toBe(`Gathering context${text}`);
             await cancel(fixture, command);
             expect(await activeTurn(fixture, command)).toBeNull();
+            expect(turnLifecycle((await history(fixture, command)).events)).toEqual([
+                `prompt.requested ${command.commandId}`,
+                `prompt.started ${command.commandId}`,
+                `prompt.completed ${command.commandId}`,
+            ]);
         } finally {
             await fixture.close();
         }

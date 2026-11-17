@@ -7,23 +7,23 @@ import type {
 } from "@portalcrew/morty-client/protocol";
 import type { ActiveRuntimeTurn, PromptDispatch } from "./active-turn.ts";
 import type { ExecutionReceipts } from "./execution-receipts.ts";
-import { type SessionExecutes, SessionExecutionState } from "./session-execution.ts";
+import { SessionExecutionState, type SessionExecutions } from "./session-execution.ts";
 
 type QueuedTurnSnapshot = Extract<NativeSessionResult, { readonly action: "active-turn" }>["queued"];
 
 export class SessionTurns {
     readonly #bySessionTarget = new NativeSessionMap<SessionExecutionState>();
     readonly #operations: ExecutionReceipts;
-    readonly #executes: SessionExecutes;
+    readonly #executions: SessionExecutions;
     readonly #onFinished: (sessionTarget: NativeSessionTarget) => void;
 
     constructor(
         operations: ExecutionReceipts,
-        executes: SessionExecutes,
+        executions: SessionExecutions,
         onFinished: (sessionTarget: NativeSessionTarget) => void,
     ) {
         this.#operations = operations;
-        this.#executes = executes;
+        this.#executions = executions;
         this.#onFinished = onFinished;
     }
 
@@ -36,7 +36,7 @@ export class SessionTurns {
     readonly session = (sessionTarget: NativeSessionTarget): SessionExecutionState => {
         let session = this.#bySessionTarget.get(sessionTarget);
         if (session === undefined) {
-            session = new SessionExecutionState(sessionTarget, this.#operations, this.#executes);
+            session = new SessionExecutionState(sessionTarget, this.#operations, this.#executions);
             this.#bySessionTarget.set(sessionTarget, session);
         }
         return session;

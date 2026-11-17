@@ -1,6 +1,7 @@
 import {
     decodeAgentSettingsDiscoveredEvent,
     decodeKnownSessionEventLogPage,
+    decodeSessionLiveEvent,
     decodeSessionPermissionRequestedEvent,
     decodeSessionsListedEvent,
 } from "@portalcrew/morty-client/protocol";
@@ -87,4 +88,26 @@ it("Given a session list entry without status, When a client decodes it, Then it
     expect(() => decodeSessionsListedEvent(JSON.stringify(page))).toThrow();
     const current = { ...page, entries: [{ ...entry, status: { kind: "idle" } }] };
     expect(decodeSessionsListedEvent(JSON.stringify(current))).toEqual(current);
+});
+
+it("Given the Computer begins and then fails to stop a running command, When a client decodes the live events, Then each names the command", () => {
+    const fields = {
+        position: "5",
+        recordedAt: "2026-11-17T00:00:00.000Z",
+        sessionGenerationId: "generation-1",
+        target: { harness: "agent-1", sessionId: "session-1" },
+        type: "lifecycle-metadata",
+    };
+    const stopping = { ...fields, eventId: "stopping", payload: { commandId: "command-1", kind: "prompt.stopping" } };
+    const failed = {
+        ...fields,
+        eventId: "stop-failed",
+        position: "6",
+        payload: { commandId: "command-1", kind: "prompt.stop-failed" },
+    };
+    expect(decodeSessionLiveEvent(JSON.stringify(stopping))).toEqual(stopping);
+    expect(decodeSessionLiveEvent(JSON.stringify(failed))).toEqual(failed);
+    expect(() =>
+        decodeSessionLiveEvent(JSON.stringify({ ...stopping, payload: { kind: "prompt.stopping" } })),
+    ).toThrow();
 });
