@@ -35,7 +35,6 @@ export function canRetryFirstMessage(facts: NewConversationFacts): boolean {
             return pageCanCreate(facts);
         case "draft":
         case "session-creating":
-        case "draft-message-sending":
             return false;
         default:
             return facts.creation satisfies never;
