@@ -1,3 +1,4 @@
+import { Download } from "lucide-react";
 import { type StoreApi, useStore } from "zustand";
 import { CopyLinkButton } from "../../components/chat/copy-link-button.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
@@ -35,7 +36,7 @@ const identitySharingSkeletonBarClassName = "rounded-full bg-morty-fill-opacity-
 const identitySharingSkeletonPulseClassName = "animate-pulse motion-reduce:animate-none";
 const identitySharingSkeletonFieldShellClassName = "rounded-lg border-[0.5px] border-black/5 bg-white";
 const identitySharingSkeletonSelectClassName = "rounded-lg border border-border bg-background";
-const identitySharingUrlBoxClassName = "min-h-[4.5rem]";
+const identitySharingUrlBoxClassName = "h-32";
 
 function IdentitySharingDeviceAccessSkeleton() {
     return (
@@ -63,16 +64,18 @@ function IdentitySharingTimingCopySkeleton() {
     );
 }
 
-const shareMethodGridClassName = "grid grid-cols-[auto_auto_minmax(0,1fr)] items-start gap-x-6 gap-y-2.5";
+const shareMethodGridClassName =
+    "grid min-w-0 grid-cols-1 items-start gap-y-2.5 sm:grid-cols-[auto_auto_minmax(0,1fr)] sm:gap-x-6";
 const shareMethodOrDividerClassName =
-    "col-start-2 row-start-2 flex min-h-0 shrink-0 flex-col items-center self-stretch";
-const shareMethodQrShellClassName =
-    "col-start-1 row-start-2 shrink-0 rounded-lg border-[0.5px] border-black/5 bg-white p-3";
+    "col-start-1 row-start-3 flex items-center gap-3 sm:col-start-2 sm:row-start-2 sm:min-h-0 sm:shrink-0 sm:flex-col sm:gap-0 sm:self-stretch";
+const shareMethodQrSectionClassName = "col-start-1 row-start-2 flex min-w-0 flex-col items-center gap-3 sm:items-start";
+const shareMethodQrShellClassName = "w-fit shrink-0 rounded-lg border-[0.5px] border-black/5 bg-white p-3";
 
 type IdentitySharingTransferSectionProps =
-    | { readonly loading: true }
+    | { readonly loading: true; readonly allowQrDownload: boolean }
     | {
           readonly loading: false;
+          readonly allowQrDownload: boolean;
           readonly image: string;
           readonly transfer: IdentityTransfer;
           readonly replacedEarlier: boolean;
@@ -90,34 +93,57 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
                 <h3 className={dialogSectionTitleClassName}>Sharing method</h3>
                 <div className={shareMethodGridClassName}>
                     <p className={`col-start-1 row-start-1 ${shareMethodSubheadingClassName}`}>QR code sharing</p>
-                    <p className={`col-start-3 row-start-1 ${shareMethodSubheadingClassName}`}>Link sharing</p>
-                    <div className={shareMethodQrShellClassName}>
-                        {loading ? (
-                            <div
-                                aria-hidden="true"
-                                className={cn(
-                                    "size-40 shrink-0 rounded-sm bg-morty-fill-opacity-3",
-                                    identitySharingSkeletonPulseClassName,
-                                )}
-                            />
-                        ) : (
-                            <img
-                                className="size-40 shrink-0"
-                                src={props.image}
-                                alt="Continue on another device QR code"
-                            />
-                        )}
+                    <p
+                        className={`col-start-1 row-start-4 sm:col-start-3 sm:row-start-1 ${shareMethodSubheadingClassName}`}
+                    >
+                        Link sharing
+                    </p>
+                    <div className={shareMethodQrSectionClassName}>
+                        <div className={shareMethodQrShellClassName}>
+                            {loading ? (
+                                <div
+                                    aria-hidden="true"
+                                    className={cn(
+                                        "size-40 shrink-0 rounded-sm bg-morty-fill-opacity-3",
+                                        identitySharingSkeletonPulseClassName,
+                                    )}
+                                />
+                            ) : (
+                                <img
+                                    className="size-40 shrink-0"
+                                    src={props.image}
+                                    alt="Continue on another device QR code"
+                                />
+                            )}
+                        </div>
+                        {props.allowQrDownload &&
+                            (loading ? (
+                                <div
+                                    aria-hidden="true"
+                                    className={cn(
+                                        "h-9 w-36 rounded-lg bg-morty-fill-opacity-3",
+                                        identitySharingSkeletonPulseClassName,
+                                    )}
+                                />
+                            ) : (
+                                <Button asChild variant="outline">
+                                    <a download="morty-access-qr.png" href={props.image}>
+                                        <Download aria-hidden="true" />
+                                        Save QR code
+                                    </a>
+                                </Button>
+                            ))}
                     </div>
                     <div aria-hidden="true" className={shareMethodOrDividerClassName}>
-                        <div className="min-h-0 w-[0.5px] flex-1 bg-border/60" />
+                        <div className="h-[0.5px] min-w-0 flex-1 bg-border/60 sm:h-auto sm:min-h-0 sm:w-[0.5px]" />
                         <p className="py-2 text-11 font-medium uppercase tracking-wide text-morty-text-4">or</p>
-                        <div className="min-h-0 w-[0.5px] flex-1 bg-border/60" />
+                        <div className="h-[0.5px] min-w-0 flex-1 bg-border/60 sm:h-auto sm:min-h-0 sm:w-[0.5px]" />
                     </div>
                     {loading ? (
                         <div
                             aria-hidden="true"
                             className={cn(
-                                "col-start-3 row-start-2 min-w-0 space-y-3",
+                                "col-start-1 row-start-5 min-w-0 space-y-3 sm:col-start-3 sm:row-start-2",
                                 identitySharingSkeletonPulseClassName,
                             )}
                         >
@@ -136,7 +162,8 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
                         </div>
                     ) : (
                         <CopyLinkButton
-                            className="col-start-3 row-start-2 min-w-0"
+                            className="col-start-1 row-start-5 min-w-0 sm:col-start-3 sm:row-start-2"
+                            scrollableUrl
                             url={props.transfer.url}
                             urlClassName={identitySharingUrlBoxClassName}
                         />
@@ -194,9 +221,10 @@ function AgentHandoffSection({
                 <AgentHandoffHeading />
                 <CopyLinkButton
                     copyLabel="Copy instructions"
+                    scrollableUrl
                     subject="instructions"
                     url={agentHandoffInstructions(transfer)}
-                    urlClassName="whitespace-pre-wrap break-normal"
+                    urlClassName="max-h-32"
                 />
             </div>
             <IdentitySharingTiming replacedEarlier={replacedEarlier} transfer={transfer} />
@@ -213,7 +241,7 @@ function AgentHandoffSkeleton() {
                 <div
                     aria-hidden="true"
                     className={cn(
-                        "min-h-40 space-y-2 px-4 py-3",
+                        "h-32 space-y-2 overflow-hidden px-4 py-3",
                         identitySharingSkeletonFieldShellClassName,
                         identitySharingSkeletonPulseClassName,
                     )}
@@ -235,7 +263,13 @@ function AgentHandoffSkeleton() {
     );
 }
 
-export function IdentitySharing({ store }: { readonly store: StoreApi<IdentitySharingStore> }) {
+export function IdentitySharing({
+    store,
+    allowQrDownload = false,
+}: {
+    readonly store: StoreApi<IdentitySharingStore>;
+    readonly allowQrDownload?: boolean;
+}) {
     const state = useStore(store, (state) => state.state);
     const choose = useStore(store, (state) => state.choose);
     const recipient = useStore(store, (state) => state.recipient);
@@ -302,12 +336,13 @@ export function IdentitySharing({ store }: { readonly store: StoreApi<IdentitySh
                 recipient === "agent" ? (
                     <AgentHandoffSkeleton />
                 ) : (
-                    <IdentitySharingTransferSection loading />
+                    <IdentitySharingTransferSection allowQrDownload={allowQrDownload} loading />
                 )
             ) : state.kind === "ready" && recipient === "agent" ? (
                 <AgentHandoffSection replacedEarlier={state.replacedEarlier} transfer={state.transfer} />
             ) : state.kind === "ready" ? (
                 <IdentitySharingTransferSection
+                    allowQrDownload={allowQrDownload}
                     image={state.image}
                     loading={false}
                     replacedEarlier={state.replacedEarlier}

@@ -22,6 +22,7 @@ const accessNoticeDetailClassName = "[font-size:var(--text-12)] leading-4 text-m
 export const sidebarAccessNoticeActionClassName = "max-w-full whitespace-normal";
 const accessNoticeActionsClassName = "flex flex-wrap items-center gap-1.5 pt-2 pb-1 max-sm:pt-1 max-sm:pb-0";
 const accessTermMenuCardClassName = "flex items-start gap-2 rounded-[16px] bg-white px-3 py-2.5";
+const accessTermCardClassName = "flex min-h-12 items-start gap-3 px-4 pt-3 pb-2";
 const accessTermMenuSkeletonBarClassName = "animate-pulse rounded-full bg-foreground/15 motion-reduce:animate-none";
 const accessTermCardSkeletonBarClassName =
     "animate-pulse rounded-full bg-morty-fill-opacity-3 motion-reduce:animate-none";
@@ -224,12 +225,7 @@ function AccessTermSkeleton({ layout }: { readonly layout: "menu" | "card" }) {
     );
     if (layout === "card") {
         return (
-            <div
-                aria-busy="true"
-                aria-label="Loading browser access"
-                className="flex min-h-12 items-start gap-3 px-4 py-2"
-                role="status"
-            >
+            <div aria-busy="true" aria-label="Loading browser access" className={accessTermCardClassName} role="status">
                 {body}
             </div>
         );
@@ -277,7 +273,7 @@ export function AccessTerm({
     const termIconClassName = layout === "card" ? "size-5 text-copy-secondary" : "size-4 text-muted-foreground";
     if (layout === "card") {
         return (
-            <div className="flex min-h-12 items-start gap-3 px-4 py-2">
+            <div className={accessTermCardClassName}>
                 <div className={accessTermIconRowClassName}>
                     <Clock3 aria-hidden="true" className={termIconClassName} />
                 </div>

@@ -39,6 +39,30 @@ test("Given a stored identity for the active Computer, When the user shares acce
     expect(queryByRole(sharing, "alert")).toBeNull();
 });
 
+test("Given mobile sharing, When the QR code is ready, Then it can be saved as the displayed PNG", {
+    timeout: 30_000,
+}, async () => {
+    const viewport = { height: window.innerHeight, width: window.innerWidth };
+    window.happyDOM.setViewport({ height: 744, width: 491 });
+    try {
+        const app = await createTestApp({ connectAgent: true, page: { kind: "bootstrap", identity: true } });
+        await app.user.click(
+            await app.waitForView(() => getByRole(document.body, "button", { name: "Open navigation" })),
+        );
+        await app.user.click(
+            await app.waitForView(() => getByRole(document.body, "button", { name: "Continue on another device" })),
+        );
+
+        const sharing = await app.queryElementByTestId(dataTestId.identitySharing);
+        const qr = getByRole(sharing, "img", { name: "Continue on another device QR code" });
+        const save = getByRole(sharing, "link", { name: "Save QR code" });
+        expect(save.getAttribute("href")).toBe(qr.getAttribute("src"));
+        expect(save.getAttribute("download")).toBe("morty-access-qr.png");
+    } finally {
+        window.happyDOM.setViewport(viewport);
+    }
+});
+
 test("Given a native session handoff, When the page loads, Then it shows the shared centered loading mark instead of a continue card", {
     timeout: 30_000,
 }, async () => {
