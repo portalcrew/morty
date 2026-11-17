@@ -49,6 +49,7 @@ export interface ControlledAgent {
     readonly reply?: FakeAgentHarnessOptions["reply"];
     readonly beforeSessionCreated?: (() => Promise<void>) | undefined;
     readonly beforeSessionsListed?: ((signal: AbortSignal) => Promise<void>) | undefined;
+    readonly beforeSessionLoaded?: ((sessionId: string) => Promise<void>) | undefined;
     readonly beforeConfigurationApplied?: ((configId: string, value: string | boolean) => Promise<void>) | undefined;
     readonly beforeCancellationApplied?: (() => Promise<void>) | undefined;
     readonly onBackgroundPermissionReady?: ((request: () => Promise<void>) => void) | undefined;

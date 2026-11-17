@@ -43,6 +43,7 @@ export async function startTestRelay(
                             .map((agent) => ({ harness: agent.harness, name: agent.label })),
                         beforeSessionCreated: agents[0]?.beforeSessionCreated,
                         beforeSessionsListed: agents[0]?.beforeSessionsListed,
+                        beforeSessionLoaded: agents[0]?.beforeSessionLoaded,
                         beforeCancellationApplied: agents[0]?.beforeCancellationApplied,
                         onBackgroundPermissionReady: agents[0]?.onBackgroundPermissionReady,
                         ...(agents[0]?.beforeConfigurationApplied === undefined

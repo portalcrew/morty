@@ -78,6 +78,8 @@ class ControlledAgentState {
     }
 
     readonly turnCount = (sessionId: string): number => this.#sessions.get(sessionId) ?? 0;
+    readonly beforeLoad = async (sessionId: string): Promise<void> =>
+        await this.#options.beforeSessionLoaded?.(sessionId);
     readonly title = (sessionId: string): string | null => this.#titles.get(sessionId) ?? null;
     readonly rename = (sessionId: string, title: string): void => {
         if (!this.#sessions.has(sessionId)) {
@@ -491,6 +493,7 @@ class ControlledAgentEndpoint implements FakeHarnessEndpoint {
                 return { configOptions: this.#state.configuration(sessionId), sessionId };
             })
             .onRequest(acp.methods.agent.session.load, async (context) => {
+                await this.#state.beforeLoad(context.params.sessionId);
                 this.#sessionIds.add(context.params.sessionId);
                 this.#state.rememberSession(context.params.sessionId, this.#state.turnCount(context.params.sessionId));
                 await this.#state.replay(context.params.sessionId, onSessionUpdate);

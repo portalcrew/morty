@@ -259,10 +259,20 @@ test("Given the user previewed a session, When they close Open Session and open 
     );
 });
 
-test("Given native sessions were discovered before the Computer disconnected, When a preview fails, Then Open Session shows one error with one bug report action", {
+test("Given a native session its Agent cannot load, When the user previews it, Then Open Session shows one error with one bug report action", {
     timeout: 30_000,
 }, async () => {
-    const app = await createTestApp({ connectAgent: true, sessionIds: new Set(["preview-error-session"]) });
+    const app = await createTestApp({
+        connectAgent: true,
+        agent: {
+            harness: "claude",
+            label: "Codex",
+            beforeSessionLoaded: async () => {
+                throw new Error("The saved session cannot be read.");
+            },
+        },
+        sessionIds: new Set(["preview-error-session"]),
+    });
     await app.queryElementByTestId(
         dataTestId.botConnectionStatus,
         (element) => element.getAttribute("data-connection-status") === "connected",
@@ -271,11 +281,7 @@ test("Given native sessions were discovered before the Computer disconnected, Wh
     const entry = await app.waitForView(() =>
         getByRole(document.body, "button", { name: "Native preview-error-session" }),
     );
-    if (app.daemon === null) {
-        throw new Error("The scenario requires a connected Computer.");
-    }
-    await app.daemon.disconnect();
-    act(() => fireEvent.click(entry));
+    await app.user.click(entry);
     const dialog = getByRole(document.body, "dialog", { name: "Open Session" });
     await app.waitForView(() => {
         expect(getAllByRole(dialog, "alert")).toHaveLength(1);
