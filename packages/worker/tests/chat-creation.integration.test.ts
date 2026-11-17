@@ -622,9 +622,7 @@ for (const operation of ["managed-sessions/open", "managed-sessions/resolve"]) {
         ]);
 
         if (reopened.status === "rejected") {
-            expect(reopened.reason).toMatchObject({
-                code: operation === "managed-sessions/open" ? "session_not_found" : "NOT_FOUND",
-            });
+            expect(reopened.reason).toMatchObject({ code: "session_not_found" });
         } else if (reopened.value instanceof MortyClient) {
             reopened.value.close();
         }
