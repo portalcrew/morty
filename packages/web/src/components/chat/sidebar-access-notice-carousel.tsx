@@ -29,7 +29,7 @@ type NoticeSwipe = {
 const carouselTrackClassName =
     "flex w-full min-w-0 items-stretch transition-transform duration-300 ease-out motion-reduce:transition-none";
 const carouselSlideShellClassName =
-    "box-border w-full min-w-0 max-h-[200px] shrink-0 grow-0 basis-full self-stretch overflow-visible [&>section]:box-border [&>section]:flex [&>section]:h-full [&>section]:max-h-[200px] [&>section]:min-h-full [&>section]:flex-col";
+    "box-border w-full min-w-0 shrink-0 grow-0 basis-full self-stretch overflow-visible [&>section]:box-border [&>section]:flex [&>section]:h-full [&>section]:min-h-full [&>section]:flex-col";
 
 /**
  * Shows one access-notice card at a time and slides horizontally to the next.
@@ -38,7 +38,6 @@ const carouselSlideShellClassName =
  * sidebar. Slides outside the moving pair stay hidden so they do not sit beside the card.
  * A horizontal drag anywhere on the card switches notices: left shows the next one,
  * right shows the previous one. Vertical movement scrolls the card, then the sidebar.
- * Each slide stops at 200px so a longer notice scrolls inside the card.
  */
 export function SidebarAccessNoticeCarousel({ children }: { readonly children: ReactNode }) {
     const slides = Children.toArray(children).filter(
