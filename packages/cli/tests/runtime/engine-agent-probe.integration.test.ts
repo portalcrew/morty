@@ -111,7 +111,7 @@ async function createProbeEngine(options: ProbeOptions, signal: AbortSignal) {
     void online.promise.catch(() => undefined);
     relay.on("connection", (socket) => {
         connected.resolve(socket);
-        socket.send(JSON.stringify({ kind: "computer.liveness.ready" }));
+        socket.send(JSON.stringify({ kind: "computer.liveness.ready", connectionEpoch: 1 }));
         socket.on("message", (encoded) => {
             if (String(encoded) === '{"kind":"computer.heartbeat"}') {
                 socket.send(JSON.stringify({ kind: "computer.heartbeat.ack" }));

@@ -118,7 +118,7 @@ async function openSessionView(_slug: string, signal: AbortSignal) {
     }
     const daemonInbox = new Inbox(daemon);
     daemon.accept();
-    expect(await daemonInbox.next()).toEqual({ kind: "computer.liveness.ready" });
+    expect(await daemonInbox.next()).toEqual({ kind: "computer.liveness.ready", connectionEpoch: expect.any(Number) });
     const heartbeat = new Promise<void>((resolve) => {
         const receive = (event: MessageEvent) => {
             if (event.data === COMPUTER_HEARTBEAT_ACK_MESSAGE) {

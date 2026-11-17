@@ -833,7 +833,7 @@ it("Given a native request forwarded to an earlier daemon, When the daemon is re
     const daemonInbox = new Inbox(daemon);
     daemon.accept();
     onTestFinished(() => daemon.close(1000, "Test complete"));
-    expect(await daemonInbox.next()).toEqual({ kind: "computer.liveness.ready" });
+    expect(await daemonInbox.next()).toEqual({ kind: "computer.liveness.ready", connectionEpoch: expect.any(Number) });
     browser.send(JSON.stringify({ kind: "http.cancel", requestId: "old-http" }));
     inbox.send('{"kind":"ping"}');
     expect(await inbox.next()).toEqual({ kind: "pong" });
@@ -972,7 +972,7 @@ async function connectedComputer(signal: AbortSignal) {
     const daemonInbox = new Inbox(daemon);
     daemon.accept();
     onTestFinished(() => daemon.close(1000, "Test complete"));
-    expect(await daemonInbox.next()).toEqual({ kind: "computer.liveness.ready" });
+    expect(await daemonInbox.next()).toEqual({ kind: "computer.liveness.ready", connectionEpoch: expect.any(Number) });
     let subscriptionCount = 0;
     return {
         daemon,

@@ -15,7 +15,7 @@ import { receive, send } from "../command/transport.ts";
 import type { RuntimeConfig } from "../config.ts";
 import { ComputerRelayRevokedError, isComputerRelayRevocation } from "./computer-revocation.ts";
 import { connectRelay } from "./connect.ts";
-import type { RelayConnectionDiagnostics } from "./diagnostics.ts";
+import type { RelayConnectionDiagnostics, RelayConnectionRecords } from "./diagnostics.ts";
 import { RelayConnectionLiveness } from "./liveness.ts";
 import { relayCredentialHeaders } from "./relay-authentication.ts";
 import type { RuntimeSessionEventPublisher } from "./session-event-publisher.ts";
@@ -42,7 +42,7 @@ export interface RelayConnectionOptions {
     readonly config: RuntimeConfig;
     readonly publisher: RuntimeSessionEventPublisher;
     readonly payloadEncryption: PayloadEncryptionConnection;
-    readonly connectionEpoch: number;
+    readonly connection: RelayConnectionRecords;
     readonly diagnostics: RelayConnectionDiagnostics;
     readonly onConnected: () => void;
     readonly signal: AbortSignal;
@@ -54,7 +54,7 @@ export async function runRelayConnection({
     config,
     publisher,
     payloadEncryption,
-    connectionEpoch,
+    connection,
     diagnostics,
     onConnected,
     signal,
@@ -63,13 +63,13 @@ export async function runRelayConnection({
     const relayUrl = new URL(config.relayUrl);
     const rotation = await config.credentials.prepare(signal);
     const relay = await connectRelay(relayUrl, relayCredentialHeaders(rotation), signal, (failure, source) => {
-        diagnostics.transportFailed(connectionEpoch, failure, source);
+        connection.transportFailed(failure, source);
     });
     const { socket } = relay;
     // Saving the rotation waits for the Relay to confirm the connection: a Relay can also open a socket only to close it,
     // as it does for a revoked Computer. Until then the next connection repeats the same rotation, which is harmless.
     let rotationSaved: Promise<void> = Promise.resolve();
-    diagnostics.connectionOpened(connectionEpoch);
+    connection.opened();
     const connectionController = new AbortController();
     const subscriptions = createSessionSubscriptions(publisher.subscriptionsChanged);
     const pendingCommands = new Set<Promise<void>>();
@@ -124,7 +124,7 @@ export async function runRelayConnection({
             const stop = (): void => {
                 // A planned upgrade can follow the last completion before the batch timer fires.
                 const finish = (): void => {
-                    diagnostics.connectionClosed(connectionEpoch, 1000, "Daemon stopped", "daemon_stop");
+                    connection.closing(1000, "Daemon stopped", "daemon_stop");
                     closeRelaySocket(socket, 1000, "Daemon stopped");
                     resolveConnection();
                 };
@@ -132,8 +132,8 @@ export async function runRelayConnection({
             };
 
             const failAndClose = (failure: Error, code: number, reason: string, source: string): void => {
-                diagnostics.connectionFailed(connectionEpoch, failure, source);
-                diagnostics.connectionClosed(connectionEpoch, code, reason, source);
+                connection.failed(failure, source);
+                connection.closing(code, reason, source);
                 closeRelaySocket(socket, code, reason);
                 rejectConnection(failure);
             };
@@ -154,13 +154,8 @@ export async function runRelayConnection({
                     }
                 },
                 unresponsive: (timeoutMilliseconds) => {
-                    diagnostics.heartbeatTimedOut(connectionEpoch, timeoutMilliseconds);
-                    diagnostics.connectionClosed(
-                        connectionEpoch,
-                        4001,
-                        "Relay liveness check timed out",
-                        "heartbeat_timeout",
-                    );
+                    connection.heartbeatTimedOut(timeoutMilliseconds);
+                    connection.closing(4001, "Relay liveness check timed out", "heartbeat_timeout");
                     closeRelaySocket(socket, 4001, "Relay liveness check timed out");
                     resolveConnection();
                 },
@@ -168,7 +163,7 @@ export async function runRelayConnection({
 
             signal.addEventListener("abort", stop, { once: true });
             const handleClose = (event: CloseEvent): void => {
-                diagnostics.connectionClosed(connectionEpoch, event.code, event.reason, "relay");
+                connection.closeObserved(event.code, event.reason, event.wasClean, "close_event");
                 if (isComputerRelayRevocation(event.code, event.reason)) {
                     rejectConnection(new ComputerRelayRevokedError(event.code, event.reason));
                     return;
@@ -182,8 +177,8 @@ export async function runRelayConnection({
                 }
                 const cause = Reflect.get(event, "error");
                 const failure = new Error("Relay WebSocket emitted an error", { cause: cause ?? event });
-                diagnostics.connectionFailed(connectionEpoch, failure, "socket_error");
-                diagnostics.connectionClosed(connectionEpoch, 1006, "WebSocket error", "socket_error");
+                connection.failed(failure, "socket_error");
+                connection.closeObserved(1006, "WebSocket error", false, "socket_error");
                 rejectConnection(failure);
             };
             const handleMessage = (event: MessageEvent<unknown>): void => {
@@ -309,6 +304,7 @@ export async function runRelayConnection({
                             return;
                         }
                         ready = true;
+                        connection.confirmed(message.connectionEpoch);
                         // The Relay made the successor current as it accepted this connection. The save finishes even
                         // when the daemon stops meanwhile: it records what the Relay already holds.
                         rotationSaved = config.credentials.complete(

@@ -292,7 +292,7 @@ await import(${JSON.stringify(agentPeer)});
                     .catch((error: unknown) => failure.reject(error));
             }
         });
-        connected.send(JSON.stringify({ kind: "computer.liveness.ready" }));
+        connected.send(JSON.stringify({ kind: "computer.liveness.ready", connectionEpoch: 1 }));
     });
     const listening = once(relay, "listening", { signal });
     relay.listen(0, "127.0.0.1");

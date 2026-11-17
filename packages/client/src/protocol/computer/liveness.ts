@@ -6,6 +6,7 @@ import {
     assertOnlyFields,
     decodeZodMessage as decodeRoutingZodMessage,
     encryptedFieldSchema,
+    ProtocolMessageError,
     parseJson,
     readIdentifier,
 } from "../shared/message-codec.ts";
@@ -23,8 +24,10 @@ export const COMPUTER_PONG_KIND = "computer.pong";
 export const COMPUTER_HEARTBEAT_MESSAGE = `{"kind":"${COMPUTER_HEARTBEAT_KIND}"}`;
 export const COMPUTER_HEARTBEAT_ACK_MESSAGE = `{"kind":"${COMPUTER_HEARTBEAT_ACK_KIND}"}`;
 
+/** `connectionEpoch` is the Relay's identity of the connection it accepted, so both ends log one identity for it. */
 export interface ComputerLivenessReadyEvent {
     readonly kind: typeof COMPUTER_LIVENESS_READY_KIND;
+    readonly connectionEpoch: number;
 }
 
 export interface ComputerHeartbeatEvent {
@@ -48,7 +51,12 @@ interface ComputerPongEvent {
 export function decodeComputerLivenessReadyEvent(encoded: string): ComputerLivenessReadyEvent {
     const value = parseJson(encoded);
     assertKind(value, COMPUTER_LIVENESS_READY_KIND);
-    return { kind: COMPUTER_LIVENESS_READY_KIND };
+    assertOnlyFields(value, ["kind", "connectionEpoch"]);
+    const connectionEpoch = value["connectionEpoch"];
+    if (typeof connectionEpoch !== "number" || !Number.isSafeInteger(connectionEpoch) || connectionEpoch < 1) {
+        throw new ProtocolMessageError("Invalid connection epoch");
+    }
+    return { kind: COMPUTER_LIVENESS_READY_KIND, connectionEpoch };
 }
 
 export function decodeComputerHeartbeatEvent(encoded: string): ComputerHeartbeatEvent {

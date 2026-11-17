@@ -15,6 +15,12 @@ import { PairingDirectoryError } from "../../../../contracts/relay/pairing.ts";
 import type { SessionViewerIdentity } from "../../../../contracts/session-event-subscription.ts";
 import type { logger } from "../../../../infra/logger.ts";
 import type { ComputerConnectionIdentity } from "../entity/computer-connection.ts";
+import {
+    type DaemonConnectionEnding,
+    daemonCloseFrame,
+    daemonEndingLogFields,
+    isExpectedDaemonEnding,
+} from "../entity/connection-ending.ts";
 import { sessionViewerAccess } from "../entity/session-viewer-access.ts";
 import type { ComputerCredentialService } from "./computer-credential-service.ts";
 import { ComputerMessageScheduler, ComputerMessageSchedulerCapacityError } from "./computer-message-scheduler.ts";
@@ -131,13 +137,12 @@ export class ComputerService {
     private readonly acceptDaemonSocket = (signal: AbortSignal, generation: number): ComputerAdmission => {
         // Nothing below awaits, so this admission check and accept + connect are one step.
         signal.throwIfAborted();
+        const identity = this.#cx.services.connections.next();
         const latest = this.#cx.services.connections.latest();
         if (latest !== null && latest.generation !== generation) {
-            for (const viewer of this.#cx.gateways.peers.viewers()) {
-                viewer.close(1000, "Previous daemon disconnected");
-            }
-            for (const { socket } of this.#cx.gateways.peers.daemonConnections()) {
-                socket.close(1000, "Previous daemon disconnected");
+            this.#cx.services.relay.endViewers({ kind: "pairing_replaced", replacement: identity });
+            for (const daemon of this.#cx.gateways.peers.daemonConnections()) {
+                this.closeDaemon(daemon.identity, daemon.socket, { kind: "pairing_replaced", replacement: identity });
             }
             for (const { socket } of this.#cx.gateways.peers.operations()) {
                 socket.close(1000, "Previous daemon disconnected");
@@ -147,11 +152,10 @@ export class ComputerService {
         for (const attachment of this.#attachments) {
             attachment.controller.abort(new DOMException("Computer connection replaced", "AbortError"));
         }
-        for (const { socket } of previous) {
-            this.#cx.services.relay.failTransfersOwnedBy(socket);
-            socket.close(1012, "Daemon connection replaced");
+        for (const daemon of previous) {
+            this.#cx.services.relay.failTransfersOwnedBy(daemon.socket);
+            this.closeDaemon(daemon.identity, daemon.socket, { kind: "replaced", replacement: identity });
         }
-        const identity = this.#cx.services.connections.next();
         const accepted = this.#cx.gateways.peers.accept(identity);
         this.#cx.services.connections.connected(identity, generation, Date.now());
         this.#cx.logger.info({ ...identity, event: "computer_websocket_accepted" }, "Computer WebSocket accepted");
@@ -181,21 +185,23 @@ export class ComputerService {
                 if (!this.#cx.services.connections.isCurrent(identity)) {
                     return;
                 }
-                const ready: ComputerLivenessReadyEvent = { kind: COMPUTER_LIVENESS_READY_KIND };
+                const ready: ComputerLivenessReadyEvent = {
+                    kind: COMPUTER_LIVENESS_READY_KIND,
+                    connectionEpoch: identity.connectionEpoch,
+                };
                 socket.send(encodeComputerLivenessReadyEvent(ready));
                 // The readiness frame is the daemon's first; ending the old subscriptions tells it about each after.
                 if (replaced) {
-                    this.#cx.services.relay.endSubscriptions();
+                    this.#cx.services.relay.endViewers({ kind: "daemon_replaced", replacement: identity });
                 }
             } catch (error) {
-                if (!attachment.controller.signal.aborted) {
+                if (this.#cx.services.connections.isCurrent(identity)) {
+                    this.closeDaemon(identity, socket, { kind: "attachment_failed" }, error);
+                } else if (!attachment.controller.signal.aborted) {
                     this.#cx.logger.error(
                         { ...identity, err: error, event: "computer_attachment_failed" },
                         "Computer attachment failed",
                     );
-                }
-                if (this.#cx.services.connections.isCurrent(identity)) {
-                    socket.close(1011, "Computer attachment failed");
                 }
             } finally {
                 clearTimeout(timer);
@@ -225,14 +231,15 @@ export class ComputerService {
         for (const attachment of this.#attachments) {
             attachment.controller.abort(new DOMException("Computer revoked", "AbortError"));
         }
-        for (const { socket } of this.#cx.gateways.peers.daemonConnections()) {
-            socket.close(1008, "Computer revoked");
+        for (const daemon of this.#cx.gateways.peers.daemonConnections()) {
+            this.closeDaemon(daemon.identity, daemon.socket, { kind: "revoked" });
         }
-        for (const viewer of this.#cx.gateways.peers.viewers()) {
-            viewer.close(1008, "Computer revoked");
-        }
+        this.#cx.services.relay.endViewers({
+            kind: "computer_revoked",
+            connection: connected ? { connectionEpoch: latest.connectionEpoch } : null,
+        });
         if (connected) {
-            this.#cx.services.relay.notifyOffline();
+            this.#cx.services.relay.refuseOperationsOffline();
         }
     };
 
@@ -357,9 +364,14 @@ export class ComputerService {
                 });
             } catch (error) {
                 signal.throwIfAborted();
-                socket.close(
-                    error instanceof ComputerMessageSchedulerCapacityError ? 1013 : 1008,
-                    "Invalid content chunk",
+                this.closeDaemon(
+                    identity,
+                    socket,
+                    {
+                        kind: "invalid_content_chunk",
+                        overCapacity: error instanceof ComputerMessageSchedulerCapacityError,
+                    },
+                    error,
                 );
             }
             return;
@@ -368,7 +380,7 @@ export class ComputerService {
             message.length > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES ||
             new TextEncoder().encode(message).byteLength > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES
         ) {
-            socket.close(1003, "Bounded text message required");
+            this.closeDaemon(identity, socket, { kind: "oversized_message" });
             return;
         }
         let daemonMessage: DaemonToRelayMessage | null;
@@ -391,11 +403,7 @@ export class ComputerService {
             });
         } catch (error) {
             if (error instanceof ComputerMessageSchedulerCapacityError) {
-                this.#cx.logger.warn(
-                    { ...identity, err: error, event: "computer_message_queue_full", closeCode: 1013 },
-                    "Computer message queue full",
-                );
-                socket.close(1013, error.code);
+                this.closeDaemon(identity, socket, { kind: "message_queue_full", code: error.code }, error);
                 return;
             }
             throw error;
@@ -414,16 +422,12 @@ export class ComputerService {
         // served. Read that authority before every business message; the local connection fence alone is insufficient.
         try {
             if ((await this.#cx.services.credentials.activeGeneration(signal)) === null) {
-                socket.close(1008, "Computer revoked");
+                this.closeDaemon(identity, socket, { kind: "revoked" });
                 return false;
             }
         } catch (error) {
             signal.throwIfAborted();
-            this.#cx.logger.warn(
-                { ...identity, err: error, event: "computer_authorization_failed", closeCode: 1011 },
-                "Computer authorization unavailable",
-            );
-            socket.close(1011, "Computer authorization unavailable");
+            this.closeDaemon(identity, socket, { kind: "authorization_unavailable" }, error);
             return false;
         }
         // A replacement may have been accepted while the authoritative lookup was in flight.
@@ -435,18 +439,51 @@ export class ComputerService {
 
     private readonly fenceDaemon = (identity: ComputerConnectionIdentity, socket: RelaySocket): boolean => {
         const standing = this.#cx.services.connections.standing(identity);
+        if (standing === "current") {
+            return false;
+        }
+        // A fenced socket may still deliver queued messages; its ending is recorded once.
+        if (!socket.isOpen()) {
+            return true;
+        }
         switch (standing) {
-            case "current":
-                return false;
-            case "replaced":
-                socket.close(1012, "Daemon connection replaced");
+            case "replaced": {
+                const latest = this.#cx.services.connections.latest();
+                this.closeDaemon(identity, socket, {
+                    kind: "replaced",
+                    replacement: latest?.kind === "connected" ? { connectionEpoch: latest.connectionEpoch } : null,
+                });
                 return true;
+            }
             case "ended":
-                socket.close(1008, "Computer revoked");
+                this.closeDaemon(identity, socket, { kind: "revoked" });
                 return true;
             default:
                 return standing satisfies never;
         }
+    };
+
+    /** Records why the Relay closes a daemon connection before the close starts any cleanup. */
+    private readonly closeDaemon = (
+        identity: ComputerConnectionIdentity,
+        socket: RelaySocket,
+        ending: DaemonConnectionEnding,
+        cause?: unknown,
+    ): void => {
+        const frame = daemonCloseFrame(ending);
+        const record = {
+            ...identity,
+            ...daemonEndingLogFields(ending),
+            event: "computer_connection_ending",
+            closeCode: frame.code,
+            ...(cause === undefined ? {} : { err: cause }),
+        };
+        if (isExpectedDaemonEnding(ending)) {
+            this.#cx.logger.info(record, "Computer connection ending");
+        } else {
+            this.#cx.logger.warn(record, "Computer connection ending");
+        }
+        socket.close(frame.code, frame.reason);
     };
 
     /**
@@ -495,7 +532,7 @@ export class ComputerService {
             return;
         }
         this.#cx.services.connections.disconnected(identity.connectionEpoch, Date.now());
-        this.#cx.services.relay.detachDaemon();
+        this.#cx.services.relay.detachDaemon(identity);
     };
 
     private readonly closeSilentDaemons = (): readonly ComputerConnectionIdentity[] => {
@@ -514,16 +551,7 @@ export class ComputerService {
             if (heardAt === null || now - heardAt <= DAEMON_HEARTBEAT_SILENCE_LIMIT_MILLISECONDS) {
                 continue;
             }
-            this.#cx.logger.warn(
-                {
-                    ...identity,
-                    closeCode: 4001,
-                    event: "computer_heartbeat_silence",
-                    silenceMilliseconds: now - heardAt,
-                },
-                "Computer daemon stopped heartbeating",
-            );
-            socket.close(4001, "Computer heartbeat timed out");
+            this.closeDaemon(identity, socket, { kind: "heartbeat_silence", silenceMilliseconds: now - heardAt });
             silent.push(identity);
         }
         return silent;

@@ -275,7 +275,9 @@ async function withDaemonConnection(
                     pending.resolve(message);
                 }
             });
-            connection.send(encodeComputerLivenessReadyEvent({ kind: COMPUTER_LIVENESS_READY_KIND }));
+            connection.send(
+                encodeComputerLivenessReadyEvent({ kind: COMPUTER_LIVENESS_READY_KIND, connectionEpoch: 1 }),
+            );
             connected.resolve();
         });
         const relayUrl = new URL(`ws://127.0.0.1:${port(relay)}${MORTY_API_PREFIX}/channels/real-agent/daemon`);

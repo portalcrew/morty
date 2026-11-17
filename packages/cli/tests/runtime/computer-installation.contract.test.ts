@@ -109,7 +109,7 @@ it("Given a saved connection with an opaque credential, When a host serves and c
             socket.close(1008, "Computer revoked");
             return;
         }
-        socket.send(encodeComputerLivenessReadyEvent({ kind: COMPUTER_LIVENESS_READY_KIND }));
+        socket.send(encodeComputerLivenessReadyEvent({ kind: COMPUTER_LIVENESS_READY_KIND, connectionEpoch: 1 }));
         socket.on("message", (encoded) => {
             if (encoded.toString() === COMPUTER_HEARTBEAT_MESSAGE) {
                 socket.send(COMPUTER_HEARTBEAT_ACK_MESSAGE);

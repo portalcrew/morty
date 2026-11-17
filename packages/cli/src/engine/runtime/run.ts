@@ -144,7 +144,7 @@ export async function runRuntime(
             sessionTurns: activeSessions,
         };
         options.onInitialized?.();
-        let connectionEpoch = 0;
+        let connectionAttempt = 0;
         let connectionAnnounced = false;
         let catalogPublished = false;
         let readinessAnnounced = false;
@@ -181,14 +181,15 @@ export async function runRuntime(
 
         try {
             while (!signal.aborted) {
-                connectionEpoch += 1;
+                connectionAttempt += 1;
+                const connection = diagnostics.connection(connectionAttempt);
                 try {
                     await runRelayConnection({
                         services,
                         config,
                         publisher,
                         payloadEncryption,
-                        connectionEpoch,
+                        connection,
                         diagnostics,
                         onConnected: () => {
                             if (catalogPublished) {
@@ -206,7 +207,7 @@ export async function runRuntime(
                     if (error instanceof ComputerRelayRevokedError) {
                         throw error;
                     }
-                    diagnostics.connectionFailed(connectionEpoch, error, "connection");
+                    connection.failed(error, "connection");
                 }
 
                 options.onConnectionStatus?.("reconnecting");

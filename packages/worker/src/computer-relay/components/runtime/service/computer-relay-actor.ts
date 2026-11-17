@@ -19,7 +19,16 @@ import {
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
 import type { SessionViewer } from "../../../../contracts/session-event-subscription.ts";
 import { logger } from "../../../../infra/logger.ts";
+import type { ComputerConnectionIdentity } from "../entity/computer-connection.ts";
+import {
+    type SessionViewersEnding,
+    sessionViewersCloseFrame,
+    sessionViewersEndingLogFields,
+} from "../entity/connection-ending.ts";
 import { sessionViewerAccess } from "../entity/session-viewer-access.ts";
+
+// Enough to link the subscriptions a browser reports to the ending, without an unbounded log record.
+const MAX_LOGGED_SUBSCRIPTION_IDS = 32;
 
 type OperationRouting = Exclude<ClientToRelayMessage, { readonly kind: typeof SESSION_EVENTS_SUBSCRIBE_KIND }>;
 
@@ -273,12 +282,30 @@ export class ComputerRelayActor {
     };
 
     /**
-     * The new daemon has no live subscription registry, so every subscription opened against the one it replaced ends.
-     * Clients establish fresh encrypted subscriptions themselves.
+     * Ends every open Session subscription, recording why before any closes. A new daemon has no live subscription
+     * registry, so subscriptions opened against the one it replaced end too; clients subscribe again themselves.
      */
-    readonly endSubscriptions = (): void => {
-        for (const viewer of this.#peers.viewers()) {
-            viewer.close(1012, "Daemon connection replaced");
+    readonly endViewers = (ending: SessionViewersEnding): void => {
+        const viewers = this.#peers.viewers();
+        if (viewers.length === 0) {
+            return;
+        }
+        const frame = sessionViewersCloseFrame(ending);
+        logger.info(
+            {
+                ...sessionViewersEndingLogFields(ending),
+                event: "session_viewers_ended",
+                computerId: this.#computerId,
+                closeCode: frame.code,
+                viewerCount: viewers.length,
+                subscriptionIds: viewers
+                    .slice(0, MAX_LOGGED_SUBSCRIPTION_IDS)
+                    .map(({ identity }) => identity.subscriptionId),
+            },
+            "Session subscriptions ended",
+        );
+        for (const viewer of viewers) {
+            viewer.close(frame.code, frame.reason);
         }
     };
 
@@ -291,15 +318,13 @@ export class ComputerRelayActor {
     };
 
     /** The latest daemon connection closed, so no daemon remains: the Computer is offline. */
-    readonly detachDaemon = (): void => {
+    readonly detachDaemon = (connection: ComputerConnectionIdentity): void => {
         this.failPendingAgentSettingsDiscoveries();
-        this.notifyOffline();
+        this.endViewers({ kind: "computer_offline", connection });
+        this.refuseOperationsOffline();
     };
 
-    readonly notifyOffline = (): void => {
-        for (const viewer of this.#peers.viewers()) {
-            viewer.close(1000, "Computer offline");
-        }
+    readonly refuseOperationsOffline = (): void => {
         for (const { socket } of this.#peers.operations()) {
             socket.computerOffline();
         }

@@ -54,13 +54,108 @@ function addFailureDetails(details: Record<string, string>, failure: unknown): v
     }
 }
 
+type RecordConnectionEvent = (event: string, details: Readonly<Record<string, string>>, warning: boolean) => void;
+
+type RelayConnectionIdentity =
+    | { readonly kind: "unconfirmed" }
+    | { readonly kind: "confirmed"; readonly relayConnectionEpoch: number };
+
+/**
+ * The records of one connection attempt. The attempt number is this daemon's own count and includes attempts the Relay
+ * never accepted; once the Relay confirms the connection, its records also carry the Relay's connection epoch, the
+ * identity the Relay logs for the same connection.
+ */
+export class RelayConnectionRecords {
+    readonly #attempt: number;
+    readonly #record: RecordConnectionEvent;
+    #identity: RelayConnectionIdentity = { kind: "unconfirmed" };
+    #closeRecorded = false;
+    #failureRecorded = false;
+
+    constructor(attempt: number, record: RecordConnectionEvent) {
+        this.#attempt = attempt;
+        this.#record = record;
+    }
+
+    readonly opened = (): void => {
+        this.#record("relay_connection_opened", this.#fields(), false);
+    };
+
+    readonly confirmed = (relayConnectionEpoch: number): void => {
+        this.#identity = { kind: "confirmed", relayConnectionEpoch };
+        this.#record("relay_connection_confirmed", this.#fields(), false);
+    };
+
+    /** This daemon is about to close the connection; recorded before any cleanup. */
+    readonly closing = (code: number, reason: string, source: string): void => {
+        this.#recordClose({
+            closeCode: code.toString(),
+            closeReason: sanitizeDiagnosticText(reason),
+            initiator: "runtime",
+            source,
+        });
+    };
+
+    /**
+     * The connection closed or failed without this daemon closing it. A received close frame or a reset only shows what
+     * arrived here, not which peer or intermediary decided it.
+     */
+    readonly closeObserved = (code: number, reason: string, wasClean: boolean, source: string): void => {
+        this.#recordClose({
+            closeCode: code.toString(),
+            closeReason: sanitizeDiagnosticText(reason),
+            initiator: "unattributed",
+            source,
+            wasClean: String(wasClean),
+        });
+    };
+
+    readonly failed = (failure: unknown, source: string): void => {
+        if (this.#failureRecorded) {
+            return;
+        }
+        this.#failureRecorded = true;
+        const details: Record<string, string> = { ...this.#fields(), source };
+        addFailureDetails(details, failure);
+        this.#record("relay_connection_failed", details, true);
+    };
+
+    readonly transportFailed = (failure: Error, source: string): void => {
+        const details: Record<string, string> = { ...this.#fields(), source };
+        addFailureDetails(details, failure);
+        this.#record("relay_transport_failed", details, true);
+    };
+
+    readonly heartbeatTimedOut = (timeoutMilliseconds: number): void => {
+        this.#record(
+            "relay_heartbeat_timed_out",
+            { ...this.#fields(), timeoutMilliseconds: timeoutMilliseconds.toString() },
+            true,
+        );
+    };
+
+    readonly #recordClose = (details: Readonly<Record<string, string>>): void => {
+        if (this.#closeRecorded) {
+            return;
+        }
+        this.#closeRecorded = true;
+        this.#record("relay_connection_closed", { ...this.#fields(), ...details }, true);
+    };
+
+    readonly #fields = (): Readonly<Record<string, string>> =>
+        this.#identity.kind === "confirmed"
+            ? {
+                  connectionAttempt: this.#attempt.toString(),
+                  relayConnectionEpoch: this.#identity.relayConnectionEpoch.toString(),
+              }
+            : { connectionAttempt: this.#attempt.toString() };
+}
+
 export class RelayConnectionDiagnostics {
     #lastSkippedLogAt = Number.NEGATIVE_INFINITY;
     #skippedCount = 0;
     readonly #computerId: string;
     readonly #localLog: RuntimeDiagnosticLog;
-    #lastClosedEpoch = 0;
-    #lastFailedEpoch = 0;
     readonly #relayOrigin: string;
     readonly #route: Readonly<Record<string, string>>;
 
@@ -79,75 +174,10 @@ export class RelayConnectionDiagnostics {
         this.#record("agent_catalog_publish_failed", details, true);
     };
 
-    readonly connectionClosed = (connectionEpoch: number, code: number, reason: string, source: string): void => {
-        if (this.#lastClosedEpoch === connectionEpoch) {
-            return;
-        }
-        this.#lastClosedEpoch = connectionEpoch;
-        this.#record(
-            "relay_connection_closed",
-            {
-                closeCode: code.toString(),
-                closeReason: sanitizeDiagnosticText(reason),
-                connectionEpoch: connectionEpoch.toString(),
-                relayOrigin: this.#relayOrigin,
-                source,
-                ...this.#route,
-            },
-            true,
+    readonly connection = (attempt: number): RelayConnectionRecords =>
+        new RelayConnectionRecords(attempt, (event, details, warning) =>
+            this.#record(event, { ...details, relayOrigin: this.#relayOrigin, ...this.#route }, warning),
         );
-    };
-
-    readonly connectionFailed = (connectionEpoch: number, failure: unknown, source: string): void => {
-        if (this.#lastFailedEpoch === connectionEpoch) {
-            return;
-        }
-        this.#lastFailedEpoch = connectionEpoch;
-        const details: Record<string, string> = {
-            connectionEpoch: connectionEpoch.toString(),
-            relayOrigin: this.#relayOrigin,
-            source,
-            ...this.#route,
-        };
-        addFailureDetails(details, failure);
-        this.#record("relay_connection_failed", details, true);
-    };
-
-    readonly transportFailed = (connectionEpoch: number, failure: Error, source: string): void => {
-        const details: Record<string, string> = {
-            connectionEpoch: connectionEpoch.toString(),
-            relayOrigin: this.#relayOrigin,
-            source,
-            ...this.#route,
-        };
-        addFailureDetails(details, failure);
-        this.#record("relay_transport_failed", details, true);
-    };
-
-    readonly connectionOpened = (connectionEpoch: number): void => {
-        this.#record(
-            "relay_connection_opened",
-            {
-                connectionEpoch: connectionEpoch.toString(),
-                relayOrigin: this.#relayOrigin,
-                ...this.#route,
-            },
-            false,
-        );
-    };
-
-    readonly heartbeatTimedOut = (connectionEpoch: number, timeoutMilliseconds: number): void => {
-        this.#record(
-            "relay_heartbeat_timed_out",
-            {
-                connectionEpoch: connectionEpoch.toString(),
-                relayOrigin: this.#relayOrigin,
-                timeoutMilliseconds: timeoutMilliseconds.toString(),
-                ...this.#route,
-            },
-            true,
-        );
-    };
 
     readonly daemonDiagnostic = (
         event: string,
