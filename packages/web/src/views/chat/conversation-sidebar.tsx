@@ -254,6 +254,22 @@ function SessionStatusIndicator({
     ) : null;
 }
 
+function SidebarConnectionMessage({ message }: { readonly message: string }) {
+    const separator = message.indexOf(". ");
+    const title = separator === -1 ? message : message.slice(0, separator);
+    const description = separator === -1 ? null : message.slice(separator + 2);
+
+    return (
+        <div role="status" className="flex min-w-0 items-start gap-2.5 px-2 py-3">
+            <ComputerOfflineIcon small />
+            <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium leading-5 text-foreground">{title}</p>
+                {description && <p className="mt-0.5 text-xs leading-4 text-muted-foreground">{description}</p>}
+            </div>
+        </div>
+    );
+}
+
 function ManagedSessionDirectoryList({
     directory,
     archive,
@@ -288,13 +304,7 @@ function ManagedSessionDirectoryList({
         <Tooltip.Provider delayDuration={150}>
             {(directory.kind === "failed" || directory.kind === "stale") &&
                 (directory.failure === "connection" ? (
-                    <div
-                        role="status"
-                        className="flex flex-col items-start gap-2 px-2 py-3 text-xs text-muted-foreground"
-                    >
-                        <ComputerOfflineIcon />
-                        <p>{directory.message}</p>
-                    </div>
+                    <SidebarConnectionMessage message={directory.message} />
                 ) : (
                     <MortyAlert>{directory.message}</MortyAlert>
                 ))}
