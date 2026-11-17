@@ -14,6 +14,8 @@ import type {
     FormElicitation,
     PermissionFileChange,
     PermissionPresentation,
+    ShownElicitation,
+    ShownPermission,
 } from "@/view-models/chat/session-interaction-store";
 import type {
     ElicitationInteraction,
@@ -31,9 +33,7 @@ import {
 
 export type { PermissionFileChange } from "@/view-models/chat/session-interaction-store";
 export type {
-    ElicitationInteraction,
     ElicitationInteractionResponse,
-    PermissionInteraction,
     PermissionInteractionResponse,
 } from "@/view-models/chat/session-pane-types";
 
@@ -476,28 +476,17 @@ function PermissionCard({
     );
 }
 
-/** A one-word note on how a decided information request ended. */
-function answeredNote(state: Exclude<ElicitationInteraction["state"], { readonly kind: "pending" }>): string {
-    if (state.kind === "resolved" && state.action === "decline") {
-        return "Declined";
-    }
-    if (state.kind === "resolved" && state.action === "cancel") {
-        return "Cancelled";
-    }
-    return "Accepted";
-}
-
 function ElicitationCard({
-    busy,
     elicitation,
+    need,
     fieldValues,
     requiredNotice,
     respond,
     accept,
     editAnswer,
 }: {
-    readonly busy: boolean;
     readonly elicitation: ElicitationInteraction;
+    readonly need: ShownElicitation["need"];
     /** What each field shows now: the user's answer so far, or the Agent's default. */
     readonly fieldValues: ReadonlyMap<string, ElicitationFieldValue>;
     /** Why the question cannot be accepted yet, once the user tried; empty otherwise. */
@@ -507,7 +496,8 @@ function ElicitationCard({
     readonly editAnswer: (fieldName: string, value: ElicitationFieldValue) => void;
 }) {
     const externalUrl = elicitation.mode === "url" ? safeExternalUrl(elicitation.url) : "";
-    const answered = elicitation.state.kind !== "pending";
+    const awaitingCompletion = need.kind === "awaiting-completion";
+    const busy = need.kind === "sending";
     const refuse = (action: "cancel" | "decline"): void => {
         respond({
             answer: { action },
@@ -515,28 +505,13 @@ function ElicitationCard({
             target: elicitation.target,
         });
     };
-    if (elicitation.state.kind !== "pending" && elicitation.mode === "form") {
-        const note = answeredNote(elicitation.state);
-        return (
-            <section className={interactionCardClassName} role="dialog" aria-label="Agent information request">
-                <div className="flex items-start gap-2">
-                    <HelpCircle aria-hidden="true" className={interactionIconClassName} />
-                    <div className="min-w-0 flex-1">
-                        <p className={interactionTitleClassName}>Asked</p>
-                        <p className="mt-1 text-13 leading-5 text-foreground">{elicitation.message}</p>
-                        <p className="mt-1 text-12 leading-5 text-muted-foreground">{note}</p>
-                    </div>
-                </div>
-            </section>
-        );
-    }
 
     return (
         <section className={interactionCardClassName} role="dialog" aria-label="Agent information request">
             <div className="flex items-start gap-2">
                 <HelpCircle aria-hidden="true" className={interactionIconClassName} />
                 <div className="min-w-0 flex-1">
-                    {answered ? (
+                    {awaitingCompletion ? (
                         <p className={interactionTitleClassName}>Asked</p>
                     ) : (
                         <p aria-label="Waiting for your answer" className={interactionTitleClassName} role="status">
@@ -549,8 +524,7 @@ function ElicitationCard({
                             <code className="block break-all rounded-md bg-muted px-3 py-2 font-mono text-12 leading-5 text-foreground">
                                 {externalUrl.length > 0 ? externalUrl : elicitation.url}
                             </code>
-                            {elicitation.state.kind === "submitted" ||
-                            (elicitation.state.kind === "resolved" && elicitation.state.action === "accept") ? (
+                            {awaitingCompletion ? (
                                 <div className="mt-2.5 flex flex-wrap items-center gap-2">
                                     <span className="text-12 text-muted-foreground">
                                         Waiting for the agent to confirm completion…
@@ -571,7 +545,7 @@ function ElicitationCard({
                                     {externalUrl.length > 0 && (
                                         <Button
                                             className="gap-[6px] min-h-11 md:min-h-9"
-                                            disabled={busy || answered}
+                                            disabled={busy}
                                             onClick={() => {
                                                 window.open(externalUrl, "_blank", "noopener,noreferrer");
                                                 respond({
@@ -587,7 +561,7 @@ function ElicitationCard({
                                     )}
                                     <Button
                                         className="min-h-11 md:min-h-9"
-                                        disabled={busy || answered}
+                                        disabled={busy}
                                         onClick={() => refuse("decline")}
                                         size="sm"
                                         variant="outline"
@@ -596,7 +570,7 @@ function ElicitationCard({
                                     </Button>
                                     <Button
                                         className="min-h-11 md:min-h-9"
-                                        disabled={busy || answered}
+                                        disabled={busy}
                                         onClick={() => refuse("cancel")}
                                         size="sm"
                                         variant="ghost"
@@ -616,7 +590,7 @@ function ElicitationCard({
                         >
                             {elicitation.fields.map((field) => (
                                 <FieldControl
-                                    disabled={busy || answered}
+                                    disabled={busy}
                                     field={field}
                                     key={field.name}
                                     value={fieldValues.get(field.name) ?? ""}
@@ -625,17 +599,12 @@ function ElicitationCard({
                             ))}
                             {requiredNotice.length > 0 && <MortyAlert>{requiredNotice}</MortyAlert>}
                             <div className="flex flex-wrap gap-2">
-                                <Button
-                                    className="min-h-11 md:min-h-9"
-                                    disabled={busy || answered}
-                                    size="sm"
-                                    type="submit"
-                                >
+                                <Button className="min-h-11 md:min-h-9" disabled={busy} size="sm" type="submit">
                                     Continue
                                 </Button>
                                 <Button
                                     className="min-h-11 md:min-h-9"
-                                    disabled={busy || answered}
+                                    disabled={busy}
                                     onClick={() => refuse("decline")}
                                     size="sm"
                                     variant="outline"
@@ -644,7 +613,7 @@ function ElicitationCard({
                                 </Button>
                                 <Button
                                     className="min-h-11 md:min-h-9"
-                                    disabled={busy || answered}
+                                    disabled={busy}
                                     onClick={() => refuse("cancel")}
                                     size="sm"
                                     variant="ghost"
@@ -674,10 +643,9 @@ export function SessionInteractionCards({
     onElicitationResponse,
     onPermissionResponse,
     onStop,
-    busyInteractionIds,
     error,
 }: {
-    readonly elicitations: readonly ElicitationInteraction[];
+    readonly elicitations: readonly ShownElicitation[];
     readonly fieldValues: ReadonlyMap<string, ReadonlyMap<string, ElicitationFieldValue>>;
     readonly permissionPresentations: ReadonlyMap<string, PermissionPresentation>;
     /** Why a question cannot be accepted yet, by interaction id, once the user tried. */
@@ -685,11 +653,10 @@ export function SessionInteractionCards({
     readonly onElicitationAnswer: (interactionId: string, fieldName: string, value: ElicitationFieldValue) => void;
     readonly onElicitationAccept: (elicitation: FormElicitation) => void;
     readonly fileChanges: ReadonlyMap<string, readonly PermissionFileChange[]>;
-    readonly permissions: readonly PermissionInteraction[];
+    readonly permissions: readonly ShownPermission[];
     readonly onStop: () => void;
     readonly onElicitationResponse: (response: ElicitationInteractionResponse) => void;
     readonly onPermissionResponse: (response: PermissionInteractionResponse) => void;
-    readonly busyInteractionIds: ReadonlySet<string>;
     readonly error: string;
 }) {
     if (permissions.length === 0 && elicitations.length === 0) {
@@ -697,13 +664,13 @@ export function SessionInteractionCards({
     }
     return (
         <div className="grid w-full gap-3">
-            {permissions.flatMap((permission) => {
+            {permissions.flatMap(({ permission, need }) => {
                 const presentation = permissionPresentations.get(permission.interactionId);
                 return presentation === undefined
                     ? []
                     : [
                           <PermissionCard
-                              busy={busyInteractionIds.has(permission.interactionId)}
+                              busy={need.kind === "sending"}
                               fileChanges={fileChanges.get(permission.interactionId) ?? []}
                               key={permission.interactionId}
                               permission={permission}
@@ -713,15 +680,15 @@ export function SessionInteractionCards({
                           />,
                       ];
             })}
-            {elicitations.map((elicitation) => (
+            {elicitations.map(({ elicitation, need }) => (
                 <ElicitationCard
-                    busy={busyInteractionIds.has(elicitation.interactionId)}
                     accept={onElicitationAccept}
                     fieldValues={fieldValues.get(elicitation.interactionId) ?? NO_VALUES}
                     requiredNotice={requiredNotices.get(elicitation.interactionId) ?? ""}
                     editAnswer={(fieldName, value) => onElicitationAnswer(elicitation.interactionId, fieldName, value)}
                     elicitation={elicitation}
                     key={elicitation.interactionId}
+                    need={need}
                     respond={onElicitationResponse}
                 />
             ))}

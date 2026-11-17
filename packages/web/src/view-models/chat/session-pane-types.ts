@@ -26,7 +26,7 @@ type ElicitationInteractionDetails = DetailsOf<SessionElicitationRequestedEvent>
 
 type ElicitationInteractionState =
     | { readonly kind: "pending" }
-    | { readonly kind: "submitted" }
+    | { readonly kind: "awaiting-completion" }
     | { readonly kind: "resolved"; readonly action: SessionElicitationResolvedEvent["action"] };
 
 export type ElicitationInteraction = ElicitationInteractionDetails & {

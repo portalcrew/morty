@@ -269,7 +269,12 @@ function transitionInteractions(
                     kind: "elicitation",
                     elicitation: {
                         ...interaction.elicitation,
-                        state: { action: change.action, kind: "resolved" },
+                        // Accepting a URL request only sends the user to its page; the Agent reports completion
+                        // separately, and until then a read reports the request as awaiting completion.
+                        state:
+                            interaction.elicitation.mode === "url" && change.action === "accept"
+                                ? { kind: "awaiting-completion" }
+                                : { action: change.action, kind: "resolved" },
                     },
                 };
             });
@@ -619,29 +624,9 @@ export function runtimeCoversMessage(state: SessionExecutionState, commandId: st
     }
 }
 
-/** The questions the Computer's account leaves pending, or null while this page has no account of them yet. */
-export function pendingQuestions(state: SessionExecutionState): ReadonlySet<string> | null {
-    return state.coverage.kind === "covered" ? pendingQuestionIds(state.interactions) : null;
-}
-
-function pendingQuestionIds(interactions: readonly SessionInteraction[]): ReadonlySet<string> {
-    return new Set(
-        interactions.flatMap((interaction) =>
-            interaction.kind === "elicitation" && interaction.elicitation.state.kind === "pending"
-                ? [interaction.elicitation.interactionId]
-                : [],
-        ),
-    );
-}
-
-export function waitingForInput(interactions: readonly SessionInteraction[]): boolean {
-    return interactions.some(
-        (interaction) =>
-            (interaction.kind === "permission" && interaction.permission.state.kind !== "resolved") ||
-            (interaction.kind === "elicitation" &&
-                (interaction.elicitation.state.kind === "pending" ||
-                    interaction.elicitation.state.kind === "submitted")),
-    );
+/** The Agent's requests as the Computer's account holds them, or null while this page has no account of them yet. */
+export function accountedInteractions(state: SessionExecutionState): readonly SessionInteraction[] | null {
+    return state.coverage.kind === "covered" ? state.interactions : null;
 }
 
 export function submittingCommandId(

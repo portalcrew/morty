@@ -283,3 +283,39 @@ test("Given a background permission after the foreground turn ends, When the use
     );
     expect(queryByRole(document.body, "alertdialog", { name: "Agent permission request" })).toBeNull();
 });
+
+test("Given the agent asks the user to open a page, When the user opens it, Then the conversation shows that it waits for the agent to confirm completion and still takes messages, also after a reload", {
+    timeout: 30_000,
+}, async () => {
+    const app = await createTestApp({
+        connectAgent: true,
+        agent: { harness: "interaction-test", label: "Interaction Agent" },
+    });
+    await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), "request account connection");
+    const request = await app.waitForView(() =>
+        getByRole(document.body, "dialog", { name: "Agent information request" }),
+    );
+    await app.user.click(getByRole(request, "button", { name: "Open page" }));
+
+    const waiting = await app.waitForView(() => {
+        const card = getByRole(document.body, "dialog", { name: "Agent information request" });
+        expect(card.textContent).toContain("Waiting for the agent to confirm completion…");
+        return card;
+    });
+    expect(getByRole(waiting, "link", { name: "Open again" })).toHaveProperty(
+        "href",
+        "https://accounts.example.test/connect",
+    );
+    expect(queryByRole(waiting, "status", { name: "Waiting for your answer" })).toBeNull();
+    expect(getByRole(document.body, "status", { name: "Agent is working" })).toBeDefined();
+    expect(await app.queryElementByTestId(dataTestId.messageComposer)).toHaveProperty("disabled", false);
+
+    const reloaded = await app.reload();
+    const recovered = await reloaded.waitForView(() => {
+        const card = getByRole(document.body, "dialog", { name: "Agent information request" });
+        expect(card.textContent).toContain("Waiting for the agent to confirm completion…");
+        return card;
+    });
+    expect(getByRole(recovered, "link", { name: "Open again" })).toBeDefined();
+    expect(await reloaded.queryElementByTestId(dataTestId.messageComposer)).toHaveProperty("disabled", false);
+});

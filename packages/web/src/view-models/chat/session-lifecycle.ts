@@ -100,7 +100,7 @@ export function requestedInteraction(
             const { commandId: _commandId, kind: _kind, ...elicitation } = event;
             return {
                 kind: "elicitation",
-                elicitation: { ...elicitation, mode: "url", state: { kind: "submitted" } },
+                elicitation: { ...elicitation, mode: "url", state: { kind: "awaiting-completion" } },
             };
         }
         default:

@@ -20,6 +20,8 @@ export default defineConfig({
                     // reads. Its preflight lists CORS-safelisted headers such as Accept, which browsers leave out,
                     // and the Relay rightly refuses them. Browsers send these reads, so the tests do too.
                     fetch: { disableSameOriginPolicy: true },
+                    // A page the app opens in a new window lies outside the app under test, so it is not loaded.
+                    navigation: { disableChildPageNavigation: true },
                 },
             },
         },

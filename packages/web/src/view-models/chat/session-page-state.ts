@@ -11,7 +11,7 @@ import {
 import type { Clock } from "../../services/time/clock.ts";
 import { createSessionComposerStore, type SessionComposerStore } from "./session-composer-store.ts";
 import { createSessionDeliveryStore, type SessionDeliveryStore } from "./session-delivery-store.ts";
-import { createSessionExecutionStore, pendingQuestions, type SessionExecutionStore } from "./session-execution.ts";
+import { accountedInteractions, createSessionExecutionStore, type SessionExecutionStore } from "./session-execution.ts";
 import { createSessionInteractionStore, type SessionInteractionStore } from "./session-interaction-store.ts";
 import { createSessionMessageQueueStore, type SessionMessageQueueStore } from "./session-message-queue-store.ts";
 import { createSessionOperationConnection, type SessionOperationConnection } from "./session-operation-connection.ts";
@@ -130,7 +130,7 @@ export function createSessionPageState(options: {
                 centralSessionStorage.write(answerDraftsEntry, Object.fromEntries(drafts));
             }
         },
-        pendingQuestions: () => pendingQuestions(execution.getState().state),
+        interactions: () => accountedInteractions(execution.getState().state),
     });
     const execution = createSessionExecutionStore();
     const settings = createSessionSettingsStore({ computerId, sessionTarget, connection, failed });
