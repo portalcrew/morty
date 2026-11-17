@@ -41,7 +41,11 @@ for (const viewport of [
             await expect(ending).not.toBeInViewport();
             await jump.click();
             await expect(ending).toBeInViewport();
-            const composerBox = await page.getByRole("textbox", { name: "Message" }).boundingBox();
+            const composer =
+                viewport.width < 640
+                    ? page.getByRole("button", { name: "Expand message composer" })
+                    : page.getByRole("textbox", { name: "Message" });
+            const composerBox = await composer.boundingBox();
             const endingBox = await ending.boundingBox();
             if (composerBox === null || endingBox === null) {
                 throw new Error("Expected the reply tail and composer to have layout boxes");

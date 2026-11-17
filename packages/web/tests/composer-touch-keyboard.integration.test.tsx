@@ -83,7 +83,7 @@ test("Given a mobile reply is generating with an empty inactive composer, When I
         const composer = app.elementByTestId(dataTestId.messageComposer);
         expect(composer).toHaveProperty("value", "");
         expect(composer).not.toBe(document.activeElement);
-        expect(getByRole(document.body, "button", { name: "Expand message composer" })).toBeDefined();
+        await app.waitForView(() => getByRole(document.body, "button", { name: "Expand message composer" }));
 
         const stop = getByRole(document.body, "button", { name: "Stop agent output" });
         expect(stop).toHaveProperty("disabled", false);

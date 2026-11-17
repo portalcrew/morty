@@ -159,7 +159,7 @@ export function BotChatComposer({
         if (!mobile) {
             return;
         }
-        const collapseOnOutsidePointerDown = (event: PointerEvent): void => {
+        const collapseOnOutsideClick = (event: MouseEvent): void => {
             const form = textarea.current?.form;
             // Composer controls can open a sheet outside the form; its dismissal must not collapse the composer.
             if (
@@ -170,8 +170,8 @@ export function BotChatComposer({
                 setActive(false);
             }
         };
-        document.addEventListener("pointerdown", collapseOnOutsidePointerDown);
-        return () => document.removeEventListener("pointerdown", collapseOnOutsidePointerDown);
+        document.addEventListener("click", collapseOnOutsideClick);
+        return () => document.removeEventListener("click", collapseOnOutsideClick);
     }, [mobile, setActive]);
     const canCollapse =
         draft.trim().length === 0 &&
