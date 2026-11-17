@@ -70,7 +70,7 @@ export function sessionOperationFacts(input: {
         // This page's own request counts until the Computer's account reflects it or the turn ends.
         stopping: turn.kind === "current" && (turn.stop === "stopping" || stopInFlight(input.tasks, turn.commandId)),
         configuring: input.settings.change.kind === "configuring",
-        delivery: settledDelivery(input.delivery, execution).state.kind,
+        delivery: settledDelivery(input.delivery, execution).state,
         waitingForInput: waitingForInput(execution.interactions, input.interactions.submissions),
         ownerRunsTurn: ownerRunsTurn(execution.turn),
         steeringSupported: input.steeringSupported,

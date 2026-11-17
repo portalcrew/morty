@@ -15,7 +15,7 @@ import { runtimeCoversMessage, runtimeHoldsCommand, type SessionExecutionState }
 
 type SubmitRequest = Parameters<MortyClient["turns"]["submit"]>[1];
 export type SubmitTurn = (request: SubmitRequest, signal: AbortSignal) => Promise<void>;
-interface DeliveryAttempt {
+export interface DeliveryAttempt {
     readonly prepare: (message: SubmittedMessage, signal: AbortSignal) => Promise<Journal["request"]>;
     readonly submit: SubmitTurn;
 }
@@ -98,14 +98,17 @@ export type DeliveryState =
     | { readonly kind: "withdrawing"; readonly journal: Journal }
     | { readonly kind: "failed"; readonly journal: Journal; readonly failure: SubmissionFailure };
 
-function failedSubmission(
-    state: DeliveryState,
-): { readonly message: SubmittedMessage; readonly failure: SubmissionFailure } | null {
+/** A failed message the user can retry, edit or discard; `rejected` when the Computer received and refused it. */
+export function failedSubmission(state: DeliveryState): {
+    readonly message: SubmittedMessage;
+    readonly failure: SubmissionFailure;
+    readonly rejected: boolean;
+} | null {
     switch (state.kind) {
         case "preparation-failed":
-            return { message: state.message, failure: state.failure };
+            return { message: state.message, failure: state.failure, rejected: false };
         case "failed":
-            return { message: journalMessage(state.journal), failure: state.failure };
+            return { message: journalMessage(state.journal), failure: state.failure, rejected: true };
         case "idle":
         case "awaiting-connection":
         case "preparing":
@@ -118,12 +121,25 @@ function failedSubmission(
     }
 }
 
+/**
+ * A new message starts only while no other is in progress or held for the user, so it never replaces one the user can
+ * still retry, edit or remove.
+ */
+export function deliveryTakesNewMessage(state: DeliveryState): boolean {
+    return state.kind === "idle";
+}
+
+/** An unconfirmed message the user can send again or remove; one being withdrawn waits for the Computer's answer. */
+export function unknownDelivery(state: DeliveryState): Journal | null {
+    return state.kind === "delivery-unknown" ? state.journal : null;
+}
+
 /** A message the Computer may hold although this page has no confirmation of it. */
 export function unconfirmedJournal(state: DeliveryState): Journal | null {
     return state.kind === "delivery-unknown" || state.kind === "withdrawing" ? state.journal : null;
 }
 
-export function awaitingMessage(state: DeliveryState): SubmittedMessage | null {
+function awaitingMessage(state: DeliveryState): SubmittedMessage | null {
     return state.kind === "awaiting-connection" ? state.message : null;
 }
 
@@ -162,8 +178,23 @@ export interface SessionDeliveryStore {
     readonly withdrawUnknown: (withdraw: WithdrawCommand, signal: AbortSignal) => Promise<void>;
     readonly awaitConnection: (message: SubmittedMessage) => void;
     readonly takeFailedMessage: () => SubmittedMessage | null;
-    readonly send: (message: SubmittedMessage, attempt: DeliveryAttempt) => Promise<void>;
-    readonly retry: (submit: SubmitTurn) => Promise<void>;
+    /** Starts a new message; null when another delivery is in progress or held for the user. */
+    readonly send: (message: AcceptedMessage, attempt: DeliveryAttempt) => StartedDelivery | null;
+    /** Starts the message held until a pane connected; null when none is held. */
+    readonly sendAwaiting: (attempt: DeliveryAttempt) => StartedDelivery | null;
+    /**
+     * Submits a failed message again: one the Computer never received keeps its identity, one it rejected gets a new
+     * identity, since the Computer never runs a rejected identity again. Null when no message failed.
+     */
+    readonly retryFailed: (attempt: DeliveryAttempt) => StartedDelivery | null;
+    /** Sends the unknown delivery again under its identity, so the Computer runs it at most once; null when none is. */
+    readonly retryUnknown: (submit: SubmitTurn) => StartedDelivery | null;
+}
+
+/** A delivery the store started: where the page shows its message until the Computer answers, and its outcome. */
+export interface StartedDelivery {
+    readonly placement: DeliveryPlacement;
+    readonly delivered: Promise<void>;
 }
 
 /** Asks the Computer to withdraw a command before it starts; true when the Computer withdrew it. */
@@ -341,6 +372,38 @@ export const createSessionDeliveryStore = (options: {
                 set({ kind: "delivery-unknown", journal });
             }
         };
+        const deliver = async (message: SubmittedMessage, delivery: DeliveryAttempt): Promise<void> => {
+            const signal = options.lifetime;
+            set({ kind: "preparing", message });
+            let request: Journal["request"];
+            try {
+                request = await delivery.prepare(message, signal);
+                signal.throwIfAborted();
+            } catch (cause) {
+                signal.throwIfAborted();
+                set({
+                    kind: "preparation-failed",
+                    message,
+                    failure: submissionFailure(cause, "The agent could not complete the message."),
+                });
+                return;
+            }
+            await attempt(
+                {
+                    commandId: message.commandId,
+                    placement: message.placement,
+                    request,
+                    attachments: message.attachments.kind === "local" ? message.attachments.values : null,
+                },
+                delivery.submit,
+                signal,
+            );
+        };
+        const start = (message: AcceptedMessage, delivery: DeliveryAttempt): StartedDelivery => {
+            // Shown in the queue while a turn runs, otherwise as the next turn, until the Computer says which it is.
+            const placement: DeliveryPlacement = options.runtime().turn.kind === "current" ? "queue" : "turn";
+            return { placement, delivered: deliver({ ...message, placement }, delivery) };
+        };
         return {
             state:
                 options.pendingSubmission === null
@@ -348,11 +411,10 @@ export const createSessionDeliveryStore = (options: {
                     : { kind: "delivery-unknown", journal: { ...options.pendingSubmission, attachments: null } },
             accepted: [],
             withdrawUnknown: async (withdraw, signal) => {
-                const { state } = settled();
-                if (state.kind !== "delivery-unknown") {
+                const journal = unknownDelivery(settled().state);
+                if (journal === null) {
                     return;
                 }
-                const { journal } = state;
                 set({ kind: "withdrawing", journal });
                 let withdrawn = false;
                 try {
@@ -371,39 +433,24 @@ export const createSessionDeliveryStore = (options: {
                 }
                 return failed?.message ?? null;
             },
-            send: async (message, delivery) => {
-                const signal = options.lifetime;
-                set({ kind: "preparing", message });
-                let request: Journal["request"];
-                try {
-                    request = await delivery.prepare(message, signal);
-                    signal.throwIfAborted();
-                } catch (cause) {
-                    signal.throwIfAborted();
-                    set({
-                        kind: "preparation-failed",
-                        message,
-                        failure: submissionFailure(cause, "The agent could not complete the message."),
-                    });
-                    return;
-                }
-                await attempt(
-                    {
-                        commandId: message.commandId,
-                        placement: message.placement,
-                        request,
-                        attachments: message.attachments.kind === "local" ? message.attachments.values : null,
-                    },
-                    delivery.submit,
-                    signal,
-                );
+            send: (message, delivery) => (deliveryTakesNewMessage(settled().state) ? start(message, delivery) : null),
+            sendAwaiting: (delivery) => {
+                const message = awaitingMessage(settled().state);
+                return message === null ? null : start(message, delivery);
             },
-            // Only an unknown delivery repeats its identity; the Computer never runs a rejected command identity again.
-            retry: async (submit) => {
-                const { state } = settled();
-                if (state.kind === "delivery-unknown") {
-                    await attempt(state.journal, submit, options.lifetime);
+            retryFailed: (delivery) => {
+                const failed = failedSubmission(settled().state);
+                if (failed === null) {
+                    return null;
                 }
+                const { message, rejected } = failed;
+                return start(rejected ? { ...message, commandId: crypto.randomUUID() } : message, delivery);
+            },
+            retryUnknown: (submit) => {
+                const journal = unknownDelivery(settled().state);
+                return journal === null
+                    ? null
+                    : { placement: journal.placement, delivered: attempt(journal, submit, options.lifetime) };
             },
         };
     });

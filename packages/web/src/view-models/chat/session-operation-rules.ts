@@ -1,5 +1,10 @@
 import type { SessionConnection } from "./session-connection.ts";
-import type { SessionDeliveryStore } from "./session-delivery-store.ts";
+import {
+    type DeliveryState,
+    deliveryTakesNewMessage,
+    failedSubmission,
+    unknownDelivery,
+} from "./session-delivery-store.ts";
 import type { ChatQueuedMessage } from "./session-message-queue-store.ts";
 
 /**
@@ -12,49 +17,38 @@ export interface SessionOperationFacts {
     /** The running turn is being stopped. */
     readonly stopping: boolean;
     readonly configuring: boolean;
-    readonly delivery: SessionDeliveryStore["state"]["kind"];
+    readonly delivery: DeliveryState;
     readonly waitingForInput: boolean;
     readonly ownerRunsTurn: boolean;
     readonly steeringSupported: boolean;
 }
 
-/**
- * Whether the Session takes a message now: it is connected and its settings are not changing. Whether the message runs
- * now or waits behind earlier work is the Computer's admission, which never refuses a message.
- */
-function sessionAccepts(facts: Pick<SessionOperationFacts, "connection" | "configuring">): boolean {
-    return facts.connection === "ready" && !facts.configuring;
+/** Settings changes and messages are serialized: a message waits while the Session's settings are changing. */
+export function settingsAllowMessages(facts: Pick<SessionOperationFacts, "configuring">): boolean {
+    return !facts.configuring;
 }
 
-/** What the Session's own state decides about a submission, whichever pane shows it. */
-export function canStartSubmission(facts: Pick<SessionOperationFacts, "configuring" | "delivery">): boolean {
+/**
+ * Whether the user can submit to the Session now: it is reachable and connected and its settings are not changing.
+ * Which message may start is delivery's decision; whether it runs now or waits behind earlier work is the Computer's
+ * admission, which never refuses a message.
+ */
+function userCanSubmit(facts: SessionOperationFacts): boolean {
     return (
-        !facts.configuring &&
-        facts.delivery !== "preparing" &&
-        facts.delivery !== "submitting" &&
-        facts.delivery !== "delivery-unknown" &&
-        facts.delivery !== "withdrawing"
+        facts.connectionAvailable &&
+        !facts.waitingForInput &&
+        !facts.stopping &&
+        facts.connection === "ready" &&
+        settingsAllowMessages(facts)
     );
 }
 
-function canSubmit(facts: Pick<SessionOperationFacts, "connection" | "configuring" | "delivery">): boolean {
-    return facts.connection === "ready" && canStartSubmission(facts);
-}
-
-function userCanReachSession(facts: SessionOperationFacts): boolean {
-    return facts.connectionAvailable && !facts.waitingForInput && !facts.stopping;
-}
-
-function userCanSubmit(facts: SessionOperationFacts): boolean {
-    return userCanReachSession(facts) && canSubmit(facts);
-}
-
 export function canSend(facts: SessionOperationFacts): boolean {
-    return facts.delivery === "idle" && userCanSubmit(facts);
+    return deliveryTakesNewMessage(facts.delivery) && userCanSubmit(facts);
 }
 
 export function canRetryFailedMessage(facts: SessionOperationFacts): boolean {
-    return userCanSubmit(facts);
+    return failedSubmission(facts.delivery) !== null && userCanSubmit(facts);
 }
 
 /**
@@ -62,7 +56,7 @@ export function canRetryFailedMessage(facts: SessionOperationFacts): boolean {
  * at most once. That unresolved delivery is the one this retry settles.
  */
 export function canRetryUnknownDelivery(facts: SessionOperationFacts): boolean {
-    return facts.delivery === "delivery-unknown" && userCanReachSession(facts) && sessionAccepts(facts);
+    return unknownDelivery(facts.delivery) !== null && userCanSubmit(facts);
 }
 
 /**
@@ -72,7 +66,7 @@ export function canRetryUnknownDelivery(facts: SessionOperationFacts): boolean {
 export function canRemoveUnknownDelivery(
     facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "delivery">,
 ): boolean {
-    return facts.delivery === "delivery-unknown" && facts.connectionAvailable && facts.connection === "ready";
+    return unknownDelivery(facts.delivery) !== null && facts.connectionAvailable && facts.connection === "ready";
 }
 
 /**
@@ -86,7 +80,7 @@ export function canChangeSettings(
         facts.connectionAvailable &&
         facts.connection === "ready" &&
         !facts.configuring &&
-        facts.delivery === "idle" &&
+        facts.delivery.kind === "idle" &&
         !facts.stopping
     );
 }
