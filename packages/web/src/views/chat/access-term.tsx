@@ -73,7 +73,7 @@ export function SidebarAccessNoticeCard({
                 <p
                     className={cn(
                         accessNoticeTitleClassName,
-                        "min-w-0 flex-1",
+                        "min-w-0 flex-1 max-sm:truncate",
                         mobileTitleSuffix !== undefined && "max-sm:flex max-sm:items-center max-sm:gap-2",
                     )}
                 >
