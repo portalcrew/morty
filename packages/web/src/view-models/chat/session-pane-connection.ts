@@ -2,7 +2,8 @@ import type { MortyClient, MortySessionEventObserver } from "@portalcrew/morty-c
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
-import { failureOutcome, recordBrowserDiagnostic } from "../../services/diagnostics/browser-diagnostics.ts";
+import { recordBrowserDiagnostic, recordSessionRecovery } from "../../services/diagnostics/browser-diagnostics.ts";
+import type { SessionRecoveryDecision } from "../../services/session-storage/central-session-storage.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import { formatError, isRetryableComputerConnectionFailure, isSessionClosedFailure } from "../format-error.ts";
 import { reportApplicationError } from "../report-error.ts";
@@ -273,18 +274,10 @@ export function createSessionPaneConnection(options: {
                     jitter: Math.random(),
                 });
                 const interrupted = currentConnection();
+                recordSessionRecovery(cause, recoveryDecision(effects, interrupted));
                 if (interrupted.kind === "closed") {
                     continue;
                 }
-                recordBrowserDiagnostic({
-                    at: new Date().toISOString(),
-                    component: "web",
-                    operation: "session-interruption",
-                    outcome: failureOutcome(cause),
-                    attempt: interrupted.kind === "waiting" ? interrupted.failures : 0,
-                    elapsedMs: 0,
-                    requestId: "",
-                });
                 await wait(effects);
                 if (signal.aborted) {
                     return;
@@ -314,4 +307,30 @@ export function createSessionPaneConnection(options: {
             follower = null;
         },
     };
+}
+
+/** What a failed attempt led to, read from the effects the connection machine chose for it. */
+function recoveryDecision(
+    effects: readonly SessionConnectionEffect[],
+    state: SessionConnectionState,
+): SessionRecoveryDecision {
+    if (state.kind === "closed") {
+        return { kind: "closed" };
+    }
+    const failures = state.failures;
+    for (const effect of effects) {
+        switch (effect.kind) {
+            case "await-retry":
+                return { kind: "retry", failures, delayMs: effect.delayMs };
+            case "await-computer":
+                return effect.notify ? { kind: "await-computer", failures } : { kind: "await-user", failures };
+            case "closed":
+            case "abort-attempt":
+            case "interrupt-wait":
+                break;
+            default:
+                effect satisfies never;
+        }
+    }
+    throw new Error("A failed Session connection attempt always decides how it recovers");
 }

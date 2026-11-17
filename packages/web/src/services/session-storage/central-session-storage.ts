@@ -48,17 +48,39 @@ export const centralSessionStorage = {
 
 const messageDraftSchema = v.pipe(v.string(), v.maxLength(100_000));
 
-const browserDiagnosticSchema = v.object({
-    at: v.pipe(v.string(), v.isoTimestamp()),
+const diagnosticTime = v.pipe(v.string(), v.isoTimestamp());
+const diagnosticCount = v.pipe(v.number(), v.integer(), v.minValue(0));
+
+const browserEventSchema = v.object({
+    kind: v.literal("event"),
+    at: diagnosticTime,
     component: v.picklist(["worker", "relay", "web"]),
     operation: v.pipe(v.string(), v.maxLength(80)),
     outcome: v.pipe(v.string(), v.maxLength(64)),
     requestId: v.pipe(v.string(), v.maxLength(64)),
-    elapsedMs: v.pipe(v.number(), v.integer(), v.minValue(0)),
-    attempt: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+    elapsedMs: diagnosticCount,
 });
 
-export type BrowserDiagnostic = Readonly<v.InferOutput<typeof browserDiagnosticSchema>>;
+const sessionRecoveryDecisionSchema = v.variant("kind", [
+    v.object({ kind: v.literal("retry"), failures: diagnosticCount, delayMs: diagnosticCount }),
+    v.object({ kind: v.literal("await-computer"), failures: diagnosticCount }),
+    v.object({ kind: v.literal("await-user"), failures: diagnosticCount }),
+    v.object({ kind: v.literal("closed") }),
+]);
+
+// What the page decided after a Session connection attempt failed, as decided then: a later rule cannot recompute it.
+const sessionRecoverySchema = v.object({
+    kind: v.literal("session-recovery"),
+    at: diagnosticTime,
+    failure: v.pipe(v.string(), v.maxLength(64)),
+    decision: sessionRecoveryDecisionSchema,
+});
+
+const browserDiagnosticSchema = v.variant("kind", [browserEventSchema, sessionRecoverySchema]);
+
+export type BrowserDiagnostic = v.InferOutput<typeof browserDiagnosticSchema>;
+export type BrowserEvent = v.InferOutput<typeof browserEventSchema>;
+export type SessionRecoveryDecision = v.InferOutput<typeof sessionRecoveryDecisionSchema>;
 
 export const BROWSER_DIAGNOSTICS_MAX_ENTRIES = 100;
 

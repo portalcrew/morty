@@ -3,8 +3,10 @@ import type { ComputerDiagnosticsResult } from "@portalcrew/morty-client/protoco
 import {
     BROWSER_DIAGNOSTICS_MAX_ENTRIES,
     type BrowserDiagnostic,
+    type BrowserEvent,
     browserDiagnosticsEntry,
     centralSessionStorage,
+    type SessionRecoveryDecision,
 } from "../session-storage/central-session-storage.ts";
 import type { ChatDiagnostics } from "./model-catalog.ts";
 import type { ServerNetworkOperations } from "./network-diagnostics.ts";
@@ -17,19 +19,11 @@ let unstored = 0;
  * Records are kept, oldest first, in this tab's session storage. Records older than a day or beyond the newest
  * hundred are dropped and counted as discarded.
  */
-export function recordBrowserDiagnostic(entry: BrowserDiagnostic): void {
+function retain(record: BrowserDiagnostic): void {
     const stored = centralSessionStorage.read(browserDiagnosticsEntry) ?? { entries: [], discarded: 0 };
-    const recordedAt = Date.parse(entry.at);
+    const recordedAt = Date.parse(record.at);
     const retained = stored.entries.filter(({ at }) => recordedAt - Date.parse(at) <= RETENTION_MILLISECONDS);
-    const entries = [
-        ...retained,
-        {
-            ...entry,
-            operation: entry.operation.slice(0, 80),
-            outcome: entry.outcome.slice(0, 64),
-            requestId: entry.requestId.slice(0, 64),
-        },
-    ];
+    const entries = [...retained, record];
     const overflow = Math.max(0, entries.length - BROWSER_DIAGNOSTICS_MAX_ENTRIES);
     const written = centralSessionStorage.write(browserDiagnosticsEntry, {
         entries: entries.slice(overflow),
@@ -38,6 +32,25 @@ export function recordBrowserDiagnostic(entry: BrowserDiagnostic): void {
     if (!written) {
         unstored += 1;
     }
+}
+
+export function recordBrowserDiagnostic(entry: Omit<BrowserEvent, "kind">): void {
+    retain({
+        ...entry,
+        kind: "event",
+        operation: entry.operation.slice(0, 80),
+        outcome: entry.outcome.slice(0, 64),
+        requestId: entry.requestId.slice(0, 64),
+    });
+}
+
+export function recordSessionRecovery(cause: unknown, decision: SessionRecoveryDecision): void {
+    retain({
+        kind: "session-recovery",
+        at: new Date().toISOString(),
+        failure: failureOutcome(cause),
+        decision,
+    });
 }
 interface BrowserDiagnosticsSnapshot {
     readonly entries: readonly BrowserDiagnostic[];
@@ -62,7 +75,7 @@ const FAILURE_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/u;
  * How a failure is recorded: by its code, else by its error name. Never by its message, which may quote prompts,
  * paths or credentials.
  */
-export function failureOutcome(cause: unknown): string {
+function failureOutcome(cause: unknown): string {
     if (!(cause instanceof Error)) {
         return "error";
     }
@@ -74,7 +87,7 @@ export function failureOutcome(cause: unknown): string {
 }
 
 export function recordRequestObservation(
-    component: BrowserDiagnostic["component"],
+    component: BrowserEvent["component"],
     observation: MortyRequestObservation,
 ): void {
     recordBrowserDiagnostic({
