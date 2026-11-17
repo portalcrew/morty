@@ -11,6 +11,7 @@ import { dataTestId } from "../web/src/data-testid.ts";
 import { ChatApi, object, text } from "./infra/chat-api.ts";
 import { E2EHarness } from "./infra/harness.ts";
 import { LocalStack } from "./infra/local-stack.ts";
+import { expandMobileComposer } from "./infra/test.ts";
 
 // Keep CI's WebKit coverage; allow local verification where the OS's frozen WebKit is unsupported.
 const selectedBrowser = process.env["MORTY_E2E_BORROWED_BROWSER"] ?? "webkit";
@@ -145,9 +146,11 @@ test("Given desktop Codex owns a conversation, When I open it in Morty and queue
         );
         await entered.promise;
         const composer = page.getByRole("textbox", { name: "Message" });
+        await expandMobileComposer(page);
         await composer.fill("First remote follow-up");
         await page.getByRole("button", { name: "Send message", exact: true }).click();
         await expect(page.getByRole("button", { name: "Stop agent output", exact: true })).toBeVisible();
+        await expandMobileComposer(page);
         await composer.fill("Second remote follow-up");
         await page.getByRole("button", { name: "Send message", exact: true }).click();
         const steer = page.getByRole("button", { name: "Steer queued message: Second remote follow-up", exact: true });
