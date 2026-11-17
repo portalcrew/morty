@@ -36,6 +36,7 @@ import {
     SESSION_QUERIED_KIND,
     SESSION_READY_KIND,
     SESSION_RESTORED_KIND,
+    type SessionLogPosition,
     SessionPromptDisposition,
 } from "@portalcrew/morty-client/protocol";
 import { listen, port } from "@portalcrew/morty-relay-test-support/websocket";
@@ -921,11 +922,12 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
                 target: sessionTarget,
             }),
         );
-        for (;;) {
+        let queuedAt: SessionLogPosition | null = null;
+        while (queuedAt === null) {
             const accepted = decodeSessionPromptAcceptedEvent(await messages.nextKind(SESSION_PROMPT_ACCEPTED_KIND));
             if (accepted.requestId === "own_queued_turn") {
-                expect(accepted.state).toBe("queued");
-                break;
+                expect(accepted.standing).toEqual({ state: "queued" });
+                queuedAt = accepted.position;
             }
         }
         socket.send(
@@ -947,6 +949,9 @@ test("Given a running turn and a queued prompt with a file, When an active-turn 
                 },
             ]);
             expect(result.turn?.commandId).toBe("running_turn");
+            // A read served after the answer covers the position the answer holds at, so it lists what was answered.
+            expect(result.executionPosition.sessionGenerationId).toBe(queuedAt.sessionGenerationId);
+            expect(BigInt(result.executionPosition.throughPosition) >= BigInt(queuedAt.throughPosition)).toBe(true);
         }
     } finally {
         cancellation.abort();

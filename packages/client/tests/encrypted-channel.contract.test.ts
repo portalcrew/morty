@@ -262,7 +262,9 @@ it("Given a Computer capability, when a prompt and reply cross an untrusted hop,
         kind: "session.prompt.accepted",
         requestId: request.requestId,
         target: request.target,
-        state: "running",
+        commandId: request.commandId,
+        standing: { state: "running", startedAt: "2026-11-12T00:00:00Z" },
+        position: { sessionGenerationId: "generation-1", throughPosition: "10000" },
     };
     expect(
         await sessionPromptAcceptedEventCodec.decode(

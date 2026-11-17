@@ -67,7 +67,7 @@ const readExecution = async (peer: RealDaemonPeer, commandId?: string) => {
 };
 
 // @no-uc: Compatibility; a reconnecting client recovers an unconfirmed submission from the Computer's execution receipt.
-test("Given commands the Computer finished, failed, is running or never received, When a client reads the Session execution naming each command, Then the Computer reports whether it received each command, also after a restart", async ({
+test("Given commands the Computer finished, failed, is running, queued or never received, When a client reads the Session execution naming each command, Then the Computer reports where each command stands, also after a restart", async ({
     signal,
 }) => {
     const directory = await mkdtemp(join(tmpdir(), "morty-command-delivery-"));
@@ -89,31 +89,48 @@ test("Given commands the Computer finished, failed, is running or never received
                 await waitForLifecycle(peer, failed, "prompt.failed");
                 const running = randomUUID();
                 submit(peer, running, "hold after first delta");
-                await waitForLifecycle(peer, running, "prompt.started");
+                const started = await waitForLifecycle(peer, running, "prompt.started");
+                const queued = randomUUID();
+                submit(peer, queued, "The request completes");
+                for (;;) {
+                    const event = decodeSessionLiveEvent(JSON.parse(await peer.nextEvent()));
+                    if (event.type === "lifecycle-metadata" && event.payload.kind === "session.queue.changed") {
+                        break;
+                    }
+                }
                 const neverReceived = randomUUID();
 
                 for (const received of [completed, failed]) {
                     expect((await readExecution(peer, received)).result).toMatchObject({
-                        delivery: { commandId: received, state: "received" },
+                        delivery: { commandId: received, standing: { state: "settled" } },
                     });
                 }
-                expect((await readExecution(peer, running)).result).toMatchObject({
-                    delivery: { commandId: running, state: "received" },
+                const runningRead = (await readExecution(peer, running)).result;
+                expect(runningRead).toMatchObject({
+                    delivery: { commandId: running, standing: { state: "running" } },
                     turn: { commandId: running },
                 });
+                expect(started.kind === "prompt.started" && runningRead.action === "active-turn").toBe(true);
+                if (runningRead.action === "active-turn" && runningRead.delivery?.standing.state === "running") {
+                    expect(runningRead.delivery.standing.startedAt).toBe(runningRead.turn?.startedAt);
+                }
+                expect((await readExecution(peer, queued)).result).toMatchObject({
+                    delivery: { commandId: queued, standing: { state: "queued" } },
+                    queued: [{ commandId: queued }],
+                });
                 expect((await readExecution(peer, neverReceived)).result).toMatchObject({
-                    delivery: { commandId: neverReceived, state: "unknown" },
+                    delivery: { commandId: neverReceived, standing: { state: "unknown" } },
                 });
                 expect((await readExecution(peer)).raw).not.toHaveProperty("delivery");
 
                 await peer.restart();
-                for (const received of [completed, running]) {
+                for (const received of [completed, running, queued]) {
                     expect((await readExecution(peer, received)).result).toMatchObject({
-                        delivery: { commandId: received, state: "received" },
+                        delivery: { commandId: received, standing: { state: "settled" } },
                     });
                 }
                 expect((await readExecution(peer, neverReceived)).result).toMatchObject({
-                    delivery: { commandId: neverReceived, state: "unknown" },
+                    delivery: { commandId: neverReceived, standing: { state: "unknown" } },
                 });
             },
         );
@@ -349,7 +366,7 @@ test.for([
                         }
                     }
                     expect((await readExecution(peer, steering)).result).toMatchObject({
-                        delivery: { commandId: steering, state: "received" },
+                        delivery: { commandId: steering, standing: { state: "settled" } },
                         lastTurn: { commandId: turn, ...live },
                         turn: null,
                     });

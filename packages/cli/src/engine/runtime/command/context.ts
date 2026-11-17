@@ -6,6 +6,7 @@ import type { SessionManager } from "../../session/manager/session-manager.ts";
 import type { NativeSessionService } from "../../session/native/native-session-browser.ts";
 import type { PromptLifecycle } from "../../session/prompt/prompt-lifecycle.ts";
 import type { SessionCreations } from "../../session/record/session-creations.ts";
+import type { CommandStandings } from "../../session/turn/command-standings.ts";
 import type { ExecutionReceipts } from "../../session/turn/execution-receipts.ts";
 import type { SessionTurns } from "../../session/turn/session-turns.ts";
 import type { WorkspaceDirectoryService } from "../../session/workspace/workspace-directory.ts";
@@ -27,6 +28,7 @@ export interface CommandContext {
     readonly eventProjection: PromptLifecycle;
     readonly externalContent: ExternalContentStore;
     readonly sessionTurns: SessionTurns;
+    readonly standings: CommandStandings;
     readonly diagnostics: RelayConnectionDiagnostics;
     readonly socket: WebSocket;
     readonly signal: AbortSignal;
@@ -44,4 +46,5 @@ export type CommandServices = Pick<
     | "eventProjection"
     | "externalContent"
     | "sessionTurns"
+    | "standings"
 >;

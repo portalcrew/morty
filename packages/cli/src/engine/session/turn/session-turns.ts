@@ -1,5 +1,10 @@
 import { NativeSessionMap } from "@portalcrew/morty-client/native-session";
-import type { NativeSessionResult, NativeSessionTarget, SessionPromptCommand } from "@portalcrew/morty-client/protocol";
+import type {
+    CommandStanding,
+    NativeSessionResult,
+    NativeSessionTarget,
+    SessionPromptCommand,
+} from "@portalcrew/morty-client/protocol";
 import type { ActiveRuntimeTurn, PromptDispatch } from "./active-turn.ts";
 import type { ExecutionReceipts } from "./execution-receipts.ts";
 import { type SessionExecutes, SessionExecutionState } from "./session-execution.ts";
@@ -67,6 +72,25 @@ export class SessionTurns {
                 attachments: candidate.command.attachments,
             }));
         return { turn, queued };
+    };
+
+    /** Where the command stands: the receipts tell whether it arrived, started or ended, admission whether it waits. */
+    readonly standing = (commandId: string, sessionTarget: NativeSessionTarget): CommandStanding => {
+        const received = this.#operations.received(commandId, sessionTarget);
+        switch (received.kind) {
+            case "unseen":
+                return { state: "unknown" };
+            case "pending":
+                return this.get(commandId, sessionTarget)?.isQueued() === true
+                    ? { state: "queued" }
+                    : { state: "preparing" };
+            case "started":
+                return { state: "running", startedAt: received.startedAt };
+            case "settled":
+                return { state: "settled" };
+            default:
+                return received satisfies never;
+        }
     };
 
     readonly admitAndWait = async (turn: ActiveRuntimeTurn, waitSignal: AbortSignal): Promise<PromptDispatch> =>

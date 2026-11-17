@@ -272,7 +272,6 @@ export {
     sessionsQueriedEventCodec,
 } from "./session/lifecycle/index.ts";
 export type {
-    CommandDelivery,
     LastTurnOutcome,
     NativeSessionCommand,
     NativeSessionCommandRouting,
@@ -344,6 +343,11 @@ export type {
     PromptUsage,
 } from "./session/prompt/usage.ts";
 export { decodeAgentPromptResponse } from "./session/prompt/usage.ts";
+export type {
+    AdmittedCommandStanding,
+    CommandStanding,
+    SessionLogPosition,
+} from "./session/shared/command-standing.ts";
 export type {
     SessionCapabilities,
     SessionCommand,

@@ -61,7 +61,7 @@ async function retrySettled(peer: RealDaemonPeer, commandId: string): Promise<re
     const seen: Frame[] = [];
     submit(peer, commandId);
     const answer = await next(peer, seen, accepted(commandId));
-    expect(answer.kind === "message" && answer.message["state"]).toBe("settled");
+    expect(answer.kind === "message" && answer.message["standing"]).toEqual({ state: "settled" });
     await next(peer, seen, completed(commandId));
     const following = randomUUID();
     submit(peer, following);

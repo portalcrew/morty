@@ -234,31 +234,32 @@ test("Given an unacknowledged command, When Stop arrives before its prompt, Then
                         target: peer.target,
                     }),
                 );
-                let cancelled = false;
-                let withdrawn = false;
-                while (!cancelled || !withdrawn) {
+                let cancelledAt: string | null = null;
+                let withdrawnAt: string | null = null;
+                while (cancelledAt === null || withdrawnAt === null) {
                     const raw = await peer.nextMessage();
                     if (decodeMessageKind(raw) === "session.operation.failed") {
                         expect(decodeSessionOperationFailedEvent(raw).requestId).not.toBe(withdrawal);
                     }
                     if (decodeMessageKind(raw) === "session.turn.withdrawn") {
-                        expect(decodeSessionTurnWithdrawnEvent(raw)).toMatchObject({
-                            commandId: stopped,
-                            requestId: withdrawal,
-                        });
-                        withdrawn = true;
+                        const withdrawn = decodeSessionTurnWithdrawnEvent(raw);
+                        expect(withdrawn).toMatchObject({ commandId: stopped, requestId: withdrawal });
+                        withdrawnAt = withdrawn.position.throughPosition;
                     }
                     if (decodeMessageKind(raw) !== SESSION_EVENT_KIND) {
                         continue;
                     }
-                    cancelled ||= decodeSessionEventEnvelope(raw).events.some(
-                        (event) =>
-                            event.type === "lifecycle-metadata" &&
-                            event.payload.kind === "prompt.completed" &&
-                            event.payload.commandId === stopped &&
-                            promptStopReason(event.payload.completion) === "cancelled",
-                    );
+                    cancelledAt ??=
+                        decodeSessionEventEnvelope(raw).events.find(
+                            (event) =>
+                                event.type === "lifecycle-metadata" &&
+                                event.payload.kind === "prompt.completed" &&
+                                event.payload.commandId === stopped &&
+                                promptStopReason(event.payload.completion) === "cancelled",
+                        )?.position ?? null;
                 }
+                // The withdrawal holds from the position of the event recording it, so a read from there reflects it.
+                expect(BigInt(withdrawnAt) >= BigInt(cancelledAt)).toBe(true);
                 const prompt = (commandId: string) =>
                     encodeSessionPromptCommand({
                         commandId,

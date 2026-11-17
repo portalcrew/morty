@@ -131,6 +131,7 @@ export async function runRuntime(
             operations,
             sessionStore,
             sessionCreations,
+            standings,
         } = layer;
         const services: CommandServices = {
             resolveAgent,
@@ -142,6 +143,7 @@ export async function runRuntime(
             eventProjection,
             externalContent,
             sessionTurns: activeSessions,
+            standings,
         };
         options.onInitialized?.();
         let connectionAttempt = 0;

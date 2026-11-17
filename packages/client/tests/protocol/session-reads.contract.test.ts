@@ -68,7 +68,10 @@ describe("Session execution read contracts", () => {
     it("Given an execution with an unknown command delivery state, When it crosses the launch protocol boundary, Then the malformed snapshot is rejected", () => {
         expect(() =>
             decodeNativeSessionResult(
-                JSON.stringify({ ...execution, delivery: { commandId: "command-1", state: "superseded" } }),
+                JSON.stringify({
+                    ...execution,
+                    delivery: { commandId: "command-1", standing: { state: "superseded" } },
+                }),
             ),
         ).toThrow();
     });
@@ -91,12 +94,20 @@ describe("Session execution read contracts", () => {
         expect(() => decodeNativeSessionResult(JSON.stringify(unordered))).toThrow();
     });
 
-    it("Given an execution with a known command delivery, When it is decoded, Then the delivery is kept", () => {
-        expect(
+    it("Given an execution with a known command delivery, When it is decoded, Then the command's standing is kept", () => {
+        const delivery = {
+            commandId: "command-1",
+            standing: { state: "running", startedAt: "2026-11-12T00:00:00.000Z" },
+        };
+        expect(decodeNativeSessionResult(JSON.stringify({ ...execution, delivery }))).toMatchObject({ delivery });
+    });
+
+    it("Given a running command delivery without its start time, When it is decoded, Then the snapshot is rejected", () => {
+        expect(() =>
             decodeNativeSessionResult(
-                JSON.stringify({ ...execution, delivery: { commandId: "command-1", state: "received" } }),
+                JSON.stringify({ ...execution, delivery: { commandId: "command-1", standing: { state: "running" } } }),
             ),
-        ).toMatchObject({ delivery: { commandId: "command-1", state: "received" } });
+        ).toThrow();
     });
     it("Given a running turn without its start time, When a client restores execution, Then the retired snapshot is rejected", () => {
         expect(() =>

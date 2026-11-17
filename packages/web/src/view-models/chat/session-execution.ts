@@ -1,4 +1,5 @@
-import type { MortyClient, MortyTurnAdmission } from "@portalcrew/morty-client";
+import type { MortyClient } from "@portalcrew/morty-client";
+import type { CommandStanding } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { SessionActivityState } from "./session-activity-machine.ts";
 import {
@@ -15,15 +16,31 @@ import type { SessionExecutionObservation } from "./session-presentation.ts";
 
 // What the page knows about one Session's execution: the current turn, the Computer's queue, the Agent's pending
 // requests, and what the Computer has shown of each command. Every fact about the execution, a live lifecycle event, an
-// execution read, the service's acceptance of a submission, enters through `applyExecutionFact`, and only there is it
-// decided whether a fact is newer than what the state already holds. The page keeps this state for the Session, so it
-// outlives the pane that follows the Session; the pane feeds facts in and performs the reads the transitions ask for.
+// execution read, the Computer's answer about a command, enters through `applyExecutionFact`, and only there is it
+// decided, by the Session log position each fact holds at, whether a fact is newer than what the state already holds.
+// The page keeps this state for the Session, so it outlives the pane that follows the Session; the pane feeds facts in
+// and performs the reads the transitions ask for.
 
 type SessionExecutionSnapshot = Awaited<ReturnType<MortyClient["sessions"]["readSessionExecution"]>>;
 
 export type QueuedCommand = SessionExecutionSnapshot["queued"][number];
 
 type LogPosition = SessionExecutionSnapshot["executionPosition"];
+
+/**
+ * What the Computer answered about one command, by replying to a request about it or in a read: where the command
+ * stands, or, answering a request on a queued command, that it left the queue without running or to join the running
+ * turn.
+ */
+type CommandAnswer =
+    | Exclude<CommandStanding, { readonly state: "unknown" }>
+    | { readonly state: "withdrawn" }
+    | { readonly state: "steered" };
+
+interface PositionedAnswer {
+    readonly answer: CommandAnswer;
+    readonly position: LogPosition;
+}
 
 type TurnOutcome =
     | { readonly kind: "completed" }
@@ -72,32 +89,26 @@ export type SessionExecutionFact =
      */
     | { readonly kind: "opened" }
     | LiveExecutionFact
-    | {
-          readonly kind: "read";
-          readonly snapshot: SessionExecutionSnapshot;
-          readonly basis: number;
-      }
-    | {
-          readonly kind: "acknowledged";
-          readonly commandId: string;
-          readonly admission: MortyTurnAdmission;
-          readonly startedAt: number;
-      }
+    | { readonly kind: "read"; readonly snapshot: SessionExecutionSnapshot }
+    | CommandAnswered
     /** This page submits a new turn, so the failure reported for an earlier one no longer describes the Session. */
     | { readonly kind: "turn-submitted" }
     | { readonly kind: "history"; readonly shown: readonly string[]; readonly recorded: readonly string[] }
     | { readonly kind: "closed" };
 
+/** The Computer's answer about a command, with the Session log position at which it holds. */
+export type CommandAnswered = {
+    readonly kind: "answered";
+    readonly commandId: string;
+    readonly answer: CommandAnswer;
+    readonly position: LogPosition;
+};
+
 interface RuntimeCommand {
-    /**
-     * When this page learned the Computer holds the command: how many commands it had learned of before. Commands are
-     * never forgotten, so this orders them in the order they were learned.
-     */
-    readonly learnedAt: number;
     readonly shown: boolean;
     readonly ended: boolean;
-    /** What the Computer answered when this page submitted the command; null for a command it learned of otherwise. */
-    readonly admission: MortyTurnAdmission | null;
+    /** The latest answer about the command, by a reply or a read; null while the Computer gave none. */
+    readonly answer: PositionedAnswer | null;
 }
 
 type ExecutionCoverage =
@@ -112,8 +123,11 @@ type ExecutionCoverage =
 export interface SessionExecutionState {
     readonly coverage: ExecutionCoverage;
     readonly turn: CurrentTurn;
-    readonly queued: readonly QueuedCommand[];
-    readonly listing: { readonly queued: ReadonlySet<string>; readonly basis: number } | null;
+    /**
+     * The Computer's queue as the latest read listed it at `through`, less the commands live events since showed
+     * starting; null before the pane's first read.
+     */
+    readonly queue: { readonly through: LogPosition; readonly commands: readonly QueuedCommand[] } | null;
     readonly interactions: readonly SessionInteraction[];
     readonly commands: ReadonlyMap<string, RuntimeCommand>;
     readonly observations: readonly SessionExecutionObservation[];
@@ -129,14 +143,15 @@ interface SessionExecutionTransition {
 const initialSessionExecution: SessionExecutionState = {
     coverage: { kind: "unread", held: [] },
     turn: idleTurn,
-    queued: [],
-    listing: null,
+    queue: null,
     interactions: [],
     commands: new Map(),
     observations: [],
 };
 
 const readEffect: SessionExecutionEffect = { kind: "read" };
+
+const unansweredCommand: RuntimeCommand = { shown: false, ended: false, answer: null };
 
 function settled(state: SessionExecutionState): SessionExecutionTransition {
     return { state, effects: [] };
@@ -151,7 +166,7 @@ function learn(
     for (const commandId of commandIds) {
         const current = commands ?? state.commands;
         const known = current.get(commandId);
-        const base = known ?? { learnedAt: current.size, shown: false, ended: false, admission: null };
+        const base = known ?? unansweredCommand;
         const next = fact === "shows" ? { ...base, shown: true } : fact === "ended" ? { ...base, ended: true } : base;
         if (known !== undefined && next.shown === known.shown && next.ended === known.ended) {
             continue;
@@ -162,13 +177,44 @@ function learn(
     return commands === null ? state : { ...state, commands };
 }
 
-function admit(state: SessionExecutionState, commandId: string, admission: MortyTurnAdmission): SessionExecutionState {
+/**
+ * Whether an answer holds beyond what an account through `through` reflects; anything holds beyond no account at all.
+ * Positions of different generations do not order, so an account of another generation supersedes the answer.
+ */
+function answerBeyond(answered: PositionedAnswer, through: LogPosition | null): boolean {
+    return (
+        through === null ||
+        (through.sessionGenerationId === answered.position.sessionGenerationId &&
+            BigInt(answered.position.throughPosition) > BigInt(through.throughPosition))
+    );
+}
+
+function coveredThrough(coverage: ExecutionCoverage): LogPosition | null {
+    return coverage.kind === "unread" ? null : coverage.position;
+}
+
+/** Records an answer unless the page holds a later one about the command. */
+function recordAnswer(
+    state: SessionExecutionState,
+    commandId: string,
+    answer: CommandAnswer,
+    position: LogPosition,
+): SessionExecutionState {
     const learned = learn(state, [commandId], "holds");
-    const command = learned.commands.get(commandId);
-    if (command === undefined || command.admission === admission) {
+    const command = learned.commands.get(commandId) ?? unansweredCommand;
+    if (command.answer !== null && answerBeyond(command.answer, position)) {
         return learned;
     }
-    return { ...learned, commands: new Map(learned.commands).set(commandId, { ...command, admission }) };
+    return {
+        ...learned,
+        commands: new Map(learned.commands).set(commandId, { ...command, answer: { answer, position } }),
+    };
+}
+
+/** Whether the page holds an answer that the command runs from a position beyond `through`. */
+function runsBeyond(state: SessionExecutionState, commandId: string, through: LogPosition): boolean {
+    const answered = state.commands.get(commandId)?.answer ?? null;
+    return answered?.answer.state === "running" && answerBeyond(answered, through);
 }
 
 function commandEnded(state: Pick<SessionExecutionState, "commands">, commandId: string): boolean {
@@ -242,9 +288,13 @@ function applyLiveChange(state: SessionExecutionState, change: LiveExecutionChan
             const known = learn(state, [commandId], "holds");
             return settled({
                 ...known,
-                queued: known.queued.some((item) => item.commandId === commandId)
-                    ? known.queued.filter((item) => item.commandId !== commandId)
-                    : known.queued,
+                queue:
+                    known.queue?.commands.some((item) => item.commandId === commandId) === true
+                        ? {
+                              ...known.queue,
+                              commands: known.queue.commands.filter((item) => item.commandId !== commandId),
+                          }
+                        : known.queue,
                 // Steering starts a command, not a new execution to stop.
                 turn: change.steers
                     ? known.turn
@@ -350,7 +400,7 @@ function applyRead(
     state: SessionExecutionState,
     fact: Extract<SessionExecutionFact, { readonly kind: "read" }>,
 ): SessionExecutionTransition {
-    const { snapshot, basis } = fact;
+    const { snapshot } = fact;
     const { coverage } = state;
     const position = snapshot.executionPosition;
     const held = coverage.kind === "covered" ? [] : coverage.held;
@@ -362,17 +412,17 @@ function applyRead(
         return replayHeld(settled({ ...state, coverage: { kind: "covered", position: coverage.position } }), held);
     }
     const running = snapshot.turn;
-    // Only the Computer knows whether a submission arrived, including one that finished while no pane followed the
-    // Session. A submission the Computer has no receipt for stays unconfirmed. The execution receipt of a running command confirms its delivery even when admission and live events were lost.
-    let next = learn(
-        state,
-        [
-            ...snapshot.queued.map((item) => item.commandId),
-            ...(snapshot.delivery?.state === "received" ? [snapshot.delivery.commandId] : []),
-            ...(running === null ? [] : [running.commandId]),
-        ],
-        "holds",
-    );
+    // A read answers, as of its position, that each command it lists waits in the queue. Only the Computer knows where
+    // a submission stands, including one that finished while no pane followed the Session; one it has no receipt for
+    // stays unconfirmed.
+    let next = learn(state, running === null ? [] : [running.commandId], "holds");
+    for (const item of snapshot.queued) {
+        next = recordAnswer(next, item.commandId, { state: "queued" }, position);
+    }
+    const delivery = snapshot.delivery;
+    if (delivery !== undefined && delivery.standing.state !== "unknown") {
+        next = recordAnswer(next, delivery.commandId, delivery.standing, position);
+    }
     let turn = next.turn;
     if (running !== null) {
         turn = transitionCurrentTurn(turn, {
@@ -389,8 +439,8 @@ function applyRead(
             });
         }
     } else {
-        // Only a turn this page learned of before the read began can have ended by the time it was served.
-        if (turn.kind === "current" && (state.commands.get(turn.commandId)?.learnedAt ?? -1) < basis) {
+        // The read covers every answer up to its position, so only a turn an answer beyond it reported still runs.
+        if (turn.kind === "current" && !runsBeyond(next, turn.commandId, position)) {
             turn = transitionCurrentTurn(turn, { kind: "nothing-running" });
         }
         // A retained outcome describes the last settled command. Repeating an outcome already observed cannot undo
@@ -405,15 +455,13 @@ function applyRead(
             next = learn(next, [lastTurn.commandId], "ended");
         }
     }
-    const queued = snapshot.queued.map((item) => item.commandId);
     return replayHeld(
         {
             state: {
                 ...next,
                 coverage: { kind: "covered", position },
                 turn,
-                queued: snapshot.queued,
-                listing: { queued: new Set(queued), basis },
+                queue: { through: position, commands: snapshot.queued },
                 interactions: snapshot.interactions.map(requestedInteraction),
                 observations: [
                     ...next.observations.filter(
@@ -425,7 +473,7 @@ function applyRead(
                         generation: position.sessionGenerationId,
                         position: position.throughPosition,
                         running: running?.commandId ?? null,
-                        queued,
+                        queued: snapshot.queued.map((item) => item.commandId),
                     },
                 ],
             },
@@ -441,8 +489,7 @@ function applyExecutionFact(state: SessionExecutionState, fact: SessionExecution
             const opened: SessionExecutionState = {
                 ...state,
                 coverage: { kind: "unread", held: [] },
-                queued: [],
-                listing: null,
+                queue: null,
                 interactions: [],
             };
             return settled({ ...opened, turn: transitionCurrentTurn(opened.turn, { kind: "nothing-running" }) });
@@ -451,20 +498,20 @@ function applyExecutionFact(state: SessionExecutionState, fact: SessionExecution
             return applyLive(state, fact);
         case "read":
             return applyRead(state, fact);
-        case "acknowledged": {
-            const known = admit(state, fact.commandId, fact.admission);
-            // Only a message the Computer started running is a turn. A queued one starts none yet, and a settled one
-            // ended before this answer, its outcome is the Session's account; a terminal live event can also precede
-            // the answer, and the turn it ended stays ended.
-            if (fact.admission !== "running" || commandEnded(state, fact.commandId)) {
-                return settled(known);
+        case "answered": {
+            const next = recordAnswer(state, fact.commandId, fact.answer, fact.position);
+            const answered = next.commands.get(fact.commandId)?.answer ?? null;
+            // An answer the page's account already covers is reflected there, or superseded since; only a newer one
+            // tells of a turn that reads and live events have not shown yet. Only a running command is a turn.
+            if (answered?.answer.state !== "running" || !answerBeyond(answered, coveredThrough(state.coverage))) {
+                return settled(next);
             }
             return settled({
-                ...known,
-                turn: transitionCurrentTurn(known.turn, {
+                ...next,
+                turn: transitionCurrentTurn(next.turn, {
                     kind: "accepted",
                     commandId: fact.commandId,
-                    startedAt: fact.startedAt,
+                    startedAt: Date.parse(answered.answer.startedAt),
                 }),
             });
         }
@@ -479,7 +526,7 @@ function applyExecutionFact(state: SessionExecutionState, fact: SessionExecution
                 state: {
                     ...state,
                     turn: transitionCurrentTurn(state.turn, { kind: "nothing-running" }),
-                    queued: [],
+                    queue: state.queue === null ? null : { ...state.queue, commands: [] },
                     interactions: [],
                     observations: [...state.observations, { kind: "closed" }],
                 },
@@ -490,54 +537,73 @@ function applyExecutionFact(state: SessionExecutionState, fact: SessionExecution
     }
 }
 
-export function executionReadBasis(state: SessionExecutionState): number {
-    return state.commands.size;
-}
-
 export function runtimeHoldsCommand(state: SessionExecutionState, commandId: string): boolean {
     return state.commands.has(commandId);
 }
 
-/**
- * Where the Computer admitted a message. Its answer to this page's submission decides; until it answers, the placement
- * the page expected stands.
- */
-export function admittedPlacement(
-    state: SessionExecutionState,
-    message: { readonly commandId: string; readonly placement: DeliveryPlacement },
-): DeliveryPlacement {
-    const admission = state.commands.get(message.commandId)?.admission ?? null;
-    if (admission === null) {
-        return message.placement;
-    }
-    return admission === "queued" ? "queue" : "turn";
+/** The latest answer about a command, or null while the page holds none. */
+export function commandAnswer(state: SessionExecutionState, commandId: string): CommandAnswer | null {
+    return state.commands.get(commandId)?.answer?.answer ?? null;
 }
 
 /**
- * Whether the Computer's own account now shows a message the service accepted, so the page no longer needs its copy.
- * A message that runs as a turn is covered once the timeline shows it; history names each turn's command. A message
- * shown in the queue keeps its files there until it starts or a read that could see it no longer lists it.
+ * The Computer's queue as the page shows it: a command an answer beyond the listing says left the queue is gone,
+ * whatever that older listing still holds.
  */
-export function runtimeCoversMessage(
-    state: SessionExecutionState,
-    message: { readonly commandId: string; readonly placement: DeliveryPlacement },
-): boolean {
-    const command = state.commands.get(message.commandId);
+export function visibleQueue(state: SessionExecutionState): readonly QueuedCommand[] {
+    const { queue } = state;
+    if (queue === null) {
+        return [];
+    }
+    return queue.commands.filter((item) => {
+        const answered = state.commands.get(item.commandId)?.answer ?? null;
+        return answered === null || answered.answer.state === "queued" || !answerBeyond(answered, queue.through);
+    });
+}
+
+/** Where the page shows a message the Computer accepted: in the queue while it answered so, otherwise as a turn. */
+export function acceptedPlacement(state: SessionExecutionState, commandId: string): DeliveryPlacement {
+    return commandAnswer(state, commandId)?.state === "queued" ? "queue" : "turn";
+}
+
+/**
+ * Whether the Computer's own account now shows a message it accepted, so the page no longer needs its copy. A message
+ * that runs as a turn is covered once the timeline shows it; history names each turn's command. A queued message keeps
+ * its files there until it starts or ends, or a listing that covers its answer no longer holds it. One withdrawn, or
+ * steered into the running turn, left the queue for good.
+ */
+export function runtimeCoversMessage(state: SessionExecutionState, commandId: string): boolean {
+    const command = state.commands.get(commandId);
     if (command === undefined) {
         return false;
     }
     if (command.shown) {
         return true;
     }
-    if (admittedPlacement(state, message) === "turn") {
+    const answered = command.answer;
+    if (answered === null) {
         return false;
     }
-    return (
-        acceptedTurn(state.turn)?.commandId === message.commandId ||
-        (state.listing !== null &&
-            command.learnedAt < state.listing.basis &&
-            !state.listing.queued.has(message.commandId))
-    );
+    const { queue } = state;
+    switch (answered.answer.state) {
+        case "withdrawn":
+        case "steered":
+            return true;
+        case "queued":
+            return (
+                command.ended ||
+                acceptedTurn(state.turn)?.commandId === commandId ||
+                (queue !== null &&
+                    !answerBeyond(answered, queue.through) &&
+                    !queue.commands.some((item) => item.commandId === commandId))
+            );
+        case "preparing":
+        case "running":
+        case "settled":
+            return false;
+        default:
+            return answered.answer satisfies never;
+    }
 }
 
 /** The questions the Computer's account leaves pending, or null while this page has no account of them yet. */

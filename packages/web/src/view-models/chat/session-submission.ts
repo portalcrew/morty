@@ -69,11 +69,11 @@ export function createSessionSubmission(ports: {
         }
     };
     const submitCommand =
-        (commandId: string, startedAt: number): SubmitTurn =>
+        (commandId: string): SubmitTurn =>
         async (request, signal) => {
-            const admission = await submitThroughConnection(request, signal);
+            const { standing, position } = await submitThroughConnection(request, signal);
             signal.throwIfAborted();
-            execution.getState().apply({ kind: "acknowledged", commandId, admission, startedAt });
+            execution.getState().apply({ kind: "answered", commandId, answer: standing, position });
         };
     // A new turn retires the failure reported for an earlier one.
     const begin = (placement: DeliveryPlacement): void => {
@@ -87,7 +87,6 @@ export function createSessionSubmission(ports: {
         }
         // Shown in the queue while a turn runs, otherwise as the next turn, until the Computer says which it is.
         const placement: DeliveryPlacement = execution.getState().state.turn.kind === "current" ? "queue" : "turn";
-        const startedAt = Date.now();
         const sending = delivery.getState().send(
             { ...submitted, placement },
             {
@@ -108,7 +107,7 @@ export function createSessionSubmission(ports: {
                     // Freeze semantic intent before delivery owns retries, including identity.
                     return { attachments: uploaded, content: content.trim() };
                 },
-                submit: submitCommand(submitted.commandId, startedAt),
+                submit: submitCommand(submitted.commandId),
             },
         );
         composer.getState().questionsClosed();
@@ -162,8 +161,7 @@ export function createSessionSubmission(ports: {
             }
             const { commandId, placement } = state.journal;
             begin(placement);
-            // Without a record of when this browser sent it, the retry dates the command's work.
-            await delivery.getState().retry(submitCommand(commandId, Date.now()));
+            await delivery.getState().retry(submitCommand(commandId));
         },
     };
 }

@@ -108,7 +108,7 @@ test("Given an attachment within the supported plaintext limit, when its encrypt
                     { content: "unrelated while uploading", idempotencyKey: "upload-concurrent-turn", attachments: [] },
                     signal,
                 );
-                expect(["queued", "running", "settled"]).toContain(turn);
+                expect(["queued", "running", "settled"]).toContain(turn.standing.state);
                 expect(
                     gate.chunks.filter((chunk) => chunk.requestId === requestId).map((chunk) => chunk.sequence),
                 ).toEqual([0]);
@@ -340,13 +340,12 @@ test("Given interrupted content uploads, when their request identities are reuse
                     await contentAvailableEventCodec.decode(await retried.text(), transport.payloadEncryption, signal),
                 ).toMatchObject({ requestId, contentKey });
             }
-            expect(["queued", "running", "settled"]).toContain(
-                await client.turns.submit(
-                    access.target,
-                    { content: "unrelated prompt", idempotencyKey: "after-interrupted-uploads", attachments: [] },
-                    signal,
-                ),
+            const admission = await client.turns.submit(
+                access.target,
+                { content: "unrelated prompt", idempotencyKey: "after-interrupted-uploads", attachments: [] },
+                signal,
             );
+            expect(["queued", "running", "settled"]).toContain(admission.standing.state);
         } finally {
             client.close();
         }
@@ -559,7 +558,7 @@ test("Given a locally paired encrypted client, when it submits a prompt and read
                 { content: "secret prompt e2e-acceptance", attachments: [], idempotencyKey: "encrypted-turn" },
                 signal,
             );
-            expect(["queued", "running", "settled"]).toContain(turn);
+            expect(["queued", "running", "settled"]).toContain(turn.standing.state);
             await Promise.race([answered.promise, live.completed, runtime.failure, network.failure]);
             expect(output.join("")).toBe("secret answer e2e-acceptance");
             const page = await client.events.list(ready.target, new MortyPageRequest(100, ""), signal);

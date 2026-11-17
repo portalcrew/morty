@@ -1058,7 +1058,9 @@ async function connectComputerDaemon(
                     kind: "session.prompt.accepted",
                     requestId: commandId,
                     target: nativeTarget(sessionId),
-                    state: "running",
+                    commandId: commandId,
+                    standing: { state: "running", startedAt: "2026-11-12T00:00:00.000Z" },
+                    position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                 }),
             );
         },
@@ -1466,7 +1468,7 @@ it("Given Chat reads the Session execution naming an unconfirmed command, When t
                     target: runtime.sessionTarget,
                     turn: null,
                     queued: [],
-                    delivery: { commandId: "unconfirmed-command", state: "received" },
+                    delivery: { commandId: "unconfirmed-command", standing: { state: "queued" } },
                     executionPosition: { sessionGenerationId: "session-generation-1", throughPosition: "0" },
                     interactions: [],
                 },
@@ -1476,7 +1478,7 @@ it("Given Chat reads the Session execution naming an unconfirmed command, When t
         );
         const routed = await responseJson(await response, 200);
         expect(await nativeSessionResultCodec.decode(JSON.stringify(routed), encryption.client, signal)).toMatchObject({
-            delivery: { commandId: "unconfirmed-command", state: "received" },
+            delivery: { commandId: "unconfirmed-command", standing: { state: "queued" } },
         });
     } finally {
         runtime.daemon.close(1000, "Test complete");
@@ -1597,6 +1599,7 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                                 kind: "session.turn.stopped",
                                 requestId: cancellation.requestId,
                                 target: runtime.sessionTarget,
+                                position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                                 stopReason,
                             },
                             encryption.computer,
@@ -1681,7 +1684,12 @@ describe("Relay Turn submission", { concurrent: false }, () => {
             method: "POST",
             body: {},
             command: { commandId: "app-command", kind: "session.cancel" },
-            reply: { commandId: "app-command", kind: "session.turn.stopped", stopReason: "cancelled" },
+            reply: {
+                commandId: "app-command",
+                kind: "session.turn.stopped",
+                stopReason: "cancelled",
+                position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
+            },
             expected: { turnId: "app-command", stopReason: "cancelled" },
         },
         {
@@ -1690,7 +1698,11 @@ describe("Relay Turn submission", { concurrent: false }, () => {
             method: "POST",
             body: {},
             command: { commandId: "app-command", kind: "session.cancel-before-start" },
-            reply: { commandId: "app-command", kind: "session.turn.withdrawn" },
+            reply: {
+                commandId: "app-command",
+                kind: "session.turn.withdrawn",
+                position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
+            },
             expected: { turnId: "app-command" },
         },
         {
@@ -1699,7 +1711,11 @@ describe("Relay Turn submission", { concurrent: false }, () => {
             method: "PUT",
             body: { disposition: "steer" },
             command: { commandId: "app-command", disposition: "steer", kind: "session.prompt.disposition" },
-            reply: { commandId: "app-command", kind: "session.prompt.steered" },
+            reply: {
+                commandId: "app-command",
+                kind: "session.prompt.steered",
+                position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
+            },
             expected: { turnId: "app-command" },
         },
         {
@@ -2125,7 +2141,9 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                         kind: "session.prompt.accepted",
                         requestId: "binary-attachment-request",
                         target: runtime.sessionTarget,
-                        state: "running",
+                        commandId: "binary-attachment-request",
+                        standing: { state: "running", startedAt: "2026-11-12T00:00:00.000Z" },
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                     },
                     encryption.computer,
                     signal,
@@ -2134,7 +2152,7 @@ describe("Relay Turn submission", { concurrent: false }, () => {
             const routed = await responseJson(await response, 200);
             expect(
                 await sessionPromptAcceptedEventCodec.decode(JSON.stringify(routed), encryption.client, signal),
-            ).toMatchObject({ requestId: "binary-attachment-request", state: "running" });
+            ).toMatchObject({ requestId: "binary-attachment-request", standing: { state: "running" } });
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
@@ -2292,7 +2310,9 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                             kind: "session.prompt.accepted",
                             requestId: "skewed-request",
                             target: runtime.sessionTarget,
-                            state: "running",
+                            commandId: "skewed-request",
+                            standing: { state: "running", startedAt: "2026-11-12T00:00:00.000Z" },
+                            position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                         },
                         encryption.computer,
                         signal,
@@ -2301,7 +2321,7 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                 const routed = await responseJson(await submitted, 200);
                 expect(
                     await sessionPromptAcceptedEventCodec.decode(JSON.stringify(routed), encryption.client, signal),
-                ).toMatchObject({ requestId: "skewed-request", state: "running" });
+                ).toMatchObject({ requestId: "skewed-request", standing: { state: "running" } });
             } finally {
                 runtime.daemon.close(1000, "Test complete");
             }
@@ -2533,7 +2553,9 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                         kind: "session.prompt.accepted",
                         requestId: "direct-request",
                         target: runtime.sessionTarget,
-                        state: "running",
+                        commandId: "direct-request",
+                        standing: { state: "running", startedAt: "2026-11-12T00:00:00.000Z" },
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                     },
                     encryption.computer,
                     signal,
@@ -2542,7 +2564,7 @@ describe("Relay Turn submission", { concurrent: false }, () => {
             const routed = await responseJson(await submitted, 200);
             expect(
                 await sessionPromptAcceptedEventCodec.decode(JSON.stringify(routed), encryption.client, signal),
-            ).toMatchObject({ requestId: "direct-request", state: "running" });
+            ).toMatchObject({ requestId: "direct-request", standing: { state: "running" } });
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
@@ -2644,7 +2666,9 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                         kind: "session.prompt.accepted",
                         requestId: delivered.commandId,
                         target: nativeTarget(sessionId),
-                        state: "running",
+                        commandId: delivered.commandId,
+                        standing: { state: "running", startedAt: "2026-11-12T00:00:00.000Z" },
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                     },
                     encryption.computer,
                     signal,
@@ -2653,7 +2677,7 @@ describe("Relay Turn submission", { concurrent: false }, () => {
             const accepted = await responseJson(await longTurn, 200);
             expect(
                 await sessionPromptAcceptedEventCodec.decode(JSON.stringify(accepted), encryption.client, signal),
-            ).toMatchObject({ state: "running", requestId: "long-first-turn" });
+            ).toMatchObject({ standing: { state: "running" }, requestId: "long-first-turn" });
 
             // A cancellation is answered only by the reply naming its own request: a failure naming the Turn it
             // cancels, or another Turn's lifecycle, leaves it waiting.
@@ -2730,6 +2754,7 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                         kind: "session.turn.stopped",
                         requestId: cancellation.requestId,
                         target: nativeTarget(sessionId),
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                         stopReason: "cancelled",
                     },
                     encryption.computer,
@@ -2752,7 +2777,9 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                         kind: "session.prompt.accepted",
                         requestId: "queued-follow-up",
                         target: nativeTarget(sessionId),
-                        state: "queued",
+                        commandId: "queued-follow-up",
+                        standing: { state: "queued" },
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                     },
                     encryption.computer,
                     signal,
@@ -2761,7 +2788,7 @@ describe("Relay Turn submission", { concurrent: false }, () => {
             const queued = await responseJson(await queuedTurn, 200);
             expect(
                 await sessionPromptAcceptedEventCodec.decode(JSON.stringify(queued), encryption.client, signal),
-            ).toMatchObject({ state: "queued", requestId: "queued-follow-up" });
+            ).toMatchObject({ standing: { state: "queued" }, requestId: "queued-follow-up" });
 
             await expect(submitTurn("invalid-image-turn", "describe this", [{ kind: "image" }])).rejects.toMatchObject({
                 code: "invalid_protocol_message",
@@ -3089,7 +3116,9 @@ describe("Relay Turn submission", { concurrent: false }, () => {
                         kind: "session.prompt.accepted",
                         requestId: "heartbeating-turn",
                         target: runtime.sessionTarget,
-                        state: "running",
+                        commandId: "heartbeating-turn",
+                        standing: { state: "running", startedAt: "2026-11-12T00:00:00.000Z" },
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                     },
                     encryption.computer,
                     signal,
@@ -3098,7 +3127,7 @@ describe("Relay Turn submission", { concurrent: false }, () => {
             const routed = await responseJson(await delivered, 200);
             expect(
                 await sessionPromptAcceptedEventCodec.decode(JSON.stringify(routed), encryption.client, signal),
-            ).toMatchObject({ requestId: "heartbeating-turn", state: "running" });
+            ).toMatchObject({ requestId: "heartbeating-turn", standing: { state: "running" } });
 
             // A Turn sent before the deadline still reaches the connection, which never answers it.
             vi.setSystemTime(heartbeatAt + 30_000);
@@ -3940,7 +3969,9 @@ describe("Computer prompt acknowledgements", () => {
                         kind: "session.prompt.accepted",
                         requestId: "other-command",
                         target: runtime.sessionTarget,
-                        state: "queued",
+                        commandId: "other-command",
+                        standing: { state: "queued" },
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                     },
                     encryption.computer,
                     signal,
@@ -3996,7 +4027,9 @@ describe("Computer prompt acknowledgements", () => {
                         kind: "session.prompt.accepted",
                         requestId: "admitted-command",
                         target: runtime.sessionTarget,
-                        state: "queued",
+                        commandId: "admitted-command",
+                        standing: { state: "queued" },
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                     },
                     encryption.computer,
                     signal,
@@ -4009,7 +4042,7 @@ describe("Computer prompt acknowledgements", () => {
                     encryption.client,
                     signal,
                 ),
-            ).toMatchObject({ state: "queued", requestId: "admitted-command" });
+            ).toMatchObject({ standing: { state: "queued" }, requestId: "admitted-command" });
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
@@ -4059,13 +4092,15 @@ describe("Computer prompt acknowledgements", () => {
                         kind: "session.prompt.accepted",
                         requestId: "retried-command",
                         target: runtime.sessionTarget,
-                        state: "running",
+                        commandId: "retried-command",
+                        standing: { state: "running", startedAt: "2026-11-12T00:00:00.000Z" },
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                     },
                     encryption.computer,
                     signal,
                 ),
             );
-            expect(await first).toBe("running");
+            expect(await first).toMatchObject({ standing: { state: "running" } });
             runtime.daemon.send(
                 await sessionEventEnvelopeCodec.encode(
                     JSON.parse(
@@ -4098,13 +4133,15 @@ describe("Computer prompt acknowledgements", () => {
                         kind: "session.prompt.accepted",
                         requestId: "retried-command",
                         target: runtime.sessionTarget,
-                        state: "settled",
+                        commandId: "retried-command",
+                        standing: { state: "settled" },
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                     },
                     encryption.computer,
                     signal,
                 ),
             );
-            expect(await retry).toBe("settled");
+            expect(await retry).toMatchObject({ standing: { state: "settled" } });
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
@@ -4139,13 +4176,15 @@ describe("Computer prompt acknowledgements", () => {
                         kind: "session.prompt.accepted",
                         requestId: "settled-command",
                         target: runtime.sessionTarget,
-                        state: "settled",
+                        commandId: "settled-command",
+                        standing: { state: "settled" },
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                     },
                     encryption.computer,
                     signal,
                 ),
             );
-            expect(await retry).toBe("settled");
+            expect(await retry).toMatchObject({ standing: { state: "settled" } });
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }
@@ -4189,7 +4228,9 @@ describe("Computer prompt acknowledgements", () => {
                         kind: "session.prompt.accepted",
                         requestId: "preparing-command",
                         target: runtime.sessionTarget,
-                        state: "settled",
+                        commandId: "preparing-command",
+                        standing: { state: "settled" },
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                     },
                     encryption.computer,
                     signal,
@@ -4202,6 +4243,7 @@ describe("Computer prompt acknowledgements", () => {
                         kind: "session.turn.stopped",
                         requestId: cancellation.requestId,
                         target: runtime.sessionTarget,
+                        position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
                         stopReason: "cancelled",
                     },
                     encryption.computer,
@@ -4210,7 +4252,7 @@ describe("Computer prompt acknowledgements", () => {
             );
 
             expect(await cancel).toMatchObject({ stopReason: "cancelled" });
-            expect(await submission).toBe("settled");
+            expect(await submission).toMatchObject({ standing: { state: "settled" } });
         } finally {
             runtime.daemon.close(1000, "Test complete");
         }

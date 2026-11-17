@@ -95,6 +95,7 @@ import { parseJson } from "./protocol/shared/message-codec.ts";
 import type {
     MortyInteractionResponseRequest,
     MortyPageRequest,
+    MortyQueuedTurnChange,
     MortyTurnAdmission,
     MortyTurnCancellation,
     SubmitMortyTurnRequest,
@@ -1159,10 +1160,11 @@ export class MortyTurnResources {
                 target: sessionTarget,
                 reply: sessionPromptAcceptedEventCodec,
                 mismatch: "The Computer returned an invalid Turn",
+                isAnswer: (reply) => reply.commandId === commandId,
             },
             signal,
         );
-        return accepted.state;
+        return { standing: accepted.standing, position: accepted.position };
     };
 
     readonly cancel = async (
@@ -1191,16 +1193,16 @@ export class MortyTurnResources {
             },
             signal,
         );
-        return { stopReason: result.stopReason };
+        return { stopReason: result.stopReason, position: result.position };
     };
 
     readonly cancelQueued = async (
         sessionTarget: NativeSessionTarget,
         commandId: string,
         signal: AbortSignal,
-    ): Promise<void> => {
+    ): Promise<MortyQueuedTurnChange> => {
         const requestId = crypto.randomUUID();
-        await this.#executor.exchange(
+        const withdrawn = await this.#executor.exchange(
             {
                 endpoint: sessionEndpoints.cancelQueuedTurn({
                     computerId: this.#computerId,
@@ -1220,15 +1222,16 @@ export class MortyTurnResources {
             },
             signal,
         );
+        return { position: withdrawn.position };
     };
 
     readonly steer = async (
         sessionTarget: NativeSessionTarget,
         commandId: string,
         signal: AbortSignal,
-    ): Promise<void> => {
+    ): Promise<MortyQueuedTurnChange> => {
         const requestId = crypto.randomUUID();
-        await this.#executor.exchange(
+        const steered = await this.#executor.exchange(
             {
                 endpoint: sessionEndpoints.steerTurn({
                     computerId: this.#computerId,
@@ -1254,6 +1257,7 @@ export class MortyTurnResources {
             },
             signal,
         );
+        return { position: steered.position };
     };
 }
 

@@ -34,7 +34,7 @@ async function replyStopped(
         target,
     }: { readonly commandId: string; readonly requestId: string; readonly target: NativeSessionTarget },
 ): Promise<void> {
-    const { operations, socket, signal, payloadEncryption } = context;
+    const { operations, socket, signal, payloadEncryption, standings } = context;
     const settled = settledCommand(operations, commandId);
     if (settled.kind === "completed") {
         if (socket.readyState === WebSocket.OPEN) {
@@ -46,6 +46,7 @@ async function replyStopped(
                         kind: SESSION_TURN_STOPPED_KIND,
                         requestId,
                         target,
+                        position: standings.position(target),
                         stopReason: promptStopReason(settled.completion),
                     },
                     payloadEncryption,
@@ -89,14 +90,21 @@ export const handleSessionCancelBeforeStart: CommandHandler<typeof SESSION_CANCE
     context,
     message,
 ): Promise<void> => {
-    const { eventProjection, operations, sessions, sessionTurns, signal, socket, payloadEncryption } = context;
+    const { eventProjection, operations, sessions, sessionTurns, signal, socket, payloadEncryption, standings } =
+        context;
     const { commandId, requestId, target } = message;
     const withdrawn = async (): Promise<void> => {
         if (socket.readyState === WebSocket.OPEN) {
             reply(
                 socket,
                 await sessionTurnWithdrawnEventCodec.encode(
-                    { commandId, kind: SESSION_TURN_WITHDRAWN_KIND, requestId, target },
+                    {
+                        commandId,
+                        kind: SESSION_TURN_WITHDRAWN_KIND,
+                        requestId,
+                        target,
+                        position: standings.position(target),
+                    },
                     payloadEncryption,
                     signal,
                 ),
@@ -201,8 +209,26 @@ export const handlePromptDisposition: CommandHandler<typeof SESSION_PROMPT_DISPO
     context,
     message,
 ): Promise<void> => {
-    const { diagnostics, operations, sessionTurns, signal, socket, payloadEncryption } = context;
+    const { diagnostics, operations, sessionTurns, signal, socket, payloadEncryption, standings } = context;
     const { commandId, requestId, target } = message;
+    const steered = async (): Promise<void> => {
+        if (socket.readyState === WebSocket.OPEN) {
+            reply(
+                socket,
+                await sessionPromptSteeredEventCodec.encode(
+                    {
+                        commandId,
+                        kind: SESSION_PROMPT_STEERED_KIND,
+                        requestId,
+                        target,
+                        position: standings.position(target),
+                    },
+                    payloadEncryption,
+                    signal,
+                ),
+            );
+        }
+    };
     const turn = sessionTurns.get(commandId, target);
     // The ledger's terminal outcome distinguishes a completed steer from a message that ran on its own.
     const outcome = operations.hasStarted(commandId, target) ? operations.outcome(commandId) : undefined;
@@ -211,16 +237,7 @@ export const handlePromptDisposition: CommandHandler<typeof SESSION_PROMPT_DISPO
         outcome.payload.kind === "prompt.completed" &&
         outcome.payload.completion.kind === "steered"
     ) {
-        if (socket.readyState === WebSocket.OPEN) {
-            reply(
-                socket,
-                await sessionPromptSteeredEventCodec.encode(
-                    { commandId, kind: SESSION_PROMPT_STEERED_KIND, requestId, target },
-                    payloadEncryption,
-                    signal,
-                ),
-            );
-        }
+        await steered();
         return;
     }
     const result = turn?.promoteQueuedPrompt(message) ?? "unavailable";
@@ -229,16 +246,7 @@ export const handlePromptDisposition: CommandHandler<typeof SESSION_PROMPT_DISPO
             .progress(commandId, target, signal)
             .then(async (progress) => {
                 if (progress === "started") {
-                    if (socket.readyState === WebSocket.OPEN) {
-                        reply(
-                            socket,
-                            await sessionPromptSteeredEventCodec.encode(
-                                { commandId, kind: SESSION_PROMPT_STEERED_KIND, requestId, target },
-                                payloadEncryption,
-                                signal,
-                            ),
-                        );
-                    }
+                    await steered();
                     return;
                 }
                 const settled = settledCommand(operations, commandId);

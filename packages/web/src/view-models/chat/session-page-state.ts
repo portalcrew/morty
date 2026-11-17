@@ -90,6 +90,9 @@ export function createSessionPageState(options: {
         sessionTarget,
         connection,
         failed,
+        answered: (answer) => {
+            execution.getState().apply(answer);
+        },
         returned: (message) => {
             // The queued message was written first, so it goes ahead of a draft the user started since.
             feedback.getState().dismiss();

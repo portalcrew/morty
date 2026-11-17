@@ -12,6 +12,7 @@ import {
     encryptedFieldSchema,
 } from "../../shared/message-codec.ts";
 import { sessionConfigOptionsSchema, sessionConfigurationSelectionsSchema } from "../configuration/index.ts";
+import { admittedCommandStandingSchema, sessionLogPositionSchema } from "../shared/command-standing.ts";
 import {
     DIRECTORY_PATH,
     sessionCapabilitiesSchema,
@@ -255,16 +256,19 @@ const sessionOperationFailedEventSchema = z
 export type SessionOperationFailedEvent = z.infer<typeof sessionOperationFailedEventSchema>;
 
 /**
- * Answers a prompt: it entered the Session's queue, started running, or had already settled before it started (for
- * example when it was withdrawn, or when a retry finds it settled). `requestId` addresses the submission. A prompt
- * that failed before it started is answered by `session.operation.failed`.
+ * Answers a prompt once its command entered the Session's queue, started, or ended, whichever came first; a retry of
+ * a command that is still preparing is answered at the same point. `standing` holds at `position`, so a read or live
+ * event at or after it reflects that standing or a later one. `requestId` addresses the submission. A prompt that
+ * failed before it started is answered by `session.operation.failed`.
  */
 const sessionPromptAcceptedEventSchema = z
     .object({
         kind: z.literal(SESSION_PROMPT_ACCEPTED_KIND),
         requestId: IDENTIFIER,
         target: nativeSessionTargetSchema,
-        state: z.enum(["queued", "running", "settled"]),
+        commandId: IDENTIFIER,
+        standing: admittedCommandStandingSchema,
+        position: sessionLogPositionSchema,
     })
     .readonly();
 
