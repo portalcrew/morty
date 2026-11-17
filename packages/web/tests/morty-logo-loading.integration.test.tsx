@@ -24,7 +24,7 @@ test("Given the Morty logo is still loading, When it finishes loading, Then the 
     expect(mark.className).toContain("opacity-100");
 });
 
-test("Given the mobile chat navigation, When the Morty mark renders, Then the logo is 24 by 24", {
+test("Given the mobile chat navigation, When the Morty mark renders, Then the logo is 26 by 26", {
     timeout: 30_000,
 }, async () => {
     const desktopViewport = { height: window.innerHeight, width: window.innerWidth };
@@ -39,11 +39,11 @@ test("Given the mobile chat navigation, When the Morty mark renders, Then the lo
         if (!(logo instanceof HTMLElement)) {
             throw new Error("Expected the mobile Morty mark");
         }
-        expect(logo.style.width).toBe("24px");
-        expect(logo.style.height).toBe("24px");
+        expect(logo.style.width).toBe("26px");
+        expect(logo.style.height).toBe("26px");
         const mark = logo.querySelector("img");
-        expect(mark?.getAttribute("width")).toBe("24");
-        expect(mark?.getAttribute("height")).toBe("24");
+        expect(mark?.getAttribute("width")).toBe("26");
+        expect(mark?.getAttribute("height")).toBe("26");
     } finally {
         if (app !== null) {
             await app.close();
