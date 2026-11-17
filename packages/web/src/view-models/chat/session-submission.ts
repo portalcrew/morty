@@ -149,6 +149,7 @@ export function createSessionSubmission(ports: {
                 case "preparing":
                 case "submitting":
                 case "delivery-unknown":
+                case "withdrawing":
                     return null;
                 default:
                     return state satisfies never;

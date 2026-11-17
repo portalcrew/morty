@@ -88,6 +88,11 @@ export type DeliveryState =
     | { readonly kind: "preparation-failed"; readonly message: SubmittedMessage; readonly failure: SubmissionFailure }
     | { readonly kind: "submitting"; readonly journal: Journal }
     | { readonly kind: "delivery-unknown"; readonly journal: Journal }
+    /**
+     * The user removed an unknown delivery, and the Computer is asked to withdraw it under its identity. Until the
+     * Computer answers, the message may still run, so it keeps its record.
+     */
+    | { readonly kind: "withdrawing"; readonly journal: Journal }
     | { readonly kind: "failed"; readonly journal: Journal; readonly failure: SubmissionFailure };
 
 function failedSubmission(
@@ -103,10 +108,16 @@ function failedSubmission(
         case "preparing":
         case "submitting":
         case "delivery-unknown":
+        case "withdrawing":
             return null;
         default:
             return state satisfies never;
     }
+}
+
+/** A message the Computer may hold although this page has no confirmation of it. */
+export function unconfirmedJournal(state: DeliveryState): Journal | null {
+    return state.kind === "delivery-unknown" || state.kind === "withdrawing" ? state.journal : null;
 }
 
 export function awaitingMessage(state: DeliveryState): SubmittedMessage | null {
@@ -126,6 +137,7 @@ export function deliveryMessages(delivery: DeliveryRecord): readonly SubmittedMe
             return [...accepted, state.message];
         case "submitting":
         case "delivery-unknown":
+        case "withdrawing":
         case "failed":
             return [...accepted, journalMessage(state.journal)];
         default:
@@ -140,19 +152,27 @@ export function deliveryMessages(delivery: DeliveryRecord): readonly SubmittedMe
 export interface SessionDeliveryStore {
     readonly state: DeliveryState;
     readonly accepted: readonly SubmittedMessage[];
-    readonly discardUnknown: () => void;
+    /**
+     * Withdraws the unknown delivery on the Computer, so it never runs. It is gone once `withdraw` says the Computer
+     * withdrew it; otherwise it stays unknown, and a command the Computer already holds settles as the Computer's.
+     */
+    readonly withdrawUnknown: (withdraw: WithdrawCommand, signal: AbortSignal) => Promise<void>;
     readonly awaitConnection: (message: SubmittedMessage) => void;
     readonly takeFailedMessage: () => SubmittedMessage | null;
     readonly send: (message: SubmittedMessage, attempt: DeliveryAttempt) => Promise<void>;
     readonly retry: (submit: SubmitTurn) => Promise<void>;
 }
 
+/** Asks the Computer to withdraw a command before it starts; true when the Computer withdrew it. */
+type WithdrawCommand = (commandId: string, signal: AbortSignal) => Promise<boolean>;
+
 export type DeliveryRecord = Pick<SessionDeliveryStore, "state" | "accepted">;
 
 /**
  * Delivery as the Computer's account leaves it. An unknown delivery the Computer holds was delivered: it is idle, or
  * accepted when it waits in the queue. An accepted message the Computer's account covers is dropped, which releases
- * the files the page kept for editing it; nothing reads them once the account shows the message.
+ * the files the page kept for editing it; nothing reads them once the account shows the message. A delivery being
+ * withdrawn waits for the answer to its withdrawal instead: the Computer also holds a command it withdrew.
  */
 export function settledDelivery(delivery: DeliveryRecord, runtime: SessionExecutionState): DeliveryRecord {
     const { state } = delivery;
@@ -186,6 +206,7 @@ function pendingSubmission(state: DeliveryState): {
     switch (state.kind) {
         case "submitting":
         case "delivery-unknown":
+        case "withdrawing":
             return {
                 commandId: state.journal.commandId,
                 placement: state.journal.placement,
@@ -217,6 +238,7 @@ function unsentContent(state: DeliveryState): string | null {
         case "idle":
         case "submitting":
         case "delivery-unknown":
+        case "withdrawing":
             return null;
         default:
             return state satisfies never;
@@ -328,9 +350,20 @@ export const createSessionDeliveryStore = (options: {
                     ? { kind: "idle" }
                     : { kind: "delivery-unknown", journal: { ...options.pendingSubmission, attachments: null } },
             accepted: [],
-            discardUnknown: () => {
-                if (settled().state.kind === "delivery-unknown") {
-                    set({ kind: "idle" });
+            withdrawUnknown: async (withdraw, signal) => {
+                const { state } = settled();
+                if (state.kind !== "delivery-unknown") {
+                    return;
+                }
+                const { journal } = state;
+                set({ kind: "withdrawing", journal });
+                let withdrawn = false;
+                try {
+                    withdrawn = await withdraw(journal.commandId, signal);
+                } finally {
+                    if (get().state.kind === "withdrawing") {
+                        set(withdrawn ? { kind: "idle" } : { kind: "delivery-unknown", journal });
+                    }
                 }
             },
             awaitConnection: (message) => set({ kind: "awaiting-connection", message }),

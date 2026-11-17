@@ -14,7 +14,7 @@ import { createBrowserFilePreviewStore } from "./file-preview-store.ts";
 import type { SelectedMortySession } from "./open-session.ts";
 import type { SessionActivityState } from "./session-activity-machine.ts";
 import { acceptedTurn } from "./session-current-turn.ts";
-import { deliveryMessages, settledDelivery } from "./session-delivery-store.ts";
+import { deliveryMessages, settledDelivery, unconfirmedJournal } from "./session-delivery-store.ts";
 import { paneActivity } from "./session-execution.ts";
 import { createSessionExecutionFeed } from "./session-execution-feed.ts";
 import { type ChatQueuedMessage, queuedMessages } from "./session-message-queue-store.ts";
@@ -22,6 +22,7 @@ import {
     canChangeSettings,
     canDeleteQueued,
     canEditQueued,
+    canRemoveUnknownDelivery,
     canRetryFailedMessage,
     canRetryUnknownDelivery,
     canSend,
@@ -50,7 +51,7 @@ export interface SessionPaneStore {
     readonly send: () => Promise<void>;
     readonly chooseAnswer: (messageId: string, questionIndex: number, answer: string) => void;
     readonly sendAnswer: (messageId: string) => Promise<void>;
-    readonly removeUnknownDelivery: () => void;
+    readonly removeUnknownDelivery: (signal: AbortSignal) => Promise<void>;
     readonly retryUnknownDelivery: () => Promise<void>;
     readonly retryFailedMessage: () => Promise<void>;
     readonly editFailedMessage: () => void;
@@ -115,7 +116,7 @@ export function createSessionPaneModel(options: {
             await history.dispatch({ kind: "reconcile" }, connected, signal);
             signal.throwIfAborted();
             const { state } = settledDelivery(delivery.getState(), execution.getState().state);
-            await feed.read(connected, signal, state.kind === "delivery-unknown" ? state.journal.commandId : undefined);
+            await feed.read(connected, signal, unconfirmedJournal(state)?.commandId);
         },
         receive: async (events) => {
             for (const event of events) {
@@ -208,8 +209,11 @@ export function createSessionPaneModel(options: {
                 await submitted(submission.sendAnswer(answer));
             }
         },
-        removeUnknownDelivery: () => {
-            delivery.getState().discardUnknown();
+        removeUnknownDelivery: async (signal) => {
+            if (canRemoveUnknownDelivery(operationFacts())) {
+                acted();
+                await delivery.getState().withdrawUnknown(queue.getState().withdrawUnconfirmed, signal);
+            }
         },
         retryUnknownDelivery: async () => {
             if (canRetryUnknownDelivery(operationFacts())) {

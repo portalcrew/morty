@@ -50,6 +50,7 @@ function PreviewRenderItem({
             onRemoveUnknownDelivery={() => undefined}
             onRetryUnknownDelivery={() => undefined}
             openLocalFile={() => undefined}
+            removeUnknownDeliveryDisabled
             retryUnknownDeliveryDisabled
         />
     );

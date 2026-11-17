@@ -93,7 +93,10 @@ function SessionRenderItemContent({
     readonly pane: SessionPaneModel;
     readonly presentation: Pick<
         ReturnType<typeof sessionPanePresentation>,
-        "answerDisabled" | "deliveryUnknownUserMessageId" | "retryUnknownDeliveryDisabled"
+        | "answerDisabled"
+        | "deliveryUnknownUserMessageId"
+        | "removeUnknownDeliveryDisabled"
+        | "retryUnknownDeliveryDisabled"
     >;
 }) {
     if (item.kind === "assistant-text" && item.messageId !== null && item.questions.length > 0) {
@@ -141,6 +144,7 @@ function SessionRenderItemContent({
             onRetryUnknownDelivery={onRetryUnknownDelivery}
             openLocalFile={openLocalFile}
             readImage={pane.readResource}
+            removeUnknownDeliveryDisabled={presentation.removeUnknownDeliveryDisabled}
             retryUnknownDeliveryDisabled={presentation.retryUnknownDeliveryDisabled}
         />
     );
@@ -381,6 +385,7 @@ export function MortySessionPaneLoading({ footer }: { readonly footer?: ReactNod
 function UnconfirmedDeliveryCard({
     collapseStore,
     delivery,
+    removeDisabled,
     retryDisabled,
     onRemove,
     onRetry,
@@ -392,6 +397,7 @@ function UnconfirmedDeliveryCard({
         readonly attachmentLabels: readonly { readonly name: string; readonly uri: string }[];
         readonly attachments: readonly ComposerAttachment[];
     };
+    readonly removeDisabled: boolean;
     readonly retryDisabled: boolean;
     readonly onRemove: () => void;
     readonly onRetry: () => void;
@@ -421,7 +427,7 @@ function UnconfirmedDeliveryCard({
                 <span className="min-w-0 flex-1">
                     Delivery wasn’t confirmed. This message won’t be sent again unless you retry it.
                 </span>
-                <button aria-label="Remove failed message" onClick={onRemove} type="button">
+                <button aria-label="Remove message" disabled={removeDisabled} onClick={onRemove} type="button">
                     <X aria-hidden="true" className="size-4" />
                 </button>
             </div>
@@ -700,8 +706,8 @@ function MortySessionPaneBody({
                                                         computerName={executionContext.computer}
                                                         onAnswer={answer}
                                                         onChooseAnswer={pane.store.getState().chooseAnswer}
-                                                        onRemoveUnknownDelivery={
-                                                            pane.store.getState().removeUnknownDelivery
+                                                        onRemoveUnknownDelivery={() =>
+                                                            run(pane.store.getState().removeUnknownDelivery)
                                                         }
                                                         onRetryUnknownDelivery={() =>
                                                             run(pane.store.getState().retryUnknownDelivery)
@@ -729,8 +735,8 @@ function MortySessionPaneBody({
                                                         computerName={executionContext.computer}
                                                         onAnswer={answer}
                                                         onChooseAnswer={pane.store.getState().chooseAnswer}
-                                                        onRemoveUnknownDelivery={
-                                                            pane.store.getState().removeUnknownDelivery
+                                                        onRemoveUnknownDelivery={() =>
+                                                            run(pane.store.getState().removeUnknownDelivery)
                                                         }
                                                         onRetryUnknownDelivery={() =>
                                                             run(pane.store.getState().retryUnknownDelivery)
@@ -808,8 +814,9 @@ function MortySessionPaneBody({
                                         <UnconfirmedDeliveryCard
                                             collapseStore={pane.userMessageCollapse}
                                             delivery={presentation.unconfirmedDelivery}
+                                            removeDisabled={presentation.removeUnknownDeliveryDisabled}
                                             retryDisabled={presentation.retryUnknownDeliveryDisabled}
-                                            onRemove={() => pane.store.getState().removeUnknownDelivery()}
+                                            onRemove={() => run(pane.store.getState().removeUnknownDelivery)}
                                             onRetry={() => run(pane.store.getState().retryUnknownDelivery)}
                                         />
                                     )}

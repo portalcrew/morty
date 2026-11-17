@@ -29,6 +29,7 @@ function currentMessage(state: DeliveryState): LocalMessage | null {
         case "failed":
             return { kind: "pending", message: journalMessage(state.journal), error: state.failure.message };
         case "delivery-unknown":
+        case "withdrawing":
             return { kind: "unknown", message: journalMessage(state.journal) };
         default:
             return state satisfies never;
