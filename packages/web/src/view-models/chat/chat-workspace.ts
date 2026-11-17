@@ -33,7 +33,7 @@ import { createLinkedDevicesStore, type LinkedDevicesStore } from "./linked-devi
 import { createNetworkDiagnosticStore, type NetworkDiagnosticStore } from "./network-diagnostic-store.ts";
 import { createRemoteAccessStore, type RemoteAccessStore } from "./remote-access-store.ts";
 import { connectionWaitsForComputer } from "./session-connection.ts";
-import { submittingCommandId } from "./session-execution.ts";
+import { pageActivity, submittingCommandId } from "./session-execution.ts";
 import { createSessionPageState, type SessionPageState } from "./session-page-state.ts";
 import { createSessionPaneModel, type SessionPaneModel } from "./session-pane-store.ts";
 import { createSessionTitlesStore, type SessionTitlesStore } from "./session-titles-store.ts";
@@ -71,6 +71,9 @@ export interface ChatWorkspace {
     readonly sidebar: ChatWorkspaceSidebar;
     readonly pane: Pick<StoreApi<ChatWorkspacePane>, "getState" | "getInitialState" | "subscribe">;
     readonly sessionPane: () => SessionPaneModel | null;
+    readonly sessionPage: (
+        sessionTarget: NativeSessionTarget,
+    ) => Pick<SessionPageState, "execution" | "delivery"> | null;
     readonly retryDraftControls: () => void;
     readonly refreshDirectory: () => void;
     readonly chatSignal: () => AbortSignal;
@@ -231,7 +234,10 @@ export function createChatWorkspace(options: {
             home.getState().newConversation();
         },
     );
-    const statuses = createConversationStatusStore(() => selectedConversationTarget(home.getState().selection));
+    const statuses = createConversationStatusStore({
+        selectedSessionId: () => selectedConversationTarget(home.getState().selection),
+        activity: (sessionTarget) => sessionPageActivity(sessionTarget),
+    });
     const draftControls = createDraftControlsStore(
         computerId,
         requests,
@@ -315,18 +321,21 @@ export function createChatWorkspace(options: {
             hasWorkingBackgroundConversation(
                 state.sessions,
                 statuses.getState().records,
+                sessionPageActivity,
                 selectedConversationTarget(home.getState().selection),
             )
         );
     };
     const followDirectory = async (signal: AbortSignal, mode: DirectoryLoadMode): Promise<void> => {
         do {
-            const submitting = [...sessionStates].flatMap(([target, state]) =>
-                submittingCommandId(state.execution.getState().state, state.delivery.getState().state) === null
-                    ? []
-                    : [target],
+            const open = paneStore.getState();
+            const following = [...sessionStates].flatMap(([target, state]) =>
+                (open.kind === "open" && sameNativeSession(open.model.session.target, target)) ||
+                submittingCommandId(state.execution.getState().state, state.delivery.getState().state) !== null
+                    ? [target]
+                    : [],
             );
-            statuses.getState().directoryLoadStarted(submitting);
+            statuses.getState().directoryLoadStarted(following);
             await directory.getState().load(signal, mode);
             signal.throwIfAborted();
             if (listWaitsForComputer()) {
@@ -407,6 +416,12 @@ export function createChatWorkspace(options: {
         sessionStates.set(sessionTarget, state);
         return state;
     };
+    const sessionPageActivity = (sessionTarget: NativeSessionTarget) => {
+        const state = sessionStates.get(sessionTarget);
+        return state === undefined
+            ? null
+            : pageActivity(state.execution.getState().state, state.delivery.getState().state);
+    };
     const replacePane = (selection: Extract<ConversationSelectionState, { readonly kind: "ready" }>): void => {
         const open = paneStore.getState();
         if (open.kind === "open" && open.model.session === selection.session) {
@@ -438,7 +453,6 @@ export function createChatWorkspace(options: {
             attachmentSignal: operationsLifetime.signal,
             computerId,
             requests,
-            onReleased: (activity) => statuses.getState().paneReleased(sessionTarget, activity),
             titles,
             connectionAvailable: (connection) =>
                 connectionPresentation(computer.getState(), home.getState().selection, connection).available,
@@ -447,6 +461,7 @@ export function createChatWorkspace(options: {
         });
         paneStore.setState({ kind: "open", model }, true);
         model.start();
+        statuses.getState().followed(sessionTarget);
     };
 
     const linkedDevices = createLinkedDevicesStore({
@@ -512,6 +527,7 @@ export function createChatWorkspace(options: {
             const open = paneStore.getState();
             return open.kind === "open" ? open.model : null;
         },
+        sessionPage: (sessionTarget) => sessionStates.get(sessionTarget) ?? null,
         retryDraftControls: () => {
             void draftControls
                 .getState()

@@ -1,7 +1,6 @@
 import type { MortyClient, MortyTurnAdmission } from "@portalcrew/morty-client";
 import { createStore } from "zustand/vanilla";
 import type { SessionActivityState } from "./session-activity-machine.ts";
-import type { SessionConnection } from "./session-connection.ts";
 import {
     acceptedTurn,
     type CurrentTurn,
@@ -607,15 +606,15 @@ export function sessionActivity(
 }
 
 /**
- * The Session's work as its pane accounts for it, including submissions the Computer never saw; none until the
- * connection first reaches the Computer, as the execution state has nothing of the Computer's yet.
+ * The Session's work as this page accounts for it, including submissions the Computer never saw; none until a pane
+ * that started following the Session first reads the Computer's account, as the execution state has nothing of the
+ * Computer's before.
  */
-export function paneActivity(
-    connection: SessionConnection,
-    execution: Pick<SessionExecutionState, "turn" | "commands">,
+export function pageActivity(
+    execution: Pick<SessionExecutionState, "coverage" | "turn" | "commands">,
     delivery: DeliveryState,
 ): SessionActivityState | null {
-    return connection.kind === "first-loading" ? null : sessionActivity(execution, delivery);
+    return execution.coverage.kind === "unread" ? null : sessionActivity(execution, delivery);
 }
 
 export interface SessionExecutionStore {

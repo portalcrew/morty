@@ -12,10 +12,8 @@ import type { Clock } from "../../services/time/clock.ts";
 import { agentQuestionAnswer, openAgentQuestions } from "./agent-question-answer.ts";
 import { createBrowserFilePreviewStore } from "./file-preview-store.ts";
 import type { SelectedMortySession } from "./open-session.ts";
-import type { SessionActivityState } from "./session-activity-machine.ts";
 import { acceptedTurn } from "./session-current-turn.ts";
 import { deliveryMessages, settledDelivery, unconfirmedJournal } from "./session-delivery-store.ts";
-import { paneActivity } from "./session-execution.ts";
 import { createSessionExecutionFeed } from "./session-execution-feed.ts";
 import { type ChatQueuedMessage, queuedMessages } from "./session-message-queue-store.ts";
 import {
@@ -74,11 +72,6 @@ export function createSessionPaneModel(options: {
     readonly attachmentSignal: AbortSignal;
     readonly computerId: string;
     readonly requests: Pick<BotChatApi, "connectSession" | "managedSession" | "computerConfiguration">;
-    /**
-     * Hands the owner this pane's last account of the Session's work when the pane stops, or null when it had none.
-     * While it runs, the owner derives the Session's status from the pane's account instead.
-     */
-    readonly onReleased?: ((activity: SessionActivityState | null) => void) | undefined;
     readonly titles: SessionTitlesStore;
     readonly connectionAvailable: (connection: SessionConnection) => boolean;
     readonly onConnected: () => void;
@@ -382,7 +375,6 @@ export function createSessionPaneModel(options: {
         paneConnection.stop();
         filePreview.getState().close();
         lifetime.abort(new Error("The session pane stopped."));
-        options.onReleased?.(paneActivity(shownConnection(), execution.getState().state, delivery.getState().state));
     };
     return {
         userMessageCollapse: sessionPage.userMessageCollapse,
