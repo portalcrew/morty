@@ -1,15 +1,27 @@
 import { Check, Copy, Download, ImageIcon, Maximize2 } from "lucide-react";
 import { Lexer } from "marked";
 import {
+    defaultComponents,
     defaultRehypePlugins,
     defaultRemarkPlugins,
+    type ExtraProps,
     type MathPlugin,
     parseMarkdownIntoBlocks,
     Streamdown,
 } from "streamdown";
 import { ImageGallery, PreviewImage } from "../images/image-gallery.tsx";
 import "streamdown/styles.css";
-import { type ComponentProps, createContext, type SVGProps, useContext, useEffect, useMemo, useState } from "react";
+import {
+    type ComponentProps,
+    cloneElement,
+    createContext,
+    isValidElement,
+    type SVGProps,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
+} from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
 import { dataTestId } from "@/data-testid";
@@ -79,13 +91,14 @@ const STREAMDOWN_FENCED_CODE_BLOCK_CLASSES = [
     "[&_[data-streamdown=code-block]]:!bg-muted",
     "[&_[data-streamdown=code-block-header]]:!h-auto [&_[data-streamdown=code-block-header]]:min-w-0 [&_[data-streamdown=code-block-header]]:px-4 [&_[data-streamdown=code-block-header]]:pt-3",
     "[&_[data-streamdown=code-block-header]>span]:!ml-0 [&_[data-streamdown=code-block-header]>span]:min-w-0 [&_[data-streamdown=code-block-header]>span]:truncate",
-    "[&_[data-streamdown=code-block-body]]:flex [&_[data-streamdown=code-block-body]]:min-h-0 [&_[data-streamdown=code-block-body]]:flex-col [&_[data-streamdown=code-block-body]]:!overflow-hidden",
+    "[&_[data-streamdown=code-block-body]]:code-scroll-fade",
+    // The rounded block clips the focused body's own ring, so the block draws it.
+    "[&_[data-streamdown=code-block]:has([data-streamdown=code-block-body]:focus-visible)]:keyboard-focus:outline-[0.5px] [&_[data-streamdown=code-block]:has([data-streamdown=code-block-body]:focus-visible)]:keyboard-focus:outline-solid [&_[data-streamdown=code-block]:has([data-streamdown=code-block-body]:focus-visible)]:keyboard-focus:outline-ring [&_[data-streamdown=code-block]:has([data-streamdown=code-block-body]:focus-visible)]:keyboard-focus:shadow-[var(--focus-ring-shadow)]",
     "[&_[data-streamdown=code-block-body]]:!rounded-none",
     "[&_[data-streamdown=code-block-body]]:!border-0",
     "[&_[data-streamdown=code-block-body]]:!bg-transparent",
     "[&_[data-streamdown=code-block-body]]:!p-4",
     "[&_[data-streamdown=code-block-body]]:!text-[13px] [&_[data-streamdown=code-block-body]]:!leading-[1.6]",
-    "[&_[data-streamdown=code-block-body]_pre]:min-h-0 [&_[data-streamdown=code-block-body]_pre]:flex-1 [&_[data-streamdown=code-block-body]_pre]:overflow-auto",
     // Prose has no column layout to preserve, so it wraps instead of hiding line ends behind a scrollbar.
     "[&_[data-streamdown=code-block-body]:is([data-language=markdown],[data-language=md],[data-language=text],[data-language=txt],[data-language=plaintext])_pre]:whitespace-pre-wrap",
     "[&_[data-streamdown=code-block-actions]]:!border-0",
@@ -359,9 +372,23 @@ export interface AgentMarkdownProps {
     readonly streaming: boolean;
 }
 
+const StreamdownPre = defaultComponents.pre;
+
+// Streamdown passes the fenced code element's props to the code body that scrolls long lines, so
+// keyboard users can focus it and scroll with the arrow keys.
+function AgentMarkdownPre({ children, ...props }: ComponentProps<"pre"> & ExtraProps) {
+    return (
+        <StreamdownPre {...props}>
+            {isValidElement<ComponentProps<"code">>(children)
+                ? cloneElement(children, { "aria-label": "Code", role: "region", tabIndex: 0 })
+                : children}
+        </StreamdownPre>
+    );
+}
+
 // Renderer identities must survive parent updates, including updates between
 // pointer-down and click. Context supplies the latest callbacks without remounts.
-const STREAMDOWN_COMPONENTS = { a: AgentMarkdownLink, img: AgentMarkdownImage };
+const STREAMDOWN_COMPONENTS = { a: AgentMarkdownLink, img: AgentMarkdownImage, pre: AgentMarkdownPre };
 
 interface AgentMarkdownContentProps extends AgentMarkdownProps {
     readonly mathPlugin?: MathPlugin | undefined;
