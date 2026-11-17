@@ -1,8 +1,8 @@
-import { type MortyClient, MortyError, type MortySessionEventObserver } from "@portalcrew/morty-client";
+import type { MortyClient, MortySessionEventObserver } from "@portalcrew/morty-client";
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
-import { recordBrowserDiagnostic } from "../../services/diagnostics/browser-diagnostics.ts";
+import { failureOutcome, recordBrowserDiagnostic } from "../../services/diagnostics/browser-diagnostics.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import { formatError, isRetryableComputerConnectionFailure, isSessionClosedFailure } from "../format-error.ts";
 import { reportApplicationError } from "../report-error.ts";
@@ -280,7 +280,7 @@ export function createSessionPaneConnection(options: {
                     at: new Date().toISOString(),
                     component: "web",
                     operation: "session-interruption",
-                    outcome: cause instanceof MortyError ? cause.code : "api_unavailable",
+                    outcome: failureOutcome(cause),
                     attempt: interrupted.kind === "waiting" ? interrupted.failures : 0,
                     elapsedMs: 0,
                     requestId: "",
