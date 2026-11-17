@@ -17,12 +17,13 @@ export type SessionRenameStore = {
 
 /**
  * Switching panes neither cancels nor resends a rename. A failure reports to the Session's operation feedback, and an
- * ambiguous one requires a new user decision.
+ * ambiguous one requires a new user decision. Once the Computer confirms, the rename waits for the directory to reload,
+ * which brings the title and the Session's moved last update together; the directory reports its own failures.
  */
 export function createSessionRenameStore(options: {
     readonly sessionTarget: NativeSessionTarget;
     readonly connection: SessionOperationConnection;
-    readonly refreshTitle: (signal: AbortSignal) => Promise<void>;
+    readonly refreshDirectory: () => Promise<void>;
     readonly failed: (failure: OperationFailure) => void;
 }) {
     return createStore<SessionRenameStore>()((set, get) => ({
@@ -50,7 +51,7 @@ export function createSessionRenameStore(options: {
                 }, requestSignal);
                 requestSignal.throwIfAborted();
                 set({ rename: { kind: "refreshing", title } });
-                await options.refreshTitle(requestSignal);
+                await options.refreshDirectory();
                 requestSignal.throwIfAborted();
                 set({ rename: { kind: "none" } });
             } catch (cause) {
@@ -63,8 +64,8 @@ export function createSessionRenameStore(options: {
                 let message: string;
                 switch (rename.kind) {
                     case "refreshing":
-                        message = "The title was saved, but its current value could not be refreshed.";
-                        break;
+                        set({ rename: { kind: "none" } });
+                        return;
                     case "sending":
                         message = "The rename could not be confirmed. Check the current title before saving again.";
                         break;
