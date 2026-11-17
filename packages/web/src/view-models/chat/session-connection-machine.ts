@@ -102,31 +102,6 @@ export function sessionConnectionView(state: SessionConnectionState): SessionCon
     }
 }
 
-/** Whether two connection states show the same thing, so a view need not be told again. */
-export function sameSessionConnection(left: SessionConnection, right: SessionConnection): boolean {
-    switch (left.kind) {
-        case "first-loading":
-            return right.kind === "first-loading";
-        case "ready":
-            return right.kind === "ready" && right.client === left.client;
-        case "reconnecting":
-            return right.kind === "reconnecting" && right.message === left.message && right.notice === left.notice;
-        case "disconnected":
-            return (
-                right.kind === "disconnected" &&
-                right.message === left.message &&
-                right.notice === left.notice &&
-                (left.retry.kind === "scheduled"
-                    ? right.retry.kind === "scheduled" && right.retry.remainingSeconds === left.retry.remainingSeconds
-                    : right.retry.kind === "exhausted")
-            );
-        case "closed":
-            return right.kind === "closed" && right.reason === left.reason;
-        case "failed":
-            return right.kind === "failed" && right.message === left.message;
-    }
-}
-
 const unchanged = (state: SessionConnectionState): SessionConnectionResult => ({ state, effects: [] });
 
 function failed(

@@ -56,6 +56,7 @@ import { type ConversationGroup, groupConversationsByUpdatedAt } from "../../vie
 import { conversationListStatus, hasUnreadConversation } from "../../view-models/chat/conversation-status-store.ts";
 import { pendingExecutionContext, sessionExecutionContext } from "../../view-models/chat/execution-context.ts";
 import { nativeSessionAgentTabs } from "../../view-models/chat/native-session-agents.ts";
+import { sessionConnectionView } from "../../view-models/chat/session-connection-machine.ts";
 import { noSessionDelivery } from "../../view-models/chat/session-delivery-store.ts";
 import { noSessionExecution, pageActivity } from "../../view-models/chat/session-execution.ts";
 import { noSessionConnection } from "../../view-models/chat/session-pane-connection.ts";
@@ -442,7 +443,9 @@ export function ConversationSidebar({
     const draftSettings = useStore(workspace.draftControls, (state) => state.settings);
     const openPane = useStore(workspace.pane);
     const pane = openPane.kind === "open" ? openPane.model : null;
-    const paneConnection = useStore(pane?.connection ?? noSessionConnection, (state) => state.connection);
+    const paneConnection = sessionConnectionView(
+        useStore(pane?.connection ?? noSessionConnection, (state) => state.state),
+    );
     const executionContext =
         home.selection.kind === "ready" && pane !== null
             ? sessionExecutionContext(pane.session, home, status, paneConnection)
