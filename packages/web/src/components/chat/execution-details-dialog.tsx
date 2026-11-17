@@ -3,7 +3,7 @@ import { Dialog } from "radix-ui";
 import { cn } from "@/lib/utils";
 import { dataTestId } from "../../data-testid.ts";
 import { Button } from "../ui/cloud-button.tsx";
-import { executionDetailsDialogDesktopWidthClassName, overlaySurfaceRadiusClassName } from "../ui/overlay-surface.ts";
+import { executionDetailsDialogDesktopWidthClassName } from "../ui/overlay-surface.ts";
 import { ScrollArea } from "../ui/scroll-area.tsx";
 import { mobileHeaderIconButtonBelowSmClassName } from "./chat-header-control.ts";
 import type { ExecutionContext } from "./execution-context.ts";
@@ -34,7 +34,7 @@ function ExecutionDetails({ context }: { readonly context: ExecutionContext }) {
                 <dt className={executionDetailsTermClassName}>Agent</dt>
                 <dd className="min-w-0 font-medium text-foreground">
                     <span className="inline-flex min-w-0 items-center gap-1.5">
-                        <HarnessMark harness={context.harness} label={context.agent} />
+                        <HarnessMark className="[&>svg]:size-3.5" harness={context.harness} label={context.agent} />
                         <span className="min-w-0 [overflow-wrap:anywhere]">{context.agent}</span>
                     </span>
                 </dd>
@@ -89,7 +89,6 @@ export function ExecutionDetailsDialog({
                         "fixed inset-x-0 bottom-0 z-[191] flex max-h-[85dvh] flex-col overflow-hidden rounded-t-[28px] pt-0 pb-[max(24px,env(safe-area-inset-bottom))] font-inter text-13 leading-5 text-foreground shadow-lg outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:flex sm:max-h-[calc(100dvh-2rem)] sm:max-w-[calc(100vw-24px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:border-white sm:bg-card sm:px-6 sm:pt-6 sm:pb-6",
                         mobileSheetSurfaceClassName,
                         executionDetailsDialogDesktopWidthClassName,
-                        overlaySurfaceRadiusClassName,
                         "sm:rounded-overlay",
                     )}
                     onCloseAutoFocus={(event) => {
