@@ -1,4 +1,4 @@
-import { MortyClient, MortyPageRequest, WsTransport } from "@portalcrew/morty-client";
+import { MortyClient, MortyPageRequest, type MortyRequestOutcome, WsTransport } from "@portalcrew/morty-client";
 import { prepareTestMortyRelayBindings } from "@portalcrew/morty-relay-test-support/cloudflare";
 import * as v from "valibot";
 import { afterEach, beforeAll, beforeEach, expect, onTestFinished, test, vi } from "vitest";
@@ -221,14 +221,14 @@ test.for(["http", "websocket"] as const)(
         );
         const session = `/v1/computers/${owner.computerId}/harnesses/${access.target.harness}/sessions/${access.target.sessionId}`;
         const transport = new WsTransport();
-        const responses: { readonly status: number; readonly serverTiming: string | null }[] = [];
+        const responses: MortyRequestOutcome[] = [];
         const client = new MortyClient({
             transport,
             encryption: { access: encryptionAccess },
             endpoint: bindings.origin,
             computerId: owner.computerId,
             credentialProvider: { credential: async () => access.credential },
-            observeResponse: (response) => responses.push(response),
+            observeRequest: (observation) => responses.push(observation.outcome),
         });
         try {
             expect(await client.events.list(access.target, new MortyPageRequest(1, ""), signal)).toBeDefined();
@@ -277,7 +277,7 @@ test.for(["http", "websocket"] as const)(
             const turns = await request(`${session}/turns`, access.credential, {});
             expect(turns.status).toBe(404);
             const downloaded = await client.sessions.readFile(access.target, "entrypoint.txt", signal);
-            expect(responses.at(-1)).toMatchObject({ status: 200, serverTiming: null });
+            expect(responses.at(-1)).toMatchObject({ kind: "answered", status: 200, serverTiming: null });
             expect(new TextDecoder().decode(downloaded.bytes)).toBe("HTTP download");
             expect(downloaded).toMatchObject({ name: "entrypoint.txt", mediaType: "application/octet-stream" });
             const audienceEndpoint = await bindings.request(

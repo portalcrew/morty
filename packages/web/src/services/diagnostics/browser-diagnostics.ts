@@ -1,3 +1,4 @@
+import type { MortyLiveEventsObservation, MortyRequestObservation } from "@portalcrew/morty-client";
 import type { ComputerDiagnosticsResult } from "@portalcrew/morty-client/protocol";
 import type { ChatDiagnostics } from "./model-catalog.ts";
 import type { ServerNetworkOperations } from "./network-diagnostics.ts";
@@ -54,6 +55,35 @@ export function failureOutcome(cause: unknown): string {
         return code;
     }
     return FAILURE_IDENTIFIER_PATTERN.test(cause.name) ? cause.name : "error";
+}
+
+export function recordRequestObservation(
+    component: BrowserDiagnostic["component"],
+    observation: MortyRequestObservation,
+): void {
+    recordBrowserDiagnostic({
+        at: new Date().toISOString(),
+        component,
+        operation: observation.operation,
+        outcome:
+            observation.outcome.kind === "answered"
+                ? String(observation.outcome.status)
+                : failureOutcome(observation.outcome.failure),
+        requestId: observation.requestId,
+        elapsedMs: observation.elapsedMilliseconds,
+    });
+}
+
+/** A live Session subscription is recorded under its subscription ID, the identity the Relay logs it by. */
+export function recordLiveEventsObservation(observation: MortyLiveEventsObservation): void {
+    recordBrowserDiagnostic({
+        at: new Date().toISOString(),
+        component: "relay",
+        operation: "session-live-events",
+        outcome: observation.kind === "opened" ? "opened" : failureOutcome(observation.failure),
+        requestId: observation.subscriptionId,
+        elapsedMs: 0,
+    });
 }
 
 export function recordBrowserError(operation: string, cause?: unknown): void {

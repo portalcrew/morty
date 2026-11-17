@@ -28,7 +28,11 @@ import type { ApiResponseSnapshot, ApiTransport } from "../api/api-transport.ts"
 import type { ApiRequest } from "../api/calls/call.ts";
 import { chatCalls } from "../api/calls/chat.ts";
 import { managementCalls } from "../api/calls/management.ts";
-import { recordBrowserDiagnostic } from "../diagnostics/browser-diagnostics.ts";
+import {
+    recordBrowserDiagnostic,
+    recordLiveEventsObservation,
+    recordRequestObservation,
+} from "../diagnostics/browser-diagnostics.ts";
 import type { AgentModelCatalog } from "../diagnostics/model-catalog.ts";
 import { storedComputerEncryption } from "../identity/remembered-computers.ts";
 import { ManagementApi } from "../management/management-api.ts";
@@ -150,16 +154,9 @@ export class BotChatApi {
             computerId: this.#computerId,
             transport: this.#sessionTransport(),
             credentialProvider: this.#credentials,
-            observeResponse: ({ elapsedMilliseconds, operation, status }) => {
-                recordBrowserDiagnostic({
-                    at: new Date().toISOString(),
-                    component: "worker",
-                    operation,
-                    requestId: "",
-                    elapsedMs: elapsedMilliseconds,
-                    outcome: String(status),
-                });
-                if (status === 401) {
+            observeRequest: (observation) => {
+                recordRequestObservation("worker", observation);
+                if (observation.outcome.kind === "answered" && observation.outcome.status === 401) {
                     this.#credentialRejected?.();
                 }
             },
@@ -361,15 +358,8 @@ export class BotChatApi {
             onClose: () => {
                 this.#sessionClients.delete(client);
             },
-            observeResponse: ({ status }) =>
-                recordBrowserDiagnostic({
-                    at: new Date().toISOString(),
-                    component: "relay",
-                    operation: "session-request",
-                    requestId: "",
-                    elapsedMs: 0,
-                    outcome: String(status),
-                }),
+            observeRequest: (observation) => recordRequestObservation("relay", observation),
+            observeLiveEvents: recordLiveEventsObservation,
             observeUnsupportedEntries: (entries) =>
                 recordBrowserDiagnostic({
                     at: new Date().toISOString(),

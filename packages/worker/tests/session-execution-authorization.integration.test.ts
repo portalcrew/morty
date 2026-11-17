@@ -76,6 +76,7 @@ test("Given Session access and Computer encryption access, When a caller sends a
                     origin: new URL("/morty/api/", bindings.origin),
                     headers: { authorization: `Bearer ${access.credential}`, "content-type": "application/json" },
                     body,
+                    requestId: crypto.randomUUID(),
                     signal,
                 });
                 expect(response.status).toBe(400);

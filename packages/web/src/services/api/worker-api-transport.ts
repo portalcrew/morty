@@ -51,7 +51,7 @@ export class WorkerApiTransport {
         }
         return transport;
     };
-    readonly #request = async (request: ApiCall): Promise<Response> => {
+    readonly #request = async (request: ApiCall, requestId: string): Promise<Response> => {
         const endpoint = request.endpoint;
         switch (endpoint.target.kind) {
             case "worker":
@@ -74,6 +74,7 @@ export class WorkerApiTransport {
                     origin: new URL(this.#origin),
                     headers: request.headers,
                     body: request.body ?? null,
+                    requestId,
                     signal: request.signal,
                 });
         }
@@ -90,7 +91,7 @@ export class WorkerApiTransport {
             }
             const signal = AbortSignal.any([request.signal, this.#lifetime.signal]);
             signal.throwIfAborted();
-            const raw = await this.#request({ ...request, signal });
+            const raw = await this.#request({ ...request, signal }, requestId);
             const response = new Response(raw.body, raw);
             if (request.endpoint.watch === "snapshot") {
                 this.#baselines.set(this.#key(request), `${response.status}\0${await response.clone().text()}`);
@@ -143,11 +144,14 @@ export class WorkerApiTransport {
             signal.throwIfAborted();
             let response: Response;
             try {
-                response = await this.#request({
-                    endpoint: request.endpoint,
-                    headers: request.headers,
-                    signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]),
-                });
+                response = await this.#request(
+                    {
+                        endpoint: request.endpoint,
+                        headers: request.headers,
+                        signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]),
+                    },
+                    crypto.randomUUID(),
+                );
             } catch (cause) {
                 signal.throwIfAborted();
                 if (ready !== undefined) {
