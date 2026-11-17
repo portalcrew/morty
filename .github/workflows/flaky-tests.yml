@@ -1,7 +1,8 @@
 name: Flaky tests
 
-# A test that fails and then passes on its retry against the same code is flaky. The pipeline still fails that run;
-# this workflow records each occurrence on one issue per test so flaky tests are tracked until they are fixed.
+# A test that fails and then passes against the same code is flaky: on its retry within a job, which still fails the run,
+# or when a rerun of the job that failed it passes. This workflow records each occurrence on one issue per test so
+# flaky tests are tracked until they are fixed.
 on:
   workflow_run: # zizmor: ignore[dangerous-triggers] Runs only default-branch code; the tested run's artifacts are validated as data and never executed.
     workflows: [Morty CI, Morty CLI]
@@ -11,8 +12,9 @@ permissions: {}
 
 jobs:
   track:
-    # A flaky test always fails its run. Fork runs cannot be attributed to this repository's code.
-    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_repository.full_name == github.repository
+    # A retried flaky test fails its run; a rerun that passes a failed test has a later attempt. Fork runs cannot be
+    # attributed to this repository's code.
+    if: (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.run_attempt > 1) && github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -36,9 +38,25 @@ jobs:
           github-token: ${{ github.token }}
           path: test-results/flaky-test-artifacts
           merge-multiple: true
+      - name: Name the previous attempt
+        id: previous
+        if: github.event.workflow_run.run_attempt > 1
+        env:
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: echo "attempt=$((RUN_ATTEMPT - 1))" >> "$GITHUB_OUTPUT"
+      # The failures a rerun may have passed: tests the previous attempt's jobs failed on every try.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: github.event.workflow_run.run_attempt > 1
+        with:
+          pattern: flaky-tests-${{ steps.previous.outputs.attempt }}-*
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: test-results/flaky-test-artifacts-previous
+          merge-multiple: true
       - name: Record each flaky test on its issue
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
           RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           RUN_EVENT: ${{ github.event.workflow_run.event }}
