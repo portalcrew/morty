@@ -6,11 +6,13 @@ export function NativeSessionDirectoryPlaceholder({
     icon: Icon,
     title,
     description,
+    action,
     tone = "muted",
 }: {
     readonly icon: LucideIcon;
     readonly title: string;
     readonly description?: ReactNode;
+    readonly action?: ReactNode;
     readonly tone?: "muted" | "destructive";
 }) {
     return (
@@ -50,6 +52,7 @@ export function NativeSessionDirectoryPlaceholder({
                         </p>
                     )}
                 </div>
+                {action}
             </div>
         </div>
     );

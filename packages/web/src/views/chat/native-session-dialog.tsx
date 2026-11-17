@@ -223,7 +223,7 @@ export function NativeSessionDialog({
         harness: model.directory.kind === "ready" ? model.directory.harness : null,
         sessionId: model.preview.kind === "empty" ? null : model.preview.entry.sessionId,
     };
-    const reportButton = <BugReportButton appearance="icon" daemonSource={diagnostics} dialog={bugReportDialog} />;
+    const reportEntry = <BugReportButton appearance="labelled" daemonSource={diagnostics} dialog={bugReportDialog} />;
     const withSignal = (action: (signal: AbortSignal) => Promise<void>) => {
         void action(store.getState().lifetimeSignal());
     };
@@ -290,14 +290,8 @@ export function NativeSessionDialog({
                                         <NativeSessionDirectoryPlaceholder
                                             icon={CircleAlert}
                                             title="Couldn't load sessions"
-                                            description={
-                                                <span className="inline-flex items-start gap-2 text-left">
-                                                    <span className="min-w-0 break-words">
-                                                        {model.directory.message}
-                                                    </span>
-                                                    {reportButton}
-                                                </span>
-                                            }
+                                            description={model.directory.message}
+                                            action={reportEntry}
                                             tone="destructive"
                                         />
                                     )}
@@ -494,12 +488,10 @@ export function NativeSessionDialog({
                                                 {model.preview.kind === "failed" && (
                                                     <div
                                                         role="alert"
-                                                        className="flex items-start gap-2 text-destructive"
+                                                        className="flex flex-col items-start gap-2 text-destructive"
                                                     >
-                                                        <p className="min-w-0 flex-1 break-words">
-                                                            {model.preview.message}
-                                                        </p>
-                                                        {reportButton}
+                                                        <p className="min-w-0 break-words">{model.preview.message}</p>
+                                                        {reportEntry}
                                                     </div>
                                                 )}
                                                 {model.preview.kind === "ready" && (
@@ -523,11 +515,11 @@ export function NativeSessionDialog({
                                     </section>
                                     {model.error !== "" && (
                                         <div
-                                            className="mx-4 flex items-start gap-2 rounded-2xl border border-destructive/20 bg-card px-4 py-3 text-13 text-destructive sm:mx-5"
+                                            className="mx-4 flex flex-col items-start gap-2 rounded-2xl border border-destructive/20 bg-card px-4 py-3 text-13 text-destructive sm:mx-5"
                                             role="alert"
                                         >
-                                            <span className="min-w-0 flex-1 break-words">{model.error}</span>
-                                            {reportButton}
+                                            <span className="min-w-0 break-words">{model.error}</span>
+                                            {reportEntry}
                                         </div>
                                     )}
                                     {/* Both actions need a session: with nothing previewed they would be dead controls. */}
