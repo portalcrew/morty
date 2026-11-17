@@ -50,7 +50,7 @@ async function queriedStatus(
     }
 }
 
-test("Given a Session whose last turn failed, When a client that did not watch it reads its status, Then the Session reports the failure until another turn completes", async ({
+test("Given a Session whose last turn failed, When a client that did not watch it reads its status, Then the Session reports that failure until another turn completes, and then reports that turn", async ({
     signal,
 }) => {
     const directory = await mkdtemp(join(tmpdir(), "failed-status-"));
@@ -64,17 +64,25 @@ test("Given a Session whose last turn failed, When a client that did not watch i
                 const failed = randomUUID();
                 const sessionTarget = await prepareNewRealSession(peer, "controlled-acp");
                 submit(peer, sessionTarget, failed, "fail with model unavailable");
-                const failure = { code: "acp_agent_error", commandId: failed, message: expect.any(String) };
+                const failure = {
+                    code: "acp_agent_error",
+                    commandId: failed,
+                    message: expect.any(String),
+                    state: "failed",
+                };
                 await nextPromptSettlement(peer, failed);
-                expect(await queriedStatus(peer, sessionTarget)).toEqual({ kind: "idle", failedTurn: failure });
+                expect(await queriedStatus(peer, sessionTarget)).toEqual({ kind: "idle", lastTurn: failure });
 
                 await peer.restart();
-                expect(await queriedStatus(peer, sessionTarget)).toEqual({ kind: "idle", failedTurn: failure });
+                expect(await queriedStatus(peer, sessionTarget)).toEqual({ kind: "idle", lastTurn: failure });
 
                 const completed = randomUUID();
                 submit(peer, sessionTarget, completed, "The request completes");
                 await nextPromptSettlement(peer, completed);
-                expect(await queriedStatus(peer, sessionTarget)).toEqual({ kind: "idle" });
+                expect(await queriedStatus(peer, sessionTarget)).toEqual({
+                    kind: "idle",
+                    lastTurn: { commandId: completed, state: "completed", stopReason: "end_turn" },
+                });
             },
         );
     } finally {

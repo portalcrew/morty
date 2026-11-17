@@ -828,18 +828,13 @@ export class SessionManager {
     readonly sessionStatus = (target: NativeSessionTarget): SessionStatus =>
         this.#reported(target, this.#executions.status(target));
 
-    /** An idle Session whose last started command failed says so, so a client that did not watch it still knows. */
+    /** An idle Session states the turn that ended last, so a client that did not watch it knows whether one ended. */
     readonly #reported = (target: NativeSessionTarget, status: SessionStatus): SessionStatus => {
         if (status.kind !== "idle") {
             return status;
         }
         const lastTurn = this.#lastTurn(target);
-        return lastTurn?.state === "failed"
-            ? {
-                  ...status,
-                  failedTurn: { code: lastTurn.code, commandId: lastTurn.commandId, message: lastTurn.message },
-              }
-            : status;
+        return lastTurn === undefined ? status : { ...status, lastTurn };
     };
 
     /**

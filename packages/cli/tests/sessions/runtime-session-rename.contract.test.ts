@@ -46,7 +46,7 @@ it("Given a prompted local conversation, When the Session is renamed, Then the d
             expect.objectContaining({
                 prompted: true,
                 target: sessionTarget,
-                status: { kind: "idle" },
+                status: expect.objectContaining({ kind: "idle" }),
                 title: "Renamed by the developer",
             }),
         ]);

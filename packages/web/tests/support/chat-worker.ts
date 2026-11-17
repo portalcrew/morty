@@ -213,6 +213,48 @@ export async function createChatWorkerEnvironment(
                         client.close();
                     }
                 },
+                runTurn: async (sessionId: string, content: string, signal: AbortSignal): Promise<void> => {
+                    const target = { harness: agents[0]?.harness ?? "codex", sessionId };
+                    const commandId = crypto.randomUUID();
+                    const client = await sessionClient(target, signal);
+                    try {
+                        const ended = Promise.withResolvers<void>();
+                        const subscription = await client.events.subscribeLive(
+                            target,
+                            {
+                                reconcile: async () => undefined,
+                                receive: async (events) => {
+                                    if (
+                                        events.some(
+                                            (event) =>
+                                                event.type === "lifecycle-metadata" &&
+                                                (event.payload.kind === "prompt.completed" ||
+                                                    event.payload.kind === "prompt.failed") &&
+                                                event.payload.commandId === commandId,
+                                        )
+                                    ) {
+                                        ended.resolve();
+                                    }
+                                    return true;
+                                },
+                            },
+                            signal,
+                        );
+                        void subscription.completed.catch(ended.reject);
+                        try {
+                            await client.turns.submit(
+                                target,
+                                { attachments: [], content, idempotencyKey: commandId },
+                                signal,
+                            );
+                            await ended.promise;
+                        } finally {
+                            subscription.close();
+                        }
+                    } finally {
+                        client.close();
+                    }
+                },
                 steerTurn: async (sessionId: string, commandId: string, signal: AbortSignal): Promise<void> => {
                     const target = { harness: agents[0]?.harness ?? "codex", sessionId };
                     const client = await sessionClient(target, signal);

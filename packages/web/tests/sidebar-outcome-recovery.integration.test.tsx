@@ -19,7 +19,7 @@ function status(app: TestApp, title: string) {
         null
     );
 }
-test("Given a background Session's failed status, When another viewer completes a later turn, Then refreshing the list clears the old failed status", {
+test("Given a background Session's failed status, When another viewer completes a later turn, Then refreshing the list replaces the old failed status with an unread reply", {
     timeout: 60000,
 }, async () => {
     const environment = await createChatWorkerEnvironment();
@@ -69,5 +69,5 @@ test("Given a background Session's failed status, When another viewer completes 
         throw new Error("Missing chat page");
     }
     await first.user.click(getByRole(page, "button", { name: "Refresh sessions" }));
-    await first.waitForView(() => expect(status(first, "Established session")).toBeNull());
+    await first.waitForView(() => expect(status(first, "Established session")).toBe("Unread response"));
 });
