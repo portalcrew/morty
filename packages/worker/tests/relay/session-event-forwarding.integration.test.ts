@@ -242,7 +242,14 @@ it("Given an authorized Session, When a browser sends a plaintext prompt, Then t
     );
     expect(await computer.daemonInbox.next()).toEqual(JSON.parse(command));
     const reply = await sessionPromptAcceptedEventCodec.encode(
-        { kind: "session.prompt.accepted", requestId: "encrypted-request", target, state: "running" },
+        {
+            kind: "session.prompt.accepted",
+            requestId: "encrypted-request",
+            target,
+            commandId: "encrypted-request",
+            standing: { state: "running", startedAt: "2026-11-12T00:00:00.000Z" },
+            position: { sessionGenerationId: "session-generation-1", throughPosition: "10000" },
+        },
         sender,
         signal,
     );

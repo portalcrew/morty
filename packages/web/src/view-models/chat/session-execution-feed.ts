@@ -1,17 +1,12 @@
 import type { MortyClient } from "@portalcrew/morty-client";
 import type { NativeSessionTarget, SessionLiveEvent } from "@portalcrew/morty-client/protocol";
 import type { StoreApi } from "zustand/vanilla";
-import {
-    executionReadBasis,
-    type LiveExecutionChange,
-    type SessionExecutionFact,
-    type SessionExecutionStore,
-} from "./session-execution.ts";
+import type { LiveExecutionChange, SessionExecutionFact, SessionExecutionStore } from "./session-execution.ts";
 import { type SessionLifecycleFact, sessionLifecycleFact } from "./session-lifecycle.ts";
 
 /** What the pane's connection tells the Session's execution state: live lifecycle events and reads of the Computer. */
 export interface SessionExecutionFeed {
-    /** Reads the Session's execution; `deliveryCommandId` asks the Computer for the receipt of that command too. */
+    /** Reads the Session's execution; `deliveryCommandId` asks the Computer where that command stands too. */
     readonly read: (connected: MortyClient, signal: AbortSignal, deliveryCommandId?: string) => Promise<void>;
     readonly receive: (event: SessionLiveEvent, connected: MortyClient, signal: AbortSignal) => Promise<void>;
 }
@@ -60,10 +55,9 @@ export function createSessionExecutionFeed(options: {
         }
     };
     const read = async (connected: MortyClient, signal: AbortSignal, deliveryCommandId?: string): Promise<void> => {
-        const basis = executionReadBasis(execution.getState().state);
         const snapshot = await connected.sessions.readSessionExecution(sessionTarget, signal, deliveryCommandId);
         signal.throwIfAborted();
-        await observe({ kind: "read", snapshot, basis }, connected, signal);
+        await observe({ kind: "read", snapshot }, connected, signal);
     };
     const observe = async (fact: SessionExecutionFact, connected: MortyClient, signal: AbortSignal): Promise<void> => {
         if (

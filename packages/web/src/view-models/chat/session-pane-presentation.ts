@@ -4,7 +4,7 @@ import type { SessionConnection } from "./session-connection.ts";
 import { acceptedTurn, ownerRunsTurn, workingIndicator } from "./session-current-turn.ts";
 import { sessionDeliveryPresentation } from "./session-delivery-presentation.ts";
 import { type SessionDeliveryStore, settledDelivery, unconfirmedJournal } from "./session-delivery-store.ts";
-import { type SessionExecutionState, sessionActivity, waitingForInput } from "./session-execution.ts";
+import { type SessionExecutionState, sessionActivity, visibleQueue, waitingForInput } from "./session-execution.ts";
 import type { ChatQueuedMessage, SessionMessageQueueStore } from "./session-message-queue-store.ts";
 import { operationFailureMessage, type SessionOperationFeedbackStore } from "./session-operation-feedback.ts";
 import {
@@ -155,7 +155,7 @@ export function sessionPanePresentation(input: {
                         activity.message
                       : null) ??
                   (delivery.state.kind === "failed" ? delivery.state.failure.message : null) ??
-                  operationFailureMessage(feedback.failure, running, execution.queued) ??
+                  operationFailureMessage(feedback.failure, running, visibleQueue(execution)) ??
                   ""),
         deliveryUnknownUserMessageId: unknownDelivery?.commandId ?? null,
         hasOlderHistory: timeline.hasOlderHistory,

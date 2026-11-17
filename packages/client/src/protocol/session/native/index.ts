@@ -19,6 +19,7 @@ import {
 } from "../interactions/index.ts";
 import { sessionReadyBodySchema } from "../lifecycle/index.ts";
 import { promptAttachmentReplySchema } from "../prompt/commands.ts";
+import { commandStandingSchema, sessionLogPositionSchema } from "../shared/command-standing.ts";
 import { sessionCapabilitiesSchema } from "../shared/index.ts";
 import { nativeSessionTargetSchema } from "../shared/native-session-target.ts";
 
@@ -52,19 +53,16 @@ const activeTurnSnapshotSchema = z
     .readonly();
 
 /**
- * Whether the Computer received one submitted command, from its execution receipts, naming the command it describes.
- * Only the Computer that receives a command can say whether it arrived, so a client recovers an unconfirmed submission
- * from this rather than from Agent message identities.
+ * Where one submitted command stands, naming the command it describes, as of the read's `executionPosition`. Only the
+ * Computer that receives a command can say whether it arrived and where it placed it, so a client recovers an
+ * unconfirmed submission from this rather than from Agent message identities.
  */
 const commandDeliverySchema = z
     .object({
         commandId: identifier,
-        // `unknown`: no receipt, so the command has not arrived; a delayed submission may still arrive later.
-        // `received`: the Computer holds or held the command, whatever became of it since.
-        state: z.enum(["unknown", "received"]),
+        standing: commandStandingSchema,
     })
     .readonly();
-export type CommandDelivery = z.infer<typeof commandDeliverySchema>;
 
 /**
  * How the Session's most recent started command ended, from the Computer's execution receipts.
@@ -151,12 +149,7 @@ const executionReadFields = {
                 .readonly(),
         )
         .readonly(),
-    executionPosition: z
-        .object({
-            sessionGenerationId: identifier,
-            throughPosition: z.string().regex(/^(0|[1-9][0-9]*)$/),
-        })
-        .readonly(),
+    executionPosition: sessionLogPositionSchema,
     interactions: sessionPendingInteractionsSchema,
     delivery: commandDeliverySchema.optional(),
 };

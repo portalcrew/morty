@@ -1,4 +1,6 @@
 import {
+    type AcceptedMessage,
+    type DeliveryPlacement,
     type DeliveryRecord,
     type DeliveryState,
     deliveryMessagePresentation,
@@ -6,13 +8,18 @@ import {
     journalMessage,
     type SubmittedMessage,
 } from "./session-delivery-store.ts";
-import type { SessionExecutionState } from "./session-execution.ts";
+import { acceptedPlacement, type SessionExecutionState, visibleQueue } from "./session-execution.ts";
 import { queuedMessages, type SessionMessageQueueStore } from "./session-message-queue-store.ts";
 import { type SessionExecutionMessage, sessionUserCommandIds } from "./session-presentation.ts";
 
 type LocalMessage =
-    | { readonly kind: "awaiting" | "accepted" | "unknown"; readonly message: SubmittedMessage }
+    | { readonly kind: "awaiting" | "unknown"; readonly message: SubmittedMessage }
+    | { readonly kind: "accepted"; readonly message: AcceptedMessage; readonly placement: DeliveryPlacement }
     | { readonly kind: "pending"; readonly message: SubmittedMessage; readonly error: string | null };
+
+function localPlacement(entry: LocalMessage): DeliveryPlacement {
+    return entry.kind === "accepted" ? entry.placement : entry.message.placement;
+}
 
 function currentMessage(state: DeliveryState): LocalMessage | null {
     switch (state.kind) {
@@ -46,17 +53,19 @@ export function sessionDeliveryPresentation(
     delivery: DeliveryRecord,
     queue: Pick<SessionMessageQueueStore, "requests">,
 ) {
-    const { queued } = execution;
+    const queued = visibleQueue(execution);
     const historyIds = new Set(sessionUserCommandIds(messages));
-    const claimed = new Set([
-        ...historyIds,
-        ...queued.map((message) => message.commandId),
-        ...[...queue.requests].flatMap(([commandId, request]) => (request === "withdrawn" ? [commandId] : [])),
-    ]);
+    const claimed = new Set([...historyIds, ...queued.map((message) => message.commandId)]);
     const current = currentMessage(delivery.state);
     const candidates: readonly LocalMessage[] = [
         ...(current === null ? [] : [current]),
-        ...delivery.accepted.map((message): LocalMessage => ({ kind: "accepted", message })),
+        ...delivery.accepted.map(
+            (message): LocalMessage => ({
+                kind: "accepted",
+                message,
+                placement: acceptedPlacement(execution, message.commandId),
+            }),
+        ),
     ];
     const local = candidates.filter(({ message }) => {
         if (claimed.has(message.commandId)) {
@@ -67,7 +76,7 @@ export function sessionDeliveryPresentation(
     });
     const pendingQueue = local.filter(
         (entry) =>
-            entry.message.placement === "queue" &&
+            localPlacement(entry) === "queue" &&
             (entry.kind === "accepted" || (entry.kind === "pending" && entry.error === null)),
     );
     const timeline = local.filter((entry) => !pendingQueue.includes(entry));

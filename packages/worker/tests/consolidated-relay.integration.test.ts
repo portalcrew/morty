@@ -262,7 +262,7 @@ test.for(["http", "websocket"] as const)(
                 },
                 signal,
             );
-            expect(["queued", "running", "settled"]).toContain(accepted);
+            expect(["queued", "running", "settled"]).toContain(accepted.standing.state);
             const live = await client.events.subscribeLive(
                 access.target,
                 { receive: async () => true, reconcile: async () => undefined },

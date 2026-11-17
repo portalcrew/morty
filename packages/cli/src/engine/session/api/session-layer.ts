@@ -17,6 +17,7 @@ import type { AgentProcessPool } from "../process/agent-process-pool.ts";
 import { PromptLifecycle } from "../prompt/prompt-lifecycle.ts";
 import { SessionCreations } from "../record/session-creations.ts";
 import { SqliteSessionStore } from "../record/session-store.ts";
+import { CommandStandings } from "../turn/command-standings.ts";
 import { ExecutionReceipts } from "../turn/execution-receipts.ts";
 import { SessionTurns } from "../turn/session-turns.ts";
 import { WorkspaceDirectoryService } from "../workspace/workspace-directory.ts";
@@ -54,6 +55,7 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         (target, commandId) => manager.executes(target, commandId),
         (target) => manager.turnFinished(target),
     );
+    const standings = new CommandStandings(activeSessions, events.livePosition);
     const sessionCreations = new SessionCreations(sessionStore);
     const directories = new WorkspaceDirectoryService(defaultWorkspace);
     const manager = new SessionManager({
@@ -95,11 +97,16 @@ export function buildSessionLayer(options: SessionLayerOptions) {
             const { turn, queued } = activeSessions.executionSnapshot(request.target);
             const read = {
                 queued,
-                executionPosition: events.livePosition(request.target),
+                executionPosition: standings.position(request.target),
                 interactions,
                 ...(request.deliveryCommandId === undefined
                     ? {}
-                    : { delivery: operations.delivery(request.deliveryCommandId, request.target) }),
+                    : {
+                          delivery: {
+                              commandId: request.deliveryCommandId,
+                              standing: standings.standing(request.deliveryCommandId, request.target),
+                          },
+                      }),
             };
             // How the last started command ended is told only while the Session executes none, as its listing tells a
             // failed turn only when idle; a command still preparing has not started, so it is no `turn` yet.
@@ -141,5 +148,6 @@ export function buildSessionLayer(options: SessionLayerOptions) {
         nativeSessions,
         operations,
         sessionStore,
+        standings,
     };
 }

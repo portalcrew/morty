@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
     decodeMessageKind,
     decodeSessionEventEnvelope,
+    decodeSessionPromptAcceptedEvent,
     encodeSessionPromptCommand,
     type SessionLiveEvent,
 } from "@portalcrew/morty-client/protocol";
@@ -76,7 +77,7 @@ test("Given a running prompt, When clients append messages and steer a turn that
                 const seen: FrameLog = { frames: [], read: 0 };
                 const running = randomUUID();
                 append(peer, running, "hold after first delta");
-                await next(peer, seen, lifecycle("prompt.started", running));
+                const started = await next(peer, seen, lifecycle("prompt.started", running));
 
                 // Two clients send without knowing a turn runs. The Computer queues both, in arrival order, and names
                 // each in the queue change that acknowledges it.
@@ -129,12 +130,23 @@ test("Given a running prompt, When clients append messages and steer a turn that
                     seen,
                     (frame) => frame.kind === "message" && frame.message["kind"] === "session.prompt.accepted",
                 );
-                expect(accepted.kind === "message" && accepted.message).toEqual({
+                if (accepted.kind !== "message" || started.kind !== "event") {
+                    throw new Error("Expected the prompt's answer and its start");
+                }
+                // The retry is answered with the command's standing, positioned at or after the event recording it.
+                expect(accepted.message).toEqual({
                     kind: "session.prompt.accepted",
                     requestId: running,
                     target: peer.target,
-                    state: "running",
+                    commandId: running,
+                    standing: { state: "running", startedAt: started.event.recordedAt },
+                    position: {
+                        sessionGenerationId: started.event.sessionGenerationId,
+                        throughPosition: expect.any(String),
+                    },
                 });
+                const { position } = decodeSessionPromptAcceptedEvent(JSON.stringify(accepted.message));
+                expect(BigInt(position.throughPosition) >= BigInt(started.event.position)).toBe(true);
 
                 peer.send(
                     JSON.stringify({

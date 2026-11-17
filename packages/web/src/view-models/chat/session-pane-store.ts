@@ -14,6 +14,7 @@ import { createBrowserFilePreviewStore } from "./file-preview-store.ts";
 import type { SelectedMortySession } from "./open-session.ts";
 import { acceptedTurn } from "./session-current-turn.ts";
 import { deliveryMessages, settledDelivery, unconfirmedJournal } from "./session-delivery-store.ts";
+import { visibleQueue } from "./session-execution.ts";
 import { createSessionExecutionFeed } from "./session-execution-feed.ts";
 import { type ChatQueuedMessage, queuedMessages } from "./session-message-queue-store.ts";
 import {
@@ -161,7 +162,7 @@ export function createSessionPaneModel(options: {
             .messages;
     const queuedMessage = (commandId: string): ChatQueuedMessage | null =>
         queuedMessages(
-            execution.getState().state.queued,
+            visibleQueue(execution.getState().state),
             queue.getState(),
             deliveryMessages(settledDelivery(delivery.getState(), execution.getState().state)),
         ).find((message) => message.commandId === commandId) ?? null;

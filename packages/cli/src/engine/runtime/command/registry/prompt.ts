@@ -56,30 +56,49 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
         );
         return;
     }
-    if (receipt.kind === "duplicate") {
+    const { commandId, requestId, target } = message;
+    // A prompt is answered once, at the first of: it entered the queue, it started, or it ended without starting. The
+    // answer states the standing the Computer holds at that moment, with the log position where it holds.
+    let answered = false;
+    let answer: Promise<void> = Promise.resolve();
+    const answerAdmitted = (): boolean => {
+        if (answered) {
+            return true;
+        }
+        const admitted = context.standings.admitted(commandId, target);
+        if (admitted === null) {
+            return false;
+        }
+        answered = true;
         if (context.socket.readyState === WebSocket.OPEN) {
-            reply(
-                context.socket,
-                await sessionPromptAcceptedEventCodec.encode(
-                    {
-                        kind: "session.prompt.accepted",
-                        requestId: message.requestId,
-                        target: message.target,
-                        state:
-                            receipt.state === "settled"
-                                ? "settled"
-                                : context.sessionTurns.get(message.commandId, message.target)?.isQueued() === true
-                                  ? "queued"
-                                  : "running",
-                    },
+            answer = sessionPromptAcceptedEventCodec
+                .encode(
+                    { kind: "session.prompt.accepted", requestId, target, commandId, ...admitted },
                     context.payloadEncryption,
                     context.signal,
-                ),
-            );
+                )
+                .then((encoded) => reply(context.socket, encoded))
+                .catch((error: unknown) => {
+                    if (!context.signal.aborted) {
+                        console.error("Morty daemon could not send prompt acceptance", error);
+                        context.socket.close(4008, "Prompt acceptance failed");
+                    }
+                });
         }
-        const outcome = receipt.state === "settled" ? context.operations.restatedOutcome(message.commandId) : undefined;
+        return true;
+    };
+    if (receipt.kind === "duplicate") {
+        // A retry of a command still preparing is answered where the command itself is: once it starts or ends.
+        if (!answerAdmitted()) {
+            await context.operations
+                .progress(commandId, target, context.signal)
+                .then(answerAdmitted)
+                .catch(() => undefined);
+        }
+        await answer;
+        const outcome = receipt.state === "settled" ? context.operations.restatedOutcome(commandId) : undefined;
         if (outcome !== undefined) {
-            context.eventProjection.restateOutcome(message.target, outcome);
+            context.eventProjection.restateOutcome(target, outcome);
         }
         return;
     }
@@ -93,30 +112,6 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
         );
         return;
     }
-    const { commandId, requestId, target } = message;
-    // A prompt is answered once, at the first of: it entered the queue, it started, or it ended without starting.
-    let answered = false;
-    let answer: Promise<void> = Promise.resolve();
-    const accepted = (state: "queued" | "running" | "settled"): void => {
-        if (!answered) {
-            answered = true;
-            if (context.socket.readyState === WebSocket.OPEN) {
-                answer = sessionPromptAcceptedEventCodec
-                    .encode(
-                        { kind: "session.prompt.accepted", requestId, target, state },
-                        context.payloadEncryption,
-                        context.signal,
-                    )
-                    .then((encoded) => reply(context.socket, encoded))
-                    .catch((error: unknown) => {
-                        if (!context.signal.aborted) {
-                            console.error("Morty daemon could not send prompt acceptance", error);
-                            context.socket.close(4008, "Prompt acceptance failed");
-                        }
-                    });
-            }
-        }
-    };
     const queueChanged = (): void => {
         void context.eventProjection.queueChanged(target, commandId).catch((error: unknown) => {
             console.error("Could not record queue change", error);
@@ -125,7 +120,7 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
     // A prompt behind a running turn enters the queue as it arrives, so the queue follows arrival order.
     const turn = context.sessionTurns.start(message, () => {
         queueChanged();
-        accepted("queued");
+        answerAdmitted();
     });
     const ended = async (): Promise<void> => {
         if (answered) {
@@ -133,7 +128,7 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
         }
         const settled = settledCommand(context.operations, commandId);
         if (settled.kind === "completed") {
-            accepted("settled");
+            answerAdmitted();
             return;
         }
         answered = true;
@@ -144,7 +139,7 @@ export const handleSessionPrompt: CommandHandler<typeof SESSION_PROMPT_KIND> = a
         .progress(commandId, target, AbortSignal.any([waiting.signal, context.signal]))
         .then((progress) => {
             if (progress === "started") {
-                accepted("running");
+                answerAdmitted();
             }
         })
         .catch(() => undefined);

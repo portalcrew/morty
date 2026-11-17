@@ -18,6 +18,7 @@ import {
 } from "../../shared/message-codec.ts";
 import type { SessionConfigurationSelection } from "../configuration/index.ts";
 import { decodeSessionConfigurationSelections } from "../configuration/index.ts";
+import { sessionLogPositionSchema } from "../shared/command-standing.ts";
 import {
     type NativeSessionTarget,
     nativeSessionTargetSchema,
@@ -229,10 +230,12 @@ export function encodeSessionPromptDispositionCommand(message: SessionPromptDisp
     return JSON.stringify(decodeSessionPromptDispositionCommand(JSON.stringify(message)));
 }
 
+// `position` is where in the Session's log the reported change holds: a read or live event at or after it reflects it.
 const turnReplyFields = {
     commandId: IDENTIFIER,
     requestId: IDENTIFIER,
     target: nativeSessionTargetSchema,
+    position: sessionLogPositionSchema,
 } as const;
 
 const sessionPromptSteeredEventSchema = z

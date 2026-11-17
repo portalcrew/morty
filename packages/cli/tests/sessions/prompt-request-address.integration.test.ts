@@ -123,7 +123,7 @@ test("Given a prompt with a separate reply address, when it is retried or confli
                     expect(await submit("request-retry", "same prompt")).toMatchObject({
                         kind: "session.prompt.accepted",
                         requestId: "request-retry",
-                        state: "settled",
+                        standing: { state: "settled" },
                     });
                     expect(await submit("request-conflict", "different prompt")).toMatchObject({
                         kind: "session.operation.failed",

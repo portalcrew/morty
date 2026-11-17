@@ -143,7 +143,7 @@ test("Given an executed command and a command cancelled before start, When later
                 await evictReceipts(peer);
 
                 for (const commandId of ["a-cancelled", "a-executed"]) {
-                    expect(await readDelivery(peer, commandId)).toEqual({ commandId, state: "received" });
+                    expect(await readDelivery(peer, commandId)).toEqual({ commandId, standing: { state: "settled" } });
                 }
                 peer.send(promptCommand(peer, "a-cancelled", "This command was already cancelled"));
                 expect(await observe(peer, ["a-cancelled"])).toEqual({

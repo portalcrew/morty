@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
-    type CommandDelivery,
     decodeKnownSessionEventPayload,
     isPromptTerminal,
     type LastTurnOutcome,
@@ -53,6 +52,12 @@ export interface SettledTurn {
 }
 
 export type CommandProgress = "started" | "settled";
+
+export type ReceivedCommand =
+    | { readonly kind: "unseen" }
+    | { readonly kind: "pending" }
+    | { readonly kind: "started"; readonly startedAt: string }
+    | { readonly kind: "settled" };
 export interface CommandDelegation {
     readonly stage: "queued" | "started";
     readonly at: string;
@@ -257,18 +262,33 @@ export class ExecutionReceipts {
         const outcome = command === undefined ? undefined : this.#outcome(command);
         return outcome === undefined ? undefined : storedOutcome(outcome);
     };
-    /** Whether the ledger received the command, whatever became of it since; another Session's command reads as unknown. */
-    readonly delivery = (commandId: string, sessionTarget: NativeSessionTarget): CommandDelivery => {
+    /** How far the ledger saw the command go; another Session's command reads as unseen. */
+    readonly received = (commandId: string, sessionTarget: NativeSessionTarget): ReceivedCommand => {
         const standing = this.#standing(commandId, sessionTarget);
         switch (standing.kind) {
             case "unseen":
             case "foreign":
-                return { commandId, state: "unknown" };
+                return { kind: "unseen" };
             case "retryable":
-            case "retained":
             case "expired":
             case "cancelled":
-                return { commandId, state: "received" };
+                return { kind: "settled" };
+            case "retained": {
+                const fate = standing.command.fate;
+                switch (fate.kind) {
+                    case "pending":
+                        return { kind: "pending" };
+                    case "started":
+                        return { kind: "started", startedAt: fate.startedAt };
+                    case "cancelled":
+                    case "interrupted-before-start":
+                    case "settled-before-start":
+                    case "settled-after-start":
+                        return { kind: "settled" };
+                    default:
+                        return fate satisfies never;
+                }
+            }
             default:
                 return standing satisfies never;
         }

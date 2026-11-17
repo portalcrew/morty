@@ -12,7 +12,7 @@ import type { ComposerAttachment } from "../../components/chat/composer-attachme
 import { SessionStorageWriteError } from "../../services/session-storage/central-session-storage.ts";
 import { formatError } from "../format-error.ts";
 import {
-    admittedPlacement,
+    commandAnswer,
     runtimeCoversMessage,
     runtimeHoldsCommand,
     type SessionExecutionState,
@@ -25,19 +25,24 @@ interface DeliveryAttempt {
     readonly submit: SubmitTurn;
 }
 /**
- * Where this page shows a message: as the Session's next turn, or in its queue. Sending decides it from whether a
- * turn runs; once the service answers, the admission the execution state holds decides it. It never changes what is
- * submitted: the Computer alone admits a message, running it now or queueing it.
+ * Where this page shows a message: as the Session's next turn, or in its queue. Until the Computer answers, sending
+ * decides it from whether a turn runs; the answer then decides it. It never changes what is submitted: the Computer
+ * alone admits a message, running it now or queueing it.
  */
 export type DeliveryPlacement = "turn" | "queue";
 
-export interface SubmittedMessage {
-    readonly placement: DeliveryPlacement;
+/** A message the Computer accepted; where it shows follows from the Computer's answer about it. */
+export interface AcceptedMessage {
     readonly attachments:
         | { readonly kind: "local"; readonly values: readonly ComposerAttachment[] }
         | { readonly kind: "uploaded"; readonly values: readonly PromptAttachment[] };
     readonly commandId: string;
     readonly content: string;
+}
+
+/** A message the Computer has not answered for, shown where the page expects it. */
+export interface SubmittedMessage extends AcceptedMessage {
+    readonly placement: DeliveryPlacement;
 }
 export type Journal = {
     readonly attachments: readonly ComposerAttachment[] | null;
@@ -46,7 +51,7 @@ export type Journal = {
     /** Chat states the Session's whole binding, so a saved request stays complete for any Relay it is resent to. */
     readonly request: Omit<SubmitRequest, "idempotencyKey" | "disposition">;
 };
-export function journalMessage(journal: Journal): SubmittedMessage {
+function acceptedJournal(journal: Journal): AcceptedMessage {
     return {
         commandId: journal.commandId,
         content: journal.request.content,
@@ -54,11 +59,14 @@ export function journalMessage(journal: Journal): SubmittedMessage {
             journal.attachments === null
                 ? { kind: "uploaded", values: journal.request.attachments }
                 : { kind: "local", values: journal.attachments },
-        placement: journal.placement,
     };
 }
 
-export function deliveryMessagePresentation(message: SubmittedMessage) {
+export function journalMessage(journal: Journal): SubmittedMessage {
+    return { ...acceptedJournal(journal), placement: journal.placement };
+}
+
+export function deliveryMessagePresentation(message: AcceptedMessage) {
     return {
         ...message,
         displayPrompt:
@@ -125,7 +133,7 @@ export function awaitingMessage(state: DeliveryState): SubmittedMessage | null {
 }
 
 /** The submitted intent and files have one owner through preparation, admission and queueing. */
-export function deliveryMessages(delivery: DeliveryRecord): readonly SubmittedMessage[] {
+export function deliveryMessages(delivery: DeliveryRecord): readonly AcceptedMessage[] {
     const accepted = delivery.accepted;
     const state = delivery.state;
     switch (state.kind) {
@@ -151,7 +159,7 @@ export function deliveryMessages(delivery: DeliveryRecord): readonly SubmittedMe
  */
 export interface SessionDeliveryStore {
     readonly state: DeliveryState;
-    readonly accepted: readonly SubmittedMessage[];
+    readonly accepted: readonly AcceptedMessage[];
     /**
      * Withdraws the unknown delivery on the Computer, so it never runs. It is gone once `withdraw` says the Computer
      * withdrew it; otherwise it stays unknown, and a command the Computer already holds settles as the Computer's.
@@ -168,11 +176,30 @@ type WithdrawCommand = (commandId: string, signal: AbortSignal) => Promise<boole
 
 export type DeliveryRecord = Pick<SessionDeliveryStore, "state" | "accepted">;
 
+/** Whether the Computer's answer leaves a message to show until its account shows it: it waits or runs. */
+function awaitsAccount(runtime: SessionExecutionState, commandId: string): boolean {
+    const answer = commandAnswer(runtime, commandId);
+    switch (answer?.state) {
+        case "preparing":
+        case "queued":
+        case "running":
+            return true;
+        case "settled":
+        case "withdrawn":
+        case "steered":
+        case undefined:
+            return false;
+        default:
+            return answer satisfies never;
+    }
+}
+
 /**
- * Delivery as the Computer's account leaves it. An unknown delivery the Computer holds was delivered: it is idle, or
- * accepted when it waits in the queue. An accepted message the Computer's account covers is dropped, which releases
- * the files the page kept for editing it; nothing reads them once the account shows the message. A delivery being
- * withdrawn waits for the answer to its withdrawal instead: the Computer also holds a command it withdrew.
+ * Delivery as the Computer's account leaves it. An unknown delivery the Computer holds was delivered: it is idle, and
+ * accepted while the Computer's answer says it waits or runs. An accepted message the Computer's account covers is
+ * dropped, which releases the files the page kept for editing it; nothing reads them once the account shows the
+ * message. A delivery being withdrawn waits for the answer to its withdrawal instead: the Computer also holds a command
+ * it withdrew.
  */
 export function settledDelivery(delivery: DeliveryRecord, runtime: SessionExecutionState): DeliveryRecord {
     const { state } = delivery;
@@ -180,21 +207,17 @@ export function settledDelivery(delivery: DeliveryRecord, runtime: SessionExecut
         state.kind === "delivery-unknown" && runtimeHoldsCommand(runtime, state.journal.commandId)
             ? {
                   state: { kind: "idle" },
-                  accepted:
-                      admittedPlacement(runtime, state.journal) === "queue"
-                          ? [
-                                ...delivery.accepted.filter((message) => message.commandId !== state.journal.commandId),
-                                journalMessage(state.journal),
-                            ]
-                          : delivery.accepted,
+                  accepted: awaitsAccount(runtime, state.journal.commandId)
+                      ? [
+                            ...delivery.accepted.filter((message) => message.commandId !== state.journal.commandId),
+                            acceptedJournal(state.journal),
+                        ]
+                      : delivery.accepted,
               }
             : delivery;
     return {
         state: settled.state,
-        accepted: settled.accepted.flatMap((message) => {
-            const resolved = { ...message, placement: admittedPlacement(runtime, message) };
-            return runtimeCoversMessage(runtime, resolved) ? [] : [resolved];
-        }),
+        accepted: settled.accepted.filter((message) => !runtimeCoversMessage(runtime, message.commandId)),
     };
 }
 
@@ -285,7 +308,7 @@ export const createSessionDeliveryStore = (options: {
         // where the saved request of a delivery the Computer holds is replaced. Until then the saved request stays: a
         // reload sends it again under the same identity, which the Computer holds already.
         const settled = (): DeliveryRecord => settledDelivery(get(), options.runtime());
-        const set = (state: DeliveryState, accepted: readonly SubmittedMessage[] = settled().accepted): void => {
+        const set = (state: DeliveryState, accepted: readonly AcceptedMessage[] = settled().accepted): void => {
             const pending = pendingSubmission(state);
             if (pending?.commandId !== pendingSubmission(get().state)?.commandId) {
                 options.pendingSubmissionChanged(pending);
@@ -296,7 +319,7 @@ export const createSessionDeliveryStore = (options: {
         const confirm = (journal: Journal): void => {
             set({ kind: "idle" }, [
                 ...settled().accepted.filter((message) => message.commandId !== journal.commandId),
-                journalMessage(journal),
+                acceptedJournal(journal),
             ]);
         };
         const attempt = async (journal: Journal, submit: SubmitTurn, signal: AbortSignal): Promise<void> => {

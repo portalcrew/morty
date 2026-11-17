@@ -2,6 +2,7 @@ import type {
     PromptAttachment,
     SessionConfigurationSelection,
     SessionElicitationFormContent,
+    SessionLogPosition,
     SessionPromptAcceptedEvent,
     SessionPromptDisposition,
 } from "@portalcrew/morty-client/protocol";
@@ -26,10 +27,17 @@ export type SubmitMortyTurnRequest = SubmitMortyTurnContent &
         | { readonly disposition: typeof SessionPromptDisposition.Steer; readonly targetCommandId: string }
     );
 
-export type MortyTurnAdmission = SessionPromptAcceptedEvent["state"];
+/** Where the Computer admitted a submitted command, and the Session log position at which that standing holds. */
+export type MortyTurnAdmission = Pick<SessionPromptAcceptedEvent, "standing" | "position">;
 
-/** How a cancelled Turn ended: `cancelled`, or the Agent's stop reason when the Turn finished first. */
-export type MortyTurnCancellation = { readonly stopReason: string };
+/**
+ * How a cancelled Turn ended: `cancelled`, or the Agent's stop reason when the Turn finished first; it holds from
+ * `position` in the Session's log.
+ */
+export type MortyTurnCancellation = { readonly stopReason: string; readonly position: SessionLogPosition };
+
+/** The Session log position from which a read or live event reflects a queued command's withdrawal or steering. */
+export type MortyQueuedTurnChange = { readonly position: SessionLogPosition };
 
 export type MortyPermissionAnswer =
     | { readonly outcome: "selected"; readonly optionId: string }

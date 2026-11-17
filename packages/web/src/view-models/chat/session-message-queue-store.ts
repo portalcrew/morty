@@ -1,10 +1,10 @@
-import type { MortyClient } from "@portalcrew/morty-client";
-import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
+import type { MortyClient, MortyQueuedTurnChange } from "@portalcrew/morty-client";
+import type { NativeSessionTarget, SessionLogPosition } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
 import { formatError } from "../format-error.ts";
-import { isAuthoritativeFailure, type SubmittedMessage } from "./session-delivery-store.ts";
-import type { QueuedCommand } from "./session-execution.ts";
+import { type AcceptedMessage, isAuthoritativeFailure } from "./session-delivery-store.ts";
+import type { CommandAnswered, QueuedCommand } from "./session-execution.ts";
 import type { SessionOperationConnection } from "./session-operation-connection.ts";
 import type { OperationFailure } from "./session-operation-feedback.ts";
 
@@ -24,22 +24,22 @@ export type ChatQueuedMessage =
     | ({ readonly kind: "steering" } & QueuedMessageValue)
     | ({ readonly kind: "deleting" } & QueuedMessageValue);
 
-/** A withdrawn message stays hidden, whatever a read that began before its withdrawal still lists. */
-type QueuedMessageRequest = "steering" | "deleting" | "withdrawn";
+type QueuedMessageRequest = "steering" | "deleting";
 
 /**
  * How a request on the queue ended: the Computer did it, refused it, never received it, or may have done it without
  * confirming.
  */
 type QueueRequestOutcome =
-    | { readonly kind: "done" }
+    | { readonly kind: "done"; readonly position: SessionLogPosition }
     | { readonly kind: "refused"; readonly cause: unknown }
     | { readonly kind: "unsent"; readonly cause: unknown }
     | { readonly kind: "unconfirmed"; readonly cause: unknown };
 
 /**
  * The Session's requests on the Computer's queue. They run on the Session's operations, so switching panes neither ends
- * a request nor loses what it returns. A failed request reports its failure to the Session's operation feedback.
+ * a request nor loses what it returns. The Computer's answer to a request enters the Session's execution, which orders
+ * it against the queue it lists. A failed request reports its failure to the Session's operation feedback.
  * Original files remain owned by delivery, which releases them once the Computer's account no longer lists the message.
  */
 export interface SessionMessageQueueStore {
@@ -61,13 +61,10 @@ export interface SessionMessageQueueStore {
 export function queuedMessages(
     queued: readonly QueuedCommand[],
     queue: Pick<SessionMessageQueueStore, "requests">,
-    submitted: readonly SubmittedMessage[],
+    submitted: readonly AcceptedMessage[],
 ): readonly ChatQueuedMessage[] {
     return queued.flatMap((message): readonly ChatQueuedMessage[] => {
         const request = queue.requests.get(message.commandId);
-        if (request === "withdrawn") {
-            return [];
-        }
         const local = submitted.find((candidate) => candidate.commandId === message.commandId)?.attachments;
         const attachments = local?.kind === "local" ? local.values : undefined;
         return [
@@ -104,6 +101,7 @@ export const createSessionMessageQueueStore = (options: {
     readonly connection: SessionOperationConnection;
     readonly returned: (message: ChatQueuedMessage) => void;
     readonly failed: (failure: OperationFailure) => void;
+    readonly answered: (answer: CommandAnswered) => void;
 }) =>
     createStore<SessionMessageQueueStore>()((set, get) => {
         const begin = (message: ChatQueuedMessage, request: "steering" | "deleting"): boolean => {
@@ -113,22 +111,23 @@ export const createSessionMessageQueueStore = (options: {
             set((state) => ({ requests: withRequest(state.requests, message.commandId, request) }));
             return true;
         };
-        const left = (commandId: string): void => {
-            set((state) => ({ requests: withRequest(state.requests, commandId, "withdrawn") }));
+        const left = (commandId: string, answer: "withdrawn" | "steered", position: SessionLogPosition): void => {
+            options.answered({ kind: "answered", commandId, answer: { state: answer }, position });
+            set((state) => ({ requests: withRequest(state.requests, commandId, null) }));
         };
         const send = async (
-            request: (client: MortyClient, signal: AbortSignal) => Promise<unknown>,
+            request: (client: MortyClient, signal: AbortSignal) => Promise<MortyQueuedTurnChange>,
             parent: AbortSignal,
         ): Promise<QueueRequestOutcome> => {
             const signal = AbortSignal.any([parent, AbortSignal.timeout(15_000)]);
             let sent = false;
             try {
-                await options.connection.send(async (client, requestSignal) => {
+                const { position } = await options.connection.send(async (client, requestSignal) => {
                     sent = true;
-                    await request(client, requestSignal);
+                    return await request(client, requestSignal);
                 }, signal);
                 signal.throwIfAborted();
-                return { kind: "done" };
+                return { kind: "done", position };
             } catch (cause) {
                 parent.throwIfAborted();
                 if (!sent) {
@@ -147,7 +146,7 @@ export const createSessionMessageQueueStore = (options: {
                 signal,
             );
             if (outcome.kind === "done") {
-                left(commandId);
+                left(commandId, "withdrawn", outcome.position);
                 return outcome;
             }
             set((state) => ({ requests: withRequest(state.requests, commandId, null) }));
@@ -201,7 +200,7 @@ export const createSessionMessageQueueStore = (options: {
                     signal,
                 );
                 if (outcome.kind === "done") {
-                    left(commandId);
+                    left(commandId, "steered", outcome.position);
                     return true;
                 }
                 // Execution events and queue reads may show the message gone before the HTTP refusal arrives; the failure
