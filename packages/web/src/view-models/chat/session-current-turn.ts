@@ -1,5 +1,5 @@
 import { decodeIdentifier } from "@portalcrew/morty-client/protocol";
-import type { DelegationStage } from "./session-lifecycle.ts";
+import type { DelegationStage, TurnStop } from "./session-lifecycle.ts";
 
 // The turn the Session treats as current: the command the service reported running or accepted from this page and
 // when its work started, or how the last reported turn ended. It records only what the service reported.
@@ -22,6 +22,7 @@ export type CurrentTurn =
            * running it, or null when the Computer reported no handoff.
            */
           readonly delegation: DelegationStage | null;
+          readonly stop: TurnStop;
       };
 
 export type CurrentTurnEvent =
@@ -34,6 +35,7 @@ export type CurrentTurnEvent =
           readonly startedAt: number;
       }
     | { readonly kind: "delegated"; readonly commandId: string; readonly stage: DelegationStage; readonly at: number }
+    | { readonly kind: "stop-reported"; readonly commandId: string; readonly stop: TurnStop }
     | { readonly kind: "ended"; readonly commandId: string; readonly failure: TurnFailure | null }
     | { readonly kind: "nothing-running" }
     /**
@@ -65,6 +67,7 @@ export function transitionCurrentTurn(turn: CurrentTurn, event: CurrentTurnEvent
                 commandId: event.commandId,
                 startedAt: event.startedAt,
                 delegation: null,
+                stop: "none",
             };
         case "running":
             return {
@@ -75,6 +78,7 @@ export function transitionCurrentTurn(turn: CurrentTurn, event: CurrentTurnEvent
                         ? turn.startedAt
                         : event.startedAt,
                 delegation: isCurrent(turn, event.commandId) ? turn.delegation : null,
+                stop: isCurrent(turn, event.commandId) ? turn.stop : "none",
             };
         case "delegated":
             // The owner never gives a started command back to its queue, whatever order the reports arrive in. Its
@@ -85,6 +89,8 @@ export function transitionCurrentTurn(turn: CurrentTurn, event: CurrentTurnEvent
             return event.stage === "started"
                 ? { ...turn, delegation: "started", startedAt: event.at }
                 : { ...turn, delegation: "queued" };
+        case "stop-reported":
+            return isCurrent(turn, event.commandId) && turn.stop !== event.stop ? { ...turn, stop: event.stop } : turn;
         case "ended":
             return isCurrent(turn, event.commandId) ? endedTurn(event.commandId, event.failure) : turn;
         case "nothing-running":

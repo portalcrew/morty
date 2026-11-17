@@ -53,8 +53,11 @@ type InteractionChange = Extract<
     { readonly kind: "interaction-requested" | "permission-resolved" | "elicitation-resolved" }
 >;
 
+type StopChange = Extract<SessionLifecycleFact, { readonly kind: "turn-stop-changed" }>;
+
 export type LiveExecutionChange =
     | InteractionChange
+    | StopChange
     /** The Computer's queue changed; only a read tells what it holds now. */
     | { readonly kind: "queue-changed" }
     /**
@@ -317,6 +320,15 @@ function applyLiveChange(state: SessionExecutionState, change: LiveExecutionChan
                 }),
             });
         }
+        case "turn-stop-changed":
+            return settled({
+                ...state,
+                turn: transitionCurrentTurn(state.turn, {
+                    kind: "stop-reported",
+                    commandId: change.commandId,
+                    stop: change.stop,
+                }),
+            });
         case "turn-ended": {
             const { commandId, outcome } = change;
             if (outcome.kind === "steered") {
@@ -438,6 +450,7 @@ function applyRead(
                 at: Date.parse(running.delegation.at),
             });
         }
+        turn = transitionCurrentTurn(turn, { kind: "stop-reported", commandId: running.commandId, stop: running.stop });
     } else {
         // The read covers every answer up to its position, so only a turn an answer beyond it reported still runs.
         if (turn.kind === "current" && !runsBeyond(next, turn.commandId, position)) {

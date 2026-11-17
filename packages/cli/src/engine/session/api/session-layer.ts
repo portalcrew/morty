@@ -52,7 +52,10 @@ export function buildSessionLayer(options: SessionLayerOptions) {
     const sessionStore = new SqliteSessionStore(sessionDatabase, events);
     const activeSessions = new SessionTurns(
         operations,
-        (target, commandId) => manager.executes(target, commandId),
+        {
+            executes: (target, commandId) => manager.executes(target, commandId),
+            stopping: (target, commandId) => manager.stopping(target, commandId),
+        },
         (target) => manager.turnFinished(target),
     );
     const standings = new CommandStandings(activeSessions, events.livePosition);

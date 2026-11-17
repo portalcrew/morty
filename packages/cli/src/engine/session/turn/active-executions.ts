@@ -39,6 +39,17 @@ interface Execution {
  */
 export class ActiveExecutions {
     readonly #entries = new NativeSessionMap<Execution>();
+    readonly #onStopChanged: (sessionTarget: NativeSessionTarget, commandId: string, stopping: boolean) => void;
+
+    /**
+     * `onStopChanged` hears each time the Computer begins, or fails, to stop a started execution; a beginning is heard
+     * before the stop runs, so it precedes whatever stopping records. Before its start a command is no turn of the
+     * Session, and once it settled its terminal event has told how it ended.
+     */
+    constructor(onStopChanged: (sessionTarget: NativeSessionTarget, commandId: string, stopping: boolean) => void) {
+        this.#onStopChanged = onStopChanged;
+    }
+
     readonly status = (sessionTarget: NativeSessionTarget): SessionStatus => {
         const execution = this.#entries.get(sessionTarget);
         return execution === undefined ? { kind: "idle" } : { commandId: execution.commandId, kind: "working" };
@@ -67,6 +78,16 @@ export class ActiveExecutions {
     readonly cancellationRequested = (sessionTarget: NativeSessionTarget, commandId: string): boolean => {
         const execution = this.#entries.get(sessionTarget);
         return execution?.commandId === commandId && execution.cancellation.kind === "requested";
+    };
+
+    /** Whether a stop of the named execution is under way: requested, and its latest attempt has not failed. */
+    readonly stopping = (sessionTarget: NativeSessionTarget, commandId: string): boolean => {
+        const execution = this.#entries.get(sessionTarget);
+        return (
+            execution?.commandId === commandId &&
+            execution.cancellation.kind === "requested" &&
+            execution.cancellation.attempt.kind === "stopping"
+        );
     };
 
     readonly cancellation = (sessionTarget: NativeSessionTarget): Promise<void> | undefined => {
@@ -138,6 +159,9 @@ export class ActiveExecutions {
         if (execution.phase === "preparing") {
             execution.preparation.abort(new Error("The Agent turn was cancelled before it started"));
         }
+        if (execution.phase === "started") {
+            this.#onStopChanged(sessionTarget, commandId, true);
+        }
         void (async () => await stop())().then(completion.resolve, (error: unknown) => {
             this.#stopFailed(sessionTarget, commandId, completion.promise);
             completion.reject(error);
@@ -158,6 +182,9 @@ export class ActiveExecutions {
                 ...execution,
                 cancellation: { kind: "requested", attempt: { kind: "failed" } },
             });
+            if (execution.phase === "started") {
+                this.#onStopChanged(sessionTarget, commandId, false);
+            }
         }
     };
 

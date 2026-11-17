@@ -2,6 +2,7 @@ import type { MortyPermissionAnswer } from "@portalcrew/morty-client";
 import type {
     SessionElicitationAwaitingCompletionEvent,
     SessionElicitationRequestedEvent,
+    SessionExecution,
     SessionLiveEvent,
     SessionPermissionRequestedEvent,
     SessionPermissionResolvedEvent,
@@ -13,6 +14,7 @@ import type { SessionInteraction } from "./session-pane-types.ts";
 
 type LifecycleMetadata = Extract<SessionLiveEvent, { readonly type: "lifecycle-metadata" }>["payload"];
 export type DelegationStage = Extract<LifecycleMetadata, { readonly kind: "prompt.delegated" }>["stage"];
+export type TurnStop = NonNullable<SessionExecution["turn"]>["stop"];
 type LifecycleEvent<Kind extends LifecycleMetadata["kind"]> = Extract<
     LifecycleMetadata,
     { readonly kind: Kind; readonly event: unknown }
@@ -33,6 +35,7 @@ export type SessionLifecycleFact =
     | { readonly kind: "queue-changed" }
     | { readonly kind: "turn-started"; readonly commandId: string }
     | { readonly kind: "turn-delegated"; readonly commandId: string; readonly stage: DelegationStage }
+    | { readonly kind: "turn-stop-changed"; readonly commandId: string; readonly stop: TurnStop }
     | { readonly kind: "turn-completed"; readonly commandId: string; readonly steered: boolean }
     | { readonly kind: "turn-failed"; readonly commandId: string; readonly code: string; readonly message: string }
     | { readonly kind: "none" };
@@ -62,6 +65,10 @@ export function sessionLifecycleFact(payload: LifecycleMetadata): SessionLifecyc
             return { kind: "turn-started", commandId: payload.commandId };
         case "prompt.delegated":
             return { kind: "turn-delegated", commandId: payload.commandId, stage: payload.stage };
+        case "prompt.stopping":
+            return { kind: "turn-stop-changed", commandId: payload.commandId, stop: "stopping" };
+        case "prompt.stop-failed":
+            return { kind: "turn-stop-changed", commandId: payload.commandId, stop: "none" };
         case "prompt.completed":
             return {
                 kind: "turn-completed",

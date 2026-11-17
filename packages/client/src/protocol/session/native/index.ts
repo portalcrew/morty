@@ -49,6 +49,9 @@ const activeTurnSnapshotSchema = z
             .object({ stage: promptDelegationStageSchema, at: z.iso.datetime({ offset: true }) })
             .readonly()
             .nullable(),
+        // `stopping` while the Computer is stopping the command at a user's request; `none` otherwise, including after
+        // an attempt to stop it failed.
+        stop: z.enum(["none", "stopping"]),
     })
     .readonly();
 

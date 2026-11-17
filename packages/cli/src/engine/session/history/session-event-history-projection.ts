@@ -248,7 +248,7 @@ export class SessionEventHistoryProjection {
     /**
      * Keeps the lifecycle that delimits each turn, where it happened. A turn's ending is history only once, after its
      * start: an ending restated for a client, or one for a turn this history does not hold, has no place in it.
-     * Interaction and queue changes are current state, not history.
+     * Interaction, queue and stop changes are current state, not history.
      */
     readonly #turnLifecycle = (
         liveEvent: Extract<SessionLiveEvent, { readonly type: "lifecycle-metadata" }>,
@@ -271,6 +271,8 @@ export class SessionEventHistoryProjection {
                 }
                 this.#turns.set(payload.commandId, "ended");
                 return { events: [projectLifecycleEvent(liveEvent)], kind: "append" };
+            case "prompt.stopping":
+            case "prompt.stop-failed":
             case "session.queue.changed":
             case "session.permission.requested":
             case "session.permission.resolved":

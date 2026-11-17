@@ -109,6 +109,27 @@ describe("Session execution read contracts", () => {
             ),
         ).toThrow();
     });
+    it("Given a running turn the Computer is stopping, When a client restores execution, Then the turn keeps its stop", () => {
+        const turn = {
+            commandId: "command-1",
+            startedAt: "2026-11-12T00:00:00.000Z",
+            delegation: null,
+            stop: "stopping",
+        };
+        expect(decodeNativeSessionResult(JSON.stringify({ ...execution, turn }))).toMatchObject({ turn });
+    });
+
+    it("Given a running turn without its stop, When a client restores execution, Then the retired snapshot is rejected", () => {
+        expect(() =>
+            decodeNativeSessionResult(
+                JSON.stringify({
+                    ...execution,
+                    turn: { commandId: "command-1", startedAt: "2026-11-12T00:00:00.000Z", delegation: null },
+                }),
+            ),
+        ).toThrow();
+    });
+
     it("Given a running turn without its start time, When a client restores execution, Then the retired snapshot is rejected", () => {
         expect(() =>
             decodeNativeSessionResult(
