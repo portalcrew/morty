@@ -7,8 +7,8 @@ settings:
 catalogs:
   default:
     '@agentclientprotocol/sdk':
-      specifier: 2.6.0
-      version: 2.6.0
+      specifier: 2.7.0
+      version: 2.7.0
     '@biomejs/biome':
       specifier: 2.6.7
       version: 2.6.7
@@ -185,7 +185,7 @@ importers:
     devDependencies:
       '@agentclientprotocol/sdk':
         specifier: 'catalog:'
-        version: 2.6.0(zod@4.6.7)
+        version: 2.7.0(zod@4.6.7)
       '@biomejs/biome':
         specifier: 'catalog:'
         version: 2.6.7
@@ -258,7 +258,7 @@ importers:
     devDependencies:
       '@agentclientprotocol/sdk':
         specifier: 'catalog:'
-        version: 2.6.0(zod@4.6.7)
+        version: 2.7.0(zod@4.6.7)
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.325
         version: 0.3.325(@anthropic-ai/sdk@1.8.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.1(supports-color@10.2.2)(zod@4.6.7))(zod@4.6.7)
@@ -388,7 +388,7 @@ importers:
     dependencies:
       '@agentclientprotocol/sdk':
         specifier: 'catalog:'
-        version: 2.6.0(zod@4.6.7)
+        version: 2.7.0(zod@4.6.7)
       '@portalcrew/morty-client':
         specifier: workspace:*
         version: link:../client
@@ -533,8 +533,8 @@ importers:
 
 packages:
 
-  '@agentclientprotocol/sdk@2.6.0':
-    resolution: {integrity: sha512-3FtL6MkAV5F9qxg0FQV8wmBszIm2xuVPoDWOILIFSDQ+Vq3Twdh7Cw6Hk2GOPUbevgrTUpUAqZXQy7Geaj79mw==}
+  '@agentclientprotocol/sdk@2.7.0':
+    resolution: {integrity: sha512-oXdQq0plWv3iOg01zJghNZRSuyWeMYxOgWIaSdwg1BZe2ZAC9LRhNDi023lNYxXq1zVIpQjIp8P6AfsxpvxF6g==}
     peerDependencies:
       '@modelcontextprotocol/server': ^2.4.0
       zod: 4.6.7
@@ -5664,7 +5664,7 @@ packages:
 
 snapshots:
 
-  '@agentclientprotocol/sdk@2.6.0(zod@4.6.7)':
+  '@agentclientprotocol/sdk@2.7.0(zod@4.6.7)':
     dependencies:
       zod: 4.6.7
 
