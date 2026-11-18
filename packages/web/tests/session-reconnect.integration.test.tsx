@@ -277,6 +277,8 @@ test("Given an open conversation with a draft, When recovery after two backgroun
         });
         const held = app.executionNetwork.holdNextExecution();
         await app.daemon.reconnect();
+        // The page returns to a Computer it has seen come back; a resumption before that waits out its retry.
+        await app.waitForView(() => getByRole(document.body, "button", { name: /Switch computer, .*, Online/ }));
         await act(async () => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
         const release = await held;
         try {
