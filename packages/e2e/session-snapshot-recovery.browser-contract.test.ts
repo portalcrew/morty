@@ -1,9 +1,10 @@
 import { createServer, request } from "node:http";
-import { computerEncryptionAccessCodec, createClientPayloadEncryption } from "@portalcrew/morty-client";
+import { createClientPayloadEncryption } from "@portalcrew/morty-client";
 import { WebSocket, WebSocketServer } from "ws";
 import { sessionEventEnvelopeCodec } from "../client/src/protocol/session/events/index.ts";
 import { sessionHistoryPageLoadedCodec } from "../client/src/protocol/session/observability/history.ts";
 import { dataTestId } from "../web/src/data-testid.ts";
+import { openedSetupHandoff } from "../worker/tests/support/setup-handoff.ts";
 import { expandMobileComposer } from "./infra/mobile-composer.ts";
 import { test as base, conversationLoaded, expect } from "./infra/test.ts";
 
@@ -246,11 +247,7 @@ for (const schedule of ["before-snapshot", "after-snapshot", "after-recovery"] a
         };
         await runtime.clock.install({ time: new Date("2026-10-24T00:00:00Z") });
         const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
-        const encodedAccess = new URLSearchParams(new URL(connected.url).hash.slice(1)).get("e2e");
-        if (encodedAccess === null) {
-            throw new Error("The browser handoff omitted encrypted Computer access");
-        }
-        const access = computerEncryptionAccessCodec.decode(Buffer.from(encodedAccess, "base64url").toString("utf8"));
+        const access = (await openedSetupHandoff(connected.url, (request) => fetch(request))).encryption;
         const observation = new AbortController();
         const signal = AbortSignal.any([observation.signal, stack.harness.signal]);
         const observer = await createClientPayloadEncryption(access, signal);
