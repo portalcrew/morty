@@ -33,10 +33,14 @@ export function BugReportButton({
     appearance = "labelled",
     daemonSource = null,
     dialog,
+    size = "default",
+    variant = "ghost",
 }: {
     readonly appearance?: keyof typeof appearances | "card";
     readonly daemonSource?: DaemonDiagnosticsSource | null;
     readonly dialog: BugReportDialogStore;
+    readonly size?: "default" | "lg";
+    readonly variant?: "ghost" | "outline";
 }) {
     const showBugReport = dialog.getState().show;
     const trigger =
@@ -58,14 +62,15 @@ export function BugReportButton({
         ) : (
             <Button
                 aria-label="Report a bug"
-                className={appearances[appearance]}
+                className={appearance === "labelled" && size === "lg" ? "" : appearances[appearance]}
                 onClick={(event) => {
                     if (event.detail > 0) {
                         event.currentTarget.blur();
                     }
                     showBugReport(daemonSource);
                 }}
-                variant="ghost"
+                size={size}
+                variant={variant}
             >
                 {appearance === "icon" ? <Bug aria-hidden="true" className="size-4" /> : "Report a bug"}
             </Button>

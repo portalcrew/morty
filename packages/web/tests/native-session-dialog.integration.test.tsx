@@ -227,6 +227,68 @@ test("Given the phone sheet lists sessions, When the user taps one, Then the she
     });
 });
 
+test("Given more saved sessions exist, When the phone and desktop lists scroll to their ends, Then each loads the next page with a spinning icon", {
+    timeout: 30_000,
+}, async () => {
+    const releasePhonePage = Promise.withResolvers<void>();
+    const releaseDesktopPage = Promise.withResolvers<void>();
+    const app = await createTestApp({
+        connectAgent: true,
+        agent: {
+            harness: "codex",
+            label: "Codex",
+            nativeSessionPageSize: 2,
+            beforeNativeSessionPage: async (cursor) => {
+                if (cursor === "2") {
+                    await releasePhonePage.promise;
+                }
+                if (cursor === "4") {
+                    await releaseDesktopPage.promise;
+                }
+            },
+        },
+        sessionIds: new Set(["first-session", "second-session", "third-session", "fourth-session", "fifth-session"]),
+    });
+    await app.queryElementByTestId(
+        dataTestId.botConnectionStatus,
+        (element) => element.getAttribute("data-connection-status") === "connected",
+    );
+    await app.user.click(getByRole(document.body, "button", { name: "Open Session" }));
+    const dialog = await app.waitForView(() => getByRole(document.body, "dialog", { name: "Open Session" }));
+    const list = await app.waitForView(() => getByRole(dialog, "region", { name: "Saved sessions" }));
+    const loadMore = getByRole(list, "button", { name: "Load more" });
+    expect(loadMore.querySelector("svg")?.classList.contains("animate-spin")).toBe(false);
+    expect(queryByRole(list, "button", { name: "Native third-session /" })).toBeNull();
+
+    act(() => {
+        list.scrollTop = 1;
+        fireEvent.scroll(list);
+    });
+    await app.waitForView(() => {
+        const loading = getByRole(list, "button", { name: "Load more" });
+        expect(loading.getAttribute("aria-busy")).toBe("true");
+        expect(loading.querySelector("svg")?.classList.contains("animate-spin")).toBe(true);
+    });
+
+    releasePhonePage.resolve();
+    await app.waitForView(() => getByRole(list, "button", { name: "Native fourth-session /" }));
+
+    const desktopList = getByRole(dialog, "region", { name: "Saved sessions on desktop" });
+    act(() => {
+        desktopList.scrollTop = 1;
+        fireEvent.scroll(desktopList);
+    });
+    await app.waitForView(() => {
+        const loading = getByRole(desktopList, "button", { name: "Load more" });
+        expect(loading.getAttribute("aria-busy")).toBe("true");
+        expect(loading.querySelector("svg")?.classList.contains("animate-spin")).toBe(true);
+    });
+
+    releaseDesktopPage.resolve();
+    await app.waitForView(() => getByRole(desktopList, "button", { name: "Native fifth-session" }));
+    expect(queryByRole(desktopList, "button", { name: "Load more" })).toBeNull();
+});
+
 test("Given the user previewed a session, When they close Open Session and open it again, Then the same session is still selected", {
     timeout: 30_000,
 }, async () => {
@@ -284,7 +346,12 @@ test("Given a native session its Agent cannot load, When the user previews it, T
     await app.user.click(entry);
     const dialog = getByRole(document.body, "dialog", { name: "Open Session" });
     await app.waitForView(() => {
+        getByRole(getByRole(dialog, "region", { name: "Selected session preview" }), "heading", {
+            name: "Native preview-error-session",
+        });
         expect(getAllByRole(dialog, "alert")).toHaveLength(1);
+        expect(getByRole(dialog, "alert").textContent).toContain("Couldn't load preview");
+        expect(getByRole(dialog, "alert").textContent).toContain("The saved session cannot be read.");
         expect(getAllByRole(dialog, "button", { name: "Report a bug" })).toHaveLength(1);
     });
     await app.user.click(getByRole(dialog, "button", { name: "Report a bug" }));

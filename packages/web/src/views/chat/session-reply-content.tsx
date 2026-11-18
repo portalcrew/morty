@@ -37,6 +37,7 @@ export function SessionReplyContent({
     active = false,
     activeItemId = null,
     copyText,
+    copyButtonClassName,
     sections,
     workingSectionId = null,
     renderItem,
@@ -44,6 +45,7 @@ export function SessionReplyContent({
     readonly active?: boolean;
     readonly activeItemId?: string | null;
     readonly copyText: string | null;
+    readonly copyButtonClassName?: string;
     readonly sections: readonly ReplyContentSection[];
     readonly workingSectionId?: string | null;
     readonly renderItem: (item: SessionRenderItem, active: boolean) => ReactNode;
@@ -101,7 +103,13 @@ export function SessionReplyContent({
                     {child.render(replyItemMarginClassName(child.spacing, index === 0, index === childCount - 1))}
                 </Fragment>
             ))}
-            {copyText !== null && <ResponseCopyButton createStore={createResponseCopyStore} text={copyText} />}
+            {copyText !== null && (
+                <ResponseCopyButton
+                    className={copyButtonClassName}
+                    createStore={createResponseCopyStore}
+                    text={copyText}
+                />
+            )}
         </article>
     );
 }

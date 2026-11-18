@@ -80,6 +80,9 @@ class ControlledAgentState {
     readonly turnCount = (sessionId: string): number => this.#sessions.get(sessionId) ?? 0;
     readonly beforeLoad = async (sessionId: string): Promise<void> =>
         await this.#options.beforeSessionLoaded?.(sessionId);
+    readonly beforeNativeSessionPage = async (cursor: string | null): Promise<void> =>
+        await this.#options.beforeNativeSessionPage?.(cursor);
+    readonly nativeSessionPageSize = (): number | null => this.#options.nativeSessionPageSize ?? null;
     readonly title = (sessionId: string): string | null => this.#titles.get(sessionId) ?? null;
     readonly rename = (sessionId: string, title: string): void => {
         if (!this.#sessions.has(sessionId)) {
@@ -515,8 +518,10 @@ class ControlledAgentEndpoint implements FakeHarnessEndpoint {
                     context.params.value,
                 ),
             }))
-            .onRequest(acp.methods.agent.session.list, (context) => ({
-                sessions: this.#state
+            .onRequest(acp.methods.agent.session.list, async (context) => {
+                const cursor = context.params.cursor ?? null;
+                await this.#state.beforeNativeSessionPage(cursor);
+                const sessions = this.#state
                     .sessions()
                     .filter((session) => session.turnCount > 0)
                     .map((session) => ({
@@ -524,8 +529,14 @@ class ControlledAgentEndpoint implements FakeHarnessEndpoint {
                         sessionId: session.sessionId,
                         title: this.#state.title(session.sessionId) ?? `Native ${session.sessionId}`,
                         updatedAt: "2026-01-01T00:00:00Z",
-                    })),
-            }))
+                    }));
+                const start = cursor === null ? 0 : Number(cursor);
+                const end = start + (this.#state.nativeSessionPageSize() ?? sessions.length);
+                return {
+                    sessions: sessions.slice(start, end),
+                    ...(end < sessions.length ? { nextCursor: String(end) } : {}),
+                };
+            })
             .onRequest(
                 "_session/rename",
                 (params: unknown) => params,
