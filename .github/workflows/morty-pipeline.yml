@@ -135,7 +135,7 @@ jobs:
     # Playwright's image carries the browsers and their system libraries for exactly the suite's Playwright version,
     # so browser and acceptance jobs never install them. Share the version, digest and runner user for both jobs.
     container: &playwright-container
-      image: mcr.microsoft.com/playwright:v1.65.0-resolute@sha256:4d70b558dbaff71611b2f3e7a32aa2b4d42cfc892078ad368cb7ea229c2ffd1f
+      image: mcr.microsoft.com/playwright:v1.65.1-resolute@sha256:dcf385f7a31aa1cbb0a7a0c97a539142bf70480b661f89f26a774ec1fe2edd1d
       options: --user 1001
     timeout-minutes: 45
     steps:
