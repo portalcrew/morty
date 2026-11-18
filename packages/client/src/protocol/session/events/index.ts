@@ -20,6 +20,7 @@ const MAX_EVENT_COUNT = 10_000;
 const MAX_COLLECTION_SIZE = 1_000;
 const MAX_CONTENT_LENGTH = 1_000_000;
 export const SESSION_EVENT_KIND = "session.event.v2";
+export const SESSION_SUBSCRIPTION_REPLACED = "session_subscription_replaced";
 export const SESSION_EVENTS_SUBSCRIBE_KIND = "session.events.subscribe";
 export const SESSION_EVENTS_UNSUBSCRIBE_KIND = "session.events.unsubscribe";
 export const SESSION_EVENT_BATCH_MAX_SIZE = 1_000;

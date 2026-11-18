@@ -1328,8 +1328,8 @@ export class MortyInteractionResources {
 }
 
 export interface MortySessionEventObserver {
-    readonly receive: (events: SessionLiveEventBatch) => Promise<boolean>;
-    readonly reconcile: () => Promise<void>;
+    readonly receive: (events: SessionLiveEventBatch, signal: AbortSignal) => Promise<boolean>;
+    readonly reconcile: (signal: AbortSignal) => Promise<void>;
 }
 
 export class MortyLiveEventSubscription {
@@ -1396,12 +1396,17 @@ export class MortyLiveEventSubscription {
                 subscriptionId,
                 this.#controller.signal,
             );
-            await this.#observer.reconcile();
-            connected = true;
-            this.#executor.observeLiveEvents({ kind: "opened", subscriptionId });
-            resolveConnected();
             const reader = connection.events.getReader();
+            // A replacement can end the stream while its observer is still reading history from the old Computer.
+            const streamFailure = new AbortController();
+            const signal = AbortSignal.any([this.#controller.signal, streamFailure.signal]);
+            void reader.closed.catch((cause: unknown) => streamFailure.abort(cause));
             try {
+                await this.#observer.reconcile(signal);
+                signal.throwIfAborted();
+                connected = true;
+                this.#executor.observeLiveEvents({ kind: "opened", subscriptionId });
+                resolveConnected();
                 while (!this.#closed) {
                     const result = await reader.read();
                     if (result.done) {
@@ -1433,9 +1438,9 @@ export class MortyLiveEventSubscription {
                                 "The live Session event stream contains an unexpected message",
                             );
                         },
-                        this.#controller.signal,
+                        signal,
                     );
-                    this.#controller.signal.throwIfAborted();
+                    signal.throwIfAborted();
                     const kind = decodeMessageKind(plaintext);
                     if (kind === "session.close.notice") {
                         const notice = decodeSessionCloseNoticeEvent(plaintext);
@@ -1456,10 +1461,13 @@ export class MortyLiveEventSubscription {
                     if (events.length === 0) {
                         continue;
                     }
-                    if (!(await this.#observer.receive(events))) {
+                    if (!(await this.#observer.receive(events, signal))) {
                         this.close();
                     }
                 }
+            } catch (cause) {
+                streamFailure.signal.throwIfAborted();
+                throw cause;
             } finally {
                 reader.releaseLock();
             }

@@ -1,5 +1,5 @@
-import type { MortyClient, MortySessionEventObserver } from "@portalcrew/morty-client";
-import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
+import { MortyApiError, type MortyClient, type MortySessionEventObserver } from "@portalcrew/morty-client";
+import { type NativeSessionTarget, SESSION_SUBSCRIPTION_REPLACED } from "@portalcrew/morty-client/protocol";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import { recordBrowserDiagnostic, recordSessionRecovery } from "../../services/diagnostics/browser-diagnostics.ts";
@@ -62,7 +62,7 @@ export function createSessionPaneConnection(options: {
     /** The access that opened the Session, which only the first connection reuses. */
     readonly openedAccess: Parameters<BotChatApi["connectSession"]>[2];
     /** What the Session's live events and reconciliation feed into the Session's state. */
-    readonly observer: (connected: MortyClient, signal: AbortSignal) => MortySessionEventObserver;
+    readonly observer: (connected: MortyClient) => MortySessionEventObserver;
     /** Runs once a connection is subscribed, before it is followed until it ends. */
     readonly subscribed: (signal: AbortSignal) => Promise<void>;
     readonly onConnected: () => void;
@@ -175,7 +175,7 @@ export function createSessionPaneConnection(options: {
             dispatch({ kind: "client-opened", client: connected });
             const subscription = await connected.events.subscribeLive(
                 sessionTarget,
-                options.observer(connected, attemptSignal),
+                options.observer(connected),
                 attemptSignal,
             );
             attemptSignal.throwIfAborted();
@@ -265,9 +265,11 @@ export function createSessionPaneConnection(options: {
                     kind: "attempt-failed",
                     failure: isSessionClosedFailure(cause)
                         ? { kind: "session-closed", reason: cause.message }
-                        : isRetryableComputerConnectionFailure(cause)
-                          ? { kind: "retryable", message, notice: recoveryNotice() }
-                          : { kind: "terminal", message },
+                        : cause instanceof MortyApiError && cause.code === SESSION_SUBSCRIPTION_REPLACED
+                          ? { kind: "computer-reconnected", message, notice: recoveryNotice() }
+                          : isRetryableComputerConnectionFailure(cause)
+                            ? { kind: "retryable", message, notice: recoveryNotice() }
+                            : { kind: "terminal", message },
                     jitter: Math.random(),
                 });
                 const interrupted = currentConnection();

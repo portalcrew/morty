@@ -302,6 +302,7 @@ export async function createChatWorkerEnvironment(
                 },
                 disconnect: runtime.disconnect,
                 reconnect: runtime.reconnect,
+                replaceConnection: runtime.replaceConnection,
                 revoke: async (): Promise<void> => await cloud.revokeComputer(identity.computerId),
                 writeFiles: runtime.writeFiles,
             };

@@ -106,14 +106,14 @@ export function createSessionPaneModel(options: {
         failedThrough: (connected, cause) => paneConnection.failedThrough(connected, cause),
     });
     const feed = createSessionExecutionFeed({ sessionTarget, execution, executionOwner: history.executionOwner });
-    const observer = (connected: MortyClient, signal: AbortSignal): MortySessionEventObserver => ({
-        reconcile: async () => {
+    const observer = (connected: MortyClient): MortySessionEventObserver => ({
+        reconcile: async (signal) => {
             await history.dispatch({ kind: "reconcile" }, connected, signal);
             signal.throwIfAborted();
             const { state } = settledDelivery(delivery.getState(), execution.getState().state);
             await feed.read(connected, signal, unconfirmedJournal(state)?.commandId);
         },
-        receive: async (events) => {
+        receive: async (events, signal) => {
             for (const event of events) {
                 // History and lifecycle processing belong to this event. Observe both immediately,
                 // so cancellation or failure in either cannot leave the other's rejection unhandled.
