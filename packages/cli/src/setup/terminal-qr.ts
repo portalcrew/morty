@@ -1,7 +1,7 @@
 import QRCode from "qrcode";
 
-// A standard terminal: a wider code would wrap in it and stop scanning.
-const maximumColumns = 80;
+// An Agent that captures setup's output hides the terminal's width, so setup assumes a standard terminal there.
+const assumedColumns = 80;
 
 /**
  * Draws the QR code with half-block characters for the terminal that runs setup. Blocks are the light modules, so the
@@ -12,7 +12,7 @@ const maximumColumns = 80;
 export async function terminalQrCode(
     value: string,
     terminal: { readonly columns: number | undefined; readonly color: boolean },
-): Promise<string | null> {
+): Promise<string> {
     // A link too long for any QR code has none; the link itself still opens Morty.
     const drawn = await QRCode.toString(value, {
         type: "utf8",
@@ -24,8 +24,9 @@ export async function terminalQrCode(
         () => [],
     );
     const width = drawn[0]?.length ?? 0;
-    if (width === 0 || width > Math.min(maximumColumns, terminal.columns ?? maximumColumns)) {
-        return null;
+    // A code wider than the terminal wraps and stops scanning, so the reader is pointed at what still works.
+    if (width === 0 || width > (terminal.columns ?? assumedColumns)) {
+        return "No QR code fits this terminal. Open the link or the QR image that setup returned.\n";
     }
     const lines = terminal.color ? drawn.map((line) => `\x1b[97;40m${line}\x1b[0m`) : drawn;
     return `${lines.join("\n")}\n`;

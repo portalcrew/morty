@@ -41,10 +41,7 @@ export async function followSetupInstructions(options: {
             emit: (event) => events.push(event),
             // What an Agent's command tool captures: no terminal width, and the colors it keeps.
             showQrCode: async (link) => {
-                const drawn = await terminalQrCode(link, { columns: undefined, color: true });
-                if (drawn !== null) {
-                    terminal.push(drawn);
-                }
+                terminal.push(await terminalQrCode(link, { columns: undefined, color: true }));
             },
             runtime: options.runtime,
             signal: options.signal,

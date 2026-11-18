@@ -23,13 +23,12 @@ export function registerSetupHandlers(program: Command, context: CliContext): vo
             // Stdout stays the event stream; the QR code is for the person watching the terminal.
             showQrCode: async (url) => {
                 const { terminalQrCode } = await import("../../../setup/terminal-qr.ts");
-                const drawn = await terminalQrCode(url, {
-                    columns: process.stderr.isTTY ? process.stderr.columns : undefined,
-                    color: !process.env["NO_COLOR"] && process.env["TERM"] !== "dumb",
-                });
-                if (drawn !== null) {
-                    process.stderr.write(drawn);
-                }
+                process.stderr.write(
+                    await terminalQrCode(url, {
+                        columns: process.stderr.isTTY ? process.stderr.columns : undefined,
+                        color: !process.env["NO_COLOR"] && process.env["TERM"] !== "dumb",
+                    }),
+                );
             },
         });
     };

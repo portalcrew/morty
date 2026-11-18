@@ -45,6 +45,7 @@ const setupHandoffInput = v.pipe(
     v.strictObject({
         lookupId: v.pipe(v.string(), v.regex(setupHandoffLookupIdPattern)),
         sealed: v.pipe(v.string(), v.regex(sealedSetupHandoffPattern)),
+        accessExpiresAt: v.pipe(v.string(), v.isoTimestamp()),
     }),
     v.readonly(),
 );
@@ -157,9 +158,14 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
                 bodyParser<ManagementHttpEnvironment, typeof setupHandoffInput>(setupHandoffInput),
                 async (context) => {
                     const application = applicationForRequest(ctx, context);
+                    const input = context.req.valid("json");
                     const staged = await application.services.setupHandoffs.stage(
                         readBearerToken(context.req.raw.headers),
-                        context.req.valid("json"),
+                        {
+                            lookupId: input.lookupId,
+                            sealed: input.sealed,
+                            accessExpiresAt: Date.parse(input.accessExpiresAt),
+                        },
                         context.req.raw.signal,
                     );
                     switch (staged.kind) {

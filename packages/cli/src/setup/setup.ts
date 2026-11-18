@@ -1293,7 +1293,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
      */
     async function handoffLink(
         context: Context,
-        formats: unknown,
+        transfer: Readonly<Record<string, unknown>>,
         issued: URL,
         handoff: {
             readonly code: string;
@@ -1303,11 +1303,16 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
             readonly workspace: string;
         },
     ): Promise<string> {
+        const formats = transfer["setupHandoffFormats"];
         if (Array.isArray(formats) && formats.includes(sealedSetupHandoffFormat)) {
             const sealed = await sealSetupHandoff(issued.origin, context.identity.computerId, handoff).catch(
                 (cause: unknown) => fail("INVALID_HANDOFF", cause instanceof SetupHandoffError ? cause : undefined),
             );
-            await request(context, "/identity/setup-handoffs", { lookupId: sealed.lookupId, sealed: sealed.sealed });
+            await request(context, "/identity/setup-handoffs", {
+                lookupId: sealed.lookupId,
+                sealed: sealed.sealed,
+                accessExpiresAt: text(transfer["accessExpiresAt"]),
+            });
             return sealed.url;
         }
         const url = new URL(issued);
@@ -1345,7 +1350,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         if (encryption.computerId !== context.identity.computerId) {
             fail("INVALID_ENCRYPTION_HANDOFF");
         }
-        const handoffUrl = await handoffLink(context, transfer["setupHandoffFormats"], url, {
+        const handoffUrl = await handoffLink(context, transfer, url, {
             code: text(new URLSearchParams(url.hash.slice(1)).get("code")),
             encryption,
             harness: options.harness,

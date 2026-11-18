@@ -36,6 +36,7 @@ const deviceAccessLifetimes: Readonly<Record<DeviceAccessDuration, number>> = {
     "30d": 30 * 24 * hour,
 };
 export const defaultDeviceAccessDuration: DeviceAccessDuration = "1d";
+export const longestDeviceAccessLifetime = deviceAccessLifetimes["30d"];
 
 export interface SharedLinkTerms {
     /** The duration chosen for the device's access, which callers show rather than assume. */
