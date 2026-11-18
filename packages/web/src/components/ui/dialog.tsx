@@ -29,12 +29,14 @@ export const dialogPinnedFooterActionsClassName = "flex justify-end gap-2 px-6 p
 
 function DialogShell({
     onClose,
+    onOpenAutoFocus,
     busy,
     className,
     testId,
     children,
 }: {
     readonly onClose: () => void;
+    readonly onOpenAutoFocus?: ((event: Event) => void) | undefined;
     readonly busy: boolean;
     readonly className: string;
     readonly testId?: string | undefined;
@@ -58,6 +60,7 @@ function DialogShell({
                 <Primitive.Overlay className="fixed inset-0 z-50 bg-black/30 motion-safe:animate-cloud-enter" />
                 <Primitive.Content
                     data-testid={testId}
+                    onOpenAutoFocus={onOpenAutoFocus}
                     onCloseAutoFocus={(event) => {
                         event.preventDefault();
                         returnFocus?.focus();
@@ -182,27 +185,53 @@ export function Dialog({
 
 export function SheetDialog({
     title,
+    description,
     onClose,
+    onOpenAutoFocus,
     busy = false,
     contentOwnsScroll = false,
     pinnedTitle = false,
+    desktopWidth = "wide",
+    mobileHeight = "full",
+    headerAction,
     children,
 }: {
     readonly title: string;
+    readonly description?: string;
     readonly onClose: () => void;
+    readonly onOpenAutoFocus?: (event: Event) => void;
     readonly busy?: boolean;
     readonly contentOwnsScroll?: boolean;
     readonly pinnedTitle?: boolean;
+    readonly desktopWidth?: "standard" | "wide";
+    readonly mobileHeight?: "full" | "content";
+    readonly headerAction?: ReactNode;
     readonly children: (title: ReactNode) => ReactNode;
 }) {
     const header = (
-        <header className="mb-0 pr-10 sm:pr-0">
+        <header
+            className={cn(
+                "mb-0",
+                headerAction === undefined ? "pr-10" : "pr-24",
+                description === undefined && "sm:pr-0",
+            )}
+        >
             <Primitive.Title asChild>
                 {/* The sm breakpoint is no longer a sheet, so it keeps the centered dialog's tighter tracking. */}
-                <MobileSheetTitle className={cn(mobileSheetTitleRowClassName, "sm:tracking-[-0.015em]")}>
+                <MobileSheetTitle
+                    className={cn(
+                        description === undefined ? mobileSheetTitleRowClassName : "flex items-center pt-5 sm:pt-4",
+                        "sm:tracking-[-0.015em]",
+                    )}
+                >
                     {title}
                 </MobileSheetTitle>
             </Primitive.Title>
+            {description !== undefined && (
+                <Primitive.Description className="pb-5 text-sm leading-5 text-muted-foreground">
+                    {description}
+                </Primitive.Description>
+            )}
         </header>
     );
     return (
@@ -211,11 +240,13 @@ export function SheetDialog({
             className={cn(
                 "fixed inset-x-0 bottom-0 z-50 flex h-[85dvh] max-h-[calc(100dvh-0.75rem)] w-full flex-col overflow-hidden rounded-t-overlay font-inter text-13 text-foreground outline-none max-sm:[font-size:15px] max-sm:leading-[24px] sm:inset-x-auto sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:block sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-overlay",
                 "motion-safe:max-sm:animate-sheet-enter motion-safe:sm:animate-cloud-enter",
-                sheetDialogDesktopMaxWidthClassName,
+                mobileHeight === "content" && "max-sm:h-auto",
+                desktopWidth === "standard" ? "sm:max-w-[520px]" : sheetDialogDesktopMaxWidthClassName,
                 overlaySurfacePanelClassName,
                 mobileSheetSurfaceClassName,
             )}
             onClose={onClose}
+            onOpenAutoFocus={onOpenAutoFocus}
         >
             {contentOwnsScroll ? (
                 <div className="flex min-h-0 flex-1 flex-col sm:block sm:p-2">{children(header)}</div>
@@ -240,6 +271,9 @@ export function SheetDialog({
                 >
                     {children(header)}
                 </ScrollArea>
+            )}
+            {headerAction !== undefined && (
+                <div className="absolute top-3 right-[60px] z-20 sm:top-5 sm:right-16">{headerAction}</div>
             )}
             <CloseButton
                 busy={busy}

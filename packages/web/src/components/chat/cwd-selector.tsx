@@ -1,11 +1,12 @@
-import { Check, ChevronRight, Folder, FolderOpen, LoaderCircle, MapPinPlus, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Folder, FolderOpen, LoaderCircle, X } from "lucide-react";
 import { Tooltip } from "radix-ui";
 import { useState } from "react";
 import { dataTestId } from "@/data-testid";
 import { cn } from "@/lib/utils";
 import type { DraftControlsStore } from "@/view-models/chat/draft-controls-store";
 import { Button } from "../ui/cloud-button.tsx";
-import { Dialog } from "../ui/dialog.tsx";
+import { dialogSectionTitleClassName, SheetDialog } from "../ui/dialog.tsx";
+import { inputClassName } from "../ui/input.tsx";
 import { MortyTooltipContent } from "../ui/morty-tooltip-content.tsx";
 import {
     overlayMenuSeparatorClassName,
@@ -19,6 +20,13 @@ import { StartClippedLabel } from "../utils/start-clipped-label.tsx";
 
 const workingDirectoryLabelClassName =
     "inline-flex min-h-9 min-w-0 max-w-[200px] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-transparent px-2 py-1.5 text-[13px] font-normal text-morty-text-3 outline-none";
+
+function parentFolderName(directoryLabel: string, parentDirectory: string): string {
+    if (/^~\/[^/]+$/.test(directoryLabel)) {
+        return "~";
+    }
+    return parentDirectory.split(/[\\/]/).filter(Boolean).at(-1) ?? parentDirectory;
+}
 
 export function WorkingDirectorySkeleton({ className }: { readonly className?: string }) {
     return (
@@ -90,6 +98,10 @@ export function CwdSelector({
     const browser = viewModel.cwdBrowser;
     const workingDirectory = settings.cwd.directoryLabel;
     const directory = browser.kind === "closed" ? null : browser.directory;
+    const parentName =
+        directory !== null && directory.parentDirectory.length > 0
+            ? parentFolderName(directory.directoryLabel, directory.parentDirectory)
+            : null;
     const directoryNavigationDisabled = browser.kind === "previewing";
     const directoryPending = browser.kind === "loading" || browser.kind === "previewing";
     return (
@@ -109,12 +121,12 @@ export function CwdSelector({
                             <Popover.Trigger asChild>
                                 <Button
                                     aria-label={`Working directory: ${workingDirectory}`}
-                                    className="min-w-0 max-w-[200px] bg-morty-fill-opacity-2 hover:bg-morty-fill-opacity-3! data-[state=open]:bg-morty-fill-opacity-3 data-[state=open]:text-foreground"
+                                    className="min-w-0 max-w-[200px] bg-morty-fill-opacity-2 px-3.5 hover:bg-morty-fill-opacity-3! data-[state=open]:bg-morty-fill-opacity-3 data-[state=open]:text-foreground"
                                     data-testid={dataTestId.workingDirectory}
                                     disabled={disabled}
                                     variant="ghost"
                                 >
-                                    <FolderOpen aria-hidden="true" className="size-3.5 shrink-0" />
+                                    <Folder aria-hidden="true" className="size-3.5 shrink-0" />
                                     <StartClippedLabel value={workingDirectory} />
                                 </Button>
                             </Popover.Trigger>
@@ -177,14 +189,14 @@ export function CwdSelector({
                                             {selected ? (
                                                 <Check
                                                     aria-hidden="true"
-                                                    className="pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 text-foreground group-hover/recent:-translate-x-7 group-focus-within/recent:-translate-x-7"
+                                                    className="pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 text-copy-secondary group-hover/recent:-translate-x-7 group-focus-within/recent:-translate-x-7"
                                                 />
                                             ) : null}
                                             <Tooltip.Root>
                                                 <Tooltip.Trigger asChild>
                                                     <button
                                                         aria-label={`Forget recent working directory ${recent.directoryLabel}`}
-                                                        className="absolute top-1/2 right-1 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none transition-opacity hover:bg-accent hover:text-copy-primary focus-visible:opacity-100 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 group-hover/recent:opacity-100 group-focus-within/recent:opacity-100 motion-reduce:transition-none"
+                                                        className="absolute top-1/2 right-1 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-copy-secondary opacity-0 outline-none transition-[color,opacity] duration-150 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 group-hover/recent:opacity-100 group-focus-within/recent:opacity-100 motion-reduce:transition-none"
                                                         data-testid={dataTestId.forgetRecentWorkingDirectory}
                                                         onClick={(event) => {
                                                             event.stopPropagation();
@@ -217,7 +229,7 @@ export function CwdSelector({
                                 role="menuitem"
                                 type="button"
                             >
-                                <MapPinPlus aria-hidden="true" className="size-4" />
+                                <FolderOpen aria-hidden="true" className="size-4" />
                                 Change to a new location
                             </button>
                         </Tooltip.Provider>
@@ -225,108 +237,146 @@ export function CwdSelector({
                 </Popover.Portal>
             </Popover.Root>
             {browser.kind !== "closed" && (
-                <Dialog
+                <SheetDialog
+                    contentOwnsScroll
                     description="Browse folders on your local computer or enter an absolute folder path."
+                    desktopWidth="standard"
                     onClose={viewModel.closeCwd}
+                    onOpenAutoFocus={(event) => {
+                        event.preventDefault();
+                        if (event.currentTarget instanceof HTMLElement) {
+                            event.currentTarget.focus();
+                        }
+                    }}
                     title="Choose working directory"
                 >
-                    <div className="grid gap-4">
-                        <label className="grid gap-1.5">
-                            <span className="text-xs font-medium text-copy-tertiary">Working directory path</span>
-                            <input
-                                aria-label="Working directory path"
-                                className="h-10 rounded-lg border border-border bg-white px-3 text-[13px] outline-none keyboard-focus:focus:border-ring keyboard-focus:focus:ring-[3px] keyboard-focus:focus:ring-ring/15"
-                                data-testid={dataTestId.workingDirectoryPath}
-                                onChange={(event) => viewModel.setCwdPath(event.currentTarget.value, signal)}
-                                value={browser.path}
-                            />
-                        </label>
-                        <section
-                            aria-busy={directoryPending}
-                            aria-disabled={directoryNavigationDisabled}
-                            aria-label={directory === null ? undefined : `Folders in ${directory.directoryLabel}`}
-                            className="min-h-56 overflow-hidden rounded-lg border border-border bg-surface-subtle/50"
-                            data-testid={dataTestId.workingDirectoryPreview}
-                        >
-                            {browser.kind === "loading" ? (
-                                <p
-                                    className="flex min-h-56 items-center justify-center gap-2 text-muted-foreground"
-                                    role="status"
+                    {(title) => (
+                        <div className="flex min-h-0 flex-col px-5 pb-4 max-sm:flex-1 max-sm:pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:h-[min(72dvh,40rem)] sm:px-4">
+                            {title}
+                            <div className="flex min-h-0 flex-1 flex-col gap-3">
+                                <label className="grid shrink-0 gap-1.5">
+                                    <span className={dialogSectionTitleClassName}>Working directory path</span>
+                                    <input
+                                        aria-label="Working directory path"
+                                        className={cn(inputClassName, "h-10 max-sm:[font-size:15px]")}
+                                        data-testid={dataTestId.workingDirectoryPath}
+                                        onChange={(event) => viewModel.setCwdPath(event.currentTarget.value, signal)}
+                                        value={browser.path}
+                                    />
+                                </label>
+                                <section
+                                    aria-busy={directoryPending}
+                                    aria-disabled={directoryNavigationDisabled}
+                                    aria-label={
+                                        directory === null ? undefined : `Folders in ${directory.directoryLabel}`
+                                    }
+                                    className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-white bg-card shadow-module"
+                                    data-testid={dataTestId.workingDirectoryPreview}
                                 >
-                                    <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-                                    Opening folder…
-                                </p>
-                            ) : (
-                                <>
-                                    {browser.kind === "failed" && (
+                                    {browser.kind === "loading" ? (
                                         <p
-                                            className="border-b border-border bg-destructive/5 px-3 py-2 text-xs text-destructive"
-                                            role="alert"
+                                            className="flex min-h-0 flex-1 items-center justify-center gap-2 text-muted-foreground"
+                                            role="status"
                                         >
-                                            {browser.message}
+                                            <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+                                            Opening folder…
                                         </p>
-                                    )}
-                                    {directory !== null && (
-                                        <ScrollEdgeFade
-                                            scrollElement="ul"
-                                            aria-label={`Folders in ${directory.directoryLabel}`}
-                                            revealSurface
-                                            edgeStroke={{ className: "border-surface-subtle/50", placement: "inside" }}
-                                            frameClassName={directoryNavigationDisabled ? "opacity-50" : ""}
-                                            className="max-h-64 p-2"
-                                        >
-                                            {directory.parentDirectory.length > 0 && (
-                                                <li>
-                                                    <button
-                                                        className="flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left hover:bg-accent disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                                                        disabled={directoryNavigationDisabled}
-                                                        onClick={() =>
-                                                            void viewModel.browseCwd(directory.parentDirectory, signal)
-                                                        }
-                                                        type="button"
-                                                    >
-                                                        <Folder aria-hidden="true" className="size-4" />
-                                                        <span className="flex-1">..</span>
-                                                        <ChevronRight aria-hidden="true" className="size-4" />
-                                                    </button>
-                                                </li>
+                                    ) : (
+                                        <>
+                                            {browser.kind === "failed" && (
+                                                <p
+                                                    className="border-b border-border bg-destructive/5 px-3 py-2 text-xs text-destructive"
+                                                    role="alert"
+                                                >
+                                                    {browser.message}
+                                                </p>
                                             )}
-                                            {directory.entries.map((entry) => (
-                                                <li key={entry.directory}>
-                                                    <button
-                                                        aria-label={entry.name}
-                                                        className="flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left hover:bg-accent disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                                                        disabled={directoryNavigationDisabled}
-                                                        onClick={() =>
-                                                            void viewModel.browseCwd(entry.directory, signal)
-                                                        }
-                                                        type="button"
+                                            {directory !== null && (
+                                                <>
+                                                    <div className="flex shrink-0 items-center border-b border-border/40 px-1.5 py-1.5">
+                                                        {parentName !== null && (
+                                                            <Button
+                                                                aria-label={`Go to parent folder ${parentName}`}
+                                                                className="h-8 min-h-8 min-w-0 max-w-full rounded-full py-0 text-copy-secondary"
+                                                                disabled={directoryNavigationDisabled}
+                                                                onClick={() =>
+                                                                    void viewModel.browseCwd(
+                                                                        directory.parentDirectory,
+                                                                        signal,
+                                                                    )
+                                                                }
+                                                                variant="ghost"
+                                                            >
+                                                                <ArrowLeft aria-hidden="true" />
+                                                                <span className="truncate">{parentName}</span>
+                                                            </Button>
+                                                        )}
+                                                        {parentName === null && (
+                                                            <span className="text-[13px] font-medium text-morty-text-3">
+                                                                Folders
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <ScrollEdgeFade
+                                                        scrollElement="ul"
+                                                        aria-label={`Folders in ${directory.directoryLabel}`}
+                                                        revealSurface
+                                                        frameClassName={cn(
+                                                            "min-h-0 flex-1",
+                                                            directoryNavigationDisabled && "opacity-50",
+                                                        )}
+                                                        className="h-full p-1.5"
                                                     >
-                                                        <Folder aria-hidden="true" className="size-4" />
-                                                        <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-                                                        <ChevronRight aria-hidden="true" className="size-4" />
-                                                    </button>
-                                                </li>
-                                            ))}
-                                        </ScrollEdgeFade>
+                                                        {directory.entries.map((entry) => (
+                                                            <li key={entry.directory}>
+                                                                <button
+                                                                    aria-label={entry.name}
+                                                                    className="flex h-10 w-full items-center gap-2 rounded-[14px] px-3 text-left hover:bg-accent disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                                                    disabled={directoryNavigationDisabled}
+                                                                    onClick={() =>
+                                                                        void viewModel.browseCwd(
+                                                                            entry.directory,
+                                                                            signal,
+                                                                        )
+                                                                    }
+                                                                    type="button"
+                                                                >
+                                                                    <Folder
+                                                                        aria-hidden="true"
+                                                                        className="size-4 text-morty-text-3"
+                                                                    />
+                                                                    <span className="min-w-0 flex-1 truncate text-14">
+                                                                        {entry.name}
+                                                                    </span>
+                                                                    <ChevronRight
+                                                                        aria-hidden="true"
+                                                                        className="size-4 text-morty-text-3"
+                                                                    />
+                                                                </button>
+                                                            </li>
+                                                        ))}
+                                                    </ScrollEdgeFade>
+                                                </>
+                                            )}
+                                        </>
                                     )}
-                                </>
-                            )}
-                        </section>
-                    </div>
-                    <footer className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
-                        <Button onClick={viewModel.closeCwd} variant="outline">
-                            Cancel
-                        </Button>
-                        <Button
-                            data-testid={dataTestId.saveWorkingDirectory}
-                            disabled={directoryPending}
-                            onClick={() => void viewModel.saveCwd(signal)}
-                        >
-                            Save
-                        </Button>
-                    </footer>
-                </Dialog>
+                                </section>
+                                <footer className="mt-2 flex shrink-0 justify-end gap-2 pt-1">
+                                    <Button onClick={viewModel.closeCwd} variant="ghost">
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        data-testid={dataTestId.saveWorkingDirectory}
+                                        disabled={directoryPending}
+                                        onClick={() => void viewModel.saveCwd(signal)}
+                                    >
+                                        Save
+                                    </Button>
+                                </footer>
+                            </div>
+                        </div>
+                    )}
+                </SheetDialog>
             )}
         </>
     );

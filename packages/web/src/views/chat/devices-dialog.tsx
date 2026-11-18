@@ -10,6 +10,7 @@ import {
     dialogBodyStackClassName,
     dialogPinnedFooterActionsClassName,
     dialogSectionTitleClassName,
+    SheetDialog,
 } from "../../components/ui/dialog.tsx";
 import { ExternalLink } from "../../components/ui/external-link.tsx";
 import { LinkButton } from "../../components/ui/link-button.tsx";
@@ -36,6 +37,23 @@ function targets(disconnection: OpenState["disconnection"], target: DisconnectTa
         disconnection.kind !== "idle" &&
         disconnection.target.kind === target.kind &&
         (target.kind === "others" || (disconnection.target.kind === "device" && disconnection.target.id === target.id))
+    );
+}
+
+function DisconnectIcon({ className }: { readonly className?: string }) {
+    return (
+        <svg
+            aria-hidden="true"
+            className={className}
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+        >
+            <path d="m7 11l-2 2a4.243 4.243 0 0 0 6 6l2-2m4-4l2-2a4.243 4.243 0 0 0-6-6l-2 2m5 12v2m3-5h2M8 5V3M5 8H3" />
+        </svg>
     );
 }
 
@@ -168,17 +186,7 @@ export function DevicesDialog({
                                     size="icon"
                                     variant="ghost"
                                 >
-                                    <svg
-                                        aria-hidden="true"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth="2"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path d="m7 11l-2 2a4.243 4.243 0 0 0 6 6l2-2m4-4l2-2a4.243 4.243 0 0 0-6-6l-2 2m5 12v2m3-5h2M8 5V3M5 8H3" />
-                                    </svg>
+                                    <DisconnectIcon />
                                 </Button>
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
@@ -195,122 +203,133 @@ export function DevicesDialog({
         );
     };
     return (
-        <Dialog
+        <SheetDialog
             description="Who can use your computer from Morty, and for how long."
+            desktopWidth="standard"
             onClose={close}
+            pinnedTitle
             title="Devices with access"
         >
-            <div className={dialogBodyStackClassName}>
-                {state.disconnected !== null && (
-                    <p
-                        className="rounded-[16px] border border-primary/20 bg-primary/5 px-3.5 py-3 text-13 leading-5 text-foreground"
-                        role="status"
-                    >
-                        {state.disconnected.kind === "device"
-                            ? `${state.disconnected.name} can no longer use your computer.`
-                            : "Other devices can no longer use your computer, and links you shared that no one opened stop working."}
-                    </p>
-                )}
+            {() => (
+                <div className="px-5 pb-5 sm:px-4">
+                    <div className={dialogBodyStackClassName}>
+                        {state.disconnected !== null && (
+                            <p
+                                className="rounded-[16px] border border-primary/20 bg-primary/5 px-3.5 py-3 text-13 leading-5 text-foreground"
+                                role="status"
+                            >
+                                {state.disconnected.kind === "device"
+                                    ? `${state.disconnected.name} can no longer use your computer.`
+                                    : "Other devices can no longer use your computer, and links you shared that no one opened stop working."}
+                            </p>
+                        )}
 
-                <ul aria-label="Devices with access" className="space-y-5">
-                    <li className="space-y-1.5">
-                        <h3 className={dialogSectionTitleClassName}>Always here</h3>
-                        <div className={deviceGroupCardClassName}>
-                            <div className={deviceGroupRowClassName}>
-                                <ThisBrowser accessExpiry={accessExpiry} />
-                            </div>
-                            <div className={cn(deviceGroupDividerClassName, deviceGroupRowClassName)}>
-                                <DeviceSummary
-                                    device={{
-                                        name: computerName || "Your computer",
-                                        details: [{ kind: "text", text: "Always keeps access · can disconnect all" }],
-                                    }}
-                                    icon={Laptop}
-                                />
-                            </div>
-                        </div>
-                    </li>
-                    <li className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-3">
-                            <h3 className={dialogSectionTitleClassName}>Shared from links</h3>
-                            <LinkButton
-                                className={cn("shrink-0", mutedTextLinkClassName)}
-                                disabled={state.disconnection.kind === "disconnecting"}
-                                onClick={() => request(others)}
-                            >
-                                Disconnect all
-                            </LinkButton>
-                        </div>
-                        {confirmingDevice !== null ? (
-                            <Dialog
-                                busy={state.disconnection.kind === "disconnecting"}
-                                description="It loses access right away. Your open windows reconnect in a few seconds."
-                                footer={disconnectConfirmFooter(
-                                    state.disconnection,
-                                    cancel,
-                                    () => void confirm(signal()),
-                                )}
-                                onClose={cancel}
-                                title={`Disconnect ${confirmingDevice.name}?`}
-                            >
-                                {state.disconnection.kind === "failed" ? (
-                                    <p className="text-destructive" role="alert">
-                                        We couldn't confirm it was disconnected. Try again.
-                                    </p>
+                        <ul aria-label="Devices with access" className="space-y-5">
+                            <li className="space-y-1.5">
+                                <h3 className={dialogSectionTitleClassName}>Always here</h3>
+                                <div className={deviceGroupCardClassName}>
+                                    <div className={deviceGroupRowClassName}>
+                                        <ThisBrowser accessExpiry={accessExpiry} />
+                                    </div>
+                                    <div className={cn(deviceGroupDividerClassName, deviceGroupRowClassName)}>
+                                        <DeviceSummary
+                                            device={{
+                                                name: computerName || "Your computer",
+                                                details: [
+                                                    { kind: "text", text: "Always keeps access · can disconnect all" },
+                                                ],
+                                            }}
+                                            icon={Laptop}
+                                        />
+                                    </div>
+                                </div>
+                            </li>
+                            <li className="space-y-1.5">
+                                <div className="flex items-center justify-between gap-3">
+                                    <h3 className={dialogSectionTitleClassName}>Shared from links</h3>
+                                    <LinkButton
+                                        className={cn("shrink-0 [font-size:13px]", mutedTextLinkClassName)}
+                                        disabled={state.disconnection.kind === "disconnecting"}
+                                        onClick={() => request(others)}
+                                    >
+                                        <DisconnectIcon className="size-3.5" />
+                                        Disconnect all
+                                    </LinkButton>
+                                </div>
+                                {confirmingDevice !== null ? (
+                                    <Dialog
+                                        busy={state.disconnection.kind === "disconnecting"}
+                                        description="It loses access right away. Your open windows reconnect in a few seconds."
+                                        footer={disconnectConfirmFooter(
+                                            state.disconnection,
+                                            cancel,
+                                            () => void confirm(signal()),
+                                        )}
+                                        onClose={cancel}
+                                        title={`Disconnect ${confirmingDevice.name}?`}
+                                    >
+                                        {state.disconnection.kind === "failed" ? (
+                                            <p className="text-destructive" role="alert">
+                                                We couldn't confirm it was disconnected. Try again.
+                                            </p>
+                                        ) : null}
+                                    </Dialog>
                                 ) : null}
-                            </Dialog>
-                        ) : null}
-                        {targets(state.disconnection, others) ? (
-                            <Dialog
-                                busy={state.disconnection.kind === "disconnecting"}
-                                description="They lose access right away, and links you shared that no one opened stop working. This browser and your computer keep access."
-                                footer={disconnectConfirmFooter(
-                                    state.disconnection,
-                                    cancel,
-                                    () => void confirm(signal()),
-                                )}
-                                onClose={cancel}
-                                title="Disconnect every other device?"
-                            >
-                                {state.disconnection.kind === "failed" ? (
-                                    <p className="text-destructive" role="alert">
-                                        We couldn't confirm it was disconnected. Try again.
-                                    </p>
+                                {targets(state.disconnection, others) ? (
+                                    <Dialog
+                                        busy={state.disconnection.kind === "disconnecting"}
+                                        description="They lose access right away, and links you shared that no one opened stop working. This browser and your computer keep access."
+                                        footer={disconnectConfirmFooter(
+                                            state.disconnection,
+                                            cancel,
+                                            () => void confirm(signal()),
+                                        )}
+                                        onClose={cancel}
+                                        title="Disconnect every other device?"
+                                    >
+                                        {state.disconnection.kind === "failed" ? (
+                                            <p className="text-destructive" role="alert">
+                                                We couldn't confirm it was disconnected. Try again.
+                                            </p>
+                                        ) : null}
+                                    </Dialog>
                                 ) : null}
-                            </Dialog>
-                        ) : null}
-                        <div className={deviceGroupCardClassName}>
-                            <OtherDevicesBody list={list} refresh={refresh} row={row} />
-                        </div>
-                    </li>
-                </ul>
-
-                <details className="disclosure-details group text-13 leading-5 text-morty-text-3">
-                    <summary className="flex h-6 cursor-pointer list-none items-center gap-1.5 rounded-lg outline-none hover:text-morty-text-2 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-                        How access works
-                        <ChevronDown
-                            aria-hidden="true"
-                            className="size-3.5 transition-[rotate] duration-300 ease-out group-open:rotate-180 motion-reduce:transition-none"
-                        />
-                    </summary>
-                    <div className="mt-2 rounded-[16px] border border-border/60 bg-[#f2f3f5] px-3.5 py-3">
-                        <ul className="list-disc space-y-1 pl-4 text-morty-text-2 marker:text-morty-text-4">
-                            <li>Links work once, within 10 minutes.</li>
-                            <li>You choose how long a device keeps access, from 1 hour to 30 days.</li>
-                            <li>Disconnect any device here. Your computer always keeps access.</li>
-                            <li>Morty records the approximate city a device joined from, never its IP address.</li>
-                            <li>Your conversation history stays on your computer.</li>
-                            <li>
-                                Messages are end-to-end encrypted: Morty's relay forwards ciphertext and still sees
-                                routing details.{" "}
-                                <ExternalLink className={textLinkClassName} href={dataPolicy}>
-                                    How Morty handles data
-                                </ExternalLink>
+                                <div className={deviceGroupCardClassName}>
+                                    <OtherDevicesBody list={list} refresh={refresh} row={row} />
+                                </div>
                             </li>
                         </ul>
+
+                        <details className="disclosure-details group text-13 leading-5 text-morty-text-3">
+                            <summary className="flex h-6 cursor-pointer list-none items-center gap-1.5 rounded-lg outline-none hover:text-morty-text-2 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                                How access works
+                                <ChevronDown
+                                    aria-hidden="true"
+                                    className="size-3.5 transition-[rotate] duration-300 ease-out group-open:rotate-180 motion-reduce:transition-none"
+                                />
+                            </summary>
+                            <div className="mt-2 rounded-[16px] border border-border/60 bg-[#f2f3f5] px-3.5 py-3">
+                                <ul className="list-disc space-y-1 pl-4 text-morty-text-2 marker:text-morty-text-4">
+                                    <li>Links work once, within 10 minutes.</li>
+                                    <li>You choose how long a device keeps access, from 1 hour to 30 days.</li>
+                                    <li>Disconnect any device here. Your computer always keeps access.</li>
+                                    <li>
+                                        Morty records the approximate city a device joined from, never its IP address.
+                                    </li>
+                                    <li>Your conversation history stays on your computer.</li>
+                                    <li>
+                                        Messages are end-to-end encrypted: Morty's relay forwards ciphertext and still
+                                        sees routing details.{" "}
+                                        <ExternalLink className={textLinkClassName} href={dataPolicy}>
+                                            How Morty handles data
+                                        </ExternalLink>
+                                    </li>
+                                </ul>
+                            </div>
+                        </details>
                     </div>
-                </details>
-            </div>
-        </Dialog>
+                </div>
+            )}
+        </SheetDialog>
     );
 }
