@@ -13,7 +13,7 @@
         "./websocket": "./src/websocket.ts"
     },
     "dependencies": {
-        "@cloudflare/workers-types": "^5.20261114.1",
+        "@cloudflare/workers-types": "^5.20261115.1",
         "@portalcrew/morty-client": "workspace:*",
         "@types/ws": "^8.18.2",
         "esbuild": "catalog:",
