@@ -8,4 +8,5 @@ export * from "./encryption.ts";
 export * from "./errors.ts";
 export * from "./resources.ts";
 export * from "./service-client.ts";
+export * from "./setup-handoff.ts";
 export * from "./transport/ws-transport.ts";

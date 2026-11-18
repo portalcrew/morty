@@ -60,6 +60,7 @@ export function ContinuePageContent({
             </Button>
         );
     switch (state.kind) {
+        case "handoff-unsealing":
         case "session-opening":
         case "session-resuming":
             return <GlobalLoadingPage label="Opening session" />;
@@ -83,6 +84,7 @@ export function ContinuePageContent({
                 </ContinueError>
             );
         }
+        case "handoff-failed":
         case "redeem-failed": {
             const copy = describePageFailure(state.message, "Couldn't continue");
             return (

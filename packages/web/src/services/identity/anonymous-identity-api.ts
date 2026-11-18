@@ -225,6 +225,29 @@ export class AnonymousIdentityApi {
             ),
         );
 
+    /** A setup link's sealed contents, or null once the link expired or never existed. */
+    readonly setupHandoff = async (
+        computerId: string,
+        lookupId: string,
+        signal: AbortSignal,
+    ): Promise<string | null> => {
+        try {
+            return v.parse(
+                v.object({ sealed: v.string() }),
+                await this.#request(
+                    identityCalls.setupHandoff({ origin: this.#origin, computerId, lookupId }),
+                    { headers: {} },
+                    signal,
+                ),
+            ).sealed;
+        } catch (cause) {
+            if (cause instanceof IdentityApiError && cause.code === "SETUP_HANDOFF_UNAVAILABLE") {
+                return null;
+            }
+            throw cause;
+        }
+    };
+
     readonly redeemTransfer = async (code: string, signal: AbortSignal): Promise<AnonymousIdentity> =>
         await withStoredAccessLock(signal, (access) => this.#redeemTransfer(code, signal, access));
 

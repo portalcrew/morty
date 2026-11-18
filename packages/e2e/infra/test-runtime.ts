@@ -194,6 +194,7 @@ export async function createTestRuntime(
                     events: result.events,
                     url: text(result.ready["url"], "Chat URL"),
                     qrPath: typeof result.ready["qrPath"] === "string" ? result.ready["qrPath"] : null,
+                    terminal: result.terminal,
                     workspace: text(result.ready["workspace"], "Runtime working directory"),
                     identity: result.identity,
                 };

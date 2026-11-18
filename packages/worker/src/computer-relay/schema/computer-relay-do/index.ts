@@ -11,3 +11,4 @@ export {
 } from "./computer-pairing.ts";
 export { continueLink, linkSharer } from "./continue-link.ts";
 export { ownerCredential } from "./owner-credential.ts";
+export { setupHandoff } from "./setup-handoff.ts";

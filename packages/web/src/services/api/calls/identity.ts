@@ -15,6 +15,19 @@ export const identityCalls = Object.freeze({
                 transport: { kind: "websocket", cancellation: "remote" },
             },
         }),
+    setupHandoff: ({ origin, computerId, lookupId }: ComputerCallTarget & { readonly lookupId: string }): ApiRequest =>
+        encodeComputerCall({
+            origin,
+            computerId,
+            path: `identity/setup-handoffs/${encodeURIComponent(lookupId)}`,
+            definition: {
+                method: "GET",
+                operation: "setup-handoff",
+                timeoutMilliseconds: 30_000,
+                watch: "none",
+                transport: { kind: "http" },
+            },
+        }),
     createTransfer: ({
         origin,
         computerId,

@@ -1,4 +1,14 @@
-import { computerEncryptionAccessCodec, E2EError, importE2EPublicKey } from "@portalcrew/morty-client";
+import {
+    type ComputerEncryptionAccess,
+    computerEncryptionAccessCodec,
+    E2EError,
+    importE2EPublicKey,
+    openSetupHandoff,
+    readSetupHandoffLink,
+    SetupHandoffError,
+    type SetupHandoffLink,
+    setupHandoffLookupId,
+} from "@portalcrew/morty-client";
 import { isIdentifier, MAX_WORKSPACE_PATH_LENGTH } from "@portalcrew/morty-client/protocol";
 import { base64urlnopad } from "@scure/base";
 import { createStore } from "zustand/vanilla";
@@ -25,12 +35,19 @@ import { formatError } from "@/view-models/format-error";
 
 export type ContinueStoreApi = ReturnType<typeof createContinueStore>;
 
+/** Where a link's Computer encryption access comes from: a sealed setup link's contents, or the link's fragment. */
+type HandoffEncryption =
+    | { readonly kind: "fragment" }
+    | { readonly kind: "sealed"; readonly access: ComputerEncryptionAccess };
 type SessionHandoff = {
     readonly harness: string;
     readonly sessionId: string;
     readonly workspace: string;
+    readonly encryption: HandoffEncryption;
 };
 export type ContinueState =
+    | { readonly kind: "handoff-unsealing"; readonly link: SetupHandoffLink }
+    | { readonly kind: "handoff-failed"; readonly link: SetupHandoffLink; readonly message: string }
     | {
           readonly kind: "session-opening";
           readonly code: string;
@@ -73,6 +90,10 @@ export interface ContinueStore {
 }
 
 function initialState(): ContinueState {
+    const sealed = readSetupHandoffLink(window.location.hash);
+    if (sealed !== null) {
+        return { kind: "handoff-unsealing", link: sealed };
+    }
     const fragment = new URLSearchParams(window.location.hash.slice(1));
     const code = fragment.get("code");
     const query = new URLSearchParams(window.location.search);
@@ -97,7 +118,11 @@ function initialState(): ContinueState {
     ) {
         return { kind: "invalid" };
     }
-    return { code, handoff: { harness, sessionId, workspace }, kind: "session-opening" };
+    return {
+        code,
+        handoff: { harness, sessionId, workspace, encryption: { kind: "fragment" } },
+        kind: "session-opening",
+    };
 }
 
 function identityDestination(path: "/" | "/chat", identity: AnonymousIdentity): URL {
@@ -116,17 +141,27 @@ function identityDestination(path: "/" | "/chat", identity: AnonymousIdentity): 
 export const createContinueStore = (transport: ApiTransport) => {
     // Snapshot the fragment locally. It is never included in the redemption request or any relay call.
     const encryptionFragment = new URLSearchParams(window.location.hash.slice(1));
-    const retainEncryption = async (identity: AnonymousIdentity, signal: AbortSignal): Promise<void> => {
+    const fragmentEncryption = (): ComputerEncryptionAccess | null => {
         const encoded = encryptionFragment.get("e2e");
         if (encoded === null) {
-            return;
+            return null;
         }
         if (encoded.length > 1024 || !/^[A-Za-z0-9_-]+$/u.test(encoded)) {
             throw new E2EError("e2e_invalid_access");
         }
-        const access = computerEncryptionAccessCodec.decode(
+        return computerEncryptionAccessCodec.decode(
             new TextDecoder("utf-8", { fatal: true }).decode(base64urlnopad.decode(encoded)),
         );
+    };
+    const retainEncryption = async (
+        identity: AnonymousIdentity,
+        encryption: HandoffEncryption,
+        signal: AbortSignal,
+    ): Promise<void> => {
+        const access = encryption.kind === "sealed" ? encryption.access : fragmentEncryption();
+        if (access === null) {
+            return;
+        }
         if (access.computerId !== identity.computerId) {
             throw new E2EError("e2e_invalid_access");
         }
@@ -222,6 +257,90 @@ export const createContinueStore = (transport: ApiTransport) => {
                 });
             }
         };
+        /**
+         * Access this browser already holds for the Computer: the explicit scope, or a remembered scope for that exact
+         * Computer when the link has no scope.
+         */
+        const retainedAccess = async (
+            api: AnonymousIdentityApi,
+            computerId: string | null,
+            signal: AbortSignal,
+        ): Promise<AnonymousIdentity | null> => {
+            const explicit = readIdentityScope();
+            const scopes = hasIdentityScope()
+                ? explicit === null
+                    ? []
+                    : [explicit]
+                : rememberedComputers().map((computer) => computer.scope);
+            const visited = new Set<string>();
+            for (const scope of scopes.filter((candidate) => candidate.computerId === computerId)) {
+                if (visited.has(computerKey(scope))) {
+                    continue;
+                }
+                visited.add(computerKey(scope));
+                const retained = await api.loadScope(scope, signal);
+                signal.throwIfAborted();
+                if (retained !== null) {
+                    return retained;
+                }
+            }
+            return null;
+        };
+        /**
+         * Reads a sealed setup link's contents from the Relay and opens them with the key only the link holds. Once
+         * they expired, the Computer opens only through access this browser still holds for it.
+         */
+        const unseal = async (link: SetupHandoffLink, signal: AbortSignal): Promise<void> => {
+            const api = new AnonymousIdentityApi({ fetchRequest, origin: window.location.origin });
+            try {
+                const sealed = await api.setupHandoff(link.computerId, await setupHandoffLookupId(link), signal);
+                signal.throwIfAborted();
+                if (sealed === null) {
+                    const retained = await retainedAccess(api, link.computerId, signal);
+                    if (retained !== null) {
+                        window.location.replace(identityDestination("/", retained));
+                        return;
+                    }
+                    set({
+                        state: { kind: "link-unavailable", recovery: "setup", message: "This setup link has expired." },
+                    });
+                    return;
+                }
+                const handoff = await openSetupHandoff(link, sealed);
+                if (transferCodeComputer(handoff.code) !== link.computerId) {
+                    throw new SetupHandoffError();
+                }
+                set({
+                    state: {
+                        kind: "session-opening",
+                        code: handoff.code,
+                        handoff: {
+                            harness: handoff.harness,
+                            sessionId: handoff.sessionId,
+                            workspace: handoff.workspace,
+                            encryption: { kind: "sealed", access: handoff.encryption },
+                        },
+                    },
+                });
+            } catch (cause) {
+                if (signal.aborted) {
+                    return;
+                }
+                recordBrowserError("setup-handoff", cause);
+                set({
+                    state:
+                        cause instanceof SetupHandoffError
+                            ? { kind: "link-unavailable", recovery: "setup", message: cause.message }
+                            : {
+                                  kind: "handoff-failed",
+                                  link,
+                                  message: formatError(cause, "Check your connection and try again."),
+                              },
+                });
+                return;
+            }
+            await get().redeem(signal);
+        };
         return {
             diagnostics: null,
             enterMorty: () => {
@@ -240,7 +359,12 @@ export const createContinueStore = (transport: ApiTransport) => {
             },
             retry: () => {
                 const state = get().state;
-                if (state.kind !== "session-failed" && state.kind !== "redeem-failed" && state.kind !== "failed") {
+                if (
+                    state.kind !== "session-failed" &&
+                    state.kind !== "redeem-failed" &&
+                    state.kind !== "failed" &&
+                    state.kind !== "handoff-failed"
+                ) {
                     return;
                 }
                 attempt?.abort(new Error("The transfer retry replaced this attempt."));
@@ -253,22 +377,30 @@ export const createContinueStore = (transport: ApiTransport) => {
                 }
                 set({
                     state:
-                        state.kind === "failed"
-                            ? { code: state.code, kind: "identity-redeeming" }
-                            : {
-                                  code: state.code,
-                                  handoff: state.handoff,
-                                  kind: "session-opening",
-                              },
+                        state.kind === "handoff-failed"
+                            ? { kind: "handoff-unsealing", link: state.link }
+                            : state.kind === "failed"
+                              ? { code: state.code, kind: "identity-redeeming" }
+                              : {
+                                    code: state.code,
+                                    handoff: state.handoff,
+                                    kind: "session-opening",
+                                },
                 });
                 void get().redeem(attempt.signal);
             },
             state: initialState(),
             redeem: async (signal) => {
                 const state = get().state;
+                if (state.kind === "handoff-unsealing") {
+                    await unseal(state.link, signal);
+                    return;
+                }
                 if (state.kind !== "session-opening" && state.kind !== "identity-redeeming") {
                     return;
                 }
+                const encryption: HandoffEncryption =
+                    state.kind === "session-opening" ? state.handoff.encryption : { kind: "fragment" };
                 const api = new AnonymousIdentityApi({
                     fetchRequest,
                     origin: window.location.origin,
@@ -278,7 +410,7 @@ export const createContinueStore = (transport: ApiTransport) => {
                 try {
                     identity = await api.redeemTransfer(state.code, signal);
                     signal.throwIfAborted();
-                    await retainEncryption(identity, signal);
+                    await retainEncryption(identity, encryption, signal);
                 } catch (cause) {
                     if (signal.aborted) {
                         return;
@@ -289,27 +421,10 @@ export const createContinueStore = (transport: ApiTransport) => {
                     // to its Computer. Validate only the explicit scope, or a remembered
                     // scope for this exact Computer when the old link has no scope.
                     if (cause instanceof IdentityApiError && cause.code === "TRANSFER_UNAVAILABLE") {
-                        const computerId = transferCodeComputer(state.code);
-                        const explicit = readIdentityScope();
-                        const scopes = hasIdentityScope()
-                            ? explicit === null
-                                ? []
-                                : [explicit]
-                            : rememberedComputers().map((computer) => computer.scope);
-                        const matching = scopes.filter((scope) => scope.computerId === computerId);
-                        const visited = new Set<string>();
                         try {
-                            for (const scope of matching) {
-                                if (visited.has(computerKey(scope))) {
-                                    continue;
-                                }
-                                visited.add(computerKey(scope));
-                                const retained = await api.loadScope(scope, signal);
-                                signal.throwIfAborted();
-                                if (retained === null) {
-                                    continue;
-                                }
-                                await retainEncryption(retained, signal);
+                            const retained = await retainedAccess(api, transferCodeComputer(state.code), signal);
+                            if (retained !== null) {
+                                await retainEncryption(retained, encryption, signal);
                                 if (state.kind === "identity-redeeming") {
                                     window.location.replace(identityDestination("/", retained));
                                 } else {

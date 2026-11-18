@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runSetup, type SetupHost, type SetupRuntime } from "../../cli/src/setup/setup.ts";
+import { terminalQrCode } from "../../cli/src/setup/terminal-qr.ts";
 import { object, text } from "./chat-api.ts";
 
 export async function followSetupInstructions(options: {
@@ -30,6 +31,7 @@ export async function followSetupInstructions(options: {
             .replaceAll("<one-use-ticket>", url.searchParams.get("token") ?? ""),
     );
     const events: Readonly<Record<string, unknown>>[] = [];
+    const terminal: string[] = [];
     const exitCode = await runSetup(
         [...args, ...(options.replaceComputer === undefined ? [] : ["--replace-computer", options.replaceComputer])],
         {
@@ -37,6 +39,13 @@ export async function followSetupInstructions(options: {
             state: options.state,
             agentEnvironment: options.agentEnvironment,
             emit: (event) => events.push(event),
+            // What an Agent's command tool captures: no terminal width, and the colors it keeps.
+            showQrCode: async (link) => {
+                const drawn = await terminalQrCode(link, { columns: undefined, color: true });
+                if (drawn !== null) {
+                    terminal.push(drawn);
+                }
+            },
             runtime: options.runtime,
             signal: options.signal,
         },
@@ -54,6 +63,7 @@ export async function followSetupInstructions(options: {
         configuration,
         events,
         ready,
+        terminal: terminal.join(""),
         identity: {
             computerId: text(configuration["computer_id"], "saved computer"),
         },

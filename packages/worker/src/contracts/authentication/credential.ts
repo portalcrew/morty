@@ -24,7 +24,7 @@ export function accessHolder(credential: Credential): SessionAccessHolder {
     }
 }
 
-const linkLifetime = 10 * 60 * 1000;
+export const linkLifetime = 10 * 60 * 1000;
 const hour = 60 * 60 * 1000;
 
 export const deviceAccessDurations = ["1h", "1d", "7d", "30d"] as const;
@@ -78,7 +78,7 @@ export function sharedLinkTerms(sharer: Credential, now: number, duration: Devic
  * The credential kinds that may perform each identity or management operation; any other operation accepts every
  * active credential. Browser access may use and share the Computer and disconnect the other browsers, so whoever
  * notices a device they did not add can remove it without losing their own access. Only the computer's local
- * credential may pair a Computer, verify the Computer's Agent or revoke all access.
+ * credential may pair a Computer, verify the Computer's Agent, stage a setup link or revoke all access.
  */
 const permittedKinds = {
     shareAccess: ["local", "browser"],
@@ -91,6 +91,7 @@ const permittedKinds = {
     endOtherBrowserAccess: ["browser"],
     endDeviceAccess: ["local", "browser"],
     retireLocalCredential: ["local"],
+    stageSetupHandoff: ["local"],
 } as const satisfies Record<string, readonly Credential["kind"][]>;
 
 export type CredentialOperation = keyof typeof permittedKinds;

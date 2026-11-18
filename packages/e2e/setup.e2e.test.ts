@@ -1,8 +1,36 @@
 import { mkdir } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import { dataTestId } from "../web/src/data-testid.ts";
 import { expect, test } from "./infra/test.ts";
+
+const decodeQrCode: unknown = createRequire(new URL("../cli/package.json", import.meta.url))("jsqr");
+
+/** Reads a half-block QR code as its white-on-black terminal shows it, without letting the decoder invert it. */
+function scanTerminalQrCode(rows: readonly string[]): string {
+    const scale = 4;
+    const width = Math.max(...rows.map((row) => row.length)) * scale;
+    const height = rows.length * 2 * scale;
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const glyph = rows[Math.floor(y / (2 * scale))]?.[Math.floor(x / scale)];
+            const top = Math.floor(y / scale) % 2 === 0;
+            const light = glyph === "█" || glyph === (top ? "▀" : "▄");
+            pixels.fill(light ? 255 : 0, (y * width + x) * 4, (y * width + x) * 4 + 4);
+        }
+    }
+    if (typeof decodeQrCode !== "function") {
+        throw new Error("The QR decoder is unavailable");
+    }
+    const decoded: unknown = decodeQrCode(pixels, width, height, { inversionAttempts: "dontInvert" });
+    if (decoded === null || typeof decoded !== "object" || !("data" in decoded) || typeof decoded.data !== "string") {
+        throw new Error("The terminal QR code does not scan");
+    }
+    return decoded.data;
+}
 
 function directoryLabel(path: string): string {
     const suffix = relative(homedir(), path);
@@ -41,12 +69,23 @@ test("Given a saved setup handoff, When its Computer reconnects, Then setup retu
     expect(connected.qrPath).toMatch(/morty-handoff-[0-9a-f-]+\.png$/u);
 });
 
-test("Given the agent's shell exposes its Claude Code session, When it follows the published setup instructions, Then the handoff link continues that session", async ({
+test("Given an Agent runs setup in a terminal, When the user scans the QR code in its command output, Then that Agent's session opens in Chat", async ({
     runtime,
 }) => {
-    const connected = await runtime.followInstructions("/doc/setup.md", "claude-shell-session");
+    const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
 
-    expect(new URL(connected.url).searchParams.get("sessionId")).toBe("claude-shell-session");
+    const rows = stripVTControlCharacters(connected.terminal)
+        .split("\n")
+        .filter((row) => row.length > 0);
+    expect(Math.max(...rows.map((row) => row.length))).toBeLessThanOrEqual(80);
+    const scanned = scanTerminalQrCode(rows);
+    expect(scanned).toBe(connected.url);
+    const { page } = runtime;
+    await page.goto(scanned);
+    await expect(page).toHaveURL(
+        (url) => url.pathname === "/chat" && url.searchParams.get("sessionId") === "setup-reconnect-session",
+    );
+    await expect(page.getByRole("textbox", { name: "Message" })).toBeEnabled();
     expect(connected.events).not.toContainEqual(expect.objectContaining({ status: "session_id_mismatch" }));
 });
 

@@ -20,12 +20,23 @@ export function registerSetupHandlers(program: Command, context: CliContext): vo
             runtime: localSetupRuntime(context.entry),
             signal: context.shutdownSignal,
             emit: (event) => process.stdout.write(`${JSON.stringify(event)}\n`),
+            // Stdout stays the event stream; the QR code is for the person watching the terminal.
+            showQrCode: async (url) => {
+                const { terminalQrCode } = await import("../../../setup/terminal-qr.ts");
+                const drawn = await terminalQrCode(url, {
+                    columns: process.stderr.isTTY ? process.stderr.columns : undefined,
+                    color: !process.env["NO_COLOR"] && process.env["TERM"] !== "dumb",
+                });
+                if (drawn !== null) {
+                    process.stderr.write(drawn);
+                }
+            },
         });
     };
 
     program
         .command("setup")
-        .description("connect this Agent session and print a browser handoff link and QR image")
+        .description("connect this Agent session and print a browser handoff link and QR code")
         .addOption(valueOption("--base-url <origin>", "Morty origin (default: https://morty.build)"))
         .addOption(valueOption("--cwd <directory>", "absolute working directory (default: current directory)"))
         .addOption(valueOption("--harness <id>", "Agent harness: codex, claude, or pi"))
