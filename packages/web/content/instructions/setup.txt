@@ -57,12 +57,12 @@ Keep progress in this session and wait for `status: "ready"` or an error (at mos
 five minutes). The daemon keeps the Computer online after the command exits.
 Only ready confirms setup; a working chat reply is a separate check.
 
-Return the exact clickable `url` and the working directory from the `workspace` field. Display the owner-only PNG at
-`qrPath` when present and inline images are supported; otherwise return the URL.
-In a terminal, setup also prints the QR code in its own command output after ready when the code fits the terminal.
-Never redraw, transcribe, or regenerate a QR code in your reply. When the command output contains the QR code and the
-user cannot see that output, tell them to expand it to scan the code. When it says no QR code fits, give the link and
-the PNG as above instead.
+Return the exact clickable `url` and the working directory from the `workspace` field.
+In a terminal, setup prints the QR code in its own command output after ready when the code fits the terminal, and the
+Agent's interface folds that output. Copy that QR code into your reply exactly as printed, character for character, in a
+plain fenced code block, so the user can scan it. Never draw, generate, or change a QR code yourself, and never use
+image syntax in a terminal. When the command output says no QR code fits, give the link instead.
+In a GUI that displays inline images, display the owner-only PNG at `qrPath` when present instead; otherwise return the URL.
 If `qrPath` is null, explain that the QR image is unavailable and use the link. Never open,
 preview, or redeem the handoff URL yourself. Tell the user: **Open this link or
 scan the QR code to chat within 10 minutes. It works on one device only and opens the same
