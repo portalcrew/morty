@@ -10,7 +10,7 @@ Chat origin: {{BASE_URL}}
 1. Identify the actual operating system, current shell, and original working directory.
    Keep Node, the Agent, and working directory in the same operating system. WSL is Linux;
    do not mix its executables or paths with native Windows ones.
-2. Ensure Node.js 22.19+ or 24.20+ and npm (including npx) are installed.
+2. Ensure Node.js 22.19+ (22.x), 24.20+ (24.x), or 26.x and npm (including npx) are installed.
    Setup uses the invoked Morty CLI release for pairing and daemon startup. Old users must reinstall and pair again; old Morty state is never inherited.
    Do not install Morty globally.
    Choose your own harness: Codex = `codex`, Claude Code = `claude`, Pi = `pi`.
