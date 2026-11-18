@@ -32,12 +32,12 @@ export function bundleLicenses(fileName: string): Plugin {
                 for (const entry of licenses) {
                     // Exact npm releases whose license is missing from Vite's supported filenames.
                     const retained = [
-                        // https://github.com/drizzle-team/drizzle-orm/blob/273c78071d4841b497f5144734b38294df7ec64b/LICENSE
+                        // https://github.com/drizzle-team/drizzle-orm/blob/eab8bedbb65d5429c54e612ddbd88aa23091d398/LICENSE
                         {
                             name: "drizzle-orm",
-                            version: "0.45.2",
+                            version: "0.45.4",
                             identifier: "Apache-2.0",
-                            file: "drizzle-orm-0.45.2-LICENSE",
+                            file: "drizzle-orm-0.45.4-LICENSE",
                         },
                         // Unmodified License section from fastdom@1.0.12's npm README.md.
                         { name: "fastdom", version: "1.0.12", identifier: "MIT", file: "fastdom-1.0.12-LICENSE" },

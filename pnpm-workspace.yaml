@@ -39,8 +39,8 @@ catalog:
   "@valibot/to-json-schema": 1.8.0
   clsx: ^2.1.1
   dependency-cruiser: 18.7.2
-  drizzle-kit: 0.31.8
-  drizzle-orm: ^0.45.2
+  drizzle-kit: 0.31.11
+  drizzle-orm: ^0.45.4
   esbuild: 0.28.2
   happy-dom: 21.0.4
   hono: ^4.13.18
@@ -77,7 +77,7 @@ packageExtensions:
       typescript: 6.0.3
   drizzle-kit@0.31:
     dependencies:
-      drizzle-orm: 0.45.2
+      drizzle-orm: 0.45.4
 packages:
   - packages/*
 allowBuilds:
