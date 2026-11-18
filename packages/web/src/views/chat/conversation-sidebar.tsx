@@ -8,8 +8,8 @@ import {
     LoaderCircle,
     LogOut,
     type LucideIcon,
+    MessageCirclePlus,
     MessageSquare,
-    MessageSquarePlus,
     MonitorSmartphone,
     RefreshCw,
     Share2,
@@ -639,7 +639,7 @@ export function ConversationSidebar({
                                                                     size="icon"
                                                                     variant="ghost"
                                                                 >
-                                                                    <MessageSquarePlus
+                                                                    <MessageCirclePlus
                                                                         aria-hidden="true"
                                                                         className="size-5"
                                                                     />
@@ -707,7 +707,7 @@ export function ConversationSidebar({
                                                     className="box-border hidden min-w-0 w-full shrink-0 flex-col gap-0.5 sm:mt-2 sm:mb-3 sm:flex"
                                                 >
                                                     <SidebarSessionOption
-                                                        icon={MessageSquarePlus}
+                                                        icon={MessageCirclePlus}
                                                         label="New Session"
                                                         testId={dataTestId.newConversation}
                                                         onClick={onNewConversation}
