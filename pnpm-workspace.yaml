@@ -1,5 +1,10 @@
 engineStrict: true
 minimumReleaseAge: 1440
+# GHSA-fc5q-39xc-vjpf (picomatch ReDoS) covers every released picomatch, which only build and test tooling uses on
+# this repository's own globs; no published package depends on it. Remove once a patched picomatch is released.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-fc5q-39xc-vjpf
 overrides:
   "@hono/node-server@>=2.0.0 <2.1.6": 2.1.6
   source-map-js@>=1.0.0 <1.2.2: 1.2.2
