@@ -241,6 +241,7 @@ export function SheetDialog({
                 "fixed inset-x-0 bottom-0 z-50 flex h-[85dvh] max-h-[calc(100dvh-0.75rem)] w-full flex-col overflow-hidden rounded-t-overlay font-inter text-13 text-foreground outline-none max-sm:[font-size:15px] max-sm:leading-[24px] sm:inset-x-auto sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:block sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-overlay",
                 "motion-safe:max-sm:animate-sheet-enter motion-safe:sm:animate-cloud-enter",
                 mobileHeight === "content" && "max-sm:h-auto",
+                pinnedTitle && "sm:flex sm:flex-col",
                 desktopWidth === "standard" ? "sm:max-w-[520px]" : sheetDialogDesktopMaxWidthClassName,
                 overlaySurfacePanelClassName,
                 mobileSheetSurfaceClassName,
@@ -254,11 +255,11 @@ export function SheetDialog({
                 <>
                     <div className="shrink-0 px-5">{header}</div>
                     <ScrollEdgeFade
-                        className="h-full min-h-0"
+                        className="flex min-h-0 flex-1 flex-col"
                         fadeFromClassName="from-card"
                         fadeToClassName="to-card/0"
-                        frameClassName="min-h-0 flex-1"
-                        viewportClassName="pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+                        frameClassName="flex min-h-0 flex-1 flex-col"
+                        viewportClassName="h-auto min-h-0 flex-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
                         viewportLabel={`${title} content`}
                     >
                         {children(null)}
