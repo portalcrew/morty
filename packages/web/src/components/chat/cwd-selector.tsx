@@ -133,7 +133,7 @@ export function CwdSelector({
                 </Tooltip.Provider>
                 <Popover.Portal>
                     <Popover.Content
-                        align="start"
+                        align="center"
                         aria-label="Working directory menu"
                         className={cn(
                             "z-50 flex max-h-[min(70dvh,520px)] w-[min(calc(100vw-1.5rem),320px)] animate-cloud-enter flex-col overflow-hidden p-1.5 text-sm text-foreground outline-none motion-reduce:animate-none",

@@ -37,7 +37,7 @@ function SessionWelcome({
     return (
         <section aria-label="Continue your work here" className="relative">
             <MortyAlert
-                className="border-white pr-10"
+                className="rounded-[20px] border-white pr-10"
                 description={
                     <>
                         Check its progress, send your next instruction, or respond to requests here.
