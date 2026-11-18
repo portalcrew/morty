@@ -27,6 +27,18 @@ Chat origin: {{BASE_URL}}
 morty setup --base-url {{BASE_URL}} --cwd <absolute-current-working-directory> --harness <own-harness-id>
 ```
 
+Choose QR presentation by the user's interface, not the harness name. Codex and Claude can each run in a terminal
+or a GUI; Pi's terminal follows the same terminal path. Check `morty setup --help` (using the same CLI invocation
+chosen above). If it lists `--qr`, append `--qr terminal` for a terminal conversation, or `--qr image` for a GUI
+such as Codex desktop or Claude desktop/IDE. If the interface is unknown, omit the option for automatic TTY
+detection. Older CLIs without this option still support the original command and PNG/link handoff; omit the option.
+
+In a terminal, run setup in a foreground command view that preserves full output, with at least 64 KB of output
+when configurable. The CLI prints the QR directly to stderr in one write after ready; stdout stays JSON.
+Let the command output display it. Never redraw, transcribe, or regenerate the QR in your response, and never
+read its pixels with an image tool just to display it. Agent tools can capture output even in a terminal, which is
+why terminal conversations explicitly select `--qr terminal` rather than relying on TTY detection.
+
 The browser that opens the link keeps access for one day. Only when the user asks for a different period, add
 `--device-access 1h`, `--device-access 7d`, or `--device-access 30d`; nothing longer than 30 days is available.
 
@@ -59,6 +71,10 @@ Only ready confirms setup; a working chat reply is a separate check.
 
 Return the exact clickable `url` and the working directory from the `workspace` field. Display the owner-only PNG at
 `qrPath` when present and inline images are supported; otherwise return the URL.
+In Codex and Claude GUIs, keep this PNG presentation; do not replace it with a character QR. In terminals, the QR
+is already in the command output. If it is collapsed, tell the user to expand that output. If it is too narrow,
+wrapped, or clipped, provide the PNG file link and handoff URL immediately instead of retrying setup or printing
+the QR through the model. Do not claim the QR is visible when the command view hides it.
 If `qrPath` is null, explain that the QR image is unavailable and use the link. Never open,
 preview, or redeem the handoff URL yourself. Tell the user: **Open this link or
 scan the QR code to chat within 10 minutes. It works on one device only and opens the same
