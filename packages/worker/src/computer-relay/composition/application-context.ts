@@ -9,7 +9,9 @@ import { AuthenticationService } from "../components/management/service/authenti
 import type { IdentityOperations } from "../components/management/service/identity-operations.ts";
 import { LocalComputerService } from "../components/management/service/local-computer-service.ts";
 import { ManagementService } from "../components/management/service/management-service.ts";
+import { SetupHandoffService } from "../components/management/service/setup-handoff-service.ts";
 import type { IdentityStorage } from "../components/management/storage/identity-storage.ts";
+import type { SetupHandoffStorage } from "../components/management/storage/setup-handoff-storage.ts";
 
 export interface ApplicationContext {
     readonly config: { readonly bindings: CloudBindings };
@@ -17,12 +19,14 @@ export interface ApplicationContext {
     readonly logger: Logger;
     readonly storages: {
         readonly identities: IdentityStorage;
+        readonly setupHandoffs: SetupHandoffStorage;
     };
     readonly services: {
         readonly computers: LocalComputerService;
         readonly authentication: AuthenticationService;
         readonly chat: ChatService;
         readonly management: ManagementService;
+        readonly setupHandoffs: SetupHandoffService;
     };
 }
 
@@ -31,6 +35,7 @@ export function createApplicationDependencies(local: {
     readonly computer: ComputerBackendService;
     readonly identity: ComputerIdentity;
     readonly identities: IdentityStorage;
+    readonly setupHandoffs: SetupHandoffStorage;
     readonly sessionOperations: ManagedSessionOperations;
     readonly identityOperations: IdentityOperations;
 }): ApplicationContext {
@@ -39,7 +44,7 @@ export function createApplicationDependencies(local: {
         identity: local.identity,
         identityOperations: local.identityOperations,
         sessionOperations: local.sessionOperations,
-        storages: { identities: local.identities },
+        storages: { identities: local.identities, setupHandoffs: local.setupHandoffs },
         logger,
     };
     const authentication = new AuthenticationService(cx);
@@ -52,6 +57,7 @@ export function createApplicationDependencies(local: {
             ...cx,
             services: { authentication, computers },
         }),
+        setupHandoffs: new SetupHandoffService({ ...cx, services: { authentication } }),
     });
     return Object.freeze({ ...cx, services });
 }

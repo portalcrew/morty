@@ -10,6 +10,7 @@ import { runSetup } from "../../cli/src/setup/setup.ts";
 import { ControlledSetupRuntime } from "../../e2e/infra/setup-daemon.ts";
 import worker from "../src/worker/application.ts";
 import { createIdentityFixture } from "./support/identity-fixture.ts";
+import { openedSetupHandoff } from "./support/setup-handoff.ts";
 
 test.for(["current", "another service origin", "retired configuration"] as const)(
     "Given %s, When setup runs again, Then it continues the saved identity's Computer or refuses without rewriting the saved state",
@@ -111,7 +112,13 @@ test.for(["current", "another service origin", "retired configuration"] as const
             new Request(`${fixture.origin}/morty/api/v1/identity/transfers/redeem`, {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ code: new URLSearchParams(new URL(ready.url).hash.slice(1)).get("code") }),
+                body: JSON.stringify({
+                    code: (
+                        await openedSetupHandoff(ready.url, (request) =>
+                            worker.fetch(request, fixture.environment(fixture.origin)),
+                        )
+                    ).code,
+                }),
             }),
             fixture.environment(fixture.origin),
         );
@@ -326,9 +333,9 @@ test.for(["relay", "local connection", "newer pairing"] as const)(
             expect.objectContaining({ status: "computer_revoked", computerId: before.identity.computer_id }),
         );
         expect(again.ready.computerId).toBe(first.ready.computerId);
-        const originalAccess = new URLSearchParams(new URL(first.ready.url).hash.slice(1)).get("e2e");
-        expect(originalAccess).not.toBeNull();
-        expect(new URLSearchParams(new URL(again.ready.url).hash.slice(1)).get("e2e")).toBe(originalAccess);
+        const opened = (url: string) =>
+            openedSetupHandoff(url, (request) => worker.fetch(request, fixture.environment(fixture.origin)));
+        expect((await opened(again.ready.url)).encryption).toEqual((await opened(first.ready.url)).encryption);
         expect(after.identity).toEqual(before.identity);
         expect(after.computerPairing).toBe("paired");
     },

@@ -59,6 +59,10 @@ Only ready confirms setup; a working chat reply is a separate check.
 
 Return the exact clickable `url` and the working directory from the `workspace` field. Display the owner-only PNG at
 `qrPath` when present and inline images are supported; otherwise return the URL.
+In a terminal, setup also prints the QR code in its own command output after ready when the code fits the terminal.
+Never redraw, transcribe, or regenerate a QR code in your reply. When the command output contains the QR code and the
+user cannot see that output, tell them to expand it to scan the code. When it says no QR code fits, give the link and
+the PNG as above instead.
 If `qrPath` is null, explain that the QR image is unavailable and use the link. Never open,
 preview, or redeem the handoff URL yourself. Tell the user: **Open this link or
 scan the QR code to chat within 10 minutes. It works on one device only and opens the same

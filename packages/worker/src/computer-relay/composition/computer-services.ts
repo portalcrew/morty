@@ -7,6 +7,7 @@ import type { ComputerBackendService } from "../components/computer/service/comp
 import type { IdentityOperations } from "../components/management/service/identity-operations.ts";
 import { createComputer } from "../components/management/service/management-service.ts";
 import { IdentityStorage } from "../components/management/storage/identity-storage.ts";
+import { SetupHandoffStorage } from "../components/management/storage/setup-handoff-storage.ts";
 import type { DurableObjectDatabase } from "../infra/durable-object-database.ts";
 import { type ApplicationContext, createApplicationDependencies } from "./application-context.ts";
 
@@ -73,6 +74,7 @@ export class ComputerServices {
             computer: this.#runtime(computerId),
             identity: { computerId },
             identities: new IdentityStorage(this.#database(), computerId),
+            setupHandoffs: new SetupHandoffStorage(this.#database()),
             sessionOperations: this.#sessionOperations,
             identityOperations: {
                 commitAccessEnd: this.#endAccess,

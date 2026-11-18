@@ -63,6 +63,8 @@ function createComputerForwardingRoutes() {
             .post("/morty/api/v1/computers/:computerId/setup/computers", computerFromPath, forward)
             // Shared by setup and web: HTTPS remains supported for setup after the browser moves to WebSocket.
             .post("/morty/api/v1/computers/:computerId/identity/transfers", computerFromPath, forward)
+            .post("/morty/api/v1/computers/:computerId/identity/setup-handoffs", computerFromPath, forward)
+            .get("/morty/api/v1/computers/:computerId/identity/setup-handoffs/:lookupId", computerFromPath, forward)
             .delete(`/morty/api/v1/computers/:computerId${credentialRevocationPaths.local}`, computerFromPath, forward)
             .get("/morty/api/v1/computers/:computerId/pairing-state", computerFromPath, forward)
             .post("/morty/api/v1/computers/:computerId/workspace", computerFromPath, forward)

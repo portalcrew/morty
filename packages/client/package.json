@@ -7,7 +7,8 @@
     "exports": {
         ".": "./src/index.ts",
         "./protocol": "./src/protocol/index.ts",
-        "./native-session": "./src/native-session.ts"
+        "./native-session": "./src/native-session.ts",
+        "./setup-handoff": "./src/setup-handoff.ts"
     },
     "scripts": {
         "typecheck": "tsc --project tsconfig.json"

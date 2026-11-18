@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { type ComputerEncryptionAccess, createClientPayloadEncryption } from "@portalcrew/morty-client";
+import {
+    type ComputerEncryptionAccess,
+    createClientPayloadEncryption,
+    SetupHandoffError,
+    sealedSetupHandoffFormat,
+    sealSetupHandoff,
+} from "@portalcrew/morty-client";
 import {
     agentSettingsDiscoverCommandCodec,
     agentSettingsDiscoveredEventCodec,
@@ -66,6 +72,8 @@ interface SetupEnvironment {
     readonly state: string;
     readonly signal: AbortSignal;
     readonly emit: (value: Readonly<Record<string, unknown>>) => void;
+    /** Shows the ready link's QR code to a person reading the terminal that runs setup, beside the emitted events. */
+    readonly showQrCode?: (url: string) => Promise<void>;
     readonly agentEnvironment?: Readonly<Record<string, string | undefined>>;
     readonly clock?: {
         readonly now: () => Date;
@@ -1279,6 +1287,44 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         return qrPath;
     }
 
+    /**
+     * A relay that advertises sealed setup links keeps the link's contents sealed under a key only the link holds, so
+     * the link and its QR code stay short enough for a terminal. Any other relay gets everything in the link itself.
+     */
+    async function handoffLink(
+        context: Context,
+        transfer: Readonly<Record<string, unknown>>,
+        issued: URL,
+        handoff: {
+            readonly code: string;
+            readonly encryption: ComputerEncryptionAccess;
+            readonly harness: string;
+            readonly sessionId: string;
+            readonly workspace: string;
+        },
+    ): Promise<string> {
+        const formats = transfer["setupHandoffFormats"];
+        if (Array.isArray(formats) && formats.includes(sealedSetupHandoffFormat)) {
+            const sealed = await sealSetupHandoff(issued.origin, context.identity.computerId, handoff).catch(
+                (cause: unknown) => fail("INVALID_HANDOFF", cause instanceof SetupHandoffError ? cause : undefined),
+            );
+            await request(context, "/identity/setup-handoffs", {
+                lookupId: sealed.lookupId,
+                sealed: sealed.sealed,
+                accessExpiresAt: text(transfer["accessExpiresAt"]),
+            });
+            return sealed.url;
+        }
+        const url = new URL(issued);
+        const fragment = new URLSearchParams(url.hash.slice(1));
+        fragment.set("e2e", Buffer.from(JSON.stringify(handoff.encryption), "utf8").toString("base64url"));
+        fragment.set("workspace", handoff.workspace);
+        url.hash = fragment.toString();
+        url.searchParams.set("harness", handoff.harness);
+        url.searchParams.set("sessionId", handoff.sessionId);
+        return url.toString();
+    }
+
     async function finishSetup(
         context: Context,
         computer: ComputerSelection,
@@ -1304,13 +1350,13 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         if (encryption.computerId !== context.identity.computerId) {
             fail("INVALID_ENCRYPTION_HANDOFF");
         }
-        const fragment = new URLSearchParams(url.hash.slice(1));
-        fragment.set("e2e", Buffer.from(JSON.stringify(encryption), "utf8").toString("base64url"));
-        fragment.set("workspace", workingDirectory);
-        url.hash = fragment.toString();
-        url.searchParams.set("harness", options.harness);
-        url.searchParams.set("sessionId", options.sessionId);
-        const handoffUrl = url.toString();
+        const handoffUrl = await handoffLink(context, transfer, url, {
+            code: text(new URLSearchParams(url.hash.slice(1)).get("code")),
+            encryption,
+            harness: options.harness,
+            sessionId: options.sessionId,
+            workspace: workingDirectory,
+        });
         // QR is an auxiliary representation: its capacity and decoding limits must
         // not prevent delivery of an otherwise valid handoff link.
         const qr = await (async (): Promise<
@@ -1347,6 +1393,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
                     : "Open the link to chat. Keep the Computer online.",
         });
         setupReady = true;
+        await host.showQrCode?.(handoffUrl);
         if (outcome === "replaced") {
             // Cleared only after ready reported it, so a run that stops earlier leaves the notice owed.
             await commit(context, withReplacementReported(context.identity));

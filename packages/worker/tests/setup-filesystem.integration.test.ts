@@ -12,6 +12,7 @@ import { mortyReply } from "../../../tests/support/fake-daemon/scenarios.ts";
 import { ControlledSetupRuntime } from "../../e2e/infra/setup-daemon.ts";
 import worker from "../src/worker/application.ts";
 import { prepareIdentityFixture } from "./support/identity-fixture.ts";
+import { openedSetupHandoff } from "./support/setup-handoff.ts";
 
 const localRuntimeModule = JSON.stringify(new URL("../../cli/src/setup/local-runtime.ts", import.meta.url).href);
 const builtCli = JSON.stringify(fileURLToPath(new URL("../../cli/dist/cli.js", import.meta.url)));
@@ -481,7 +482,7 @@ test.runIf(process.env["MORTY_VERIFY_SYSTEM_STATE"] === "true" && process.platfo
 
 for (const segments of [4, 8]) {
     test.skipIf(segments === 8 && process.platform !== "linux")(
-        `Given a valid ${segments}-segment multibyte workspace, When setup prepares the handoff, Then it delivers the normal link even when no QR can represent it`,
+        `Given a valid ${segments}-segment multibyte workspace, When setup prepares the handoff, Then its link carries the workspace without sending it to the Worker`,
         { timeout: 30_000 },
         async ({ signal }) => {
             const root = await realpath(await mkdtemp(join(tmpdir(), "morty-setup-long-")));
@@ -535,7 +536,9 @@ for (const segments of [4, 8]) {
                 }
                 const handoff = new URL(link);
                 expect(handoff.searchParams.has("workspace")).toBe(false);
-                expect(new URLSearchParams(handoff.hash.slice(1)).get("workspace")).toBe(workspace);
+                expect((await openedSetupHandoff(link, (request) => fetch(request, { signal }))).workspace).toBe(
+                    workspace,
+                );
                 const documentRequest = Promise.withResolvers<string>();
                 const proxy = createServer((incoming, outgoing) => {
                     documentRequest.resolve(incoming.url ?? "");
@@ -567,15 +570,6 @@ for (const segments of [4, 8]) {
                 } finally {
                     await new Promise<void>((resolve, reject) =>
                         proxy.close((error) => (error === undefined ? resolve() : reject(error))),
-                    );
-                }
-                if (segments === 8) {
-                    expect(ready).toMatchObject({ qrPath: null });
-                    expect(events).toContainEqual(
-                        expect.objectContaining({
-                            status: "qr_unavailable",
-                            error: expect.objectContaining({ code: "QR_UNAVAILABLE" }),
-                        }),
                     );
                 }
             } finally {
@@ -739,7 +733,7 @@ test("Given a shared Computer whose local pairing was removed, When setup has no
                 new Request(`${paths.origin}/morty/api/v1/identity/transfers/redeem`, {
                     method: "POST",
                     headers: { "content-type": "application/json" },
-                    body: JSON.stringify({ code: new URLSearchParams(new URL(url).hash.slice(1)).get("code") }),
+                    body: JSON.stringify({ code: (await openedSetupHandoff(url, paths.dispatch)).code }),
                     signal,
                 }),
             );
