@@ -114,7 +114,7 @@ export function Dialog({
     readonly description?: ReactNode;
     readonly onClose: () => void;
     readonly busy?: boolean;
-    readonly size?: "standard" | "medium";
+    readonly size?: keyof typeof dialogDesktopMaxWidthClassName;
     readonly testId?: string;
     readonly headerAction?: ReactNode;
     readonly footer?: ReactNode;
