@@ -1,3 +1,11 @@
+---
+metadata:
+  change-policy: >-
+    Do not modify this Markdown file together with source code or other non-Markdown
+    files. Submit changes in a separate documentation-only pull request for review
+    and approval. The recommended reviewer is taowen-paraflow.
+---
+
 <div align="center">
 
 # Morty
@@ -19,6 +27,12 @@ Continue Codex, Claude Code, and Pi conversations from any browser.
 Your agent is working on your computer. Morty puts the conversation on your phone,
 tablet, or another screen, so you can check in and give the next instruction wherever
 you are.
+
+<p align="center">
+  <a href="https://cdn.jsdelivr.net/gh/portalcrew/morty@c5b793ff4aecc0a2db3bd78f25f8c20a4c1e0bd1/docs/assets/morty-demo.mp4"><img src="https://raw.githubusercontent.com/portalcrew/morty/c5b793ff4aecc0a2db3bd78f25f8c20a4c1e0bd1/docs/assets/morty-demo.jpg" width="760" alt="Morty on a phone showing an agent’s request to edit a file" /></a>
+  <br />
+  <a href="https://cdn.jsdelivr.net/gh/portalcrew/morty@c5b793ff4aecc0a2db3bd78f25f8c20a4c1e0bd1/docs/assets/morty-demo.mp4"><strong>▶ Watch the demo · 1 min</strong></a>
+</p>
 
 ## Stay in the loop
 
