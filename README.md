@@ -56,7 +56,7 @@ downloaded or run. Read it yourself before you paste the prompt.
 ## What you need
 
 - One of **Codex**, **Claude Code**, or **Pi**, installed and signed in on your computer
-- **Node.js 22.19+ (22.x) or 24.20+ (24.x)**
+- **Node.js 22.19+ (22.x), 24.20+ (24.x), or 26.x**
 - The connected machine **awake and online**. Morty is a window into a session running
   on your computer, not a cloud sandbox. When the computer sleeps the session pauses with
   it, and the browser shows no history until it reconnects.

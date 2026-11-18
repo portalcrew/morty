@@ -12,9 +12,9 @@ runs on your own computer. Visit [morty.build](https://morty.build) to connect.
 
 ## Requirements and setup
 
-Use Node.js 22.19+ on the 22.x line or 24.20+ on the 24.x line, and an installed,
-configured Codex, Claude Code or Pi Agent. Keep the computer awake and online.
-Morty's installed package is tested on Linux, macOS and Windows.
+Use Node.js 22.19+ on the 22.x line, 24.20+ on the 24.x line, or any 26.x release,
+and an installed, configured Codex, Claude Code or Pi Agent. Keep the computer awake
+and online. Morty's installed package is tested on Linux, macOS and Windows.
 
 Give your Agent this prompt:
 
