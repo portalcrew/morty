@@ -69,7 +69,7 @@ test("Given a saved setup handoff, When its Computer reconnects, Then setup retu
     expect(connected.qrPath).toMatch(/morty-handoff-[0-9a-f-]+\.png$/u);
 });
 
-test("Given an Agent runs setup in a terminal, When the user scans the QR code in its command output, Then that Agent's session opens in Chat", async ({
+test("Given an Agent runs setup in a terminal, When the user follows the hint below its folded command output and scans the QR code, Then that Agent's session opens in Chat", async ({
     runtime,
 }) => {
     const connected = await runtime.followInstructions("/doc/setup.md", "setup-reconnect-session");
@@ -78,7 +78,8 @@ test("Given an Agent runs setup in a terminal, When the user scans the QR code i
         .split("\n")
         .filter((row) => row.length > 0);
     expect(Math.max(...rows.map((row) => row.length))).toBeLessThanOrEqual(80);
-    const scanned = scanTerminalQrCode(rows);
+    expect(rows.at(-1)).toBe("↑ Scan to open Morty. If this output is folded, expand it to see the QR code.");
+    const scanned = scanTerminalQrCode(rows.slice(0, -1));
     expect(scanned).toBe(connected.url);
     const { page } = runtime;
     await page.goto(scanned);
