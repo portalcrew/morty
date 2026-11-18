@@ -43,6 +43,12 @@ export async function startTestRelay(
                             .map((agent) => ({ harness: agent.harness, name: agent.label })),
                         beforeSessionCreated: agents[0]?.beforeSessionCreated,
                         beforeSessionsListed: agents[0]?.beforeSessionsListed,
+                        ...(agents[0]?.nativeSessionPageSize === undefined
+                            ? {}
+                            : { nativeSessionPageSize: agents[0].nativeSessionPageSize }),
+                        ...(agents[0]?.beforeNativeSessionPage === undefined
+                            ? {}
+                            : { beforeNativeSessionPage: agents[0].beforeNativeSessionPage }),
                         beforeSessionLoaded: agents[0]?.beforeSessionLoaded,
                         beforeCancellationApplied: agents[0]?.beforeCancellationApplied,
                         onBackgroundPermissionReady: agents[0]?.onBackgroundPermissionReady,

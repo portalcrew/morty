@@ -2,6 +2,7 @@ import {
     type CSSProperties,
     type KeyboardEventHandler,
     type ReactNode,
+    type UIEventHandler,
     useCallback,
     useEffect,
     useLayoutEffect,
@@ -27,6 +28,7 @@ type ScrollEdgeFadeBase = {
     readonly id?: string;
     readonly "aria-label"?: string;
     readonly onKeyDown?: KeyboardEventHandler<HTMLElement>;
+    readonly onViewportScroll?: UIEventHandler<HTMLDivElement>;
     readonly role?: React.AriaRole;
     readonly tabIndex?: number;
     readonly scrollElementRef?: (element: HTMLElement | null) => void;
@@ -36,6 +38,8 @@ type EdgeStrokeAppearance = {
     readonly className: string;
     /** `outside` covers a layout seam; its frame and ancestors must not clip the stroke. */
     readonly placement: "inside" | "outside";
+    /** An additional stroke centered on the scroll edge. */
+    readonly centeredClassName?: string;
 };
 
 type PaintedEdgeFade = ScrollEdgeFadeBase & {
@@ -58,6 +62,10 @@ type RevealedSurfaceFade = ScrollEdgeFadeBase & {
      * rows and will not match the background.
      */
     readonly revealSurface: true;
+    /** Length of the clipped-edge gradient. */
+    readonly fadeSize?: string;
+    /** Fully hides content at the top edge before the gradient starts. */
+    readonly topClearSize?: string;
     /** Optional seam stroke; omit when the scrollport sits inside a card without a border seam. */
     readonly edgeStroke?: EdgeStrokeAppearance;
 };
@@ -71,14 +79,14 @@ const fadeMaskSize = "2rem";
 /** Two fully transparent pixels absorb mask antialiasing at the clipped edge. */
 const fadeClearSize = "2px";
 
-function viewportEdgeMask(edges: ClippedEdges): string | undefined {
-    const bottomFadeStart = `calc(100% - ${fadeMaskSize})`;
+function viewportEdgeMask(edges: ClippedEdges, fadeSize: string, topClearSize: string): string | undefined {
+    const bottomFadeStart = `calc(100% - ${fadeSize})`;
     const bottomClearStart = `calc(100% - ${fadeClearSize})`;
     if (edges.top && edges.bottom) {
-        return `linear-gradient(to bottom, transparent 0, transparent ${fadeClearSize}, #000 ${fadeMaskSize}, #000 ${bottomFadeStart}, transparent ${bottomClearStart}, transparent 100%)`;
+        return `linear-gradient(to bottom, transparent 0, transparent ${topClearSize}, #000 ${fadeSize}, #000 ${bottomFadeStart}, transparent ${bottomClearStart}, transparent 100%)`;
     }
     if (edges.top) {
-        return `linear-gradient(to bottom, transparent 0, transparent ${fadeClearSize}, #000 ${fadeMaskSize})`;
+        return `linear-gradient(to bottom, transparent 0, transparent ${topClearSize}, #000 ${fadeSize})`;
     }
     if (edges.bottom) {
         return `linear-gradient(to bottom, #000 ${bottomFadeStart}, transparent ${bottomClearStart}, transparent 100%)`;
@@ -125,6 +133,7 @@ export function ScrollEdgeFade(props: ScrollEdgeFadeProps) {
         id,
         "aria-label": ariaLabel,
         onKeyDown,
+        onViewportScroll,
         role,
         tabIndex,
         scrollElementRef,
@@ -132,6 +141,7 @@ export function ScrollEdgeFade(props: ScrollEdgeFadeProps) {
     const scrollRef = useRef<HTMLElement | null>(null);
     const scrolledToBottomFor = useRef<string | null>(null);
     const [edges, setEdges] = useState<ClippedEdges>(hiddenEdges);
+    const [scrolledFromTop, setScrolledFromTop] = useState(false);
 
     const syncEdges = useCallback(() => {
         const element = scrollRef.current;
@@ -140,6 +150,7 @@ export function ScrollEdgeFade(props: ScrollEdgeFadeProps) {
         }
         const next = clippedEdges(element);
         setEdges((current) => (current.top === next.top && current.bottom === next.bottom ? current : next));
+        setScrolledFromTop(element.scrollTop > 0);
     }, []);
 
     useLayoutEffect(() => {
@@ -192,7 +203,9 @@ export function ScrollEdgeFade(props: ScrollEdgeFadeProps) {
         scrollElementRef?.(node);
     };
     const revealSurface = props.revealSurface === true;
-    const maskImage = revealSurface ? viewportEdgeMask(edges) : undefined;
+    const maskImage = revealSurface
+        ? viewportEdgeMask(edges, props.fadeSize ?? fadeMaskSize, props.topClearSize ?? fadeClearSize)
+        : undefined;
     const list = scrollElement === "ul" ? <ul>{children}</ul> : children;
 
     return (
@@ -202,8 +215,9 @@ export function ScrollEdgeFade(props: ScrollEdgeFadeProps) {
                 className={cn("min-h-0", className)}
                 id={id}
                 onKeyDown={onKeyDown}
-                onViewportScroll={() => {
+                onViewportScroll={(event) => {
                     syncEdges();
+                    onViewportScroll?.(event);
                 }}
                 role={role}
                 tabIndex={tabIndex}
@@ -251,6 +265,22 @@ export function ScrollEdgeFade(props: ScrollEdgeFadeProps) {
                         placement={props.edgeStroke.placement}
                         visible={edges.bottom}
                     />
+                    {props.edgeStroke.centeredClassName !== undefined && (
+                        <>
+                            <EdgeStroke
+                                className={props.edgeStroke.centeredClassName}
+                                edge="top"
+                                placement="outside"
+                                visible={scrolledFromTop}
+                            />
+                            <EdgeStroke
+                                className={props.edgeStroke.centeredClassName}
+                                edge="bottom"
+                                placement="outside"
+                                visible={edges.bottom}
+                            />
+                        </>
+                    )}
                 </>
             )}
         </div>

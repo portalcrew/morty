@@ -1,5 +1,5 @@
-import { ChevronLeft, CircleAlert, Inbox, MessageSquare, PackageOpen, Unplug } from "lucide-react";
-import type { ReactNode } from "react";
+import { ChevronLeft, CircleAlert, Inbox, LoaderCircle, MessageSquare, PackageOpen, Unplug } from "lucide-react";
+import type { ReactNode, UIEvent } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
 import { mobileHeaderIconButtonClassName } from "../../components/chat/chat-header-control.ts";
@@ -14,7 +14,6 @@ import {
 } from "../../components/chat/session-agent-tabs.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
 import { SheetDialog } from "../../components/ui/dialog.tsx";
-import { Spinner } from "../../components/ui/spinner.tsx";
 import { ScrollEdgeFade } from "../../components/utils/scroll-edge-fade.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
@@ -116,13 +115,17 @@ function NativeSessionLoadMore({
 }) {
     return (
         <div className="flex justify-center py-2">
-            {busy ? (
-                <Spinner label="Loading more sessions" />
-            ) : (
-                <Button disabled={disabled} onClick={onMore} size="lg" variant="ghost">
-                    Load more
-                </Button>
-            )}
+            <Button
+                aria-busy={busy}
+                className="w-full sm:w-auto [&_svg]:size-4"
+                disabled={disabled}
+                onClick={onMore}
+                size="lg"
+                variant="ghost"
+            >
+                <LoaderCircle aria-hidden="true" className={cn(busy && "animate-spin motion-reduce:animate-none")} />
+                Load more
+            </Button>
         </div>
     );
 }
@@ -219,9 +222,24 @@ export function NativeSessionDialog({
         harness: model.directory.kind === "ready" ? model.directory.harness : null,
         sessionId: model.preview.kind === "empty" ? null : model.preview.entry.sessionId,
     };
-    const reportEntry = <BugReportButton appearance="labelled" daemonSource={diagnostics} dialog={bugReportDialog} />;
+    const reportEntry = (
+        <BugReportButton
+            appearance="labelled"
+            daemonSource={diagnostics}
+            dialog={bugReportDialog}
+            size="lg"
+            variant="outline"
+        />
+    );
     const withSignal = (action: (signal: AbortSignal) => Promise<void>) => {
         void action(store.getState().lifetimeSignal());
+    };
+    const loadMoreOnScroll = (event: UIEvent<HTMLDivElement>) => {
+        const viewport = event.currentTarget;
+        const bottomGap = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+        if (model.operation === "idle" && model.error.length === 0 && viewport.scrollTop > 0 && bottomGap <= 64) {
+            withSignal(store.getState().more);
+        }
     };
     const fallback = agents[0];
     const closeDialog = () => {
@@ -305,11 +323,14 @@ export function NativeSessionDialog({
                                         <div className="flex min-h-0 flex-1 flex-col sm:hidden">
                                             <ScrollEdgeFade
                                                 revealSurface
+                                                fadeSize="0.75rem"
                                                 frameClassName="flex min-h-0 flex-1 flex-col"
-                                                viewportClassName="[&>div]:!block [&>div]:!w-full"
+                                                viewportLabel="Saved sessions"
+                                                viewportClassName="pb-1 [&>div]:!block [&>div]:!w-full"
+                                                onViewportScroll={loadMoreOnScroll}
                                                 className={cn(
                                                     // The 40px rows are already the touch target; extra vertical gaps only make the list longer.
-                                                    "min-h-0 flex-1 space-y-0 pb-1",
+                                                    "min-h-0 flex-1 space-y-0",
                                                 )}
                                             >
                                                 {model.directory.entries.map((entry) => (
@@ -349,13 +370,19 @@ export function NativeSessionDialog({
                                     {model.directory.kind === "ready" && model.directory.entries.length > 0 && (
                                         <ScrollEdgeFade
                                             revealSurface
+                                            fadeSize="0.75rem"
+                                            topClearSize="0.5rem"
                                             edgeStroke={{
                                                 className: "border-background",
                                                 placement: "outside",
+                                                centeredClassName:
+                                                    "h-0.5 bg-background border-background transition-none",
                                             }}
                                             frameClassName="hidden min-h-0 flex-1 sm:flex sm:flex-col"
-                                            viewportClassName="[&>div]:!block [&>div]:!w-full"
-                                            className={cn("min-h-0 flex-1 space-y-0 pr-3 pb-2")}
+                                            viewportLabel="Saved sessions on desktop"
+                                            viewportClassName="pb-2 [&>div]:!block [&>div]:!w-full"
+                                            onViewportScroll={loadMoreOnScroll}
+                                            className={cn("min-h-0 flex-1 space-y-0 pr-3")}
                                         >
                                             {model.directory.entries.map((entry) => (
                                                 <button
@@ -442,7 +469,7 @@ export function NativeSessionDialog({
                                         aria-label="Selected session preview"
                                         className="flex min-h-0 min-w-0 flex-1 flex-col"
                                     >
-                                        {model.preview.kind === "ready" && (
+                                        {(model.preview.kind === "ready" || model.preview.kind === "failed") && (
                                             <h2
                                                 className={cn(nativeSessionPreviewTitleBarClassName, "hidden sm:flex")}
                                                 title={model.preview.entry.displayTitle}
@@ -467,7 +494,16 @@ export function NativeSessionDialog({
                                                 description="Preview its message history here."
                                             />
                                         )}
-                                        {model.preview.kind !== "empty" && (
+                                        {model.preview.kind === "failed" && (
+                                            <NativeSessionDirectoryPlaceholder
+                                                icon={CircleAlert}
+                                                title="Couldn't load preview"
+                                                description={model.preview.message}
+                                                action={reportEntry}
+                                                tone="destructive"
+                                            />
+                                        )}
+                                        {(model.preview.kind === "loading" || model.preview.kind === "ready") && (
                                             <ScrollEdgeFade
                                                 revealSurface
                                                 edgeStroke={{ className: "border-card", placement: "outside" }}
@@ -486,15 +522,6 @@ export function NativeSessionDialog({
                                                 )}
                                             >
                                                 {model.preview.kind === "loading" && <NativeSessionPreviewSkeleton />}
-                                                {model.preview.kind === "failed" && (
-                                                    <div
-                                                        role="alert"
-                                                        className="flex flex-col items-start gap-2 text-destructive"
-                                                    >
-                                                        <p className="min-w-0 break-words">{model.preview.message}</p>
-                                                        {reportEntry}
-                                                    </div>
-                                                )}
                                                 {model.preview.kind === "ready" && (
                                                     <div>
                                                         {model.preview.content.truncated && (

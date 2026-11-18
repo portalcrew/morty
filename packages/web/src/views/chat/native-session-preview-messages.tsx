@@ -99,6 +99,7 @@ export function NativeSessionPreviewMessages({
         );
         return (
             <SessionReplyContent
+                copyButtonClassName="ml-0"
                 copyText={copyText}
                 key={group.id}
                 renderItem={(item) => <PreviewRenderItem collapseStore={collapseStore} item={item} />}

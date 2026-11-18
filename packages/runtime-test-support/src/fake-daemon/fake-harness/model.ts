@@ -57,6 +57,8 @@ export interface FakeAgentHarnessOptions {
     readonly additionalAgents?: readonly { readonly harness: string; readonly name: string }[];
     readonly echoUserMessage?: boolean;
     readonly sessionIds?: ReadonlySet<string>;
+    readonly nativeSessionPageSize?: number;
+    readonly beforeNativeSessionPage?: (cursor: string | null) => Promise<void>;
     readonly beforeSessionLoaded?: ((sessionId: string) => Promise<void>) | undefined;
     readonly reply: (prompt: string, turnNumber: number, mode: "prompt" | "steer") => HarnessReplyPlan;
 }

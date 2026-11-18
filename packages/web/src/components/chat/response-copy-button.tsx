@@ -2,6 +2,7 @@ import { Check, Copy } from "lucide-react";
 import { useMemo } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
+import { cn } from "../../lib/utils.ts";
 
 export interface ResponseCopyModel {
     readonly state:
@@ -16,9 +17,11 @@ export type ResponseCopyStoreFactory = (text: string) => StoreApi<ResponseCopyMo
 export function ResponseCopyButton({
     text,
     createStore,
+    className,
 }: {
     readonly text: string;
     readonly createStore: ResponseCopyStoreFactory;
+    readonly className?: string | undefined;
 }) {
     const store = useMemo(() => createStore(text), [createStore, text]);
     const model = useStore(store);
@@ -28,7 +31,10 @@ export function ResponseCopyButton({
         <div className="mt-3 flex flex-wrap items-center gap-x-3" ref={model.onAttach}>
             <button
                 aria-label={copy === "copied" ? "Copied" : "Copy response"}
-                className="relative -ml-1 inline-flex size-7 before:absolute before:-inset-2 before:content-[''] sm:before:hidden shrink-0 items-center justify-center rounded-md text-morty-text-3 transition-colors hover:bg-morty-fill-opacity-2 hover:text-foreground active:bg-morty-fill-opacity-3 active:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
+                className={cn(
+                    "relative -ml-1 inline-flex size-7 before:absolute before:-inset-2 before:content-[''] sm:before:hidden shrink-0 items-center justify-center rounded-md text-morty-text-3 transition-colors hover:bg-morty-fill-opacity-2 hover:text-foreground active:bg-morty-fill-opacity-3 active:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none",
+                    className,
+                )}
                 aria-disabled={copy === "copying"}
                 onClick={model.copy}
                 title="Copy response as Markdown"
