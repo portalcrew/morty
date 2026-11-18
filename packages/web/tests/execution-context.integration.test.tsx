@@ -153,7 +153,9 @@ test("Given a saved conversation and a different draft directory, When the user 
     await app.user.click(app.elementByTestId(dataTestId.newConversation));
     await app.user.click(await app.queryElementByTestId(dataTestId.workingDirectory));
     await app.user.click(app.elementByTestId(dataTestId.changeWorkingDirectory));
-    await app.user.click(await app.waitForView(() => getByRole(document.body, "button", { name: ".." })));
+    await app.user.click(
+        await app.waitForView(() => getByRole(document.body, "button", { name: /^Go to parent folder / })),
+    );
     await app.user.click(
         await app.queryElementByTestId(
             dataTestId.saveWorkingDirectory,

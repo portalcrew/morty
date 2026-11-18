@@ -21,7 +21,10 @@ import type { MouseEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useStore } from "zustand";
 import { MortyLogoMark } from "../../components/brand/morty-logo.tsx";
-import { mobileHeaderIconButtonClassName } from "../../components/chat/chat-header-control.ts";
+import {
+    mobileHeaderIconButtonBelowSmClassName,
+    mobileHeaderIconButtonClassName,
+} from "../../components/chat/chat-header-control.ts";
 import { ComputerOfflineIcon } from "../../components/chat/computer-offline-icon.tsx";
 import {
     mobileSheetHeaderClassName,
@@ -56,6 +59,7 @@ import { type ConversationGroup, groupConversationsByUpdatedAt } from "../../vie
 import { conversationListStatus, hasUnreadConversation } from "../../view-models/chat/conversation-status-store.ts";
 import { pendingExecutionContext, sessionExecutionContext } from "../../view-models/chat/execution-context.ts";
 import { nativeSessionAgentTabs } from "../../view-models/chat/native-session-agents.ts";
+import type { NetworkDiagnosticStore } from "../../view-models/chat/network-diagnostic-store.ts";
 import { sessionConnectionView } from "../../view-models/chat/session-connection-machine.ts";
 import { noSessionDelivery } from "../../view-models/chat/session-delivery-store.ts";
 import { noSessionExecution, pageActivity } from "../../view-models/chat/session-execution.ts";
@@ -138,6 +142,88 @@ function NetworkLatencySkeleton() {
                 </div>
             </NetworkLatencyCard>
         </div>
+    );
+}
+
+function NetworkLatencyDialog({
+    computerId,
+    desktop,
+    diagnostic,
+    onRefresh,
+}: {
+    readonly computerId: string | null;
+    readonly desktop: boolean;
+    readonly diagnostic: NetworkDiagnosticStore;
+    readonly onRefresh: () => void;
+}) {
+    const { state, close } = diagnostic;
+    if (state.kind === "closed") {
+        return null;
+    }
+    const refresh = (
+        <Button
+            aria-label="Refresh network latency"
+            className={mobileHeaderIconButtonBelowSmClassName}
+            disabled={state.kind === "measuring"}
+            onClick={onRefresh}
+            size="icon"
+            title="Refresh network latency"
+            variant="ghost"
+        >
+            <RefreshCw aria-hidden="true" className={`size-4 ${state.kind === "measuring" ? "animate-spin" : ""}`} />
+        </Button>
+    );
+    const content = (
+        <div className="flex flex-col gap-0">
+            <NetworkLatencyIntro computerId={computerId} />
+            {state.kind === "measuring" ? (
+                <NetworkLatencySkeleton />
+            ) : state.kind === "failed" ? (
+                <div className="space-y-4">
+                    <p className="text-destructive" role="alert">
+                        {state.message}
+                    </p>
+                    <Button onClick={onRefresh} variant="outline">
+                        Try again
+                    </Button>
+                </div>
+            ) : (
+                <NetworkLatencyCard>
+                    <dl>
+                        <div className={networkLatencyRowClassName}>
+                            <dt>
+                                <NetworkHopLabel from="Browser" to="Morty" />
+                            </dt>
+                            <dd aria-label="Browser to Morty latency" className="font-mono font-medium" role="status">
+                                {state.browserMortyLatencyMs} ms
+                            </dd>
+                        </div>
+                        <div className={cn(networkLatencyRowClassName, networkLatencyDividerClassName)}>
+                            <dt>
+                                <NetworkHopLabel from="Morty" to="Computer" />
+                            </dt>
+                            <dd aria-label="Morty to Computer latency" className="font-mono font-medium" role="status">
+                                {state.computerLatencyMs} ms
+                            </dd>
+                        </div>
+                    </dl>
+                </NetworkLatencyCard>
+            )}
+        </div>
+    );
+    return desktop ? (
+        <Dialog headerAction={refresh} onClose={close} title="Network latency">
+            {content}
+        </Dialog>
+    ) : (
+        <SheetDialog headerAction={refresh} mobileHeight="content" onClose={close} title="Network latency">
+            {(title) => (
+                <div className="px-5 pb-5">
+                    {title}
+                    {content}
+                </div>
+            )}
+        </SheetDialog>
     );
 }
 
@@ -954,77 +1040,12 @@ export function ConversationSidebar({
                                                 )}
                                             </SheetDialog>
                                         )}
-                                        {diagnostic.state.kind !== "closed" && (
-                                            <Dialog
-                                                title="Network latency"
-                                                headerAction={
-                                                    <Button
-                                                        aria-label="Refresh network latency"
-                                                        disabled={diagnostic.state.kind === "measuring"}
-                                                        onClick={measureNetwork}
-                                                        size="icon"
-                                                        title="Refresh network latency"
-                                                        variant="ghost"
-                                                    >
-                                                        <RefreshCw
-                                                            aria-hidden="true"
-                                                            className={`size-4 ${diagnostic.state.kind === "measuring" ? "animate-spin" : ""}`}
-                                                        />
-                                                    </Button>
-                                                }
-                                                onClose={diagnostic.close}
-                                            >
-                                                <div className="flex flex-col gap-0">
-                                                    <NetworkLatencyIntro computerId={workspace.computerId} />
-                                                    {diagnostic.state.kind === "measuring" ? (
-                                                        <NetworkLatencySkeleton />
-                                                    ) : diagnostic.state.kind === "failed" ? (
-                                                        <div className="space-y-4">
-                                                            <p className="text-destructive" role="alert">
-                                                                {diagnostic.state.message}
-                                                            </p>
-                                                            <Button onClick={measureNetwork} variant="outline">
-                                                                Try again
-                                                            </Button>
-                                                        </div>
-                                                    ) : (
-                                                        <NetworkLatencyCard>
-                                                            <dl>
-                                                                <div className={networkLatencyRowClassName}>
-                                                                    <dt>
-                                                                        <NetworkHopLabel from="Browser" to="Morty" />
-                                                                    </dt>
-                                                                    <dd
-                                                                        aria-label="Browser to Morty latency"
-                                                                        className="font-mono font-medium"
-                                                                        role="status"
-                                                                    >
-                                                                        {diagnostic.state.browserMortyLatencyMs} ms
-                                                                    </dd>
-                                                                </div>
-                                                                <div
-                                                                    className={cn(
-                                                                        networkLatencyRowClassName,
-                                                                        networkLatencyDividerClassName,
-                                                                    )}
-                                                                >
-                                                                    <dt>
-                                                                        <NetworkHopLabel from="Morty" to="Computer" />
-                                                                    </dt>
-                                                                    <dd
-                                                                        aria-label="Morty to Computer latency"
-                                                                        className="font-mono font-medium"
-                                                                        role="status"
-                                                                    >
-                                                                        {diagnostic.state.computerLatencyMs} ms
-                                                                    </dd>
-                                                                </div>
-                                                            </dl>
-                                                        </NetworkLatencyCard>
-                                                    )}
-                                                </div>
-                                            </Dialog>
-                                        )}
+                                        <NetworkLatencyDialog
+                                            computerId={workspace.computerId}
+                                            desktop={desktop}
+                                            diagnostic={diagnostic}
+                                            onRefresh={measureNetwork}
+                                        />
                                         {(access.state.kind === "loading" ||
                                             access.state.kind === "unavailable" ||
                                             access.state.kind === "confirming-end" ||
