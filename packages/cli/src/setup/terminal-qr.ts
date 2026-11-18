@@ -3,6 +3,8 @@ import QRCode from "qrcode";
 // An Agent that captures setup's output hides the terminal's width, so setup assumes a standard terminal there.
 const assumedColumns = 80;
 
+const expandHint = "↑ Scan to open Morty. If this output is folded, expand it to see the QR code.";
+
 /**
  * Draws the QR code with half-block characters for the terminal that runs setup. Blocks are the light modules, so the
  * code scans on the dark background most terminals use even where colors are stripped, and explicit white-on-black
@@ -29,5 +31,6 @@ export async function terminalQrCode(
         return "No QR code fits this terminal. Open the link or the QR image that setup returned.\n";
     }
     const lines = terminal.color ? drawn.map((line) => `\x1b[97;40m${line}\x1b[0m`) : drawn;
-    return `${lines.join("\n")}\n`;
+    // Agents fold command output and keep only its last lines visible, so the way to the code comes last.
+    return `${lines.join("\n")}\n${expandHint}\n`;
 }
