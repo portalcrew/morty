@@ -47,7 +47,7 @@ catalog:
   jsqr: ^1.4.0
   katex: 0.19.1
   knip: ^6.45.1
-  lucide-react: 1.72.0
+  lucide-react: 1.73.0
   marked: 18.2.0
   miniflare: 5.20261023.1-beta
   pino: ^10.4.0
@@ -70,7 +70,7 @@ catalog:
   zustand: 5.1.0
   "@streamdown/mermaid": 1.0.3
   "@streamdown/math": 1.0.3
-  dompurify: 3.4.17
+  dompurify: 3.4.18
 packageExtensions:
   dependency-cruiser@18:
     dependencies:
