@@ -56,7 +56,7 @@ You may install missing prerequisites and pair this machine.
 ## 运行条件
 
 - 电脑上装有并已登录 **Codex**、**Claude Code** 或 **Pi** 其中之一
-- **Node.js 22.19+（22.x）或 24.20+（24.x）**
+- **Node.js 22.19+（22.x）、24.20+（24.x）或 26.x**
 - 连接的机器保持**唤醒并联网**。Morty 是你本地会话的一扇窗，不是云端沙箱；
   电脑休眠时会话随之暂停，重新连上之前浏览器里看不到历史。
 
