@@ -1,6 +1,7 @@
 import { type AnyRouter, RouterProvider } from "@tanstack/react-router";
 import { ArrowLeft, ArrowUpRight, Unplug } from "lucide-react";
 import { SetupConnectionGraphic } from "../../components/setup/setup-connection-graphic.tsx";
+import { SetupDemoVideo } from "../../components/setup/setup-demo-video.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
 import { ExternalLink } from "../../components/ui/external-link.tsx";
 import { MortyAlert } from "../../components/ui/morty-alert.tsx";
@@ -9,7 +10,7 @@ import type { BugReportDialogStore } from "../../view-models/bug-report-dialog-s
 import type { SetupHandoffModel } from "../../view-models/send-link-store.ts";
 import { PairingInstruction } from "../chat/pairing-instruction.tsx";
 import { BugReportButton, BugReportDialogHost } from "../diagnostics/bug-report-button.tsx";
-import { mortyRepository } from "../morty-repository.ts";
+import { mortyDemoPoster, mortyDemoVideo, mortyRepository } from "../morty-repository.ts";
 import { GlobalLoadingPage } from "../setup/global-loading-page.tsx";
 import {
     SetupCardAlert,
@@ -243,6 +244,7 @@ function SetupApplication({
                     </ExternalLink>
                 </p>
             )}
+            {returnHref === null && <SetupDemoVideo poster={mortyDemoPoster} video={mortyDemoVideo} />}
         </SetupCardShell>
     );
 }

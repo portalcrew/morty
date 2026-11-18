@@ -4,6 +4,7 @@ export const centeredOverlayHorizontalInsetClassName = "w-[calc(100%-2rem)]";
 export const dialogDesktopMaxWidthClassName = {
     standard: "max-w-[520px]",
     medium: "max-w-[680px]",
+    wide: "max-w-[960px]",
 } as const;
 
 export const sheetDialogDesktopMaxWidthClassName = "sm:max-w-[840px]";
