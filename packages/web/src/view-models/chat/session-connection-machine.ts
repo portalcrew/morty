@@ -26,7 +26,7 @@ export type SessionConnectionState =
 
 type AttemptFailure =
     | { readonly kind: "session-closed"; readonly reason: string }
-    | { readonly kind: "retryable"; readonly message: string; readonly notice: Notice }
+    | { readonly kind: "retryable" | "computer-reconnected"; readonly message: string; readonly notice: Notice }
     | { readonly kind: "terminal"; readonly message: string };
 
 export type SessionConnectionEvent =
@@ -111,14 +111,15 @@ function failed(
 ): SessionConnectionResult {
     // A requested recovery starts the backoff over, so its failure is retried soon instead of continuing the climb.
     const failures = state.recovery === "requested" ? 0 : state.failures;
-    const next = { failures: failures + 1, recovery: "none" } as const;
+    const handover = failure.kind === "computer-reconnected";
+    const next = { failures: handover ? failures : failures + 1, recovery: "none" } as const;
     if (failure.kind === "terminal") {
         return {
             state: { kind: "waiting", message: failure.message, waiting: { kind: "user" }, ...next },
             effects: [{ kind: "await-computer", notify: false }],
         };
     }
-    const retry = sessionReconnectAttempt(failures, jitter);
+    const retry = handover ? ({ kind: "scheduled", delayMs: 0 } as const) : sessionReconnectAttempt(failures, jitter);
     if (retry.kind === "exhausted") {
         return {
             state: {

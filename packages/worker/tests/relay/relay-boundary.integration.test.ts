@@ -1174,7 +1174,9 @@ it("Given an encrypted live subscription, When a still-connected daemon is repla
         replacement.accept();
         expect(decodeWorkerToDaemonMessage(await replacementMessages.next()).kind).toBe("computer.liveness.ready");
         expect(JSON.parse(await original.messages.next())).toMatchObject({
-            kind: "session.events.end",
+            kind: "session.events.error",
+            code: "session_subscription_replaced",
+            status: 409,
             subscriptionId: original.admission["subscriptionId"],
         });
         expect(decodeWorkerToDaemonMessage(await replacementMessages.next())).toMatchObject({

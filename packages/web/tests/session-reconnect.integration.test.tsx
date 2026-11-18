@@ -517,6 +517,57 @@ test("Given a failed Agent turn, When its Computer reconnects and the conversati
     });
 });
 
+test("Given a draft in an open conversation, When the Computer replaces its connection three times, Then I can send once as soon as it returns and see one reply", {
+    timeout: dedicatedEnvironmentTimeout,
+}, async () => {
+    const environment = await createChatWorkerEnvironment(false, true);
+    onTestFinished(() => environment.close());
+    const app = await createTestApp({ environment, connectAgent: true, clock: new TestClock(CLOCK_ORIGIN) });
+    const composer = await openSavedConversation(app, "Resume this conversation");
+    if (app.daemon === null || app.executionNetwork === null) {
+        throw new Error("Expected the connected Computer and execution-read proxy");
+    }
+    const draft = "Continue in this conversation";
+    await app.user.click(composer);
+    await app.user.paste(draft);
+    const waitForSend = () =>
+        app.waitForView(() => {
+            const send = getByRole(document.body, "button", { name: "Send message" });
+            expect(send).toHaveProperty("disabled", false);
+            expect(send.getAttribute("aria-disabled")).toBeNull();
+            getByRole(document.body, "button", { name: /Switch computer/, description: "Connection available" });
+        });
+    await waitForSend();
+    const execution = app.executionNetwork.holdNextResponse("/active-turn");
+    await app.daemon.replaceConnection();
+    const releaseExecution = await execution;
+    try {
+        await app.waitForView(expectSendExplainsConnection);
+        const access = app.executionNetwork.holdNextResponse("/native-sessions/access");
+        await app.daemon.replaceConnection();
+        const releaseAccess = await access;
+        try {
+            await app.daemon.replaceConnection();
+        } finally {
+            releaseAccess();
+        }
+        await waitForSend();
+        expect(composer.value).toBe(draft);
+    } finally {
+        releaseExecution();
+    }
+    await app.user.click(getByRole(document.body, "button", { name: "Send message" }));
+    await app.waitForView(() => {
+        expect(app.optionalElementByTestId(dataTestId.workingIndicator)).toBeNull();
+        expect(
+            app.elementsByTestId(dataTestId.userMessage).filter((message) => message.textContent?.includes(draft)),
+        ).toHaveLength(1);
+        expect(
+            app.elementsByTestId(dataTestId.agentResponse).filter((reply) => reply.textContent?.includes(draft)),
+        ).toHaveLength(1);
+    });
+});
+
 test("Given a recovered Computer and an unsent draft, When the retry deadline arrives, Then Chat recovers automatically without sending the draft", {
     timeout: 30_000,
 }, async () => {

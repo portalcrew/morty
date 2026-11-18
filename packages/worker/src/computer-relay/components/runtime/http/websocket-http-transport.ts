@@ -6,6 +6,7 @@ import {
     decodeContentChunkFrame,
     FILE_STREAM_CONTENT_TYPE,
     MORTY_API_PREFIX,
+    SESSION_SUBSCRIPTION_REPLACED,
     type SessionEventsSubscribeCommandRouting,
     sessionEventsSubscribeCommandCodec,
 } from "@portalcrew/morty-client/protocol";
@@ -73,6 +74,8 @@ type WebSocketTransportErrorCode =
     | "request_timeout"
     | "request_too_large"
     | "response_too_large"
+    | typeof SESSION_SUBSCRIPTION_REPLACED
+    | "session_unavailable"
     | "streaming_response_unsupported";
 
 const TRANSPORT_ERRORS: Readonly<
@@ -86,6 +89,11 @@ const TRANSPORT_ERRORS: Readonly<
     request_timeout: { message: "The WebSocket transport upload timed out", status: 408 },
     request_too_large: { message: "The WebSocket transport request is too large", status: 413 },
     response_too_large: { message: "The WebSocket transport response is too large", status: 502 },
+    [SESSION_SUBSCRIPTION_REPLACED]: {
+        message: "The Computer reconnected. Subscribe to the Session again.",
+        status: 409,
+    },
+    session_unavailable: { message: "The Session event subscription is unavailable", status: 502 },
     streaming_response_unsupported: {
         message: "The WebSocket transport does not support streaming responses",
         status: 501,
@@ -484,19 +492,13 @@ export function openBrowserTransport(
                             "Session event subscription disconnected",
                         );
                     }
-                    server.send(
-                        JSON.stringify(
-                            current.kind === "pending"
-                                ? {
-                                      kind: "session.events.error",
-                                      subscriptionId,
-                                      code: "session_unavailable",
-                                      status: 502,
-                                      message: "The Session event subscription is unavailable",
-                                  }
-                                : { kind: "session.events.end", subscriptionId },
-                        ),
-                    );
+                    if (code === 1012) {
+                        sendSubscriptionError(subscriptionId, transportError(SESSION_SUBSCRIPTION_REPLACED));
+                    } else if (current.kind === "pending") {
+                        sendSubscriptionError(subscriptionId, transportError("session_unavailable"));
+                    } else {
+                        server.send(JSON.stringify({ kind: "session.events.end", subscriptionId }));
+                    }
                 }
             }
             subscriptionController.abort(new DOMException("Session event subscription closed", "AbortError"));

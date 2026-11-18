@@ -274,6 +274,15 @@ export async function connectControlledAgentRuntime(options: {
             };
         },
         disconnect,
+        /** Connect the same Computer while the Relay still has its previous socket, as after a one-sided reset. */
+        replaceConnection: async (): Promise<void> => {
+            if (state.kind !== "running") {
+                throw new Error("Expected a connected controlled Computer");
+            }
+            const previous = state.runtime;
+            state = { kind: "running", runtime: await start() };
+            await previous.stop();
+        },
         reconnect: async (): Promise<void> => {
             if (state.kind === "disposed") {
                 throw new Error("Cannot reconnect a disposed controlled Computer");

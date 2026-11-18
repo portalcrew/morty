@@ -141,6 +141,7 @@ export {
     SESSION_EVENT_KIND,
     SESSION_EVENTS_SUBSCRIBE_KIND,
     SESSION_EVENTS_UNSUBSCRIBE_KIND,
+    SESSION_SUBSCRIPTION_REPLACED,
     sessionEventEnvelopeCodec,
     sessionEventsSubscribeCommandCodec,
 } from "./session/events/index.ts";
