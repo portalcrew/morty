@@ -154,7 +154,7 @@ export function BotChatComposer({
     const clipped = useScrollClippedEdges(scrollViewport, composerScrollEdgeThresholdPx);
     const { attachments, state: attachmentState } = attachmentModel;
     const showToast = useToast();
-    const { active, activate, mobile, setActive } = useMobileComposerActive(textarea);
+    const { active, activate, mobile, setActive, transitionsEnabled } = useMobileComposerActive(textarea);
     useEffect(() => {
         if (!mobile) {
             return;
@@ -179,6 +179,7 @@ export function BotChatComposer({
         attachmentState.kind !== "reading" &&
         outputState !== "sending";
     const collapsed = mobile && !active && canCollapse;
+    const animateComposer = !mobile || transitionsEnabled;
     const explainBlockedSend =
         outputState === "idle" &&
         submitDisabled &&
@@ -278,7 +279,10 @@ export function BotChatComposer({
             />
             <div
                 className={cn(
-                    "relative flex max-h-64 flex-col rounded-[24px] border-[0.5px] border-border bg-surface-elevated px-3 pt-3 pb-2.5 shadow-[0_8px_28px_rgba(23,30,36,0.06)] transition-[height,border-radius,padding] duration-250 ease-in-out motion-reduce:transition-none max-sm:overflow-hidden max-sm:border-[1px] max-sm:border-white max-sm:bg-card sm:min-h-[128px] sm:pb-3 sm:has-[:focus]:border-[var(--color-border)]",
+                    "relative flex max-h-64 flex-col rounded-[24px] border-[0.5px] border-border bg-surface-elevated px-3 pt-3 pb-2.5 shadow-[0_8px_28px_rgba(23,30,36,0.06)] max-sm:overflow-hidden max-sm:border-[1px] max-sm:border-white max-sm:bg-card sm:min-h-[128px] sm:pb-3 sm:has-[:focus]:border-[var(--color-border)]",
+                    animateComposer
+                        ? "transition-[height,border-radius,padding] duration-250 ease-in-out motion-reduce:transition-none"
+                        : "transition-none",
                     "max-sm:shadow-[0_4px_16px_0_rgba(0,0,0,0.04),0_4px_24px_0_rgba(0,0,0,0.06)]",
                     !collapsed && draft.length === 0 && attachments.length === 0 && "max-sm:h-[128px]",
                     collapsed && "max-sm:h-14 max-sm:rounded-[28px] max-sm:px-2 max-sm:py-2",
@@ -287,7 +291,10 @@ export function BotChatComposer({
                 <div
                     aria-hidden={!collapsed}
                     className={cn(
-                        "absolute inset-0 flex items-center justify-between px-3 transition-[opacity,visibility] duration-250 ease-in-out motion-reduce:transition-none sm:hidden",
+                        "absolute inset-0 flex items-center justify-between px-3 sm:hidden",
+                        animateComposer
+                            ? "transition-[opacity,visibility] duration-250 ease-in-out motion-reduce:transition-none"
+                            : "transition-none",
                         collapsed ? "opacity-100" : "pointer-events-none invisible opacity-0",
                     )}
                 >
@@ -337,7 +344,10 @@ export function BotChatComposer({
                 <div
                     aria-hidden={collapsed || undefined}
                     className={cn(
-                        "flex min-h-0 flex-col transition-[opacity,visibility,transform] duration-250 ease-in-out motion-reduce:transition-none",
+                        "flex min-h-0 flex-col",
+                        animateComposer
+                            ? "transition-[opacity,visibility,transform] duration-250 ease-in-out motion-reduce:transition-none"
+                            : "transition-none",
                         collapsed &&
                             "max-sm:pointer-events-none max-sm:invisible max-sm:translate-y-2 max-sm:opacity-0",
                     )}
