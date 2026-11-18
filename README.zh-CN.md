@@ -27,6 +27,12 @@ metadata:
 Agent 在电脑上工作，你可以用手机、平板或另一台电脑查看进展，给出下一条指令。
 Morty 把正在进行的对话带到你手边。
 
+<p align="center">
+  <a href="https://cdn.jsdelivr.net/gh/portalcrew/morty@c5b793ff4aecc0a2db3bd78f25f8c20a4c1e0bd1/docs/assets/morty-demo.mp4"><img src="https://raw.githubusercontent.com/portalcrew/morty/c5b793ff4aecc0a2db3bd78f25f8c20a4c1e0bd1/docs/assets/morty-demo.jpg" width="760" alt="手机上的 Morty 显示 Agent 发来的文件编辑审批请求" /></a>
+  <br />
+  <a href="https://cdn.jsdelivr.net/gh/portalcrew/morty@c5b793ff4aecc0a2db3bd78f25f8c20a4c1e0bd1/docs/assets/morty-demo.mp4"><strong>▶ 观看演示 · 1 分钟</strong></a>
+</p>
+
 ## 工作进展，随时掌握
 
 - **看见正在发生的事。** 实时查看回复和工具执行进展，打开对话中的文件和生成的图片。
