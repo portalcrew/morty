@@ -14,13 +14,10 @@ updates:
         update-types:
           - version-update:semver-major
       # The Worker and the generated migrations stay on the stable 0.x line. The CLI pins its own 1.0 release candidate
-      # for the node:sqlite driver, and moves it by hand, orm and kit together.
+      # for the node:sqlite driver. An update moves every occurrence of a dependency to one version, which would put the
+      # CLI on the stable line, so both lines move by hand, orm and kit together.
       - dependency-name: "drizzle-orm"
-        update-types:
-          - version-update:semver-major
       - dependency-name: "drizzle-kit"
-        update-types:
-          - version-update:semver-major
     # Groups follow risk, so a breaking change in one area never holds back the others. A dependency joins the first
     # group whose patterns match it.
     groups:
@@ -37,6 +34,16 @@ updates:
           - "wrangler"
           - "miniflare"
           - "@cloudflare/*"
+        update-types:
+          - minor
+          - patch
+      # The browser and acceptance jobs run in the Playwright image of the suite's exact version, which Dependabot does
+      # not update: its pull request also moves the image in morty-pipeline.yml before it merges.
+      playwright:
+        patterns:
+          - "@playwright/*"
+          - "playwright"
+          - "playwright-core"
         update-types:
           - minor
           - patch
