@@ -1,11 +1,16 @@
-import { type RefObject, useEffect, useLayoutEffect, useState } from "react";
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useState } from "react";
 
 const mobileComposerQuery = "(max-width: 639px)";
 
 /** Keep a restored textarea focus visible before the first mobile paint. */
 export function useMobileComposerActive(textarea: RefObject<HTMLTextAreaElement | null>) {
     const [mobile, setMobile] = useState(() => window.matchMedia(mobileComposerQuery).matches);
-    const [active, setActive] = useState(true);
+    const [active, setActiveState] = useState(true);
+    const [transitionsEnabled, setTransitionsEnabled] = useState(false);
+    const setActive = useCallback((value: boolean) => {
+        setTransitionsEnabled(true);
+        setActiveState(value);
+    }, []);
 
     useEffect(() => {
         const query = window.matchMedia(mobileComposerQuery);
@@ -17,7 +22,7 @@ export function useMobileComposerActive(textarea: RefObject<HTMLTextAreaElement 
 
     useLayoutEffect(() => {
         if (mobile && document.activeElement !== textarea.current) {
-            setActive(false);
+            setActiveState(false);
         }
     }, [mobile, textarea]);
 
@@ -26,5 +31,5 @@ export function useMobileComposerActive(textarea: RefObject<HTMLTextAreaElement 
         setActive(true);
     };
 
-    return { active, activate, mobile, setActive };
+    return { active, activate, mobile, setActive, transitionsEnabled };
 }
