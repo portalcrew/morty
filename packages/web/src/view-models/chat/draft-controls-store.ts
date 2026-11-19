@@ -1,3 +1,4 @@
+import { MortyOperationError } from "@portalcrew/morty-client";
 import type {
     SessionConfigOption,
     SessionConfigurationSelection,
@@ -26,6 +27,7 @@ import { isComputerConnectionFailure } from "@/services/management/management-ap
 import type { AgentModelCatalog } from "../../services/diagnostics/model-catalog.ts";
 import { formatError } from "../format-error.ts";
 import { harnessOptions, nativeSessionAgentTabs } from "./native-session-agents.ts";
+import { type DirectoryAvailability, type SessionDirectory, sessionDirectories } from "./recent-directories.ts";
 
 /**
  * The open draft's Agent settings. Whether the Computer is online or offers an Agent is the Computer configuration's to
@@ -120,6 +122,7 @@ type CwdBrowserState =
 
 export interface DraftControlsStore {
     readonly cwdBrowser: CwdBrowserState;
+    readonly directoryAvailability: ReadonlyMap<string, DirectoryAvailability>;
     readonly recentCwds: readonly RecentCwdPreference[];
     readonly settings: DraftSettingsState;
     readonly browseCwd: (directory: string, signal: AbortSignal) => Promise<void>;
@@ -132,11 +135,12 @@ export interface DraftControlsStore {
     readonly openCwd: () => void;
     readonly refreshRecentCwds: () => void;
     readonly saveCwd: (signal: AbortSignal) => Promise<void>;
-    readonly selectRecentCwd: (directory: string, signal: AbortSignal) => Promise<void>;
+    readonly selectRecentCwd: (recent: RecentCwdPreference, signal: AbortSignal) => Promise<void>;
     readonly selectHarness: (value: string, disabled: boolean, signal: AbortSignal) => Promise<void>;
     readonly selectOption: (configId: string, value: string) => void;
     readonly toggleOption: (configId: string) => void;
     readonly setCwdPath: (path: string, signal: AbortSignal) => void;
+    readonly verifySessionDirectories: (sessions: readonly SessionDirectory[], signal: AbortSignal) => Promise<void>;
 }
 
 const CWD_PREVIEW_DEBOUNCE_MILLISECONDS = 1_000;
@@ -171,6 +175,7 @@ export const createDraftControlsStore = (
 ) =>
     createStore<DraftControlsStore>()((set, get) => {
         let cwdOperation: AbortController | null = null;
+        let directoryVerification: AbortController | null = null;
         // Agent settings belong to the Computer configuration they were read under: a different configuration, as
         // after the Computer reconnects or its Agents change, drops them. They also belong to the directory a Session
         // would start in, whose project settings the Agent reads.
@@ -500,6 +505,7 @@ export const createDraftControlsStore = (
         };
         return {
             cwdBrowser: { kind: "closed" },
+            directoryAvailability: new Map(),
             recentCwds: readRecentCwdPreferences(computerId) ?? [],
             settings: { kind: "loading" },
             browseCwd,
@@ -649,10 +655,9 @@ export const createDraftControlsStore = (
                     await applyDirectory(settings, directory, signal);
                 }
             },
-            selectRecentCwd: async (directory, signal) => {
+            selectRecentCwd: async (recent, signal) => {
                 const settings = get().settings;
-                const recent = get().recentCwds.find((recent) => recent.directory === directory);
-                if (settings.kind !== "ready" || recent === undefined) {
+                if (settings.kind !== "ready") {
                     return;
                 }
                 const operation = beginDirectoryChoice(signal);
@@ -660,7 +665,7 @@ export const createDraftControlsStore = (
                     return;
                 }
                 try {
-                    const listing = await requests.directory(directory, operation.signal);
+                    const listing = await requests.directory(recent.directory, operation.signal);
                     operation.signal.throwIfAborted();
                     if (operation.current()) {
                         operation.release();
@@ -751,6 +756,42 @@ export const createDraftControlsStore = (
                     cwdOperation = null;
                     set({ cwdBrowser: { kind: "previewing", directory: browser.directory, path } });
                     void previewCwd(path, signal);
+                }
+            },
+            verifySessionDirectories: async (sessions, parent) => {
+                directoryVerification?.abort(new Error("A newer Session listing arrived."));
+                const verification = new AbortController();
+                directoryVerification = verification;
+                const signal = AbortSignal.any([parent, verification.signal]);
+                try {
+                    for (const { directory } of sessionDirectories(sessions)) {
+                        if (get().directoryAvailability.has(directory)) {
+                            continue;
+                        }
+                        let availability: DirectoryAvailability;
+                        try {
+                            await requests.directory(directory, signal);
+                            availability = "available";
+                        } catch (cause) {
+                            signal.throwIfAborted();
+                            // Only the Computer's refusal shows a directory is gone; any other failure leaves every
+                            // directory unconfirmed until the next listing.
+                            if (
+                                !(cause instanceof MortyOperationError && cause.code === "local_authorization_failed")
+                            ) {
+                                return;
+                            }
+                            availability = "missing";
+                        }
+                        signal.throwIfAborted();
+                        set({
+                            directoryAvailability: new Map(get().directoryAvailability).set(directory, availability),
+                        });
+                    }
+                } finally {
+                    if (directoryVerification === verification) {
+                        directoryVerification = null;
+                    }
                 }
             },
         };

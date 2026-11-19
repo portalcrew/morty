@@ -4,6 +4,7 @@ import { useState } from "react";
 import { dataTestId } from "@/data-testid";
 import { cn } from "@/lib/utils";
 import type { DraftControlsStore } from "@/view-models/chat/draft-controls-store";
+import type { RecentDirectory } from "@/view-models/chat/recent-directories";
 import { Button } from "../ui/cloud-button.tsx";
 import { dialogSectionTitleClassName, SheetDialog } from "../ui/dialog.tsx";
 import { inputClassName } from "../ui/input.tsx";
@@ -83,10 +84,12 @@ export function ReadonlyWorkingDirectory({
 
 export function CwdSelector({
     disabled,
+    recentLocations,
     signal,
     viewModel,
 }: {
     readonly disabled: boolean;
+    readonly recentLocations: readonly RecentDirectory[];
     readonly signal: AbortSignal;
     readonly viewModel: DraftControlsStore;
 }) {
@@ -162,8 +165,9 @@ export function CwdSelector({
                                 edgeStroke={{ className: "border-white/80", placement: "inside" }}
                                 revealSurface
                             >
-                                {viewModel.recentCwds.map((recent) => {
+                                {recentLocations.map((recent) => {
                                     const selected = recent.directory === settings.cwd.directory;
+                                    const forgettable = recent.source === "chosen";
                                     return (
                                         <div
                                             className="group/recent relative flex h-9 items-center rounded-md hover:bg-accent focus-within:bg-accent"
@@ -172,12 +176,12 @@ export function CwdSelector({
                                             <button
                                                 className={cn(
                                                     "flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-3 text-left outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60",
-                                                    selected && "pr-7",
+                                                    selected && forgettable && "pr-7",
                                                 )}
                                                 data-testid={dataTestId.recentWorkingDirectory}
                                                 onClick={() => {
                                                     setMenuOpen(false);
-                                                    void viewModel.selectRecentCwd(recent.directory, signal);
+                                                    void viewModel.selectRecentCwd(recent, signal);
                                                 }}
                                                 role="menuitem"
                                                 title={recent.directoryLabel}
@@ -189,31 +193,40 @@ export function CwdSelector({
                                             {selected ? (
                                                 <Check
                                                     aria-hidden="true"
-                                                    className="pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 text-copy-secondary group-hover/recent:-translate-x-7 group-focus-within/recent:-translate-x-7"
+                                                    className={cn(
+                                                        "pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 text-copy-secondary",
+                                                        forgettable &&
+                                                            "group-hover/recent:-translate-x-7 group-focus-within/recent:-translate-x-7",
+                                                    )}
                                                 />
                                             ) : null}
-                                            <Tooltip.Root>
-                                                <Tooltip.Trigger asChild>
-                                                    <button
-                                                        aria-label={`Forget recent working directory ${recent.directoryLabel}`}
-                                                        className="absolute top-1/2 right-1 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-copy-secondary opacity-0 outline-none transition-[color,opacity] duration-150 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 group-hover/recent:opacity-100 group-focus-within/recent:opacity-100 motion-reduce:transition-none"
-                                                        data-testid={dataTestId.forgetRecentWorkingDirectory}
-                                                        onClick={(event) => {
-                                                            event.stopPropagation();
-                                                            viewModel.forgetRecentCwd(recent.directory);
-                                                        }}
-                                                        type="button"
-                                                    >
-                                                        <X aria-hidden="true" className="size-4" />
-                                                    </button>
-                                                </Tooltip.Trigger>
-                                                <Tooltip.Portal>
-                                                    <MortyTooltipContent side="top" sideOffset={overlayTriggerOffsetPx}>
-                                                        Forget recent location
-                                                        <Tooltip.Arrow className="fill-foreground" />
-                                                    </MortyTooltipContent>
-                                                </Tooltip.Portal>
-                                            </Tooltip.Root>
+                                            {forgettable && (
+                                                <Tooltip.Root>
+                                                    <Tooltip.Trigger asChild>
+                                                        <button
+                                                            aria-label={`Forget recent working directory ${recent.directoryLabel}`}
+                                                            className="absolute top-1/2 right-1 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-copy-secondary opacity-0 outline-none transition-[color,opacity] duration-150 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 group-hover/recent:opacity-100 group-focus-within/recent:opacity-100 motion-reduce:transition-none"
+                                                            data-testid={dataTestId.forgetRecentWorkingDirectory}
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                viewModel.forgetRecentCwd(recent.directory);
+                                                            }}
+                                                            type="button"
+                                                        >
+                                                            <X aria-hidden="true" className="size-4" />
+                                                        </button>
+                                                    </Tooltip.Trigger>
+                                                    <Tooltip.Portal>
+                                                        <MortyTooltipContent
+                                                            side="top"
+                                                            sideOffset={overlayTriggerOffsetPx}
+                                                        >
+                                                            Forget recent location
+                                                            <Tooltip.Arrow className="fill-foreground" />
+                                                        </MortyTooltipContent>
+                                                    </Tooltip.Portal>
+                                                </Tooltip.Root>
+                                            )}
                                         </div>
                                     );
                                 })}

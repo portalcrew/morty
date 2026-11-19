@@ -42,21 +42,27 @@ export interface ConversationDirectoryStore {
     readonly load: (signal: AbortSignal, mode?: DirectoryLoadMode) => Promise<void>;
 }
 
-/** Titles are joined at read time, so the list, pane and dialogs share the same Session fact. */
-export function conversationDirectorySessions(
-    state: ConversationDirectoryState,
-    titles: SessionTitles,
-): readonly ManagedChatSession[] | null {
+export function listedSessions(state: ConversationDirectoryState): readonly DirectorySession[] | null {
     switch (state.kind) {
         case "ready":
         case "refreshing":
         case "stale":
-            return state.sessions.map((session) => ({ ...session, title: sessionTitle(titles, session.target) }));
+            return state.sessions;
         case "loading":
         case "setup-required":
         case "failed":
             return null;
     }
+}
+
+/** Titles are joined at read time, so the list, pane and dialogs share the same Session fact. */
+export function conversationDirectorySessions(
+    state: ConversationDirectoryState,
+    titles: SessionTitles,
+): readonly ManagedChatSession[] | null {
+    return (
+        listedSessions(state)?.map((session) => ({ ...session, title: sessionTitle(titles, session.target) })) ?? null
+    );
 }
 
 export const createConversationDirectoryStore = (

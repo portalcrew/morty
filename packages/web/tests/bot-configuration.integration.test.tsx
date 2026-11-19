@@ -567,6 +567,70 @@ test("Given a chosen New Session directory the Computer briefly cannot read, Whe
     }
 });
 
+test("Given Sessions were started in three directories and the oldest directory was deleted, When the user opens the working directory menu in a browser that never chose them, Then the remaining directories are offered most recently used first", {
+    timeout: 120_000,
+}, async () => {
+    const root = await mkdtemp(join(tmpdir(), "morty-session-directories-"));
+    try {
+        const projects = await Promise.all(
+            ["deleted-project", "older-project", "newer-project"].map(async (name) => {
+                const project = join(await realpath(root), name);
+                await mkdir(project);
+                return { name, project };
+            }),
+        );
+        const app = await createTestApp({ connectAgent: true });
+        for (const { name, project } of projects) {
+            await app.user.click(await app.queryElementByTestId(dataTestId.workingDirectory));
+            await app.user.click(await app.queryElementByTestId(dataTestId.changeWorkingDirectory));
+            const path = await app.queryElementByTestId(dataTestId.workingDirectoryPath);
+            await app.user.clear(path);
+            await app.user.type(path, project);
+            await app.user.click(
+                await app.queryElementByTestId(
+                    dataTestId.saveWorkingDirectory,
+                    (element) => element instanceof HTMLButtonElement && !element.disabled,
+                ),
+            );
+            await app.queryElementByTestId(
+                dataTestId.workingDirectory,
+                (element) => element.textContent?.includes(name) === true,
+            );
+            await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), `Work in ${name}`);
+            await app.queryElementByTestId(
+                dataTestId.agentResponse,
+                (element) => element.textContent?.includes(`Work in ${name}`) === true,
+            );
+            await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
+        }
+        const [deleted] = projects;
+        if (deleted === undefined) {
+            throw new Error("Expected a project to delete");
+        }
+        await rm(deleted.project, { recursive: true });
+        for (const key of Object.keys(window.localStorage)) {
+            if (key.startsWith("morty:recent-cwd:") || key.startsWith("morty:last-cwd:")) {
+                window.localStorage.removeItem(key);
+            }
+        }
+
+        const fresh = await app.reload();
+        await fresh.user.click(await fresh.queryElementByTestId(dataTestId.workingDirectory));
+
+        await fresh.waitForView(() => {
+            const offered = fresh
+                .elementsByTestId(dataTestId.recentWorkingDirectory)
+                .map((element) => element.getAttribute("title") ?? "");
+            expect(offered[0]).toContain("newer-project");
+            expect(offered[1]).toContain("older-project");
+            expect(offered.some((label) => label.includes("deleted-project"))).toBe(false);
+        });
+        await fresh.close();
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
 test("Given a Bot paired with the Claude harness, When the user opens its settings, Then the Claude brand mark labels the harness field and the trigger", {
     timeout: 30_000,
 }, async () => {

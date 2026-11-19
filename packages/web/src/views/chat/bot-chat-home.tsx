@@ -44,6 +44,7 @@ import {
     conversationCreationStatus,
     queuedDraftMessage,
 } from "../../view-models/chat/conversation-creation-machine.ts";
+import { listedSessions } from "../../view-models/chat/conversation-directory-store.ts";
 import { selectedConversationTarget } from "../../view-models/chat/conversation-selection-machine.ts";
 import type { DraftControlsStore } from "../../view-models/chat/draft-controls-store.ts";
 import { activeHarnessMark, pendingExecutionContext } from "../../view-models/chat/execution-context.ts";
@@ -51,6 +52,7 @@ import {
     conversationReadPending,
     pendingConversationPresentation,
 } from "../../view-models/chat/pending-conversation-presentation.ts";
+import { type RecentDirectory, recentDirectories } from "../../view-models/chat/recent-directories.ts";
 import { describeLoadFailure, type PageFailure } from "../../view-models/format-error.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
@@ -87,11 +89,13 @@ type BotChatHomeProps = {
 
 function DraftLandingDirectory({
     disabled,
+    recentLocations,
     settingsKind,
     signal,
     viewModel,
 }: {
     readonly disabled: boolean;
+    readonly recentLocations: readonly RecentDirectory[];
     readonly settingsKind: DraftControlsStore["settings"]["kind"];
     readonly signal: AbortSignal;
     readonly viewModel: DraftControlsStore;
@@ -109,7 +113,7 @@ function DraftLandingDirectory({
     }
     return (
         <div className="mt-5">
-            <CwdSelector disabled={disabled} signal={signal} viewModel={viewModel} />
+            <CwdSelector disabled={disabled} recentLocations={recentLocations} signal={signal} viewModel={viewModel} />
         </div>
     );
 }
@@ -156,6 +160,7 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
     const model = useStore(store);
     const computer = useStore(workspace.computer);
     const draftControls = useStore(workspace.draftControls);
+    const sessions = useStore(workspace.directory, (state) => listedSessions(state.state)) ?? [];
     const executionContext = pendingExecutionContext(model, computer, draftControls.settings);
     const attachmentModel = useStore(model.composerAttachments);
     const connectionStatus = botConnectionStatus(computer);
@@ -386,6 +391,11 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                                             {canStartConversation && model.selection.kind === "draft" && (
                                                 <DraftLandingDirectory
                                                     disabled={composerLocked}
+                                                    recentLocations={recentDirectories(
+                                                        sessions,
+                                                        draftControls.recentCwds,
+                                                        draftControls.directoryAvailability,
+                                                    )}
                                                     settingsKind={draftControls.settings.kind}
                                                     signal={workspace.chatSignal()}
                                                     viewModel={draftControls}
