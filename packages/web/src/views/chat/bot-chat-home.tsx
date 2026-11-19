@@ -13,7 +13,7 @@ import {
 } from "../../components/chat/chat-session-layout.ts";
 import { ChatVisibleViewport } from "../../components/chat/chat-visible-viewport.tsx";
 import { ComputerOfflineIcon } from "../../components/chat/computer-offline-icon.tsx";
-import { ConnectionNotice } from "../../components/chat/connection-notice.tsx";
+import { ConnectionNotice, RestartCommand, restartCommand } from "../../components/chat/connection-notice.tsx";
 import { CwdSelector } from "../../components/chat/cwd-selector.tsx";
 import { HarnessMark } from "../../components/chat/harness-mark.tsx";
 import { MessageDeliveryStatus } from "../../components/chat/message-delivery-status.tsx";
@@ -179,6 +179,7 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
     const draft = model.draft;
     const titles = useStore(workspace.titles, (state) => state.titles);
     const pendingConversation = pendingConversationPresentation(model.selection, computer, titles);
+    const offlineRestartCommand = restartCommand(executionContext.feedback);
     const canStartConversation = homeCanStartConversation(model, computer);
     const presentation = newConversationPresentation(
         model,
@@ -319,6 +320,11 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                                                     Your unsent draft will be restored with this session.
                                                 </p>
                                             </div>
+                                            {offlineRestartCommand !== null && (
+                                                <div className="text-sm text-muted-foreground">
+                                                    <RestartCommand command={offlineRestartCommand} />
+                                                </div>
+                                            )}
                                             <Button onClick={store.getState().retry}>Reconnect</Button>
                                         </div>
                                     ) : computer.entry.kind === "loading" ? (

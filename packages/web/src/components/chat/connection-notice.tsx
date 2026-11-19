@@ -47,10 +47,10 @@ function RetryAction({ className, onClick }: { readonly className: string; reado
  * The restart command on its own row: monospace and unbroken so it can be typed exactly,
  * with a copy action for when Morty is open on that computer.
  */
-function RestartCommand({ command }: { readonly command: string }) {
+export function RestartCommand({ command }: { readonly command: string }) {
     return (
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 font-normal">
-            <span>After a restart, run</span>
+            <span>After a restart, Morty must be started again. On that computer, run</span>
             <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1">
                 <ScrollArea
                     className="max-w-full shrink rounded-md bg-muted"
@@ -76,6 +76,10 @@ function RestartCommand({ command }: { readonly command: string }) {
             </span>
         </div>
     );
+}
+
+export function restartCommand(feedback: ConnectionFeedback): string | null {
+    return feedback.kind === "waiting" || feedback.kind === "retrying" ? feedback.restartCommand : null;
 }
 
 function retryButton(feedback: VisibleFeedback, onRetryNow: () => void, className: string): ReactNode {
@@ -124,16 +128,14 @@ export function ConnectionNotice({
         : "relative min-h-5 before:absolute before:inset-x-0 before:top-1/2 before:h-11 before:-translate-y-1/2 before:content-[''] sm:before:hidden";
     const retry = retryButton(feedback, onRetryNow, actionClassName);
     const testId = noticeTestId(feedback);
-    const restart =
-        (feedback.kind === "waiting" || feedback.kind === "retrying") && feedback.restartCommand !== null ? (
-            <RestartCommand command={feedback.restartCommand} />
-        ) : null;
+    const command = restartCommand(feedback);
+    const restart = command === null ? null : <RestartCommand command={command} />;
 
-    // The waiting state reads as a compact chip: title only, in a
+    // A waiting state that asks nothing of the user reads as a compact chip: title only, in a
     // button-like shape on the chat surface so it sits left-aligned with the
     // composer instead of spanning the pane. The trailing ellipsis animates
     // dot by dot; the clipped span keeps its full width so layout never shifts.
-    if (feedback.kind === "waiting" && !inline) {
+    if (feedback.kind === "waiting" && restart === null && !inline) {
         const title = feedback.title.endsWith("…") ? feedback.title.slice(0, -1) : feedback.title;
         const chip = (
             <div

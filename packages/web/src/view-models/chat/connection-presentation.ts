@@ -4,13 +4,15 @@ import type { ConversationSelectionState } from "./conversation-selection-machin
 import type { SessionConnection } from "./session-connection.ts";
 
 /** A computer goes offline when it sleeps, loses its network, or restarts; only a restart needs the user to start Morty again. */
-const COMPUTER_OFFLINE_RECOVERY = "Make sure it’s awake and online. Your draft is saved.";
+const COMPUTER_OFFLINE_RECOVERY =
+    "If it’s asleep or lost its connection, Morty reconnects when it’s back. Your draft is saved.";
 const RETRY_IN_PROGRESS_STATUS: ConnectionFeedback = {
     kind: "attempting",
     title: "Retrying…",
     description: "Trying to reconnect now. Your draft is saved.",
 };
-const MORTY_START_COMMAND = "npx @portalcrew/morty@latest start";
+// `--yes` keeps a first run on that computer from stopping at npx's install prompt.
+const MORTY_START_COMMAND = "npx --yes @portalcrew/morty@latest start";
 const COMPUTER_REVOKED_RECOVERY =
     "Its connection key was used somewhere else, so Morty disconnected it to keep your account safe. Run the Morty setup prompt on that computer again to reconnect it. Your agent's own sessions stay on that computer.";
 
