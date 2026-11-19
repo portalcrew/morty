@@ -221,6 +221,10 @@ export function createChatWorkspace(options: {
         requests,
         (sessions, previous) => {
             statuses.getState().directoryLoaded(sessions, previous);
+            void draftControls
+                .getState()
+                .verifySessionDirectories(sessions, operationsLifetime.signal)
+                .catch(() => undefined);
         },
         options.clock,
         titles,
