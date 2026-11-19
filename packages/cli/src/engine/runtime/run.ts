@@ -19,13 +19,16 @@ import { RuntimeSessionEventPublisher } from "./relay/session-event-publisher.ts
 
 const RELAY_RECONNECT_DELAY_MILLISECONDS = 500;
 
-function waitForRelayRetry(signal: AbortSignal, timer: Timer): Promise<void> {
+function waitForRelayRetry(signal: AbortSignal, timer: Timer, failures: number): Promise<void> {
     if (signal.aborted) {
         return Promise.resolve();
     }
 
     return new Promise((resolve) => {
-        const retry = timer.schedule(finish, RELAY_RECONNECT_DELAY_MILLISECONDS);
+        const ceiling = Math.min(60_000, RELAY_RECONNECT_DELAY_MILLISECONDS * 2 ** Math.min(failures - 1, 7));
+        const delay =
+            RELAY_RECONNECT_DELAY_MILLISECONDS + Math.random() * (ceiling - RELAY_RECONNECT_DELAY_MILLISECONDS);
+        const retry = timer.schedule(finish, Math.round(delay));
 
         function finish(): void {
             retry.cancel();
@@ -53,8 +56,9 @@ async function publishAgentCatalogUntilAvailable(
         diagnostics.catalogFailed(error);
     }
 
+    let failures = 0;
     while (!signal.aborted) {
-        await waitForRelayRetry(signal, timer);
+        await waitForRelayRetry(signal, timer, ++failures);
         try {
             await publishAgentCatalog(config, signal);
             return;
@@ -147,6 +151,7 @@ export async function runRuntime(
         };
         options.onInitialized?.();
         let connectionAttempt = 0;
+        let failures = 0;
         let connectionAnnounced = false;
         let catalogPublished = false;
         let readinessAnnounced = false;
@@ -185,6 +190,7 @@ export async function runRuntime(
             while (!signal.aborted) {
                 connectionAttempt += 1;
                 const connection = diagnostics.connection(connectionAttempt);
+                let confirmedAt: number | undefined;
                 try {
                     await runRelayConnection({
                         services,
@@ -194,6 +200,7 @@ export async function runRuntime(
                         connection,
                         diagnostics,
                         onConnected: () => {
+                            confirmedAt ??= Date.now();
                             if (catalogPublished) {
                                 options.onConnectionStatus?.("online");
                             }
@@ -213,7 +220,10 @@ export async function runRuntime(
                 }
 
                 options.onConnectionStatus?.("reconnecting");
-                await waitForRelayRetry(signal, timer);
+                if (confirmedAt !== undefined && Date.now() - confirmedAt >= 60_000) {
+                    failures = 0;
+                }
+                await waitForRelayRetry(signal, timer, ++failures);
             }
         } finally {
             shutdown.abort();

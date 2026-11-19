@@ -21,6 +21,7 @@ import { requestTimeoutMiddleware } from "../../middleware/request-timeout-middl
 import { createRelayProtocolRoutes } from "../components/management/http/protocol-routes.ts";
 import type { ComputerRouteContext } from "../composition/computer-route-context.ts";
 import type { ComputerRouteHttpEnvironment } from "./environment.ts";
+import { retiredDaemonResponse } from "./retired-daemon.ts";
 
 export function createComputerHttpRoutes(
     ctx: ComputerRouteContext,
@@ -59,9 +60,19 @@ export function createComputerHttpRoutes(
             // opens storage for it. A CORS preflight asks for nothing, so it is answered either way.
             .use("*", async (context, next) => {
                 if (context.req.method !== "OPTIONS" && !ctx.holdsComputer()) {
+                    if (
+                        context.req.method === "GET" &&
+                        context.req.path === `${MORTY_API_PREFIX}/v1/computers/connect` &&
+                        context.req.header("upgrade")?.toLowerCase() === "websocket"
+                    ) {
+                        const response = await retiredDaemonResponse(context.req.raw, ctx.bindings.COMPUTER_RELAY);
+                        if (response !== null) {
+                            return response;
+                        }
+                    }
                     throw computerNotFound();
                 }
-                await next();
+                return await next();
             })
             .route("/", createRelayProtocolRoutes({ services: { forComputer: ctx.services.relay } }))
             .get(

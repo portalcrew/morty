@@ -1,4 +1,4 @@
-import { abortAllDurableObjects } from "cloudflare:test";
+import { abortAllDurableObjects, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import {
     COMPUTER_SUCCESSOR_CREDENTIAL_HEADER,
@@ -8,6 +8,7 @@ import {
 import { afterAll, afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createTestMortyRelayApp } from "../../../relay-test-support/src/app.ts";
 import { RelayAuthenticationConfiguration } from "../../src/contracts/relay/computer-management.ts";
+import { hashPairingCredential } from "../../src/contracts/relay/pairing.ts";
 import type { RelayBindings } from "../../src/contracts/relay-bindings.ts";
 import { createOwner, ownerRequest } from "./owner-fixture.ts";
 
@@ -161,4 +162,42 @@ it("Given a daemon whose connection reply was lost, When it repeats the same rot
     repeated.socket.close(1000, "Reconnect");
 
     accept(await runtime.connect(successor, computerCredentialSuccessor(successor))).socket.close(1000, "Done");
+});
+
+it("Given a pairing retained only in the retired layout, When the daemon reconnects, Then only its held credential receives the terminal close", async () => {
+    const id = "prj_wn_01_0123456789abcdefghijklmn";
+    const credential = computerCredentialSuccessor(`morty_${id}_${"a".repeat(43)}`);
+    const successor = computerCredentialSuccessor(credential);
+    const worker = createTestMortyRelayApp(new RelayAuthenticationConfiguration());
+    const connect = (current: string, next: string) =>
+        worker.fetch(
+            new Request(`${relayOrigin}${MORTY_API_PREFIX}/v1/computers/connect`, {
+                headers: {
+                    authorization: `Bearer ${current}`,
+                    upgrade: "websocket",
+                    [COMPUTER_SUCCESSOR_CREDENTIAL_HEADER]: next,
+                },
+            }),
+            bindings(),
+        );
+
+    expect((await connect(credential, successor)).status).toBe(404);
+    const hash = await hashPairingCredential(credential);
+    await runInDurableObject(env.COMPUTER_RELAY.getByName(id), async (_instance, state) => {
+        await state.storage.put("computer-account", { computer_id: id });
+        state.storage.sql.exec(
+            "CREATE TABLE daemon_credentials (generation INTEGER PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE)",
+        );
+        state.storage.sql.exec("INSERT INTO daemon_credentials VALUES (1, ?)", hash);
+    });
+
+    expect((await connect(successor, computerCredentialSuccessor(successor))).status).toBe(404);
+    for (const [current, next] of [
+        [credential, successor],
+        [successor, credential],
+    ] as const) {
+        const daemon = accept(await connect(current, next));
+        const close = await daemon.closed;
+        expect([close.code, close.reason]).toEqual([1008, "Computer revoked"]);
+    }
 });

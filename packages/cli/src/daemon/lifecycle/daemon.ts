@@ -168,7 +168,7 @@ async function runDaemonRuntime(
                                 }),
                             );
                             console.error(
-                                "Morty disconnected this Computer: its connection key was used somewhere else. Run Morty setup on this computer again to reconnect.",
+                                "Morty disconnected this Computer: its pairing is no longer valid. Run Morty setup on this computer again to reconnect.",
                             );
                             await control
                                 .recordRevocation(connection.pairingGeneration, combined)
