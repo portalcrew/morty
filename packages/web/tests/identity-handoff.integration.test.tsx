@@ -947,7 +947,9 @@ test("Given a browser whose access ends within the hour, When the page stays ope
     clock.advanceBy(23 * 60 * 60 * 1000 + 60_000);
     const reminder = await app.waitForView(() => getByRole(document.body, "status", { name: "Access ending soon" }));
     expect(reminder.textContent).toContain("Access in this browser ends");
-    expect(reminder.textContent).toContain("open a new link from your computer or another device");
+    expect(reminder.textContent).toContain("paste the setup prompt into your agent");
+    await app.user.click(getByRole(reminder, "button", { name: "Copy setup prompt" }));
+    expect(await navigator.clipboard.readText()).toContain("/doc/setup.md and complete the Morty setup");
     await app.user.click(getByRole(reminder, "button", { name: "Got it" }));
     expect(queryByRole(document.body, "status", { name: "Access ending soon" })).toBeNull();
 
