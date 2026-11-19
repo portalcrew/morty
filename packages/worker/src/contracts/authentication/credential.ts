@@ -47,6 +47,20 @@ export interface SharedLinkTerms {
     readonly accessLimitedBySharer: boolean;
 }
 
+export interface AccessDurationOption {
+    readonly duration: DeviceAccessDuration;
+    readonly accessExpiresAt: number;
+    readonly limitedBySharer: boolean;
+}
+
+/** What each duration would grant now, so a sharer sees before choosing which ones their own access cuts short. */
+export function accessDurationOptions(sharer: Credential, now: number): readonly AccessDurationOption[] {
+    return deviceAccessDurations.map((duration) => {
+        const terms = sharedLinkTerms(sharer, now, duration);
+        return { duration, accessExpiresAt: terms.accessExpiresAt, limitedBySharer: terms.accessLimitedBySharer };
+    });
+}
+
 /** Reconstructs the committed terms; retrying never moves either deadline forward. */
 export function issuedLinkTerms(
     duration: DeviceAccessDuration,

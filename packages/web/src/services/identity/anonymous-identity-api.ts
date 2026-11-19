@@ -48,6 +48,26 @@ const transferSchema = v.pipe(
         accessDuration: v.picklist(deviceAccessDurations),
         /** Whether the sharer's own access ends first, and so ends the added device's access earlier than chosen. */
         accessLimitedBySharer: v.boolean(),
+        // Absent from Workers released before it; a duration this page does not know is not offered.
+        accessDurationOptions: v.optional(
+            v.pipe(
+                v.array(
+                    v.object({
+                        accessDuration: v.string(),
+                        accessExpiresAt: v.pipe(v.string(), v.isoTimestamp()),
+                        accessLimitedBySharer: v.boolean(),
+                    }),
+                ),
+                v.transform((options) =>
+                    options.flatMap((option) => {
+                        const accessDuration = deviceAccessDurations.find(
+                            (duration) => duration === option.accessDuration,
+                        );
+                        return accessDuration === undefined ? [] : [{ ...option, accessDuration }];
+                    }),
+                ),
+            ),
+        ),
         url: v.pipe(v.string(), v.url()),
     }),
     v.readonly(),
@@ -79,6 +99,7 @@ const otherBrowserAccessEndedSchema = v.object({ status: v.literal("other_browse
 const credentialRevocationPathSchema = v.picklist(["/identity/local-credential", "/identity/browser-access"]);
 export type AnonymousIdentity = v.InferOutput<typeof identitySchema>;
 export type IdentityTransfer = v.InferOutput<typeof transferSchema>;
+export type AccessDurationOptions = NonNullable<IdentityTransfer["accessDurationOptions"]>;
 export interface SharingTerms {
     /** The same operation is retained until its outcome is known. */
     readonly operationId: string;

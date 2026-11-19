@@ -1,6 +1,8 @@
 import type { SessionAccessHolder } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import {
+    type AccessDurationOption,
+    accessDurationOptions,
     accessHolder,
     type Credential,
     type CredentialOperation,
@@ -207,7 +209,7 @@ export class AuthenticationService {
             readonly replaces: string | null;
         },
         signal: AbortSignal,
-    ): Promise<IdentityTransfer | null> => {
+    ): Promise<(IdentityTransfer & { readonly durationOptions: readonly AccessDurationOption[] }) | null> => {
         const access = await this.authorize(token, "shareAccess", signal);
         if (access.kind !== "authorized") {
             return null;
@@ -230,7 +232,11 @@ export class AuthenticationService {
                 409,
             );
         }
-        return { code, ...issuedLinkTerms(request.duration, issued) };
+        return {
+            code,
+            ...issuedLinkTerms(request.duration, issued),
+            durationOptions: accessDurationOptions(access.credential, now),
+        };
     };
 
     readonly redeemTransfer = async (

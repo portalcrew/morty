@@ -145,6 +145,11 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
                             accessExpiresAt: new Date(transfer.accessExpiresAt).toISOString(),
                             accessDuration: transfer.accessDuration,
                             accessLimitedBySharer: transfer.accessLimitedBySharer,
+                            accessDurationOptions: transfer.durationOptions.map((option) => ({
+                                accessDuration: option.duration,
+                                accessExpiresAt: new Date(option.accessExpiresAt).toISOString(),
+                                accessLimitedBySharer: option.limitedBySharer,
+                            })),
                             url: url.toString(),
                             // Served by the deployment whose /continue page opens these links, so setup may issue them.
                             setupHandoffFormats: [sealedSetupHandoffFormat],
