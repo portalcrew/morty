@@ -4,7 +4,7 @@ import { dataTestId } from "../../data-testid.ts";
 import { ExternalLink } from "../ui/external-link.tsx";
 import { Textarea } from "../ui/textarea.tsx";
 
-const nextStepClassName = "mt-3 min-h-10 text-center text-sm leading-5 text-morty-text-2";
+const nextStepClassName = "mt-3 text-center text-sm leading-5 text-morty-text-2";
 
 export function SetupPromptIdleHint(): ReactNode {
     return <p className={nextStepClassName}>Next: paste it into the agent running on your computer.</p>;
@@ -38,10 +38,10 @@ function SetupPromptField({ prompt }: { readonly prompt: string }) {
 export function SetupPromptDetails({ prompt }: { readonly prompt: string }) {
     return (
         <>
-            <p className="mt-3 text-center text-xs leading-5 text-pretty text-morty-text-3">
-                Setup interrupts the agent's current task; continue it here afterwards. Keep that computer awake and
-                online.
-            </p>
+            <ul className="mt-6 list-disc space-y-1 rounded-md bg-[rgba(11,26,57,0.03)] py-3 pr-3 pl-7 text-left text-xs leading-5 text-morty-text-3 marker:text-morty-text-4">
+                <li>Setup interrupts the agent's current task; continue it here afterwards.</li>
+                <li>Keep that computer awake and online.</li>
+            </ul>
             <details
                 aria-label="Setup details"
                 className="disclosure-details group w-full text-xs leading-5 text-morty-text-3"
@@ -53,7 +53,7 @@ export function SetupPromptDetails({ prompt }: { readonly prompt: string }) {
                         className="size-3.5 transition-[rotate] duration-300 ease-out group-open:rotate-180 motion-reduce:transition-none"
                     />
                 </summary>
-                <div className="mt-1 rounded-[16px] border border-border/60 bg-muted/50 p-1 text-left">
+                <div className="mt-1 rounded-[16px] border border-border/30 bg-[rgba(11,26,57,0.03)] p-1 text-left">
                     <ul
                         aria-label="What setup does"
                         className="list-disc space-y-1 py-2 pr-3 pl-7 text-morty-text-3 marker:text-morty-text-4 [&_code]:whitespace-nowrap"
