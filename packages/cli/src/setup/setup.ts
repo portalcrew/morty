@@ -931,7 +931,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
                 emit({ status: "computer_revoked", computerId: context.identity.computerId });
                 progress(
                     "pairing",
-                    "Morty disconnected this computer because its connection key was used somewhere else. Pairing it again.",
+                    "Morty disconnected this computer because its pairing is no longer valid. Pairing it again.",
                 );
                 // The connection list can retain the revoked credential. Only a new pairing can replace it.
                 return await pairComputer(context);

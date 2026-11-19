@@ -14,6 +14,7 @@ import { errorMiddleware, rethrowHonoError } from "../../../../http/error-middle
 import { protocolBodyLimit } from "../../../../http/protocol-body-limit.ts";
 import { requestTimeoutMiddleware } from "../../../../middleware/request-timeout-middleware.ts";
 import type { ComputerRouteHttpEnvironment } from "../../../http/environment.ts";
+import { revokedDaemonResponse } from "../../../http/retired-daemon.ts";
 import type { RelayProtocolRouteContext } from "./protocol-routes.ts";
 
 const redeemRequestSchema = v.object({
@@ -74,10 +75,7 @@ export function createComputerPairingRoutes(ctx: RelayProtocolRouteContext) {
                           );
                 }
                 case "revoked": {
-                    const pair = new WebSocketPair();
-                    pair[1].accept();
-                    pair[1].close(1008, "Computer revoked");
-                    return new Response(null, { status: 101, webSocket: pair[0] });
+                    return revokedDaemonResponse();
                 }
             }
         });

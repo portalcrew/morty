@@ -9,7 +9,7 @@ export class ComputerPairingRevokedError extends Error {
 
     constructor() {
         super(
-            "Morty disconnected this Computer because its connection key was used somewhere else. Run `morty setup` on this computer to pair it again.",
+            "Morty disconnected this Computer because its pairing is no longer valid. Run `morty setup` on this computer to pair it again.",
         );
         this.name = "ComputerPairingRevokedError";
     }

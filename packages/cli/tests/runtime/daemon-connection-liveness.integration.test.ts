@@ -912,6 +912,7 @@ describe("daemon relay connection liveness", () => {
                 },
                 { kind: "text", text: "{not-json", reason: "Invalid protocol message" },
             ] as const) {
+                vi.setSystemTime(Date.now() + 60_000);
                 const retry = timer.waitForTask(500);
                 writeServerTextFrame(currentSocket, invalid.text);
                 let closed = await currentFrames.next();

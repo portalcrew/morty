@@ -357,6 +357,7 @@ async function startRuntime(signal: AbortSignal) {
             return peer;
         },
         disconnect: async (peer: RelayPeer): Promise<ManualTask> => {
+            vi.setSystemTime(Date.now() + 60_000);
             const retry = timer.next(500);
             peer.socket.terminate();
             return await retry;

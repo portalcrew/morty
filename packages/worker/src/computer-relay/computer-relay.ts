@@ -1,12 +1,19 @@
 import { DurableObject } from "cloudflare:workers";
-import { COMPUTER_HEARTBEAT_ACK_MESSAGE, COMPUTER_HEARTBEAT_MESSAGE } from "@portalcrew/morty-client/protocol";
+import {
+    COMPUTER_HEARTBEAT_ACK_MESSAGE,
+    COMPUTER_HEARTBEAT_MESSAGE,
+    COMPUTER_SUCCESSOR_CREDENTIAL_HEADER,
+    isComputerCredentialSuccessor,
+} from "@portalcrew/morty-client/protocol";
 import { Hono } from "hono";
-import { computerObjectName, decodeComputerPlacement } from "../contracts/computer-id.ts";
+import { computerIdFromPrefixedValue, computerObjectName, decodeComputerPlacement } from "../contracts/computer-id.ts";
 import { ComputerManagementError } from "../contracts/computer-management.ts";
 import { computerNotFound } from "../contracts/management-error.ts";
+import { hashPairingCredential } from "../contracts/relay/pairing.ts";
 import type { ConfiguredRelayBindings } from "../contracts/relay-bindings.ts";
 import { errorHandler } from "../http/error-middleware.ts";
 import { RequestDeadline } from "../http/request-deadline.ts";
+import { readBearerToken } from "../http/request-headers.ts";
 import { logger } from "../infra/logger.ts";
 import { ComputerBackendService } from "./components/computer/service/computer-backend-service.ts";
 import { credentialRejected } from "./components/management/http/authenticated-session.ts";
@@ -15,6 +22,7 @@ import { ComputerRelayStore } from "./components/management/storage/computer-rel
 import { DurableComputerAccount } from "./components/management/storage/durable-computer-account.ts";
 import { DurableCredentialKey } from "./components/management/storage/durable-credential-key.ts";
 import { IdentityStorage } from "./components/management/storage/identity-storage.ts";
+import { heldRetiredPairing } from "./components/management/storage/retired-layout-pairing.ts";
 import { DaemonWebSocketRoutes } from "./components/runtime/daemon-websocket-routes.ts";
 import { CloudflareBrowserTransports } from "./components/runtime/gateway/cloudflare-browser-transports.ts";
 import { daemonSocketComputerId } from "./components/runtime/gateway/cloudflare-relay-peers.ts";
@@ -28,6 +36,7 @@ import { ComputerServices } from "./composition/computer-services.ts";
 import { createRelayDurableObjectContext } from "./composition/relay-durable-object-context.ts";
 import { createComputerRelayServices } from "./composition/relay-services.ts";
 import type { ComputerRouteHttpEnvironment } from "./http/environment.ts";
+import { retiredPairingLookup } from "./http/retired-daemon.ts";
 import { createComputerHttpRoutes } from "./http/routes.ts";
 import { DurableObjectDatabase } from "./infra/durable-object-database.ts";
 
@@ -238,8 +247,25 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
     };
 
     override async fetch(request: Request): Promise<Response> {
+        if (request.method === "POST" && request.url === retiredPairingLookup) {
+            const token = readBearerToken(request.headers);
+            const id = computerIdFromPrefixedValue(token ?? "");
+            const successor = request.headers.get(COMPUTER_SUCCESSOR_CREDENTIAL_HEADER) ?? "";
+            if (
+                id === null ||
+                token === undefined ||
+                !isComputerCredentialSuccessor(token, successor) ||
+                this.env.COMPUTER_RELAY.idFromName(id).toString() !== this.ctx.id.toString()
+            ) {
+                return new Response(null, { status: 404 });
+            }
+            // A daemon can have persisted the successor just before losing the acknowledgement of rotation.
+            const hashes = await Promise.all([hashPairingCredential(token), hashPairingCredential(successor)]);
+            const held = heldRetiredPairing(this.ctx.storage, hashes);
+            return new Response(null, { status: held ? 204 : 404 });
+        }
         const response = await this.#routes.http.fetch(request, this.env);
-        if (response.status === 101) {
+        if (response.status === 101 && this.#account.holdsAccount()) {
             await this.#scheduleConnectionChecks();
         }
         return response;
