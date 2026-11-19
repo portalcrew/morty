@@ -35,7 +35,7 @@ export interface HarnessOption {
 }
 
 /** The harnesses a configuration menu offers, derived from the Computer configuration the page follows. */
-export function harnessOptions(computer: ChatComputer | null): readonly HarnessOption[] {
+function harnessOptions(computer: ChatComputer | null): readonly HarnessOption[] {
     return (computer === null ? [] : nativeSessionAgentTabs(computer)).map((agent) => ({
         installed: agent.installed,
         label: agent.label,

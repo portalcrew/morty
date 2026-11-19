@@ -26,7 +26,6 @@ import { centralLocalStorage, lastHarnessEntry } from "@/services/local-storage/
 import { isComputerConnectionFailure } from "@/services/management/management-api";
 import type { AgentModelCatalog } from "../../services/diagnostics/model-catalog.ts";
 import { formatError } from "../format-error.ts";
-import { harnessOptions, nativeSessionAgentTabs } from "./native-session-agents.ts";
 import { type DirectoryAvailability, type SessionDirectory, sessionDirectories } from "./recent-directories.ts";
 
 /**
@@ -79,7 +78,10 @@ export function draftShownOptions(settings: DraftSettingsState): readonly Sessio
 }
 
 export function draftHarnessSelection(settings: DraftSettingsState, configuration: BotComputerConfiguration | null) {
-    const options = harnessOptions(configuration?.computer ?? null);
+    const options = connectedChatComputerAgents(configuration?.computer).map((agent) => ({
+        label: agent.label,
+        value: agent.harness,
+    }));
     const harness =
         settings.kind === "switching"
             ? settings.harness
@@ -693,8 +695,8 @@ export const createDraftControlsStore = (
                 }
                 // The Computer's Agents can change while the draft is open; choose among those it offers now.
                 const configuration = computerConfiguration();
-                const agent = (configuration === null ? [] : nativeSessionAgentTabs(configuration.computer)).find(
-                    (item) => item.installed && item.harness === value,
+                const agent = connectedChatComputerAgents(configuration?.computer).find(
+                    (item) => item.harness === value,
                 );
                 if (agent === undefined) {
                     return;

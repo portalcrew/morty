@@ -307,7 +307,7 @@ test("Given a paired Bot with cached agent settings, When a user filters its mod
     await created.waitForView(() => expect(created.optionalElementByTestId(dataTestId.sessionStatus)).toBeNull());
 });
 
-test("Given a paired computer, When a user opens Agent configuration, Then its harnesses appear once and unavailable harnesses are disabled", {
+test("Given a Computer offering only Codex, When a user opens New Session settings, Then only Codex is offered", {
     timeout: 30_000,
 }, async () => {
     const created = await createTestApp({ connectAgent: true });
@@ -318,10 +318,9 @@ test("Given a paired computer, When a user opens Agent configuration, Then its h
     const configuration = getByRole(document.body, "dialog", { name: "Agent configuration" });
 
     const harnesses = getByRole(configuration, "radiogroup", { name: "Harness" });
-    expect(getAllByRole(harnesses, "radio", { name: "Codex" })).toHaveLength(1);
-    expect(getAllByRole(harnesses, "radio", { name: "Pi" })).toHaveLength(1);
-    expect(getAllByRole(harnesses, "radio")).toHaveLength(2);
-    expect(getByRole(harnesses, "radio", { name: "Pi" }).getAttribute("aria-disabled")).toBe("true");
+    const codex = getByRole(harnesses, "radio", { name: "Codex", checked: true });
+    expect(getAllByRole(harnesses, "radio")).toEqual([codex]);
+    expect(codex).toHaveProperty("disabled", false);
 });
 
 test("Given a Bot has a recent directory from another harness, When its Computer configuration loads, Then the directory remains available", {
@@ -727,8 +726,7 @@ test("Given a Bot paired with an unlisted harness, When the user opens its setti
     expect(harness.textContent).toContain("Unlisted Agent");
     expect(app.elementByTestId(dataTestId.harnessMark, harness).getAttribute("data-harness-product")).toBe("generic");
     const harnesses = getByRole(configuration, "radiogroup", { name: "Harness" });
-    expect(getAllByRole(harnesses, "radio", { name: "Unlisted Agent" })).toHaveLength(1);
-    expect(getByRole(harnesses, "radio", { name: "Pi" }).getAttribute("aria-disabled")).toBe("true");
+    expect(getAllByRole(harnesses, "radio")).toEqual([harness]);
 });
 
 test("Given a Bot paired with Pi, When the user opens its settings and sends a prompt, Then Pi and its streamed reply are visible", {
