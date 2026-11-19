@@ -7,7 +7,7 @@ const setupConnectionBandArtworkUrl = "/setup-connection-band.png";
 
 /** Plate and glyph both use 70% opacity; icons were full `#171717` so they did not follow `bg-white/*` alone. */
 const setupHarnessTileClassName =
-    "absolute top-6 flex size-11 -translate-x-1/2 items-center justify-center rounded-[14px] bg-white/70";
+    "absolute top-6 flex size-11 -translate-x-1/2 items-center justify-center rounded-[14px] border border-white/40 bg-white/70";
 const setupHarnessMarkClassName = "text-[#171717]/70";
 
 /**
