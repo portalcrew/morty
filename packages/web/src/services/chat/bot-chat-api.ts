@@ -68,8 +68,8 @@ export function computerAgentAvailability(computer: ChatComputer): "no-agent" | 
     }
     return computer.online ? "available" : "offline";
 }
-export function connectedChatComputerAgents(computer: ChatComputer): readonly ChatAgentSelection[] {
-    return computer.online ? computer.agents : [];
+export function connectedChatComputerAgents(computer: ChatComputer | undefined): readonly ChatAgentSelection[] {
+    return computer?.online ? computer.agents : [];
 }
 export interface ChatDraftConfiguration {
     readonly harness: string;

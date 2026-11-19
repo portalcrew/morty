@@ -1,4 +1,4 @@
-import { getByRole } from "@testing-library/dom";
+import { getByRole, queryByRole } from "@testing-library/dom";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
 import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
@@ -187,4 +187,29 @@ test("Given a Pi draft, When a Codex switch cannot finish because the Computer g
     await app.daemon.reconnect();
     await reloaded.waitForView(() => expect(reloaded.optionalElementByTestId(dataTestId.chatLanding)).not.toBeNull());
     await waitForHarness(reloaded, "pi");
+});
+
+test("Given a draft last used Pi, When the Computer reconnects offering only Codex and I open New Session settings, Then Codex is selected and Pi is absent", {
+    timeout: 60_000,
+}, async () => {
+    const app = await createTestApp({
+        connectAgent: true,
+        agents: [
+            { harness: "codex", label: "Codex" },
+            { harness: "pi", label: "Pi" },
+        ],
+    });
+    await waitForHarness(app, "codex");
+    await selectHarness(app, "Pi", "pi");
+
+    if (app.daemon === null) {
+        throw new Error("Expected a connected Computer");
+    }
+    await app.daemon.replaceAgents([{ harness: "codex", label: "Codex" }]);
+    await startNewSession(app);
+    await waitForHarness(app, "codex");
+    await app.user.click(await app.queryElementByTestId(dataTestId.agentConfiguration));
+    const dialog = getByRole(document.body, "dialog", { name: "Agent configuration" });
+    expect(getByRole(dialog, "radio", { name: "Codex", checked: true })).toHaveProperty("disabled", false);
+    expect(queryByRole(dialog, "radio", { name: "Pi" })).toBeNull();
 });
