@@ -1,6 +1,6 @@
 import { ArrowLeft, Check, ChevronRight, Folder, FolderOpen, LoaderCircle, X } from "lucide-react";
 import { Tooltip } from "radix-ui";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { dataTestId } from "@/data-testid";
 import { cn } from "@/lib/utils";
 import type { DraftControlsStore } from "@/view-models/chat/draft-controls-store";
@@ -27,6 +27,69 @@ function parentFolderName(directoryLabel: string, parentDirectory: string): stri
         return "~";
     }
     return parentDirectory.split(/[\\/]/).filter(Boolean).at(-1) ?? parentDirectory;
+}
+
+function RecentDirectoryButton({
+    directoryLabel,
+    forgettable,
+    onSelect,
+    selected,
+}: {
+    readonly directoryLabel: string;
+    readonly forgettable: boolean;
+    readonly onSelect: () => void;
+    readonly selected: boolean;
+}) {
+    const labelRef = useRef<HTMLSpanElement>(null);
+    const [isTruncated, setIsTruncated] = useState(false);
+
+    useEffect(() => {
+        const label = labelRef.current;
+        if (label === null) {
+            return;
+        }
+        const measure = () =>
+            setIsTruncated(label.textContent === directoryLabel && label.scrollWidth > label.clientWidth);
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(label);
+        return () => observer.disconnect();
+    }, [directoryLabel]);
+
+    return (
+        <Tooltip.Root>
+            <Tooltip.Trigger asChild>
+                <button
+                    className={cn(
+                        "flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-3 text-left outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60",
+                        selected && forgettable && "pr-7",
+                    )}
+                    data-testid={dataTestId.recentWorkingDirectory}
+                    onClick={onSelect}
+                    role="menuitem"
+                    type="button"
+                >
+                    <Folder aria-hidden="true" className="size-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate" ref={labelRef}>
+                        {directoryLabel}
+                    </span>
+                </button>
+            </Tooltip.Trigger>
+            {isTruncated && (
+                <Tooltip.Portal>
+                    <MortyTooltipContent
+                        className="max-w-80 break-all px-3 py-2 leading-5"
+                        collisionPadding={8}
+                        side="right"
+                        sideOffset={8}
+                    >
+                        {directoryLabel}
+                        <Tooltip.Arrow className="fill-foreground" />
+                    </MortyTooltipContent>
+                </Tooltip.Portal>
+            )}
+        </Tooltip.Root>
+    );
 }
 
 export function WorkingDirectorySkeleton({ className }: { readonly className?: string }) {
@@ -164,6 +227,7 @@ export function CwdSelector({
                                 className="max-h-80"
                                 edgeStroke={{ className: "border-white/80", placement: "inside" }}
                                 revealSurface
+                                viewportClassName="[&>div]:!block [&>div]:!w-full"
                             >
                                 {recentLocations.map((recent) => {
                                     const selected = recent.directory === settings.cwd.directory;
@@ -173,23 +237,15 @@ export function CwdSelector({
                                             className="group/recent relative flex h-9 items-center rounded-md hover:bg-accent focus-within:bg-accent"
                                             key={recent.directory}
                                         >
-                                            <button
-                                                className={cn(
-                                                    "flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-3 text-left outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60",
-                                                    selected && forgettable && "pr-7",
-                                                )}
-                                                data-testid={dataTestId.recentWorkingDirectory}
-                                                onClick={() => {
+                                            <RecentDirectoryButton
+                                                directoryLabel={recent.directoryLabel}
+                                                forgettable={forgettable}
+                                                onSelect={() => {
                                                     setMenuOpen(false);
                                                     void viewModel.selectRecentCwd(recent, signal);
                                                 }}
-                                                role="menuitem"
-                                                title={recent.directoryLabel}
-                                                type="button"
-                                            >
-                                                <Folder aria-hidden="true" className="size-4 shrink-0" />
-                                                <StartClippedLabel value={recent.directoryLabel} />
-                                            </button>
+                                                selected={selected}
+                                            />
                                             {selected ? (
                                                 <Check
                                                     aria-hidden="true"
