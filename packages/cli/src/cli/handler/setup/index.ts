@@ -47,7 +47,7 @@ export function registerSetupHandlers(program: Command, context: CliContext): vo
             ),
         )
         .addOption(
-            valueOption("--device-access <duration>", "browser access duration: 1h, 1d, 7d, or 30d (default: 1d)"),
+            valueOption("--device-access <duration>", "browser access duration: 1h, 1d, 7d, or 30d (default: 7d)"),
         )
         .action(async (options: SetupOptions) => {
             await run([

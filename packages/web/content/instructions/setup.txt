@@ -27,8 +27,8 @@ Chat origin: {{BASE_URL}}
 morty setup --base-url {{BASE_URL}} --cwd <absolute-current-working-directory> --harness <own-harness-id>
 ```
 
-The browser that opens the link keeps access for one day. Only when the user asks for a different period, add
-`--device-access 1h`, `--device-access 7d`, or `--device-access 30d`; nothing longer than 30 days is available.
+The browser that opens the link keeps access for seven days. Only when the user asks for a different period, add
+`--device-access 1h`, `--device-access 1d`, or `--device-access 30d`; nothing longer than 30 days is available.
 
 The CLI keeps this computer's Morty identity in the operating system's local
 application data directory for the current user, which is not synced to other

@@ -183,7 +183,7 @@ interface SetupIdentity {
 
 interface SetupOptions {
     readonly base: string;
-    readonly deviceAccess: string | null;
+    readonly deviceAccess: string;
     readonly cwd: string;
     readonly harness: string;
     readonly sessionId: string;
@@ -751,7 +751,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         const harness = identifier(values.harness);
         return {
             base: origin(values["base-url"]),
-            deviceAccess: values["device-access"] ?? null,
+            deviceAccess: values["device-access"] ?? "7d",
             replaceComputer: values["replace-computer"] === undefined ? null : identifier(values["replace-computer"]),
             cwd: text(values.cwd),
             harness,
@@ -1335,7 +1335,7 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         await waitForReadiness(context, computer, options.harness);
         const transfer = await request(context, "/identity/transfers", {
             operationId: crypto.randomUUID(),
-            ...(options.deviceAccess === null ? {} : { accessDuration: options.deviceAccess }),
+            accessDuration: options.deviceAccess,
         });
         const url = new URL(text(transfer["url"]));
         if (

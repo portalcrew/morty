@@ -69,7 +69,7 @@ export function SetupPromptDetails({ prompt }: { readonly prompt: string }) {
                         <li>Asks before replacing a missing connection, which ends earlier shared access.</li>
                         <li>
                             Returns a private link for one device, valid for 10 minutes. That device can control your
-                            agent for one day unless you revoke access; ask the agent for 1 hour, 7 days or 30 days
+                            agent for 7 days unless you revoke access; ask the agent for 1 hour, 1 day or 30 days
                             instead.
                         </li>
                     </ul>
