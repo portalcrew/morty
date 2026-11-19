@@ -29,6 +29,7 @@ hand user actions to store actions; they hold none of it.
 - React hooks are allowed in components so developers can implement complex animation, visual effects, and better UI/UX. Components may own ephemeral DOM-only state such as focus targets, element measurements, disclosure/popover visibility, and uncontrolled input refs.
 - Effects in components may bind and release browser or DOM resources such as listeners, timers, observers, and object URLs, and may drive visual state. Any effect outside that scope requires an explicit recorded rationale in the component.
 - Components must not import `src/views`, `src/view-models`, or `src/services` at runtime; they may import their types and receive data and callbacks as props. The lint step enforces this.
+- Tooltips for vertically stacked options open beside the hovered or focused option: to the right by default, then to the left when the right side lacks space. A tooltip repeating an option label appears only when that label is clipped.
 
 ## Views
 
