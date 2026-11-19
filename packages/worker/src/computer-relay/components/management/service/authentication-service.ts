@@ -1,6 +1,8 @@
 import type { SessionAccessHolder } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import {
+    type AccessDurationOption,
+    accessDurationOptions,
     accessHolder,
     type Credential,
     type CredentialOperation,
@@ -231,6 +233,26 @@ export class AuthenticationService {
             );
         }
         return { code, ...issuedLinkTerms(request.duration, issued) };
+    };
+
+    /** Read apart from sharing, whose retries must answer with exactly the terms they committed. */
+    readonly sharingTerms = async (
+        token: string | undefined,
+        signal: AbortSignal,
+    ): Promise<
+        | { readonly kind: "terms"; readonly options: readonly AccessDurationOption[] }
+        | { readonly kind: "unauthenticated" | "revoked" }
+    > => {
+        const access = await this.authorize(token, "shareAccess", signal);
+        switch (access.kind) {
+            case "authorized":
+                return { kind: "terms", options: accessDurationOptions(access.credential, Date.now()) };
+            case "revoked":
+                return { kind: "revoked" };
+            case "unauthenticated":
+            case "forbidden":
+                return { kind: "unauthenticated" };
+        }
     };
 
     readonly redeemTransfer = async (

@@ -1,5 +1,6 @@
 import type { ApiTransport } from "../../services/api/api-transport.ts";
 import {
+    type AccessDurationOptions,
     AnonymousIdentityApi,
     IdentityApiError,
     type IdentityTransfer,
@@ -10,6 +11,7 @@ import { createRemoteAccessOperations } from "../chat/remote-access-store.ts";
 
 export interface IdentityAccess {
     readonly createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>;
+    readonly sharingTerms: (signal: AbortSignal) => Promise<AccessDurationOptions>;
     readonly currentAccessToken: (signal: AbortSignal) => Promise<string>;
     readonly endRemoteAccess: (signal: AbortSignal) => Promise<void>;
     readonly accessExpiresAt: (signal: AbortSignal) => Promise<string | null>;
@@ -52,6 +54,14 @@ export function createIdentityAccess(options: {
             throw cause;
         }
     };
+    const sharingToken = async (signal: AbortSignal): Promise<string> => {
+        const localIdentity = await options.currentAccess(signal);
+        signal.throwIfAborted();
+        if (localIdentity === null || localIdentity.computerId !== options.identity.computerId) {
+            throw new IdentitySharingUnavailable();
+        }
+        return localIdentity.computerToken;
+    };
     return {
         ...remoteAccess,
         accessExpiresAt: (signal) => withCurrentAccess(signal, (token) => api.accessExpiresAt(token, signal)),
@@ -66,13 +76,7 @@ export function createIdentityAccess(options: {
             withCurrentAccess(signal, (token) => api.endOtherBrowserAccess(token, signal)),
         endDeviceAccess: (deviceId, signal) =>
             withCurrentAccess(signal, (token) => api.endDeviceAccess(token, deviceId, signal)),
-        createTransfer: async (terms, signal) => {
-            const localIdentity = await options.currentAccess(signal);
-            signal.throwIfAborted();
-            if (localIdentity === null || localIdentity.computerId !== options.identity.computerId) {
-                throw new IdentitySharingUnavailable();
-            }
-            return await api.createTransfer(localIdentity.computerToken, terms, signal);
-        },
+        createTransfer: async (terms, signal) => await api.createTransfer(await sharingToken(signal), terms, signal),
+        sharingTerms: async (signal) => await api.sharingTerms(await sharingToken(signal), signal),
     };
 }

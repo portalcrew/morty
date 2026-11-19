@@ -52,6 +52,24 @@ const transferSchema = v.pipe(
     }),
     v.readonly(),
 );
+// A duration this page does not know is not offered.
+const sharingTermsSchema = v.object({
+    accessDurationOptions: v.pipe(
+        v.array(
+            v.object({
+                accessDuration: v.string(),
+                accessExpiresAt: v.pipe(v.string(), v.isoTimestamp()),
+                accessLimitedBySharer: v.boolean(),
+            }),
+        ),
+        v.transform((options) =>
+            options.flatMap((option) => {
+                const accessDuration = deviceAccessDurations.find((duration) => duration === option.accessDuration);
+                return accessDuration === undefined ? [] : [{ ...option, accessDuration }];
+            }),
+        ),
+    ),
+});
 const deviceSharerSchema = v.variant("kind", [
     v.object({ kind: v.literal("computer") }),
     v.object({ kind: v.literal("device"), label: v.nullable(v.string()) }),
@@ -79,6 +97,7 @@ const otherBrowserAccessEndedSchema = v.object({ status: v.literal("other_browse
 const credentialRevocationPathSchema = v.picklist(["/identity/local-credential", "/identity/browser-access"]);
 export type AnonymousIdentity = v.InferOutput<typeof identitySchema>;
 export type IdentityTransfer = v.InferOutput<typeof transferSchema>;
+export type AccessDurationOptions = v.InferOutput<typeof sharingTermsSchema>["accessDurationOptions"];
 export interface SharingTerms {
     /** The same operation is retained until its outcome is known. */
     readonly operationId: string;
@@ -224,6 +243,17 @@ export class AnonymousIdentityApi {
                 signal,
             ),
         );
+
+    /** What each duration would grant if this access shared it now. */
+    readonly sharingTerms = async (token: string, signal: AbortSignal): Promise<AccessDurationOptions> =>
+        v.parse(
+            sharingTermsSchema,
+            await this.#request(
+                identityCalls.sharingTerms({ origin: this.#origin, computerId: this.#computerId() }),
+                { headers: { authorization: `Bearer ${v.parse(tokenSchema, token)}` } },
+                signal,
+            ),
+        ).accessDurationOptions;
 
     /** A setup link's sealed contents, or null once the link expired or never existed. */
     readonly setupHandoff = async (

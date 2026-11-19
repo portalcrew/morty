@@ -87,6 +87,19 @@ export const identityCalls = Object.freeze({
                 redemptionKey,
             },
         }),
+    sharingTerms: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
+        encodeComputerCall({
+            origin,
+            computerId,
+            path: "identity/sharing-terms",
+            definition: {
+                method: "GET",
+                operation: "sharing-terms",
+                timeoutMilliseconds: 30_000,
+                watch: "none",
+                transport: { kind: "websocket", cancellation: "remote" },
+            },
+        }),
     linkedDevices: ({ origin, computerId }: ComputerCallTarget): ApiRequest =>
         encodeComputerCall({
             origin,

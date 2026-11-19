@@ -7,25 +7,16 @@ import { MortyAlert } from "../../components/ui/morty-alert.tsx";
 import { Select } from "../../components/ui/option-select.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
-import {
-    type DeviceAccessDuration,
-    deviceAccessDurations,
-    type IdentityTransfer,
-} from "../../services/identity/anonymous-identity-api.ts";
+import type { IdentityTransfer } from "../../services/identity/anonymous-identity-api.ts";
 import { formatMoment } from "../../view-models/chat/access-presentation.ts";
 import {
     agentHandoffInstructions,
+    chosenDuration,
+    durationChoices,
     type IdentitySharingStore,
     type SharingRecipient,
 } from "../../view-models/chat/identity-sharing-store.ts";
 
-const durationLabels: Readonly<Record<DeviceAccessDuration, string>> = {
-    "1h": "1 hour",
-    "1d": "1 day",
-    "7d": "7 days",
-    "30d": "30 days",
-};
-const durationOptions = deviceAccessDurations.map((value) => ({ value, label: durationLabels[value] }));
 const recipientOptions: readonly { readonly value: SharingRecipient; readonly label: string }[] = [
     { value: "person", label: "A person" },
     { value: "agent", label: "An AI agent" },
@@ -79,6 +70,7 @@ type IdentitySharingTransferSectionProps =
           readonly image: string;
           readonly transfer: IdentityTransfer;
           readonly replacedEarlier: boolean;
+          readonly sharerLimitShown: boolean;
       };
 
 function IdentitySharingTransferSection(props: IdentitySharingTransferSectionProps) {
@@ -189,7 +181,11 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
             {loading ? (
                 <IdentitySharingTimingCopySkeleton />
             ) : (
-                <IdentitySharingTiming replacedEarlier={props.replacedEarlier} transfer={props.transfer} />
+                <IdentitySharingTiming
+                    replacedEarlier={props.replacedEarlier}
+                    sharerLimitShown={props.sharerLimitShown}
+                    transfer={props.transfer}
+                />
             )}
         </div>
     );
@@ -198,15 +194,18 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
 function IdentitySharingTiming({
     transfer,
     replacedEarlier,
+    sharerLimitShown,
 }: {
     readonly transfer: IdentityTransfer;
     readonly replacedEarlier: boolean;
+    readonly sharerLimitShown: boolean;
 }) {
     return (
         <p className="text-xs leading-5 text-morty-text-3">
             Works for one device until {formatMoment(transfer.expiresAt)}. That device keeps access until{" "}
             {formatMoment(transfer.accessExpiresAt)}.
             {transfer.accessLimitedBySharer &&
+                !sharerLimitShown &&
                 " This browser's own access ends then, so the device cannot keep it longer."}
             {replacedEarlier && " The previous link no longer works."}
         </p>
@@ -227,9 +226,11 @@ function AgentHandoffHeading() {
 function AgentHandoffSection({
     transfer,
     replacedEarlier,
+    sharerLimitShown,
 }: {
     readonly transfer: IdentityTransfer;
     readonly replacedEarlier: boolean;
+    readonly sharerLimitShown: boolean;
 }) {
     return (
         <div className="space-y-4" data-testid={dataTestId.agentHandoff}>
@@ -243,7 +244,11 @@ function AgentHandoffSection({
                     urlClassName="max-h-32"
                 />
             </div>
-            <IdentitySharingTiming replacedEarlier={replacedEarlier} transfer={transfer} />
+            <IdentitySharingTiming
+                replacedEarlier={replacedEarlier}
+                sharerLimitShown={sharerLimitShown}
+                transfer={transfer}
+            />
         </div>
     );
 }
@@ -291,10 +296,10 @@ export function IdentitySharing({
     const recipient = useStore(store, (state) => state.recipient);
     const chooseRecipient = useStore(store, (state) => state.chooseRecipient);
     const recipientTransitioning = useStore(store, (state) => state.recipientTransitioning);
-    const duration =
-        state.kind === "ready" ? state.transfer.accessDuration : state.kind === "initial" ? null : state.duration;
+    const durationOptions = useStore(store, (state) => state.durationOptions);
+    const choices = durationChoices(state, durationOptions);
     const loading = state.kind === "initial" || state.kind === "loading";
-    const showDeviceAccess = duration !== null || loading;
+    const showDeviceAccess = choices.selected !== null || loading;
     return (
         <div className={dialogBodyStackClassName}>
             <MortyAlert tone="warning">
@@ -318,20 +323,27 @@ export function IdentitySharing({
             {showDeviceAccess && (
                 <div className="grid gap-2">
                     <p className={dialogSectionTitleClassName}>Device access</p>
-                    {duration === null ? (
+                    {choices.selected === null ? (
                         <IdentitySharingDeviceAccessSkeleton />
                     ) : (
                         <Select
+                            description={
+                                choices.sharerAccessEndsAt === null
+                                    ? undefined
+                                    : `This browser's access ends ${formatMoment(choices.sharerAccessEndsAt)}, so a device you share with can't keep access longer.`
+                            }
                             disabled={state.kind === "refused"}
                             label="Device access"
                             onValueChange={(value) => {
-                                const chosen = deviceAccessDurations.find((option) => option === value);
-                                if (chosen !== undefined) {
-                                    choose(chosen);
+                                const chosen = choices.options.find((option) => option.value === value);
+                                const duration =
+                                    chosen === undefined ? null : chosenDuration(chosen.value, durationOptions);
+                                if (duration !== null) {
+                                    choose(duration);
                                 }
                             }}
-                            options={durationOptions}
-                            value={duration}
+                            options={choices.options}
+                            value={choices.selected}
                             viewportClassName="pt-2.5"
                         />
                     )}
@@ -355,13 +367,18 @@ export function IdentitySharing({
                     <IdentitySharingTransferSection allowQrDownload={allowQrDownload} loading />
                 )
             ) : state.kind === "ready" && recipient === "agent" ? (
-                <AgentHandoffSection replacedEarlier={state.replacedEarlier} transfer={state.transfer} />
+                <AgentHandoffSection
+                    replacedEarlier={state.replacedEarlier}
+                    sharerLimitShown={choices.sharerAccessEndsAt !== null}
+                    transfer={state.transfer}
+                />
             ) : state.kind === "ready" ? (
                 <IdentitySharingTransferSection
                     allowQrDownload={allowQrDownload}
                     image={state.image}
                     loading={false}
                     replacedEarlier={state.replacedEarlier}
+                    sharerLimitShown={choices.sharerAccessEndsAt !== null}
                     transfer={state.transfer}
                 />
             ) : null}
