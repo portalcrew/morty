@@ -256,6 +256,7 @@ export function createChatWorkspace(options: {
             requests,
             computer: () => computer.getState().computerConfiguration?.computer ?? null,
             createTransfer: options.access.createTransfer,
+            sharingTerms: options.access.sharingTerms,
             onOpenSession: (session) => {
                 home.getState().openManaged(session.target);
             },

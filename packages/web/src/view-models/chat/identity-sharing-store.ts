@@ -20,7 +20,6 @@ type IdentitySharingState =
           readonly kind: "loading" | "unconfirmed";
           readonly duration: DeviceAccessDuration | null;
           readonly request: SharingTerms;
-          readonly durationOptions: AccessDurationOptions | null;
       }
     | { readonly kind: "refused"; readonly duration: DeviceAccessDuration | null }
     | {
@@ -34,6 +33,8 @@ export type SharingRecipient = "person" | "agent";
 
 export interface IdentitySharingStore {
     readonly state: IdentitySharingState;
+    /** Null until the Worker reports them; a Worker released before them never does. */
+    readonly durationOptions: AccessDurationOptions | null;
     readonly recipient: SharingRecipient;
     readonly recipientTransitioning: boolean;
     readonly chooseRecipient: (recipient: SharingRecipient) => void;
@@ -66,20 +67,6 @@ export interface DurationChoices {
     readonly sharerAccessEndsAt: string | null;
 }
 
-/** The latest terms the Worker reported for each duration; it alone decides how far this browser's access reaches. */
-function durationOptions(state: IdentitySharingState): AccessDurationOptions | null {
-    switch (state.kind) {
-        case "ready":
-            return state.transfer.accessDurationOptions ?? null;
-        case "loading":
-        case "unconfirmed":
-            return state.durationOptions;
-        case "initial":
-        case "refused":
-            return null;
-    }
-}
-
 function selectedDuration(state: IdentitySharingState): DeviceAccessDuration | null {
     switch (state.kind) {
         case "ready":
@@ -97,8 +84,7 @@ function selectedDuration(state: IdentitySharingState): DeviceAccessDuration | n
  * A duration the sharer's own access cuts short stays listed but disabled, so the sharer sees why it is unavailable,
  * and one choice names where shared access actually ends instead.
  */
-export function durationChoices(state: IdentitySharingState): DurationChoices {
-    const options = durationOptions(state);
+export function durationChoices(state: IdentitySharingState, options: AccessDurationOptions | null): DurationChoices {
     const duration = selectedDuration(state);
     if (options === null) {
         return {
@@ -153,11 +139,14 @@ export function durationChoices(state: IdentitySharingState): DurationChoices {
 }
 
 /** Any duration the sharer's access cuts short grants the same term, so the shortest of them stands for that choice. */
-export function chosenDuration(value: DurationChoiceValue, state: IdentitySharingState): DeviceAccessDuration | null {
+export function chosenDuration(
+    value: DurationChoiceValue,
+    options: AccessDurationOptions | null,
+): DeviceAccessDuration | null {
     if (value !== untilSharerAccessEnds) {
         return value;
     }
-    return durationOptions(state)?.find((option) => option.accessLimitedBySharer)?.accessDuration ?? null;
+    return options?.find((option) => option.accessLimitedBySharer)?.accessDuration ?? null;
 }
 
 function linkCode(transfer: IdentityTransfer): string {
@@ -193,6 +182,7 @@ async function transferQrImage(url: string): Promise<string> {
 
 export const createIdentitySharingStore = (
     createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>,
+    sharingTerms: (signal: AbortSignal) => Promise<AccessDurationOptions>,
     clock: Clock,
 ) => {
     const lifetime = new AbortController();
@@ -266,14 +256,30 @@ export const createIdentitySharingStore = (
         recipient: "person",
         recipientTransitioning: false,
         state: { kind: "initial" },
+        durationOptions: null,
     }));
+    let termsRead: AbortController | null = null;
+    // Read again with every link, so the dates beside each duration stay current while the dialog stays open.
+    const readSharingTerms = () => {
+        termsRead?.abort();
+        const read = new AbortController();
+        termsRead = read;
+        const readSignal = AbortSignal.any([signal, read.signal]);
+        void sharingTerms(readSignal).then(
+            (durationOptions) => {
+                if (!readSignal.aborted) {
+                    store.setState({ durationOptions });
+                }
+            },
+            () => undefined,
+        );
+    };
     const issue = (request: SharingTerms, duration: DeviceAccessDuration | null) => {
         if (signal.aborted) {
             return;
         }
-        store.setState({
-            state: { kind: "loading", duration, request, durationOptions: durationOptions(store.getState().state) },
-        });
+        store.setState({ state: { kind: "loading", duration, request } });
+        readSharingTerms();
         void (async () => {
             try {
                 const issued = await createTransfer(request, signal);
@@ -327,12 +333,7 @@ export const createIdentitySharingStore = (
                 store.setState({
                     state: refused
                         ? { kind: "refused", duration: current.duration }
-                        : {
-                              kind: "unconfirmed",
-                              duration: current.duration,
-                              request,
-                              durationOptions: current.durationOptions,
-                          },
+                        : { kind: "unconfirmed", duration: current.duration, request },
                 });
             }
         })();

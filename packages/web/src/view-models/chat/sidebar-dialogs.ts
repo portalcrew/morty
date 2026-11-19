@@ -1,6 +1,10 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi, ChatComputer } from "../../services/chat/bot-chat-api.ts";
-import type { IdentityTransfer, SharingTerms } from "../../services/identity/anonymous-identity-api.ts";
+import type {
+    AccessDurationOptions,
+    IdentityTransfer,
+    SharingTerms,
+} from "../../services/identity/anonymous-identity-api.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import { createIdentitySharingStore, type IdentitySharingStore } from "./identity-sharing-store.ts";
 import { createNativeSessionStore, type NativeSessionStore } from "./native-session-store.ts";
@@ -61,10 +65,11 @@ export function createSidebarDialogs(options: {
     >;
     readonly computer: () => ChatComputer | null;
     readonly createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>;
+    readonly sharingTerms: (signal: AbortSignal) => Promise<AccessDurationOptions>;
     readonly onOpenSession: (session: OpenMortySession) => void;
     readonly onOpenedSession: () => void;
 }): SidebarDialogs {
-    const { clock, requests, computer, createTransfer, onOpenSession, onOpenedSession } = options;
+    const { clock, requests, computer, createTransfer, sharingTerms, onOpenSession, onOpenedSession } = options;
     return createStore<SidebarDialogsState>()((set, get) => ({
         mobilePanel: { kind: "closed" },
         nativeDialog: null,
@@ -145,7 +150,7 @@ export function createSidebarDialogs(options: {
             if (get().sharing !== null) {
                 return;
             }
-            const sharing = createIdentitySharingStore(createTransfer, clock);
+            const sharing = createIdentitySharingStore(createTransfer, sharingTerms, clock);
             set({ sharing });
             sharing.getState().start(options.signal());
         },

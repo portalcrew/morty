@@ -70,6 +70,7 @@ type IdentitySharingTransferSectionProps =
           readonly image: string;
           readonly transfer: IdentityTransfer;
           readonly replacedEarlier: boolean;
+          readonly sharerLimitShown: boolean;
       };
 
 function IdentitySharingTransferSection(props: IdentitySharingTransferSectionProps) {
@@ -180,7 +181,11 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
             {loading ? (
                 <IdentitySharingTimingCopySkeleton />
             ) : (
-                <IdentitySharingTiming replacedEarlier={props.replacedEarlier} transfer={props.transfer} />
+                <IdentitySharingTiming
+                    replacedEarlier={props.replacedEarlier}
+                    sharerLimitShown={props.sharerLimitShown}
+                    transfer={props.transfer}
+                />
             )}
         </div>
     );
@@ -189,16 +194,18 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
 function IdentitySharingTiming({
     transfer,
     replacedEarlier,
+    sharerLimitShown,
 }: {
     readonly transfer: IdentityTransfer;
     readonly replacedEarlier: boolean;
+    readonly sharerLimitShown: boolean;
 }) {
     return (
         <p className="text-xs leading-5 text-morty-text-3">
             Works for one device until {formatMoment(transfer.expiresAt)}. That device keeps access until{" "}
             {formatMoment(transfer.accessExpiresAt)}.
             {transfer.accessLimitedBySharer &&
-                transfer.accessDurationOptions === undefined &&
+                !sharerLimitShown &&
                 " This browser's own access ends then, so the device cannot keep it longer."}
             {replacedEarlier && " The previous link no longer works."}
         </p>
@@ -219,9 +226,11 @@ function AgentHandoffHeading() {
 function AgentHandoffSection({
     transfer,
     replacedEarlier,
+    sharerLimitShown,
 }: {
     readonly transfer: IdentityTransfer;
     readonly replacedEarlier: boolean;
+    readonly sharerLimitShown: boolean;
 }) {
     return (
         <div className="space-y-4" data-testid={dataTestId.agentHandoff}>
@@ -235,7 +244,11 @@ function AgentHandoffSection({
                     urlClassName="max-h-32"
                 />
             </div>
-            <IdentitySharingTiming replacedEarlier={replacedEarlier} transfer={transfer} />
+            <IdentitySharingTiming
+                replacedEarlier={replacedEarlier}
+                sharerLimitShown={sharerLimitShown}
+                transfer={transfer}
+            />
         </div>
     );
 }
@@ -283,7 +296,8 @@ export function IdentitySharing({
     const recipient = useStore(store, (state) => state.recipient);
     const chooseRecipient = useStore(store, (state) => state.chooseRecipient);
     const recipientTransitioning = useStore(store, (state) => state.recipientTransitioning);
-    const choices = durationChoices(state);
+    const durationOptions = useStore(store, (state) => state.durationOptions);
+    const choices = durationChoices(state, durationOptions);
     const loading = state.kind === "initial" || state.kind === "loading";
     const showDeviceAccess = choices.selected !== null || loading;
     return (
@@ -322,7 +336,8 @@ export function IdentitySharing({
                             label="Device access"
                             onValueChange={(value) => {
                                 const chosen = choices.options.find((option) => option.value === value);
-                                const duration = chosen === undefined ? null : chosenDuration(chosen.value, state);
+                                const duration =
+                                    chosen === undefined ? null : chosenDuration(chosen.value, durationOptions);
                                 if (duration !== null) {
                                     choose(duration);
                                 }
@@ -352,13 +367,18 @@ export function IdentitySharing({
                     <IdentitySharingTransferSection allowQrDownload={allowQrDownload} loading />
                 )
             ) : state.kind === "ready" && recipient === "agent" ? (
-                <AgentHandoffSection replacedEarlier={state.replacedEarlier} transfer={state.transfer} />
+                <AgentHandoffSection
+                    replacedEarlier={state.replacedEarlier}
+                    sharerLimitShown={choices.sharerAccessEndsAt !== null}
+                    transfer={state.transfer}
+                />
             ) : state.kind === "ready" ? (
                 <IdentitySharingTransferSection
                     allowQrDownload={allowQrDownload}
                     image={state.image}
                     loading={false}
                     replacedEarlier={state.replacedEarlier}
+                    sharerLimitShown={choices.sharerAccessEndsAt !== null}
                     transfer={state.transfer}
                 />
             ) : null}

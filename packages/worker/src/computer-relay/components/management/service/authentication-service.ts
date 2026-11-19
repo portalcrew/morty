@@ -209,7 +209,7 @@ export class AuthenticationService {
             readonly replaces: string | null;
         },
         signal: AbortSignal,
-    ): Promise<(IdentityTransfer & { readonly durationOptions: readonly AccessDurationOption[] }) | null> => {
+    ): Promise<IdentityTransfer | null> => {
         const access = await this.authorize(token, "shareAccess", signal);
         if (access.kind !== "authorized") {
             return null;
@@ -232,11 +232,27 @@ export class AuthenticationService {
                 409,
             );
         }
-        return {
-            code,
-            ...issuedLinkTerms(request.duration, issued),
-            durationOptions: accessDurationOptions(access.credential, now),
-        };
+        return { code, ...issuedLinkTerms(request.duration, issued) };
+    };
+
+    /** Read apart from sharing, whose retries must answer with exactly the terms they committed. */
+    readonly sharingTerms = async (
+        token: string | undefined,
+        signal: AbortSignal,
+    ): Promise<
+        | { readonly kind: "terms"; readonly options: readonly AccessDurationOption[] }
+        | { readonly kind: "unauthenticated" | "revoked" }
+    > => {
+        const access = await this.authorize(token, "shareAccess", signal);
+        switch (access.kind) {
+            case "authorized":
+                return { kind: "terms", options: accessDurationOptions(access.credential, Date.now()) };
+            case "revoked":
+                return { kind: "revoked" };
+            case "unauthenticated":
+            case "forbidden":
+                return { kind: "unauthenticated" };
+        }
     };
 
     readonly redeemTransfer = async (

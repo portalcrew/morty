@@ -145,11 +145,6 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
                             accessExpiresAt: new Date(transfer.accessExpiresAt).toISOString(),
                             accessDuration: transfer.accessDuration,
                             accessLimitedBySharer: transfer.accessLimitedBySharer,
-                            accessDurationOptions: transfer.durationOptions.map((option) => ({
-                                accessDuration: option.duration,
-                                accessExpiresAt: new Date(option.accessExpiresAt).toISOString(),
-                                accessLimitedBySharer: option.limitedBySharer,
-                            })),
                             url: url.toString(),
                             // Served by the deployment whose /continue page opens these links, so setup may issue them.
                             setupHandoffFormats: [sealedSetupHandoffFormat],
@@ -215,6 +210,27 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
                     );
                 }
                 return json({ sealed }, 200, { "Cache-Control": "no-store" });
+            })
+            .get("/identity/sharing-terms", async (context) => {
+                const application = applicationForRequest(ctx, context);
+                const result = await application.services.authentication.sharingTerms(
+                    readBearerToken(context.req.raw.headers),
+                    context.req.raw.signal,
+                );
+                if (result.kind !== "terms") {
+                    throw credentialRejected(result.kind);
+                }
+                return json(
+                    {
+                        accessDurationOptions: result.options.map((option) => ({
+                            accessDuration: option.duration,
+                            accessExpiresAt: new Date(option.accessExpiresAt).toISOString(),
+                            accessLimitedBySharer: option.limitedBySharer,
+                        })),
+                    },
+                    200,
+                    { "Cache-Control": "no-store" },
+                );
             })
             .get("/identity/devices", async (context) => {
                 const application = applicationForRequest(ctx, context);
