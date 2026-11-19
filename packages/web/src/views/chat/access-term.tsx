@@ -1,10 +1,12 @@
-import { Clock3, MonitorSmartphone, ShieldCheck } from "lucide-react";
+import { Clock3, Copy, MonitorSmartphone, ShieldCheck } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
 import { Button } from "../../components/ui/cloud-button.tsx";
+import { CopyToClipboardButton } from "../../components/ui/copy-to-clipboard-button.tsx";
 import { cn } from "../../lib/utils.ts";
+import { agentSetupPrompt, browserSetupHandoff } from "../../services/device/setup-handoff.ts";
 import { type AccessExpiryStore, visibleAccessNotice } from "../../view-models/chat/access-expiry-store.ts";
 import { formatMoment } from "../../view-models/chat/access-presentation.ts";
 
@@ -155,14 +157,46 @@ function EndingAccessNoticeCard({
     readonly expiresAt: string;
     readonly onDismiss: () => void;
 }) {
+    // Setup again keeps this computer's pairing and returns a new link; only the computer running the agent can copy it.
+    const copiesPrompt = browserSetupHandoff().kind === "copy-prompt";
     return (
         <SidebarAccessNoticeCard
             actions={
-                <Button className={sidebarAccessNoticeActionClassName} onClick={onDismiss} size="xs">
-                    Got it
-                </Button>
+                <>
+                    {copiesPrompt && (
+                        <CopyToClipboardButton
+                            className={sidebarAccessNoticeActionClassName}
+                            failureToast={{
+                                description: `Ask your agent to fetch ${window.location.origin}/doc/setup.md and complete the Morty setup.`,
+                                title: "Could not copy",
+                            }}
+                            label="Copy setup prompt"
+                            size="xs"
+                            successToast={{
+                                description: "Paste into your agent, then open the link it returns.",
+                                title: "Copied",
+                            }}
+                            value={agentSetupPrompt()}
+                        >
+                            <Copy aria-hidden="true" />
+                            <span>Copy setup prompt</span>
+                        </CopyToClipboardButton>
+                    )}
+                    <Button
+                        className={sidebarAccessNoticeActionClassName}
+                        onClick={onDismiss}
+                        size="xs"
+                        {...(copiesPrompt ? { variant: "outline" as const } : {})}
+                    >
+                        Got it
+                    </Button>
+                </>
             }
-            detail="To keep using Morty here, open a new link from your computer or another device. Your local agent and tasks keep running."
+            detail={
+                copiesPrompt
+                    ? "To keep using Morty here, paste the setup prompt into your agent and open the new link in this browser. Your agent and tasks keep running."
+                    : "To keep using Morty here, ask your agent on your computer to run Morty setup again and open the new link in this browser. Your agent and tasks keep running."
+            }
             icon={Clock3}
             label="Access ending soon"
             title={`Access in this browser ends ${formatMoment(expiresAt)}`}
