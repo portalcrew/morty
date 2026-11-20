@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { MortyLogoMark } from "@/components/brand/morty-logo";
 import { cn } from "@/lib/utils";
 import { overlaySurfaceRadiusClassName } from "../../components/ui/overlay-surface.ts";
+import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 
 const setupPageBackgroundClassName = "bg-[radial-gradient(circle_at_top,_#f6f7f9_0%,_#f0f1f4_48%)]";
 
@@ -51,23 +52,25 @@ function SetupPageWithHeader({
 }) {
     const hasPageLeading = pageNotice !== undefined || pageAction !== undefined;
     return (
-        <main className={`flex min-h-dvh flex-col ${setupPageBackgroundClassName} text-foreground`}>
-            <SetupPageHeader headerAction={headerAction} />
-            {pageNotice !== undefined && <div className="w-full px-6">{pageNotice}</div>}
-            <div
-                className={
-                    hasPageLeading
-                        ? "flex flex-1 flex-col items-center justify-center px-6 py-8"
-                        : "flex flex-1 flex-col items-center px-6 py-8 md:justify-center"
-                }
-            >
-                {pageAction !== undefined && <div className="mb-6">{pageAction}</div>}
-                {!hasPageLeading && <div aria-hidden="true" className="grow-[40] basis-0 md:hidden" />}
-                {children}
-                {!hasPageLeading && <div aria-hidden="true" className="grow-[60] basis-0 md:hidden" />}
-            </div>
-            {pageFooter}
-        </main>
+        <ScrollArea className="h-dvh rounded-none" viewportClassName="h-full [&>div]:block!">
+            <main className={`flex min-h-dvh flex-col ${setupPageBackgroundClassName} text-foreground`}>
+                <SetupPageHeader headerAction={headerAction} />
+                {pageNotice !== undefined && <div className="w-full px-6">{pageNotice}</div>}
+                <div
+                    className={
+                        hasPageLeading
+                            ? "flex flex-1 flex-col items-center justify-center p-6"
+                            : "flex flex-1 flex-col items-center p-6 md:justify-center"
+                    }
+                >
+                    {pageAction !== undefined && <div className="mb-6">{pageAction}</div>}
+                    {!hasPageLeading && <div aria-hidden="true" className="grow-[40] basis-0 md:hidden" />}
+                    {children}
+                    {!hasPageLeading && <div aria-hidden="true" className="grow-[60] basis-0 md:hidden" />}
+                </div>
+                {pageFooter}
+            </main>
+        </ScrollArea>
     );
 }
 
