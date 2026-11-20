@@ -1,6 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import type { ReactNode } from "react";
 import { dataTestId } from "../../data-testid.ts";
+import { cn } from "../../lib/utils.ts";
 import { ExternalLink } from "../ui/external-link.tsx";
 import { Textarea } from "../ui/textarea.tsx";
 
@@ -35,55 +36,72 @@ function SetupPromptField({ prompt }: { readonly prompt: string }) {
 }
 
 /** The note and review disclosure shown under a setup-prompt button. */
-export function SetupPromptDetails({ prompt }: { readonly prompt: string }) {
+export function SetupPromptDetails({
+    prompt,
+    note,
+    action,
+}: {
+    readonly prompt: string;
+    readonly note?: ReactNode;
+    readonly action?: ReactNode;
+}) {
     return (
         <>
             <ul className="mt-6 list-disc space-y-1 rounded-md bg-[rgba(11,26,57,0.03)] py-3 pr-3 pl-7 text-left text-xs leading-5 text-morty-text-3 marker:text-morty-text-4">
                 <li>Setup interrupts the agent's current task; continue it here afterwards.</li>
                 <li>Keep that computer awake and online.</li>
+                {note && <li>{note}</li>}
             </ul>
-            <details
-                aria-label="Setup details"
-                className="disclosure-details group w-full text-xs leading-5 text-morty-text-3"
-            >
-                <summary className="mt-5 flex h-6 cursor-pointer list-none items-center justify-center gap-1.5 rounded-lg outline-none hover:text-morty-text-2 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-                    Review what setup does
-                    <ChevronDown
-                        aria-hidden="true"
-                        className="size-3.5 transition-[rotate] duration-300 ease-out group-open:rotate-180 motion-reduce:transition-none"
-                    />
-                </summary>
-                <div className="mt-1 rounded-[16px] border border-border/30 bg-[rgba(11,26,57,0.03)] p-1 text-left">
-                    <ul
-                        aria-label="What setup does"
-                        className="list-disc space-y-1 py-2 pr-3 pl-7 text-morty-text-3 marker:text-morty-text-4 [&_code]:whitespace-nowrap"
+            <div className="mt-5 grid grid-cols-2 items-start">
+                <details
+                    aria-label="Setup details"
+                    className="disclosure-details group col-span-2 col-start-1 row-start-1 w-full text-xs leading-5 text-morty-text-3"
+                >
+                    <summary
+                        className={cn(
+                            "flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-lg outline-none hover:text-morty-text-2 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring [&::-webkit-details-marker]:hidden",
+                            action ? "-mx-3 w-fit justify-start px-3 text-left" : "justify-center",
+                        )}
                     >
-                        <li>
-                            Installs the Morty CLI (<code>@portalcrew/morty</code>) from npm. Use{" "}
-                            <code>npx @portalcrew/morty@latest restart</code> to install updates.
-                        </li>
-                        <li>
-                            Runs a background connection until restart or <code>morty stop</code>.
-                        </li>
-                        <li>Keeps this computer's Morty identity in your user data folder.</li>
-                        <li>Asks before replacing a missing connection, which ends earlier shared access.</li>
-                        <li>
-                            Returns a private link for one device, valid for 10 minutes. That device can control your
-                            agent for 7 days unless you revoke access; ask the agent for 1 hour, 1 day or 30 days
-                            instead.
-                        </li>
-                    </ul>
-                    <p className="px-3 pb-2">
-                        <ExternalLink
-                            className="text-morty-text-2 underline underline-offset-2 hover:text-foreground"
-                            href={`${window.location.origin}/doc/setup.md`}
+                        <span>Setup details</span>
+                        <ChevronDown
+                            aria-hidden="true"
+                            className="size-3.5 shrink-0 transition-[rotate] duration-300 ease-out group-open:rotate-180 motion-reduce:transition-none"
+                        />
+                    </summary>
+                    <div className="mt-1 rounded-[16px] border border-border/30 bg-[rgba(11,26,57,0.03)] p-1 text-left">
+                        <ul
+                            aria-label="What setup does"
+                            className="list-disc space-y-1 py-2 pr-3 pl-7 text-morty-text-3 marker:text-morty-text-4 [&_code]:whitespace-nowrap"
                         >
-                            Read setup.md
-                        </ExternalLink>
-                    </p>
-                    <SetupPromptField prompt={prompt} />
-                </div>
-            </details>
+                            <li>
+                                Installs the Morty CLI (<code>@portalcrew/morty</code>) from npm. Use{" "}
+                                <code>npx @portalcrew/morty@latest restart</code> to install updates.
+                            </li>
+                            <li>
+                                Runs a background connection until restart or <code>morty stop</code>.
+                            </li>
+                            <li>Keeps this computer's Morty identity in your user data folder.</li>
+                            <li>Asks before replacing a missing connection, which ends earlier shared access.</li>
+                            <li>
+                                Returns a private link for one device, valid for 10 minutes. That device can control
+                                your agent for 7 days unless you revoke access; ask the agent for 1 hour, 1 day or 30
+                                days instead.
+                            </li>
+                        </ul>
+                        <p className="px-3 pb-2">
+                            <ExternalLink
+                                className="text-morty-text-2 underline underline-offset-2 hover:text-foreground"
+                                href={`${window.location.origin}/doc/setup.md`}
+                            >
+                                Read setup.md
+                            </ExternalLink>
+                        </p>
+                        <SetupPromptField prompt={prompt} />
+                    </div>
+                </details>
+                {action && <div className="col-start-2 row-start-1 min-w-0 justify-self-end">{action}</div>}
+            </div>
         </>
     );
 }

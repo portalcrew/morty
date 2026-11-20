@@ -2,6 +2,7 @@ import { type AnyRouter, RouterProvider } from "@tanstack/react-router";
 import { ArrowLeft, ArrowUpRight, Unplug } from "lucide-react";
 import { SetupConnectionGraphic } from "../../components/setup/setup-connection-graphic.tsx";
 import { SetupDemoVideo } from "../../components/setup/setup-demo-video.tsx";
+import { SetupResourceLinks } from "../../components/setup/setup-resource-links.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
 import { ExternalLink } from "../../components/ui/external-link.tsx";
 import { MortyAlert } from "../../components/ui/morty-alert.tsx";
@@ -198,17 +199,9 @@ function SetupApplication({
             }
             pageAction={pageAction}
             pageFooter={
-                <footer className="shrink-0 px-6 pb-6">
+                <footer className="shrink-0 px-6 pb-4">
                     <nav aria-label="About Morty">
-                        <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs leading-5">
-                            {mortyResources.map(([label, href]) => (
-                                <li key={label}>
-                                    <ExternalLink className="text-morty-text-3 hover:text-morty-text-2" href={href}>
-                                        {label}
-                                    </ExternalLink>
-                                </li>
-                            ))}
-                        </ul>
+                        <SetupResourceLinks links={mortyResources} />
                     </nav>
                 </footer>
             }
@@ -231,20 +224,31 @@ function SetupApplication({
                     : "Run one setup prompt on the computer you want to add."}
             </SetupCardDescription>
             <div className="mt-4 w-full">
-                <PairingInstruction handoff={setupHandoff} />
+                <PairingInstruction
+                    action={
+                        returnHref === null ? (
+                            <SetupDemoVideo poster={mortyDemoPoster} video={mortyDemoVideo} />
+                        ) : undefined
+                    }
+                    handoff={setupHandoff}
+                    note={
+                        returnHref === null ? (
+                            <>
+                                <span className="whitespace-nowrap">History stays on your computer</span>
+                                {" · "}
+                                <span className="whitespace-nowrap">End-to-end encrypted</span>
+                                {" · "}
+                                <ExternalLink
+                                    className="underline underline-offset-2 hover:text-foreground"
+                                    href={mortyRepository}
+                                >
+                                    Open source
+                                </ExternalLink>
+                            </>
+                        ) : undefined
+                    }
+                />
             </div>
-            {returnHref === null && (
-                <p className="mt-5 text-center text-xs leading-5 text-morty-text-2">
-                    <span className="whitespace-nowrap">History stays on your computer</span>
-                    {" · "}
-                    <span className="whitespace-nowrap">End-to-end encrypted</span>
-                    {" · "}
-                    <ExternalLink className="underline underline-offset-2 hover:text-foreground" href={mortyRepository}>
-                        Open source
-                    </ExternalLink>
-                </p>
-            )}
-            {returnHref === null && <SetupDemoVideo poster={mortyDemoPoster} video={mortyDemoVideo} />}
         </SetupCardShell>
     );
 }

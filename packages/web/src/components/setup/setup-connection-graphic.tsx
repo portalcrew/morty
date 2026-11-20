@@ -67,7 +67,7 @@ export function SetupConnectionGraphic() {
             </span>
             <span
                 aria-hidden="true"
-                className="absolute top-[77px] left-1/2 flex size-[70px] -translate-x-1/2 items-center justify-center rounded-[22px] border-[1px] border-white bg-card shadow-[0_4px_16px_rgba(23,30,36,0.12)]"
+                className="absolute top-[77px] left-1/2 flex size-[70px] -translate-x-1/2 items-center justify-center rounded-[22px] border-[1px] border-white bg-card shadow-[0_4px_24px_rgba(23,30,36,0.12)]"
             >
                 <MortyLogoMark size={45} />
             </span>

@@ -23,7 +23,7 @@ for (const viewport of [
             await page.goto(runtime.origin);
             await expect(page.getByRole("heading", { name: "Step away. Keep your agent working." })).toBeVisible();
             await expect(page.getByRole("heading")).toHaveCount(1);
-            const details = page.getByText("Review what setup does", { exact: true });
+            const details = page.getByText("Setup details", { exact: true });
             const setupText = page.getByRole("textbox", { name: "Agent setup prompt" });
             if (viewport.name === "desktop") {
                 const copy = page.getByRole("button", { name: "Copy setup prompt" });

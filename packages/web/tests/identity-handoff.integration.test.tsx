@@ -311,7 +311,7 @@ test("Given an expired handoff with no retained access, When the failure page sh
     expect(document.body.textContent).toContain("Next: paste it into the agent running on your computer.");
     expect(queryByRole(document.body, "textbox", { name: "Agent setup prompt" })).toBeNull();
     expect(document.body.textContent).not.toContain("complete the Morty setup for me");
-    expect(document.body.textContent).not.toContain("Review what setup does");
+    expect(document.body.textContent).not.toContain("Setup details");
     expect(document.body.textContent).not.toContain("Setup interrupts the agent's current task");
     expect(queryByRole(document.body, "group", { name: "Setup details" })).toBeNull();
 });

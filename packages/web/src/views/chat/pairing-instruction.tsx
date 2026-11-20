@@ -1,4 +1,5 @@
 import { Check, Copy, Link, Send } from "lucide-react";
+import type { ReactNode } from "react";
 import { useStore } from "zustand";
 import {
     SetupPromptCopiedHint,
@@ -75,9 +76,13 @@ function ShareSetupLink({
 export function PairingInstruction({
     actionPresentation = "setup-card",
     handoff = copyPrompt,
+    note,
+    action,
 }: {
     readonly actionPresentation?: PairingActionPresentation;
     readonly handoff?: SetupHandoffModel;
+    readonly note?: ReactNode;
+    readonly action?: ReactNode;
 }) {
     const setupInstruction = agentSetupPrompt();
     const primaryAction = pairingPrimaryActionProps(actionPresentation);
@@ -138,7 +143,7 @@ export function PairingInstruction({
                     <span>Copy setup prompt</span>
                 </CopyToClipboardButton>
             )}
-            <SetupPromptDetails prompt={setupInstruction} />
+            <SetupPromptDetails action={action} note={note} prompt={setupInstruction} />
         </div>
     );
 }
