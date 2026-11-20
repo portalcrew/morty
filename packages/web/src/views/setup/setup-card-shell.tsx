@@ -20,7 +20,7 @@ const setupCardTitleClassName = "max-w-md text-24 font-semibold tracking-[-0.03e
 
 function SetupPageHeader({ headerAction }: { readonly headerAction: ReactNode }) {
     return (
-        <header className="w-full shrink-0">
+        <header className="sticky top-0 z-20 w-full shrink-0 bg-transparent backdrop-blur-2xl">
             <div className="flex min-h-16 w-full items-center justify-between px-4 py-3 sm:px-6">
                 <a
                     className="flex items-center gap-2 text-16 font-semibold tracking-tight"
@@ -51,14 +51,14 @@ function SetupPageWithHeader({
 }) {
     const hasPageLeading = pageNotice !== undefined || pageAction !== undefined;
     return (
-        <main className={`flex min-h-dvh flex-col overflow-y-auto ${setupPageBackgroundClassName} text-foreground`}>
+        <main className={`flex min-h-dvh flex-col ${setupPageBackgroundClassName} text-foreground`}>
             <SetupPageHeader headerAction={headerAction} />
             {pageNotice !== undefined && <div className="w-full px-6">{pageNotice}</div>}
             <div
                 className={
                     hasPageLeading
-                        ? "flex flex-1 flex-col items-center justify-center px-6 py-6"
-                        : "flex flex-1 flex-col items-center px-6 md:justify-center md:py-12"
+                        ? "flex flex-1 flex-col items-center justify-center px-6 py-8"
+                        : "flex flex-1 flex-col items-center px-6 py-8 md:justify-center"
                 }
             >
                 {pageAction !== undefined && <div className="mb-6">{pageAction}</div>}

@@ -130,7 +130,7 @@ export function CwdSelector({
                                     variant="ghost"
                                 >
                                     <Folder aria-hidden="true" className="size-3.5 shrink-0" />
-                                    <StartClippedLabel value={workingDirectory} />
+                                    <StartClippedLabel clip="end" value={workingDirectory} />
                                 </Button>
                             </Popover.Trigger>
                         </Tooltip.Trigger>

@@ -49,7 +49,7 @@ test("Given a new visitor reviewing setup, When they expand its details, Then th
 }, async () => {
     const app = await createTestApp({ page: { kind: "bootstrap" } });
     await app.waitForView(() => getByRole(document.body, "button", { name: "Copy setup prompt" }));
-    await app.user.click(getByText(document.body, "Review what setup does", { exact: true }));
+    await app.user.click(getByText(document.body, "Setup details", { exact: true }));
 
     const steps = getAllByRole(getByRole(document.body, "list", { name: "What setup does" }), "listitem");
     expect(steps.map((step) => step.textContent)).toEqual([
@@ -121,7 +121,7 @@ test("Given a new visitor, When they copy the instruction, Then the clipboard ho
     );
     const nextStep = getByRole(document.body, "status", { name: "Setup next step" });
     expect(nextStep.textContent).toContain("Paste into your agent, then open the link it returns.");
-    await app.user.click(getByText(document.body, "Review what setup does", { exact: true }));
+    await app.user.click(getByText(document.body, "Setup details", { exact: true }));
     const pairing = getByRole(document.body, "textbox", { name: "Agent setup prompt" });
     expect(pairing).toHaveProperty("value", instruction);
     await app.user.click(pairing);
@@ -140,7 +140,7 @@ test("Given the first screen, When the user reaches the copy button by keyboard 
 
     const instruction = await navigator.clipboard.readText();
     expect(instruction).toContain(`${window.location.origin}/doc/setup.md`);
-    await app.user.click(getByText(document.body, "Review what setup does", { exact: true }));
+    await app.user.click(getByText(document.body, "Setup details", { exact: true }));
     expect(getByRole(document.body, "textbox", { name: "Agent setup prompt" })).toHaveProperty("value", instruction);
     expect(getByRole(document.body, "button", { name: "Copied" })).toBeInstanceOf(HTMLButtonElement);
     expect(document.body.textContent).toContain("Paste into your agent, then open the link it returns.");
@@ -151,7 +151,7 @@ test("Given a user wants to inspect or manually copy setup, When they expand the
 }, async () => {
     const app = await createTestApp({ page: { kind: "bootstrap" } });
     await app.waitForView(() => getByRole(document.body, "button", { name: "Copy setup prompt" }));
-    await app.user.click(getByText(document.body, "Review what setup does", { exact: true }));
+    await app.user.click(getByText(document.body, "Setup details", { exact: true }));
     expect(getByRole(document.body, "group", { name: "Setup details" })).toHaveProperty("open", true);
 
     const pairing = getByRole(document.body, "textbox", { name: "Agent setup prompt" });

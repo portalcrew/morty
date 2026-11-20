@@ -7,9 +7,14 @@ export function SetupDemoVideo({ poster, video }: { readonly poster: string; rea
     const [open, setOpen] = useState(false);
     return (
         <>
-            <Button className="mt-2" onClick={() => setOpen(true)} size="sm" variant="ghost">
+            <Button
+                className="-mr-3 ml-3 max-w-full px-3 py-1 text-right font-normal"
+                onClick={() => setOpen(true)}
+                size="sm"
+                variant="ghost"
+            >
                 <CirclePlay aria-hidden="true" />
-                Watch the 1-min demo
+                <span>Watch demo</span>
             </Button>
             {open && (
                 <Dialog onClose={() => setOpen(false)} size="wide" title="Morty in one minute">
@@ -17,7 +22,7 @@ export function SetupDemoVideo({ poster, video }: { readonly poster: string; rea
                     <video
                         aria-label="Morty demo"
                         autoPlay
-                        className="aspect-video w-full rounded-[16px] bg-black"
+                        className="aspect-video w-full rounded-[16px]"
                         controls
                         playsInline
                         poster={poster}
