@@ -210,7 +210,7 @@ test("Given a real Codex conversation with content, When the manual /compact's s
     });
 });
 
-test("Given Codex is signed in to a ChatGPT account with two usage limit resets, When the user sends /usage and then /usage reset, Then Codex reports the resets and uses exactly one", async ({
+test("Given a Codex conversation signed in to a ChatGPT account with two usage limit resets, When the user sends /usage and then /usage reset, Then Codex reports the resets and uses exactly one", async ({
     signal,
 }) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "REAL_PROMPT_REPLY");
@@ -249,6 +249,8 @@ test("Given Codex is signed in to a ChatGPT account with two usage limit resets,
             }
         };
 
+        expect(await reply("Hello")).toContain("REAL_PROMPT_REPLY");
+
         const usage = await reply("/usage");
         expect(usage).toContain("100% used");
         expect(usage).toContain("2026-11-21 15:00 UTC");
@@ -257,6 +259,6 @@ test("Given Codex is signed in to a ChatGPT account with two usage limit resets,
 
         expect(await reply("/usage reset")).toContain("Codex usage limits were reset.");
         expect(account.availableResets()).toBe(1);
-        expect(provider.diagnostics()).toEqual([]);
+        expect(provider.diagnostics()).toHaveLength(1);
     });
 });

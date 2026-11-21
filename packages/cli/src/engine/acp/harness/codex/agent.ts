@@ -7,6 +7,7 @@ import {
 } from "@agentclientprotocol/sdk/unstable";
 import { z } from "zod";
 import { captureProcessTree, type ProcessTreeIdentity, stopProcessTree } from "../../../util/process/executable.ts";
+import { AcpExecutionError } from "../../acp-error.ts";
 import { agentTerminationError } from "../../agent/agent-lifecycle.ts";
 import { CodexAppServerClient } from "./app-server-client.ts";
 import {
@@ -27,6 +28,10 @@ import { usageReport, usageResetReport } from "./usage.ts";
 
 const APPROVAL_TIMEOUT_MILLISECONDS = 3_600_000;
 const ACCOUNT_REQUEST_TIMEOUT_MILLISECONDS = 30_000;
+const USAGE_READ_FAILED =
+    "Codex couldn't read your usage limits. Usage limits and resets need a ChatGPT sign-in; if Codex is signed in with ChatGPT, try again shortly.";
+const USAGE_RESET_FAILED =
+    "Codex couldn't confirm a usage limit reset. Send /usage to see whether your limits were reset; resets need a ChatGPT sign-in.";
 const CODEX_AGENT_VERSION = "0.154.0";
 
 function promptInput(prompt: readonly ContentBlock[]): readonly unknown[] {
@@ -60,6 +65,9 @@ export class CodexAcpAgent {
     readonly #settings: CodexSettings;
     #closePromise: Promise<void> | null = null;
     #sessionId = "";
+    // Codex saves a new thread only when its first turn starts, and Morty keeps a conversation once a prompt reaches
+    // the Agent; a command answered without a turn would leave a conversation that cannot be reopened.
+    #thread: "unsaved" | "saved" = "unsaved";
     #sessionAgent: CodexSessionAgent;
 
     constructor(options: CodexClientOptions) {
@@ -69,7 +77,12 @@ export class CodexAcpAgent {
             cwd: options.cwd,
             environment: options.environment,
             handlers: {
-                onNotification: async (method, params) => await this.#sessionAgent.onNotification(method, params),
+                onNotification: async (method, params) => {
+                    if (method === "turn/started") {
+                        this.#thread = "saved";
+                    }
+                    await this.#sessionAgent.onNotification(method, params);
+                },
                 onServerRequest: async (request) => await this.#sessionAgent.onServerRequest(request),
             },
         });
@@ -159,6 +172,7 @@ export class CodexAcpAgent {
             ),
         );
         this.#sessionId = created.thread.id;
+        this.#thread = "unsaved";
         this.#settings.selectNewThread(created);
         await this.#settings.probeCollaborationMode(this.#sessionId, signal);
         return await this.#opened();
@@ -179,6 +193,7 @@ export class CodexAcpAgent {
             ),
         );
         this.#sessionId = forked.thread.id;
+        this.#thread = "saved";
         this.#settings.selectRestoredThread(forked);
         await this.#settings.probeCollaborationMode(this.#sessionId, signal);
         return await this.#opened();
@@ -231,7 +246,8 @@ export class CodexAcpAgent {
             prompt.length === 1 && prompt[0]?.type === "text"
                 ? prompt[0].text.trim().toLowerCase().split(/\s+/u).join(" ")
                 : null;
-        if (command === "/compact" || command === "/usage" || command === "/usage reset") {
+        const usage = this.#thread === "saved" && (command === "/usage" || command === "/usage reset");
+        if (command === "/compact" || usage) {
             const messageId = randomUUID();
             for (const content of prompt) {
                 await this.#emit({ sessionUpdate: "user_message_chunk", messageId, content });
@@ -245,28 +261,36 @@ export class CodexAcpAgent {
         return await this.#sessionAgent.prompt(promptInput(prompt), this.signal, prompt);
     };
     readonly #usage = async (reset: boolean): Promise<PromptResponse> => {
-        const signal = AbortSignal.any([this.signal, AbortSignal.timeout(ACCOUNT_REQUEST_TIMEOUT_MILLISECONDS)]);
-        const text = reset
-            ? usageResetReport(
-                  rateLimitResetCreditConsumeResponseSchema.parse(
-                      await this.#appServer.request(
-                          "account/rateLimitResetCredit/consume",
-                          { idempotencyKey: randomUUID() },
-                          signal,
-                      ),
-                  ).outcome,
-              )
-            : usageReport(
-                  accountRateLimitsResponseSchema.parse(
-                      await this.#appServer.request("account/rateLimits/read", undefined, signal),
-                  ),
-              );
+        const text = await this.#usageReport(reset).catch((cause: unknown) => {
+            this.signal.throwIfAborted();
+            // Codex reports these failures with the ChatGPT backend's URL and raw response body, so only this Computer's
+            // log keeps them.
+            console.warn("Codex usage request failed", cause);
+            throw new AcpExecutionError(
+                reset ? USAGE_RESET_FAILED : USAGE_READ_FAILED,
+                { cause },
+                "codex_usage_unavailable",
+            );
+        });
         await this.#emit({
             sessionUpdate: "agent_message_chunk",
             messageId: randomUUID(),
             content: { type: "text", text },
         });
         return { stopReason: "end_turn" };
+    };
+    readonly #usageReport = async (reset: boolean): Promise<string> => {
+        const signal = AbortSignal.any([this.signal, AbortSignal.timeout(ACCOUNT_REQUEST_TIMEOUT_MILLISECONDS)]);
+        if (reset) {
+            const consumed = await this.#appServer.request(
+                "account/rateLimitResetCredit/consume",
+                { idempotencyKey: randomUUID() },
+                signal,
+            );
+            return usageResetReport(rateLimitResetCreditConsumeResponseSchema.parse(consumed).outcome);
+        }
+        const usage = await this.#appServer.request("account/rateLimits/read", undefined, signal);
+        return usageReport(accountRateLimitsResponseSchema.parse(usage));
     };
     readonly steer = async (request: unknown, signal: AbortSignal) => await this.#sessionAgent.steer(request, signal);
     readonly cancel = async (_request: { readonly sessionId: string }): Promise<void> => {
@@ -339,6 +363,7 @@ export class CodexAcpAgent {
             );
             await queued.initialize(signal);
             this.#sessionId = threadId;
+            this.#thread = "saved";
             this.#settings.selectRestoredThread({
                 thread: { id: threadId },
                 model: saved.thread.model,
@@ -349,6 +374,7 @@ export class CodexAcpAgent {
             return;
         }
         this.#sessionId = resumed.thread.id;
+        this.#thread = "saved";
         this.#settings.selectRestoredThread(resumed);
         await this.#settings.probeCollaborationMode(this.#sessionId, signal);
     };
