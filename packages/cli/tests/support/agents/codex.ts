@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { executableLaunch } from "../../../src/engine/util/process/executable.ts";
 import { FakeOpenAiProvider } from "../llm/openai.ts";
+import type { FakeChatGptAccount } from "./chatgpt-account.ts";
 import { resolveTestExecutable } from "./executable.ts";
 
 export class CodexFixture implements AsyncDisposable {
@@ -22,6 +23,7 @@ export class CodexFixture implements AsyncDisposable {
         options: {
             readonly approvalPolicy?: "never" | "on-request";
             readonly autoCompactTokenLimit?: number;
+            readonly chatgptAccount?: FakeChatGptAccount;
             readonly configuredModel?: string;
             readonly modelTools?: readonly string[];
         } = {},
@@ -59,6 +61,9 @@ export class CodexFixture implements AsyncDisposable {
                 }),
             );
         }
+        if (options.chatgptAccount !== undefined) {
+            await writeFile(join(codexHome, "auth.json"), options.chatgptAccount.authFile(), { mode: 0o600 });
+        }
         await writeFile(
             join(codexHome, "config.toml"),
             [
@@ -69,6 +74,9 @@ export class CodexFixture implements AsyncDisposable {
                 ...(options.autoCompactTokenLimit === undefined
                     ? []
                     : [`model_auto_compact_token_limit = ${options.autoCompactTokenLimit.toString()}`]),
+                ...(options.chatgptAccount === undefined
+                    ? []
+                    : [`chatgpt_base_url = ${JSON.stringify(options.chatgptAccount.origin)}`]),
                 'model_provider = "morty"',
                 'model_reasoning_effort = "low"',
                 'model_reasoning_summary = "none"',

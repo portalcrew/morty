@@ -383,6 +383,26 @@ export const threadSettingsUpdatedSchema = z.object({
     }),
 });
 
+const rateLimitWindowSchema = z.object({
+    usedPercent: z.number(),
+    windowDurationMins: z.number().int().positive().nullish(),
+    resetsAt: z.number().int().nonnegative().nullish(),
+});
+
+export const accountRateLimitsResponseSchema = z.object({
+    rateLimits: z.object({
+        primary: rateLimitWindowSchema.nullish(),
+        secondary: rateLimitWindowSchema.nullish(),
+    }),
+    rateLimitResetCredits: z.object({ availableCount: z.number().int().nonnegative() }).nullish(),
+});
+
+export const rateLimitResetCreditConsumeResponseSchema = z.object({
+    outcome: z.enum(["reset", "nothingToReset", "noCredit", "alreadyRedeemed"]),
+});
+
 export type McpElicitationParams = z.infer<typeof mcpElicitationParamsSchema>;
 export type UserInputQuestion = z.infer<typeof userInputQuestionSchema>;
 export type CodexModel = z.infer<typeof modelSchema>;
+export type AccountRateLimits = z.infer<typeof accountRateLimitsResponseSchema>;
+export type RateLimitResetCreditOutcome = z.infer<typeof rateLimitResetCreditConsumeResponseSchema>["outcome"];
