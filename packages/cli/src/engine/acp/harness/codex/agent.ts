@@ -10,6 +10,8 @@ import { captureProcessTree, type ProcessTreeIdentity, stopProcessTree } from ".
 import { agentTerminationError } from "../../agent/agent-lifecycle.ts";
 import { CodexAppServerClient } from "./app-server-client.ts";
 import {
+    accountRateLimitsResponseSchema,
+    rateLimitResetCreditConsumeResponseSchema,
     threadForkResponseSchema,
     threadListResponseSchema,
     threadResumeResponseSchema,
@@ -21,8 +23,10 @@ import { CodexOwnedAcpAgent } from "./owned-agent.ts";
 import type { CodexSessionAgent } from "./session-agent.ts";
 import { type CodexClientOptions, type CodexSessionUpdate, promptResultWithMessageId } from "./session-update.ts";
 import { CodexSettings } from "./settings.ts";
+import { usageReport, usageResetReport } from "./usage.ts";
 
 const APPROVAL_TIMEOUT_MILLISECONDS = 3_600_000;
+const ACCOUNT_REQUEST_TIMEOUT_MILLISECONDS = 30_000;
 const CODEX_AGENT_VERSION = "0.154.0";
 
 function promptInput(prompt: readonly ContentBlock[]): readonly unknown[] {
@@ -134,7 +138,14 @@ export class CodexAcpAgent {
     readonly #opened = async () => {
         await this.#emit({
             sessionUpdate: "available_commands_update",
-            availableCommands: [{ name: "compact", description: "Manually compact the session context" }],
+            availableCommands: [
+                { name: "compact", description: "Manually compact the session context" },
+                {
+                    name: "usage",
+                    description: "Show usage limits; /usage reset uses a usage limit reset",
+                    input: { hint: "reset" },
+                },
+            ],
         });
         return this.sessionState();
     };
@@ -216,14 +227,46 @@ export class CodexAcpAgent {
     };
     readonly prompt = async (request: PromptRequest): Promise<PromptResponse> => {
         const prompt = request.prompt;
-        if (prompt.length === 1 && prompt[0]?.type === "text" && prompt[0].text.trim().toLowerCase() === "/compact") {
+        const command =
+            prompt.length === 1 && prompt[0]?.type === "text"
+                ? prompt[0].text.trim().toLowerCase().split(/\s+/u).join(" ")
+                : null;
+        if (command === "/compact" || command === "/usage" || command === "/usage reset") {
             const messageId = randomUUID();
             for (const content of prompt) {
                 await this.#emit({ sessionUpdate: "user_message_chunk", messageId, content });
             }
-            return await promptResultWithMessageId(this.#sessionAgent.compact(this.signal), messageId);
+            const result =
+                command === "/compact"
+                    ? this.#sessionAgent.compact(this.signal)
+                    : this.#usage(command === "/usage reset");
+            return await promptResultWithMessageId(result, messageId);
         }
         return await this.#sessionAgent.prompt(promptInput(prompt), this.signal, prompt);
+    };
+    readonly #usage = async (reset: boolean): Promise<PromptResponse> => {
+        const signal = AbortSignal.any([this.signal, AbortSignal.timeout(ACCOUNT_REQUEST_TIMEOUT_MILLISECONDS)]);
+        const text = reset
+            ? usageResetReport(
+                  rateLimitResetCreditConsumeResponseSchema.parse(
+                      await this.#appServer.request(
+                          "account/rateLimitResetCredit/consume",
+                          { idempotencyKey: randomUUID() },
+                          signal,
+                      ),
+                  ).outcome,
+              )
+            : usageReport(
+                  accountRateLimitsResponseSchema.parse(
+                      await this.#appServer.request("account/rateLimits/read", undefined, signal),
+                  ),
+              );
+        await this.#emit({
+            sessionUpdate: "agent_message_chunk",
+            messageId: randomUUID(),
+            content: { type: "text", text },
+        });
+        return { stopReason: "end_turn" };
     };
     readonly steer = async (request: unknown, signal: AbortSignal) => await this.#sessionAgent.steer(request, signal);
     readonly cancel = async (_request: { readonly sessionId: string }): Promise<void> => {
