@@ -629,14 +629,29 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         body?: unknown,
         requestSignal: AbortSignal = signal,
     ) {
-        const response = await fetch(new URL(`/morty/api/v1${path}`, base), {
-            method: body === undefined ? "GET" : "POST",
-            headers: { "content-type": "application/json", ...headers },
-            redirect: "error",
-            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-            signal: AbortSignal.any([signal, requestSignal, deadline(45000)]),
-        });
-        const value = object(await response.json());
+        const requestDeadline = AbortSignal.any([signal, requestSignal, deadline(45000)]);
+        let response: Response;
+        try {
+            response = await fetch(new URL(`/morty/api/v1${path}`, base), {
+                method: body === undefined ? "GET" : "POST",
+                headers: { "content-type": "application/json", ...headers },
+                redirect: "error",
+                ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+                signal: requestDeadline,
+            });
+        } catch (cause) {
+            requestDeadline.throwIfAborted();
+            fail("RELAY_UNAVAILABLE", cause instanceof Error ? cause : undefined);
+        }
+        let answer: unknown;
+        try {
+            answer = await response.json();
+        } catch (cause) {
+            requestDeadline.throwIfAborted();
+            // A failed request answered without JSON came from in front of Morty, such as a proxy's error page.
+            fail(response.ok ? "INVALID_RESPONSE" : "RELAY_UNAVAILABLE", cause instanceof Error ? cause : undefined);
+        }
+        const value = object(answer);
         if (!response.ok) {
             remoteFailure(value, response.status);
         }
