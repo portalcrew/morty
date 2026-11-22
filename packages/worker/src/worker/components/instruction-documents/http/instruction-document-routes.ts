@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { CloudBindings } from "../../../../contracts/cloud-bindings.ts";
+import { deployedVersion, deployedVersionHeader } from "../../../../contracts/deployed-version.ts";
 import { RequestError } from "../../../../http/request-error.ts";
 import {
     type ApiSchemaDocument,
@@ -19,24 +20,34 @@ function documentOrigin(requestUrl: string, configuredOrigin: unknown): string {
 
 const cacheControl = "public, max-age=0, s-maxage=300";
 
-function instruction(document: InstructionDocument, requestUrl: string, configuredOrigin: unknown): Response {
-    return new Response(renderInstructionDocument(document, documentOrigin(requestUrl, configuredOrigin)), {
-        headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": cacheControl },
+function versionHeaders(bindings: CloudBindings): Record<string, string> {
+    const version = deployedVersion(bindings.CF_VERSION_METADATA);
+    return version === null ? {} : { [deployedVersionHeader]: version };
+}
+
+function instruction(document: InstructionDocument, requestUrl: string, bindings: CloudBindings): Response {
+    return new Response(renderInstructionDocument(document, documentOrigin(requestUrl, bindings.APP_ORIGIN)), {
+        headers: {
+            "Content-Type": "text/markdown; charset=utf-8",
+            "Cache-Control": cacheControl,
+            ...versionHeaders(bindings),
+        },
     });
 }
 
-function apiSchema(document: ApiSchemaDocument, requestUrl: string, configuredOrigin: unknown): Response {
-    return new Response(renderApiSchemaDocument(document, documentOrigin(requestUrl, configuredOrigin)), {
+function apiSchema(document: ApiSchemaDocument, requestUrl: string, bindings: CloudBindings): Response {
+    return new Response(renderApiSchemaDocument(document, documentOrigin(requestUrl, bindings.APP_ORIGIN)), {
         headers: {
             "Content-Type": "application/json; charset=utf-8",
             "Cache-Control": cacheControl,
             "Access-Control-Allow-Origin": "*",
+            ...versionHeaders(bindings),
         },
     });
 }
 
 export const instructionDocumentRoutes = new Hono<{ readonly Bindings: CloudBindings }>()
-    .get("/doc/setup.md", (context) => instruction("setup", context.req.url, context.env.APP_ORIGIN))
-    .get("/doc/agent-api.md", (context) => instruction("agentApi", context.req.url, context.env.APP_ORIGIN))
-    .get("/doc/agent-api/openapi.json", (context) => apiSchema("openapi", context.req.url, context.env.APP_ORIGIN))
-    .get("/doc/agent-api/asyncapi.json", (context) => apiSchema("asyncapi", context.req.url, context.env.APP_ORIGIN));
+    .get("/doc/setup.md", (context) => instruction("setup", context.req.url, context.env))
+    .get("/doc/agent-api.md", (context) => instruction("agentApi", context.req.url, context.env))
+    .get("/doc/agent-api/openapi.json", (context) => apiSchema("openapi", context.req.url, context.env))
+    .get("/doc/agent-api/asyncapi.json", (context) => apiSchema("asyncapi", context.req.url, context.env));

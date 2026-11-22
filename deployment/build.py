@@ -109,7 +109,7 @@ def main():
         if cli_release['revision'] != env['MORTY_RELEASE_REVISION'] or cli_release['version'] != read(ROOT / 'packages/cli/package.json')['version']:
             raise ValueError('Cloud and CLI release identities differ')
     files = {p.relative_to(release).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(release.rglob('*')) if p.is_file() and p.name != 'release.json'}
-    write(release / 'release.json', {'format': 'morty-cloud-release-v3', 'account_id': ACCOUNT, 'environment': environment, 'revision': env['MORTY_RELEASE_REVISION'], 'cliVersion': read(ROOT / 'packages/cli/package.json')['version'], 'cliRelease': cli_release, 'configs': configs, 'target': spec, 'files': files})
+    write(release / 'release.json', {'format': 'morty-cloud-release-v3', 'account_id': ACCOUNT, 'environment': environment, 'revision': env['MORTY_RELEASE_REVISION'], 'cliVersion': read(ROOT / 'packages/cli/package.json')['version'], 'cliRelease': cli_release, 'configs': configs, 'target': spec, 'files': files, 'reportsDeployedVersion': True})
     print(json.dumps({'release': str(release), 'environment': environment, 'files': len(files)}))
 
 

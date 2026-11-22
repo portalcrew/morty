@@ -114,17 +114,19 @@ test("Given rendered setup instructions at the edge, When users fetch different 
     }
 });
 
-test("Given setup instructions cached by one deployed version, When the next version serves them, Then it renders its own copy instead of the earlier version's", async () => {
+test("Given setup instructions cached by one deployed version, When the next version serves them, Then it serves its own copy and names its version instead of the earlier version's", async () => {
     const runtime = createRuntime({ appOrigin: "https://chat.example", version: "earlier-version" });
     try {
         await (await runtime.dispatchFetch("https://preview.example/doc/setup.md")).text();
         const cached = await runtime.dispatchFetch("https://preview.example/doc/setup.md");
         expect(cached.headers.get("X-Instruction-Cache")).toBe("HIT");
+        expect(cached.headers.get("Morty-Version")).toBe("earlier-version");
         await cached.text();
 
         await runtime.setOptions(runtimeOptions({ appOrigin: "https://chat.example", version: "next-version" }));
         const next = await runtime.dispatchFetch("https://preview.example/doc/setup.md");
         expect(next.headers.get("X-Instruction-Cache")).toBe("MISS");
+        expect(next.headers.get("Morty-Version")).toBe("next-version");
         expect(await next.text()).toContain("morty setup --base-url https://chat.example");
     } finally {
         await runtime.dispose();

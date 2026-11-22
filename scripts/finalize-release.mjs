@@ -37,13 +37,16 @@ if (
 }
 const instructionUrl = new URL("/doc/setup.md", cloud.target.morty_origin);
 const instructionCheck = evidence.checks?.find((check) => check.url === instructionUrl.href && check.status === 200);
+const deployedVersion = evidence.deployed?.versions?.[0]?.version_id;
 const currentInstructions = await fetch(instructionUrl, {
     signal: AbortSignal.timeout(40_000),
     headers: { "cache-control": "no-cache" },
 });
 if (
     !instructionCheck ||
+    typeof deployedVersion !== "string" ||
     !currentInstructions.ok ||
+    currentInstructions.headers.get("morty-version") !== deployedVersion ||
     createHash("sha256")
         .update(Buffer.from(await currentInstructions.arrayBuffer()))
         .digest("hex") !== instructionCheck.sha256
