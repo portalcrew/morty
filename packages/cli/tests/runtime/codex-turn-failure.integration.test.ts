@@ -54,7 +54,7 @@ test("Given Codex fails a turn with a reason, When a member's prompt runs throug
                     attemptId,
                     code: "acp_agent_error",
                     commandId,
-                    message: `Internal error: ${reason}`,
+                    message: reason,
                 });
                 break;
             }
