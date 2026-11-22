@@ -15,7 +15,7 @@ import {
     daemonCredential,
     retiredDaemonCredential,
 } from "../../../schema/computer-relay-do/index.ts";
-import { activeGeneration, currentGeneration } from "./computer-generation.ts";
+import { activeDaemonCredential, activeGeneration, currentGeneration, unrevoked } from "./computer-generation.ts";
 
 const registrationFields = {
     computer_name: computerRegistration.computerName,
@@ -98,10 +98,7 @@ export class ComputerDirectoryStorage {
             .leftJoin(computerRegistration, eq(computerRegistration.generation, computerPairing.generation))
             .where(
                 and(
-                    notInArray(
-                        computerPairing.generation,
-                        database.select({ generation: computerRevocation.generation }).from(computerRevocation),
-                    ),
+                    unrevoked(computerPairing.generation),
                     or(isNotNull(computerRegistration.generation), gt(computerPairing.expiresAt, value.now)),
                 ),
             )
@@ -145,10 +142,7 @@ export class ComputerDirectoryStorage {
                         computerPairing.generation,
                         database.select({ generation: computerRegistration.generation }).from(computerRegistration),
                     ),
-                    notInArray(
-                        computerPairing.generation,
-                        database.select({ generation: computerRevocation.generation }).from(computerRevocation),
-                    ),
+                    unrevoked(computerPairing.generation),
                 ),
             );
         const credential = database.insert(daemonCredential).select(
@@ -194,20 +188,6 @@ export class ComputerDirectoryStorage {
         return results[0]?.meta.changes === 1;
     };
 
-    readonly isActiveDaemon = async (tokenHash: string, signal: AbortSignal): Promise<boolean> => {
-        const rows = await relayDrizzle(this.#database, signal)
-            .select({ generation: daemonCredential.generation })
-            .from(daemonCredential)
-            .where(
-                and(
-                    eq(daemonCredential.tokenHash, tokenHash),
-                    inArray(daemonCredential.generation, activeGeneration()),
-                ),
-            )
-            .limit(1);
-        return rows.length === 1;
-    };
-
     /**
      * Presents a daemon credential with the successor the daemon saved before connecting. A current credential is
      * retired, remembering the successor that replaced it, and the successor becomes current. A retired credential
@@ -221,10 +201,7 @@ export class ComputerDirectoryStorage {
     ): Promise<ComputerCredentialRotation> => {
         const database = relayDrizzle(this.#database, signal);
         const active = activeGeneration();
-        const current = and(
-            eq(daemonCredential.tokenHash, presentedHash),
-            inArray(daemonCredential.generation, active),
-        );
+        const current = activeDaemonCredential(presentedHash);
         this.#database.batch(
             [
                 database.insert(retiredDaemonCredential).select(
@@ -307,12 +284,7 @@ export class ComputerDirectoryStorage {
                         agents: bound(JSON.stringify(agents), "agents"),
                     })
                     .from(daemonCredential)
-                    .where(
-                        and(
-                            eq(daemonCredential.tokenHash, tokenHash),
-                            inArray(daemonCredential.generation, activeGeneration()),
-                        ),
-                    ),
+                    .where(activeDaemonCredential(tokenHash)),
             )
             .onConflictDoUpdate({ target: computerAgentCatalog.generation, set: { agents } });
         return this.#database.run(replaced, signal).meta.changes === 1;
