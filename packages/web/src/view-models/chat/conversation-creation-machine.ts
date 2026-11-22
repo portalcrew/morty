@@ -17,10 +17,8 @@ export type ConversationCreationState =
       };
 
 export type ConversationCreationEvent =
-    | { readonly kind: "reset" }
     | { readonly kind: "draft-message-queued"; readonly message: QueuedDraftMessage }
-    | { readonly kind: "session-create-failed"; readonly commandId: string; readonly error: string }
-    | { readonly kind: "conversation-created"; readonly commandId: string };
+    | { readonly kind: "session-create-failed"; readonly commandId: string; readonly error: string };
 
 /** Whether the draft is still creating the Session for this message, so the page follows that Session. */
 export function createsSessionFor(
@@ -35,8 +33,6 @@ export function transitionConversationCreation(
     event: ConversationCreationEvent,
 ): ConversationCreationState {
     switch (event.kind) {
-        case "reset":
-            return { kind: "draft" };
         case "draft-message-queued":
             switch (state.kind) {
                 case "draft":
@@ -50,8 +46,6 @@ export function transitionConversationCreation(
             return createsSessionFor(state, event.commandId)
                 ? { error: event.error, kind: "session-create-failed", message: state.message }
                 : state;
-        case "conversation-created":
-            return createsSessionFor(state, event.commandId) ? { kind: "draft" } : state;
     }
 }
 
