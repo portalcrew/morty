@@ -499,6 +499,7 @@ export class FakeOpenAiProvider implements AsyncDisposable {
              *  its failure, giving a test a window to act while the request is in
              *  flight (for example to steer the running turn). */
             readonly holdBeforeFailure?: () => Promise<void>;
+            readonly usageLimitPromptContaining?: string;
         } = {},
     ): Promise<FakeOpenAiProvider> {
         const requests: ProviderRequestDiagnostic[] = [];
@@ -564,6 +565,23 @@ export class FakeOpenAiProvider implements AsyncDisposable {
                 tools: tools.map(({ kind, name }) => ({ kind, name })),
                 url: request.url ?? "",
             });
+            if (
+                options.usageLimitPromptContaining !== undefined &&
+                userPrompt.includes(options.usageLimitPromptContaining)
+            ) {
+                response.writeHead(429, { "content-type": "application/json" });
+                response.end(
+                    JSON.stringify({
+                        error: {
+                            type: "usage_limit_reached",
+                            message: "The usage limit has been reached",
+                            plan_type: "plus",
+                            resets_at: Date.parse("2026-11-21T15:00:00Z") / 1_000,
+                        },
+                    }),
+                );
+                return;
+            }
             if (options.failPromptContaining !== undefined && userPrompt.includes(options.failPromptContaining)) {
                 failedMarkerRequests += 1;
                 const shouldFail =

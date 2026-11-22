@@ -1,4 +1,4 @@
-import type { AccountRateLimits, RateLimitResetCreditOutcome } from "./app-server-protocol.ts";
+import type { AccountRateLimits, CodexTurnError, RateLimitResetCreditOutcome } from "./app-server-protocol.ts";
 
 type RateLimitWindow = NonNullable<AccountRateLimits["rateLimits"]["primary"]>;
 
@@ -57,4 +57,11 @@ export function usageResetReport(outcome: RateLimitResetCreditOutcome): string {
         case "noCredit":
             return "No usage limit resets are available.";
     }
+}
+
+export function turnFailureMessage(error: CodexTurnError | null | undefined): string {
+    const message = error?.message ?? "The Codex turn failed";
+    return error?.codexErrorInfo === "usageLimitExceeded"
+        ? `${message}\n\nSend /usage to see your usage limits and resets, or /usage reset to use one.`
+        : message;
 }

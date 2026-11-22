@@ -218,9 +218,11 @@ export const threadItemSchema = z.discriminatedUnion("type", [
     }),
 ]);
 
+const turnErrorSchema = z.object({ codexErrorInfo: z.unknown().optional(), message: boundedText(4_096) });
+
 const turnSchema = z.object({
     durationMs: z.number().nullish(),
-    error: z.object({ message: boundedText(4_096) }).nullish(),
+    error: turnErrorSchema.nullish(),
     id: boundedText(256),
     status: turnStatusSchema,
 });
@@ -404,5 +406,6 @@ export const rateLimitResetCreditConsumeResponseSchema = z.object({
 export type McpElicitationParams = z.infer<typeof mcpElicitationParamsSchema>;
 export type UserInputQuestion = z.infer<typeof userInputQuestionSchema>;
 export type CodexModel = z.infer<typeof modelSchema>;
+export type CodexTurnError = z.infer<typeof turnErrorSchema>;
 export type AccountRateLimits = z.infer<typeof accountRateLimitsResponseSchema>;
 export type RateLimitResetCreditOutcome = z.infer<typeof rateLimitResetCreditConsumeResponseSchema>["outcome"];

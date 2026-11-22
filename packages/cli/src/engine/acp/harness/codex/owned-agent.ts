@@ -7,6 +7,7 @@ import type { NativeSessionInteractions } from "../../adapter/native-session-eve
 import { type AgentTermination, agentTerminationError, type BackgroundActivity } from "../../agent/agent-lifecycle.ts";
 import type { CodexAppServerClient, CodexAppServerServerRequest } from "./app-server-client.ts";
 import {
+    type CodexTurnError,
     commandApprovalParamsSchema,
     fileChangeApprovalParamsSchema,
     itemNotificationSchema,
@@ -28,6 +29,7 @@ import type { CodexSessionAgent } from "./session-agent.ts";
 import type { CodexMessageUpdate, CodexSessionUpdate } from "./session-update.ts";
 import { promptResultWithMessageId } from "./session-update.ts";
 import type { CodexSettings } from "./settings.ts";
+import { turnFailureMessage } from "./usage.ts";
 import { userMessageUpdates } from "./user-message.ts";
 
 const APPROVAL_REASON_CHARACTER_LIMIT = 500;
@@ -946,7 +948,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
     };
 
     readonly #completeTurn = async (turn: {
-        readonly error?: { readonly message: string } | null | undefined;
+        readonly error?: CodexTurnError | null | undefined;
         readonly id: string;
         readonly status: string;
     }): Promise<void> => {
@@ -965,9 +967,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
             // settle the open compaction under the same failure before the turn
             // rejects, so the client is not left with a compaction stuck in_progress.
             this.#settleCompaction("failed", turn.error?.message ?? "The Codex turn failed");
-            active.completion.reject(
-                new AcpExecutionError(turn.error?.message ?? "The Codex turn failed", {}, "codex_turn_failed"),
-            );
+            active.completion.reject(new AcpExecutionError(turnFailureMessage(turn.error), {}, "codex_turn_failed"));
             return;
         }
         if (turn.status === "interrupted") {

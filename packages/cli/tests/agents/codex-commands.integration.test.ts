@@ -262,3 +262,57 @@ test("Given a Codex conversation signed in to a ChatGPT account with two usage l
         expect(provider.diagnostics()).toHaveLength(1);
     });
 });
+
+test("Given Codex reaches its ChatGPT usage limit, When a turn fails, Then the failure points to /usage, which reports the available reset", async ({
+    signal,
+}) => {
+    await using provider = await FakeOpenAiProvider.start("morty-test-model", "REAL_PROMPT_REPLY", {
+        usageLimitPromptContaining: "over the limit",
+    });
+    await using account = await FakeChatGptAccount.start({ resets: 1 });
+    await using codex = await CodexFixture.create(provider, { chatgptAccount: account });
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
+        const send = async (prompt: string) => {
+            const commandId = randomUUID();
+            peer.send(
+                encodeSessionPromptCommand({
+                    kind: "session.prompt",
+                    commandId,
+                    requestId: commandId,
+                    target: peer.target,
+                    attachments: [],
+                    prompt,
+                    disposition: SessionPromptDisposition.Append,
+                }),
+            );
+            let text = "";
+            for (;;) {
+                const event = decodeSessionLiveEvent(JSON.parse(await peer.nextEvent()));
+                if (
+                    event.type === "acp" &&
+                    event.payload.sessionUpdate === "agent_message_chunk" &&
+                    event.payload.content.type === "text"
+                ) {
+                    text += event.payload.content.text;
+                }
+                if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.failed") {
+                    return { kind: "failed", message: event.payload.message } as const;
+                }
+                if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
+                    return { kind: "completed", text } as const;
+                }
+            }
+        };
+
+        const failure = await send("Work over the limit");
+        expect(failure.kind).toBe("failed");
+        expect(failure.kind === "failed" && failure.message).toContain("usage limit");
+        expect(failure.kind === "failed" && failure.message).toContain(
+            "Send /usage to see your usage limits and resets, or /usage reset to use one.",
+        );
+
+        const usage = await send("/usage");
+        expect(usage).toMatchObject({ kind: "completed" });
+        expect(usage.kind === "completed" && usage.text).toContain("1 usage limit reset available");
+    });
+});
