@@ -9,6 +9,7 @@ import {
 } from "@portalcrew/morty-client/protocol";
 import { expect, test } from "vitest";
 import { CodexAgentSpecification } from "../../src/engine/agent/specification/vendors/codex-agent.ts";
+import { FakeChatGptAccount } from "../support/agents/chatgpt-account.ts";
 import { CodexFixture } from "../support/agents/codex.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
@@ -206,5 +207,58 @@ test("Given a real Codex conversation with content, When the manual /compact's s
         expect(promptFailed).toBe(true);
         expect(statuses).toEqual(["in_progress", "failed"]);
         expect(new Set(compactionIds).size).toBe(1);
+    });
+});
+
+test("Given a Codex conversation signed in to a ChatGPT account with two usage limit resets, When the user sends /usage and then /usage reset, Then Codex reports the resets and uses exactly one", async ({
+    signal,
+}) => {
+    await using provider = await FakeOpenAiProvider.start("morty-test-model", "REAL_PROMPT_REPLY");
+    await using account = await FakeChatGptAccount.start({ resets: 2 });
+    await using codex = await CodexFixture.create(provider, { chatgptAccount: account });
+    await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
+        const reply = async (prompt: string): Promise<string> => {
+            const commandId = randomUUID();
+            peer.send(
+                encodeSessionPromptCommand({
+                    kind: "session.prompt",
+                    commandId,
+                    requestId: commandId,
+                    target: peer.target,
+                    attachments: [],
+                    prompt,
+                    disposition: SessionPromptDisposition.Append,
+                }),
+            );
+            let text = "";
+            for (;;) {
+                const event = decodeSessionLiveEvent(JSON.parse(await peer.nextEvent()));
+                if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.failed") {
+                    throw new Error(JSON.stringify(event));
+                }
+                if (
+                    event.type === "acp" &&
+                    event.payload.sessionUpdate === "agent_message_chunk" &&
+                    event.payload.content.type === "text"
+                ) {
+                    text += event.payload.content.text;
+                }
+                if (event.type === "lifecycle-metadata" && event.payload.kind === "prompt.completed") {
+                    return text;
+                }
+            }
+        };
+
+        expect(await reply("Hello")).toContain("REAL_PROMPT_REPLY");
+
+        const usage = await reply("/usage");
+        expect(usage).toContain("100% used");
+        expect(usage).toContain("2026-11-21 15:00 UTC");
+        expect(usage).toContain("2 usage limit resets available");
+        expect(usage).toContain("/usage reset");
+
+        expect(await reply("/usage reset")).toContain("Codex usage limits were reset.");
+        expect(account.availableResets()).toBe(1);
+        expect(provider.diagnostics()).toHaveLength(1);
     });
 });
