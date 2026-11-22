@@ -229,6 +229,8 @@ const turnSchema = z.object({
 
 export const turnSteerResponseSchema = z.object({ turnId: boundedText(256) });
 
+export const threadSampleResponseSchema = z.object({ text: boundedText(65_536).nullable().optional() });
+
 export const turnStartResponseSchema = z.object({ turn: turnSchema });
 
 export const threadNameUpdatedSchema = z.object({ threadName: z.string().min(1) });

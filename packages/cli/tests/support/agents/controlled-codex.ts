@@ -23,6 +23,7 @@ export class ControlledCodexFixture implements AsyncDisposable {
             readonly endFirstTurnOnSteering?: "completed" | "failed" | "interrupted";
             readonly failTurnWith?: string;
             readonly latePreviousUser?: boolean;
+            readonly nextPrompt?: string;
             readonly skipSecondSteering?: boolean;
         } = {},
     ): Promise<ControlledCodexFixture> {
@@ -89,6 +90,15 @@ createInterface({ input: process.stdin }).on("line", (line) => {
                 item: { type: "userMessage", id: "controlled-steering-user-" + turnNumber, clientId: request.params.clientUserMessageId, content: request.params.input },
             } });
         }
+        return;
+    }
+    if (request.method === "thread/sample" && ${JSON.stringify(options.nextPrompt ?? null)} !== null) {
+        if (request.params.expectedTurnId !== active?.turn.id) {
+            send({ id: request.id, error: { code: -32600, message: "The source turn is not the latest" } });
+            return;
+        }
+        send({ id: request.id, result: { sourceTurnId: active.turn.id, responseId: "controlled-sample",
+            text: JSON.stringify({ suggestion: ${JSON.stringify(options.nextPrompt ?? null)} }) } });
         return;
     }
     if (request.method === "turn/interrupt") {
