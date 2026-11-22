@@ -309,9 +309,13 @@ export class ComputerRelayActor {
         }
     };
 
-    readonly failTransfersOwnedBy = (daemon: RelaySocket): void => {
+    /**
+     * Refuses what was forwarded to a daemon connection that was replaced: its replies and transfer frames can only
+     * arrive on that connection, so nothing more will answer them.
+     */
+    readonly refuseOperationsOwnedBy = (daemon: RelaySocket): void => {
         for (const route of this.#peers.operations()) {
-            if (route.socket.requestTransferKind() !== null && route.socket.requestDaemon()?.isSame(daemon)) {
+            if (route.socket.requestDaemon()?.isSame(daemon)) {
                 this.refuseOffline(route.socket);
             }
         }
