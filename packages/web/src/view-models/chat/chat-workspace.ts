@@ -19,6 +19,7 @@ import {
     type ConversationDirectoryStore,
     createConversationDirectoryStore,
     type DirectoryLoadMode,
+    directoryWaitsForComputer,
 } from "./conversation-directory-store.ts";
 import type { ConversationSelectionState } from "./conversation-selection-machine.ts";
 import { selectedConversationTarget } from "./conversation-selection-machine.ts";
@@ -366,10 +367,7 @@ export function createChatWorkspace(options: {
             mode = "background";
         } while (backgroundConversationIsWorking());
     };
-    const listWaitsForComputer = (): boolean => {
-        const listed = directory.getState().state.kind;
-        return listed === "failed" || listed === "stale";
-    };
+    const listWaitsForComputer = (): boolean => directoryWaitsForComputer(directory.getState().state);
     const draftWaitsForComputer = (): boolean => draftControls.getState().settings.kind === "unreachable";
     const paneWaitingForComputer = () => {
         const open = paneStore.getState();
