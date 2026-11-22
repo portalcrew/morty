@@ -1,9 +1,15 @@
 import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
+import {
+    type ConversationCreationEvent,
+    type ConversationCreationState,
+    transitionConversationCreation,
+} from "./conversation-creation-machine.ts";
 import { type OpenMortySession, type SelectedMortySession, selectedSession } from "./open-session.ts";
 
+/** A draft owns the creation its first message asks for: leaving the draft leaves that creation behind. */
 export type ConversationSelectionState =
-    | { readonly kind: "draft"; readonly key: string }
+    | { readonly kind: "draft"; readonly key: string; readonly creation: ConversationCreationState }
     | { readonly kind: "pending"; readonly target: NativeSessionTarget }
     | { readonly kind: "loading"; readonly target: NativeSessionTarget }
     | { readonly kind: "ready"; readonly session: SelectedMortySession }
@@ -30,6 +36,7 @@ export type ConversationSelectionEvent =
           readonly target: NativeSessionTarget;
       }
     | { readonly kind: "retry-requested" }
+    | { readonly kind: "creation"; readonly event: ConversationCreationEvent }
     | { readonly kind: "conversation-created"; readonly session: OpenMortySession };
 
 export function transitionConversationSelection(
@@ -38,7 +45,7 @@ export function transitionConversationSelection(
 ): ConversationSelectionState {
     switch (event.kind) {
         case "draft-selected":
-            return { key: event.key, kind: "draft" };
+            return { key: event.key, kind: "draft", creation: { kind: "draft" } };
         case "target-selected":
             return { kind: "pending", target: event.target };
         case "session-load-started":
@@ -54,9 +61,17 @@ export function transitionConversationSelection(
                 : state;
         case "retry-requested":
             return state.kind === "failed" ? { kind: "pending", target: state.target } : state;
+        case "creation":
+            return state.kind === "draft"
+                ? { ...state, creation: transitionConversationCreation(state.creation, event.event) }
+                : state;
         case "conversation-created":
             return state.kind === "draft" ? { kind: "ready", session: selectedSession(event.session) } : state;
     }
+}
+
+export function draftCreation(state: ConversationSelectionState): ConversationCreationState {
+    return state.kind === "draft" ? state.creation : { kind: "draft" };
 }
 
 export function selectedConversationTarget(state: ConversationSelectionState): NativeSessionTarget | null {

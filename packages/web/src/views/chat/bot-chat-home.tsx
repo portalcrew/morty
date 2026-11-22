@@ -45,7 +45,7 @@ import {
     queuedDraftMessage,
 } from "../../view-models/chat/conversation-creation-machine.ts";
 import { listedSessions } from "../../view-models/chat/conversation-directory-store.ts";
-import { selectedConversationTarget } from "../../view-models/chat/conversation-selection-machine.ts";
+import { draftCreation, selectedConversationTarget } from "../../view-models/chat/conversation-selection-machine.ts";
 import type { DraftControlsStore } from "../../view-models/chat/draft-controls-store.ts";
 import { activeHarnessMark, pendingExecutionContext } from "../../view-models/chat/execution-context.ts";
 import {
@@ -164,8 +164,9 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
     const executionContext = pendingExecutionContext(model, computer, draftControls.settings);
     const attachmentModel = useStore(model.composerAttachments);
     const connectionStatus = botConnectionStatus(computer);
-    const creationBusy = conversationCreationBusy(model.creation);
-    const composerLocked = conversationComposerLocked(model.creation);
+    const creation = draftCreation(model.selection);
+    const creationBusy = conversationCreationBusy(creation);
+    const composerLocked = conversationComposerLocked(creation);
     // Leaving the page cancels creation with the workspace; only other failures are unexpected.
     const createConversation = () => {
         const signal = workspace.operationsSignal();
@@ -178,9 +179,9 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                 }
             });
     };
-    const creationError = conversationCreationError(model.creation);
-    const creationStatus = conversationCreationStatus(model.creation);
-    const queuedInitialMessage = queuedDraftMessage(model.creation);
+    const creationError = conversationCreationError(creation);
+    const creationStatus = conversationCreationStatus(creation);
+    const queuedInitialMessage = queuedDraftMessage(creation);
     const draft = model.draft;
     const titles = useStore(workspace.titles, (state) => state.titles);
     const pendingConversation = pendingConversationPresentation(model.selection, computer, titles);

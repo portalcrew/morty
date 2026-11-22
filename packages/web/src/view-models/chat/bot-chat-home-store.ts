@@ -26,16 +26,11 @@ import {
     type ComputerStatusStoreApi,
     computerEntryOutcome,
 } from "./computer-status-store.ts";
-import {
-    type ConversationCreationState,
-    createsSessionFor,
-    failedDraftMessage,
-    type QueuedDraftMessage,
-    transitionConversationCreation,
-} from "./conversation-creation-machine.ts";
+import { createsSessionFor, failedDraftMessage, type QueuedDraftMessage } from "./conversation-creation-machine.ts";
 import {
     type ConversationSelectionEvent,
     type ConversationSelectionState,
+    draftCreation,
     selectedConversationTarget,
     transitionConversationSelection,
 } from "./conversation-selection-machine.ts";
@@ -99,7 +94,6 @@ export interface BotChatHomeStore {
         readonly attachments: ReturnType<typeof createComposerAttachmentStore>;
     } | null;
     readonly selection: ConversationSelectionState;
-    readonly creation: ConversationCreationState;
     readonly draft: string;
     readonly scrollFollowRevision: number;
     readonly load: (signal: AbortSignal) => Promise<void>;
@@ -126,7 +120,9 @@ function initialSelection(urlValue: string, createId: () => string): Conversatio
         harness: parameters.get("harness"),
         sessionId: parameters.get("sessionId"),
     });
-    return target !== null ? { kind: "pending", target } : { kind: "draft", key: createId() };
+    return target !== null
+        ? { kind: "pending", target }
+        : { kind: "draft", key: createId(), creation: { kind: "draft" } };
 }
 
 function homeSetupReason(home: BotChatHomeStore, computer: ComputerStatusStore): SetupReason | null {
@@ -175,7 +171,7 @@ function newConversationFacts(
         startable: homeCanStartConversation(home, computer),
         draftSelected: home.selection.kind === "draft",
         settingsReady,
-        creation: home.creation.kind,
+        creation: draftCreation(home.selection).kind,
     };
 }
 
@@ -330,7 +326,7 @@ export const createBotChatHomeStore = (
             if (
                 current.selection.kind !== "draft" ||
                 composer.state.kind === "reading" ||
-                current.creation.kind !== "draft"
+                current.selection.creation.kind !== "draft"
             ) {
                 returned = [...returned, message];
                 return;
@@ -358,7 +354,6 @@ export const createBotChatHomeStore = (
             composerAttachments: createComposerAttachmentStore(),
             draftHandoff: null,
             selection,
-            creation: { kind: "draft" },
             draft: "",
             scrollFollowRevision: 0,
             load: async (signal) => {
@@ -539,7 +534,7 @@ export const createBotChatHomeStore = (
             },
             newConversation: () => {
                 restoredTarget = null;
-                const failed = failedDraftMessage(get().creation);
+                const failed = failedDraftMessage(draftCreation(get().selection));
                 get().composerAttachments.getState().clear();
                 const current = get();
                 centralSessionStorage.remove(newConversationDraftEntry(computerId));
@@ -555,7 +550,6 @@ export const createBotChatHomeStore = (
                         kind: "draft-selected",
                         key: draftKey,
                     }),
-                    creation: transitionConversationCreation(state.creation, { kind: "reset" }),
                     draft: "",
                     scrollFollowRevision: state.scrollFollowRevision + 1,
                 }));
@@ -575,7 +569,7 @@ export const createBotChatHomeStore = (
             },
             openManaged: (target) => {
                 restoredTarget = null;
-                const failed = failedDraftMessage(get().creation);
+                const failed = failedDraftMessage(draftCreation(get().selection));
                 get().composerAttachments.getState().clear();
                 options.navigation.showManaged(target);
                 set((current) => ({
@@ -583,7 +577,6 @@ export const createBotChatHomeStore = (
                         kind: "target-selected",
                         target,
                     }),
-                    creation: transitionConversationCreation(current.creation, { kind: "reset" }),
                     scrollFollowRevision: current.scrollFollowRevision + 1,
                 }));
                 if (failed !== null) {
@@ -610,6 +603,7 @@ export const createBotChatHomeStore = (
                 const composer = get().composerAttachments.getState();
                 const { attachments } = composer;
                 const draft = current.draft;
+                const creation = draftCreation(current.selection);
                 const settings = options.draftConfiguration();
                 const facts = newConversationFacts(
                     current,
@@ -618,7 +612,7 @@ export const createBotChatHomeStore = (
                     options.connectionAvailable(),
                 );
                 const allowed =
-                    current.creation.kind === "draft"
+                    creation.kind === "draft"
                         ? canSendFirstMessage(facts, composerMessage(current, composer))
                         : canRetryFirstMessage(facts);
                 // The rule already requires both; checking them again narrows their types.
@@ -627,7 +621,7 @@ export const createBotChatHomeStore = (
                 }
                 const content = draft.trim();
                 const queuedMessage =
-                    current.creation.kind === "draft"
+                    creation.kind === "draft"
                         ? {
                               attachments,
                               commandId: current.selection.key,
@@ -637,10 +631,10 @@ export const createBotChatHomeStore = (
                                   500,
                               ),
                           }
-                        : current.creation.message;
+                        : creation.message;
                 const commandId = queuedMessage.commandId;
                 const title = queuedMessage.summary;
-                if (current.creation.kind === "draft") {
+                if (creation.kind === "draft") {
                     // The submitted snapshot owns its content before any network work begins.
                     get().composerAttachments.getState().clear();
                     centralSessionStorage.remove(newConversationDraftEntry(computerId));
@@ -649,11 +643,11 @@ export const createBotChatHomeStore = (
                     }
                 }
                 set((state) => ({
-                    creation: transitionConversationCreation(state.creation, {
-                        kind: "draft-message-queued",
-                        message: queuedMessage,
+                    selection: transitionConversationSelection(state.selection, {
+                        kind: "creation",
+                        event: { kind: "draft-message-queued", message: queuedMessage },
                     }),
-                    ...(current.creation.kind === "draft" ? { draft: "" } : {}),
+                    ...(creation.kind === "draft" ? { draft: "" } : {}),
                 }));
                 let access: ChatAccess;
                 try {
@@ -662,13 +656,16 @@ export const createBotChatHomeStore = (
                 } catch (cause) {
                     signal.throwIfAborted();
                     set((state) => ({
-                        creation: transitionConversationCreation(state.creation, {
-                            commandId,
-                            error: formatError(cause, "The Session could not be created."),
-                            kind: "session-create-failed",
+                        selection: transitionConversationSelection(state.selection, {
+                            kind: "creation",
+                            event: {
+                                commandId,
+                                error: formatError(cause, "The Session could not be created."),
+                                kind: "session-create-failed",
+                            },
                         }),
                     }));
-                    if (failedDraftMessage(get().creation)?.commandId !== commandId) {
+                    if (failedDraftMessage(draftCreation(get().selection))?.commandId !== commandId) {
                         returnFirstMessage(queuedMessage);
                     }
                     return;
@@ -678,7 +675,7 @@ export const createBotChatHomeStore = (
                 titles.getState().created(conversationId, queuedMessage.summary);
                 // The conversation exists, so its first message belongs to it from now on, whatever is on screen.
                 // The page follows it only if the user is still on this draft.
-                const following = createsSessionFor(get().creation, commandId);
+                const following = createsSessionFor(draftCreation(get().selection), commandId);
                 let session: OpenMortySession | null = null;
                 if (following) {
                     session = requests.conversationSession(access, settings.workspaceLabel, title);
@@ -694,10 +691,6 @@ export const createBotChatHomeStore = (
                 releaseUnsentFirstMessage(commandId);
                 if (session !== null) {
                     set((state) => ({
-                        creation: transitionConversationCreation(state.creation, {
-                            commandId,
-                            kind: "conversation-created",
-                        }),
                         scrollFollowRevision: state.scrollFollowRevision + 1,
                         selection: transitionConversationSelection(state.selection, {
                             kind: "conversation-created",
