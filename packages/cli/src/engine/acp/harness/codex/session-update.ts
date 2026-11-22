@@ -42,7 +42,8 @@ export async function promptResultWithMessageId(
         // An OperationError carries a message written for clients (for example Codex's own turn failure
         // reason or why the app-server stopped); any other error may quote internals and stays opaque.
         const detail = cause instanceof OperationError ? cause.message : "The prompt could not be completed";
-        const failure = RequestError.internalError({ messageId }, detail);
+        // ACP's internalError helper would prefix "Internal error: " and present Codex's reason as Morty's own fault.
+        const failure = new RequestError(-32_603, detail, { messageId });
         Object.defineProperty(failure, "cause", { value: cause });
         throw failure;
     }
