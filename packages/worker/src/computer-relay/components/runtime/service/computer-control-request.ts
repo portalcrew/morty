@@ -375,16 +375,22 @@ export async function requestComputerContentWrite(
     });
 }
 
+const FILE_RECORD_TIMEOUT_MILLISECONDS = 120_000;
+
 export async function requestComputerFile(
     socket: ComputerReplyConnection,
     command: FileReadCommandRouting,
     signal: AbortSignal,
 ): Promise<ComputerFileStream> {
     const timeout = new AbortController();
-    const timer = setTimeout(
-        () => timeout.abort(new DOMException("Computer request timed out", "TimeoutError")),
-        120_000,
-    );
+    const expire = (): void => timeout.abort(new DOMException("Computer request timed out", "TimeoutError"));
+    let timer = setTimeout(expire, FILE_RECORD_TIMEOUT_MILLISECONDS);
+    // As the client does, the deadline bounds each wait for the Computer's next record: a large file keeps arriving
+    // for longer than any one wait.
+    const progressed = (): void => {
+        clearTimeout(timer);
+        timer = setTimeout(expire, FILE_RECORD_TIMEOUT_MILLISECONDS);
+    };
     const deadline = AbortSignal.any([signal, timeout.signal]);
     let settleFinished = () => {};
     const finished = new Promise<void>((resolve) => {
@@ -507,6 +513,7 @@ export async function requestComputerFile(
                     throw invalidComputerReply("The Computer returned invalid file metadata");
                 }
                 startResponse(encoded, false);
+                progressed();
             },
             [FILE_END_KIND]: (encoded) => {
                 if (matches(fileEndEventCodec.decodeRouting(encoded))) {
@@ -563,6 +570,7 @@ export async function requestComputerFile(
                     const controller = state.controller;
                     state = { ...state, receivedBytes, nextSequence: state.nextSequence + 1, credit: "available" };
                     controller.enqueue(encodeFileStreamRecord({ kind: "chunk", encoded }));
+                    progressed();
                     return;
                 }
                 handlers[decodeMessageKind(event.data)]?.(event.data);
