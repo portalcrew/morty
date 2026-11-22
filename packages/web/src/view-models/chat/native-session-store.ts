@@ -140,6 +140,11 @@ export const createNativeSessionStore = (
     return createStore<NativeSessionStore>()((set, get) => ({
         userMessageCollapse: createUserMessageCollapseStore(),
         start: () => {
+            // Reopening the dialog leaves a Load more, Open or Fork the user sent running, as a configuration change
+            // does: its end checks the listing against the configuration again.
+            if (get().operation !== "idle") {
+                return;
+            }
             void get().load(lifetime.signal);
         },
         lifetimeSignal: () =>
