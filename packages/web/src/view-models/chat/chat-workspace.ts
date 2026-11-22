@@ -78,7 +78,6 @@ export interface ChatWorkspace {
     ) => Pick<SessionPageState, "execution" | "delivery"> | null;
     readonly retryDraftControls: () => void;
     readonly refreshDirectory: () => void;
-    readonly chatSignal: () => AbortSignal;
     readonly operationsSignal: () => AbortSignal;
     /** Records deliberate activity in this tab without following another tab's selection. */
     readonly recordUserActivity: () => void;
@@ -546,7 +545,6 @@ export function createChatWorkspace(options: {
                 .catch(() => undefined);
         },
         refreshDirectory: startDirectoryLoad,
-        chatSignal: () => chatLifetime.signal,
         operationsSignal: () => operationsLifetime.signal,
         dispose: () => {
             options.computers.dispose();

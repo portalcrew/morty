@@ -398,7 +398,7 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                                                         draftControls.directoryAvailability,
                                                     )}
                                                     settingsKind={draftControls.settings.kind}
-                                                    signal={workspace.chatSignal()}
+                                                    signal={workspace.operationsSignal()}
                                                     viewModel={draftControls}
                                                 />
                                             )}
