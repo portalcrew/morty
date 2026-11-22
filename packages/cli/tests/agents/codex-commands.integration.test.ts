@@ -253,7 +253,6 @@ test("Given a Codex conversation signed in to a ChatGPT account with two usage l
 
         const usage = await reply("/usage");
         expect(usage).toContain("100% used");
-        expect(usage).toContain("2026-11-21 15:00 UTC");
         expect(usage).toContain("2 usage limit resets available");
         expect(usage).toContain("/usage reset");
 
@@ -263,14 +262,14 @@ test("Given a Codex conversation signed in to a ChatGPT account with two usage l
     });
 });
 
-test("Given Codex reaches its ChatGPT usage limit, When a turn fails, Then the failure points to /usage, which reports the available reset", async ({
+test("Given Codex reaches its ChatGPT usage limit, When a turn fails, Then the failure points to /usage, which reports the available reset at the same local time", async ({
     signal,
 }) => {
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "REAL_PROMPT_REPLY", {
         usageLimitPromptContaining: "over the limit",
     });
     await using account = await FakeChatGptAccount.start({ resets: 1 });
-    await using codex = await CodexFixture.create(provider, { chatgptAccount: account });
+    await using codex = await CodexFixture.create(provider, { chatgptAccount: account, timeZone: "Asia/Shanghai" });
     await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
         const send = async (prompt: string) => {
             const commandId = randomUUID();
@@ -307,6 +306,7 @@ test("Given Codex reaches its ChatGPT usage limit, When a turn fails, Then the f
         const failure = await send("Work over the limit");
         expect(failure.kind).toBe("failed");
         expect(failure.kind === "failed" && failure.message).toContain("usage limit");
+        expect(failure.kind === "failed" && failure.message).toContain("Nov 21st, 2026 11:00 PM");
         expect(failure.kind === "failed" && failure.message).toContain(
             "Send /usage to see your usage limits and resets, or /usage reset to use one.",
         );
@@ -314,5 +314,6 @@ test("Given Codex reaches its ChatGPT usage limit, When a turn fails, Then the f
         const usage = await send("/usage");
         expect(usage).toMatchObject({ kind: "completed" });
         expect(usage.kind === "completed" && usage.text).toContain("1 usage limit reset available");
+        expect(usage.kind === "completed" && usage.text).toContain("resets Nov 21st, 2026 11:00 PM");
     });
 });
