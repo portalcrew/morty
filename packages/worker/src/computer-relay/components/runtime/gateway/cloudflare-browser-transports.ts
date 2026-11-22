@@ -1,6 +1,6 @@
 import { CHANGES_CHANGED_KIND, CHANGES_ERROR_KIND, type RelayChangeTopic } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
-import type { ChangeFollow } from "../../../../contracts/relay-changes.ts";
+import type { AccessStanding, ChangeFollow } from "../../../../contracts/relay-changes.ts";
 import type { SessionViewerIdentity } from "../../../../contracts/session-event-subscription.ts";
 import {
     type BrowserTransport,
@@ -166,13 +166,24 @@ export class CloudflareBrowserTransports {
             return attachment?.follow ? [{ computerId: attachment.computerId, follow: attachment.follow }] : [];
         });
 
-    /** Stops following changes for every connection whose access `ended`, telling it why. */
-    readonly endFollows = async (
-        ended: (computerId: string, follow: ChangeFollow) => Promise<boolean>,
+    /**
+     * Rechecks the access each connection follows changes under. A connection whose access ended stops following and
+     * is told why; one whose access still holds keeps following until the end of its current term, which may have
+     * moved since the connection began.
+     */
+    readonly recheckFollows = async (
+        standing: (computerId: string, follow: ChangeFollow) => Promise<AccessStanding>,
     ): Promise<void> => {
         for (const socket of this.#openSockets()) {
             const attachment = readAttachment(socket);
-            if (!attachment?.follow || !(await ended(attachment.computerId, attachment.follow))) {
+            if (!attachment?.follow) {
+                continue;
+            }
+            const access = await standing(attachment.computerId, attachment.follow);
+            if (access.kind === "held") {
+                if (access.until !== attachment.follow.accessExpiresAt) {
+                    saveAttachment(socket, { follow: { ...attachment.follow, accessExpiresAt: access.until } });
+                }
                 continue;
             }
             saveAttachment(socket, { follow: null });

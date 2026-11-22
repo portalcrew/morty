@@ -3,6 +3,7 @@ import { and, eq, exists, gt, isNull, ne, notExists, type SQL, sql } from "drizz
 import { alias, type SQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { Credential, SharedLinkTerms } from "../../../../contracts/authentication/credential.ts";
 import type { ClientLocation } from "../../../../contracts/client-location.ts";
+import type { AccessStanding } from "../../../../contracts/relay-changes.ts";
 import { readTransferCredential } from "../../../../contracts/transfer-credential.ts";
 import type { DurableObjectDatabase } from "../../../infra/durable-object-database.ts";
 import {
@@ -204,6 +205,30 @@ export class IdentityStorage {
         signal.throwIfAborted();
         const database = this.#database.orm;
         return holds(database, holderHolds(database, accessHolderOfGrant(holder), now));
+    };
+
+    readonly accessStanding = async (
+        holder: SessionAccessHolder,
+        now: number,
+        signal: AbortSignal,
+    ): Promise<AccessStanding> => {
+        signal.throwIfAborted();
+        const database = this.#database.orm;
+        const access = accessHolderOfGrant(holder);
+        switch (access.kind) {
+            case "owner":
+                return holds(database, holderHolds(database, access, now))
+                    ? { kind: "held", until: null }
+                    : { kind: "ended" };
+            case "device": {
+                const device = database
+                    .select({ heldUntil: deviceHeldUntil(database, browserDevice, now).as("access_held_until") })
+                    .from(browserDevice)
+                    .where(eq(browserDevice.id, access.deviceId))
+                    .get();
+                return deviceStanding(device?.heldUntil ?? null);
+            }
+        }
     };
 
     readonly linkedDevices = async (now: number, signal: AbortSignal) => {
