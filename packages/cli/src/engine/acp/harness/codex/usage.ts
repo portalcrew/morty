@@ -15,16 +15,47 @@ function windowLabel(minutes: number | null | undefined): string {
     return `${minutes.toString()}-minute limit`;
 }
 
-function utcMinute(unixSeconds: number): string {
-    const iso = new Date(unixSeconds * 1_000).toISOString();
-    return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+const localTimeOptions: Intl.DateTimeFormatOptions = {
+    day: "numeric",
+    hour: "numeric",
+    hour12: true,
+    minute: "2-digit",
+    month: "short",
+    year: "numeric",
+};
+
+function localTimeFormat(timeZone: string | undefined): Intl.DateTimeFormat {
+    try {
+        return new Intl.DateTimeFormat("en-US", { ...localTimeOptions, timeZone });
+    } catch (error) {
+        if (!(error instanceof RangeError)) {
+            throw error;
+        }
+        return new Intl.DateTimeFormat("en-US", localTimeOptions);
+    }
 }
 
-function windowLine(window: RateLimitWindow): string {
+function daySuffix(day: number): string {
+    if (day >= 11 && day <= 13) {
+        return "th";
+    }
+    return day % 10 === 1 ? "st" : day % 10 === 2 ? "nd" : day % 10 === 3 ? "rd" : "th";
+}
+
+// Matches how Codex itself writes a reset time, such as "Nov 21st, 2026 3:00 PM", so its limit message agrees.
+function localTime(unixSeconds: number, timeZone: string | undefined): string {
+    const parts = localTimeFormat(timeZone).formatToParts(new Date(unixSeconds * 1_000));
+    const part = (type: Intl.DateTimeFormatPartTypes): string =>
+        parts.find((entry) => entry.type === type)?.value ?? "";
+    const day = Number(part("day"));
+    return `${part("month")} ${day.toString()}${daySuffix(day)}, ${part("year")} ${part("hour")}:${part("minute")} ${part("dayPeriod")}`;
+}
+
+function windowLine(window: RateLimitWindow, timeZone: string | undefined): string {
     const used = `- ${windowLabel(window.windowDurationMins)}: ${window.usedPercent.toString()}% used`;
     return window.resetsAt === null || window.resetsAt === undefined
         ? used
-        : `${used}, resets ${utcMinute(window.resetsAt)}`;
+        : `${used}, resets ${localTime(window.resetsAt, timeZone)}`;
 }
 
 function resetsLine(available: number): string {
@@ -35,9 +66,9 @@ function resetsLine(available: number): string {
     return `${resets} available. Send /usage reset to use one.`;
 }
 
-export function usageReport(usage: AccountRateLimits): string {
+export function usageReport(usage: AccountRateLimits, timeZone: string | undefined): string {
     const windows = [usage.rateLimits.primary, usage.rateLimits.secondary].flatMap((window) =>
-        window === null || window === undefined ? [] : [windowLine(window)],
+        window === null || window === undefined ? [] : [windowLine(window, timeZone)],
     );
     const resets = usage.rateLimitResetCredits;
     const paragraphs = [
@@ -55,7 +86,7 @@ export function usageResetReport(outcome: RateLimitResetCreditOutcome): string {
         case "nothingToReset":
             return "Codex usage limits do not need a reset right now.";
         case "noCredit":
-            return "No usage limit resets are available.";
+            return "No usage limit resets available.";
     }
 }
 

@@ -26,6 +26,7 @@ export class CodexFixture implements AsyncDisposable {
             readonly chatgptAccount?: FakeChatGptAccount;
             readonly configuredModel?: string;
             readonly modelTools?: readonly string[];
+            readonly timeZone?: string;
         } = {},
     ): Promise<CodexFixture> {
         // Codex is an in-process Agent: there is no ACP adapter to resolve, only the real binary
@@ -111,6 +112,7 @@ export class CodexFixture implements AsyncDisposable {
             NO_PROXY: "127.0.0.1,localhost",
             NO_BROWSER: "1",
             PATH: process.env["PATH"] ?? "",
+            ...(options.timeZone === undefined ? {} : { TZ: options.timeZone }),
             XDG_CACHE_HOME: join(directory, "cache"),
             XDG_CONFIG_HOME: join(directory, "config"),
             XDG_DATA_HOME: join(directory, "data"),

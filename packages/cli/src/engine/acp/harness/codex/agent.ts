@@ -290,7 +290,8 @@ export class CodexAcpAgent {
             return usageResetReport(rateLimitResetCreditConsumeResponseSchema.parse(consumed).outcome);
         }
         const usage = await this.#appServer.request("account/rateLimits/read", undefined, signal);
-        return usageReport(accountRateLimitsResponseSchema.parse(usage));
+        // Codex writes its own limit times in its process's time zone, which this launch environment sets.
+        return usageReport(accountRateLimitsResponseSchema.parse(usage), this.#options.environment["TZ"]);
     };
     readonly steer = async (request: unknown, signal: AbortSignal) => await this.#sessionAgent.steer(request, signal);
     readonly cancel = async (_request: { readonly sessionId: string }): Promise<void> => {
