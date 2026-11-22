@@ -7,7 +7,6 @@ import {
 import type { SessionConfigurationSelection } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
-import { centralLocalStorage, lastHarnessEntry } from "../../services/local-storage/central-local-storage.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import { agentQuestionAnswer, openAgentQuestions } from "./agent-question-answer.ts";
 import { createBrowserFilePreviewStore } from "./file-preview-store.ts";
@@ -85,10 +84,6 @@ export function createSessionPaneModel(options: {
     const acted = (): void => feedback.getState().dismiss();
     const composerAttachments = composer.getState().attachments;
     const sessionTarget = session.target;
-    // Working in a conversation makes its harness the reference for the next draft. Its settings carry into New
-    // Session only where the user changes them: the others are the Agent's and its directory's, which the draft reads
-    // for itself.
-    centralLocalStorage.write(lastHarnessEntry(computerId), sessionTarget.harness);
     // The pane's lifetime: its owner starts it once and stops it once, so at most one connection loop ever runs for
     // the pane. React attaching or detaching its view is not part of it.
     const lifetime = new AbortController();
