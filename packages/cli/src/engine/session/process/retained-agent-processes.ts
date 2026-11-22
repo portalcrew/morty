@@ -26,8 +26,7 @@ interface RetainedSessionEvents<P> {
 }
 
 export class RetainedAgentProcesses<P, Key = string> {
-    readonly #entries = new Map<string, Entry<P>>();
-    readonly #keys = new Map<string, Key>();
+    readonly #entries = new Map<string, { readonly id: Key; readonly entry: Entry<P> }>();
     readonly #events: RetainedSessionEvents<P>;
     readonly #key: (id: Key) => string;
     constructor(events: RetainedSessionEvents<P>, key: (id: Key) => string) {
@@ -36,14 +35,12 @@ export class RetainedAgentProcesses<P, Key = string> {
     }
 
     readonly #entry = (id: Key): Entry<P> =>
-        this.#entries.get(this.#key(id)) ?? { lifecycle: { kind: "empty" }, users: 0 };
+        this.#entries.get(this.#key(id))?.entry ?? { lifecycle: { kind: "empty" }, users: 0 };
     readonly #write = (id: Key, entry: Entry<P>): void => {
         if (entry.lifecycle.kind === "empty" && entry.users === 0) {
             this.#entries.delete(this.#key(id));
-            this.#keys.delete(this.#key(id));
         } else {
-            this.#entries.set(this.#key(id), entry);
-            this.#keys.set(this.#key(id), id);
+            this.#entries.set(this.#key(id), { id, entry });
         }
     };
     readonly #resource = (entry: Entry<P>): Resource<P> =>
@@ -107,7 +104,7 @@ export class RetainedAgentProcesses<P, Key = string> {
     };
     readonly entries = (): readonly (readonly [Key, P])[] => {
         const result: (readonly [Key, P])[] = [];
-        for (const id of this.#keys.values()) {
+        for (const { id } of this.#entries.values()) {
             const runtime = this.get(id);
             if (runtime !== undefined) {
                 result.push([id, runtime]);

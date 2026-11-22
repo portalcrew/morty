@@ -100,15 +100,13 @@ export class ComputerMessageScheduler {
     readonly #concurrency = new ComputerMessageConcurrency();
     readonly #lanes = new Map<string, Promise<void>>();
     readonly #operations = new Set<Promise<void>>();
-    #pending = 0;
 
     /** Runs `task` after every earlier task on its lane, so tasks on a lane run in the order they were scheduled. */
     readonly run = async (lane: string, signal: AbortSignal, task: () => Promise<void>): Promise<void> => {
         signal.throwIfAborted();
-        if (this.#pending >= PENDING_LIMIT) {
+        if (this.#operations.size >= PENDING_LIMIT) {
             throw new ComputerMessageSchedulerCapacityError(PENDING_LIMIT);
         }
-        this.#pending += 1;
 
         const previous = this.#lanes.get(lane) ?? Promise.resolve();
         const operation = (async (): Promise<void> => {
@@ -128,7 +126,6 @@ export class ComputerMessageScheduler {
         try {
             await operation;
         } finally {
-            this.#pending -= 1;
             this.#operations.delete(tail);
             if (this.#lanes.get(lane) === tail) {
                 this.#lanes.delete(lane);
