@@ -15,6 +15,7 @@ import {
     fileFailedEventCodec,
     type NativeSessionTarget,
 } from "@portalcrew/morty-client/protocol";
+import { OperationError } from "../../../../infra/operation-error.ts";
 import type { ScheduledTask } from "../../../../util/timer.ts";
 import type { CommandContext } from "../../context.ts";
 import type { CommandMessage } from "../../definition.ts";
@@ -106,10 +107,14 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
                 release(state);
             }
         }
+        // Only a failure written for the client crosses to the browser; any other error may quote local paths.
+        if (!(error instanceof OperationError)) {
+            context.diagnostics.daemonDiagnostic("content_write_failed", command.requestId, {}, error);
+        }
         await replyFailure(
             command,
             "content_write_failed",
-            error instanceof Error ? error.message : "The content could not be stored",
+            error instanceof OperationError ? error.message : "The content could not be stored",
         );
     };
 
@@ -138,7 +143,10 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
                 return;
             }
             if (JSON.stringify(existing.command) !== JSON.stringify(message)) {
-                await fail(message, new Error("The content request identifier is already in use"));
+                await fail(
+                    message,
+                    new OperationError("content_write_failed", "The content request identifier is already in use"),
+                );
                 return;
             }
         } else {
@@ -215,7 +223,7 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
             return replyFailure(message, "content_write_busy", "The content upload is being committed");
         }
         if (state === undefined || !sameNativeSession(state.command.target, message.target)) {
-            return fail(message, new Error("The content upload is unavailable"));
+            return fail(message, new OperationError("content_write_failed", "The content upload is unavailable"));
         }
         const committing: PendingWrite = {
             kind: "committing",
@@ -231,10 +239,13 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
             try {
                 signal.throwIfAborted();
                 if (state.receivedBytes !== state.command.byteLength) {
-                    throw new Error("The content upload ended at an unexpected length");
+                    throw new OperationError(
+                        "content_write_failed",
+                        "The content upload ended at an unexpected length",
+                    );
                 }
                 if (state.hash.digest("hex") !== state.command.contentKey) {
-                    throw new Error("The content upload failed integrity validation");
+                    throw new OperationError("content_write_failed", "The content upload failed integrity validation");
                 }
                 const stored = await context.externalContent.put({
                     bytes: state.bytes,
@@ -246,7 +257,7 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
                 });
                 signal.throwIfAborted();
                 if (stored.key !== state.command.contentKey || stored.byteLength !== state.command.byteLength) {
-                    throw new Error("Stored content did not match the upload");
+                    throw new OperationError("content_write_failed", "Stored content did not match the upload");
                 }
                 send(
                     context.socket,
@@ -296,7 +307,10 @@ export function createContentWriteCommands(context: CommandContext): ContentWrit
                 frame.sequence !== state.sequence ||
                 state.receivedBytes + frame.bytes.byteLength > state.command.byteLength
             ) {
-                await fail(state.command, new Error("The content upload contains invalid chunks"));
+                await fail(
+                    state.command,
+                    new OperationError("content_write_failed", "The content upload contains invalid chunks"),
+                );
                 return;
             }
             state.bytes.set(frame.bytes, state.receivedBytes);
