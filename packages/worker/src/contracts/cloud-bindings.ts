@@ -18,4 +18,5 @@ export interface CloudBindings {
     readonly ASSETS?: unknown;
     readonly MORTY_SESSION_SIGNING_SECRET?: unknown;
     readonly MORTY_ALLOWED_ORIGINS?: unknown;
+    readonly CF_VERSION_METADATA?: unknown;
 }

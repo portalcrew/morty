@@ -21,16 +21,25 @@ if (output === undefined) {
 }
 const workerScript = output.text;
 
-function createRuntime(options: { readonly appOrigin?: string } = {}) {
-    return new Miniflare(
-        convertV4MiniflareOptions({
-            modules: true,
-            script: workerScript,
-            compatibilityDate: "2026-09-07",
-            compatibilityFlags: ["nodejs_compat"],
-            ...(options.appOrigin === undefined ? {} : { bindings: { APP_ORIGIN: options.appOrigin } }),
-        }),
-    );
+function runtimeOptions(options: { readonly appOrigin?: string; readonly version?: string }) {
+    return convertV4MiniflareOptions({
+        modules: true,
+        script: workerScript,
+        compatibilityDate: "2026-09-07",
+        compatibilityFlags: ["nodejs_compat"],
+        bindings: {
+            ...(options.appOrigin === undefined ? {} : { APP_ORIGIN: options.appOrigin }),
+            CF_VERSION_METADATA: {
+                id: options.version ?? "deployed-version",
+                tag: "",
+                timestamp: "2026-11-22T00:00:00.000Z",
+            },
+        },
+    });
+}
+
+function createRuntime(options: { readonly appOrigin?: string; readonly version?: string } = {}) {
+    return new Miniflare(runtimeOptions(options));
 }
 
 test("Given the setup document, When users fetch it from configured and standalone origins, Then the rendered command is safe and current", async () => {
@@ -100,6 +109,23 @@ test("Given rendered setup instructions at the edge, When users fetch different 
 
         const otherHost = await runtime.dispatchFetch("https://other.example/doc/setup.md?token=third");
         expect(otherHost.headers.get("X-Instruction-Cache")).toBe("MISS");
+    } finally {
+        await runtime.dispose();
+    }
+});
+
+test("Given setup instructions cached by one deployed version, When the next version serves them, Then it renders its own copy instead of the earlier version's", async () => {
+    const runtime = createRuntime({ appOrigin: "https://chat.example", version: "earlier-version" });
+    try {
+        await (await runtime.dispatchFetch("https://preview.example/doc/setup.md")).text();
+        const cached = await runtime.dispatchFetch("https://preview.example/doc/setup.md");
+        expect(cached.headers.get("X-Instruction-Cache")).toBe("HIT");
+        await cached.text();
+
+        await runtime.setOptions(runtimeOptions({ appOrigin: "https://chat.example", version: "next-version" }));
+        const next = await runtime.dispatchFetch("https://preview.example/doc/setup.md");
+        expect(next.headers.get("X-Instruction-Cache")).toBe("MISS");
+        expect(await next.text()).toContain("morty setup --base-url https://chat.example");
     } finally {
         await runtime.dispose();
     }
