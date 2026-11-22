@@ -60,6 +60,7 @@ export interface DaemonConnectionPeer {
     readonly sendUnsealed: (message: string) => void;
     readonly subscribe: (target: NativeSessionTarget) => Promise<void>;
     readonly workspace: string;
+    readonly stateDirectory: string;
 
     readonly readDiagnostics: () => Promise<string>;
     readonly signal: AbortSignal;
@@ -206,7 +207,12 @@ async function withDaemonConnection(
     };
     let socket: WebSocket | undefined;
     const stateDirectory =
-        launch === "managed" ? (await openMortyInstallation(signal, cliEnvironment)).stateDirectory : directory;
+        launch === "managed"
+            ? (await openMortyInstallation(signal, cliEnvironment)).stateDirectory
+            : join(directory, "computer");
+    if (launch === "embedded") {
+        await mkdir(stateDirectory, { mode: 0o700 });
+    }
     const encryption = await createEncryptedDaemonFrames(stateDirectory, "real-agent", signal);
     const contentFrames = encryptedContentFrames(encryption.encryption, signal);
     const subscriptions = new Map<string, NativeSessionTarget>();
@@ -292,7 +298,7 @@ async function withDaemonConnection(
             launch === "embedded"
                 ? await (async () => {
                       const inventory = await discoverLocalAgentInventory({
-                          dataDirectory: directory,
+                          dataDirectory: stateDirectory,
                           defaultWorkspace: workspace,
                           environment: cliEnvironment,
                           signal,
@@ -312,7 +318,7 @@ async function withDaemonConnection(
                               relayUrl,
                           },
                           new RuntimeAgentDependencies([agent], adapters),
-                          new RuntimeLocalContext(directory, { ...process.env, ...environment }),
+                          new RuntimeLocalContext(stateDirectory, { ...process.env, ...environment }),
                           async (agent) => agent,
                       );
                   })()
@@ -417,9 +423,10 @@ async function withDaemonConnection(
                 }
             },
             cli: async (args) => await cli(args),
-            readDiagnostics: async () => await readFile(join(directory, "logs", "daemon.log"), "utf8"),
+            readDiagnostics: async () => await readFile(join(stateDirectory, "logs", "daemon.log"), "utf8"),
             signal,
             workspace,
+            stateDirectory,
             send,
             sendUnsealed,
             subscribe,

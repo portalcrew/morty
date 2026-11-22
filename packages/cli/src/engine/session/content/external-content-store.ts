@@ -5,6 +5,7 @@ import { nativeSessionKey } from "@portalcrew/morty-client/native-session";
 import { decodeNativeSessionTarget, type NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { z } from "zod";
 import { OperationError } from "../../infra/operation-error.ts";
+import { isWithinDirectory } from "../../storage/files/local-files.ts";
 import { ScratchDirectory } from "../../storage/files/scratch-directory.ts";
 
 const contentRequest = /^morty-content:(image|audio|resource):([a-f0-9]{64})$/u;
@@ -60,6 +61,8 @@ export interface ExternalContentStore {
         request: string,
         signal: AbortSignal,
     ) => Promise<ReadExternalContent | null>;
+    /** Whether a canonical path is content this store keeps for Sessions, which Agents may reference by path. */
+    readonly holds: (path: string) => Promise<boolean>;
 }
 
 interface CachedContent extends ResolvedExternalContent {
@@ -77,8 +80,11 @@ export class LocalExternalContentStore implements ExternalContentStore, AsyncDis
     readonly #expirationTimer: ReturnType<typeof setInterval>;
     #cleanup: Promise<void> = Promise.resolve();
 
+    readonly #contentDirectory: string;
+
     constructor(stateDirectory: string) {
-        this.#scratch = new ScratchDirectory(join(stateDirectory, "tmp", "session-content"));
+        this.#contentDirectory = join(stateDirectory, "tmp", "session-content");
+        this.#scratch = new ScratchDirectory(this.#contentDirectory);
         this.#expirationTimer = setInterval(() => {
             // A cleanup failure must not interrupt Agent output. The next pass retries.
             void this.#expire().catch(() => undefined);
@@ -152,6 +158,9 @@ export class LocalExternalContentStore implements ExternalContentStore, AsyncDis
         });
         return { byteLength: bytes.byteLength, key };
     };
+
+    readonly holds: ExternalContentStore["holds"] = async (path) =>
+        await isWithinDirectory(path, this.#contentDirectory);
 
     readonly resolve: ExternalContentStore["resolve"] = (sessionTarget, request, signal) =>
         this.#track(() => this.#resolve(sessionTarget, request, AbortSignal.any([signal, this.#lifetime.signal])));

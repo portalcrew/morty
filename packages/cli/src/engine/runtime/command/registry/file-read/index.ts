@@ -76,9 +76,9 @@ export function createFileReadCommands(context: CommandContext) {
             });
         };
         const completion = Promise.resolve().then(async () => {
-            const { externalContent, sessions, socket, payloadEncryption } = context;
+            const { externalContent, sessions, socket, payloadEncryption, config } = context;
             try {
-                await streamLocalFile({
+                const served = await streamLocalFile({
                     command: message,
                     sendBegin: async (response) =>
                         send(socket, await fileBeginEventCodec.encode(response, payloadEncryption, signal)),
@@ -90,6 +90,13 @@ export function createFileReadCommands(context: CommandContext) {
                     signal,
                     workingDirectory: sessions.findSessions([message.target])[0]?.cwd ?? null,
                     externalContent,
+                    stateDirectory: config.localContext.stateDirectory,
+                });
+                // A local file left the Computer: record which Session read how much, never the path itself.
+                context.diagnostics.daemonDiagnostic("file_read_served", message.requestId, {
+                    harness: message.target.harness,
+                    sessionId: message.target.sessionId,
+                    byteLength: served.byteLength.toString(),
                 });
             } catch (error) {
                 if (signal.aborted || socket.readyState !== WebSocket.OPEN) {

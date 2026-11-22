@@ -7,6 +7,7 @@ export class UnretainedExternalContentStore implements ExternalContentStore {
         return { byteLength: bytes.byteLength, key: createHash("sha256").update(bytes).digest("hex") };
     };
 
+    readonly holds: ExternalContentStore["holds"] = async () => false;
     readonly resolve: ExternalContentStore["resolve"] = (_sessionId, _request, signal) => {
         signal.throwIfAborted();
         return Promise.resolve(null);

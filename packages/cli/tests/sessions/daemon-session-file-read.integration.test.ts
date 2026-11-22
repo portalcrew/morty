@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
@@ -118,7 +118,7 @@ async function readSessionFile(
     sessionTarget: Parameters<Parameters<typeof withRealDaemon>[3]>[0]["target"],
     path: string,
 ): Promise<FileReadResult> {
-    const requestId = `read-${path.replaceAll(/[^a-zA-Z0-9]/gu, "-")}`;
+    const requestId = `read-${crypto.randomUUID()}`;
     peer.send(
         encodeFileReadCommand({
             kind: "file.read",
@@ -244,6 +244,73 @@ if (process.argv.includes("--version")) {
                 // the working-directory interpretation is not a substitute.
                 const absentUrlRead = await readSessionFile(peer, peer.target, pathToFileURL(absentTarget).href);
                 expect(absentUrlRead.kind).toBe("failed");
+            },
+            "embedded",
+            workspace,
+        );
+    } finally {
+        await rm(directory, { force: true, recursive: true });
+    }
+});
+
+test("Given Morty's own state directory, When a client reads its files directly, through a link in the workspace, or the setup state beside it, Then the daemon refuses them and still serves workspace files", async ({
+    signal,
+}) => {
+    const directory = await mkdtemp(join(tmpdir(), "morty-state-file-read-"));
+    const executableDirectory = join(directory, "bin");
+    const executable = join(executableDirectory, "controlled-acp");
+    await mkdir(executableDirectory);
+    await writeFile(
+        executable,
+        executableSource(`
+if (process.argv.includes("--version")) {
+  process.stdout.write("1.0.0\\n");
+} else {
+  process.argv.push("--agent-name", "Controlled ACP", "--agent-version", "1.0.0");
+  await import(${JSON.stringify(new URL(`file://${fakeAgentPath}`).toString())});
+}
+`),
+        { mode: 0o700 },
+    );
+    const workspace = join(directory, "workspace");
+    await mkdir(workspace, { recursive: true });
+    await writeFile(join(workspace, "notes.txt"), "workspace notes\n");
+    try {
+        await withRealDaemon(
+            signal,
+            new ControlledAcpAgentSpecification(),
+            { PATH: executableDirectory },
+            async (peer) => {
+                peer.send(
+                    encodeSessionPrepareCommand({
+                        kind: "session.prepare",
+                        requestId: "prepare-state-file-read-session",
+                        target: peer.target,
+                    }),
+                );
+                for (;;) {
+                    if (decodeMessageKind(await peer.nextMessage()) === "session.ready") {
+                        break;
+                    }
+                }
+                const computerKey = (await readdir(peer.stateDirectory)).find(
+                    (name) => name.startsWith("encryption.") && name.endsWith(".json"),
+                );
+                expect(computerKey).toBeDefined();
+                await symlink(peer.stateDirectory, join(workspace, "state-link"));
+
+                const direct = await readSessionFile(peer, peer.target, join(peer.stateDirectory, `${computerKey}`));
+                expect(direct.kind).toBe("failed");
+                const linked = await readSessionFile(peer, peer.target, `state-link/${computerKey}`);
+                expect(linked.kind).toBe("failed");
+                const setupState = join(dirname(peer.stateDirectory), "config.json");
+                await writeFile(setupState, "{}\n", { mode: 0o600 });
+                const saved = await readSessionFile(peer, peer.target, setupState);
+                expect(saved.kind).toBe("failed");
+
+                const workspaceFile = await readSessionFile(peer, peer.target, "notes.txt");
+                expect(workspaceFile.kind).toBe("streamed");
+                expect(workspaceFile.bytes.toString("utf8")).toBe("workspace notes\n");
             },
             "embedded",
             workspace,

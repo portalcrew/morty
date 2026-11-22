@@ -166,7 +166,10 @@ export async function connectControlledAgentRuntime(options: {
 }) {
     options.signal.throwIfAborted();
     const directory = await mkdtemp(join(tmpdir(), "morty-controlled-agent-"));
+    // As an installation does, the Runtime keeps its state in a directory of its own beside the workspace.
+    const installation = join(directory, "computer");
     const workspace = join(directory, "workspace");
+    await mkdir(installation, { mode: 0o700 });
     await mkdir(workspace);
     await writeWorkspaceFiles(options.behavior.files, workspace, options.signal);
     const relayUrl = new URL("/morty/api/v1/computers/connect", options.connection.origin);
@@ -183,7 +186,7 @@ export async function connectControlledAgentRuntime(options: {
                 relayUrl,
                 credentials: connection.credentials,
             },
-            directory,
+            installation,
         );
         return { harness, runtime };
     };
@@ -231,7 +234,7 @@ export async function connectControlledAgentRuntime(options: {
     // The Computer's encryption access is fixed for its life. Read it once, before any client traffic can hold the
     // store: a later read would race the daemon's replay claims for the store's non-blocking lock.
     const encryptionAccess = await ComputerEncryptionStore.open(
-        directory,
+        installation,
         options.connection.computerId,
         options.signal,
     )
@@ -267,7 +270,7 @@ export async function connectControlledAgentRuntime(options: {
          */
         holdEncryptionStore: (): Disposable => {
             const name = createHash("sha256").update(connection.computerId).digest("hex");
-            const ledger = new DatabaseSync(join(directory, `encryption.${name}.replay.sqlite`));
+            const ledger = new DatabaseSync(join(installation, `encryption.${name}.replay.sqlite`));
             ledger.exec("BEGIN IMMEDIATE");
             return {
                 [Symbol.dispose]: () => {

@@ -47,6 +47,11 @@ export function sniffRasterMime(bytes: Uint8Array): LocalRasterMimeType | null {
     return null;
 }
 
+/** The image type of a local file from its first bytes, for a file the size a local image may have. */
+export function localRasterMimeType(header: Uint8Array, size: number): LocalRasterMimeType | null {
+    return size < 1 || size > MAX_LOCAL_RASTER_BYTES ? null : sniffRasterMime(header);
+}
+
 async function resolveCanonicalPath(requested: string, signal: AbortSignal): Promise<string | null> {
     signal.throwIfAborted();
     if (!isAbsolute(requested) || requested.includes("\0") || normalize(requested) !== requested) {
@@ -110,7 +115,7 @@ export async function readLocalRaster(uri: string, signal: AbortSignal): Promise
     }
     const header = await readFileStart(target, 12);
     signal.throwIfAborted();
-    const mimeType = sniffRasterMime(header);
+    const mimeType = localRasterMimeType(header, targetMetadata.size);
     if (mimeType === null) {
         return null;
     }

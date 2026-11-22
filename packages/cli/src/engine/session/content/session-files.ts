@@ -8,8 +8,9 @@ import {
     FILE_END_KIND,
     type FileReadCommand,
 } from "@portalcrew/morty-client/protocol";
-import { readLocalRaster } from "../../acp/content/raster.ts";
-import { canonicalPath, readFileChunks, readPathMetadata } from "../../storage/files/local-files.ts";
+import { isMortyStatePath } from "../../../storage/state-root.ts";
+import { localRasterMimeType } from "../../acp/content/raster.ts";
+import { canonicalPath, openCanonicalFile } from "../../storage/files/local-files.ts";
 import { SessionError } from "../api/session-error.ts";
 import type { ExternalContentStore } from "./external-content-store.ts";
 
@@ -83,6 +84,7 @@ export async function streamLocalFile({
     signal,
     workingDirectory,
     externalContent,
+    stateDirectory,
 }: {
     readonly command: FileReadCommand;
     readonly sendBegin: (message: ReturnType<typeof decodeFileBeginEvent>) => Promise<void>;
@@ -92,27 +94,46 @@ export async function streamLocalFile({
     readonly signal: AbortSignal;
     readonly workingDirectory: string | null;
     readonly externalContent: ExternalContentStore;
-}): Promise<void> {
+    readonly stateDirectory: string;
+}): Promise<{ readonly byteLength: number }> {
     const external = await externalContent.resolve(command.target, command.path, signal);
-    const target = external?.path ?? (await resolveFile(command.path, workingDirectory, signal));
+    const target =
+        external === null
+            ? await resolveFile(command.path, workingDirectory, signal)
+            : await canonicalPath(external.path);
+    signal.throwIfAborted();
     if (target === null) {
         throw new Error("The local file is unavailable");
     }
-    const before = await readPathMetadata(target);
+    // Morty's state holds the Computer's credentials and keys, which no Session file read may serve. Content the store
+    // keeps for Sessions lies there too, and Agents reference it by path.
+    if (
+        external === null &&
+        (await isMortyStatePath(target, stateDirectory)) &&
+        !(await externalContent.holds(target))
+    ) {
+        throw new SessionError("morty_state_unavailable", "Morty's own state is not a Session file");
+    }
+    await using opened = await openCanonicalFile(target);
     signal.throwIfAborted();
-    if (before.kind !== "file" || before.size < 1) {
+    if (opened === null) {
+        throw new Error("The local file is unavailable");
+    }
+    const before = opened.metadata;
+    if (before.size < 1) {
         throw new Error("The local file is unavailable");
     }
     if (before.size > command.maxBytes) {
         throw new SessionError("file_too_large", "The local file is larger than the read allows");
     }
-    const raster = external === null ? await readLocalRaster(target, signal) : null;
+    const raster = external === null ? localRasterMimeType(await opened.readStart(12), before.size) : null;
+    signal.throwIfAborted();
     await sendBegin({
         byteLength: before.size,
         kind: FILE_BEGIN_KIND,
         mediaType:
             external?.mediaType ??
-            raster?.mimeType ??
+            raster ??
             (extname(target).toLowerCase() === ".svg" ? "image/svg+xml" : "application/octet-stream"),
         modifiedAt: before.modifiedAt.toISOString(),
         name: external?.name ?? (basename(target) || "file"),
@@ -120,7 +141,7 @@ export async function streamLocalFile({
         target: command.target,
     });
     let sequence = 0;
-    const chunks = readFileChunks(target, CONTENT_CHUNK_MAX_BYTES, signal)[Symbol.asyncIterator]();
+    const chunks = opened.chunks(CONTENT_CHUNK_MAX_BYTES, signal)[Symbol.asyncIterator]();
     try {
         while (true) {
             signal.throwIfAborted();
@@ -136,7 +157,7 @@ export async function streamLocalFile({
     } finally {
         await chunks.return?.();
     }
-    const after = await readPathMetadata(target);
+    const after = await opened.currentMetadata();
     signal.throwIfAborted();
     if (after.size !== before.size || after.modifiedMilliseconds !== before.modifiedMilliseconds) {
         throw new Error("The local file changed during transfer");
@@ -146,4 +167,5 @@ export async function streamLocalFile({
         requestId: command.requestId,
         target: command.target,
     });
+    return { byteLength: before.size };
 }
