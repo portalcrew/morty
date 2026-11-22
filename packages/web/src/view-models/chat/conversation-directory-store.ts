@@ -55,6 +55,14 @@ export function listedSessions(state: ConversationDirectoryState): readonly Dire
     }
 }
 
+/**
+ * Whether the listing failed only because the Computer or the connection to it was unreachable, so the workspace
+ * retries it once the Computer is back. Any other failure is the answer, not an outage to wait out.
+ */
+export function directoryWaitsForComputer(state: ConversationDirectoryState): boolean {
+    return (state.kind === "failed" || state.kind === "stale") && state.failure === "connection";
+}
+
 /** Titles are joined at read time, so the list, pane and dialogs share the same Session fact. */
 export function conversationDirectorySessions(
     state: ConversationDirectoryState,
