@@ -1,4 +1,4 @@
-import type { ToolCallContent } from "@agentclientprotocol/sdk/unstable";
+import type { AvailableCommand, ToolCallContent } from "@agentclientprotocol/sdk/unstable";
 import type { AgentQuestion } from "@portalcrew/morty-client/protocol";
 import type { PromptDelegationStage } from "../../../../cli/src/engine/acp/agent/agent-lifecycle.ts";
 
@@ -55,6 +55,7 @@ export interface FakeAgentHarnessOptions {
     readonly harness?: string;
     readonly agentName?: string;
     readonly additionalAgents?: readonly { readonly harness: string; readonly name: string }[];
+    readonly commands?: readonly AvailableCommand[];
     readonly echoUserMessage?: boolean;
     readonly sessionIds?: ReadonlySet<string>;
     readonly nativeSessionPageSize?: number;

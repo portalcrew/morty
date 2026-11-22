@@ -46,6 +46,7 @@ export interface ControlledComputerConnection {
 export interface ControlledAgent {
     readonly harness: string;
     readonly label: string;
+    readonly commands?: FakeAgentHarnessOptions["commands"];
     readonly reply?: FakeAgentHarnessOptions["reply"];
     readonly beforeSessionCreated?: (() => Promise<void>) | undefined;
     readonly beforeSessionsListed?: ((signal: AbortSignal) => Promise<void>) | undefined;

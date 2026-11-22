@@ -1,3 +1,4 @@
+import type { SessionCommand } from "@portalcrew/morty-client/protocol";
 import { ArrowUp, FileText, LoaderCircle, Plus, Square, X } from "lucide-react";
 import {
     type ClipboardEvent,
@@ -5,6 +6,7 @@ import {
     type KeyboardEvent,
     type ReactNode,
     useEffect,
+    useId,
     useRef,
     useState,
 } from "react";
@@ -24,8 +26,10 @@ import { useScrollClippedEdges } from "../utils/use-scroll-clipped-edges.ts";
 import { useSoftwareKeyboardMarker } from "../utils/use-software-keyboard-marker.ts";
 import { chatSessionComposerClassName } from "./chat-session-layout.ts";
 import type { ComposerAttachment } from "./composer-attachment.ts";
+import { ComposerCommandMenu, composerCommandOptionId } from "./composer-command-menu.tsx";
 import { type ComposerNoticePlacement, ComposerNoticeSlot, composerErrorMessage } from "./composer-notice-slot.tsx";
 
+const noCommands: readonly SessionCommand[] = [];
 const composerMaxHeightPx = 256;
 const composerChromeHeightPx = 64;
 const composerTextareaMaxHeightPx = composerMaxHeightPx - composerChromeHeightPx;
@@ -99,6 +103,7 @@ export function BotChatComposer({
     canAttach,
     attachmentSignal,
     children,
+    commandMenu,
     disabled,
     draft,
     error,
@@ -118,6 +123,10 @@ export function BotChatComposer({
     readonly canAttach: boolean;
     readonly attachmentSignal: AbortSignal;
     readonly children: ReactNode;
+    readonly commandMenu?: {
+        readonly commands: readonly SessionCommand[];
+        readonly onSelect: (command: SessionCommand) => void;
+    };
     readonly disabled: boolean;
     readonly draft: string;
     readonly error: string;
@@ -179,6 +188,20 @@ export function BotChatComposer({
         attachmentState.kind !== "reading" &&
         outputState !== "sending";
     const collapsed = mobile && !active && canCollapse;
+    const commandListId = useId();
+    const [activeCommandName, setActiveCommandName] = useState<string | null>(null);
+    const [dismissedCommandDraft, setDismissedCommandDraft] = useState<string | null>(null);
+    const suggestedCommands =
+        commandMenu === undefined || disabled || collapsed || dismissedCommandDraft === draft
+            ? noCommands
+            : commandMenu.commands;
+    const activeCommand =
+        suggestedCommands.find((command) => command.name === activeCommandName) ?? suggestedCommands[0];
+    const selectCommand = (command: SessionCommand): void => {
+        setActiveCommandName(null);
+        commandMenu?.onSelect(command);
+        textarea.current?.focus({ preventScroll: true });
+    };
     const animateComposer = !mobile || transitionsEnabled;
     const explainBlockedSend =
         outputState === "idle" &&
@@ -208,6 +231,27 @@ export function BotChatComposer({
     };
 
     const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+        if (activeCommand !== undefined && !event.nativeEvent.isComposing) {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                const step = event.key === "ArrowDown" ? 1 : suggestedCommands.length - 1;
+                const next =
+                    suggestedCommands[(suggestedCommands.indexOf(activeCommand) + step) % suggestedCommands.length];
+                setActiveCommandName(next?.name ?? null);
+                return;
+            }
+            const plainKey = !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey;
+            if (plainKey && (event.key === "Enter" || event.key === "Tab")) {
+                event.preventDefault();
+                selectCommand(activeCommand);
+                return;
+            }
+            if (event.key === "Escape") {
+                event.preventDefault();
+                setDismissedCommandDraft(draft);
+                return;
+            }
+        }
         if (event.key === "Enter" && event.ctrlKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
             event.currentTarget.setRangeText(
@@ -253,6 +297,14 @@ export function BotChatComposer({
                     collapsed ? "h-[calc(100%+3rem)]" : "h-[calc(100%+6rem)]",
                 )}
             />
+            {activeCommand !== undefined && (
+                <ComposerCommandMenu
+                    active={activeCommand}
+                    commands={suggestedCommands}
+                    listId={commandListId}
+                    onSelect={selectCommand}
+                />
+            )}
             {noticePlacement === "overlay" && (
                 <ComposerNoticeSlot
                     connectionNotice={connectionNotice}
@@ -375,6 +427,13 @@ export function BotChatComposer({
                             viewportStyle={{ maxHeight: composerTextareaMaxHeightPx }}
                         >
                             <Textarea
+                                aria-activedescendant={
+                                    activeCommand === undefined
+                                        ? undefined
+                                        : composerCommandOptionId(commandListId, activeCommand)
+                                }
+                                aria-autocomplete="list"
+                                aria-controls={activeCommand === undefined ? undefined : commandListId}
                                 aria-describedby="chat-composer-keyboard-hint"
                                 aria-label="Message"
                                 className="mb-2 min-h-[56px] w-full resize-none overflow-hidden px-4 pt-0 pb-1 text-14 placeholder:text-14 max-sm:visible sm:min-h-[64px]"

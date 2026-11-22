@@ -1,4 +1,4 @@
-import type { SessionEvent, SessionLiveEvent } from "@portalcrew/morty-client/protocol";
+import type { SessionCommand, SessionEvent, SessionLiveEvent } from "@portalcrew/morty-client/protocol";
 import type { SessionPresentationEvent } from "./session-presentation.ts";
 import {
     appendSessionMessageEvent,
@@ -43,6 +43,8 @@ export type SessionProjection =
           readonly pending: PendingEvents | null;
           readonly reduction: SessionMessageReduction;
           readonly revision: number;
+          /** The newest command list the events report; the Agent may send it only after the Session opened. */
+          readonly commands: readonly SessionCommand[] | null;
       };
 
 export type SessionProjectionInput =
@@ -92,6 +94,20 @@ function newestTitle(events: readonly SessionPresentationEvent[]): string | unde
     return undefined;
 }
 
+function newestCommands(events: readonly SessionPresentationEvent[]): readonly SessionCommand[] | null {
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+        const event = events[index];
+        if (event?.type === "acp" && event.payload.sessionUpdate === "available_commands_update") {
+            return event.payload.availableCommands.map((command) => ({
+                description: command.description,
+                inputHint: command.input?.hint ?? "",
+                name: command.name,
+            }));
+        }
+    }
+    return null;
+}
+
 /** Live settings updates invalidate the display; only a Computer read establishes current settings. */
 function adoptionEffect(events: readonly SessionPresentationEvent[]): readonly SessionProjectionEffect[] {
     const title = newestTitle(events);
@@ -127,6 +143,7 @@ function adoptGeneration(
         pending: null,
         reduction: createSessionMessageReduction({ events, nextCursor: history.nextCursor }),
         revision: state.revision + 1,
+        commands: newestCommands(events),
     };
 }
 
@@ -176,6 +193,7 @@ export function transitionSessionProjection(
                     eventIds: new Set([...state.eventIds, event.eventId]),
                     firstEventId: state.firstEventId ?? event.eventId,
                     reduction: appendSessionMessageEvent(state.reduction, event),
+                    commands: newestCommands([event]) ?? state.commands,
                 },
             };
         }
@@ -246,12 +264,20 @@ export function transitionSessionProjection(
                     eventIds: new Set([...input.page.events.map((event) => event.eventId), ...state.eventIds]),
                     reduction: prependSessionMessageEvents(state.reduction, input.page),
                     revision: state.revision + 1,
+                    commands: state.commands ?? newestCommands(input.page.events),
                 },
             };
         }
         default:
             return input satisfies never;
     }
+}
+
+export function sessionProjectionCommands(
+    state: SessionProjection,
+    opened: readonly SessionCommand[],
+): readonly SessionCommand[] {
+    return state.kind === "established" && state.commands !== null ? state.commands : opened;
 }
 
 export function sessionProjectionExecutionOwner(state: SessionProjection, commandId: string): string | null {
