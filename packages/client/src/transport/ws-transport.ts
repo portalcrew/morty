@@ -657,6 +657,14 @@ export class WsTransport {
             );
             this.#pending.delete(requestId);
         } catch (cause) {
+            // After a message it cannot read, the transport no longer knows what the Relay holds for it, so it ends the
+            // connection: the Relay releases every request and subscription opened on it, and the next one reconnects.
+            if (this.#state.kind === "connected") {
+                const socket = this.#state.socket;
+                this.#stopHeartbeat();
+                this.#state = { kind: "disconnected" };
+                socket.close(1000, "Invalid protocol message");
+            }
             this.#failPending(cause);
             this.#failSubscriptions(cause);
             this.#failChanges(cause);
