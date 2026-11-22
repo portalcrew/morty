@@ -9,7 +9,7 @@ import type {
 import type { DurableObjectDatabase } from "../../../infra/durable-object-database.ts";
 import { ComputerCredentialStorage } from "./computer-credential-storage.ts";
 import { ComputerDirectoryStorage } from "./computer-directory-storage.ts";
-import { credentialMatches } from "./pairing-identity-storage.ts";
+import { credentialMatches, holdsDaemonCredential } from "./pairing-identity-storage.ts";
 
 interface RequestComputerPairing {
     readonly codeHash: string;
@@ -92,7 +92,7 @@ export class ComputerRelayStore {
         return (
             pairing !== null &&
             pairing.expires_at > value.now &&
-            (await this.#computers.isActiveDaemon(value.daemonHash, signal))
+            (await holdsDaemonCredential(this.#database, value.daemonHash, signal))
         );
     };
 
