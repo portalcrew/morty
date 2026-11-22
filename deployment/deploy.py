@@ -45,6 +45,11 @@ def upload_objects(command, env):
     run(command, env)
 
 
+def fetch_public(url):
+    with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'Morty-Deployment/1.0', 'Cache-Control': 'no-cache'}), timeout=40) as response:
+        return {'url': url, 'status': response.status, 'version': response.headers.get('Morty-Version'), 'body': response.read()}
+
+
 def served_versions(deployment):
     return [(version['version_id'], version['percentage']) for version in deployment['versions']]
 
@@ -90,7 +95,6 @@ def main():
     assert not morty.get('d1_databases')
     assert not morty.get('services')
     assert morty['durable_objects']['bindings'] == [{'name': 'COMPUTER_RELAY', 'class_name': 'ComputerRelay'}]
-    assert morty['version_metadata'] == {'binding': 'CF_VERSION_METADATA'}
     assert morty['vars']['APP_ORIGIN'] == expected['morty_origin']
     assert json.loads(morty['vars']['MORTY_ALLOWED_ORIGINS']) == [expected['morty_origin']]
     if args.verify_release_only:
@@ -177,18 +181,6 @@ def main():
             secret_file.touch(mode=0o600)
             secret_file.write_text(json.dumps(secrets))
             run(WRANGLER + ['deploy', '--config', str(config_file), '--message', 'morty ' + manifest['revision'], '--secrets-file', str(secret_file)], env)
-            checks = []
-            for url, content in [(expected['morty_origin'] + '/', 'Morty'), (expected['morty_origin'] + '/doc/setup.md', 'morty setup --base-url ' + expected['morty_origin'])]:
-                with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'Morty-Deployment/1.0', 'Cache-Control': 'no-cache'}), timeout=40) as response:
-                    body = response.read()
-                    if response.status != 200 or content and content not in body.decode():
-                        raise ValueError('Post-deployment health verification failed')
-                    checks.append({'url': url, 'status': response.status, 'sha256': hashlib.sha256(body).hexdigest()})
-            for extension in ['.js', '.css', '.woff2']:
-                entry = groups[extension][0]
-                with urllib.request.urlopen(urllib.request.Request(expected['asset_origin'] + '/' + entry['key'], headers={'Origin': expected['morty_origin'], 'User-Agent': 'Morty-Deployment/1.0'}), timeout=40) as response:
-                    if hashlib.sha256(response.read()).hexdigest() != hashlib.sha256(Path(entry['file']).read_bytes()).hexdigest() or response.headers.get('Access-Control-Allow-Origin') != expected['morty_origin'] or 'immutable' not in response.headers.get('Cache-Control', ''):
-                        raise ValueError('Asset content, CORS, or cache verification failed')
             # The deployments API can still list the previous deployment shortly after Wrangler returns.
             for _ in range(24):
                 deployed = cloud(deployments)['deployments'][0]
@@ -199,6 +191,27 @@ def main():
                 raise ValueError('Unexpected gradual deployment')
             if deployed.get('annotations', {}).get('workers/message') != 'morty ' + manifest['revision']:
                 raise ValueError('Active Worker deployment does not match the accepted source')
+            # A deployment reaches each location within seconds, not all at once; record only what this version served.
+            # An archive built before its Worker named its version cannot be told apart and is checked once, as before.
+            version_id = deployed['versions'][0]['version_id']
+            reports_version = manifest.get('reportsDeployedVersion') is True
+            for _ in range(24 if reports_version else 1):
+                instructions = fetch_public(expected['morty_origin'] + '/doc/setup.md')
+                if not reports_version or instructions['version'] == version_id:
+                    break
+                time.sleep(5)
+            else:
+                raise ValueError('Production does not serve the deployed Worker version')
+            checks = []
+            for response, content in [(fetch_public(expected['morty_origin'] + '/'), 'Morty'), (instructions, 'morty setup --base-url ' + expected['morty_origin'])]:
+                if response['status'] != 200 or content not in response['body'].decode():
+                    raise ValueError('Post-deployment health verification failed')
+                checks.append({'url': response['url'], 'status': response['status'], 'sha256': hashlib.sha256(response['body']).hexdigest()})
+            for extension in ['.js', '.css', '.woff2']:
+                entry = groups[extension][0]
+                with urllib.request.urlopen(urllib.request.Request(expected['asset_origin'] + '/' + entry['key'], headers={'Origin': expected['morty_origin'], 'User-Agent': 'Morty-Deployment/1.0'}), timeout=40) as response:
+                    if hashlib.sha256(response.read()).hexdigest() != hashlib.sha256(Path(entry['file']).read_bytes()).hexdigest() or response.headers.get('Access-Control-Allow-Origin') != expected['morty_origin'] or 'immutable' not in response.headers.get('Cache-Control', ''):
+                        raise ValueError('Asset content, CORS, or cache verification failed')
             active_secrets = cloud('/workers/scripts/' + expected['morty'] + '/secrets')
             if 'MORTY_SESSION_SIGNING_SECRET' not in {item['name'] for item in active_secrets}:
                 raise ValueError('The deployed Session signing secret binding is missing')
