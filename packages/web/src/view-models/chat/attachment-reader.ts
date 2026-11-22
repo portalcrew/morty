@@ -18,8 +18,10 @@ function readBytes(file: File, signal: AbortSignal): Promise<ArrayBuffer> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         const timeout = window.setTimeout(() => {
-            reader.abort();
+            // Aborting the reader dispatches its abort event at once, which would report the read as cancelled.
+            cleanup();
             reject(new AttachmentReadError("attachment_timeout", `Timed out while reading ${file.name}.`));
+            reader.abort();
         }, READ_TIMEOUT_MILLISECONDS);
         const cleanup = (): void => {
             signal.removeEventListener("abort", cancel);
