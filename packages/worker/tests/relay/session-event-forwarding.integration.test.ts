@@ -785,7 +785,7 @@ it("Given a forwarded native Session request, When the browser cancels it, Then 
     expect(await inbox.next()).toEqual(JSON.parse(COMPUTER_HEARTBEAT_ACK_MESSAGE));
 });
 
-it("Given a native request forwarded to an earlier daemon, When the daemon is replaced and the caller cancels, Then the replacement receives no stale cancellation", async ({
+it("Given a native request forwarded to an earlier daemon, When the daemon is replaced and the caller cancels, Then the request is refused as offline and the replacement receives no stale cancellation", async ({
     signal,
 }) => {
     const computer = await connectedComputer(signal);
@@ -843,6 +843,12 @@ it("Given a native request forwarded to an earlier daemon, When the daemon is re
     daemon.accept();
     onTestFinished(() => daemon.close(1000, "Test complete"));
     expect(await daemonInbox.next()).toEqual({ kind: "computer.liveness.ready", connectionEpoch: expect.any(Number) });
+    const refused = v.parse(
+        v.object({ kind: v.literal("http.response"), requestId: v.string(), status: v.number(), body: v.string() }),
+        await inbox.next(),
+    );
+    expect(refused).toMatchObject({ requestId: "old-http", status: 503 });
+    expect(JSON.parse(refused.body)).toMatchObject({ error: { code: "computer_offline" } });
     browser.send(JSON.stringify({ kind: "http.cancel", requestId: "old-http" }));
     inbox.send(COMPUTER_HEARTBEAT_MESSAGE);
     expect(await inbox.next()).toEqual(JSON.parse(COMPUTER_HEARTBEAT_ACK_MESSAGE));

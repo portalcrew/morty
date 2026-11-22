@@ -155,7 +155,7 @@ export class ComputerService {
             attachment.controller.abort(new DOMException("Computer connection replaced", "AbortError"));
         }
         for (const daemon of previous) {
-            this.#cx.services.relay.failTransfersOwnedBy(daemon.socket);
+            this.#cx.services.relay.refuseOperationsOwnedBy(daemon.socket);
             this.closeDaemon(daemon.identity, daemon.socket, { kind: "replaced", replacement: identity });
         }
         const accepted = this.#cx.gateways.peers.accept(identity);
