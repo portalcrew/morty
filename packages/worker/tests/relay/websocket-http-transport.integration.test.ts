@@ -609,6 +609,49 @@ it("Given an incomplete upload consumes the aggregate byte budget, When its dead
     }
 });
 
+it("Given an upload whose chunks keep arriving, When it takes longer than one chunk's deadline, Then it completes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
+    try {
+        const daemon = new TextDaemonBoundary("uploaded");
+        const response = openTestBrowserTransport({
+            dispatch: daemon.fetch,
+            subscribe: new SubscriptionDaemonBoundary().subscribe,
+        });
+        const socket = response.webSocket;
+        if (socket === null) {
+            throw new Error("Expected a WebSocket transport response");
+        }
+        socket.accept();
+        const uploaded = nextMessage(socket);
+        socket.send(
+            JSON.stringify({
+                body: "",
+                bodyByteLength: 3,
+                headers: [],
+                kind: "http.request",
+                method: "POST",
+                path: "/morty/api/v1/computers/computer/sessions",
+                requestId: "steady-upload",
+            }),
+        );
+        for (const sequence of [0, 1, 2]) {
+            await vi.advanceTimersByTimeAsync(25_000);
+            socket.send(
+                encodeContentChunkFrame({ bytes: new TextEncoder().encode("x"), requestId: "steady-upload", sequence }),
+            );
+        }
+        expect(JSON.parse(await uploaded)).toMatchObject({
+            kind: "http.response",
+            requestId: "steady-upload",
+            status: 200,
+        });
+        socket.close();
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
 it("Given binary requests, when their declared sizes exceed their owning limits, then ordinary requests and encrypted uploads are both refused", async () => {
     const daemon = new TextDaemonBoundary("uploaded");
     const response = openTestBrowserTransport({

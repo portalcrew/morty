@@ -38,7 +38,9 @@ import { diagnosticText } from "../../../../infra/log-diagnostics.ts";
 import { logger } from "../../../../infra/logger.ts";
 import { WebSocketUploadCapacity } from "../service/websocket-upload-capacity.ts";
 
-const BINARY_REQUEST_TIMEOUT_MILLISECONDS = 30_000;
+// An upload keeps its buffer while chunks keep arriving, and no longer than the client waits for the whole request.
+const BINARY_CHUNK_TIMEOUT_MILLISECONDS = 30_000;
+const BINARY_REQUEST_TIMEOUT_MILLISECONDS = 120_000;
 const MAX_SUBSCRIPTION_DIAGNOSTICS = 8;
 // A connection's open subscriptions are saved with it, which bounds them by the attachment size.
 export const MAX_SUBSCRIPTIONS_PER_CONNECTION = 16;
@@ -141,7 +143,8 @@ class PendingBinaryUpload {
     readonly #ready = Promise.withResolvers<boolean>();
     readonly authorization = this.#ready.promise;
     readonly #controller = new AbortController();
-    readonly #timeout: ReturnType<typeof setTimeout>;
+    readonly #expiresAt = Date.now() + BINARY_REQUEST_TIMEOUT_MILLISECONDS;
+    #timeout: ReturnType<typeof setTimeout> | undefined;
     #closed = false;
 
     readonly byteLength: number;
@@ -163,10 +166,21 @@ class PendingBinaryUpload {
         this.#connectionBudget = connectionBudget;
         this.#encryptedUpload = encryptedUpload;
         this.#onFailure = onFailure;
-        this.#timeout = setTimeout(() => {
-            void this.fail(transportError("request_timeout"));
-        }, BINARY_REQUEST_TIMEOUT_MILLISECONDS);
+        this.progressed();
     }
+
+    readonly progressed = (): void => {
+        if (this.#closed) {
+            return;
+        }
+        clearTimeout(this.#timeout);
+        this.#timeout = setTimeout(
+            () => {
+                void this.fail(transportError("request_timeout"));
+            },
+            Math.min(BINARY_CHUNK_TIMEOUT_MILLISECONDS, this.#expiresAt - Date.now()),
+        );
+    };
 
     readonly authorize = async (request: Request, dispatch: WebSocketHttpDispatch): Promise<void> => {
         try {
@@ -587,6 +601,7 @@ export function openBrowserTransport(
                 }
                 upload.chunks.push(chunk.bytes);
                 if (upload.receivedBytes < upload.byteLength) {
+                    upload.progressed();
                     return;
                 }
                 if (!(await upload.authorization) || binaryRequests.get(chunk.requestId) !== upload) {
