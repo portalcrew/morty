@@ -13,6 +13,10 @@ const assets = configuration.assets;
 if (assets === undefined) {
     throw new Error("Missing public assets configuration");
 }
+const versionMetadata = configuration.version_metadata;
+if (versionMetadata === undefined) {
+    throw new Error("Missing version metadata configuration");
+}
 const directory = await mkdtemp(join(tmpdir(), "morty-web-pages-"));
 await cp(join(root, "public"), directory, { recursive: true });
 await cp(join(root, "index.html"), join(directory, "index.html"));
@@ -36,6 +40,7 @@ const runtime = new Miniflare(
         script: output.text,
         compatibilityDate: configuration.compatibility_date,
         compatibilityFlags: ["nodejs_compat"],
+        versionMetadata: versionMetadata.binding,
         assets: {
             directory,
             binding: assets.binding,
