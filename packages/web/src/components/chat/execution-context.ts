@@ -18,6 +18,7 @@ export interface ExecutionContext {
         readonly kind: "ready" | "recovering" | "offline" | "unknown" | "failed" | "closed";
         readonly label: string;
     };
+    readonly sendBlocked: string | null;
     readonly connection:
         | "Not started"
         | "Connecting"

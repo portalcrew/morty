@@ -16,9 +16,12 @@ const MORTY_START_COMMAND = "npx --yes @portalcrew/morty@latest start";
 const COMPUTER_REVOKED_RECOVERY =
     "Its connection key was used somewhere else, so Morty disconnected it to keep your account safe. Run the Morty setup prompt on that computer again to reconnect it. Your agent's own sessions stay on that computer.";
 
+const SEND_BLOCKED_RECONNECTING = "Can't send while reconnecting";
+const SEND_BLOCKED_UNAVAILABLE = "Can't send while the connection is unavailable";
+
 type ConnectionPresentation = Pick<
     ExecutionContext,
-    "computerStatus" | "lastConfirmed" | "connection" | "indicator" | "feedback" | "available"
+    "computerStatus" | "lastConfirmed" | "connection" | "indicator" | "feedback" | "available" | "sendBlocked"
 >;
 
 export function connectionPresentation(
@@ -52,6 +55,7 @@ export function connectionPresentation(
     const present = (
         indicator: ExecutionContext["indicator"],
         feedback: ConnectionFeedback,
+        sendBlocked: string | null = null,
     ): ConnectionPresentation => ({
         computerStatus,
         lastConfirmed,
@@ -67,6 +71,7 @@ export function connectionPresentation(
                 ? { kind: "hidden" }
                 : feedback,
         available: indicator.kind === "ready",
+        sendBlocked,
     });
     if (session?.kind === "closed") {
         return present(
@@ -94,6 +99,7 @@ export function connectionPresentation(
                 description:
                     session.kind === "failed" ? session.message : "Automatic retries stopped. Your draft is saved.",
             },
+            SEND_BLOCKED_UNAVAILABLE,
         );
     }
     if (computer.kind === "revoked") {
@@ -120,10 +126,14 @@ export function connectionPresentation(
     // A suspended mobile page loses its connection on nearly every return and usually recovers within seconds, so
     // recovery stays quiet until its grace period ends; Send still explains why it is blocked.
     if ((session?.kind === "disconnected" || session?.kind === "reconnecting") && session.notice === "quiet") {
-        return present({ kind: "recovering", label: "Reconnecting" }, { kind: "hidden" });
+        return present({ kind: "recovering", label: "Reconnecting" }, { kind: "hidden" }, SEND_BLOCKED_RECONNECTING);
     }
     if (session?.kind === "reconnecting") {
-        return present({ kind: "recovering", label: "Reconnecting" }, RETRY_IN_PROGRESS_STATUS);
+        return present(
+            { kind: "recovering", label: "Reconnecting" },
+            RETRY_IN_PROGRESS_STATUS,
+            SEND_BLOCKED_RECONNECTING,
+        );
     }
     if (session?.kind === "disconnected") {
         return present(
@@ -141,6 +151,7 @@ export function connectionPresentation(
                 remainingSeconds: session.retry.kind === "scheduled" ? session.retry.remainingSeconds : null,
                 restartCommand: computer.kind === "disconnected" ? MORTY_START_COMMAND : null,
             },
+            computer.kind === "disconnected" ? null : SEND_BLOCKED_RECONNECTING,
         );
     }
     if (computer.kind === "disconnected") {
@@ -156,7 +167,11 @@ export function connectionPresentation(
     }
     if (computer.kind === "unavailable") {
         if (watch.kind === "unavailable" && watch.notice === "quiet") {
-            return present({ kind: "recovering", label: "Reconnecting" }, { kind: "hidden" });
+            return present(
+                { kind: "recovering", label: "Reconnecting" },
+                { kind: "hidden" },
+                SEND_BLOCKED_RECONNECTING,
+            );
         }
         return present(
             { kind: "unknown", label: "Connection status unavailable" },
@@ -184,7 +199,7 @@ export function connectionPresentation(
         return present({ kind: "recovering", label: "Connecting" }, { kind: "hidden" });
     }
     if (session === null && selection.kind === "failed") {
-        return present({ kind: "failed", label: "Session unavailable" }, { kind: "hidden" });
+        return present({ kind: "failed", label: "Session unavailable" }, { kind: "hidden" }, SEND_BLOCKED_UNAVAILABLE);
     }
     return present({ kind: "ready", label: "Connection available" }, { kind: "hidden" });
 }

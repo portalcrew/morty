@@ -556,13 +556,7 @@ export function NativeSessionDialog({
                                             <Button
                                                 variant="outline"
                                                 size="lg"
-                                                disabled={
-                                                    model.preview.kind !== "ready" ||
-                                                    model.operation !== "idle" ||
-                                                    model.directory.kind !== "ready" ||
-                                                    (!model.directory.capabilities.loadSession &&
-                                                        !model.directory.capabilities.resumeSession)
-                                                }
+                                                disabled={!model.canImport}
                                                 onClick={() =>
                                                     withSignal(
                                                         async (signal) => await store.getState().open("import", signal),
@@ -573,7 +567,7 @@ export function NativeSessionDialog({
                                             </Button>
                                             <Button
                                                 size="lg"
-                                                disabled={model.preview.kind !== "ready" || model.operation !== "idle"}
+                                                disabled={!model.canFork}
                                                 onClick={() =>
                                                     withSignal(
                                                         async (signal) => await store.getState().open("fork", signal),
