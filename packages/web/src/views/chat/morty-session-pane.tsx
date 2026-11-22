@@ -48,6 +48,7 @@ import { type AgentQuestionChoices, agentQuestionCard } from "../../view-models/
 import { authenticationGuidance } from "../../view-models/chat/authentication-guidance.ts";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { canAddAttachments } from "../../view-models/chat/composer-attachment-store.ts";
+import { commandDraft, commandSuggestions } from "../../view-models/chat/composer-commands.ts";
 import { sessionExecutionContext } from "../../view-models/chat/execution-context.ts";
 import { sessionHarnessSelection } from "../../view-models/chat/native-session-agents.ts";
 import { sessionConnectionView } from "../../view-models/chat/session-connection-machine.ts";
@@ -58,7 +59,7 @@ import {
     type TitleEdit,
 } from "../../view-models/chat/session-pane-presentation.ts";
 import type { SessionPaneModel } from "../../view-models/chat/session-pane-store.ts";
-import { sessionProjectionTimeline } from "../../view-models/chat/session-projection.ts";
+import { sessionProjectionCommands, sessionProjectionTimeline } from "../../view-models/chat/session-projection.ts";
 import type { SessionRenderItem } from "../../view-models/chat/session-render-items.ts";
 import { sessionTimelinePresentation } from "../../view-models/chat/session-timeline-presentation.ts";
 import { sessionTitle } from "../../view-models/chat/session-titles-store.ts";
@@ -919,6 +920,13 @@ function MortySessionPaneBody({
                             focusScope={workspace}
                             canAttach={canAddAttachments(attachmentModel)}
                             attachmentSignal={pane.attachmentSignal}
+                            commandMenu={{
+                                commands: commandSuggestions(
+                                    composer.draft,
+                                    sessionProjectionCommands(projection, pane.session.ready.commands),
+                                ),
+                                onSelect: (command) => pane.store.getState().setDraft(commandDraft(command)),
+                            }}
                             disabled={presentation.composerInputDisabled}
                             draft={composer.draft}
                             error={slotErrorMessage}

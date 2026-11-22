@@ -43,6 +43,7 @@ export async function startTestRelay(
                             .map((agent) => ({ harness: agent.harness, name: agent.label })),
                         beforeSessionCreated: agents[0]?.beforeSessionCreated,
                         beforeSessionsListed: agents[0]?.beforeSessionsListed,
+                        ...(agents[0]?.commands === undefined ? {} : { commands: agents[0].commands }),
                         ...(agents[0]?.nativeSessionPageSize === undefined
                             ? {}
                             : { nativeSessionPageSize: agents[0].nativeSessionPageSize }),

@@ -77,6 +77,18 @@ class ControlledAgentState {
         }
     }
 
+    readonly reportCommands = async (
+        sessionId: string,
+        onSessionUpdate: (notification: acp.SessionNotification) => Promise<void>,
+    ): Promise<void> => {
+        if (this.#options.commands !== undefined) {
+            await onSessionUpdate({
+                sessionId,
+                update: { availableCommands: [...this.#options.commands], sessionUpdate: "available_commands_update" },
+            });
+        }
+    };
+
     readonly turnCount = (sessionId: string): number => this.#sessions.get(sessionId) ?? 0;
     readonly beforeLoad = async (sessionId: string): Promise<void> =>
         await this.#options.beforeSessionLoaded?.(sessionId);
@@ -489,10 +501,11 @@ class ControlledAgentEndpoint implements FakeHarnessEndpoint {
                 authMethods: [],
                 protocolVersion: acp.PROTOCOL_VERSION,
             }))
-            .onRequest(acp.methods.agent.session.new, () => {
+            .onRequest(acp.methods.agent.session.new, async () => {
                 const sessionId = crypto.randomUUID();
                 this.#sessionIds.add(sessionId);
                 this.#state.rememberSession(sessionId);
+                await this.#state.reportCommands(sessionId, onSessionUpdate);
                 return { configOptions: this.#state.configuration(sessionId), sessionId };
             })
             .onRequest(acp.methods.agent.session.load, async (context) => {
@@ -500,6 +513,7 @@ class ControlledAgentEndpoint implements FakeHarnessEndpoint {
                 this.#sessionIds.add(context.params.sessionId);
                 this.#state.rememberSession(context.params.sessionId, this.#state.turnCount(context.params.sessionId));
                 await this.#state.replay(context.params.sessionId, onSessionUpdate);
+                await this.#state.reportCommands(context.params.sessionId, onSessionUpdate);
                 return { configOptions: this.#state.configuration(context.params.sessionId) };
             })
             .onRequest(acp.methods.agent.session.fork, (context) => {
