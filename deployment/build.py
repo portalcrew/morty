@@ -96,7 +96,7 @@ def main():
     })
     morty_dir = release / spec['morty'].replace('-', '_')
     built = read(morty_dir / 'wrangler.json')
-    allowed = ['name', 'main', 'account_id', 'compatibility_date', 'compatibility_flags', 'durable_objects', 'migrations', 'r2_buckets', 'vars', 'assets', 'observability', 'ratelimits', 'workers_dev', 'preview_urls', 'secrets', 'placement', 'limits', 'rules', 'triggers']
+    allowed = ['name', 'main', 'account_id', 'compatibility_date', 'compatibility_flags', 'durable_objects', 'version_metadata', 'migrations', 'r2_buckets', 'vars', 'assets', 'observability', 'ratelimits', 'workers_dev', 'preview_urls', 'secrets', 'placement', 'limits', 'rules', 'triggers']
     portable = {key: built[key] for key in allowed if key in built}
     portable.update(no_bundle=True, find_additional_modules=True)
     write(morty_dir / 'wrangler.json', portable)
