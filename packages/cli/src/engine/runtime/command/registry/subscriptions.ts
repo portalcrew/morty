@@ -4,7 +4,7 @@ import type {
     SessionEventsUnsubscribeControl,
 } from "@portalcrew/morty-client/protocol";
 
-export function createSessionSubscriptions(changed: () => void) {
+export function createSessionSubscriptions(subscribed: (target: NativeSessionTarget) => void) {
     const subscriptions = new Map<string, NativeSessionTarget>();
     return {
         subscribe: (message: SessionEventsSubscribeCommand): void => {
@@ -16,7 +16,7 @@ export function createSessionSubscriptions(changed: () => void) {
                 throw new Error("Subscription address conflict");
             }
             subscriptions.set(message.subscriptionId, message.target);
-            changed();
+            subscribed(message.target);
         },
         unsubscribe: (message: SessionEventsUnsubscribeControl): void => {
             const current = subscriptions.get(message.subscriptionId);

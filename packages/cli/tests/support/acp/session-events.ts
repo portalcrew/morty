@@ -1,5 +1,10 @@
 import { setImmediate as yieldToRuntime } from "node:timers/promises";
-import type { SessionCapabilities, SessionConfigOption } from "@portalcrew/morty-client/protocol";
+import {
+    decodePromptSuggestions,
+    type SessionCapabilities,
+    type SessionConfigOption,
+    type SessionPromptSuggestions,
+} from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../../../src/engine/acp/acp-error.ts";
 import {
     type NativeSessionEvent,
@@ -39,6 +44,7 @@ interface SessionConnectionScope {
 }
 
 export interface AdapterSessionConnectionOptions extends SessionConnectionScope {
+    readonly onPromptSuggestions?: (suggestions: SessionPromptSuggestions["suggestions"]) => Promise<void>;
     readonly onBackgroundActivity?: (activity: BackgroundActivity) => void;
     readonly onPromptDelegation?: (stage: PromptDelegationStage) => Promise<void>;
     readonly interactions: NativeSessionInteractions;
@@ -90,6 +96,10 @@ export class AdapterSessionConnection {
                 throw new AcpExecutionError("ACP agent referenced an unknown session", {}, "invalid_agent_session");
             }
             const signal = AbortSignal.any([this.#lifetime.signal, AbortSignal.timeout(30_000)]);
+            if (notification.update.sessionUpdate === "prompt_suggestions_update") {
+                await options.onPromptSuggestions?.(decodePromptSuggestions(notification.update.suggestions));
+                return;
+            }
             const externalized =
                 options.externalizeUpdate === undefined
                     ? await externalizer.update(

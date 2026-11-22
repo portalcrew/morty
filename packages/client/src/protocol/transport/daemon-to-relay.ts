@@ -19,7 +19,12 @@ import {
     sessionConfigUpdatedEventCodec,
 } from "../session/configuration/index.ts";
 import { SESSION_RENAMED_KIND, sessionRenamedEventCodec } from "../session/configuration/title.ts";
-import { SESSION_EVENT_KIND, sessionEventEnvelopeCodec } from "../session/events/index.ts";
+import {
+    SESSION_EVENT_KIND,
+    SESSION_PROMPT_SUGGESTIONS_KIND,
+    sessionEventEnvelopeCodec,
+    sessionPromptSuggestionsCodec,
+} from "../session/events/index.ts";
 import {
     CONTENT_AVAILABLE_KIND,
     CONTENT_READY_KIND,
@@ -97,6 +102,7 @@ export const daemonToRelayDecoders = {
     "computer.diagnostics.result": computerDiagnosticsResultCodec.decodeRouting,
     [COMPUTER_PONG_KIND]: computerPongEventCodec.decodeRouting,
     [SESSION_EVENT_KIND]: sessionEventEnvelopeCodec.decodeRouting,
+    [SESSION_PROMPT_SUGGESTIONS_KIND]: sessionPromptSuggestionsCodec.decodeRouting,
     [SESSION_OPERATION_FAILED_KIND]: sessionOperationFailedEventCodec.decodeRouting,
     [SESSION_PROMPT_ACCEPTED_KIND]: sessionPromptAcceptedEventCodec.decodeRouting,
     [SESSION_PROMPT_STEERED_KIND]: sessionPromptSteeredEventCodec.decodeRouting,

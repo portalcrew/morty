@@ -145,6 +145,7 @@ import { normalizeDurablePermissionChangeSet } from "./permissions/normalization
 import { buildClaudePermissionOptions } from "./permissions/options.js";
 import { buildClaudePermissionPresentation } from "./permissions/presentation.js";
 import { decodeClaudePermissionResponse } from "./permissions/response.js";
+import { PromptSuggestions } from "./prompt-suggestions.js";
 import { DEFAULT_AGENT_ID, EFFORT_CONFIG_ID } from "./session-config-ids.js";
 import { SessionTitles, sanitizeTitle } from "./session-titles.js";
 import type { ClaudeSessionNotification, ClaudeSessionNotification as SessionNotification } from "./session-update.js";
@@ -612,6 +613,8 @@ export type Session = {
     creationParams?: NewSessionRequest;
     settingsManager: SettingsManager;
     titles: SessionTitles;
+    /** Present only for a client that advertised `session.promptSuggestions`. */
+    promptSuggestions?: PromptSuggestions;
     accumulatedUsage: AccumulatedUsage;
     /** The active turn's spend broken out per model — the breakdown behind
      *  `accumulatedUsage`, reported as `_meta.quota.model_usage` on the prompt
@@ -2040,6 +2043,7 @@ export class ClaudeAcpAgent {
         const isLocalOnlyCommand = firstText.startsWith("/") && LOCAL_ONLY_COMMANDS.has(firstText.split(" ", 1)[0]);
 
         session.titles.onPrompt(params.prompt);
+        await this.publishPromptSuggestions(params.sessionId, session.promptSuggestions?.clear());
         const turn: Turn = {
             promptUuid,
             inputQueuedAt: performance.now(),
@@ -2099,6 +2103,15 @@ export class ClaudeAcpAgent {
                 _meta: { goal },
             },
         });
+    }
+
+    private async publishPromptSuggestions(
+        sessionId: string,
+        update: SessionNotification["update"] | undefined,
+    ): Promise<void> {
+        if (update !== undefined) {
+            await this.client.sessionUpdate({ sessionId, update });
+        }
     }
 
     private async publishTaskPlan(sessionId: string, taskState: TaskState): Promise<void> {
@@ -3721,6 +3734,7 @@ export class ClaudeAcpAgent {
                         break;
                     case "result": {
                         disarmResultWatchdog();
+                        session.promptSuggestions?.resultArrived();
                         // An autonomous cycle can absorb a queued user prompt. Its
                         // result keeps the autonomous origin but identifies that
                         // prompt in user_message_uuid. Only unmatched autonomous
@@ -4704,11 +4718,20 @@ export class ClaudeAcpAgent {
                         // cached title no longer describes the session: drop it and
                         // re-evaluate at the next turn-end.
                         session.titles.reset();
+                        await this.publishPromptSuggestions(params.sessionId, session.promptSuggestions?.clear());
                         break;
                     }
+                    case "prompt_suggestion":
+                        await this.publishPromptSuggestions(
+                            params.sessionId,
+                            session.promptSuggestions?.suggested(
+                                message.suggestion,
+                                (session.turnQueue ?? []).some((turn) => !turn.settled),
+                            ),
+                        );
+                        break;
                     case "tool_use_summary":
                     case "auth_status":
-                    case "prompt_suggestion":
                         break;
                     default:
                         unreachable(message, this.logger);
@@ -6354,10 +6377,14 @@ export class ClaudeAcpAgent {
             `[session/query] sessionId=${sessionId} resume=${creationOpts?.resume ?? "none"} apiType=${resolvedProvider?.apiType ?? "native"} baseUrl=${resolvedProvider?.baseUrl ?? "native"}`,
         );
 
+        const takesPromptSuggestions = this.clientCapabilities?.session?.promptSuggestions != null;
         const options: Options = {
             systemPrompt,
             settingSources: ["user", "project", "local"],
             ...(thinking !== undefined && { thinking }),
+            // Each prediction costs a request, so only a client that shows it asks for one. The user's
+            // `promptSuggestionEnabled` setting still turns it off.
+            ...(takesPromptSuggestions && { promptSuggestions: true }),
             ...userProvidedOptions,
             ...(settings && { settings }),
             env,
@@ -6681,6 +6708,7 @@ export class ClaudeAcpAgent {
             creationParams: params,
             settingsManager,
             titles: new SessionTitles(this, sessionId),
+            ...(takesPromptSuggestions && { promptSuggestions: new PromptSuggestions() }),
             accumulatedUsage: {
                 inputTokens: 0,
                 outputTokens: 0,

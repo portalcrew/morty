@@ -46,8 +46,13 @@ import {
 import { sessionRenameCommandCodec, sessionRenamedEventCodec } from "./protocol/session/configuration/title.ts";
 import {
     decodeSessionEventEnvelope,
+    decodeSessionPromptSuggestions,
+    PROMPT_SUGGESTIONS_SUBSCRIPTION_HEADER,
+    SESSION_PROMPT_SUGGESTIONS_KIND,
+    type SessionPromptSuggestions,
     sessionEventEnvelopeCodec,
     sessionEventsSubscribeCommandCodec,
+    sessionPromptSuggestionsCodec,
 } from "./protocol/session/events/index.ts";
 import {
     contentAvailableEventCodec,
@@ -698,6 +703,7 @@ export class MortyRequestExecutor {
         endpoint: MortyOperationEndpoint,
         body: string,
         subscriptionId: string,
+        acceptsPromptSuggestions: boolean,
         signal: AbortSignal,
     ): Promise<LiveEventConnection> => {
         signal = AbortSignal.any([signal, this.#lifetime.signal]);
@@ -723,6 +729,7 @@ export class MortyRequestExecutor {
                     headers: {
                         ...this.authenticationHeaders(credential, "application/json"),
                         "content-type": "application/json",
+                        ...(acceptsPromptSuggestions ? { [PROMPT_SUGGESTIONS_SUBSCRIPTION_HEADER]: "accept" } : {}),
                     },
                     signal: controller.signal,
                 },
@@ -1330,6 +1337,8 @@ export class MortyInteractionResources {
 export interface MortySessionEventObserver {
     readonly receive: (events: SessionLiveEventBatch, signal: AbortSignal) => Promise<boolean>;
     readonly reconcile: (signal: AbortSignal) => Promise<void>;
+    /** Present when the viewer offers the prompts the Agent predicts; only then does the Relay send them. */
+    readonly promptSuggestions?: (suggestions: SessionPromptSuggestions["suggestions"]) => void;
 }
 
 export class MortyLiveEventSubscription {
@@ -1394,6 +1403,7 @@ export class MortyLiveEventSubscription {
                     this.#controller.signal,
                 ),
                 subscriptionId,
+                this.#observer.promptSuggestions !== undefined,
                 this.#controller.signal,
             );
             const reader = connection.events.getReader();
@@ -1434,6 +1444,18 @@ export class MortyLiveEventSubscription {
                                     ),
                                 );
                             }
+                            if (
+                                kind === SESSION_PROMPT_SUGGESTIONS_KIND &&
+                                this.#observer.promptSuggestions !== undefined
+                            ) {
+                                return JSON.stringify(
+                                    await sessionPromptSuggestionsCodec.decode(
+                                        result.value.data,
+                                        this.#executor.payloadEncryption,
+                                        signal,
+                                    ),
+                                );
+                            }
                             throw new MortyProtocolError(
                                 "The live Session event stream contains an unexpected message",
                             );
@@ -1448,6 +1470,14 @@ export class MortyLiveEventSubscription {
                             throw new MortyProtocolError("The live Session close notice is invalid");
                         }
                         throw new MortyError(SESSION_CLOSED_ERROR_CODE, notice.reason, { cause: notice });
+                    }
+                    if (kind === SESSION_PROMPT_SUGGESTIONS_KIND) {
+                        const suggestions = decodeSessionPromptSuggestions(plaintext);
+                        if (!sameNativeSession(suggestions.target, this.#target)) {
+                            throw new MortyProtocolError("The live Session prompt suggestions are invalid");
+                        }
+                        this.#observer.promptSuggestions?.(suggestions.suggestions);
+                        continue;
                     }
                     if (kind !== "session.event.v2") {
                         throw new MortyProtocolError("The live Session event stream contains an unexpected message");

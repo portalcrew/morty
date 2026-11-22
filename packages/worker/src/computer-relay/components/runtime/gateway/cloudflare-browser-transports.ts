@@ -32,6 +32,7 @@ const attachmentSchema = v.object({
     subscriptions: v.pipe(
         v.array(
             v.object({
+                acceptsPromptSuggestions: v.optional(v.boolean(), false),
                 subscriptionId: identifier,
                 sessionFilter: v.object({ harness: identifier, sessionId: identifier }),
                 expiresAt: v.pipe(v.number(), v.integer(), v.minValue(0)),

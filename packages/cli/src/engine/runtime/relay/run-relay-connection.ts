@@ -71,7 +71,10 @@ export async function runRelayConnection({
     let rotationSaved: Promise<void> = Promise.resolve();
     connection.opened();
     const connectionController = new AbortController();
-    const subscriptions = createSessionSubscriptions(publisher.subscriptionsChanged);
+    const subscriptions = createSessionSubscriptions((target) => {
+        publisher.subscriptionsChanged();
+        services.sessions.restatePromptSuggestions(target);
+    });
     const pendingCommands = new Set<Promise<void>>();
     let incoming: Promise<void> = Promise.resolve();
     let queuedMessages = 0;

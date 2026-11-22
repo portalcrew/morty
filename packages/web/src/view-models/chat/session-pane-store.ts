@@ -4,7 +4,7 @@ import {
     MortyError,
     type MortySessionEventObserver,
 } from "@portalcrew/morty-client";
-import type { SessionConfigurationSelection } from "@portalcrew/morty-client/protocol";
+import type { SessionConfigurationSelection, SessionPromptSuggestions } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import type { Clock } from "../../services/time/clock.ts";
@@ -46,6 +46,8 @@ export interface SessionPaneStore {
      * steer) so the message surface re-arms following the latest message.
      */
     readonly followRevision: number;
+    /** What the live subscription last reported; a new subscription holds none until the Computer restates it. */
+    readonly promptSuggestions: SessionPromptSuggestions["suggestions"];
     readonly setDraft: (draft: string) => void;
     readonly send: () => Promise<void>;
     readonly chooseAnswer: (messageId: string, questionIndex: number, answer: string) => void;
@@ -103,6 +105,7 @@ export function createSessionPaneModel(options: {
     const feed = createSessionExecutionFeed({ sessionTarget, execution, executionOwner: history.executionOwner });
     const observer = (connected: MortyClient): MortySessionEventObserver => ({
         reconcile: async (signal) => {
+            store.setState({ promptSuggestions: [] });
             await history.dispatch({ kind: "reconcile" }, connected, signal);
             signal.throwIfAborted();
             const { state } = settledDelivery(delivery.getState(), execution.getState().state);
@@ -121,6 +124,7 @@ export function createSessionPaneModel(options: {
             }
             return true;
         },
+        promptSuggestions: (promptSuggestions) => store.setState({ promptSuggestions }),
     });
     const paneConnection = createSessionPaneConnection({
         clock,
@@ -173,6 +177,7 @@ export function createSessionPaneModel(options: {
     };
     const store = createStore<SessionPaneStore>()(() => ({
         followRevision: 0,
+        promptSuggestions: [],
         setDraft: (draft) => {
             acted();
             composer.getState().setDraft(draft);

@@ -17,7 +17,7 @@ import {
     sessionEventsSubscribeCommandCodec,
 } from "@portalcrew/morty-client/protocol";
 import { SessionRuntimeError } from "../../../../contracts/relay/session.ts";
-import type { SessionViewer } from "../../../../contracts/session-event-subscription.ts";
+import type { SessionViewer, SessionViewerIdentity } from "../../../../contracts/session-event-subscription.ts";
 import { logger } from "../../../../infra/logger.ts";
 import type { ComputerConnectionIdentity } from "../entity/computer-connection.ts";
 import {
@@ -219,6 +219,9 @@ export class ComputerRelayActor {
         ),
         "session.close.notice": daemonHandler("session.close.notice", (message, encoded) =>
             this.deliverToViewers(message.target, encoded),
+        ),
+        "session.prompt-suggestions": daemonHandler("session.prompt-suggestions", (message, encoded) =>
+            this.deliverToViewers(message.target, encoded, (identity) => identity.acceptsPromptSuggestions),
         ),
         "agent.settings.discovered": daemonHandler("agent.settings.discovered", (message, encoded) =>
             this.returnAgentSettingsDiscoveryResult(message.requestId, message.harness, encoded),
@@ -620,14 +623,18 @@ export class ComputerRelayActor {
      * Hands an encrypted Session message, unread, to every viewer of its Session. A viewer whose access ended is closed
      * instead, whichever Session the message is for.
      */
-    private readonly deliverToViewers = (target: NativeSessionTarget, encoded: string): void => {
+    private readonly deliverToViewers = (
+        target: NativeSessionTarget,
+        encoded: string,
+        reads: (identity: SessionViewerIdentity) => boolean = () => true,
+    ): void => {
         for (const viewer of this.#peers.viewers()) {
             const access = sessionViewerAccess(viewer.identity, Date.now(), "granted");
             if (access.kind === "ended") {
                 viewer.close(access.code, access.reason);
                 continue;
             }
-            if (!sameNativeSession(viewer.identity.sessionFilter, target)) {
+            if (!sameNativeSession(viewer.identity.sessionFilter, target) || !reads(viewer.identity)) {
                 continue;
             }
             try {

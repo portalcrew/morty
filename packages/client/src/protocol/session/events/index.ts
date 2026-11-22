@@ -23,6 +23,12 @@ export const SESSION_EVENT_KIND = "session.event.v2";
 export const SESSION_SUBSCRIPTION_REPLACED = "session_subscription_replaced";
 export const SESSION_EVENTS_SUBSCRIBE_KIND = "session.events.subscribe";
 export const SESSION_EVENTS_UNSUBSCRIBE_KIND = "session.events.unsubscribe";
+export const SESSION_PROMPT_SUGGESTIONS_KIND = "session.prompt-suggestions";
+/**
+ * A viewer sends this header with its subscription to receive `session.prompt-suggestions`. The Relay reads it and
+ * delivers those messages only to such viewers, because a page that predates them fails on an unknown live message.
+ */
+export const PROMPT_SUGGESTIONS_SUBSCRIPTION_HEADER = "morty-prompt-suggestions";
 export const SESSION_EVENT_BATCH_MAX_SIZE = 1_000;
 
 const boundedString = z.string().max(MAX_CONTENT_LENGTH);
@@ -777,6 +783,40 @@ const sessionEventsSubscribeRoutingSchema = sessionEventsSubscribeSchema
     .extend({ encrypted: encryptedFieldSchema })
     .strict();
 export type SessionEventsSubscribeCommandRouting = z.infer<typeof sessionEventsSubscribeRoutingSchema>;
+
+/**
+ * The prompts the Agent predicts the user sends next, most likely first. Each message replaces the list the viewer
+ * holds, and an empty list withdraws it. A new subscription holds none until the Computer sends the current list.
+ */
+const promptSuggestionsSchema = z
+    .array(z.object({ prompt: z.array(contentBlockSchema).min(1).max(MAX_COLLECTION_SIZE).readonly() }).readonly())
+    .max(MAX_COLLECTION_SIZE)
+    .readonly();
+export const decodePromptSuggestions = (value: unknown): SessionPromptSuggestions["suggestions"] =>
+    decode(value, promptSuggestionsSchema);
+const sessionPromptSuggestionsSchema = z
+    .object({
+        kind: z.literal(SESSION_PROMPT_SUGGESTIONS_KIND),
+        suggestions: promptSuggestionsSchema,
+        target: nativeSessionTargetSchema,
+    })
+    .readonly();
+export type SessionPromptSuggestions = z.infer<typeof sessionPromptSuggestionsSchema>;
+export const decodeSessionPromptSuggestions = (value: unknown): SessionPromptSuggestions =>
+    decode(value, sessionPromptSuggestionsSchema);
+const sessionPromptSuggestionsPublicRoutingSchema = z.object({
+    kind: z.literal(SESSION_PROMPT_SUGGESTIONS_KIND),
+    target: nativeSessionTargetSchema,
+});
+const sessionPromptSuggestionsRoutingSchema = sessionPromptSuggestionsPublicRoutingSchema
+    .extend({ encrypted: encryptedFieldSchema })
+    .strict();
+export const sessionPromptSuggestionsCodec = encryptedMessageCodec({
+    kind: SESSION_PROMPT_SUGGESTIONS_KIND,
+    decode: decodeSessionPromptSuggestions,
+    decodeRouting: (encoded: string) => decodeRoutingZodMessage(encoded, sessionPromptSuggestionsRoutingSchema),
+    publicRoutingSchema: sessionPromptSuggestionsPublicRoutingSchema,
+});
 
 export const sessionEventsSubscribeCommandCodec = encryptedMessageCodec({
     kind: SESSION_EVENTS_SUBSCRIBE_KIND,

@@ -83,6 +83,7 @@ export function createLocalSessionOperations(cx: RuntimeContext) {
         subscribeSessionEvents: async (
             sessionTarget: NativeSessionTarget,
             subscription: SessionEventsSubscribeCommandRouting,
+            acceptsPromptSuggestions: boolean,
             credential: {
                 readonly grant: SessionAccessGrant;
                 readonly expiresAt: number;
@@ -105,6 +106,7 @@ export function createLocalSessionOperations(cx: RuntimeContext) {
                 throw new PairingDirectoryError("invalid_request", "The subscription identifier is already in use");
             }
             const identity: SessionViewerIdentity = {
+                acceptsPromptSuggestions,
                 sessionFilter: sessionTarget,
                 subscriptionId: subscription.subscriptionId,
                 expiresAt: credential.expiresAt,

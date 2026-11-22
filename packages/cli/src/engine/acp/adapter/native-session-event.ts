@@ -11,6 +11,7 @@ import {
     decodeAcpSessionUpdate,
     type SessionCommand,
     type SessionConfigOption,
+    type SessionPromptSuggestions,
 } from "@portalcrew/morty-client/protocol";
 import { truncate } from "../../util/value-utils.ts";
 import type { BackgroundActivity, PromptDelegationStage } from "../agent/agent-lifecycle.ts";
@@ -36,6 +37,11 @@ export interface NativeSessionSubscriber {
     readonly onSessionEvent: (sessionId: string, event: NativeSessionEvent) => Promise<void>;
     readonly onBackgroundActivity?: (activity: BackgroundActivity) => void;
     readonly onPromptDelegation?: (stage: PromptDelegationStage) => Promise<void>;
+    /** ACP keeps prompt suggestions out of a Session's history, so they reach the Session apart from its events. */
+    readonly onPromptSuggestions?: (
+        sessionId: string,
+        suggestions: SessionPromptSuggestions["suggestions"],
+    ) => Promise<void>;
     readonly interactions: NativeSessionInteractions;
 }
 

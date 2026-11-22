@@ -68,6 +68,7 @@ export function buildSessionLayer(options: SessionLayerOptions) {
                 operations.record(event);
                 eventProjection.record(event);
             },
+            onPromptSuggestions: sink.publishPromptSuggestions,
         },
         store: sessionStore,
         processes: options.processes,

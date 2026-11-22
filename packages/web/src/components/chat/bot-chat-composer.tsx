@@ -114,6 +114,7 @@ export function BotChatComposer({
     onStop,
     onSubmit,
     outputState,
+    promptSuggestion = null,
     sendBlockedMessage,
     submitDisabled,
     stopDisabled = false,
@@ -150,6 +151,8 @@ export function BotChatComposer({
     readonly onStop: () => void;
     readonly onSubmit: () => void;
     readonly outputState: "idle" | "sending" | "running" | "stopping";
+    /** The prompt the Agent predicts the user sends next. Using it only fills the draft. */
+    readonly promptSuggestion?: string | null;
     /** Why a draft cannot be sent while this Session reconnects. */
     readonly sendBlockedMessage?: string | undefined;
     readonly submitDisabled: boolean;
@@ -202,6 +205,13 @@ export function BotChatComposer({
         commandMenu?.onSelect(command);
         textarea.current?.focus({ preventScroll: true });
     };
+    const offeredSuggestion =
+        !disabled && outputState === "idle" && draft.length === 0 && attachments.length === 0 ? promptSuggestion : null;
+    const acceptSuggestion = (suggestion: string): void => {
+        onDraftChange(suggestion);
+        setActive(true);
+        textarea.current?.focus({ preventScroll: true });
+    };
     const animateComposer = !mobile || transitionsEnabled;
     const explainBlockedSend =
         outputState === "idle" &&
@@ -251,6 +261,19 @@ export function BotChatComposer({
                 setDismissedCommandDraft(draft);
                 return;
             }
+        }
+        if (
+            offeredSuggestion !== null &&
+            (event.key === "Tab" || event.key === "ArrowRight") &&
+            !event.shiftKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey &&
+            !event.nativeEvent.isComposing
+        ) {
+            event.preventDefault();
+            acceptSuggestion(offeredSuggestion);
+            return;
         }
         if (event.key === "Enter" && event.ctrlKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
@@ -357,7 +380,7 @@ export function BotChatComposer({
                         onClick={activate}
                         type="button"
                     >
-                        Ask me anything
+                        <span className="block truncate">{offeredSuggestion ?? "Ask me anything"}</span>
                     </button>
                     <button
                         aria-label="Add attachment"
@@ -444,7 +467,7 @@ export function BotChatComposer({
                                 onFocus={() => setActive(true)}
                                 onKeyDown={handleKeyDown}
                                 onPaste={handlePaste}
-                                placeholder="Ask me anything"
+                                placeholder={offeredSuggestion ?? "Ask me anything"}
                                 ref={attachTextarea}
                                 tabIndex={collapsed ? -1 : undefined}
                                 value={draft}
@@ -480,6 +503,19 @@ export function BotChatComposer({
                             </ScrollArea>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
+                            {offeredSuggestion !== null && (
+                                <button
+                                    aria-label="Use suggested prompt"
+                                    className="flex h-8 items-center gap-1.5 rounded-full px-3 text-13 text-copy-secondary outline-none transition-colors duration-150 hover:bg-black/[0.045] hover:text-foreground active:bg-black/[0.07] active:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
+                                    onClick={() => acceptSuggestion(offeredSuggestion)}
+                                    type="button"
+                                >
+                                    Use
+                                    <kbd className="rounded border border-border px-1 font-sans text-12 max-sm:hidden">
+                                        Tab
+                                    </kbd>
+                                </button>
+                            )}
                             <Button
                                 aria-busy={outputState === "sending"}
                                 aria-disabled={explainBlockedSend || undefined}

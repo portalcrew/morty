@@ -57,6 +57,8 @@ export class AcpExecutionConnections {
                     ? {}
                     : { externalizeUpdate: params.scope.externalizeUpdate }),
                 onEvent: (event) => params.onSessionEvent(connection.events.sessionId(), event),
+                onPromptSuggestions: async (suggestions) =>
+                    await params.onPromptSuggestions?.(connection.events.sessionId(), suggestions),
                 ...(params.onBackgroundActivity === undefined
                     ? {}
                     : { onBackgroundActivity: params.onBackgroundActivity }),
