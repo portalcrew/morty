@@ -29,7 +29,7 @@ export function DraftChatControls({
 }) {
     const viewModel = useStore(workspace.draftControls);
     const computerConfiguration = useStore(workspace.computer, (state) => state.computerConfiguration);
-    const signal = workspace.chatSignal();
+    const signal = workspace.operationsSignal();
     const { settings } = viewModel;
     const retry = () => {
         workspace.retryDraftControls();
