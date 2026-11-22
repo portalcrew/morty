@@ -5,6 +5,7 @@ import type {
 } from "@portalcrew/morty-client/protocol";
 
 export interface SessionViewerIdentity {
+    readonly acceptsPromptSuggestions: boolean;
     readonly expiresAt: number;
     readonly grant: SessionAccessGrant;
     readonly sessionFilter: NativeSessionTarget;
@@ -26,6 +27,7 @@ interface SessionEventSubscriptionRequest {
     readonly sessionId: string;
     readonly credential: string;
     readonly command: SessionEventsSubscribeCommandRouting;
+    readonly acceptsPromptSuggestions: boolean;
     readonly signal: AbortSignal;
 }
 

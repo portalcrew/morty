@@ -382,8 +382,8 @@ export class AcpContentExternalizer {
             case "plan_update":
             case "plan_removed":
             case "prompt_suggestions_update":
-                // Morty advertises neither the plan nor the prompt suggestions capability, so these never reach a
-                // Session's events.
+                // Morty does not advertise the plan capability, and prompt suggestions reach the Session apart from
+                // its events, so none of these become a Session's events.
                 return { agent: update, events: [] };
         }
     };

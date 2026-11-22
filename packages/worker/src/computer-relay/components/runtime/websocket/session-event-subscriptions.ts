@@ -29,6 +29,7 @@ export function createSessionEventSubscriptions(ctx: {
         const identity = await services.operations.subscribeSessionEvents(
             target,
             request.command,
+            request.acceptsPromptSuggestions,
             { grant: access.grant, expiresAt: access.expiresAtEpochMilliseconds },
             observer,
             deadline.signal,

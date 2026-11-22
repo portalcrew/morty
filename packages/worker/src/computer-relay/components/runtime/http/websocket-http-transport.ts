@@ -6,6 +6,7 @@ import {
     decodeContentChunkFrame,
     FILE_STREAM_CONTENT_TYPE,
     MORTY_API_PREFIX,
+    PROMPT_SUGGESTIONS_SUBSCRIPTION_HEADER,
     SESSION_SUBSCRIPTION_REPLACED,
     type SessionEventsSubscribeCommandRouting,
     sessionEventsSubscribeCommandCodec,
@@ -692,7 +693,14 @@ export function openBrowserTransport(
                 let identity: SessionViewerIdentity;
                 try {
                     identity = await subscribe(
-                        { ...address, credential, command: subscription, signal: subscriptionController.signal },
+                        {
+                            ...address,
+                            credential,
+                            command: subscription,
+                            acceptsPromptSuggestions:
+                                frameHeaders.get(PROMPT_SUGGESTIONS_SUBSCRIPTION_HEADER) === "accept",
+                            signal: subscriptionController.signal,
+                        },
                         observer,
                     );
                     subscriptionController.signal.throwIfAborted();

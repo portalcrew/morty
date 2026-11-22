@@ -1,4 +1,5 @@
 import type { SessionNotification } from "@agentclientprotocol/sdk/unstable";
+import { decodePromptSuggestions } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError } from "../acp-error.ts";
 import { waitForAgentOperation } from "../connection/agent-operation.ts";
 import { AgentUpdateStream } from "../connection/agent-update-stream.ts";
@@ -16,6 +17,7 @@ import {
 export interface HarnessCallbackParams {
     readonly externalizeUpdate?: ExternalizeSessionUpdate;
     readonly onSessionEvent: (sessionId: string, event: NativeSessionEvent) => Promise<void>;
+    readonly onPromptSuggestions?: NativeSessionSubscriber["onPromptSuggestions"];
     readonly interactions: Pick<NativeSessionInteractions, "onPermission" | "onElicitation"> & {
         readonly onElicitationComplete?: NativeSessionInteractions["onElicitationComplete"];
     };
@@ -67,6 +69,13 @@ export class HarnessClientEvents {
             const sessionId = sessionIdSchema.parse(notification.sessionId);
             const signal = AbortSignal.any([lifetime.signal, AbortSignal.timeout(30_000)]);
             signal.throwIfAborted();
+            if (notification.update.sessionUpdate === "prompt_suggestions_update") {
+                const suggestions = decodePromptSuggestions(notification.update.suggestions);
+                if (params.onPromptSuggestions !== undefined) {
+                    await waitForAgentOperation(params.onPromptSuggestions(sessionId, suggestions), signal);
+                }
+                return;
+            }
             const externalized =
                 params.externalizeUpdate === undefined
                     ? await externalizer.update({ harness, sessionId }, notification.update, signal)

@@ -3,12 +3,14 @@ import { sameNativeSession } from "@portalcrew/morty-client/native-session";
 import {
     isIdentifier,
     type NativeSessionTarget,
+    SESSION_PROMPT_SUGGESTIONS_KIND,
     type SessionCapabilities,
     type SessionCommand,
     type SessionConfigOption,
     type SessionConfigurationSelection,
     type SessionEventPayload,
     type SessionPendingInteractions,
+    type SessionPromptSuggestions,
 } from "@portalcrew/morty-client/protocol";
 import { AcpExecutionError, AcpPromptExecutionError } from "../../acp/acp-error.ts";
 import { RetryableAcpInitializationError, validateAgentRuntime } from "../../acp/adapter/agent-initialization.ts";
@@ -124,6 +126,7 @@ export class AgentSession {
     #agentVersion = "";
     #capabilities: SessionCapabilities = unsupportedSessionCapabilities();
     #commands: readonly SessionCommand[] = [];
+    #promptSuggestions: SessionPromptSuggestions["suggestions"] = [];
     readonly #configurationChanges = new SerialTaskQueue();
     #configOptions: readonly SessionConfigOption[] = [];
     readonly #sessionConfigurations = new SessionConfigurations();
@@ -175,6 +178,15 @@ export class AgentSession {
             onSessionEvent: async (sessionId, event) => {
                 this.#adoptNativeSession(sessionId);
                 await this.#processEvent(event);
+            },
+            onPromptSuggestions: async (sessionId, suggestions) => {
+                this.#adoptNativeSession(sessionId);
+                this.#promptSuggestions = suggestions;
+                this.#observer.onPromptSuggestions?.({
+                    kind: SESSION_PROMPT_SUGGESTIONS_KIND,
+                    suggestions,
+                    target: this.target,
+                });
             },
             onBackgroundActivity: (activity) => {
                 const previous = this.#backgroundActivity;
@@ -1106,6 +1118,8 @@ export class AgentSession {
         }
         this.#backgroundActivity = "none";
     };
+
+    readonly promptSuggestions = (): SessionPromptSuggestions["suggestions"] => this.#promptSuggestions;
 
     readonly agentSettingsModelEffort = () => this.#modelEffort;
     readonly #sessionParams = (signal: AbortSignal): AdapterSessionCreateParams => ({

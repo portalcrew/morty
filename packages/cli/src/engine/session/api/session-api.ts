@@ -12,6 +12,7 @@ import type {
     SessionElicitationRespondCommand,
     SessionLiveEvent,
     SessionPermissionRespondCommand,
+    SessionPromptSuggestions,
 } from "@portalcrew/morty-client/protocol";
 import type { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
 import type { AgentModelEffort } from "../../acp/agent/model-effort.ts";
@@ -94,6 +95,7 @@ export type PromptResult = AgentPromptResponse;
 export interface SessionObserver {
     readonly onBackgroundActivity?: () => void;
     readonly onSessionEvent?: (event: SessionLiveEvent) => void;
+    readonly onPromptSuggestions?: (message: SessionPromptSuggestions) => void;
 }
 
 export interface SessionConfigurationSnapshot {
@@ -166,4 +168,5 @@ export type ReportFailure = (event: string, requestId: string, details: Readonly
 export interface SessionEventSink {
     readonly publish: (event: SessionLiveEvent) => void;
     readonly publishClosed: (event: SessionCloseNoticeEvent) => void;
+    readonly publishPromptSuggestions: (message: SessionPromptSuggestions) => void;
 }

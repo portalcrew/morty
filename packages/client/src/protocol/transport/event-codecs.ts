@@ -14,7 +14,12 @@ import {
     sessionConfigUpdatedEventCodec,
 } from "../session/configuration/index.ts";
 import { SESSION_RENAMED_KIND, sessionRenamedEventCodec } from "../session/configuration/title.ts";
-import { SESSION_EVENT_KIND, sessionEventEnvelopeCodec } from "../session/events/index.ts";
+import {
+    SESSION_EVENT_KIND,
+    SESSION_PROMPT_SUGGESTIONS_KIND,
+    sessionEventEnvelopeCodec,
+    sessionPromptSuggestionsCodec,
+} from "../session/events/index.ts";
 import {
     CONTENT_AVAILABLE_KIND,
     CONTENT_READY_KIND,
@@ -117,6 +122,10 @@ export const daemonEventSignatures = {
     }),
     [COMPUTER_PONG_KIND]: defineMessageSignature({ kind: COMPUTER_PONG_KIND, codec: computerPongEventCodec }),
     [SESSION_EVENT_KIND]: defineMessageSignature({ kind: SESSION_EVENT_KIND, codec: sessionEventEnvelopeCodec }),
+    [SESSION_PROMPT_SUGGESTIONS_KIND]: defineMessageSignature({
+        kind: SESSION_PROMPT_SUGGESTIONS_KIND,
+        codec: sessionPromptSuggestionsCodec,
+    }),
     [SESSION_OPERATION_FAILED_KIND]: defineMessageSignature({
         kind: SESSION_OPERATION_FAILED_KIND,
         codec: sessionOperationFailedEventCodec,

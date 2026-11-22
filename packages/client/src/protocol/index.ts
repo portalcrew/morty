@@ -122,6 +122,7 @@ export type {
     SessionEventsUnsubscribeControl,
     SessionLiveEvent,
     SessionLiveEventBatch,
+    SessionPromptSuggestions,
     UnsupportedSessionEntry,
 } from "./session/events/index.ts";
 export {
@@ -130,20 +131,24 @@ export {
     decodeKnownSessionEventPayload,
     decodeKnownSessionLiveEventBatch,
     decodeNativeSessionEvents,
+    decodePromptSuggestions,
     decodeSessionEvent,
     decodeSessionEventEnvelope,
     decodeSessionLiveEvent,
     encodeSessionEventEnvelope,
     encodeSessionEventsUnsubscribe,
     isPromptTerminal,
+    PROMPT_SUGGESTIONS_SUBSCRIPTION_HEADER,
     promptStopReason,
     SESSION_EVENT_BATCH_MAX_SIZE,
     SESSION_EVENT_KIND,
     SESSION_EVENTS_SUBSCRIBE_KIND,
     SESSION_EVENTS_UNSUBSCRIBE_KIND,
+    SESSION_PROMPT_SUGGESTIONS_KIND,
     SESSION_SUBSCRIPTION_REPLACED,
     sessionEventEnvelopeCodec,
     sessionEventsSubscribeCommandCodec,
+    sessionPromptSuggestionsCodec,
 } from "./session/events/index.ts";
 export type {
     ContentChunkFrame,

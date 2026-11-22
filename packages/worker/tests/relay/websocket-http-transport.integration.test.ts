@@ -374,6 +374,7 @@ class SubscriptionDaemonBoundary {
         this.requestSignal = request.signal;
         request.signal.addEventListener("abort", () => this.closed.resolve(), { once: true });
         return {
+            acceptsPromptSuggestions: request.acceptsPromptSuggestions,
             subscriptionId: request.command.subscriptionId,
             sessionFilter: { harness: request.harness, sessionId: request.sessionId },
             expiresAt: Date.now() + 60_000,

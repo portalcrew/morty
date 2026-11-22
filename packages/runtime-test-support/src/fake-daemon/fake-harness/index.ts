@@ -300,6 +300,17 @@ class ControlledAgentState {
             await active.send(notification);
             return;
         }
+        if (output.kind === "prompt-suggestion") {
+            // Suggestions are not history, so a replay of the session never repeats them.
+            await active.send({
+                sessionId: active.sessionId,
+                update: {
+                    sessionUpdate: "prompt_suggestions_update",
+                    suggestions: [{ prompt: [{ text: output.text, type: "text" }] }],
+                },
+            });
+            return;
+        }
         if (output.kind === "session-title" || output.kind === "session-updated-at") {
             const notification: acp.SessionNotification = {
                 sessionId: active.sessionId,

@@ -3,6 +3,7 @@ import {
     isIdentifier,
     type NativeSessionTarget,
     SESSION_CLOSE_NOTICE_KIND,
+    SESSION_PROMPT_SUGGESTIONS_KIND,
     type SessionCapabilities,
     type SessionCloseNoticeEvent,
     type SessionEventPayload,
@@ -827,6 +828,14 @@ export class SessionManager {
      * Session not yet prompted is listed too, so a conversation whose first prompt has not arrived is not lost.
      */
     readonly listSessions = (limit: number) => this.#store.list().slice(0, limit);
+
+    /** A viewer that subscribes holds no suggestions until it is told the ones the live Session offers. */
+    readonly restatePromptSuggestions = (target: NativeSessionTarget): void => {
+        const suggestions = this.#executionProcesses.get(target)?.promptSuggestions() ?? [];
+        if (suggestions.length > 0) {
+            this.#observer.onPromptSuggestions?.({ kind: SESSION_PROMPT_SUGGESTIONS_KIND, suggestions, target });
+        }
+    };
 
     readonly pendingInteractions = (target: NativeSessionTarget): SessionPendingInteractions => {
         const session = this.heldSession(target);

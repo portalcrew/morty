@@ -12,6 +12,7 @@ export type HarnessOutput =
     | { readonly kind: "text"; readonly text: string }
     | { readonly kind: "file"; readonly name: string }
     | { readonly kind: "session-title"; readonly title: string }
+    | { readonly kind: "prompt-suggestion"; readonly text: string }
     | { readonly kind: "session-updated-at"; readonly updatedAt: string }
     | {
           readonly kind: "compaction";

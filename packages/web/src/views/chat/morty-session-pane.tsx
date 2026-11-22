@@ -51,6 +51,7 @@ import { canAddAttachments } from "../../view-models/chat/composer-attachment-st
 import { commandDraft, commandSuggestions } from "../../view-models/chat/composer-commands.ts";
 import { sessionExecutionContext } from "../../view-models/chat/execution-context.ts";
 import { sessionHarnessSelection } from "../../view-models/chat/native-session-agents.ts";
+import { draftPromptSuggestion } from "../../view-models/chat/prompt-suggestion.ts";
 import { sessionConnectionView } from "../../view-models/chat/session-connection-machine.ts";
 import { sessionInteractionPresentation } from "../../view-models/chat/session-interaction-store.ts";
 import {
@@ -937,6 +938,7 @@ function MortySessionPaneBody({
                             onStop={() => run(pane.store.getState().stop)}
                             onSubmit={() => runAndFollow(pane.store.getState().send)}
                             outputState={presentation.outputState}
+                            promptSuggestion={draftPromptSuggestion(model.promptSuggestions)}
                             sendBlockedMessage={executionContext.sendBlocked ?? undefined}
                             stopDisabled={presentation.stopDisabled}
                             submitDisabled={presentation.submitDisabled}

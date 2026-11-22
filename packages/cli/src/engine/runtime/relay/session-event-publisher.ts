@@ -9,8 +9,10 @@ import {
     SESSION_EVENT_KIND,
     type SessionCloseNoticeEvent,
     type SessionLiveEvent,
+    type SessionPromptSuggestions,
     sessionCloseNoticeEventCodec,
     sessionEventEnvelopeCodec,
+    sessionPromptSuggestionsCodec,
 } from "@portalcrew/morty-client/protocol";
 import { WebSocket } from "undici";
 import type { SessionEventSink } from "../../session/api/session-api.ts";
@@ -105,16 +107,34 @@ export class RuntimeSessionEventPublisher implements SessionEventSink {
 
     readonly publishClosed = (event: SessionCloseNoticeEvent): void => {
         this.#awaitingFirstAnswer.delete(event.target);
+        this.#publishNotice(
+            event,
+            async (signal) => await sessionCloseNoticeEventCodec.encode(event, this.#payloadEncryption, signal),
+        );
+    };
+
+    readonly publishPromptSuggestions = (message: SessionPromptSuggestions): void => {
+        this.#publishNotice(
+            message,
+            async (signal) => await sessionPromptSuggestionsCodec.encode(message, this.#payloadEncryption, signal),
+        );
+    };
+
+    /** A notice states the Session's current condition, so one that no viewer can receive is not kept to replay. */
+    readonly #publishNotice = (
+        notice: SessionCloseNoticeEvent | SessionPromptSuggestions,
+        encode: (signal: AbortSignal) => Promise<string>,
+    ): void => {
         const connection = this.#connection;
         if (
             connection.kind !== "connected" ||
             connection.socket.readyState !== WebSocket.OPEN ||
-            !connection.isSubscribed(event.target)
+            !connection.isSubscribed(notice.target)
         ) {
             return;
         }
         const socket = connection.socket;
-        const bytes = Buffer.byteLength(JSON.stringify(event), "utf8");
+        const bytes = Buffer.byteLength(JSON.stringify(notice), "utf8");
         if (this.#noticeBytes + bytes > MAX_PENDING_BYTES) {
             socket.close(LOCAL_BACKPRESSURE_CLOSE_CODE, "Live event transport overloaded");
             return;
@@ -123,15 +143,16 @@ export class RuntimeSessionEventPublisher implements SessionEventSink {
         this.#notices = this.#notices
             .then(async () => {
                 const signal = AbortSignal.any([connection.controller.signal, AbortSignal.timeout(10_000)]);
-                const encoded = await sessionCloseNoticeEventCodec.encode(event, this.#payloadEncryption, signal);
+                const encoded = await encode(signal);
                 signal.throwIfAborted();
-                if (!connection.isSubscribed(event.target)) {
+                if (!connection.isSubscribed(notice.target)) {
                     return;
                 }
                 if (Buffer.byteLength(encoded, "utf8") > ENCRYPTED_MESSAGE_MAX_WIRE_BYTES) {
-                    console.warn("Session close notice exceeds the Relay frame limit", {
+                    console.warn("Session notice exceeds the Relay frame limit", {
                         code: "live_notice_too_large",
-                        target: event.target,
+                        kind: notice.kind,
+                        target: notice.target,
                     });
                     return;
                 }
@@ -145,7 +166,7 @@ export class RuntimeSessionEventPublisher implements SessionEventSink {
             })
             .catch((error: unknown) => {
                 if (!connection.controller.signal.aborted) {
-                    console.warn("Session close notice could not be sent", error);
+                    console.warn("Session notice could not be sent", { kind: notice.kind, error });
                     socket.close(LOCAL_BACKPRESSURE_CLOSE_CODE, "Live event handoff failed");
                 }
             })
