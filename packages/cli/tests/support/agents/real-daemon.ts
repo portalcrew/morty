@@ -206,12 +206,14 @@ async function withDaemonConnection(
         });
     };
     let socket: WebSocket | undefined;
+    // An embedded Runtime keeps its state beside the workspace, as an installation's "computer" directory does.
+    const embeddedStateDirectory = join(directory, "computer");
     const stateDirectory =
         launch === "managed"
             ? (await openMortyInstallation(signal, cliEnvironment)).stateDirectory
-            : join(directory, "computer");
+            : embeddedStateDirectory;
     if (launch === "embedded") {
-        await mkdir(stateDirectory, { mode: 0o700 });
+        await mkdir(embeddedStateDirectory, { mode: 0o700 });
     }
     const encryption = await createEncryptedDaemonFrames(stateDirectory, "real-agent", signal);
     const contentFrames = encryptedContentFrames(encryption.encryption, signal);
@@ -298,7 +300,7 @@ async function withDaemonConnection(
             launch === "embedded"
                 ? await (async () => {
                       const inventory = await discoverLocalAgentInventory({
-                          dataDirectory: stateDirectory,
+                          dataDirectory: embeddedStateDirectory,
                           defaultWorkspace: workspace,
                           environment: cliEnvironment,
                           signal,
@@ -318,7 +320,7 @@ async function withDaemonConnection(
                               relayUrl,
                           },
                           new RuntimeAgentDependencies([agent], adapters),
-                          new RuntimeLocalContext(stateDirectory, { ...process.env, ...environment }),
+                          new RuntimeLocalContext(embeddedStateDirectory, { ...process.env, ...environment }),
                           async (agent) => agent,
                       );
                   })()
@@ -423,7 +425,7 @@ async function withDaemonConnection(
                 }
             },
             cli: async (args) => await cli(args),
-            readDiagnostics: async () => await readFile(join(stateDirectory, "logs", "daemon.log"), "utf8"),
+            readDiagnostics: async () => await readFile(join(embeddedStateDirectory, "logs", "daemon.log"), "utf8"),
             signal,
             workspace,
             stateDirectory,
