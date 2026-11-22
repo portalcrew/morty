@@ -352,10 +352,9 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
         if (this.#routes.browser.follows().length > 0) {
             using deadline = new RequestDeadline(new AbortController().signal, 30_000);
             await this.#connections?.context.services.runtime.expireSilentDaemons();
-            await this.#routes.browser.endFollows(
+            await this.#routes.browser.recheckFollows(
                 async (computerId, follow) =>
-                    (follow.accessExpiresAt !== null && follow.accessExpiresAt <= Date.now()) ||
-                    !(await this.#accessFor(computerId).holdsAccess(follow.holder, deadline.signal)),
+                    await this.#accessFor(computerId).accessStanding(follow.holder, deadline.signal),
             );
         }
         try {

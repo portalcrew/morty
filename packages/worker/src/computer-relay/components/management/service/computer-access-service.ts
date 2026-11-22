@@ -2,6 +2,7 @@ import type { SessionAccessGrant, SessionAccessHolder } from "@portalcrew/morty-
 import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
 import { ComputerAuthenticationError } from "../../../../contracts/relay/computer-authentication.ts";
 import { validateIdentifier } from "../../../../contracts/relay/pairing.ts";
+import type { AccessStanding } from "../../../../contracts/relay-changes.ts";
 import type { ComputerRelayStore } from "../storage/computer-relay-store.ts";
 import type { IdentityStorage } from "../storage/identity-storage.ts";
 
@@ -12,12 +13,12 @@ import type { IdentityStorage } from "../storage/identity-storage.ts";
 export class ComputerAccessService {
     readonly #computerId: string;
     readonly #store: Pick<ComputerRelayStore, "readActiveGeneration">;
-    readonly #identities: Pick<IdentityStorage, "holdsAccess">;
+    readonly #identities: Pick<IdentityStorage, "holdsAccess" | "accessStanding">;
 
     constructor(
         computerId: string,
         store: Pick<ComputerRelayStore, "readActiveGeneration">,
-        identities: Pick<IdentityStorage, "holdsAccess">,
+        identities: Pick<IdentityStorage, "holdsAccess" | "accessStanding">,
     ) {
         this.#computerId = computerId;
         this.#store = store;
@@ -81,4 +82,7 @@ export class ComputerAccessService {
     /** Whether `holder` still holds access to this computer, whatever its pairing. */
     readonly holdsAccess = async (holder: SessionAccessHolder, signal: AbortSignal): Promise<boolean> =>
         await this.#identities.holdsAccess(holder, Date.now(), signal);
+
+    readonly accessStanding = async (holder: SessionAccessHolder, signal: AbortSignal): Promise<AccessStanding> =>
+        await this.#identities.accessStanding(holder, Date.now(), signal);
 }
