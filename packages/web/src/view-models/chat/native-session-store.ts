@@ -64,6 +64,24 @@ export interface NativeSessionStore {
     readonly dispose: () => void;
 }
 
+/**
+ * The previewed Session an action can start on now, or null. Opening continues the native Session through the Agent,
+ * so it needs an Agent that loads or resumes its Sessions.
+ */
+function startableNativeSession(
+    model: Pick<NativeSessionStore, "directory" | "preview" | "operation">,
+    action: "import" | "fork",
+) {
+    const { directory, preview, operation } = model;
+    if (directory.kind !== "ready" || preview.kind !== "ready" || operation !== "idle") {
+        return null;
+    }
+    if (action === "import" && !directory.capabilities.loadSession && !directory.capabilities.resumeSession) {
+        return null;
+    }
+    return { directory, preview };
+}
+
 /** Linked native entries use the same current Session titles as the sidebar, without caching a presentation. */
 export function nativeSessionPresentation(model: NativeSessionStore, sessions: readonly ManagedChatSession[]) {
     const present = (entry: NativeSessionEntry) => {
@@ -84,6 +102,8 @@ export function nativeSessionPresentation(model: NativeSessionStore, sessions: r
                 : model.directory,
         preview:
             model.preview.kind === "empty" ? model.preview : { ...model.preview, entry: present(model.preview.entry) },
+        canImport: startableNativeSession(model, "import") !== null,
+        canFork: startableNativeSession(model, "fork") !== null,
     };
 }
 
@@ -289,10 +309,11 @@ export const createNativeSessionStore = (
             }
         },
         open: async (action, signal) => {
-            const { directory, preview, operation } = get();
-            if (directory.kind !== "ready" || preview.kind !== "ready" || operation !== "idle") {
+            const startable = startableNativeSession(get(), action);
+            if (startable === null) {
                 return;
             }
+            const { directory, preview } = startable;
             set({ operation: action, error: "" });
             try {
                 const input = {
