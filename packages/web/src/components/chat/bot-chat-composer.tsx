@@ -302,6 +302,7 @@ export function BotChatComposer({
                     active={activeCommand}
                     commands={suggestedCommands}
                     listId={commandListId}
+                    onActivate={(command) => setActiveCommandName(command.name)}
                     onSelect={selectCommand}
                 />
             )}
@@ -514,6 +515,11 @@ export function BotChatComposer({
                     </div>
                 </div>
             </div>
+            <span aria-live="polite" className="sr-only">
+                {suggestedCommands.length === 0
+                    ? ""
+                    : `${suggestedCommands.length.toString()} ${suggestedCommands.length === 1 ? "command" : "commands"} available`}
+            </span>
             <span className="sr-only" id="chat-composer-keyboard-hint">
                 Enter to send. Shift or Control plus Enter inserts a new line.
             </span>
