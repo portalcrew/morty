@@ -452,6 +452,7 @@ export function createChatWorkspace(options: {
             });
             rememberedSessionTarget = sessionTarget;
         }
+        draftControls.getState().conversationOpened(sessionTarget.harness);
         const sessionPage = sessionState(sessionTarget);
         const handoff = home.getState().takeNextDraft(sessionTarget);
         if (handoff !== null) {

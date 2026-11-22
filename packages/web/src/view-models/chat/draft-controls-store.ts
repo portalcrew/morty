@@ -132,6 +132,7 @@ export interface DraftControlsStore {
     readonly forgetRecentCwd: (directory: string) => void;
     readonly enter: (signal: AbortSignal) => Promise<void>;
     readonly leave: () => void;
+    readonly conversationOpened: (harness: string) => void;
     readonly retry: (signal: AbortSignal) => Promise<void>;
     readonly computerChanged: (configuration: BotComputerConfiguration, signal: AbortSignal) => Promise<void>;
     readonly openCwd: () => void;
@@ -542,6 +543,12 @@ export const createDraftControlsStore = (
                 cwdOperation?.abort();
                 cwdOperation = null;
                 set({ settings: { kind: "loading" }, cwdBrowser: { kind: "closed" } });
+            },
+            // Working in a conversation makes its harness the reference for the next draft. Its settings carry into
+            // New Session only where the user changes them: the others are the Agent's and its directory's, which the
+            // draft reads for itself.
+            conversationOpened: (harness) => {
+                centralLocalStorage.write(lastHarnessEntry(computerId), harness);
             },
             retry: async (signal) => {
                 await load(signal);
