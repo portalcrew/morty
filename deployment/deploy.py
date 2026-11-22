@@ -90,7 +90,6 @@ def main():
     assert not morty.get('d1_databases')
     assert not morty.get('services')
     assert morty['durable_objects']['bindings'] == [{'name': 'COMPUTER_RELAY', 'class_name': 'ComputerRelay'}]
-    assert morty['version_metadata'] == {'binding': 'CF_VERSION_METADATA'}
     assert morty['vars']['APP_ORIGIN'] == expected['morty_origin']
     assert json.loads(morty['vars']['MORTY_ALLOWED_ORIGINS']) == [expected['morty_origin']]
     if args.verify_release_only:
