@@ -567,7 +567,7 @@ export function BotChatComposer({
                                     outputState === "sending" ||
                                     outputState === "stopping" ||
                                     (outputState === "idle" && submitDisabled && !explainBlockedSend) ||
-                                    (outputState === "running" && stopDisabled)
+                                    (outputState === "running" && !submitAction && stopDisabled)
                                 }
                                 onClick={outputState === "running" && !submitAction ? onStop : undefined}
                                 size="icon"
