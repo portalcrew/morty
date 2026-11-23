@@ -48,10 +48,13 @@ export class CodexPromptSuggestions {
         void this.#predict(threadId, turnId, signal).catch(() => {});
     };
 
-    /** A prompt spent the prediction: no sample still running may publish one. */
-    readonly withdraw = async (): Promise<void> => {
+    /**
+     * A prompt spent the prediction: no sample still running may publish one. `null` when none is offered, so a
+     * prompt never waits to withdraw nothing.
+     */
+    readonly withdraw = (): Promise<void> | null => {
         this.stop();
-        await this.#offer(null);
+        return this.#published === null ? null : this.#offer(null);
     };
 
     readonly stop = (): void => {

@@ -841,7 +841,10 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         this.#streamedReasoningSources.clear();
         this.#turn = turn;
         try {
-            await this.#suggestions.withdraw();
+            const withdrawn = this.#suggestions.withdraw();
+            if (withdrawn !== null) {
+                await withdrawn;
+            }
             // The selection rides on the turn rather than the thread, so a choice made between turns
             // applies to the next one without restarting the conversation. Approval and sandboxing
             // travel as a pair: Codex resolves them together into the mode's single preset.
