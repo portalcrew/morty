@@ -1,4 +1,4 @@
-import type { MortyClient, MortyInteractionResponseRequest } from "@portalcrew/morty-client";
+import type { MortyClient, MortyInteractionResponseRequest, NativeSessionLocation } from "@portalcrew/morty-client";
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import type { StoreApi } from "zustand/vanilla";
 import {
@@ -12,6 +12,7 @@ import type { Clock } from "../../services/time/clock.ts";
 import { createSessionComposerStore, type SessionComposerStore } from "./session-composer-store.ts";
 import { createSessionDeliveryStore, type SessionDeliveryStore } from "./session-delivery-store.ts";
 import { accountedInteractions, createSessionExecutionStore, type SessionExecutionStore } from "./session-execution.ts";
+import { createSessionForkStore, type SessionForkStore } from "./session-fork-store.ts";
 import { createSessionInteractionStore, type SessionInteractionStore } from "./session-interaction-store.ts";
 import { createSessionMessageQueueStore, type SessionMessageQueueStore } from "./session-message-queue-store.ts";
 import { createSessionOperationConnection, type SessionOperationConnection } from "./session-operation-connection.ts";
@@ -41,6 +42,7 @@ export interface SessionPageState {
     readonly delivery: StoreApi<SessionDeliveryStore>;
     readonly execution: StoreApi<SessionExecutionStore>;
     readonly feedback: StoreApi<SessionOperationFeedbackStore>;
+    readonly fork: StoreApi<SessionForkStore>;
     readonly interactions: StoreApi<SessionInteractionStore>;
     readonly queue: StoreApi<SessionMessageQueueStore>;
     readonly rename: StoreApi<SessionRenameStore>;
@@ -54,6 +56,12 @@ export function createSessionPageState(options: {
     readonly sessionTarget: NativeSessionTarget;
     readonly clock: Clock;
     readonly refreshDirectory: () => Promise<void>;
+    readonly forkSession: (
+        operationId: string,
+        location: NativeSessionLocation,
+        signal: AbortSignal,
+    ) => Promise<{ readonly target: NativeSessionTarget }>;
+    readonly openFork: (target: NativeSessionTarget) => void;
     readonly lifetime: AbortSignal;
 }): SessionPageState {
     const { computerId, sessionTarget } = options;
@@ -142,6 +150,11 @@ export function createSessionPageState(options: {
         delivery,
         execution,
         feedback,
+        fork: createSessionForkStore({
+            request: options.forkSession,
+            forked: options.openFork,
+            failed,
+        }),
         interactions,
         queue,
         rename: createSessionRenameStore({

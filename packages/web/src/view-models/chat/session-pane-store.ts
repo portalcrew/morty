@@ -21,6 +21,7 @@ import {
     canChangeSettings,
     canDeleteQueued,
     canEditQueued,
+    canFork,
     canRemoveUnknownDelivery,
     canRetryFailedMessage,
     canRetryUnknownDelivery,
@@ -66,6 +67,7 @@ export interface SessionPaneStore {
     readonly confirmTitleEdit: (signal: AbortSignal) => Promise<void>;
     readonly cancelTitleEdit: () => void;
     readonly stop: (signal: AbortSignal) => Promise<void>;
+    readonly fork: (signal: AbortSignal) => Promise<void>;
 }
 
 export function createSessionPaneModel(options: {
@@ -81,7 +83,7 @@ export function createSessionPaneModel(options: {
     readonly onWaitingForComputer: () => void;
 }) {
     const { session, computerId, requests, clock, titles, sessionPage } = options;
-    const { composer, delivery, execution, feedback, queue, rename, settings, submission, tasks } = sessionPage;
+    const { composer, delivery, execution, feedback, fork, queue, rename, settings, submission, tasks } = sessionPage;
     /** The user asked something of the Session again: the last failure no longer describes what they see. */
     const acted = (): void => feedback.getState().dismiss();
     const composerAttachments = composer.getState().attachments;
@@ -155,8 +157,10 @@ export function createSessionPaneModel(options: {
             delivery: delivery.getState(),
             tasks: tasks.getState(),
             settings: settings.getState(),
+            fork: fork.getState(),
             connectionAvailable: options.connectionAvailable(shownConnection()),
             steeringSupported: session.ready.capabilities.steering,
+            forkSupported: session.ready.capabilities.unstableForkSession,
         });
     const timelineMessages = () =>
         sessionProjectionTimeline(history.store.getState().projection, execution.getState().state.observations)
@@ -297,6 +301,20 @@ export function createSessionPaneModel(options: {
             acted();
             await tasks.getState().stop(acceptedTurn(execution.getState().state.turn), signal);
         },
+        fork: async (signal) => {
+            if (!canFork(operationFacts())) {
+                return;
+            }
+            acted();
+            await fork.getState().start(
+                {
+                    harness: sessionTarget.harness,
+                    sessionId: sessionTarget.sessionId,
+                    directory: session.ready.directory,
+                },
+                signal,
+            );
+        },
     }));
     const welcome = createSessionWelcomeStore({
         computerId,
@@ -314,8 +332,10 @@ export function createSessionPaneModel(options: {
                 attachments: composerAttachments.getState(),
                 settings: settings.getState(),
                 feedback: feedback.getState(),
+                fork: fork.getState(),
                 connectionAvailable: options.connectionAvailable(shownConnection()),
                 steeringSupported: session.ready.capabilities.steering,
+                forkSupported: session.ready.capabilities.unstableForkSession,
             });
             if (!presentation.canSuggestProgress) {
                 return false;
@@ -393,6 +413,7 @@ export function createSessionPaneModel(options: {
         history: history.store,
         delivery,
         feedback,
+        fork,
         rename,
         filePreview,
         messageQueue: queue,

@@ -3,7 +3,7 @@ import type { QueuedCommand } from "./session-execution.ts";
 
 export type OperationFailure =
     | {
-          readonly operation: "rename" | "settings" | "older-history" | "delete-queued" | "remove-unconfirmed";
+          readonly operation: "rename" | "fork" | "settings" | "older-history" | "delete-queued" | "remove-unconfirmed";
           readonly message: string;
       }
     | { readonly operation: "stop"; readonly commandId: string; readonly message: string }
@@ -49,6 +49,7 @@ export function operationFailureMessage(
         case "steer":
             return queued.some((message) => message.commandId === failure.commandId) ? failure.message : null;
         case "rename":
+        case "fork":
         case "settings":
         case "older-history":
         case "delete-queued":

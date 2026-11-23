@@ -38,6 +38,7 @@ export function SessionReplyContent({
     activeItemId = null,
     copyText,
     copyButtonClassName,
+    fork,
     sections,
     workingSectionId = null,
     renderItem,
@@ -46,6 +47,7 @@ export function SessionReplyContent({
     readonly activeItemId?: string | null;
     readonly copyText: string | null;
     readonly copyButtonClassName?: string;
+    readonly fork?: ReactNode;
     readonly sections: readonly ReplyContentSection[];
     readonly workingSectionId?: string | null;
     readonly renderItem: (item: SessionRenderItem, active: boolean) => ReactNode;
@@ -108,7 +110,9 @@ export function SessionReplyContent({
                     className={copyButtonClassName}
                     createStore={createResponseCopyStore}
                     text={copyText}
-                />
+                >
+                    {fork}
+                </ResponseCopyButton>
             )}
         </article>
     );

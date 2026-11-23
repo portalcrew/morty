@@ -419,6 +419,11 @@ export function createChatWorkspace(options: {
             sessionTarget,
             clock: options.clock,
             refreshDirectory: () => startDirectoryLoad(),
+            forkSession: requests.forkNativeSession,
+            openFork: (target) => {
+                home.getState().openManaged(target);
+                void startDirectoryLoad();
+            },
             lifetime: operationsLifetime.signal,
         });
         sessionStates.set(sessionTarget, state);

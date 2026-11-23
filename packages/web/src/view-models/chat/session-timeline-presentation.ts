@@ -32,6 +32,7 @@ type SessionTimelineGroup =
           readonly sections: readonly ReplyContentSection[];
           readonly workingSectionId: string | null;
           readonly copyText: string | null;
+          readonly forkOffered: boolean;
       };
 
 export interface SessionTimelinePresentation {
@@ -50,10 +51,18 @@ export function sessionTimelinePresentation(
     messages: readonly SessionExecutionMessage[],
     presentation: Pick<
         SessionPanePresentation,
-        "activity" | "awaitingMessage" | "confirmedMessages" | "historyLoading" | "outputState" | "workingIndicator"
+        | "activity"
+        | "awaitingMessage"
+        | "confirmedMessages"
+        | "historyLoading"
+        | "outputState"
+        | "pendingDelivery"
+        | "queuedMessages"
+        | "workingIndicator"
     >,
     connection: SessionConnection["kind"],
     isFileEdit: (entry: ToolThinkingEntry) => boolean,
+    forkSupported: boolean,
 ): SessionTimelinePresentation {
     const working = presentation.activity.kind === "working";
     const renderItems = sessionRenderItems(messages);
@@ -71,6 +80,12 @@ export function sessionTimelinePresentation(
     const activeItem = generationActive ? renderItems.at(-1) : undefined;
     const activeItemId = activeItem === undefined ? null : sessionRenderItemId(activeItem);
     const renderGroups = sessionRenderGroups(renderItems);
+    const sessionAtRest =
+        presentation.outputState === "idle" &&
+        presentation.awaitingMessage === null &&
+        presentation.confirmedMessages.length === 0 &&
+        presentation.pendingDelivery === null &&
+        presentation.queuedMessages.length === 0;
     const groups = renderGroups.map((group, groupIndex): SessionTimelineGroup => {
         if (group.kind === "user") {
             return {
@@ -87,6 +102,11 @@ export function sessionTimelinePresentation(
         const replyActive = activeItem !== undefined && group.items.at(-1) === activeItem;
         const sections = agentReplySections(group.items, isFileEdit);
         const lastSection = sections.at(-1);
+        const copyText = agentReplyCopyText(
+            replyMessagesById.get(group.id) ?? [],
+            executionStateById.get(group.id) ?? { kind: "open" },
+            replyActive || hasRunningProcessWork(group.items),
+        );
         return {
             kind: "agent-reply",
             id: group.id,
@@ -97,11 +117,10 @@ export function sessionTimelinePresentation(
                 replyActive && lastSection?.kind === "process" && lastSection.items.some(isGeneratingProcessRenderItem)
                     ? lastSection.id
                     : null,
-            copyText: agentReplyCopyText(
-                replyMessagesById.get(group.id) ?? [],
-                executionStateById.get(group.id) ?? { kind: "open" },
-                replyActive || hasRunningProcessWork(group.items),
-            ),
+            copyText,
+            // A fork copies the whole Session, so only the reply that ends it offers one; an earlier reply would promise
+            // a fork from that point.
+            forkOffered: forkSupported && sessionAtRest && copyText !== null && groupIndex === renderGroups.length - 1,
         };
     });
     const loading = connection === "first-loading" && messages.length === 0 && presentation.awaitingMessage === null;

@@ -5,6 +5,7 @@ import { acceptedTurn, ownerRunsTurn, workingIndicator } from "./session-current
 import { sessionDeliveryPresentation } from "./session-delivery-presentation.ts";
 import { type SessionDeliveryStore, settledDelivery, unconfirmedJournal } from "./session-delivery-store.ts";
 import { type SessionExecutionState, sessionActivity, visibleQueue } from "./session-execution.ts";
+import type { SessionForkStore } from "./session-fork-store.ts";
 import { type SessionInteractionStore, waitingForInput } from "./session-interaction-store.ts";
 import type { ChatQueuedMessage, SessionMessageQueueStore } from "./session-message-queue-store.ts";
 import { operationFailureMessage, type SessionOperationFeedbackStore } from "./session-operation-feedback.ts";
@@ -12,6 +13,7 @@ import {
     canChangeSettings,
     canDeleteQueued,
     canEditQueued,
+    canFork,
     canRemoveUnknownDelivery,
     canRetryFailedMessage,
     canRetryUnknownDelivery,
@@ -59,8 +61,10 @@ export function sessionOperationFacts(input: {
     readonly delivery: Pick<SessionDeliveryStore, "state" | "accepted">;
     readonly tasks: Pick<SessionTaskControlsStore, "stopInFlight">;
     readonly settings: Pick<SessionSettingsStore, "change">;
+    readonly fork: Pick<SessionForkStore, "fork">;
     readonly connectionAvailable: boolean;
     readonly steeringSupported: boolean;
+    readonly forkSupported: boolean;
 }): SessionOperationFacts {
     const { execution } = input;
     const { turn } = execution;
@@ -74,6 +78,8 @@ export function sessionOperationFacts(input: {
         waitingForInput: waitingForInput(execution.interactions, input.interactions.submissions),
         ownerRunsTurn: ownerRunsTurn(execution.turn),
         steeringSupported: input.steeringSupported,
+        forkSupported: input.forkSupported,
+        forking: input.fork.fork.kind === "forking",
     };
 }
 
@@ -101,8 +107,10 @@ export function sessionPanePresentation(input: {
     readonly attachments: ComposerAttachmentStore;
     readonly settings: Pick<SessionSettingsStore, "change">;
     readonly feedback: Pick<SessionOperationFeedbackStore, "failure">;
+    readonly fork: Pick<SessionForkStore, "fork">;
     readonly connectionAvailable: boolean;
     readonly steeringSupported: boolean;
+    readonly forkSupported: boolean;
 }) {
     const { connection, execution, composer, attachments, feedback } = input;
     const delivery = settledDelivery(input.delivery, execution);
@@ -140,6 +148,7 @@ export function sessionPanePresentation(input: {
         settingsDisabled: !canChangeSettings(facts),
         settingsNotice: controlRunning ? "New settings may not affect this response." : null,
         stopDisabled: !canStop(facts),
+        forkDisabled: !canFork(facts),
         canSuggestProgress:
             !controlRunning &&
             canSend(facts) &&
