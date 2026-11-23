@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import type { ContentBlock, PermissionOption, PromptResponse } from "@agentclientprotocol/sdk/unstable";
 import type { AgentQuestion } from "@portalcrew/morty-client/protocol";
+import { z } from "zod";
 import { AcpExecutionError } from "../../acp-error.ts";
-import type { NativeSessionInteractions } from "../../adapter/native-session-event.ts";
+import type { NativeSessionInteractions, NativeSessionSubscriber } from "../../adapter/native-session-event.ts";
 import { type AgentTermination, agentTerminationError, type BackgroundActivity } from "../../agent/agent-lifecycle.ts";
+import { waitForAgentOperation } from "../../connection/agent-operation.ts";
 import type { CodexAppServerClient, CodexAppServerServerRequest } from "./app-server-client.ts";
 import {
     type CodexTurnError,
@@ -15,6 +17,7 @@ import {
     mcpElicitationParamsSchema,
     reasoningTextDeltaParamsSchema,
     requestUserInputParamsSchema,
+    sharedTurnPageSchema,
     threadNameUpdatedSchema,
     threadNotificationSchema,
     threadSettingsUpdatedSchema,
@@ -63,6 +66,8 @@ const THREAD_NOTIFICATIONS: ReadonlySet<string> = new Set([
 ]);
 
 interface OwnedAgentContext {
+    readonly shared?: boolean;
+    readonly onObservedTurn?: NativeSessionSubscriber["onObservedTurn"];
     readonly onBackgroundActivity?: (activity: BackgroundActivity) => void;
     readonly client: CodexAppServerClient;
     readonly settings: CodexSettings;
@@ -169,6 +174,8 @@ function steeringPrompt(prompt: readonly unknown[]): readonly SteeringPromptBloc
 }
 
 interface ActiveTurn {
+    /** Terminals observed under this exact native turn while a phone stop is in progress. */
+    stoppingTerminals?: Map<string, string>;
     readonly steeringContent: Map<string, readonly ContentBlock[]>;
     readonly clientId: string;
     readonly content: readonly ContentBlock[];
@@ -224,6 +231,55 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
     readonly #streamedReasoningSources = new Map<string, "summary" | "content">();
     readonly #agentMessages = new Map<string, "started" | "streaming">();
     #turn: ActiveTurn | null = null;
+    #turnRevision = 0;
+    #observedSettlement: Promise<void> | void = undefined;
+    readonly #pendingApprovals = new Map<number | string, AbortController>();
+
+    /** Notifications and the live snapshot overlap during attach. A newer notification wins. */
+    get turnRevision(): number {
+        return this.#turnRevision;
+    }
+    readonly observeCurrentTurn = (revision: number, latest: { id: string; status: string } | undefined) => {
+        if (revision === this.#turnRevision && latest?.status === "inProgress") {
+            this.#observeTurn(latest.id);
+        }
+    };
+
+    readonly #observeTurn = (id: string) => {
+        if (!this.#context.shared || this.#turn !== null) {
+            return;
+        }
+        const completion = Promise.withResolvers<PromptResponse>();
+        const observed: ActiveTurn = {
+            completion,
+            content: [],
+            clientId: randomUUID(),
+            steeringContent: new Map(),
+            turn: { id },
+            input: { kind: "awaiting" },
+            compactionReported: false,
+        };
+        this.#turn = observed;
+        this.#agentMessages.clear();
+        this.#streamedReasoningSources.clear();
+        const ended = completion.promise
+            .finally(() => {
+                if (this.#turn === observed) {
+                    this.#turn = null;
+                }
+            })
+            .then((result) => result.stopReason);
+        void ended.catch(() => {});
+        const settlement = this.#context.onObservedTurn?.(this.#context.threadId(), {
+            commandId: observed.clientId,
+            completion: ended,
+        });
+        this.#observedSettlement = settlement?.catch(async (error: unknown) => {
+            console.error("Could not register the shared Codex turn", error);
+            await this.#context.close();
+        });
+    };
+
     readonly #suggestions: CodexPromptSuggestions;
     readonly #runningCommands = new Map<string, "foreground" | "background">();
     #updateTail: Promise<void> = Promise.resolve();
@@ -342,6 +398,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
             turn: { id: "" },
         };
         this.#turn = turn;
+        this.#observedSettlement = undefined;
         try {
             await this.#appServer.request(
                 "thread/compact/start",
@@ -406,6 +463,15 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
     };
 
     readonly onNotification = async (method: string, params: unknown): Promise<void> => {
+        if (this.#context.shared && method === "serverRequest/resolved") {
+            const result = z
+                .object({ threadId: z.string(), requestId: z.union([z.string(), z.number()]) })
+                .safeParse(params);
+            if (result.success && result.data.threadId === this.#context.threadId()) {
+                this.#pendingApprovals.get(result.data.requestId)?.abort();
+            }
+            return;
+        }
         if (!THREAD_NOTIFICATIONS.has(method)) {
             return;
         }
@@ -417,7 +483,11 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
             return;
         }
         if (method === "turn/started") {
+            ++this.#turnRevision;
             const decoded = turnNotificationSchema.safeParse(params);
+            if (decoded.success) {
+                this.#observeTurn(decoded.data.turn.id);
+            }
             if (
                 decoded.success &&
                 this.#turn !== null &&
@@ -428,6 +498,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
             return;
         }
         if (method === "turn/completed") {
+            ++this.#turnRevision;
             const decoded = turnNotificationSchema.safeParse(params);
             if (decoded.success) {
                 await this.#enqueue(async () => {
@@ -443,7 +514,9 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
                         });
                     }
                 });
+                const settlement = this.#turn?.turn.id === decoded.data.turn.id ? this.#observedSettlement : undefined;
                 await this.#completeTurn(decoded.data.turn);
+                await settlement;
             }
             return;
         }
@@ -542,6 +615,16 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         const item = notification.success ? decodeThreadItem(notification.data.item) : null;
         if (item === null) {
             return;
+        }
+        if (
+            item.type === "commandExecution" &&
+            item.processId &&
+            this.#turn?.stoppingTerminals &&
+            typeof params === "object" &&
+            params !== null &&
+            Reflect.get(params, "turnId") === this.#turn.turn.id
+        ) {
+            this.#turn.stoppingTerminals.set(item.id, item.processId);
         }
         if (item.type === "userMessage") {
             if (method === "item/started") {
@@ -683,6 +766,33 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
     };
 
     readonly onServerRequest = async (request: CodexAppServerServerRequest): Promise<void> => {
+        if (this.#context.shared) {
+            const scope = threadNotificationSchema.safeParse(request.params);
+            if (!scope.success || scope.data.threadId !== this.#context.threadId()) {
+                return;
+            }
+            if (
+                request.method !== "item/commandExecution/requestApproval" &&
+                request.method !== "item/fileChange/requestApproval"
+            ) {
+                return;
+            }
+            if (this.#pendingApprovals.has(request.id)) {
+                return;
+            }
+            const pending = new AbortController();
+            this.#pendingApprovals.set(request.id, pending);
+            try {
+                await this.#requestApproval(request, pending.signal);
+            } catch (error) {
+                if (!pending.signal.aborted && !this.#context.signal.aborted) {
+                    console.warn("Could not deliver a shared Codex approval", error);
+                }
+            } finally {
+                this.#pendingApprovals.delete(request.id);
+            }
+            return;
+        }
         if (
             request.method === "item/commandExecution/requestApproval" ||
             request.method === "item/fileChange/requestApproval"
@@ -707,37 +817,44 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         title: string,
         toolCallId: string,
         signal: AbortSignal,
+        rawInput?: unknown,
     ): Promise<"accept" | "acceptForSession" | "decline" | "cancel"> => {
         const response = await this.#context.interactions.onPermission(
             {
                 options: [...APPROVAL_OPTIONS],
                 sessionId: this.#context.threadId(),
-                toolCall: { title, toolCallId },
+                toolCall: { title, toolCallId, ...(rawInput === undefined ? {} : { rawInput }) },
             },
             AbortSignal.any([signal, this.#context.signal]),
         );
         return response.outcome.outcome === "selected" ? permissionDecision(response.outcome.optionId) : "cancel";
     };
 
-    readonly #requestApproval = async (request: CodexAppServerServerRequest): Promise<void> => {
+    readonly #requestApproval = async (request: CodexAppServerServerRequest, resolved?: AbortSignal): Promise<void> => {
         const decoded =
             request.method === "item/commandExecution/requestApproval"
                 ? commandApprovalParamsSchema.safeParse(request.params)
                 : fileChangeApprovalParamsSchema.safeParse(request.params);
         if (!decoded.success) {
-            this.#appServer.respondWithError(request.id, -32_602, "Morty could not read the approval request");
+            if (!this.#context.shared) {
+                this.#appServer.respondWithError(request.id, -32_602, "Morty could not read the approval request");
+            }
             return;
         }
         const params = decoded.data;
         const command = "command" in params ? params.command : undefined;
         const title = (command ?? params.reason ?? "Approve a local change").slice(0, APPROVAL_REASON_CHARACTER_LIMIT);
-        const turn = this.#turn;
         const decision = await this.#askPermission(
             title,
             params.itemId,
-            AbortSignal.timeout(APPROVAL_TIMEOUT_MILLISECONDS),
+            resolved
+                ? AbortSignal.any([resolved, AbortSignal.timeout(APPROVAL_TIMEOUT_MILLISECONDS)])
+                : AbortSignal.timeout(APPROVAL_TIMEOUT_MILLISECONDS),
+            this.#context.shared ? params : undefined,
         );
-        void turn;
+        if (this.#context.shared && (resolved?.aborted || this.#context.signal.aborted || decision === "cancel")) {
+            return;
+        }
         this.#appServer.respond(request.id, { decision });
     };
 
@@ -840,6 +957,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         this.#agentMessages.clear();
         this.#streamedReasoningSources.clear();
         this.#turn = turn;
+        this.#observedSettlement = undefined;
         try {
             const withdrawn = this.#suggestions.withdraw();
             if (withdrawn !== null) {
@@ -852,7 +970,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
                 await this.#appServer.request(
                     "turn/start",
                     {
-                        ...this.#settings.turnParameters(),
+                        ...this.#settings.turnParameters(this.#context.shared),
                         input,
                         clientUserMessageId: turn.clientId,
                         threadId: this.#context.threadId(),
@@ -942,6 +1060,47 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         if (turn === null) {
             return;
         }
+        if (this.#context.shared) {
+            const signal = AbortSignal.any([this.#context.signal, AbortSignal.timeout(12000)]);
+            if (!turn.turn.id) {
+                throw new AcpExecutionError("The Codex turn has not started", {}, "turn_not_active");
+            }
+            // The live resume page also contains commands already running before this phone attached.
+            // Saved history can omit these until the tool finishes. Keep the native item/PTY pair.
+            const terminals = new Map<string, string>();
+            turn.stoppingTerminals = terminals;
+            const snapshot = z.object({ initialTurnsPage: sharedTurnPageSchema }).parse(
+                await this.#appServer.request(
+                    "thread/resume",
+                    {
+                        threadId: this.#context.threadId(),
+                        excludeTurns: true,
+                        initialTurnsPage: { limit: 1, sortDirection: "desc", itemsView: "full" },
+                    },
+                    signal,
+                ),
+            );
+            const current = snapshot.initialTurnsPage.data[0];
+            if (current?.id !== turn.turn.id || current.status !== "inProgress" || this.#turn !== turn) {
+                throw new AcpExecutionError("The Codex turn is no longer running", {}, "turn_not_active");
+            }
+            for (const raw of current.items) {
+                const item = decodeThreadItem(raw);
+                if (item?.type === "commandExecution" && item.processId) {
+                    terminals.set(item.id, item.processId);
+                }
+            }
+            await this.#appServer.request(
+                "turn/interrupt",
+                { threadId: this.#context.threadId(), turnId: turn.turn.id },
+                signal,
+            );
+            const ended = await waitForAgentOperation(turn.completion.promise, signal);
+            if (ended.stopReason !== "cancelled") {
+                throw new AcpExecutionError("The Codex turn finished before it was interrupted", {}, "turn_not_active");
+            }
+            return;
+        }
         this.#turn = null;
         turn.steeringContent.clear();
         if (turn.turn.id.length > 0) {
@@ -959,6 +1118,45 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         // compaction must not outlive it.
         this.#settleCompaction("cancelled");
         turn.completion.resolve({ stopReason: "cancelled" });
+    };
+
+    readonly #stopTerminals = async (owned: ReadonlyMap<string, string>): Promise<void> => {
+        const signal = AbortSignal.any([this.#context.signal, AbortSignal.timeout(10000)]);
+        const threadId = this.#context.threadId();
+        const running = new Set<string>();
+        const seen = new Set<string>();
+        let cursor: string | null = null;
+        do {
+            const page = z
+                .object({
+                    data: z.array(z.object({ itemId: z.string(), processId: z.string() })),
+                    nextCursor: z.string().nullable(),
+                })
+                .parse(
+                    await this.#appServer.request(
+                        "thread/backgroundTerminals/list",
+                        { threadId, cursor, limit: 100 },
+                        signal,
+                    ),
+                );
+            for (const terminal of page.data) {
+                if (owned.get(terminal.itemId) === terminal.processId) {
+                    running.add(terminal.processId);
+                }
+            }
+            cursor = page.nextCursor;
+            if (cursor !== null && seen.has(cursor)) {
+                throw new Error("Codex repeated its terminal cursor");
+            }
+            if (cursor !== null) {
+                seen.add(cursor);
+            }
+        } while (cursor !== null);
+        await Promise.all(
+            [...running].map((processId) =>
+                this.#appServer.request("thread/backgroundTerminals/terminate", { threadId, processId }, signal),
+            ),
+        );
     };
 
     readonly #completeTurn = async (turn: {
@@ -986,6 +1184,20 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         }
         if (turn.status === "interrupted") {
             this.#settleCompaction("cancelled");
+            if (active.stoppingTerminals?.size) {
+                try {
+                    await this.#stopTerminals(active.stoppingTerminals);
+                } catch (cause) {
+                    active.completion.reject(
+                        new AcpExecutionError(
+                            "Codex interrupted the turn but could not confirm its terminal commands stopped",
+                            { cause },
+                            "codex_terminal_stop_failed",
+                        ),
+                    );
+                    return;
+                }
+            }
             active.completion.resolve({ stopReason: "cancelled" });
             return;
         }

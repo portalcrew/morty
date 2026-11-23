@@ -117,8 +117,9 @@ test("Given native Claude is installed outside PATH, When two prompts execute th
 test.skipIf(process.platform !== "darwin")(
     "Given Claude Code receives a transient provider error, When its production adapter retries, Then the successful reply reaches the client without failing the turn",
     async ({ signal }) => {
+        const prompt = "Recover after a transient overload";
         await using provider = await FakeAnthropicProvider.start("claude-sonnet-4-6", "CLAUDE_RECOVERED", {
-            disconnectsBeforeSuccess: 1,
+            disconnectOnceOnPrompt: prompt,
         });
         await using agent = await ClaudeFixture.create(provider);
         await withRealDaemon(signal, new ClaudeCodeAgentSpecification(), agent.environment, async (peer) => {
@@ -130,7 +131,7 @@ test.skipIf(process.platform !== "darwin")(
                     disposition: SessionPromptDisposition.Append,
                     attachments: [],
                     kind: "session.prompt",
-                    prompt: "Recover after a transient overload",
+                    prompt,
                     target: peer.target,
                 }),
             );

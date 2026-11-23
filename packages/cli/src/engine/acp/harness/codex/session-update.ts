@@ -1,5 +1,6 @@
 import type { SessionNotification, SessionUpdate } from "@agentclientprotocol/sdk/unstable";
-import type { NativeSessionInteractions } from "../../adapter/native-session-event.ts";
+import type WebSocket from "ws";
+import type { NativeSessionInteractions, NativeSessionSubscriber } from "../../adapter/native-session-event.ts";
 import type { BackgroundActivity, PromptDelegationStage } from "../../agent/agent-lifecycle.ts";
 
 type MessageUpdate = Extract<
@@ -14,7 +15,9 @@ interface CodexSessionNotification extends Omit<SessionNotification, "update"> {
     readonly update: CodexSessionUpdate;
 }
 export interface CodexClientOptions {
+    readonly onObservedTurn?: NativeSessionSubscriber["onObservedTurn"];
     readonly command: string;
+    readonly socket?: WebSocket;
     readonly cwd: string;
     readonly environment: Readonly<Record<string, string>>;
     readonly onBackgroundActivity?: (activity: BackgroundActivity) => void;

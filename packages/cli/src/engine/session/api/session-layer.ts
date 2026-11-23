@@ -9,6 +9,7 @@ import {
     openSessionEventCacheDatabase,
 } from "../../storage/sqlite/local-databases.ts";
 import type { Timer } from "../../util/timer.ts";
+import { waitForSharedOperation } from "../../util/wait-for-shared-operation.ts";
 import { SqliteSessionLiveEventPosition } from "../history/live-event-positions.ts";
 import { CachedSessionEventStore } from "../history/session-event-store.ts";
 import { SessionManager } from "../manager/session-manager.ts";
@@ -63,6 +64,70 @@ export function buildSessionLayer(options: SessionLayerOptions) {
     const directories = new WorkspaceDirectoryService(defaultWorkspace);
     const manager = new SessionManager({
         observer: {
+            onObservedTurn: async (target, observation) => {
+                // A local prompt can still be unwinding when Codex announces the next turn.
+                // Never replace its execution entry or send its pending stop to the successor.
+                const previous = activeSessions.session(target).working();
+                if (previous && manager.executes(target, previous.command.commandId)) {
+                    const stillActive = await Promise.race([
+                        previous.completion.then(() => true),
+                        observation.completion.then(
+                            () => false,
+                            () => false,
+                        ),
+                    ]);
+                    if (!stillActive) {
+                        return;
+                    }
+                }
+                const { commandId } = observation;
+                const command = {
+                    kind: "session.prompt",
+                    disposition: "append",
+                    commandId,
+                    requestId: commandId,
+                    target,
+                    prompt: "",
+                    attachments: [],
+                } as const;
+                const receipt = operations.claimExecution(commandId, target, JSON.stringify(command), () => true);
+                if (receipt.kind !== "accepted") {
+                    return;
+                }
+                const finishExecution = manager.observeExecution(target, commandId);
+                const turn = activeSessions.start(command, () => {});
+                turn.admit({ kind: "own" });
+                const started = events.append(target, {
+                    type: "lifecycle-metadata",
+                    payload: { kind: "prompt.started", commandId, attemptId: receipt.attemptId },
+                });
+                operations.record(started);
+                eventProjection.record(started);
+                // This receipt exposes native work through the existing turn controls. Its empty prompt is never submitted.
+                return waitForSharedOperation(observation.completion, turn.signal)
+                    .then(
+                        (reason) =>
+                            eventProjection.completed(
+                                target,
+                                commandId,
+                                reason === "cancelled" ? { kind: "cancelled" } : { kind: "ended", stopReason: reason },
+                            ),
+                        () =>
+                            eventProjection.failed(
+                                target,
+                                commandId,
+                                receipt.attemptId,
+                                "codex_shared_turn_unavailable",
+                                "The shared Codex turn ended with an error or its connection closed.",
+                            ),
+                    )
+                    .finally(() => {
+                        finishExecution();
+                        activeSessions.finish(turn);
+                        eventProjection.publishTerminal(target, commandId);
+                    })
+                    .catch((error: unknown) => console.error("Could not settle a shared Codex turn", error));
+            },
             onBackgroundActivity: options.processes.notifyChanged,
             onSessionEvent: (event) => {
                 operations.record(event);

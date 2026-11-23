@@ -216,6 +216,7 @@ export class CodexSettings {
     // rather than break every turn.
     #collaborationModeSupported: boolean | null = null;
     #selection: SessionSelection;
+    #modeSelected = false;
 
     constructor(appServer: CodexAppServerClient) {
         this.#appServer = appServer;
@@ -248,15 +249,19 @@ export class CodexSettings {
         this.#selection = { ...this.#selection, collaborationMode: mode };
         return true;
     };
-    readonly turnParameters = (): Readonly<Record<string, unknown>> => {
+    readonly turnParameters = (inheritPermissions = false): Readonly<Record<string, unknown>> => {
         const selection = this.#selection;
         const mode = AGENT_MODES.find((candidate) => candidate.id === selection.mode) ?? DEFAULT_MODE;
         const model = this.#model(selection.model);
         const supportsFast = model?.additionalSpeedTiers?.includes(FAST_TIER) === true;
         return {
-            approvalPolicy: mode.approvalPolicy,
-            approvalsReviewer: mode.approvalsReviewer,
-            sandboxPolicy: mode.sandboxPolicy,
+            ...(inheritPermissions && !this.#modeSelected
+                ? {}
+                : {
+                      approvalPolicy: mode.approvalPolicy,
+                      approvalsReviewer: mode.approvalsReviewer,
+                      sandboxPolicy: mode.sandboxPolicy,
+                  }),
             // Codex only streams its provider-authored reasoning summary when the turn opts in.
             // Keep the summary channel enabled so Thinking has visible content even when no raw
             // reasoning text is available.
@@ -419,6 +424,7 @@ export class CodexSettings {
                     "invalid_session_configuration",
                 );
             }
+            this.#modeSelected = true;
             this.#selection = { ...this.#selection, mode: value };
             return;
         }

@@ -108,6 +108,8 @@ export interface Adapter {
     readonly cancel: (params: AdapterSessionOperation) => Promise<"retained" | "closed">;
     readonly closeSession: (params: AdapterSessionOperation) => Promise<void>;
     /** Release a retained execution without changing the native conversation. */
+    /** Whether an externally owned native endpoint went away while its Session was retained. */
+    readonly connectionLost?: (target: AdapterSessionTarget) => boolean;
     readonly releaseSession: (params: AdapterSessionOperation) => Promise<void>;
     readonly readNativeHistoryRevision: (params: AdapterSessionOperation) => Promise<NativeHistoryRevision>;
     readonly prompt: (

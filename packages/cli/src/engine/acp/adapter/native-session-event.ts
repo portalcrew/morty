@@ -33,7 +33,13 @@ export interface NativeSessionInteractions {
     readonly onElicitationComplete: (notification: CompleteElicitationNotification) => Promise<void>;
 }
 
+/** A turn started by another client on the attached native session. */
+export interface ObservedAgentTurn {
+    readonly commandId: string;
+    readonly completion: Promise<string>;
+}
 export interface NativeSessionSubscriber {
+    readonly onObservedTurn?: (sessionId: string, turn: ObservedAgentTurn) => Promise<void> | void;
     readonly onSessionEvent: (sessionId: string, event: NativeSessionEvent) => Promise<void>;
     readonly onBackgroundActivity?: (activity: BackgroundActivity) => void;
     readonly onPromptDelegation?: (stage: PromptDelegationStage) => Promise<void>;
