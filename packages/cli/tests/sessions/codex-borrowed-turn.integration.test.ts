@@ -53,6 +53,7 @@ it("Given another Codex client owns the thread, When its turn for this prompt is
         "thread",
         async () => {},
         async () => {},
+        async () => null,
     );
     await agent.initialize(signal);
 
@@ -134,6 +135,7 @@ it("Given a queued prompt in a borrowed Codex thread, When one history read time
             }
         },
         async () => {},
+        async () => null,
     );
     await agent.initialize(signal);
 
@@ -165,6 +167,7 @@ it("Given a queued prompt in a borrowed Codex thread, When delivering the owner'
             }
         },
         async () => {},
+        async () => null,
     );
     await agent.initialize(signal);
 
