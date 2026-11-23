@@ -8,6 +8,7 @@ import { ImageViewerProvider } from "../components/images/image-gallery.tsx";
 import { ToastProvider } from "../components/ui/toast.tsx";
 import { installInputModalityTracking } from "../input-modality.ts";
 import type { ApiTransport } from "../services/api/api-transport.ts";
+import type { AppInstall } from "../services/device/app-install.ts";
 import type { SetupHandoff } from "../services/device/setup-handoff.ts";
 import type { Clock } from "../services/time/clock.ts";
 import { createImageDownloadStore } from "../view-models/chat/image-download-store.ts";
@@ -31,6 +32,7 @@ export function assembleMorty(options: {
     readonly origin: string;
     readonly clock?: Clock;
     readonly setupHandoff?: SetupHandoff;
+    readonly appInstall?: AppInstall;
 }): {
     readonly application: MortyApplication;
     readonly element: React.ReactElement;
@@ -45,6 +47,7 @@ export function assembleMorty(options: {
         transport: options.transport,
         ...(options.clock === undefined ? {} : { clock: options.clock }),
         ...(options.setupHandoff === undefined ? {} : { setupHandoff: options.setupHandoff }),
+        ...(options.appInstall === undefined ? {} : { appInstall: options.appInstall }),
     });
     // The signed-in router is assembled once with the application: its inputs
     // (the stable authorize action, the application) are fixed for the
