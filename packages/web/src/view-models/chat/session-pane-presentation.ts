@@ -80,6 +80,8 @@ export function sessionOperationFacts(input: {
         steeringSupported: input.steeringSupported,
         forkSupported: input.forkSupported,
         forking: input.fork.fork.kind === "forking",
+        turnRunning: turn.kind === "current",
+        queued: visibleQueue(execution).length > 0,
     };
 }
 

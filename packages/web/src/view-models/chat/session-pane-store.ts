@@ -312,6 +312,7 @@ export function createSessionPaneModel(options: {
                     sessionId: sessionTarget.sessionId,
                     directory: session.ready.directory,
                 },
+                timelineMessages().at(-1)?.firstEvent.eventId ?? "",
                 signal,
             );
         },

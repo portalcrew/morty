@@ -18,10 +18,11 @@ export function ForkSessionButton({
             // Touch targets extend past the icon; the extra gap keeps them from overlapping the copy button's.
             className={cn(
                 replyActionButtonClassName,
-                "ml-1 disabled:pointer-events-none disabled:opacity-50 aria-busy:opacity-100",
+                "ml-1 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-busy:opacity-100",
             )}
-            disabled={disabled}
-            onClick={onFork}
+            // Unlike `disabled`, this keeps keyboard focus on the button while the fork is in progress.
+            aria-disabled={disabled || undefined}
+            onClick={disabled ? undefined : onFork}
             title="Fork session"
             type="button"
         >

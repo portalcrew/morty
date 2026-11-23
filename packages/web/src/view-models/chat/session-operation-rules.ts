@@ -22,8 +22,9 @@ export interface SessionOperationFacts {
     readonly ownerRunsTurn: boolean;
     readonly steeringSupported: boolean;
     readonly forkSupported: boolean;
-    /** A fork of this Session is being requested. */
     readonly forking: boolean;
+    readonly turnRunning: boolean;
+    readonly queued: boolean;
 }
 
 /** Settings changes and messages are serialized: a message waits while the Session's settings are changing. */
@@ -98,11 +99,23 @@ export function canStop(
     return facts.connectionAvailable && facts.connection === "ready" && !facts.ownerRunsTurn && !facts.stopping;
 }
 
-/** Forking asks the Computer for a copy of the Session, so it needs the Computer, not this Session's connection. */
-export function canFork(
-    facts: Pick<SessionOperationFacts, "connectionAvailable" | "forkSupported" | "forking">,
-): boolean {
-    return facts.forkSupported && facts.connectionAvailable && !facts.forking;
+/**
+ * Forking copies the Session as the user last saw it, so the Session must be at rest: nothing running, being sent,
+ * queued or waiting for the user, and its connection ready to report a failure.
+ */
+export function canFork(facts: SessionOperationFacts): boolean {
+    return (
+        facts.forkSupported &&
+        facts.connectionAvailable &&
+        facts.connection === "ready" &&
+        !facts.forking &&
+        !facts.turnRunning &&
+        !facts.queued &&
+        !facts.stopping &&
+        !facts.configuring &&
+        !facts.waitingForInput &&
+        facts.delivery.kind === "idle"
+    );
 }
 
 function canActOnQueued(

@@ -322,7 +322,9 @@ export const createNativeSessionStore = (
                     directory: preview.entry.directory,
                     sessionId: preview.entry.sessionId,
                 };
-                const fork = forkIntent(get().forkIntent, input, () => crypto.randomUUID());
+                const fork = forkIntent(get().forkIntent, input, preview.entry.updatedAt ?? "", () =>
+                    crypto.randomUUID(),
+                );
                 if (action === "fork") {
                     set({ forkIntent: fork });
                 }

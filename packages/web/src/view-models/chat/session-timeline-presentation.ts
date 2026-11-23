@@ -57,7 +57,6 @@ export function sessionTimelinePresentation(
         | "historyLoading"
         | "outputState"
         | "pendingDelivery"
-        | "queuedMessages"
         | "workingIndicator"
     >,
     connection: SessionConnection["kind"],
@@ -80,12 +79,10 @@ export function sessionTimelinePresentation(
     const activeItem = generationActive ? renderItems.at(-1) : undefined;
     const activeItemId = activeItem === undefined ? null : sessionRenderItemId(activeItem);
     const renderGroups = sessionRenderGroups(renderItems);
-    const sessionAtRest =
-        presentation.outputState === "idle" &&
-        presentation.awaitingMessage === null &&
-        presentation.confirmedMessages.length === 0 &&
-        presentation.pendingDelivery === null &&
-        presentation.queuedMessages.length === 0;
+    const followedByMessages =
+        presentation.awaitingMessage !== null ||
+        presentation.confirmedMessages.length > 0 ||
+        presentation.pendingDelivery !== null;
     const groups = renderGroups.map((group, groupIndex): SessionTimelineGroup => {
         if (group.kind === "user") {
             return {
@@ -120,7 +117,8 @@ export function sessionTimelinePresentation(
             copyText,
             // A fork copies the whole Session, so only the reply that ends it offers one; an earlier reply would promise
             // a fork from that point.
-            forkOffered: forkSupported && sessionAtRest && copyText !== null && groupIndex === renderGroups.length - 1,
+            forkOffered:
+                forkSupported && !followedByMessages && copyText !== null && groupIndex === renderGroups.length - 1,
         };
     });
     const loading = connection === "first-loading" && messages.length === 0 && presentation.awaitingMessage === null;

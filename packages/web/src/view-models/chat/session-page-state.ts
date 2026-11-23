@@ -61,7 +61,7 @@ export function createSessionPageState(options: {
         location: NativeSessionLocation,
         signal: AbortSignal,
     ) => Promise<{ readonly target: NativeSessionTarget }>;
-    readonly openFork: (target: NativeSessionTarget) => void;
+    readonly openFork: (source: NativeSessionTarget, fork: NativeSessionTarget) => void;
     readonly lifetime: AbortSignal;
 }): SessionPageState {
     const { computerId, sessionTarget } = options;
@@ -152,7 +152,7 @@ export function createSessionPageState(options: {
         feedback,
         fork: createSessionForkStore({
             request: options.forkSession,
-            forked: options.openFork,
+            forked: (fork) => options.openFork(sessionTarget, fork),
             failed,
         }),
         interactions,

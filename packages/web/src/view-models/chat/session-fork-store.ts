@@ -1,7 +1,6 @@
 import type { NativeSessionLocation } from "@portalcrew/morty-client";
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
-import { formatError } from "../format-error.ts";
 import { type ForkIntent, forkIntent } from "./native-session-fork.ts";
 import type { OperationFailure } from "./session-operation-feedback.ts";
 
@@ -11,7 +10,7 @@ type SessionFork =
 
 export type SessionForkStore = {
     readonly fork: SessionFork;
-    readonly start: (location: NativeSessionLocation, signal: AbortSignal) => Promise<void>;
+    readonly start: (location: NativeSessionLocation, point: string, signal: AbortSignal) => Promise<void>;
 };
 
 /**
@@ -29,13 +28,13 @@ export function createSessionForkStore(options: {
 }) {
     return createStore<SessionForkStore>()((set, get) => ({
         fork: { kind: "idle", retained: null },
-        start: async (location, signal) => {
+        start: async (location, point, signal) => {
             signal.throwIfAborted();
             const current = get().fork;
             if (current.kind === "forking") {
                 return;
             }
-            const intent = forkIntent(current.retained, location, () => crypto.randomUUID());
+            const intent = forkIntent(current.retained, location, point, () => crypto.randomUUID());
             set({ fork: { kind: "forking", intent } });
             let target: NativeSessionTarget;
             try {
@@ -44,7 +43,8 @@ export function createSessionForkStore(options: {
             } catch (cause) {
                 set({ fork: { kind: "idle", retained: intent } });
                 signal.throwIfAborted();
-                options.failed({ operation: "fork", message: formatError(cause, "The session could not be forked.") });
+                console.error("The session could not be forked.", cause);
+                options.failed({ operation: "fork", message: "The session could not be forked. Try again." });
                 return;
             }
             set({ fork: { kind: "idle", retained: null } });
