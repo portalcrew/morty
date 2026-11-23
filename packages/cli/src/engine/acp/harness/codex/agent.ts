@@ -28,6 +28,7 @@ import { usageReport, usageResetReport } from "./usage.ts";
 
 const APPROVAL_TIMEOUT_MILLISECONDS = 3_600_000;
 const ACCOUNT_REQUEST_TIMEOUT_MILLISECONDS = 30_000;
+const THREAD_TAKEOVER_TIMEOUT_MILLISECONDS = 30_000;
 const USAGE_READ_FAILED =
     "Codex couldn't read your usage limits. Usage limits and resets need a ChatGPT sign-in; if Codex is signed in with ChatGPT, try again shortly.";
 const USAGE_RESET_FAILED =
@@ -87,20 +88,7 @@ export class CodexAcpAgent {
             },
         });
         this.#settings = new CodexSettings(this.#appServer);
-        this.#sessionAgent = new CodexOwnedAcpAgent({
-            client: this.#appServer,
-            settings: this.#settings,
-            threadId: () => this.#sessionId,
-            interactions: options.interactions,
-            signal: this.signal,
-            emit: this.#emit,
-            onBackgroundActivity: (activity) => {
-                if (this.#closePromise === null) {
-                    options.onBackgroundActivity?.(activity);
-                }
-            },
-            close: () => this.dispose("force"),
-        });
+        this.#sessionAgent = this.#ownedAgent();
         void this.#appServer.terminated.then((termination) => {
             this.#sessionAgent.onTerminated(termination);
             this.#lifetime.abort(agentTerminationError(termination));
@@ -111,6 +99,22 @@ export class CodexAcpAgent {
             }
         });
     }
+
+    readonly #ownedAgent = (): CodexOwnedAcpAgent =>
+        new CodexOwnedAcpAgent({
+            client: this.#appServer,
+            settings: this.#settings,
+            threadId: () => this.#sessionId,
+            interactions: this.#options.interactions,
+            signal: this.signal,
+            emit: this.#emit,
+            onBackgroundActivity: (activity) => {
+                if (this.#closePromise === null) {
+                    this.#options.onBackgroundActivity?.(activity);
+                }
+            },
+            close: () => this.dispose("force"),
+        });
 
     static readonly capabilities = () => ({
         _meta: { steering: { supported: true } },
@@ -323,23 +327,42 @@ export class CodexAcpAgent {
         }
         return this.#closePromise;
     };
+    readonly #resumeThread = async (threadId: string, cwd: string, timeout: number, signal: AbortSignal) => {
+        try {
+            const response = threadResumeResponseSchema.parse(
+                await this.#appServer.request(
+                    "thread/resume",
+                    { cwd, excludeTurns: true, threadId },
+                    AbortSignal.any([signal, AbortSignal.timeout(timeout)]),
+                ),
+            );
+            return { kind: "resumed", response } as const;
+        } catch (cause: unknown) {
+            signal.throwIfAborted();
+            return { kind: "unavailable", cause } as const;
+        }
+    };
+    // Codex lets one process write a thread. Once the process that held it is gone, input queued on the thread waits
+    // for a writer that never comes, so this connection becomes the writer and runs the Session's turns itself.
+    readonly #takeOver = async (
+        threadId: string,
+        cwd: string,
+        signal: AbortSignal,
+    ): Promise<CodexOwnedAcpAgent | null> => {
+        const resumed = await this.#resumeThread(threadId, cwd, THREAD_TAKEOVER_TIMEOUT_MILLISECONDS, signal);
+        if (resumed.kind === "unavailable") {
+            return null;
+        }
+        this.#settings.selectRestoredThread(resumed.response);
+        await this.#settings.probeCollaborationMode(threadId, signal);
+        const owned = this.#ownedAgent();
+        this.#sessionAgent = owned;
+        return owned;
+    };
     readonly #resume = async (threadId: string, cwd: string, signal: AbortSignal): Promise<void> => {
-        const resumed = await (async () => {
-            try {
-                return threadResumeResponseSchema.parse(
-                    await this.#appServer.request(
-                        "thread/resume",
-                        { cwd, excludeTurns: true, threadId },
-                        AbortSignal.any([signal, AbortSignal.timeout(APPROVAL_TIMEOUT_MILLISECONDS)]),
-                    ),
-                );
-            } catch (cause: unknown) {
-                signal.throwIfAborted();
-                console.warn("Codex thread resume failed; attempting borrowed queue access", { threadId }, cause);
-                return null;
-            }
-        })();
-        if (resumed === null) {
+        const resumed = await this.#resumeThread(threadId, cwd, APPROVAL_TIMEOUT_MILLISECONDS, signal);
+        if (resumed.kind === "unavailable") {
+            console.warn("Codex thread resume failed; attempting borrowed queue access", { threadId }, resumed.cause);
             const saved = z
                 .object({
                     thread: z.object({
@@ -361,6 +384,7 @@ export class CodexAcpAgent {
                 threadId,
                 this.#emit,
                 async (stage) => await this.#options.onPromptDelegation?.(stage),
+                async (takeOverSignal) => await this.#takeOver(threadId, cwd, takeOverSignal),
             );
             await queued.initialize(signal);
             this.#sessionId = threadId;
@@ -374,9 +398,9 @@ export class CodexAcpAgent {
             this.#sessionAgent = queued;
             return;
         }
-        this.#sessionId = resumed.thread.id;
+        this.#sessionId = resumed.response.thread.id;
         this.#thread = "saved";
-        this.#settings.selectRestoredThread(resumed);
+        this.#settings.selectRestoredThread(resumed.response);
         await this.#settings.probeCollaborationMode(this.#sessionId, signal);
     };
     readonly #emit = async (update: CodexSessionUpdate): Promise<void> => {

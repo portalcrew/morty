@@ -62,7 +62,10 @@ interface PendingPrompt {
     delegation: Promise<void>;
 }
 
-/** A locked thread remains owned by Codex. This connection only reads it and appends queued input. */
+/**
+ * A locked thread remains owned by Codex. This connection only reads it and appends queued input, until no other
+ * process holds the thread when a prompt arrives and this connection takes it over.
+ */
 export class CodexBorrowedAcpAgent implements CodexSessionAgent {
     readonly steeringSupported = false;
     readonly runsTurns = false;
@@ -70,6 +73,7 @@ export class CodexBorrowedAcpAgent implements CodexSessionAgent {
     readonly #threadId: string;
     readonly #emit: (update: CodexSessionUpdate) => Promise<void>;
     readonly #onDelegation: (stage: PromptDelegationStage) => Promise<void>;
+    readonly #takeOver: (signal: AbortSignal) => Promise<Pick<CodexSessionAgent, "prompt"> | null>;
     readonly #closed = new AbortController();
     readonly #seen = new Map<string, string>();
     #pending: PendingPrompt | null = null;
@@ -84,11 +88,13 @@ export class CodexBorrowedAcpAgent implements CodexSessionAgent {
         threadId: string,
         emit: (update: CodexSessionUpdate) => Promise<void>,
         onDelegation: (stage: PromptDelegationStage) => Promise<void>,
+        takeOver: (signal: AbortSignal) => Promise<Pick<CodexSessionAgent, "prompt"> | null>,
     ) {
         this.#client = client;
         this.#threadId = threadId;
         this.#emit = emit;
         this.#onDelegation = onDelegation;
+        this.#takeOver = takeOver;
     }
 
     readonly #reportDelegation = async (pending: PendingPrompt, stage: PromptDelegationStage): Promise<void> => {
@@ -298,6 +304,13 @@ export class CodexBorrowedAcpAgent implements CodexSessionAgent {
         }
         if (this.#pending !== null) {
             throw new AcpExecutionError("Another prompt is already running", {}, "session_busy");
+        }
+        const writer = await this.#takeOver(signal);
+        if (writer !== null) {
+            this.#lifecycle = { kind: "closed" };
+            this.#closed.abort();
+            await this.#watch;
+            return await writer.prompt(input, signal, content);
         }
         const pending: PendingPrompt = {
             content,
