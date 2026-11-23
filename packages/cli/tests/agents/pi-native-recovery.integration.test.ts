@@ -238,7 +238,7 @@ test("Given a real Pi native Session was previewed, When the user imports it, Th
         const previewRequestId = randomUUID();
         peer.send(
             encodeSessionPreviewHistoryPageLoad({
-                ...identity,
+                directory: identity.directory,
                 cursor: null,
                 eventLimit: 200,
                 kind: "session.preview-history.page.load",
@@ -414,6 +414,7 @@ test("Given a saved real Pi native Session, When the user forks it, Then its his
             break;
         }
 
+        await peer.subscribe(forkedSessionTarget);
         const forkedCommandId = randomUUID();
         peer.send(
             encodeSessionPromptCommand({

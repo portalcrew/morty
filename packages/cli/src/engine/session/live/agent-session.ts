@@ -118,6 +118,7 @@ export class AgentSession {
     readonly #cwd: string;
     readonly #environment: Readonly<Record<string, string>>;
     readonly #observer: SessionObserver;
+    #observedCommandId: string | undefined;
     readonly #agentCommand: () => string | undefined;
     readonly #settledTurns: () => readonly SettledTurn[];
     readonly #interactions: SessionInteractions;
@@ -196,6 +197,17 @@ export class AgentSession {
                     // Background work may have appended to native history on this process's behalf.
                     void this.#recordNativeHistoryRevision();
                 }
+            },
+            onObservedTurn: (sessionId, turn) => {
+                this.#adoptNativeSession(sessionId);
+                this.#observedCommandId = turn.commandId;
+                const clear = () => {
+                    if (this.#observedCommandId === turn.commandId) {
+                        this.#observedCommandId = undefined;
+                    }
+                };
+                void turn.completion.then(clear, clear);
+                return this.#observer.onObservedTurn?.(this.target, turn);
             },
             onPromptDelegation: async (stage) => {
                 // Only the prompt this Session is running can be delegated; a late report has no command to name.
@@ -352,6 +364,7 @@ export class AgentSession {
             options.adapter,
         );
 
+    readonly connectionLost = (): boolean => this.#adapter.connectionLost?.(this.#target()) ?? false;
     readonly runsIn = (cwd: string): boolean => this.#cwd === cwd;
 
     readonly usesEnvironment = (environment: Readonly<Record<string, string>>): boolean =>
@@ -924,6 +937,13 @@ export class AgentSession {
             });
         }
         try {
+            if (this.#observedCommandId !== undefined && this.#observedCommandId !== options.targetCommandId) {
+                throw new AcpExecutionError(
+                    "The target turn finished before steering could be injected",
+                    {},
+                    "steering_target_unavailable",
+                );
+            }
             const outcome = await this.#adapter.steer({ ...this.#target(), content: options, signal: options.signal });
             if (lifecycle !== undefined) {
                 this.recordLifecycleEvent({
@@ -958,11 +978,14 @@ export class AgentSession {
         }
     };
 
-    readonly cancel = async (signal: AbortSignal): Promise<"retained" | "closed"> => {
+    readonly cancel = async (signal: AbortSignal, commandId: string): Promise<"retained" | "closed"> => {
         signal.throwIfAborted();
         await this.#interactions.cancelPendingInteractions();
         signal.throwIfAborted();
-        if (this.#agentCommand() !== undefined) {
+        if (
+            this.#agentCommand() === commandId &&
+            (this.#observedCommandId === undefined || this.#observedCommandId === commandId)
+        ) {
             return await this.#adapter.cancel({ ...this.#target(), signal });
         }
         return "retained";

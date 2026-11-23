@@ -14,6 +14,7 @@ import type {
     SessionPermissionRespondCommand,
     SessionPromptSuggestions,
 } from "@portalcrew/morty-client/protocol";
+import type { ObservedAgentTurn } from "../../acp/adapter/native-session-event.ts";
 import type { AcpAgentDefinition } from "../../acp/agent/agent-definition.ts";
 import type { AgentModelEffort } from "../../acp/agent/model-effort.ts";
 import type { PromptImageInput, PromptResourceInput } from "../../acp/client/prompt-content.ts";
@@ -93,6 +94,7 @@ export type ElicitationResponseOptions = AnswerOf<SessionElicitationRespondComma
 export type PromptResult = AgentPromptResponse;
 
 export interface SessionObserver {
+    readonly onObservedTurn?: (target: NativeSessionTarget, turn: ObservedAgentTurn) => Promise<void> | void;
     readonly onBackgroundActivity?: () => void;
     readonly onSessionEvent?: (event: SessionLiveEvent) => void;
     readonly onPromptSuggestions?: (message: SessionPromptSuggestions) => void;

@@ -334,7 +334,20 @@ export const threadTurnsPageSchema = z.object({
     nextCursor: boundedText(1_024).nullish(),
 });
 
-export const threadResumeResponseSchema = threadLifecycleResponseSchema;
+export const sharedTurnPageSchema = z.object({
+    data: z
+        .array(
+            z.object({
+                id: boundedText(256),
+                status: turnStatusSchema,
+                items: z.array(z.unknown()).max(100_000),
+            }),
+        )
+        .max(1),
+});
+export const threadResumeResponseSchema = threadLifecycleResponseSchema.extend({
+    initialTurnsPage: sharedTurnPageSchema.nullish(),
+});
 export const threadForkResponseSchema = threadLifecycleResponseSchema;
 
 // A thread summary as `thread/list` reports it. `updatedAt` is Unix seconds and becomes the ACP

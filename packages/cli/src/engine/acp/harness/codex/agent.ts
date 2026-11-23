@@ -24,6 +24,7 @@ import { CodexOwnedAcpAgent } from "./owned-agent.ts";
 import type { CodexSessionAgent } from "./session-agent.ts";
 import { type CodexClientOptions, type CodexSessionUpdate, promptResultWithMessageId } from "./session-update.ts";
 import { CodexSettings } from "./settings.ts";
+import { sharedServerOwns } from "./shared-server.ts";
 import { usageReport, usageResetReport } from "./usage.ts";
 
 const APPROVAL_TIMEOUT_MILLISECONDS = 3_600_000;
@@ -73,6 +74,7 @@ export class CodexAcpAgent {
     constructor(options: CodexClientOptions) {
         this.#options = options;
         this.#appServer = new CodexAppServerClient({
+            ...(options.socket === undefined ? {} : { socket: options.socket }),
             command: options.command,
             cwd: options.cwd,
             environment: options.environment,
@@ -89,6 +91,8 @@ export class CodexAcpAgent {
         this.#settings = new CodexSettings(this.#appServer);
         this.#sessionAgent = new CodexOwnedAcpAgent({
             client: this.#appServer,
+            shared: this.shared(),
+            onObservedTurn: options.onObservedTurn,
             settings: this.#settings,
             threadId: () => this.#sessionId,
             interactions: options.interactions,
@@ -128,6 +132,9 @@ export class CodexAcpAgent {
         await this.#settings.loadModels(signal);
         this.signal.throwIfAborted();
     };
+    readonly shared = () => this.#options.socket !== undefined;
+    readonly ownsSharedThread = async (id: string, signal: AbortSignal) =>
+        sharedServerOwns(this.#appServer, id, this.#options.cwd, signal);
     readonly runsTurns = (): boolean => this.#sessionAgent.runsTurns;
     readonly agentSettingsModelEffort = () => this.#settings.agentModelEffort();
     readonly sessionConfiguration = () => ({ configOptions: this.#settings.configOptions() });
@@ -295,7 +302,7 @@ export class CodexAcpAgent {
     };
     readonly steer = async (request: unknown, signal: AbortSignal) => await this.#sessionAgent.steer(request, signal);
     readonly cancel = async (_request: { readonly sessionId: string }): Promise<void> => {
-        if (this.#sessionAgent.runsTurns) {
+        if (this.#sessionAgent.runsTurns && !this.shared()) {
             // Interrupt alone leaves unified-exec tools alive, including late startup notifications.
             await this.dispose("force");
         } else {
@@ -310,10 +317,12 @@ export class CodexAcpAgent {
                     await this.#sessionAgent.close();
                 } finally {
                     this.#appServer.detach();
-                    const child = this.#appServer.child();
                     try {
-                        const captured: readonly ProcessTreeIdentity[] = await captureProcessTree(child);
-                        await stopProcessTree(child, captured);
+                        if (!this.shared()) {
+                            const child = this.#appServer.child();
+                            const captured: readonly ProcessTreeIdentity[] = await captureProcessTree(child);
+                            await stopProcessTree(child, captured);
+                        }
                     } finally {
                         this.#lifetime.abort(new DOMException("The Codex client closed", "AbortError"));
                         this.#options.onBackgroundActivity?.("none");
@@ -324,17 +333,33 @@ export class CodexAcpAgent {
         return this.#closePromise;
     };
     readonly #resume = async (threadId: string, cwd: string, signal: AbortSignal): Promise<void> => {
+        const shared =
+            this.shared() && this.#sessionAgent instanceof CodexOwnedAcpAgent ? this.#sessionAgent : undefined;
+        const revision = shared?.turnRevision;
+        if (shared) {
+            this.#sessionId = threadId;
+        }
         const resumed = await (async () => {
             try {
                 return threadResumeResponseSchema.parse(
                     await this.#appServer.request(
                         "thread/resume",
-                        { cwd, excludeTurns: true, threadId },
+                        {
+                            cwd,
+                            excludeTurns: true,
+                            threadId,
+                            ...(shared
+                                ? { initialTurnsPage: { limit: 1, sortDirection: "desc", itemsView: "notLoaded" } }
+                                : {}),
+                        },
                         AbortSignal.any([signal, AbortSignal.timeout(APPROVAL_TIMEOUT_MILLISECONDS)]),
                     ),
                 );
             } catch (cause: unknown) {
                 signal.throwIfAborted();
+                if (this.shared()) {
+                    throw cause;
+                }
                 console.warn("Codex thread resume failed; attempting borrowed queue access", { threadId }, cause);
                 return null;
             }
@@ -377,6 +402,16 @@ export class CodexAcpAgent {
         this.#sessionId = resumed.thread.id;
         this.#thread = "saved";
         this.#settings.selectRestoredThread(resumed);
+        if (shared && revision !== undefined) {
+            if (!resumed.initialTurnsPage) {
+                throw new AcpExecutionError(
+                    "Codex did not return live shared turn state",
+                    {},
+                    "codex_shared_turn_unavailable",
+                );
+            }
+            shared.observeCurrentTurn(revision, resumed.initialTurnsPage.data[0]);
+        }
         await this.#settings.probeCollaborationMode(this.#sessionId, signal);
     };
     readonly #emit = async (update: CodexSessionUpdate): Promise<void> => {

@@ -57,8 +57,13 @@ export class SessionExecutionState {
      * The turn the Session is working on, from its arrival, through preparation and execution, until it ends: the
      * earliest turn that owns an execution. A promoted prompt steers instead and holds no place.
      */
-    readonly working = (): ActiveRuntimeTurn | undefined =>
-        [...this.#turnsByCommandId.values()].find((candidate) => !candidate.isSteering());
+    readonly working = (): ActiveRuntimeTurn | undefined => {
+        const owners = [...this.#turnsByCommandId.values()].filter((candidate) => !candidate.isSteering());
+        // A desktop turn can begin while phone inputs wait. The native execution precedes that queue.
+        return (
+            owners.find((turn) => this.#executions.executes(this.#sessionTarget, turn.command.commandId)) ?? owners[0]
+        );
+    };
 
     readonly get = (commandId: string): ActiveRuntimeTurn | undefined => this.#turnsByCommandId.get(commandId);
 

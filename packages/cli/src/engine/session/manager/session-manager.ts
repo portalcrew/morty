@@ -309,7 +309,7 @@ export class SessionManager {
         if (current !== undefined && current !== existing) {
             return current;
         }
-        if (!changed) {
+        if (!changed && !existing.connectionLost()) {
             return existing;
         }
         return await this.#executionProcesses.prepare(
@@ -570,8 +570,8 @@ export class SessionManager {
         this.#executions.cancel(target, commandId, () =>
             this.#operations.run({ signal }, async ({ signal }) => {
                 const runtime = this.#executionProcesses.get(target);
-                if (runtime !== undefined) {
-                    const outcome = await runtime.cancel(signal);
+                if (runtime !== undefined && this.executes(target, commandId)) {
+                    const outcome = await runtime.cancel(signal, commandId);
                     switch (outcome) {
                         case "retained":
                             break;
@@ -588,6 +588,11 @@ export class SessionManager {
                 }
             }),
         );
+
+    readonly observeExecution = (target: NativeSessionTarget, commandId: string) => {
+        this.#executions.begin(target, commandId);
+        return () => this.#executions.finish(target, commandId);
+    };
 
     readonly executes = (target: NativeSessionTarget, commandId: string): boolean =>
         this.#executions.executes(target, commandId);

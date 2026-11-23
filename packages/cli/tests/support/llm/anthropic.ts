@@ -235,7 +235,7 @@ export class FakeAnthropicProvider implements AsyncDisposable {
                 signal: AbortSignal,
                 conversation: string,
             ) => Promise<void>;
-            readonly disconnectsBeforeSuccess?: number;
+            readonly disconnectOnceOnPrompt?: string;
             readonly readPath?: string;
             readonly toolPrompt?: string;
             readonly bash?: { readonly command: string; readonly runInBackground: boolean };
@@ -243,7 +243,7 @@ export class FakeAnthropicProvider implements AsyncDisposable {
         } = {},
     ): Promise<FakeAnthropicProvider> {
         const toolPrompts = [options.toolPrompt, options.subagent?.innerPrompt];
-        let disconnectsRemaining = options.disconnectsBeforeSuccess ?? 0;
+        let disconnectPrompt = options.disconnectOnceOnPrompt;
         const server = createServer(async (request, response) => {
             const disconnected = new AbortController();
             response.once("close", () => disconnected.abort());
@@ -258,15 +258,15 @@ export class FakeAnthropicProvider implements AsyncDisposable {
                 response.end(JSON.stringify({ input_tokens: 10 }));
                 return;
             }
-            if (disconnectsRemaining > 0) {
-                disconnectsRemaining -= 1;
+            const prompt = latestUserPrompt(payload);
+            if (disconnectPrompt !== undefined && prompt.includes(disconnectPrompt)) {
+                disconnectPrompt = undefined;
                 response.destroy();
                 return;
             }
 
             const tools = availableTools(payload);
             const completedToolCalls = toolResultCount(payload);
-            const prompt = latestUserPrompt(payload);
             const scenario = selectFakeProviderScenario(prompt, toolPrompts);
             const scripted =
                 options.subagent !== undefined

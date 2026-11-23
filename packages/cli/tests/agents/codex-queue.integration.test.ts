@@ -16,7 +16,7 @@ import { CodexAgentSpecification } from "../../src/engine/agent/specification/ve
 import { CodexFixture } from "../support/agents/codex.ts";
 import { withRealDaemon } from "../support/agents/real-daemon.ts";
 import { FakeOpenAiProvider } from "../support/llm/openai.ts";
-import { fakeProviderPrompts } from "../support/llm/scenarios.ts";
+import { fakeProviderPrompts, latestUserPrompt } from "../support/llm/scenarios.ts";
 
 test("Given real Codex has accepted a steering prompt, When V2 recovery reloads the working Session, Then the steered user message remains visible", async ({
     signal,
@@ -155,7 +155,7 @@ test("Given real Codex has accepted a steering prompt, When V2 recovery reloads 
                         payload: expect.objectContaining({
                             kind: "prompt.requested",
                             commandId: steeringCommandId,
-                            disposition: "steer",
+                            dispatch: { kind: "steer", targetCommandId: activeCommandId },
                         }),
                     }),
                 );
@@ -174,14 +174,25 @@ test("Given real Codex advances between repeated prompts, When V2 recovery pagin
     const queuedEntered = Promise.withResolvers<void>();
     const releaseActive = Promise.withResolvers<void>();
     const releaseQueued = Promise.withResolvers<void>();
-    let responseNumber = 0;
+    const repeatedPrompt = fakeProviderPrompts.twoTools;
     await using provider = await FakeOpenAiProvider.start("morty-test-model", "BOUNDARY_REPLY", {
-        beforeFirstText: async () => {
-            responseNumber += 1;
-            if (responseNumber === 1) {
+        beforeFirstText: async (_signal, conversation) => {
+            // A completion may also trigger a prediction request. Count actual submitted
+            // user messages in the model context, not incidental provider requests.
+            const input: unknown = JSON.parse(conversation);
+            const occurrences = Array.isArray(input)
+                ? input.filter(
+                      (message) =>
+                          typeof message === "object" &&
+                          message !== null &&
+                          message.role === "user" &&
+                          latestUserPrompt({ input: [message] }).includes(repeatedPrompt),
+                  ).length
+                : 0;
+            if (occurrences === 1) {
                 activeEntered.resolve();
                 await releaseActive.promise;
-            } else if (responseNumber === 2) {
+            } else if (occurrences === 2) {
                 queuedEntered.resolve();
                 await releaseQueued.promise;
             }
@@ -192,7 +203,6 @@ test("Given real Codex advances between repeated prompts, When V2 recovery pagin
         await withRealDaemon(signal, new CodexAgentSpecification(), codex.environment, async (peer) => {
             const active = randomUUID();
             const queued = randomUUID();
-            const repeatedPrompt = fakeProviderPrompts.twoTools;
             const prompt = (commandId: string, text = `Reply to ${commandId}`): void =>
                 peer.send(
                     encodeSessionPromptCommand({

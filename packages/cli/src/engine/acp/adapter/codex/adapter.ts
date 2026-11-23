@@ -54,6 +54,7 @@ export class CodexAdapter implements Adapter {
     readonly #start = async (
         params: AdapterSessionCreateParams,
         open: (agent: CodexAcpAgent, signal: AbortSignal) => Promise<CodexOpened>,
+        existingThread?: string,
     ) => {
         // The Runtime adds per-session launch values without changing the catalog identity.
         const runtime = params.scope.agent;
@@ -78,9 +79,11 @@ export class CodexAdapter implements Adapter {
                                     params.onBackgroundActivity?.(activity);
                                 }
                             },
+                            onObservedTurn: params.onObservedTurn,
                             onPromptDelegation: async (stage) => await params.onPromptDelegation?.(stage),
                         },
                         signal,
+                        existingThread,
                     );
                     return { agent, drained: callbacks.drained };
                 },
@@ -150,9 +153,33 @@ export class CodexAdapter implements Adapter {
             }
         }
         await this.#release(sessionId, "graceful");
-        return await this.#start(params, (agent, signal) =>
-            replay ? agent.loadSession(request, signal) : agent.resumeSession(request, signal),
-        );
+        const open = (agent: CodexAcpAgent, signal: AbortSignal) =>
+            replay ? agent.loadSession(request, signal) : agent.resumeSession(request, signal);
+        let sharedOpenFailed = false;
+        try {
+            return await this.#start(
+                params,
+                async (agent, signal) => {
+                    try {
+                        return await open(agent, signal);
+                    } catch (error) {
+                        sharedOpenFailed = agent.shared();
+                        throw error;
+                    }
+                },
+                sessionId,
+            );
+        } catch (error) {
+            params.signal.throwIfAborted();
+            if (!sharedOpenFailed) {
+                throw error;
+            }
+            return await this.#start(params, open);
+        }
+    };
+    readonly connectionLost = (target: AdapterSessionTarget): boolean => {
+        const session = this.#sessions.get(sessionIdSchema.parse(target.sessionId));
+        return session?.agent.shared() === true && !session.available;
     };
     readonly #session = (target: AdapterSessionTarget): CodexSession => {
         this.#lifetime.signal.throwIfAborted();
@@ -219,7 +246,7 @@ export class CodexAdapter implements Adapter {
     readonly cancel: Adapter["cancel"] = async (params) => {
         const session = this.#session(params);
         params.signal.throwIfAborted();
-        if (!session.agent.runsTurns()) {
+        if (session.agent.shared() || !session.agent.runsTurns()) {
             return await session.cancel(params.signal);
         }
         await this.#release(session.sessionId, "force");

@@ -275,6 +275,7 @@ test("Given a completed real Claude Session, When it is forked, Then its history
             break;
         }
 
+        await peer.subscribe(childTarget);
         const childCommandId = randomUUID();
         sendPrompt(childTarget, childCommandId);
         expect(await finish(childTarget, childCommandId)).toContain("CLAUDE_FORK_REPLY");

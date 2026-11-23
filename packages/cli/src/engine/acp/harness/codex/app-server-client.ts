@@ -1,4 +1,5 @@
 import type { ChildProcess } from "node:child_process";
+import type WebSocket from "ws";
 
 import { executableLaunch, platformSpawnOptions, spawnProcess } from "../../../util/process/executable.ts";
 
@@ -37,10 +38,12 @@ export interface CodexAppServerOptions {
     readonly cwd: string;
     readonly environment: Readonly<Record<string, string>>;
     readonly handlers: CodexAppServerHandlers;
+    readonly socket?: WebSocket;
 }
 
 export class CodexAppServerClient {
-    readonly #child: ChildProcess;
+    readonly #child: ChildProcess | null;
+    readonly #socket: WebSocket | undefined;
     readonly #handlers: CodexAppServerHandlers;
     readonly #pending = new Map<number | string, PendingRequest>();
     readonly #termination = Promise.withResolvers<AgentTermination>();
@@ -48,12 +51,38 @@ export class CodexAppServerClient {
     #lifecycle: { readonly kind: "open" } | { readonly kind: "terminated"; readonly result: AgentTermination } = {
         kind: "open",
     };
+    #sharedNotifications: Promise<void> = Promise.resolve();
     #nextRequestId = 1;
     #pendingBytes = 0;
     #pendingFragments: string[] = [];
 
     constructor(options: CodexAppServerOptions) {
         this.#handlers = options.handlers;
+        this.#socket = options.socket;
+        if (options.socket !== undefined) {
+            this.#child = null;
+            options.socket.on("message", (data, binary) => {
+                try {
+                    if (binary) {
+                        throw new Error("Expected a Codex text frame");
+                    }
+                    this.#dispatch(decodeAppServerMessage(JSON.parse(data.toString())));
+                } catch (cause) {
+                    this.#fail(
+                        new CodexAppServerError("codex_app_server_protocol_error", "Invalid Codex frame", { cause }),
+                    );
+                }
+            });
+            options.socket.on("close", () =>
+                this.#fail(new CodexAppServerError("codex_app_server_exited", "The Codex connection closed")),
+            );
+            options.socket.on("error", (cause) =>
+                this.#fail(
+                    new CodexAppServerError("codex_app_server_io_error", "The Codex connection failed", { cause }),
+                ),
+            );
+            return;
+        }
         const launch = executableLaunch(options.command, ["app-server"]);
         this.#child = spawnProcess(launch.command, launch.arguments, {
             cwd: options.cwd,
@@ -103,7 +132,12 @@ export class CodexAppServerClient {
         });
     }
 
-    readonly child = (): ChildProcess => this.#child;
+    readonly child = (): ChildProcess => {
+        if (this.#child === null) {
+            throw new Error("A shared Codex connection owns no child process");
+        }
+        return this.#child;
+    };
 
     readonly #fail = (error: CodexAppServerError): void => {
         this.#terminate({ kind: "failed", error });
@@ -225,7 +259,17 @@ export class CodexAppServerClient {
             );
             return;
         }
-        this.#runHandler(this.#handlers.onNotification(message.method, message.params));
+        if (this.#socket !== undefined) {
+            // A second client can start the next turn immediately. Finish projecting the previous
+            // notification before exposing it. RPC replies and approval requests remain independent.
+            this.#sharedNotifications = this.#sharedNotifications.then(async () => {
+                this.#requireOpen();
+                await this.#handlers.onNotification(message.method, message.params);
+            });
+            this.#runHandler(this.#sharedNotifications);
+        } else {
+            this.#runHandler(this.#handlers.onNotification(message.method, message.params));
+        }
     };
 
     readonly request = async (method: string, params: unknown, signal: AbortSignal): Promise<unknown> => {
@@ -264,7 +308,11 @@ export class CodexAppServerClient {
 
     readonly #write = (message: unknown): void => {
         this.#requireOpen();
-        const stdin = this.#child.stdin;
+        if (this.#socket !== undefined) {
+            this.#socket.send(JSON.stringify(message));
+            return;
+        }
+        const stdin = this.child().stdin;
         if (stdin === null || stdin.destroyed) {
             const error = new CodexAppServerError("codex_app_server_io_error", "The Codex app-server input is closed");
             this.#fail(error);
@@ -291,6 +339,7 @@ export class CodexAppServerClient {
      * app-server and every tool subprocess it started.
      */
     readonly detach = (): void => {
+        this.#socket?.terminate();
         this.#terminate({ kind: "closed" });
     };
 }
