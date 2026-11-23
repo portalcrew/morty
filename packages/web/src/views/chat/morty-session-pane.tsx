@@ -931,8 +931,7 @@ function MortySessionPaneBody({
                             }
                             steerExplanation={{
                                 title: `${executionContext.agent} on your computer is running this session.`,
-                                description:
-                                    "This message waits until the current task finishes. To steer tasks from here, use Fork session on the reply once it finishes.",
+                                detail: "This message waits until the current task finishes. To steer tasks from here, use Fork session on the reply once it finishes.",
                             }}
                         />
                         <BotChatComposer
@@ -960,9 +959,12 @@ function MortySessionPaneBody({
                             promptSuggestion={draftPromptSuggestion(model.promptSuggestions)}
                             sendBlockedMessage={executionContext.sendBlocked ?? undefined}
                             stopDisabled={presentation.stopDisabled}
-                            stopBlockedMessage={
+                            stopExplanation={
                                 presentation.stopHeldByOwner
-                                    ? `Only ${executionContext.agent} on your computer can stop this task.`
+                                    ? {
+                                          title: `Only ${executionContext.agent} on your computer can stop this task.`,
+                                          detail: "To control later tasks here, use Fork session on the reply once it finishes.",
+                                      }
                                     : undefined
                             }
                             submitDisabled={presentation.submitDisabled}

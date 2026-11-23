@@ -34,12 +34,7 @@ export function WorkingIndicator({ owner, startedAt }: { readonly owner: string 
                 Working for {workingDuration(elapsedSeconds)}
                 {owner === null ? null : ` in ${owner}`}
             </span>
-            {owner === null ? null : (
-                <span>
-                    Only {owner} on your computer can stop it. To control later tasks here, use Fork session on the
-                    reply once it finishes.
-                </span>
-            )}
+            {owner === null ? null : <span>Only {owner} on your computer can stop it.</span>}
         </span>
     );
 }

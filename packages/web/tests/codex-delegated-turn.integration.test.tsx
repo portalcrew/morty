@@ -39,7 +39,7 @@ test("Given the Codex app owns the conversation, When it holds my message in its
     });
     await app.waitForView(() => {
         expect(app.elementByTestId(dataTestId.workingIndicator).textContent).toMatch(
-            /^Working for \d+s in CodexOnly Codex on your computer can stop it\. To control later tasks here, use Fork session on the reply once it finishes\.$/,
+            /^Working for \d+s in CodexOnly Codex on your computer can stop it\.$/,
         );
         expect(getByRole(document.body, "button", { name: "Stop agent output" }).getAttribute("aria-disabled")).toBe(
             "true",
@@ -50,7 +50,7 @@ test("Given the Codex app owns the conversation, When it holds my message in its
     const reloaded = await app.reload();
     await reloaded.waitForView(() => {
         expect(reloaded.elementByTestId(dataTestId.workingIndicator).textContent).toMatch(
-            /^Working for \d+s in CodexOnly Codex on your computer can stop it\. To control later tasks here, use Fork session on the reply once it finishes\.$/,
+            /^Working for \d+s in CodexOnly Codex on your computer can stop it\.$/,
         );
         expect(getByRole(document.body, "button", { name: "Stop agent output" }).getAttribute("aria-disabled")).toBe(
             "true",
@@ -95,7 +95,7 @@ test("Given the Codex app is running my message, When I type a follow-up and cli
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), PROMPT);
     await app.waitForView(() => {
         expect(app.elementByTestId(dataTestId.workingIndicator).textContent).toMatch(
-            /Only Codex on your computer can stop it\./,
+            /Only Codex on your computer can stop it\.$/,
         );
     });
 

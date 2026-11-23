@@ -4,6 +4,7 @@ import {
     type ClipboardEvent,
     type FormEvent,
     type KeyboardEvent,
+    type ReactElement,
     type ReactNode,
     useEffect,
     useId,
@@ -28,6 +29,7 @@ import { chatSessionComposerClassName } from "./chat-session-layout.ts";
 import type { ComposerAttachment } from "./composer-attachment.ts";
 import { ComposerCommandMenu, composerCommandOptionId } from "./composer-command-menu.tsx";
 import { type ComposerNoticePlacement, ComposerNoticeSlot, composerErrorMessage } from "./composer-notice-slot.tsx";
+import { ExplainedUnavailable, type UnavailableExplanation } from "./unavailable-explanation.tsx";
 
 const noCommands: readonly SessionCommand[] = [];
 const composerMaxHeightPx = 256;
@@ -120,7 +122,7 @@ export function BotChatComposer({
     sendBlockedMessage,
     submitDisabled,
     stopDisabled = false,
-    stopBlockedMessage,
+    stopExplanation,
 }: {
     readonly attachmentModel: ComposerAttachmentStore;
     readonly focusScope?: object;
@@ -161,7 +163,7 @@ export function BotChatComposer({
     readonly submitDisabled: boolean;
     readonly stopDisabled?: boolean;
     /** Why the running turn cannot be stopped from here. */
-    readonly stopBlockedMessage?: string | undefined;
+    readonly stopExplanation?: UnavailableExplanation | undefined;
 }) {
     const fileInput = useRef<HTMLInputElement>(null);
     const textarea = useRef<HTMLTextAreaElement>(null);
@@ -236,12 +238,13 @@ export function BotChatComposer({
         sendBlockedMessage !== undefined &&
         attachmentState.kind !== "reading" &&
         (draft.trim().length > 0 || attachments.length > 0);
-    const explainBlockedStop = outputState === "running" && stopDisabled && stopBlockedMessage !== undefined;
-    const explainStop = (): void => {
-        if (stopBlockedMessage !== undefined) {
-            showToast({ title: stopBlockedMessage, variant: "error" });
-        }
-    };
+    const explainBlockedStop = outputState === "running" && stopDisabled && stopExplanation !== undefined;
+    const explained = (button: ReactElement): ReactElement =>
+        explainBlockedStop && stopExplanation !== undefined ? (
+            <ExplainedUnavailable explanation={stopExplanation}>{button}</ExplainedUnavailable>
+        ) : (
+            button
+        );
 
     const submit = (event: FormEvent<HTMLFormElement>): void => {
         event.preventDefault();
@@ -436,33 +439,35 @@ export function BotChatComposer({
                             Use
                         </button>
                     )}
-                    <Button
-                        aria-label={
-                            outputState === "stopping"
-                                ? "Stopping agent output"
-                                : outputState === "running"
-                                  ? "Stop agent output"
-                                  : "Send message"
-                        }
-                        aria-disabled={explainBlockedStop || undefined}
-                        className={cn(
-                            composerActionButtonClassName,
-                            "relative z-10",
-                            outputState === "idle" && "pointer-events-none",
-                            explainBlockedStop && "opacity-50",
-                        )}
-                        disabled={outputState !== "running" || (stopDisabled && !explainBlockedStop)}
-                        onClick={outputState === "running" ? (explainBlockedStop ? explainStop : onStop) : undefined}
-                        size="icon"
-                        title={explainBlockedStop ? stopBlockedMessage : undefined}
-                        type="button"
-                    >
-                        {outputState === "running" || outputState === "stopping" ? (
-                            <Square aria-hidden="true" className="size-3! fill-current" />
-                        ) : (
-                            <ArrowUp aria-hidden="true" className="size-[18px]" />
-                        )}
-                    </Button>
+                    {explained(
+                        <Button
+                            aria-label={
+                                outputState === "stopping"
+                                    ? "Stopping agent output"
+                                    : outputState === "running"
+                                      ? "Stop agent output"
+                                      : "Send message"
+                            }
+                            aria-disabled={explainBlockedStop || undefined}
+                            className={cn(
+                                composerActionButtonClassName,
+                                "relative z-10",
+                                outputState === "idle" && "pointer-events-none",
+                                explainBlockedStop && "opacity-50",
+                            )}
+                            disabled={outputState !== "running" || (stopDisabled && !explainBlockedStop)}
+                            onClick={outputState === "running" && !explainBlockedStop ? onStop : undefined}
+                            size="icon"
+                            title={explainBlockedStop ? stopExplanation?.title : undefined}
+                            type="button"
+                        >
+                            {outputState === "running" || outputState === "stopping" ? (
+                                <Square aria-hidden="true" className="size-3! fill-current" />
+                            ) : (
+                                <ArrowUp aria-hidden="true" className="size-[18px]" />
+                            )}
+                        </Button>,
+                    )}
                 </div>
                 <div
                     aria-hidden={collapsed || undefined}
@@ -561,52 +566,57 @@ export function BotChatComposer({
                                     Use
                                 </button>
                             )}
-                            <Button
-                                aria-busy={outputState === "sending"}
-                                aria-disabled={explainBlockedSend || (!submitAction && explainBlockedStop) || undefined}
-                                aria-label={
-                                    outputState === "sending"
-                                        ? "Sending message"
-                                        : outputState === "stopping"
-                                          ? "Stopping agent output"
-                                          : submitAction
-                                            ? "Send message"
-                                            : "Stop agent output"
-                                }
-                                className={cn(
-                                    composerActionButtonClassName,
-                                    (explainBlockedSend || (!submitAction && explainBlockedStop)) && "opacity-50",
-                                )}
-                                data-testid={dataTestId.sendMessage}
-                                disabled={
-                                    outputState === "sending" ||
-                                    outputState === "stopping" ||
-                                    (outputState === "idle" && submitDisabled && !explainBlockedSend) ||
-                                    (outputState === "running" && !submitAction && stopDisabled && !explainBlockedStop)
-                                }
-                                onClick={
-                                    outputState === "running" && !submitAction
-                                        ? explainBlockedStop
-                                            ? explainStop
-                                            : onStop
-                                        : undefined
-                                }
-                                size="icon"
-                                title={
-                                    explainBlockedSend
-                                        ? sendBlockedMessage
-                                        : !submitAction && explainBlockedStop
-                                          ? stopBlockedMessage
-                                          : undefined
-                                }
-                                type={submitAction ? "submit" : "button"}
-                            >
-                                {submitAction || outputState === "sending" ? (
-                                    <ArrowUp aria-hidden="true" className="size-[18px]" />
-                                ) : (
-                                    <Square aria-hidden="true" className="size-3! fill-current" />
-                                )}
-                            </Button>
+                            {explained(
+                                <Button
+                                    aria-busy={outputState === "sending"}
+                                    aria-disabled={
+                                        explainBlockedSend || (!submitAction && explainBlockedStop) || undefined
+                                    }
+                                    aria-label={
+                                        outputState === "sending"
+                                            ? "Sending message"
+                                            : outputState === "stopping"
+                                              ? "Stopping agent output"
+                                              : submitAction
+                                                ? "Send message"
+                                                : "Stop agent output"
+                                    }
+                                    className={cn(
+                                        composerActionButtonClassName,
+                                        (explainBlockedSend || (!submitAction && explainBlockedStop)) && "opacity-50",
+                                    )}
+                                    data-testid={dataTestId.sendMessage}
+                                    disabled={
+                                        outputState === "sending" ||
+                                        outputState === "stopping" ||
+                                        (outputState === "idle" && submitDisabled && !explainBlockedSend) ||
+                                        (outputState === "running" &&
+                                            !submitAction &&
+                                            stopDisabled &&
+                                            !explainBlockedStop)
+                                    }
+                                    onClick={
+                                        outputState === "running" && !submitAction && !explainBlockedStop
+                                            ? onStop
+                                            : undefined
+                                    }
+                                    size="icon"
+                                    title={
+                                        explainBlockedSend
+                                            ? sendBlockedMessage
+                                            : !submitAction && explainBlockedStop
+                                              ? stopExplanation?.title
+                                              : undefined
+                                    }
+                                    type={submitAction ? "submit" : "button"}
+                                >
+                                    {submitAction || outputState === "sending" ? (
+                                        <ArrowUp aria-hidden="true" className="size-[18px]" />
+                                    ) : (
+                                        <Square aria-hidden="true" className="size-3! fill-current" />
+                                    )}
+                                </Button>,
+                            )}
                         </div>
                     </div>
                 </div>
