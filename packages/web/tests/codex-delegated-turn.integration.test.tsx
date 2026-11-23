@@ -39,18 +39,22 @@ test("Given the Codex app owns the conversation, When it holds my message in its
     });
     await app.waitForView(() => {
         expect(app.elementByTestId(dataTestId.workingIndicator).textContent).toMatch(
-            /^Working for \d+s in CodexOnly Codex can stop it\.$/,
+            /^Working for \d+s in CodexOnly Codex on your computer can stop it\.$/,
         );
-        expect(getByRole(document.body, "button", { name: "Stop agent output" })).toHaveProperty("disabled", true);
+        expect(getByRole(document.body, "button", { name: "Stop agent output" }).getAttribute("aria-disabled")).toBe(
+            "true",
+        );
     });
 
     // The Computer, not the page's memory of live events, says how far Codex has taken the message.
     const reloaded = await app.reload();
     await reloaded.waitForView(() => {
         expect(reloaded.elementByTestId(dataTestId.workingIndicator).textContent).toMatch(
-            /^Working for \d+s in CodexOnly Codex can stop it\.$/,
+            /^Working for \d+s in CodexOnly Codex on your computer can stop it\.$/,
         );
-        expect(getByRole(document.body, "button", { name: "Stop agent output" })).toHaveProperty("disabled", true);
+        expect(getByRole(document.body, "button", { name: "Stop agent output" }).getAttribute("aria-disabled")).toBe(
+            "true",
+        );
     });
 
     await daemon.continueReply(PROMPT, {
@@ -90,7 +94,9 @@ test("Given the Codex app is running my message, When I type a follow-up and cli
     }
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), PROMPT);
     await app.waitForView(() => {
-        expect(app.elementByTestId(dataTestId.workingIndicator).textContent).toMatch(/Only Codex can stop it\.$/);
+        expect(app.elementByTestId(dataTestId.workingIndicator).textContent).toMatch(
+            /Only Codex on your computer can stop it\.$/,
+        );
     });
 
     await sendPrompt(app, await app.queryElementByTestId(dataTestId.messageComposer), FOLLOW_UP);

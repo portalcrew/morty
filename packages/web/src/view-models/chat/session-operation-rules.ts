@@ -154,6 +154,17 @@ export function canSteerQueued(
     return facts.steeringSupported && canActOnQueued(facts, message);
 }
 
+/**
+ * The queued message could steer but for the Session itself: the Runtime withdraws steering only from a Session another
+ * process holds, as Codex on the computer does with its conversation.
+ */
+export function steeringWithheld(
+    facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "steeringSupported">,
+    message: Pick<ChatQueuedMessage, "kind">,
+): boolean {
+    return !facts.steeringSupported && canActOnQueued(facts, message);
+}
+
 export function composerHasMessage(draft: string, attachmentCount: number, readingAttachments: boolean): boolean {
     return !readingAttachments && (draft.trim() !== "" || attachmentCount > 0);
 }

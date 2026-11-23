@@ -1,5 +1,6 @@
 import { Clock4, CornerUpLeft, LoaderCircle, MessageSquare, Pencil, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { ExplainedUnavailable, type UnavailableExplanation } from "../../components/chat/unavailable-explanation.tsx";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import type { sessionPanePresentation } from "../../view-models/chat/session-pane-presentation.ts";
@@ -7,18 +8,37 @@ import type { sessionPanePresentation } from "../../view-models/chat/session-pan
 function QueueAction({
     label,
     disabled,
+    explanation,
     onClick,
     children,
 }: {
     readonly children: ReactNode;
     readonly disabled: boolean;
+    readonly explanation?: UnavailableExplanation | undefined;
     readonly label: string;
     readonly onClick: () => void;
 }) {
+    const className =
+        "flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-morty-text-3 outline-none transition-colors hover:bg-transparent hover:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:cursor-not-allowed aria-disabled:opacity-40";
+    if (disabled && explanation !== undefined) {
+        return (
+            <ExplainedUnavailable explanation={explanation}>
+                <button
+                    aria-disabled="true"
+                    aria-label={label}
+                    className={className}
+                    title={explanation.title}
+                    type="button"
+                >
+                    {children}
+                </button>
+            </ExplainedUnavailable>
+        );
+    }
     return (
         <button
             aria-label={label}
-            className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-morty-text-3 outline-none transition-colors hover:bg-transparent hover:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:opacity-40"
+            className={className}
             disabled={disabled}
             onClick={onClick}
             title={label}
@@ -35,12 +55,14 @@ export function ChatMessageQueue({
     onDelete,
     onEdit,
     onSteer,
+    steerExplanation,
 }: {
     readonly messages: ReturnType<typeof sessionPanePresentation>["queuedMessages"];
     readonly pendingMessages: ReturnType<typeof sessionPanePresentation>["pendingQueueMessages"];
     readonly onDelete: (commandId: string) => void;
     readonly onEdit: (commandId: string) => void;
     readonly onSteer: (commandId: string) => void;
+    readonly steerExplanation: UnavailableExplanation;
 }) {
     if (messages.length + pendingMessages.length === 0) {
         return null;
@@ -101,6 +123,7 @@ export function ChatMessageQueue({
                                             </QueueAction>
                                             <QueueAction
                                                 disabled={message.steerDisabled}
+                                                explanation={message.steeringWithheld ? steerExplanation : undefined}
                                                 label={`Steer queued message: ${message.summary}`}
                                                 onClick={() => onSteer(message.commandId)}
                                             >
