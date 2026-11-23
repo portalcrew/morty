@@ -12,8 +12,11 @@ export function useAutoGrowingTextarea(
 ): void {
     const resize = useCallback(
         (element: HTMLTextAreaElement) => {
+            // An empty box shows only its placeholder, whose start must stay in view.
             const followsCaret =
-                element.selectionStart === element.value.length && element.selectionEnd === element.value.length;
+                element.value.length > 0 &&
+                element.selectionStart === element.value.length &&
+                element.selectionEnd === element.value.length;
             element.style.height = "auto";
             element.style.height = `${element.scrollHeight.toString()}px`;
             const viewport = scrollViewport?.current;

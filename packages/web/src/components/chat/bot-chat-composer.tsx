@@ -36,6 +36,8 @@ const composerTextareaMaxHeightPx = composerMaxHeightPx - composerChromeHeightPx
 const composerScrollEdgeThresholdPx = 1;
 const composerActionButtonClassName =
     "size-8! rounded-full bg-foreground text-background hover:bg-foreground/85 active:bg-foreground/75";
+const suggestionButtonClassName =
+    "flex h-9 items-center rounded-full px-3 text-13 text-copy-secondary outline-none transition-colors duration-150 hover:bg-black/[0.045] hover:text-foreground active:bg-black/[0.07] active:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none";
 
 function attachmentName(attachment: ComposerAttachment): string {
     return attachment.name;
@@ -162,9 +164,20 @@ export function BotChatComposer({
     const textarea = useRef<HTMLTextAreaElement>(null);
     const scrollViewport = useRef<HTMLDivElement>(null);
     const attachTextarea = useComposerFocus(textarea, focusScope);
-    useAutoGrowingTextarea(textarea, draft, scrollViewport);
-    const clipped = useScrollClippedEdges(scrollViewport, composerScrollEdgeThresholdPx);
     const { attachments, state: attachmentState } = attachmentModel;
+    const [dismissedSuggestion, setDismissedSuggestion] = useState<string | null>(null);
+    const offeredSuggestion =
+        !disabled &&
+        outputState === "idle" &&
+        draft.length === 0 &&
+        attachments.length === 0 &&
+        promptSuggestion !== dismissedSuggestion
+            ? promptSuggestion
+            : null;
+    const placeholder = offeredSuggestion ?? "Ask me anything";
+    // An empty draft shows its placeholder, so a long suggestion sizes the box as its text would.
+    useAutoGrowingTextarea(textarea, draft.length > 0 ? draft : placeholder, scrollViewport);
+    const clipped = useScrollClippedEdges(scrollViewport, composerScrollEdgeThresholdPx);
     const showToast = useToast();
     const { active, activate, mobile, setActive, transitionsEnabled } = useMobileComposerActive(textarea);
     useEffect(() => {
@@ -205,12 +218,13 @@ export function BotChatComposer({
         commandMenu?.onSelect(command);
         textarea.current?.focus({ preventScroll: true });
     };
-    const offeredSuggestion =
-        !disabled && outputState === "idle" && draft.length === 0 && attachments.length === 0 ? promptSuggestion : null;
     const acceptSuggestion = (suggestion: string): void => {
         onDraftChange(suggestion);
         setActive(true);
-        textarea.current?.focus({ preventScroll: true });
+        // Touch devices keep the software keyboard down, so the filled draft and Send stay in view.
+        if (!window.matchMedia("(pointer: coarse)").matches) {
+            textarea.current?.focus({ preventScroll: true });
+        }
     };
     const animateComposer = !mobile || transitionsEnabled;
     const explainBlockedSend =
@@ -273,6 +287,11 @@ export function BotChatComposer({
         ) {
             event.preventDefault();
             acceptSuggestion(offeredSuggestion);
+            return;
+        }
+        if (offeredSuggestion !== null && event.key === "Escape" && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            setDismissedSuggestion(offeredSuggestion);
             return;
         }
         if (event.key === "Enter" && event.ctrlKey && !event.nativeEvent.isComposing) {
@@ -360,7 +379,10 @@ export function BotChatComposer({
                         ? "transition-[height,border-radius,padding] duration-250 ease-in-out motion-reduce:transition-none"
                         : "transition-none",
                     "max-sm:shadow-[0_4px_16px_0_rgba(0,0,0,0.04),0_4px_24px_0_rgba(0,0,0,0.06)]",
-                    !collapsed && draft.length === 0 && attachments.length === 0 && "max-sm:h-[128px]",
+                    !collapsed &&
+                        draft.length === 0 &&
+                        attachments.length === 0 &&
+                        (offeredSuggestion === null ? "max-sm:h-[128px]" : "max-sm:min-h-[128px]"),
                     collapsed && "max-sm:h-14 max-sm:rounded-[28px] max-sm:px-2 max-sm:py-2",
                 )}
             >
@@ -376,11 +398,14 @@ export function BotChatComposer({
                 >
                     <button
                         aria-label="Expand message composer"
-                        className="absolute inset-0 rounded-[28px] bg-card pr-12 pl-12 text-left text-[15px] text-morty-text-3 outline-none"
+                        className={cn(
+                            "absolute inset-0 rounded-[28px] bg-card pl-12 text-left text-[15px] text-morty-text-3 outline-none",
+                            offeredSuggestion === null ? "pr-12" : "pr-24",
+                        )}
                         onClick={activate}
                         type="button"
                     >
-                        <span className="block truncate">{offeredSuggestion ?? "Ask me anything"}</span>
+                        <span className="block truncate">{placeholder}</span>
                     </button>
                     <button
                         aria-label="Add attachment"
@@ -392,6 +417,16 @@ export function BotChatComposer({
                     >
                         <Plus aria-hidden="true" className="size-4" />
                     </button>
+                    {offeredSuggestion !== null && (
+                        <button
+                            aria-label="Use suggested prompt"
+                            className={`${suggestionButtonClassName} relative z-10 ml-auto`}
+                            onClick={() => acceptSuggestion(offeredSuggestion)}
+                            type="button"
+                        >
+                            Use
+                        </button>
+                    )}
                     <Button
                         aria-label={
                             outputState === "stopping"
@@ -467,7 +502,7 @@ export function BotChatComposer({
                                 onFocus={() => setActive(true)}
                                 onKeyDown={handleKeyDown}
                                 onPaste={handlePaste}
-                                placeholder={offeredSuggestion ?? "Ask me anything"}
+                                placeholder={placeholder}
                                 ref={attachTextarea}
                                 tabIndex={collapsed ? -1 : undefined}
                                 value={draft}
@@ -506,14 +541,12 @@ export function BotChatComposer({
                             {offeredSuggestion !== null && (
                                 <button
                                     aria-label="Use suggested prompt"
-                                    className="flex h-8 items-center gap-1.5 rounded-full px-3 text-13 text-copy-secondary outline-none transition-colors duration-150 hover:bg-black/[0.045] hover:text-foreground active:bg-black/[0.07] active:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
+                                    className={suggestionButtonClassName}
                                     onClick={() => acceptSuggestion(offeredSuggestion)}
+                                    title="Use suggested prompt (Tab)"
                                     type="button"
                                 >
                                     Use
-                                    <kbd className="rounded border border-border px-1 font-sans text-12 max-sm:hidden">
-                                        Tab
-                                    </kbd>
                                 </button>
                             )}
                             <Button
@@ -558,6 +591,7 @@ export function BotChatComposer({
             </span>
             <span className="sr-only" id="chat-composer-keyboard-hint">
                 Enter to send. Shift or Control plus Enter inserts a new line.
+                {offeredSuggestion === null ? "" : " Tab inserts the suggested prompt and Escape dismisses it."}
             </span>
         </form>
     );
