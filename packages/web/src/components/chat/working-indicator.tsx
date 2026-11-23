@@ -26,7 +26,7 @@ export function WorkingIndicator({ owner, startedAt }: { readonly owner: string 
     return (
         <span
             aria-label="Agent is working"
-            className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums"
+            className="flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground tabular-nums"
             data-testid={dataTestId.workingIndicator}
             role="status"
         >
@@ -34,7 +34,12 @@ export function WorkingIndicator({ owner, startedAt }: { readonly owner: string 
                 Working for {workingDuration(elapsedSeconds)}
                 {owner === null ? null : ` in ${owner}`}
             </span>
-            {owner === null ? null : <span>Only {owner} can stop it.</span>}
+            {owner === null ? null : (
+                <span>
+                    Only {owner} on your computer can stop it. To control later tasks here, use Fork session on the
+                    reply once it finishes.
+                </span>
+            )}
         </span>
     );
 }

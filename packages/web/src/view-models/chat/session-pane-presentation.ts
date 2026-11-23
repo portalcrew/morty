@@ -23,6 +23,7 @@ import {
     composerHasMessage,
     queuedMessageEditable,
     type SessionOperationFacts,
+    steeringWithheld,
 } from "./session-operation-rules.ts";
 import {
     type SessionProjection,
@@ -93,6 +94,7 @@ function queuedMessagePresentation(facts: SessionOperationFacts, message: ChatQu
             ? `Edit queued message: ${message.summary}`
             : "This message's files cannot be restored here. Delete it and send it again.",
         steerDisabled: !canSteerQueued(facts, message),
+        steeringWithheld: steeringWithheld(facts, message),
         deleteDisabled: !canDeleteQueued(facts, message),
     } as const;
 }
@@ -150,6 +152,7 @@ export function sessionPanePresentation(input: {
         settingsDisabled: !canChangeSettings(facts),
         settingsNotice: controlRunning ? "New settings may not affect this response." : null,
         stopDisabled: !canStop(facts),
+        stopHeldByOwner: facts.ownerRunsTurn,
         forkDisabled: !canFork(facts),
         canSuggestProgress:
             !controlRunning &&

@@ -929,6 +929,11 @@ function MortySessionPaneBody({
                                     async (signal) => await pane.store.getState().steerQueued(commandId, signal),
                                 )
                             }
+                            steerExplanation={{
+                                title: `${executionContext.agent} on your computer is running this session.`,
+                                description:
+                                    "This message waits until the current task finishes. To steer tasks from here, use Fork session on the reply once it finishes.",
+                            }}
                         />
                         <BotChatComposer
                             attachmentModel={attachmentModel}
@@ -955,6 +960,11 @@ function MortySessionPaneBody({
                             promptSuggestion={draftPromptSuggestion(model.promptSuggestions)}
                             sendBlockedMessage={executionContext.sendBlocked ?? undefined}
                             stopDisabled={presentation.stopDisabled}
+                            stopBlockedMessage={
+                                presentation.stopHeldByOwner
+                                    ? `Only ${executionContext.agent} on your computer can stop this task.`
+                                    : undefined
+                            }
                             submitDisabled={presentation.submitDisabled}
                         >
                             <ChatConfigurationMenu

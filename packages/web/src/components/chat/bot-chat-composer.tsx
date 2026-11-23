@@ -120,6 +120,7 @@ export function BotChatComposer({
     sendBlockedMessage,
     submitDisabled,
     stopDisabled = false,
+    stopBlockedMessage,
 }: {
     readonly attachmentModel: ComposerAttachmentStore;
     readonly focusScope?: object;
@@ -159,6 +160,8 @@ export function BotChatComposer({
     readonly sendBlockedMessage?: string | undefined;
     readonly submitDisabled: boolean;
     readonly stopDisabled?: boolean;
+    /** Why the running turn cannot be stopped from here. */
+    readonly stopBlockedMessage?: string | undefined;
 }) {
     const fileInput = useRef<HTMLInputElement>(null);
     const textarea = useRef<HTMLTextAreaElement>(null);
@@ -233,6 +236,12 @@ export function BotChatComposer({
         sendBlockedMessage !== undefined &&
         attachmentState.kind !== "reading" &&
         (draft.trim().length > 0 || attachments.length > 0);
+    const explainBlockedStop = outputState === "running" && stopDisabled && stopBlockedMessage !== undefined;
+    const explainStop = (): void => {
+        if (stopBlockedMessage !== undefined) {
+            showToast({ title: stopBlockedMessage, variant: "error" });
+        }
+    };
 
     const submit = (event: FormEvent<HTMLFormElement>): void => {
         event.preventDefault();
@@ -435,14 +444,17 @@ export function BotChatComposer({
                                   ? "Stop agent output"
                                   : "Send message"
                         }
+                        aria-disabled={explainBlockedStop || undefined}
                         className={cn(
                             composerActionButtonClassName,
                             "relative z-10",
                             outputState === "idle" && "pointer-events-none",
+                            explainBlockedStop && "opacity-50",
                         )}
-                        disabled={outputState !== "running" || stopDisabled}
-                        onClick={outputState === "running" ? onStop : undefined}
+                        disabled={outputState !== "running" || (stopDisabled && !explainBlockedStop)}
+                        onClick={outputState === "running" ? (explainBlockedStop ? explainStop : onStop) : undefined}
                         size="icon"
+                        title={explainBlockedStop ? stopBlockedMessage : undefined}
                         type="button"
                     >
                         {outputState === "running" || outputState === "stopping" ? (
@@ -551,7 +563,7 @@ export function BotChatComposer({
                             )}
                             <Button
                                 aria-busy={outputState === "sending"}
-                                aria-disabled={explainBlockedSend || undefined}
+                                aria-disabled={explainBlockedSend || (!submitAction && explainBlockedStop) || undefined}
                                 aria-label={
                                     outputState === "sending"
                                         ? "Sending message"
@@ -561,17 +573,32 @@ export function BotChatComposer({
                                             ? "Send message"
                                             : "Stop agent output"
                                 }
-                                className={`${composerActionButtonClassName}${explainBlockedSend ? " opacity-50" : ""}`}
+                                className={cn(
+                                    composerActionButtonClassName,
+                                    (explainBlockedSend || (!submitAction && explainBlockedStop)) && "opacity-50",
+                                )}
                                 data-testid={dataTestId.sendMessage}
                                 disabled={
                                     outputState === "sending" ||
                                     outputState === "stopping" ||
                                     (outputState === "idle" && submitDisabled && !explainBlockedSend) ||
-                                    (outputState === "running" && !submitAction && stopDisabled)
+                                    (outputState === "running" && !submitAction && stopDisabled && !explainBlockedStop)
                                 }
-                                onClick={outputState === "running" && !submitAction ? onStop : undefined}
+                                onClick={
+                                    outputState === "running" && !submitAction
+                                        ? explainBlockedStop
+                                            ? explainStop
+                                            : onStop
+                                        : undefined
+                                }
                                 size="icon"
-                                title={explainBlockedSend ? sendBlockedMessage : undefined}
+                                title={
+                                    explainBlockedSend
+                                        ? sendBlockedMessage
+                                        : !submitAction && explainBlockedStop
+                                          ? stopBlockedMessage
+                                          : undefined
+                                }
                                 type={submitAction ? "submit" : "button"}
                             >
                                 {submitAction || outputState === "sending" ? (
