@@ -3,6 +3,7 @@ import { createStore } from "zustand/vanilla";
 import type { BotChatApi, ChatComputer, ManagedChatSession } from "../../services/chat/bot-chat-api.ts";
 import { formatError } from "../format-error.ts";
 import { type NativeSessionAgent, nativeSessionAgentTabs } from "./native-session-agents.ts";
+import { type ForkIntent, forkIntent } from "./native-session-fork.ts";
 import type { OpenMortySession } from "./open-session.ts";
 import { type SessionMessage, sessionEventLogPresentation } from "./session-presentation.ts";
 import { createUserMessageCollapseStore, type UserMessageCollapseStore } from "./user-message-collapse-store.ts";
@@ -38,11 +39,6 @@ type NativeSessionPreview =
     | { readonly kind: "failed"; readonly entry: NativeSessionEntry; readonly message: string };
 
 type Operation = "idle" | "more" | "import" | "fork";
-
-type ForkIntent = {
-    readonly target: string;
-    readonly operationId: string;
-};
 
 export interface NativeSessionStore {
     readonly userMessageCollapse: UserMessageCollapseStore;
@@ -326,18 +322,14 @@ export const createNativeSessionStore = (
                     directory: preview.entry.directory,
                     sessionId: preview.entry.sessionId,
                 };
-                const retained = get().forkIntent;
-                const target = JSON.stringify(input);
-                const forkIntent =
-                    retained !== null && retained.target === target
-                        ? retained
-                        : { target, operationId: crypto.randomUUID() };
+                // A retry from the dialog keeps the identity of the fork it already asked for, whatever the preview shows.
+                const fork = forkIntent(get().forkIntent, input, "", () => crypto.randomUUID());
                 if (action === "fork") {
-                    set({ forkIntent });
+                    set({ forkIntent: fork });
                 }
                 const result =
                     action === "fork"
-                        ? await requests.forkNativeSession(forkIntent.operationId, input, signal)
+                        ? await requests.forkNativeSession(fork.operationId, input, signal)
                         : await requests.importNativeSession(input, signal);
                 signal.throwIfAborted();
                 const { sessionId: _sessionId, ...entry } = preview.entry;

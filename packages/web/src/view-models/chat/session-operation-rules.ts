@@ -21,6 +21,10 @@ export interface SessionOperationFacts {
     readonly waitingForInput: boolean;
     readonly ownerRunsTurn: boolean;
     readonly steeringSupported: boolean;
+    readonly forkSupported: boolean;
+    readonly forking: boolean;
+    readonly turnRunning: boolean;
+    readonly queued: boolean;
 }
 
 /** Settings changes and messages are serialized: a message waits while the Session's settings are changing. */
@@ -38,6 +42,8 @@ function userCanSubmit(facts: SessionOperationFacts): boolean {
         facts.connectionAvailable &&
         !facts.waitingForInput &&
         !facts.stopping &&
+        // A message must not reach the Session before the fork the user already asked for copies it.
+        !facts.forking &&
         facts.connection === "ready" &&
         settingsAllowMessages(facts)
     );
@@ -93,6 +99,25 @@ export function canStop(
     facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "ownerRunsTurn" | "stopping">,
 ): boolean {
     return facts.connectionAvailable && facts.connection === "ready" && !facts.ownerRunsTurn && !facts.stopping;
+}
+
+/**
+ * Forking copies the Session as the user last saw it, so the Session must be at rest: nothing running, being sent,
+ * queued or waiting for the user, and its connection ready to report a failure.
+ */
+export function canFork(facts: SessionOperationFacts): boolean {
+    return (
+        facts.forkSupported &&
+        facts.connectionAvailable &&
+        facts.connection === "ready" &&
+        !facts.forking &&
+        !facts.turnRunning &&
+        !facts.queued &&
+        !facts.stopping &&
+        !facts.configuring &&
+        !facts.waitingForInput &&
+        facts.delivery.kind === "idle"
+    );
 }
 
 function canActOnQueued(

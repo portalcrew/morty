@@ -69,6 +69,7 @@ class ControlledAgentState {
     readonly #options: FakeAgentHarnessOptions;
     readonly #sessions = new Map<string, number>();
     readonly #titles = new Map<string, string>();
+    readonly #directories = new Map<string, string>();
 
     constructor(options: FakeAgentHarnessOptions) {
         this.#options = options;
@@ -96,6 +97,10 @@ class ControlledAgentState {
         await this.#options.beforeNativeSessionPage?.(cursor);
     readonly nativeSessionPageSize = (): number | null => this.#options.nativeSessionPageSize ?? null;
     readonly title = (sessionId: string): string | null => this.#titles.get(sessionId) ?? null;
+    readonly directory = (sessionId: string): string | null => this.#directories.get(sessionId) ?? null;
+    readonly placeSession = (sessionId: string, cwd: string): void => {
+        this.#directories.set(sessionId, cwd);
+    };
     readonly rename = (sessionId: string, title: string): void => {
         if (!this.#sessions.has(sessionId)) {
             throw new Error(`The controlled Agent session is unknown: ${sessionId}`);
@@ -512,10 +517,11 @@ class ControlledAgentEndpoint implements FakeHarnessEndpoint {
                 authMethods: [],
                 protocolVersion: acp.PROTOCOL_VERSION,
             }))
-            .onRequest(acp.methods.agent.session.new, async () => {
+            .onRequest(acp.methods.agent.session.new, async (context) => {
                 const sessionId = crypto.randomUUID();
                 this.#sessionIds.add(sessionId);
                 this.#state.rememberSession(sessionId);
+                this.#state.placeSession(sessionId, context.params.cwd);
                 await this.#state.reportCommands(sessionId, onSessionUpdate);
                 return { configOptions: this.#state.configuration(sessionId), sessionId };
             })
@@ -530,6 +536,7 @@ class ControlledAgentEndpoint implements FakeHarnessEndpoint {
             .onRequest(acp.methods.agent.session.fork, (context) => {
                 const sessionId = this.#state.fork(context.params.sessionId);
                 this.#sessionIds.add(sessionId);
+                this.#state.placeSession(sessionId, context.params.cwd);
                 return { configOptions: this.#state.configuration(sessionId), sessionId };
             })
             .onRequest(acp.methods.agent.session.resume, (context) => {
@@ -550,7 +557,8 @@ class ControlledAgentEndpoint implements FakeHarnessEndpoint {
                     .sessions()
                     .filter((session) => session.turnCount > 0)
                     .map((session) => ({
-                        cwd: context.params.cwd ?? "/",
+                        // An Agent reports where each of its sessions runs, whichever directory the listing asked for.
+                        cwd: this.#state.directory(session.sessionId) ?? context.params.cwd ?? "/",
                         sessionId: session.sessionId,
                         title: this.#state.title(session.sessionId) ?? `Native ${session.sessionId}`,
                         updatedAt: "2026-01-01T00:00:00Z",

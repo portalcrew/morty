@@ -23,6 +23,7 @@ import type { ComposerAttachment } from "../../components/chat/composer-attachme
 import { ComposerNoticeSlot, composerErrorMessage } from "../../components/chat/composer-notice-slot.tsx";
 import { ConnectionNotice } from "../../components/chat/connection-notice.tsx";
 import { ReadonlyWorkingDirectory, WorkingDirectorySkeleton } from "../../components/chat/cwd-selector.tsx";
+import { ForkSessionButton } from "../../components/chat/fork-session-button.tsx";
 import { HarnessMark } from "../../components/chat/harness-mark.tsx";
 import { InlineEditFocus } from "../../components/chat/inline-edit-focus.tsx";
 import { MessageDeliveryStatus } from "../../components/chat/message-delivery-status.tsx";
@@ -499,6 +500,7 @@ function MortySessionPaneBody({
     const messageQueue = useStore(pane.messageQueue);
     const taskControls = useStore(pane.tasks);
     const feedback = useStore(pane.feedback);
+    const fork = useStore(pane.fork);
     const welcome = useStore(pane.welcome, (state) => state.state);
     const harness = sessionHarnessSelection(computerConfiguration?.computer ?? null, pane.harness);
 
@@ -532,8 +534,10 @@ function MortySessionPaneBody({
         attachments: attachmentModel,
         settings: settingsModel,
         feedback,
+        fork,
         connectionAvailable: executionContext.available,
         steeringSupported: pane.steeringSupported,
+        forkSupported: pane.session.ready.capabilities.unstableForkSession,
     });
     const answer = (messageId: string): void =>
         runAndFollow(async () => {
@@ -581,6 +585,7 @@ function MortySessionPaneBody({
         presentation,
         connection.kind,
         isFileEditToolCall,
+        pane.session.ready.capabilities.unstableForkSession,
     );
     const sessionMessagesLoading = timelinePresentation.loading;
     const initialMessage = presentation.awaitingMessage;
@@ -729,6 +734,15 @@ function MortySessionPaneBody({
                                                 active={group.active}
                                                 activeItemId={group.activeItemId}
                                                 copyText={group.copyText}
+                                                fork={
+                                                    group.forkOffered ? (
+                                                        <ForkSessionButton
+                                                            disabled={presentation.forkDisabled}
+                                                            forking={fork.fork.kind === "forking"}
+                                                            onFork={() => run(pane.store.getState().fork)}
+                                                        />
+                                                    ) : undefined
+                                                }
                                                 sections={group.sections}
                                                 workingSectionId={group.workingSectionId}
                                                 renderItem={(item, active) => (

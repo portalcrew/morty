@@ -419,6 +419,15 @@ export function createChatWorkspace(options: {
             sessionTarget,
             clock: options.clock,
             refreshDirectory: () => startDirectoryLoad(),
+            forkSession: requests.forkNativeSession,
+            openFork: (source, fork) => {
+                // A fork that completes after the user moved on must not pull them away from where they are.
+                const selected = selectedConversationTarget(home.getState().selection);
+                if (selected !== null && sameNativeSession(selected, source)) {
+                    home.getState().openManaged(fork);
+                }
+                void startDirectoryLoad();
+            },
             lifetime: operationsLifetime.signal,
         });
         sessionStates.set(sessionTarget, state);
