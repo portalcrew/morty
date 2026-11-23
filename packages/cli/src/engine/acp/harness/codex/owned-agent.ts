@@ -25,6 +25,7 @@ import {
     type UserInputQuestion,
 } from "./app-server-protocol.ts";
 import { decodeThreadItem, messageQuestions, reasoningText, toolCallUpdate } from "./items.ts";
+import { CodexPromptSuggestions } from "./prompt-suggestions.ts";
 import type { CodexSessionAgent } from "./session-agent.ts";
 import type { CodexMessageUpdate, CodexSessionUpdate } from "./session-update.ts";
 import { promptResultWithMessageId } from "./session-update.ts";
@@ -223,6 +224,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
     readonly #streamedReasoningSources = new Map<string, "summary" | "content">();
     readonly #agentMessages = new Map<string, "started" | "streaming">();
     #turn: ActiveTurn | null = null;
+    readonly #suggestions: CodexPromptSuggestions;
     readonly #runningCommands = new Map<string, "foreground" | "background">();
     #updateTail: Promise<void> = Promise.resolve();
     // The compaction whose contextCompaction item/started has been reported but whose
@@ -240,9 +242,15 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         this.#context = context;
         this.#appServer = context.client;
         this.#settings = context.settings;
+        this.#suggestions = new CodexPromptSuggestions(
+            context.client,
+            context.signal,
+            async (update) => await this.#enqueue(async () => await this.#context.emit(update)),
+        );
     }
 
     readonly onTerminated = (termination: AgentTermination): void => {
+        this.#suggestions.stop();
         if (this.#turn !== null) {
             this.#turn.steeringContent.clear();
         }
@@ -250,6 +258,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         this.#settleCompaction("cancelled");
     };
     readonly close = async (): Promise<void> => {
+        this.#suggestions.stop();
         if (this.#turn !== null) {
             this.#turn.steeringContent.clear();
         }
@@ -832,6 +841,10 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
         this.#streamedReasoningSources.clear();
         this.#turn = turn;
         try {
+            const withdrawn = this.#suggestions.withdraw();
+            if (withdrawn !== null) {
+                await withdrawn;
+            }
             // The selection rides on the turn rather than the thread, so a choice made between turns
             // applies to the next one without restarting the conversation. Approval and sandboxing
             // travel as a pair: Codex resolves them together into the mode's single preset.
@@ -924,6 +937,7 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
     };
 
     readonly cancel = async (): Promise<void> => {
+        this.#suggestions.stop();
         const turn = this.#turn;
         if (turn === null) {
             return;
@@ -976,5 +990,6 @@ export class CodexOwnedAcpAgent implements CodexSessionAgent {
             return;
         }
         active.completion.resolve({ stopReason: "end_turn" });
+        this.#suggestions.turnCompleted(this.#context.threadId(), turn.id);
     };
 }
