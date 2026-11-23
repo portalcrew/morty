@@ -76,7 +76,8 @@ export function createAppInstallStore(appInstall: AppInstall, clock: Clock, sign
     appInstall.watch(
         {
             offered: (offer) => {
-                if (store.getState().state.kind !== "installed") {
+                const kind = store.getState().state.kind;
+                if (kind === "offered" || kind === "unavailable") {
                     store.setState({ state: { kind: "offered", offer } });
                 }
             },
