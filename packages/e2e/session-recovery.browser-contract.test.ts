@@ -509,7 +509,7 @@ test("Given a mobile browser with an unsent draft, when its network is disabled 
     );
 });
 
-test("Given an active turn on mobile, when the browser goes offline and the user presses Enter, then the follow-up stays editable and can be queued after recovery", async ({
+test("Given an active turn on mobile, when the browser goes offline and the user presses Return, then Return inserts a line break, nothing is queued, and Send queues the follow-up after recovery", async ({
     runtime,
 }) => {
     const { page } = runtime;
@@ -530,12 +530,12 @@ test("Given an active turn on mobile, when the browser goes offline and the user
     await composer.fill("Keep this follow-up");
     await expect(page.getByTestId(dataTestId.sendMessage)).toBeDisabled();
     await composer.press("Enter");
-    await expect(composer).toHaveValue("Keep this follow-up");
+    await expect(composer).toHaveValue("Keep this follow-up\n");
     await expect(page.getByTestId(dataTestId.queuedMessage)).toHaveCount(0);
     await page.context().setOffline(false);
     await runtime.clock.runFor(5000);
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
     await expect(page.getByTestId(dataTestId.sendMessage)).toBeEnabled();
-    await composer.press("Enter");
+    await page.getByTestId(dataTestId.sendMessage).click();
     await expect(page.getByTestId(dataTestId.queuedMessage)).toContainText("Keep this follow-up");
 });

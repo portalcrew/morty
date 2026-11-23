@@ -1,3 +1,5 @@
+import { isTouchFirst } from "../../touch-first.ts";
+
 /**
  * How this device gets setup to the computer where the agent runs. A desktop browser is usually that
  * computer, so it copies the prompt. A touch-first phone or tablet cannot run the agent, so it sends Morty's
@@ -7,15 +9,12 @@ export type SetupHandoff =
     | { readonly kind: "copy-prompt" }
     | { readonly kind: "send-link"; readonly share: ((data: ShareData) => Promise<void>) | null };
 
-/** Touch-first by capability, not by user agent: a tablet with a trackpad keeps the desktop flow. */
-const touchFirstQuery = "(hover: none) and (pointer: coarse)";
-
 export function agentSetupPrompt(): string {
     return `Fetch ${window.location.origin}/doc/setup.md and complete the Morty setup for me. You may install missing prerequisites and pair this computer.`;
 }
 
 export function browserSetupHandoff(): SetupHandoff {
-    if (!window.matchMedia(touchFirstQuery).matches) {
+    if (!isTouchFirst()) {
         return { kind: "copy-prompt" };
     }
     return {

@@ -25,6 +25,7 @@ import { useComposerFocus } from "../utils/use-composer-focus.ts";
 import { useMobileComposerActive } from "../utils/use-mobile-composer-active.ts";
 import { useScrollClippedEdges } from "../utils/use-scroll-clipped-edges.ts";
 import { useSoftwareKeyboardMarker } from "../utils/use-software-keyboard-marker.ts";
+import { useTouchFirst } from "../utils/use-touch-first.ts";
 import { chatSessionComposerClassName } from "./chat-session-layout.ts";
 import type { ComposerAttachment } from "./composer-attachment.ts";
 import { ComposerCommandMenu, composerCommandOptionId } from "./composer-command-menu.tsx";
@@ -185,6 +186,7 @@ export function BotChatComposer({
     const clipped = useScrollClippedEdges(scrollViewport, composerScrollEdgeThresholdPx);
     const showToast = useToast();
     const { active, activate, mobile, setActive, transitionsEnabled } = useMobileComposerActive(textarea);
+    const touchFirst = useTouchFirst();
     useEffect(() => {
         if (!mobile) {
             return;
@@ -227,7 +229,7 @@ export function BotChatComposer({
         onDraftChange(suggestion);
         setActive(true);
         // Touch devices keep the software keyboard down, so the filled draft and Send stay in view.
-        if (!window.matchMedia("(pointer: coarse)").matches) {
+        if (!touchFirst) {
             textarea.current?.focus({ preventScroll: true });
         }
     };
@@ -251,7 +253,7 @@ export function BotChatComposer({
         if (!submitDisabled) {
             onSubmit();
             // Touch devices drop the software keyboard so the reply is visible; keyboard users keep typing.
-            if (window.matchMedia("(pointer: coarse)").matches) {
+            if (touchFirst) {
                 textarea.current?.blur();
                 setActive(false);
             } else {
@@ -267,7 +269,9 @@ export function BotChatComposer({
     };
 
     const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-        if (activeCommand !== undefined && !event.nativeEvent.isComposing) {
+        // Safari ends composition before the keydown that confirms it, which then reports only keyCode 229.
+        const composing = event.nativeEvent.isComposing || event.keyCode === 229;
+        if (activeCommand !== undefined && !composing) {
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                 event.preventDefault();
                 const step = event.key === "ArrowDown" ? 1 : suggestedCommands.length - 1;
@@ -295,18 +299,21 @@ export function BotChatComposer({
             !event.ctrlKey &&
             !event.metaKey &&
             !event.altKey &&
-            !event.nativeEvent.isComposing
+            !composing
         ) {
             event.preventDefault();
             acceptSuggestion(offeredSuggestion);
             return;
         }
-        if (offeredSuggestion !== null && event.key === "Escape" && !event.nativeEvent.isComposing) {
+        if (offeredSuggestion !== null && event.key === "Escape" && !composing) {
             event.preventDefault();
             setDismissedSuggestion(offeredSuggestion);
             return;
         }
-        if (event.key === "Enter" && event.ctrlKey && !event.nativeEvent.isComposing) {
+        if (event.key !== "Enter" || composing) {
+            return;
+        }
+        if (event.ctrlKey) {
             event.preventDefault();
             event.currentTarget.setRangeText(
                 "\n",
@@ -317,14 +324,8 @@ export function BotChatComposer({
             onDraftChange(event.currentTarget.value);
             return;
         }
-        if (
-            event.key !== "Enter" ||
-            event.shiftKey ||
-            event.ctrlKey ||
-            event.metaKey ||
-            event.altKey ||
-            event.nativeEvent.isComposing
-        ) {
+        // A software keyboard has no Shift+Enter, so its Return must stay a line break; Send is the button.
+        if (touchFirst || event.shiftKey || event.metaKey || event.altKey) {
             return;
         }
         event.preventDefault();
@@ -515,6 +516,7 @@ export function BotChatComposer({
                                 className="mb-2 min-h-[56px] w-full resize-none overflow-hidden px-4 pt-0 pb-1 text-14 placeholder:text-14 max-sm:visible sm:min-h-[64px]"
                                 data-testid={dataTestId.messageComposer}
                                 disabled={disabled}
+                                enterKeyHint={touchFirst ? "enter" : "send"}
                                 onChange={(event) => onDraftChange(event.target.value)}
                                 onFocus={() => setActive(true)}
                                 onKeyDown={handleKeyDown}
@@ -627,7 +629,9 @@ export function BotChatComposer({
                     : `${suggestedCommands.length.toString()} ${suggestedCommands.length === 1 ? "command" : "commands"} available`}
             </span>
             <span className="sr-only" id="chat-composer-keyboard-hint">
-                Enter to send. Shift or Control plus Enter inserts a new line.
+                {touchFirst
+                    ? "Enter inserts a new line. Use Send message to send."
+                    : "Enter to send. Shift or Control plus Enter inserts a new line."}
                 {offeredSuggestion === null ? "" : " Tab inserts the suggested prompt and Escape dismisses it."}
             </span>
         </form>
