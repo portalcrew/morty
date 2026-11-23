@@ -42,6 +42,8 @@ function userCanSubmit(facts: SessionOperationFacts): boolean {
         facts.connectionAvailable &&
         !facts.waitingForInput &&
         !facts.stopping &&
+        // A message must not reach the Session before the fork the user already asked for copies it.
+        !facts.forking &&
         facts.connection === "ready" &&
         settingsAllowMessages(facts)
     );

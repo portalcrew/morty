@@ -322,9 +322,8 @@ export const createNativeSessionStore = (
                     directory: preview.entry.directory,
                     sessionId: preview.entry.sessionId,
                 };
-                const fork = forkIntent(get().forkIntent, input, preview.entry.updatedAt ?? "", () =>
-                    crypto.randomUUID(),
-                );
+                // A retry from the dialog keeps the identity of the fork it already asked for, whatever the preview shows.
+                const fork = forkIntent(get().forkIntent, input, "", () => crypto.randomUUID());
                 if (action === "fork") {
                     set({ forkIntent: fork });
                 }
