@@ -204,7 +204,13 @@ export function createMortyApplication(options: {
             requestId: "",
             elapsedMs: 0,
         });
-        if (document.visibilityState === "hidden" || recovery !== null) {
+        if (document.visibilityState === "hidden") {
+            return;
+        }
+        // A connection that reads as open may have died while the page was away; it shows only when a check goes
+        // unanswered, so check now rather than at the next heartbeat.
+        transport.verifyConnections();
+        if (recovery !== null) {
             return;
         }
         recovery = Promise.allSettled([workspace?.sessionPane()?.connection.getState().recover(lifetime.signal)])

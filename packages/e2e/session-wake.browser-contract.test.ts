@@ -150,3 +150,65 @@ test("Given a reply streaming while the page is suspended, when the page resumes
     await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
     await expect(page.getByRole("button", { name: "Stop agent output" })).toBeHidden();
 });
+
+test("Given a reply finishing while the page is away for minutes and its connection silently died, when the page is shown again, then it reconnects at once and shows the reply", async ({
+    runtime,
+}) => {
+    const { page } = runtime;
+    const links = new Set<{ dead: boolean }>();
+    await page.routeWebSocket("**/morty/api/v1/computers/*/transport", (socket) => {
+        const server = socket.connectToServer();
+        const link = { dead: false };
+        links.add(link);
+        server.onMessage((message) => {
+            if (!link.dead) {
+                socket.send(message);
+            }
+        });
+        socket.onMessage((message) => {
+            if (!link.dead) {
+                server.send(message);
+            }
+        });
+        socket.onClose(async (code, reason) => {
+            await server.close({
+                ...(code === undefined ? {} : { code }),
+                ...(reason === undefined ? {} : { reason }),
+            });
+        });
+    });
+    await runtime.clock.install({ time: new Date("2026-10-28T08:00:00Z") });
+    await runtime.clock.pauseAt(new Date("2026-10-28T08:01:00Z"));
+    await runtime.openPairedChat();
+    const composer = page.getByRole("textbox", { name: "Message" });
+    await composer.fill("hold after first delta");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(page.getByRole("article", { name: "Agent response" })).toContainText("Partial reply");
+
+    // The network dropped the connection while the page was away, and nothing told the page: the socket still reads
+    // as open, but no frame crosses it either way.
+    for (const link of links) {
+        link.dead = true;
+    }
+    runtime.clock.holdOpenTransports();
+    await runtime.continueReply("hold after first delta", {
+        outcome: "complete",
+        output: [{ kind: "text", text: "Finished while the connection was gone." }],
+    });
+    // Away for two minutes: no timer ran meanwhile, and the heartbeat due during that time fires once on return.
+    await runtime.clock.fastForward(120_000);
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+
+    const finished = page
+        .getByRole("article", { name: "Agent response" })
+        .filter({ hasText: "Finished while the connection was gone." });
+    // Longer than a heartbeat cycle without an answer means the connection is gone: no ten-second wait on it.
+    await runtime.clock.advanceUntil(
+        async () => {
+            expect(await finished.count()).toBe(1);
+        },
+        { maximum: 5_000 },
+    );
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Stop agent output" })).toBeHidden();
+});

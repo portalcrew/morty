@@ -56,6 +56,17 @@ export class MortyConnectionError extends MortyError {
     }
 }
 
+/**
+ * A connection the page found already dead when it came back to the foreground: it went a whole heartbeat cycle
+ * unanswered while the page could not check it. Nothing failed on the network just now, so it is replaced at once.
+ */
+export class MortyStaleConnectionError extends MortyConnectionError {
+    constructor(message: string, options: ErrorOptions = {}) {
+        super(message, options);
+        this.name = "MortyStaleConnectionError";
+    }
+}
+
 export class MortyProtocolError extends MortyError {
     constructor(message: string, options: ErrorOptions = {}) {
         super("invalid_service_response", message, options);

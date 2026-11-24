@@ -1,4 +1,9 @@
-import { MortyApiError, type MortyClient, type MortySessionEventObserver } from "@portalcrew/morty-client";
+import {
+    MortyApiError,
+    type MortyClient,
+    type MortySessionEventObserver,
+    MortyStaleConnectionError,
+} from "@portalcrew/morty-client";
 import { type NativeSessionTarget, SESSION_SUBSCRIPTION_REPLACED } from "@portalcrew/morty-client/protocol";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
@@ -267,9 +272,11 @@ export function createSessionPaneConnection(options: {
                         ? { kind: "session-closed", reason: cause.message }
                         : cause instanceof MortyApiError && cause.code === SESSION_SUBSCRIPTION_REPLACED
                           ? { kind: "computer-reconnected", message, notice: recoveryNotice() }
-                          : isRetryableComputerConnectionFailure(cause)
-                            ? { kind: "retryable", message, notice: recoveryNotice() }
-                            : { kind: "terminal", message },
+                          : cause instanceof MortyStaleConnectionError
+                            ? { kind: "stale-connection", message, notice: recoveryNotice() }
+                            : isRetryableComputerConnectionFailure(cause)
+                              ? { kind: "retryable", message, notice: recoveryNotice() }
+                              : { kind: "terminal", message },
                     jitter: Math.random(),
                 });
                 const interrupted = currentConnection();
