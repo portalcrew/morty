@@ -5,6 +5,7 @@ import { type AnonymousIdentity, AnonymousIdentityApi } from "../../services/ide
 import type { IdentityScope } from "../../services/identity/identity-scope-url.ts";
 import {
     computerKey,
+    forgetRememberedComputer,
     rememberComputerName,
     rememberedComputers,
     resumeComputerAddress,
@@ -83,13 +84,13 @@ export function createComputerSwitcher(options: {
     const api = new AnonymousIdentityApi(options);
     const store = createStore<ComputerChoicesState>(() => ({ kind: "loading", choices: [] }));
     const activeKey = computerKey(options.active);
+    const lifetime = new AbortController();
     let attempt: AbortController | null = null;
-    let disposed = false;
     return {
         store,
         activeKey,
         refresh: async (): Promise<void> => {
-            if (disposed) {
+            if (lifetime.signal.aborted) {
                 return;
             }
             attempt?.abort(new DOMException("Computer list refresh replaced", "AbortError"));
@@ -145,7 +146,12 @@ export function createComputerSwitcher(options: {
                     }),
                 );
                 controller.signal.throwIfAborted();
-                store.setState({ kind: "ready", choices: choices.filter((choice) => choice !== null) });
+                // A computer forgotten while its status was being read stays forgotten.
+                const remembered = new Set(rememberedComputers().map((computer) => computerKey(computer.scope)));
+                store.setState({
+                    kind: "ready",
+                    choices: choices.filter((choice) => choice !== null).filter((choice) => remembered.has(choice.key)),
+                });
             } catch {
                 if (!controller.signal.aborted) {
                     store.setState((state) => ({ kind: "ready", choices: state.choices }));
@@ -156,8 +162,22 @@ export function createComputerSwitcher(options: {
                 }
             }
         },
+        /** The computer this page is on cannot be forgotten from here. */
+        forget: async (key: string): Promise<void> => {
+            const computer = rememberedComputers().find((candidate) => computerKey(candidate.scope) === key);
+            if (key === activeKey || computer === undefined) {
+                return;
+            }
+            try {
+                await forgetRememberedComputer(computer.scope, lifetime.signal);
+            } catch {
+                // A computer this browser could not forget stays listed.
+                return;
+            }
+            store.setState((state) => ({ ...state, choices: state.choices.filter((choice) => choice.key !== key) }));
+        },
         dispose: () => {
-            disposed = true;
+            lifetime.abort(new DOMException("Computer switcher disposed", "AbortError"));
             attempt?.abort(new DOMException("Computer switcher disposed", "AbortError"));
             attempt = null;
         },
