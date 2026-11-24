@@ -3,14 +3,14 @@ import {
     type AccessDurationOptions,
     AnonymousIdentityApi,
     IdentityApiError,
-    type IdentityTransfer,
     type LinkedDevice,
     type SharingTerms,
 } from "../../services/identity/anonymous-identity-api.ts";
+import { type SharedAccess, sharedAccess } from "../../services/identity/shared-access.ts";
 import { createRemoteAccessOperations } from "../chat/remote-access-store.ts";
 
 export interface IdentityAccess {
-    readonly createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>;
+    readonly shareAccess: (terms: SharingTerms, signal: AbortSignal) => Promise<SharedAccess>;
     readonly sharingTerms: (signal: AbortSignal) => Promise<AccessDurationOptions>;
     readonly currentAccessToken: (signal: AbortSignal) => Promise<string>;
     readonly endRemoteAccess: (signal: AbortSignal) => Promise<void>;
@@ -76,7 +76,14 @@ export function createIdentityAccess(options: {
             withCurrentAccess(signal, (token) => api.endOtherBrowserAccess(token, signal)),
         endDeviceAccess: (deviceId, signal) =>
             withCurrentAccess(signal, (token) => api.endDeviceAccess(token, deviceId, signal)),
-        createTransfer: async (terms, signal) => await api.createTransfer(await sharingToken(signal), terms, signal),
+        shareAccess: async (terms, signal) => {
+            const token = await sharingToken(signal);
+            return await sharedAccess(
+                await api.createTransfer(token, terms, signal),
+                (computerId, handoff, stageSignal) => api.stageSealedHandoff(token, computerId, handoff, stageSignal),
+                signal,
+            );
+        },
         sharingTerms: async (signal) => await api.sharingTerms(await sharingToken(signal), signal),
     };
 }

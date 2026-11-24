@@ -7,7 +7,7 @@ import { MortyAlert } from "../../components/ui/morty-alert.tsx";
 import { Select } from "../../components/ui/option-select.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
-import type { IdentityTransfer } from "../../services/identity/anonymous-identity-api.ts";
+import type { SharedAccess } from "../../services/identity/shared-access.ts";
 import { type AccessHolder, formatMoment } from "../../view-models/chat/access-presentation.ts";
 import {
     agentHandoffInstructions,
@@ -68,7 +68,7 @@ type IdentitySharingTransferSectionProps =
           readonly loading: false;
           readonly allowQrDownload: boolean;
           readonly image: string;
-          readonly transfer: IdentityTransfer;
+          readonly transfer: SharedAccess;
           readonly replacedEarlier: boolean;
           readonly sharerLimitShown: boolean;
           readonly holder: AccessHolder;
@@ -173,7 +173,7 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
                         <CopyLinkButton
                             className="col-start-1 row-start-5 min-w-0 sm:col-start-3 sm:row-start-2"
                             scrollableUrl
-                            url={props.transfer.url}
+                            url={props.transfer.link}
                             urlClassName={identitySharingUrlBoxClassName}
                         />
                     )}
@@ -200,7 +200,7 @@ function IdentitySharingTiming({
     sharerLimitShown,
 }: {
     readonly holder: AccessHolder;
-    readonly transfer: IdentityTransfer;
+    readonly transfer: SharedAccess;
     readonly replacedEarlier: boolean;
     readonly sharerLimitShown: boolean;
 }) {
@@ -234,7 +234,7 @@ function AgentHandoffSection({
     sharerLimitShown,
 }: {
     readonly holder: AccessHolder;
-    readonly transfer: IdentityTransfer;
+    readonly transfer: SharedAccess;
     readonly replacedEarlier: boolean;
     readonly sharerLimitShown: boolean;
 }) {

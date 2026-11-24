@@ -1,11 +1,8 @@
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi, ChatComputer } from "../../services/chat/bot-chat-api.ts";
-import type {
-    AccessDurationOptions,
-    IdentityTransfer,
-    SharingTerms,
-} from "../../services/identity/anonymous-identity-api.ts";
+import type { AccessDurationOptions, SharingTerms } from "../../services/identity/anonymous-identity-api.ts";
+import type { SharedAccess } from "../../services/identity/shared-access.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import type { AccessHolder } from "./access-presentation.ts";
 import { createHomeScreenLinkStore, type HomeScreenLinkStore } from "./home-screen-link-store.ts";
@@ -71,14 +68,14 @@ export function createSidebarDialogs(options: {
         "nativeSessions" | "nativeSession" | "forkNativeSession" | "importNativeSession"
     >;
     readonly computer: () => ChatComputer | null;
-    readonly createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>;
+    readonly shareAccess: (terms: SharingTerms, signal: AbortSignal) => Promise<SharedAccess>;
     readonly sharingTerms: (signal: AbortSignal) => Promise<AccessDurationOptions>;
     readonly onOpenSession: (session: OpenMortySession) => void;
     readonly onOpenedSession: () => void;
     readonly onHomeScreenLinkCopied: () => void;
     readonly accessHolder: AccessHolder;
 }): SidebarDialogs {
-    const { clock, requests, computer, createTransfer, sharingTerms, onOpenSession, onOpenedSession } = options;
+    const { clock, requests, computer, shareAccess, sharingTerms, onOpenSession, onOpenedSession } = options;
     return createStore<SidebarDialogsState>()((set, get) => ({
         mobilePanel: { kind: "closed" },
         nativeDialog: null,
@@ -160,7 +157,7 @@ export function createSidebarDialogs(options: {
             if (get().sharing !== null) {
                 return;
             }
-            const sharing = createIdentitySharingStore(createTransfer, sharingTerms, clock, options.accessHolder);
+            const sharing = createIdentitySharingStore(shareAccess, sharingTerms, clock, options.accessHolder);
             set({ sharing });
             sharing.getState().start(options.signal());
         },
@@ -177,7 +174,7 @@ export function createSidebarDialogs(options: {
                 return;
             }
             const homeScreen = createHomeScreenLinkStore({
-                createTransfer,
+                shareAccess,
                 chat,
                 signal: options.signal(),
                 onCopied: options.onHomeScreenLinkCopied,

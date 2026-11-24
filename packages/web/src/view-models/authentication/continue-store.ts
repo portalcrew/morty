@@ -3,11 +3,11 @@ import {
     computerEncryptionAccessCodec,
     E2EError,
     importE2EPublicKey,
-    openSetupHandoff,
-    readSetupHandoffLink,
-    SetupHandoffError,
-    type SetupHandoffLink,
-    setupHandoffLookupId,
+    openSealedHandoff,
+    readSealedHandoffLink,
+    SealedHandoffError,
+    type SealedHandoffLink,
+    sealedHandoffLookupId,
 } from "@portalcrew/morty-client";
 import { isIdentifier, MAX_WORKSPACE_PATH_LENGTH, type NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { base64urlnopad } from "@scure/base";
@@ -36,7 +36,7 @@ import { formatError } from "@/view-models/format-error";
 
 export type ContinueStoreApi = ReturnType<typeof createContinueStore>;
 
-/** Where a link's Computer encryption access comes from: a sealed setup link's contents, or the link's fragment. */
+/** Where a link's Computer encryption access comes from: a sealed link's contents, or the link's fragment. */
 type HandoffEncryption =
     | { readonly kind: "fragment" }
     | { readonly kind: "sealed"; readonly access: ComputerEncryptionAccess };
@@ -47,8 +47,8 @@ type SessionHandoff = {
     readonly encryption: HandoffEncryption;
 };
 export type ContinueState =
-    | { readonly kind: "handoff-unsealing"; readonly link: SetupHandoffLink }
-    | { readonly kind: "handoff-failed"; readonly link: SetupHandoffLink; readonly message: string }
+    | { readonly kind: "handoff-unsealing"; readonly link: SealedHandoffLink }
+    | { readonly kind: "handoff-failed"; readonly link: SealedHandoffLink; readonly message: string }
     | {
           readonly kind: "session-opening";
           readonly code: string;
@@ -81,8 +81,13 @@ export type ContinueState =
           readonly recovery: "setup" | "share" | "home-screen-app";
           readonly message: string;
       }
-    | { readonly kind: "identity-redeeming"; readonly code: string }
-    | { readonly kind: "failed"; readonly code: string; readonly message: string }
+    | { readonly kind: "identity-redeeming"; readonly code: string; readonly encryption: HandoffEncryption }
+    | {
+          readonly kind: "failed";
+          readonly code: string;
+          readonly encryption: HandoffEncryption;
+          readonly message: string;
+      }
     | { readonly kind: "invalid" };
 
 export interface ContinueStore {
@@ -96,7 +101,7 @@ export interface ContinueStore {
 }
 
 function initialState(): ContinueState {
-    const sealed = readSetupHandoffLink(window.location.hash);
+    const sealed = readSealedHandoffLink(window.location.hash);
     if (sealed !== null) {
         return { kind: "handoff-unsealing", link: sealed };
     }
@@ -110,7 +115,7 @@ function initialState(): ContinueState {
         return { kind: "invalid" };
     }
     if (harness === null && sessionId === null && workspace === null) {
-        return { code, kind: "identity-redeeming" };
+        return { code, kind: "identity-redeeming", encryption: { kind: "fragment" } };
     }
     if (
         harness === null ||
@@ -188,6 +193,8 @@ export const createContinueStore = (transport: ApiTransport, homeScreenApp: bool
         signal.throwIfAborted();
         rememberComputerEncryption(access);
     };
+    // Links come from whoever issued them, except in the Home Screen app, where the person copies them in Safari.
+    const recovery = (issuedBy: "setup" | "share") => (homeScreenApp ? "home-screen-app" : issuedBy);
     const fetchRequest = transport.fetch;
     let attempt: AbortController | null = null;
     const store = createStore<ContinueStore>()((set, get) => {
@@ -199,7 +206,7 @@ export const createContinueStore = (transport: ApiTransport, homeScreenApp: bool
             set({
                 state:
                     state.kind === "identity-redeeming"
-                        ? { kind: "failed", code: state.code, message }
+                        ? { kind: "failed", code: state.code, encryption: state.encryption, message }
                         : { kind: "redeem-failed", code: state.code, handoff: state.handoff, message },
             });
         };
@@ -306,13 +313,14 @@ export const createContinueStore = (transport: ApiTransport, homeScreenApp: bool
             return null;
         };
         /**
-         * Reads a sealed setup link's contents from the Relay and opens them with the key only the link holds. Once
-         * they expired, the Computer opens only through access this browser still holds for it.
+         * Reads a sealed link's contents from the Relay and opens them with the key only the link holds. Once they
+         * expired, the Computer opens only through access this browser still holds for it.
          */
-        const unseal = async (link: SetupHandoffLink, signal: AbortSignal): Promise<void> => {
+        const unseal = async (link: SealedHandoffLink, signal: AbortSignal): Promise<void> => {
             const api = new AnonymousIdentityApi({ fetchRequest, origin: window.location.origin });
+            const issuedBy = link.kind === "setup" ? "setup" : "share";
             try {
-                const sealed = await api.setupHandoff(link.computerId, await setupHandoffLookupId(link), signal);
+                const sealed = await api.sealedHandoff(link.computerId, await sealedHandoffLookupId(link), signal);
                 signal.throwIfAborted();
                 if (sealed === null) {
                     const retained = await retainedAccess(api, link.computerId, signal);
@@ -321,35 +329,47 @@ export const createContinueStore = (transport: ApiTransport, homeScreenApp: bool
                         return;
                     }
                     set({
-                        state: { kind: "link-unavailable", recovery: "setup", message: "This setup link has expired." },
+                        state: {
+                            kind: "link-unavailable",
+                            recovery: recovery(issuedBy),
+                            message: "This link has expired.",
+                        },
                     });
                     return;
                 }
-                const handoff = await openSetupHandoff(link, sealed);
-                if (transferCodeComputer(handoff.code) !== link.computerId) {
-                    throw new SetupHandoffError();
+                const opened = await openSealedHandoff(link, sealed);
+                if (transferCodeComputer(opened.handoff.code) !== link.computerId) {
+                    throw new SealedHandoffError();
                 }
-                set({
-                    state: {
-                        kind: "session-opening",
-                        code: handoff.code,
-                        handoff: {
-                            harness: handoff.harness,
-                            sessionId: handoff.sessionId,
-                            workspace: handoff.workspace,
-                            encryption: { kind: "sealed", access: handoff.encryption },
-                        },
-                    },
-                });
+                const encryption: HandoffEncryption = { kind: "sealed", access: opened.handoff.encryption };
+                switch (opened.kind) {
+                    case "setup":
+                        set({
+                            state: {
+                                kind: "session-opening",
+                                code: opened.handoff.code,
+                                handoff: {
+                                    harness: opened.handoff.harness,
+                                    sessionId: opened.handoff.sessionId,
+                                    workspace: opened.handoff.workspace,
+                                    encryption,
+                                },
+                            },
+                        });
+                        break;
+                    case "access":
+                        set({ state: { kind: "identity-redeeming", code: opened.handoff.code, encryption } });
+                        break;
+                }
             } catch (cause) {
                 if (signal.aborted) {
                     return;
                 }
-                recordBrowserError("setup-handoff", cause);
+                recordBrowserError("sealed-handoff", cause);
                 set({
                     state:
-                        cause instanceof SetupHandoffError
-                            ? { kind: "link-unavailable", recovery: "setup", message: cause.message }
+                        cause instanceof SealedHandoffError
+                            ? { kind: "link-unavailable", recovery: recovery(issuedBy), message: cause.message }
                             : {
                                   kind: "handoff-failed",
                                   link,
@@ -399,7 +419,7 @@ export const createContinueStore = (transport: ApiTransport, homeScreenApp: bool
                         state.kind === "handoff-failed"
                             ? { kind: "handoff-unsealing", link: state.link }
                             : state.kind === "failed"
-                              ? { code: state.code, kind: "identity-redeeming" }
+                              ? { code: state.code, kind: "identity-redeeming", encryption: state.encryption }
                               : {
                                     code: state.code,
                                     handoff: state.handoff,
@@ -418,8 +438,7 @@ export const createContinueStore = (transport: ApiTransport, homeScreenApp: bool
                 if (state.kind !== "session-opening" && state.kind !== "identity-redeeming") {
                     return;
                 }
-                const encryption: HandoffEncryption =
-                    state.kind === "session-opening" ? state.handoff.encryption : { kind: "fragment" };
+                const encryption = state.kind === "session-opening" ? state.handoff.encryption : state.encryption;
                 const api = new AnonymousIdentityApi({
                     fetchRequest,
                     origin: window.location.origin,
@@ -464,11 +483,7 @@ export const createContinueStore = (transport: ApiTransport, homeScreenApp: bool
                         set({
                             state: {
                                 kind: "link-unavailable",
-                                recovery: homeScreenApp
-                                    ? "home-screen-app"
-                                    : state.kind === "session-opening"
-                                      ? "setup"
-                                      : "share",
+                                recovery: recovery(state.kind === "session-opening" ? "setup" : "share"),
                                 message,
                             },
                         });

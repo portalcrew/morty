@@ -50,6 +50,8 @@ const transferSchema = v.pipe(
         /** Whether the sharer's own access ends first, and so ends the added device's access earlier than chosen. */
         accessLimitedBySharer: v.boolean(),
         url: v.pipe(v.string(), v.url()),
+        /** The sealed link formats this Worker's `/continue` page opens; a Worker released before them names none. */
+        setupHandoffFormats: v.optional(v.array(v.string()), []),
     }),
     v.readonly(),
 );
@@ -256,8 +258,30 @@ export class AnonymousIdentityApi {
             ),
         ).accessDurationOptions;
 
-    /** A setup link's sealed contents, or null once the link expired or never existed. */
-    readonly setupHandoff = async (
+    /**
+     * Holds a sealed link's contents on its Computer until the access it hands over ends. Staging the same contents
+     * again is safe after a lost reply.
+     */
+    readonly stageSealedHandoff = async (
+        token: string,
+        computerId: string,
+        handoff: { readonly lookupId: string; readonly sealed: string; readonly accessExpiresAt: string },
+        signal: AbortSignal,
+    ): Promise<void> => {
+        await this.#request(
+            identityCalls.stageSealedHandoff({ origin: this.#origin, computerId, ...handoff }),
+            {
+                headers: {
+                    authorization: `Bearer ${v.parse(tokenSchema, token)}`,
+                    "content-type": "application/json",
+                },
+            },
+            signal,
+        );
+    };
+
+    /** A sealed link's contents, or null once the link expired or never existed. */
+    readonly sealedHandoff = async (
         computerId: string,
         lookupId: string,
         signal: AbortSignal,
@@ -266,7 +290,7 @@ export class AnonymousIdentityApi {
             return v.parse(
                 v.object({ sealed: v.string() }),
                 await this.#request(
-                    identityCalls.setupHandoff({ origin: this.#origin, computerId, lookupId }),
+                    identityCalls.sealedHandoff({ origin: this.#origin, computerId, lookupId }),
                     { headers: {} },
                     signal,
                 ),

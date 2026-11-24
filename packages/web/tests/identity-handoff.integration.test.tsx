@@ -5,6 +5,7 @@ import { getByRole, getByTestId, queryByRole } from "@testing-library/dom";
 import { act } from "@testing-library/react";
 import * as v from "valibot";
 import { expect, test, vi } from "vitest";
+import { sharedLinkCode } from "../../worker/tests/support/sealed-handoff.ts";
 import { dataTestId } from "../src/data-testid.ts";
 import { centralLocalStorage, linkedDevicesSeenEntry } from "../src/services/local-storage/central-local-storage.ts";
 import { sendPrompt } from "./infra/application-scenario.ts";
@@ -34,7 +35,7 @@ test("Given a stored identity for the active Computer, When the user shares acce
     const url = new URL(await navigator.clipboard.readText());
     expect(url.origin).toBe(app.origin);
     expect(url.pathname).toBe("/continue");
-    expect(url.hash).toMatch(/^#code=\S+$/u);
+    expect(url.hash).toMatch(/^#a=\S+$/u);
     expect(getByRole(sharing, "button", { name: "Copied" })).toBeInstanceOf(HTMLButtonElement);
     expect(queryByRole(sharing, "alert")).toBeNull();
 });
@@ -174,13 +175,15 @@ test("Given a stored identity, When the user shares access with an AI agent, The
     expect(redeemed.status).toBe(200);
     expect(await redeemed.json()).toEqual({ computerToken: expect.any(String), computerId: expect.any(String) });
 
-    // Switching back shows the same link to a person; choosing a recipient never issues another link.
+    // Switching back hands a person the same access; choosing a recipient never issues another link.
     await app.user.click(getByRole(dialog, "combobox", { name: "Share with" }));
     await app.user.click(getByRole(document.body, "option", { name: "A person" }));
     expect(getByRole(dialog, "status").textContent).toContain("Preparing sharing details");
     await act(async () => clock.advanceBy(250));
     await app.user.click(getByRole(dialog, "button", { name: "Copy link" }));
-    expect(await navigator.clipboard.readText()).toBe(link);
+    expect(await sharedLinkCode(await navigator.clipboard.readText(), app.transport.request)).toBe(
+        new URLSearchParams(new URL(link).hash.slice(1)).get("code"),
+    );
 });
 
 test("Given shared Morty access, When the user continues on another device, Then the visible entry opens sharing with its scope and expiry before the link", {

@@ -7,9 +7,10 @@ import { parseArgs } from "node:util";
 import {
     type ComputerEncryptionAccess,
     createClientPayloadEncryption,
-    SetupHandoffError,
+    SealedHandoffError,
+    type SetupHandoff,
     sealedSetupHandoffFormat,
-    sealSetupHandoff,
+    sealHandoff,
 } from "@portalcrew/morty-client";
 import {
     agentSettingsDiscoverCommandCodec,
@@ -1310,18 +1311,15 @@ export async function runSetup(args: readonly string[], host: SetupHost): Promis
         context: Context,
         transfer: Readonly<Record<string, unknown>>,
         issued: URL,
-        handoff: {
-            readonly code: string;
-            readonly encryption: ComputerEncryptionAccess;
-            readonly harness: string;
-            readonly sessionId: string;
-            readonly workspace: string;
-        },
+        handoff: SetupHandoff,
     ): Promise<string> {
         const formats = transfer["setupHandoffFormats"];
         if (Array.isArray(formats) && formats.includes(sealedSetupHandoffFormat)) {
-            const sealed = await sealSetupHandoff(issued.origin, context.identity.computerId, handoff).catch(
-                (cause: unknown) => fail("INVALID_HANDOFF", cause instanceof SetupHandoffError ? cause : undefined),
+            const sealed = await sealHandoff(issued.origin, context.identity.computerId, {
+                kind: "setup",
+                handoff,
+            }).catch((cause: unknown) =>
+                fail("INVALID_HANDOFF", cause instanceof SealedHandoffError ? cause : undefined),
             );
             await request(context, "/identity/setup-handoffs", {
                 lookupId: sealed.lookupId,

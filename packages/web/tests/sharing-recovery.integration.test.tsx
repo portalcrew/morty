@@ -2,6 +2,7 @@ import { getByRole } from "@testing-library/dom";
 import { act } from "@testing-library/react";
 import * as v from "valibot";
 import { expect, test } from "vitest";
+import { sharedLinkCode } from "../../worker/tests/support/sealed-handoff.ts";
 import { dataTestId } from "../src/data-testid.ts";
 import { createTestApp } from "./infra/test-app.tsx";
 import { TestClock } from "./infra/test-clock.ts";
@@ -42,18 +43,19 @@ test("Given a sharing replacement committed before its reply was lost, When the 
         await app.user.click(retry);
         const current = await copy();
         expect(getByRole(dialog, "combobox", { name: "Device access" }).textContent).toContain("1 hour");
-        const redeem = (url: URL) =>
+        const redeem = (code: string | null) =>
             app.transport.request(
                 new Request(new URL("/morty/api/v1/identity/transfers/redeem", app.origin), {
                     method: "POST",
                     headers: { "content-type": "application/json" },
-                    body: JSON.stringify({ code: new URLSearchParams(url.hash.slice(1)).get("code") }),
+                    body: JSON.stringify({ code }),
                     signal: signal,
                 }),
             );
-        expect((await redeem(original)).status).toBe(410);
-        expect((await redeem(committed)).status).toBe(410);
-        expect((await redeem(current)).status).toBe(200);
+        const copiedCode = (url: URL) => sharedLinkCode(url.href, app.transport.request);
+        expect((await redeem(await copiedCode(original))).status).toBe(410);
+        expect((await redeem(new URLSearchParams(committed.hash.slice(1)).get("code"))).status).toBe(410);
+        expect((await redeem(await copiedCode(current))).status).toBe(200);
     } finally {
         await app.close();
         await environment.close();
