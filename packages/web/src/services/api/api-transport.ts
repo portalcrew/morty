@@ -10,6 +10,8 @@ export interface ApiResponseSnapshot {
 export interface ApiTransport {
     /** Application-owned; callers release their requests/subscriptions, never this connection. */
     readonly computerTransport: (computerId: string) => WsTransport;
+    /** The page is in front again: every Computer connection checks now that it still gets through. */
+    readonly verifyConnections: () => void;
     readonly fetch: (call: ApiCall) => Promise<Response>;
     readonly measureMortyLatency: (signal: AbortSignal) => Promise<number>;
     readonly waitForChange: (call: ApiCall, onReady?: (snapshot: ApiResponseSnapshot) => void) => Promise<void>;

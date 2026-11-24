@@ -35,6 +35,11 @@ export class WorkerApiTransport {
         }
         this.#computers.clear();
     };
+    readonly verifyConnections = (): void => {
+        for (const transport of this.#computers.values()) {
+            transport.verifyConnection();
+        }
+    };
     readonly computerTransport = (computerId: string): WsTransport => {
         this.#lifetime.signal.throwIfAborted();
         if (!isIdentifier(computerId)) {

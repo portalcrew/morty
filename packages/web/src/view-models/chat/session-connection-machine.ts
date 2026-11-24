@@ -26,7 +26,15 @@ export type SessionConnectionState =
 
 type AttemptFailure =
     | { readonly kind: "session-closed"; readonly reason: string }
-    | { readonly kind: "retryable" | "computer-reconnected"; readonly message: string; readonly notice: Notice }
+    /**
+     * `computer-reconnected`: the Computer replaced the subscription. `stale-connection`: the page came back to a
+     * connection already dead. Neither is the network failing now, so both reopen at once without counting.
+     */
+    | {
+          readonly kind: "retryable" | "computer-reconnected" | "stale-connection";
+          readonly message: string;
+          readonly notice: Notice;
+      }
     | { readonly kind: "terminal"; readonly message: string };
 
 export type SessionConnectionEvent =
@@ -111,7 +119,7 @@ function failed(
 ): SessionConnectionResult {
     // A requested recovery starts the backoff over, so its failure is retried soon instead of continuing the climb.
     const failures = state.recovery === "requested" ? 0 : state.failures;
-    const handover = failure.kind === "computer-reconnected";
+    const handover = failure.kind === "computer-reconnected" || failure.kind === "stale-connection";
     const next = { failures: handover ? failures : failures + 1, recovery: "none" } as const;
     if (failure.kind === "terminal") {
         return {

@@ -29,6 +29,7 @@ import {
     MortyConnectionError,
     type MortyError,
     MortyProtocolError,
+    MortyStaleConnectionError,
     MortyValidationError,
 } from "../errors.ts";
 import { type LiveDeliveryExecution, registerLiveDelivery } from "./live-delivery.ts";
@@ -210,9 +211,21 @@ export class WsTransport {
         readonly resolve: () => void;
         readonly reject: (cause: unknown) => void;
     }>();
+    /** `answeredAt`: when the connection last proved it gets through, by opening or by answering a heartbeat. */
     #heartbeat:
         | { readonly kind: "inactive" }
-        | { readonly kind: "waiting" | "awaiting"; readonly timer: ReturnType<typeof globalThis.setTimeout> } = {
+        | {
+              readonly kind: "waiting";
+              readonly timer: ReturnType<typeof globalThis.setTimeout>;
+              readonly answeredAt: number;
+          }
+        | {
+              readonly kind: "awaiting";
+              readonly timer: ReturnType<typeof globalThis.setTimeout>;
+              readonly answeredAt: number;
+              /** `return`: the page is checking the connection it came back to, so silence means it was already dead. */
+              readonly check: "scheduled" | "return";
+          } = {
         kind: "inactive",
     };
 
@@ -955,33 +968,78 @@ export class WsTransport {
         this.#heartbeat = { kind: "inactive" };
     };
 
+    /**
+     * Applies the heartbeat's rule now rather than at the next heartbeat. A page back in the foreground can hold a
+     * socket that still reads as open after the network dropped it. Timers did not run while the page was away, so
+     * the time that passed decides: past a whole heartbeat cycle without an answer the heartbeat would already have
+     * given the socket up, so it reconnects at once; otherwise a heartbeat sent now tells. A check already under way
+     * is the same check.
+     */
+    readonly verifyConnection = (): void => {
+        if (this.#state.kind !== "connected" || this.#heartbeat.kind === "inactive") {
+            return;
+        }
+        const socket = this.#state.socket;
+        if (
+            Date.now() - this.#heartbeat.answeredAt >
+            HEARTBEAT_INTERVAL_MILLISECONDS + HEARTBEAT_TIMEOUT_MILLISECONDS
+        ) {
+            this.#disconnected(socket, new MortyStaleConnectionError("The Morty WebSocket went unanswered while away"));
+            socket.close(4001, "Morty transport went unanswered while away");
+            return;
+        }
+        switch (this.#heartbeat.kind) {
+            case "waiting":
+                this.#sendHeartbeat(socket, this.#heartbeat.answeredAt, "return");
+                return;
+            case "awaiting":
+                this.#heartbeat = { ...this.#heartbeat, check: "return" };
+                return;
+            default:
+                this.#heartbeat satisfies never;
+        }
+    };
+
+    /** Called once the connection opened or answered a heartbeat. */
     readonly #scheduleHeartbeat = (socket: WebSocket): void => {
         this.#stopHeartbeat();
+        const answeredAt = Date.now();
         this.#heartbeat = {
             kind: "waiting",
+            answeredAt,
             timer: globalThis.setTimeout(() => {
                 if (this.#state.kind !== "connected" || this.#state.socket !== socket) {
                     return;
                 }
-                this.#heartbeat = {
-                    kind: "awaiting",
-                    timer: globalThis.setTimeout(() => {
-                        this.#disconnected(socket, new MortyConnectionError("The Morty WebSocket heartbeat timed out"));
-                        socket.close(4001, "Morty transport heartbeat timed out");
-                    }, HEARTBEAT_TIMEOUT_MILLISECONDS),
-                };
-                try {
-                    // The Relay's host answers this exact text without waking the Relay, so an idle page lets it hibernate.
-                    socket.send(COMPUTER_HEARTBEAT_MESSAGE);
-                } catch (cause) {
-                    this.#disconnected(
-                        socket,
-                        new MortyConnectionError("The Morty WebSocket heartbeat failed", { cause }),
-                    );
-                    socket.close(4001, "Morty transport heartbeat failed");
-                }
+                this.#sendHeartbeat(socket, answeredAt, "scheduled");
             }, HEARTBEAT_INTERVAL_MILLISECONDS),
         };
+    };
+
+    readonly #sendHeartbeat = (socket: WebSocket, answeredAt: number, check: "scheduled" | "return"): void => {
+        this.#stopHeartbeat();
+        this.#heartbeat = {
+            kind: "awaiting",
+            answeredAt,
+            check,
+            timer: globalThis.setTimeout(() => {
+                const message = "The Morty WebSocket heartbeat timed out";
+                this.#disconnected(
+                    socket,
+                    this.#heartbeat.kind === "awaiting" && this.#heartbeat.check === "return"
+                        ? new MortyStaleConnectionError(message)
+                        : new MortyConnectionError(message),
+                );
+                socket.close(4001, "Morty transport heartbeat timed out");
+            }, HEARTBEAT_TIMEOUT_MILLISECONDS),
+        };
+        try {
+            // The Relay's host answers this exact text without waking the Relay, so an idle page lets it hibernate.
+            socket.send(COMPUTER_HEARTBEAT_MESSAGE);
+        } catch (cause) {
+            this.#disconnected(socket, new MortyConnectionError("The Morty WebSocket heartbeat failed", { cause }));
+            socket.close(4001, "Morty transport heartbeat failed");
+        }
     };
 }
 

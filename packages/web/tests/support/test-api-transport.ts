@@ -15,6 +15,7 @@ export class TestApiTransport {
     readonly dispose = this.disconnect;
     readonly computerTransport: WorkerApiTransport["computerTransport"] = (computerId) =>
         this.#current.computerTransport(computerId);
+    readonly verifyConnections: WorkerApiTransport["verifyConnections"] = () => this.#current.verifyConnections();
     readonly fetch: WorkerApiTransport["fetch"] = (request) => this.#current.fetch(request);
     readonly measureMortyLatency: WorkerApiTransport["measureMortyLatency"] = (signal) =>
         this.#current.measureMortyLatency(signal);

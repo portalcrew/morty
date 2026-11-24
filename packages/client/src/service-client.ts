@@ -33,6 +33,7 @@ import {
     MortyError,
     MortyOperationError,
     MortyProtocolError,
+    MortyStaleConnectionError,
     MortyTimeoutError,
     MortyValidationError,
 } from "./errors.ts";
@@ -1522,6 +1523,10 @@ export class MortyLiveEventSubscription {
 
 /** Protocol and request failures keep their meaning; a lost connection reports its sanitized causes. */
 function liveStreamFailure(cause: unknown): unknown {
+    // Kept as it is: a stale connection is replaced at once, while other disconnections wait their turn to retry.
+    if (cause instanceof MortyStaleConnectionError) {
+        return cause;
+    }
     // A delivery past its freshness window means the stream fell behind, as when a suspended page resumes to frames its
     // socket held while frozen. The rejected delivery is never shown; a new subscription reads what it missed from history.
     if (cause instanceof E2EError && cause.code === "e2e_payload_expired") {
