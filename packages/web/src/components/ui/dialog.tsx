@@ -30,6 +30,7 @@ export const dialogPinnedFooterActionsClassName = "flex justify-end gap-2 px-6 p
 function DialogShell({
     onClose,
     onOpenAutoFocus,
+    returnFocus,
     busy,
     className,
     testId,
@@ -37,12 +38,13 @@ function DialogShell({
 }: {
     readonly onClose: () => void;
     readonly onOpenAutoFocus?: ((event: Event) => void) | undefined;
+    readonly returnFocus?: (() => void) | undefined;
     readonly busy: boolean;
     readonly className: string;
     readonly testId?: string | undefined;
     readonly children: ReactNode;
 }) {
-    const [returnFocus] = useState(() =>
+    const [focusedBeforeOpen] = useState(() =>
         typeof document !== "undefined" && document.activeElement instanceof HTMLElement
             ? document.activeElement
             : null,
@@ -63,7 +65,11 @@ function DialogShell({
                     onOpenAutoFocus={onOpenAutoFocus}
                     onCloseAutoFocus={(event) => {
                         event.preventDefault();
-                        returnFocus?.focus();
+                        if (returnFocus === undefined) {
+                            focusedBeforeOpen?.focus();
+                        } else {
+                            returnFocus();
+                        }
                     }}
                     className={className}
                 >
@@ -103,6 +109,7 @@ export function Dialog({
     title,
     description,
     onClose,
+    returnFocus,
     busy = false,
     size = "standard",
     testId,
@@ -113,6 +120,8 @@ export function Dialog({
     readonly title: string;
     readonly description?: ReactNode;
     readonly onClose: () => void;
+    /** Where focus goes once the dialog closes, when the control that opened it closed with its menu. */
+    readonly returnFocus?: () => void;
     readonly busy?: boolean;
     readonly size?: keyof typeof dialogDesktopMaxWidthClassName;
     readonly testId?: string;
@@ -127,6 +136,7 @@ export function Dialog({
             busy={busy}
             className={`fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] flex-col ${centeredOverlayHorizontalInsetClassName} ${dialogDesktopMaxWidthClassName[size]} -translate-x-1/2 -translate-y-1/2 overflow-hidden ${overlaySurfaceRadiusClassName} border-[1px] border-white bg-card text-[13px] leading-5 text-foreground shadow-lg outline-none motion-safe:animate-cloud-enter`}
             onClose={onClose}
+            returnFocus={returnFocus}
             testId={testId}
         >
             <header className="shrink-0 px-6 pt-6 pb-5">
