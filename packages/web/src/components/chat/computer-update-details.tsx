@@ -18,6 +18,8 @@ function noticeText(update: AvailableUpdate): string | null {
             return "Morty updates when no task is running on this computer. Try again once its tasks finish.";
         case "download":
             return `This computer couldn't download Morty ${update.latest}. Check its network, then try again.`;
+        case "npx":
+            return "Morty couldn't find npx on this computer, so it can't download the update there.";
         case "failed":
             return `The update didn't start. This computer still runs Morty ${update.running}.`;
         case "incomplete":
@@ -54,7 +56,7 @@ function AvailableUpdateDetails({
     onUpdate,
 }: {
     readonly update: AvailableUpdate;
-    readonly onUpdate: () => void;
+    readonly onUpdate: (() => void) | null;
 }) {
     const notice = noticeText(update);
     return (
@@ -67,8 +69,12 @@ function AvailableUpdateDetails({
                     {notice}
                 </span>
             )}
-            {update.remote ? (
-                <Button className="mt-2.5" onClick={onUpdate} size="sm" variant="outline">
+            {update.remote && onUpdate === null ? (
+                <span className="mt-1 block text-xs text-muted-foreground">
+                    You can update once this computer is online.
+                </span>
+            ) : update.remote ? (
+                <Button className="mt-2.5" onClick={onUpdate ?? undefined} size="sm" variant="outline">
                     Update
                 </Button>
             ) : (
@@ -81,7 +87,13 @@ function AvailableUpdateDetails({
     );
 }
 
-function UpdateDetails({ state, onUpdate }: { readonly state: ComputerUpdateState; readonly onUpdate: () => void }) {
+function UpdateDetails({
+    state,
+    onUpdate,
+}: {
+    readonly state: ComputerUpdateState;
+    readonly onUpdate: (() => void) | null;
+}) {
     switch (state.kind) {
         case "unknown":
             return null;
@@ -104,7 +116,13 @@ function UpdateDetails({ state, onUpdate }: { readonly state: ComputerUpdateStat
     }
 }
 
-export function ComputerUpdateDetails({ update }: { readonly update: ComputerUpdateStoreApi }) {
+export function ComputerUpdateDetails({
+    online,
+    update,
+}: {
+    readonly online: boolean;
+    readonly update: ComputerUpdateStoreApi;
+}) {
     const { state, update: start } = useStore(update);
     if (state.kind === "unknown") {
         return null;
@@ -114,7 +132,7 @@ export function ComputerUpdateDetails({ update }: { readonly update: ComputerUpd
             <dt className="shrink-0 whitespace-nowrap text-muted-foreground">Morty</dt>
             <dd className="min-w-0 text-foreground">
                 {/* Only the page closing during an update rejects, and nothing is left to show it to. */}
-                <UpdateDetails onUpdate={() => void start().catch(() => undefined)} state={state} />
+                <UpdateDetails onUpdate={online ? () => void start().catch(() => undefined) : null} state={state} />
             </dd>
         </>
     );

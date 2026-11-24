@@ -63,7 +63,7 @@ function ExecutionDetails({
                         <span className="mt-1 block text-xs text-muted-foreground">{context.lastConfirmed}</span>
                     )}
                 </dd>
-                <ComputerUpdateDetails update={update} />
+                <ComputerUpdateDetails online={context.computerStatus === "Online"} update={update} />
             </div>
             <div className="grid gap-2.5">
                 <dt className={executionDetailsTermClassName}>Working directory</dt>

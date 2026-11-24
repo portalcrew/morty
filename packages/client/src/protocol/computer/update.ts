@@ -4,8 +4,9 @@ import { type Identifier, isIdentifier, identifierStringSchema as routingIdentif
 import { decodeZodMessage as decodeRoutingZodMessage, encryptedFieldSchema } from "../shared/message-codec.ts";
 
 const identifier = z.custom<Identifier>(isIdentifier);
-// The Computer downloads the release before it answers; its own download deadline stays inside this budget.
-export const COMPUTER_UPDATE_TIMEOUT_MILLISECONDS = 240_000;
+// The Computer downloads the release before it answers, so its download deadline stays inside this budget, which
+// stays inside the Worker's 120 s ceiling for any Computer request.
+export const COMPUTER_UPDATE_TIMEOUT_MILLISECONDS = 110_000;
 export const mortyReleaseVersionSchema = z
     .string()
     .max(32)

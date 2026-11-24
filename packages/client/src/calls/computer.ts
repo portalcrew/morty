@@ -63,7 +63,7 @@ export const computerEndpoints = Object.freeze({
             computerId,
             operation: "computer-update",
             path: "update",
-            timeoutMilliseconds: COMPUTER_UPDATE_TIMEOUT_MILLISECONDS + 15_000,
+            timeoutMilliseconds: COMPUTER_UPDATE_TIMEOUT_MILLISECONDS + 10_000,
         }),
     measureLatency: ({ computerId }: ComputerCallTarget): MortyOperationEndpoint =>
         endpoint({

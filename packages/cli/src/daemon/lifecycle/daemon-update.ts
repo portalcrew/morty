@@ -1,7 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
 import { homedir } from "node:os";
-import { isNewerMortyRelease } from "@portalcrew/morty-client/protocol";
+import { COMPUTER_UPDATE_TIMEOUT_MILLISECONDS, isNewerMortyRelease } from "@portalcrew/morty-client/protocol";
 import { OperationError } from "../../engine/infra/operation-error.ts";
 import type { ComputerUpdate } from "../../engine/runtime/computer-update.ts";
 import type { AgentProcessPool } from "../../engine/session/process/agent-process-pool.ts";
@@ -9,7 +9,8 @@ import type { BoundedLineLog } from "../../engine/storage/logs/bounded-log.ts";
 import { findExecutableOnPath, runBoundedProcess } from "../../engine/util/process/executable.ts";
 
 export const MORTY_PACKAGE_NAME = "@portalcrew/morty";
-const RELEASE_DOWNLOAD_TIMEOUT_MILLISECONDS = 180_000;
+// A slow download is refused before the request's own deadline, so the page never mistakes it for a restart.
+const RELEASE_DOWNLOAD_TIMEOUT_MILLISECONDS = COMPUTER_UPDATE_TIMEOUT_MILLISECONDS - 20_000;
 
 export interface DaemonUpdateOptions {
     readonly version: string;

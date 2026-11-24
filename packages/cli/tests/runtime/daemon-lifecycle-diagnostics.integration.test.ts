@@ -39,6 +39,7 @@ test("Given a daemon, When a bug report is read through the Computer, Then it ca
                     expect(kinds).toContain("daemon_ready");
                     const ready = exported.entries.find((entry) => entry["kind"] === "daemon_ready");
                     expect(ready?.["version"]).toMatch(/^\d+\.\d+\.\d+$/u);
+                    expect(exported.remoteUpdate).toBe("supported");
                     expect(exported.entries).toContainEqual(
                         expect.objectContaining({
                             event: "runtime_environment",
@@ -59,6 +60,7 @@ test("Given a daemon, When a bug report is read through the Computer, Then it ca
                                 .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/u),
                             truncated: z.boolean(),
                             version: z.string().max(32),
+                            remoteUpdate: z.literal("supported").optional(),
                             entries: z.array(z.record(z.string(), z.string().max(256))).max(200),
                         })
                         .refine((value) => JSON.stringify(value).length <= 65_536)

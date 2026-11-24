@@ -5,7 +5,7 @@ import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import type { Clock } from "../../services/time/clock.ts";
 
 /** Why the last update left the Computer on its release; the person may try again. */
-type UpdateNotice = "busy" | "download" | "failed" | "incomplete";
+type UpdateNotice = "busy" | "download" | "npx" | "failed" | "incomplete";
 
 export type ComputerUpdateState =
     | { readonly kind: "unknown" }
@@ -44,8 +44,9 @@ function refusalNotice(code: string): UpdateNotice {
         case "computer_busy":
             return "busy";
         case "update_download_failed":
-        case "update_npx_unavailable":
             return "download";
+        case "update_npx_unavailable":
+            return "npx";
         default:
             return "failed";
     }
@@ -59,6 +60,9 @@ export const createComputerUpdateStore = (options: {
     const { latest, requests, clock } = options;
     const lifetime = new AbortController();
     let online = false;
+    // Whether the Computer went offline since this page asked it to update: until then, an earlier release answering
+    // is the one still stopping, and after it, the release that came back.
+    let wentOffline = false;
 
     const readRelease = async (): Promise<{ readonly running: string; readonly remote: boolean }> => {
         const diagnostics = await requests.daemonDiagnostics(
@@ -70,8 +74,6 @@ export const createComputerUpdateStore = (options: {
     return createStore<ComputerUpdateStore>()((set, get) => {
         const settleRestart = async (running: string, target: string): Promise<void> => {
             const deadline = clock.now() + RESTART_DEADLINE_MILLISECONDS;
-            // Until the Computer has been unreachable, an earlier release answering is the one still stopping.
-            let restarted = false;
             while (clock.now() < deadline) {
                 await clock.sleep(RESTART_CHECK_INTERVAL_MILLISECONDS, lifetime.signal);
                 try {
@@ -80,7 +82,7 @@ export const createComputerUpdateStore = (options: {
                         set({ state: { kind: "updated", version: release.running } });
                         return;
                     }
-                    if (restarted) {
+                    if (wentOffline) {
                         set({
                             state: {
                                 kind: "available",
@@ -94,7 +96,7 @@ export const createComputerUpdateStore = (options: {
                     }
                 } catch {
                     lifetime.signal.throwIfAborted();
-                    restarted = true;
+                    wentOffline = true;
                 }
             }
             set({ state: { kind: "available", running, latest: target, remote: true, notice: "incomplete" } });
@@ -106,6 +108,9 @@ export const createComputerUpdateStore = (options: {
                 const cameOnline = nowOnline && !online;
                 online = nowOnline;
                 const state = get().state;
+                if (!nowOnline && (state.kind === "updating" || state.kind === "restarting")) {
+                    wentOffline = true;
+                }
                 if (!cameOnline || latest === null || state.kind === "updating" || state.kind === "restarting") {
                     return;
                 }
@@ -121,10 +126,12 @@ export const createComputerUpdateStore = (options: {
             },
             update: async () => {
                 const state = get().state;
-                if (state.kind !== "available" || !state.remote) {
+                // An offline Computer cannot receive the request, and its silence would read as a restart.
+                if (state.kind !== "available" || !state.remote || !online) {
                     return;
                 }
                 const { running, latest: target } = state;
+                wentOffline = false;
                 set({ state: { kind: "updating", running, latest: target } });
                 try {
                     await requests.updateComputer(target, lifetime.signal);
