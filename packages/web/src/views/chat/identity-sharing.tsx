@@ -8,7 +8,7 @@ import { Select } from "../../components/ui/option-select.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
 import type { IdentityTransfer } from "../../services/identity/anonymous-identity-api.ts";
-import { formatMoment } from "../../view-models/chat/access-presentation.ts";
+import { type AccessHolder, formatMoment } from "../../view-models/chat/access-presentation.ts";
 import {
     agentHandoffInstructions,
     chosenDuration,
@@ -71,6 +71,7 @@ type IdentitySharingTransferSectionProps =
           readonly transfer: IdentityTransfer;
           readonly replacedEarlier: boolean;
           readonly sharerLimitShown: boolean;
+          readonly holder: AccessHolder;
       };
 
 function IdentitySharingTransferSection(props: IdentitySharingTransferSectionProps) {
@@ -182,6 +183,7 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
                 <IdentitySharingTimingCopySkeleton />
             ) : (
                 <IdentitySharingTiming
+                    holder={props.holder}
                     replacedEarlier={props.replacedEarlier}
                     sharerLimitShown={props.sharerLimitShown}
                     transfer={props.transfer}
@@ -192,10 +194,12 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
 }
 
 function IdentitySharingTiming({
+    holder,
     transfer,
     replacedEarlier,
     sharerLimitShown,
 }: {
+    readonly holder: AccessHolder;
     readonly transfer: IdentityTransfer;
     readonly replacedEarlier: boolean;
     readonly sharerLimitShown: boolean;
@@ -206,7 +210,7 @@ function IdentitySharingTiming({
             {formatMoment(transfer.accessExpiresAt)}.
             {transfer.accessLimitedBySharer &&
                 !sharerLimitShown &&
-                " This browser's own access ends then, so the device cannot keep it longer."}
+                ` This ${holder}'s own access ends then, so the device cannot keep it longer.`}
             {replacedEarlier && " The previous link no longer works."}
         </p>
     );
@@ -224,10 +228,12 @@ function AgentHandoffHeading() {
 }
 
 function AgentHandoffSection({
+    holder,
     transfer,
     replacedEarlier,
     sharerLimitShown,
 }: {
+    readonly holder: AccessHolder;
     readonly transfer: IdentityTransfer;
     readonly replacedEarlier: boolean;
     readonly sharerLimitShown: boolean;
@@ -245,6 +251,7 @@ function AgentHandoffSection({
                 />
             </div>
             <IdentitySharingTiming
+                holder={holder}
                 replacedEarlier={replacedEarlier}
                 sharerLimitShown={sharerLimitShown}
                 transfer={transfer}
@@ -297,7 +304,8 @@ export function IdentitySharing({
     const chooseRecipient = useStore(store, (state) => state.chooseRecipient);
     const recipientTransitioning = useStore(store, (state) => state.recipientTransitioning);
     const durationOptions = useStore(store, (state) => state.durationOptions);
-    const choices = durationChoices(state, durationOptions);
+    const holder = useStore(store, (state) => state.holder);
+    const choices = durationChoices(state, durationOptions, holder);
     const loading = state.kind === "initial" || state.kind === "loading";
     const showDeviceAccess = choices.selected !== null || loading;
     return (
@@ -330,7 +338,7 @@ export function IdentitySharing({
                             description={
                                 choices.sharerAccessEndsAt === null
                                     ? undefined
-                                    : `This browser's access ends ${formatMoment(choices.sharerAccessEndsAt)}, so a device you share with can't keep access longer.`
+                                    : `This ${holder}'s access ends ${formatMoment(choices.sharerAccessEndsAt)}, so a device you share with can't keep access longer.`
                             }
                             disabled={state.kind === "refused"}
                             label="Device access"
@@ -368,6 +376,7 @@ export function IdentitySharing({
                 )
             ) : state.kind === "ready" && recipient === "agent" ? (
                 <AgentHandoffSection
+                    holder={holder}
                     replacedEarlier={state.replacedEarlier}
                     sharerLimitShown={choices.sharerAccessEndsAt !== null}
                     transfer={state.transfer}
@@ -375,6 +384,7 @@ export function IdentitySharing({
             ) : state.kind === "ready" ? (
                 <IdentitySharingTransferSection
                     allowQrDownload={allowQrDownload}
+                    holder={holder}
                     image={state.image}
                     loading={false}
                     replacedEarlier={state.replacedEarlier}

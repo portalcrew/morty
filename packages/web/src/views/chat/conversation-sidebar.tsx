@@ -49,6 +49,7 @@ import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
 import type { ManagedChatSession } from "../../services/chat/bot-chat-api.ts";
 import { appInstallEntryShown } from "../../view-models/app-install-store.ts";
+import type { AccessHolder } from "../../view-models/chat/access-presentation.ts";
 import { chatDiagnostics } from "../../view-models/chat/chat-diagnostics.ts";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { computerLocationLabel } from "../../view-models/chat/computer-location-label.ts";
@@ -107,10 +108,16 @@ function NetworkLatencyCard({ children }: { readonly children: ReactNode }) {
     );
 }
 
-function NetworkLatencyIntro({ computerId }: { readonly computerId: string | null }) {
+function NetworkLatencyIntro({
+    computerId,
+    holder,
+}: {
+    readonly computerId: string | null;
+    readonly holder: AccessHolder;
+}) {
     return (
         <div className="text-14 leading-5 text-muted-foreground">
-            <p>Round-trip latency for this browser and its connected Computer.</p>
+            <p>Round-trip latency for this {holder} and its connected Computer.</p>
             <p className="mt-1">Relay location: {computerLocationLabel(computerId ?? "")}</p>
         </div>
     );
@@ -152,9 +159,11 @@ function NetworkLatencyDialog({
     computerId,
     desktop,
     diagnostic,
+    holder,
     onRefresh,
 }: {
     readonly computerId: string | null;
+    readonly holder: AccessHolder;
     readonly desktop: boolean;
     readonly diagnostic: NetworkDiagnosticStore;
     readonly onRefresh: () => void;
@@ -178,7 +187,7 @@ function NetworkLatencyDialog({
     );
     const content = (
         <div className="flex flex-col gap-0">
-            <NetworkLatencyIntro computerId={computerId} />
+            <NetworkLatencyIntro computerId={computerId} holder={holder} />
             {state.kind === "measuring" ? (
                 <NetworkLatencySkeleton />
             ) : state.kind === "failed" ? (
@@ -1096,6 +1105,7 @@ export function ConversationSidebar({
                                             computerId={workspace.computerId}
                                             desktop={desktop}
                                             diagnostic={diagnostic}
+                                            holder={workspace.accessExpiry.getState().holder}
                                             onRefresh={measureNetwork}
                                         />
                                         {(access.state.kind === "loading" ||
@@ -1109,9 +1119,10 @@ export function ConversationSidebar({
                                                 description={
                                                     <>
                                                         <span className="block">
-                                                            This browser loses access to your computer. Your computer
-                                                            and your other devices keep theirs, and links you already
-                                                            shared still work until they expire.
+                                                            This {workspace.accessExpiry.getState().holder} loses access
+                                                            to your computer. Your computer and your other devices keep
+                                                            theirs, and links you already shared still work until they
+                                                            expire.
                                                         </span>
                                                         <span className="mt-3 block font-medium text-foreground">
                                                             Your local agent and tasks keep running.

@@ -12,7 +12,7 @@ import {
 } from "@/services/identity/anonymous-identity-api";
 import { storedComputerEncryption } from "@/services/identity/remembered-computers";
 import type { Clock } from "@/services/time/clock";
-import { formatMoment } from "./access-presentation.ts";
+import { type AccessHolder, formatMoment } from "./access-presentation.ts";
 
 type IdentitySharingState =
     | { readonly kind: "initial" }
@@ -32,6 +32,7 @@ type IdentitySharingState =
 export type SharingRecipient = "person" | "agent";
 
 export interface IdentitySharingStore {
+    readonly holder: AccessHolder;
     readonly state: IdentitySharingState;
     /** Null until the Worker reports them; a Worker released before them never does. */
     readonly durationOptions: AccessDurationOptions | null;
@@ -84,7 +85,11 @@ function selectedDuration(state: IdentitySharingState): DeviceAccessDuration | n
  * A duration the sharer's own access cuts short stays listed but disabled, so the sharer sees why it is unavailable,
  * and one choice names where shared access actually ends instead.
  */
-export function durationChoices(state: IdentitySharingState, options: AccessDurationOptions | null): DurationChoices {
+export function durationChoices(
+    state: IdentitySharingState,
+    options: AccessDurationOptions | null,
+    holder: AccessHolder,
+): DurationChoices {
     const duration = selectedDuration(state);
     if (options === null) {
         return {
@@ -108,7 +113,7 @@ export function durationChoices(state: IdentitySharingState, options: AccessDura
             : [
                   {
                       value: untilSharerAccessEnds,
-                      label: "Until this browser's access ends",
+                      label: `Until this ${holder}'s access ends`,
                       hint: formatMoment(sharerAccessEndsAt),
                   },
               ];
@@ -128,7 +133,7 @@ export function durationChoices(state: IdentitySharingState, options: AccessDura
                 (option): DurationChoice => ({
                     value: option.accessDuration,
                     label: durationLabels[option.accessDuration],
-                    hint: "Longer than this browser's access",
+                    hint: `Longer than this ${holder}'s access`,
                     disabled: true,
                 }),
             ),
@@ -201,11 +206,13 @@ export const createIdentitySharingStore = (
     createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>,
     sharingTerms: (signal: AbortSignal) => Promise<AccessDurationOptions>,
     clock: Clock,
+    holder: AccessHolder,
 ) => {
     const lifetime = new AbortController();
     let signal = lifetime.signal;
     let recipientTransition: AbortController | null = null;
     const store = createStore<IdentitySharingStore>(() => ({
+        holder,
         start: (parent) => {
             if (store.getState().state.kind !== "initial" || lifetime.signal.aborted) {
                 return;

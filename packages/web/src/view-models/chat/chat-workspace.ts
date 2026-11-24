@@ -10,6 +10,7 @@ import type { IdentityAccess } from "../authentication/identity-access.ts";
 import type { BugReportDialogStore } from "../bug-report-dialog-store.ts";
 import { reportApplicationError } from "../report-error.ts";
 import { type AccessExpiryStore, createAccessExpiryStore } from "./access-expiry-store.ts";
+import type { AccessHolder } from "./access-presentation.ts";
 import { type BotChatHomeStoreApi, createBotChatHomeStore, homeWaitsForComputer } from "./bot-chat-home-store.ts";
 import { createComputerFollower } from "./computer-follower.ts";
 import { createComputerRecovery } from "./computer-recovery.ts";
@@ -125,6 +126,7 @@ export function createChatWorkspace(options: {
     readonly entry: "address" | "restore";
     readonly bugReportDialog: BugReportDialogStore;
     readonly appInstall: AppInstallStoreApi;
+    readonly accessHolder: AccessHolder;
     readonly computerId: string;
     readonly requests: BotChatApi;
     readonly access: IdentityAccess;
@@ -265,6 +267,7 @@ export function createChatWorkspace(options: {
             createTransfer: options.access.createTransfer,
             sharingTerms: options.access.sharingTerms,
             onHomeScreenLinkCopied: () => options.appInstall.getState().dismissSuggestion(),
+            accessHolder: options.accessHolder,
             onOpenSession: (session) => {
                 home.getState().openManaged(session.target);
             },
@@ -496,6 +499,7 @@ export function createChatWorkspace(options: {
         computerId: options.computerId,
         accessExpiresAt: options.access.accessExpiresAt,
         clock: options.clock,
+        holder: options.accessHolder,
     });
     return {
         computers: options.computers,

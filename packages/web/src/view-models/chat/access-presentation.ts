@@ -83,3 +83,6 @@ export function describeLinkedDevice(
         details: [{ kind: "fields", fields }],
     };
 }
+
+/** What holds this page's access: the browser, or the iOS Home Screen app, which keeps access apart from Safari. */
+export type AccessHolder = "browser" | "app";

@@ -167,6 +167,7 @@ export function createMortyApplication(options: {
             entry: session.entry,
             bugReportDialog,
             appInstall,
+            accessHolder: install.homeScreenApp === "running" ? "app" : "browser",
             computerId: identity.computerId,
             requests,
             access,

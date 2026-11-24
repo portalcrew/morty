@@ -7,6 +7,7 @@ import type {
     SharingTerms,
 } from "../../services/identity/anonymous-identity-api.ts";
 import type { Clock } from "../../services/time/clock.ts";
+import type { AccessHolder } from "./access-presentation.ts";
 import { createHomeScreenLinkStore, type HomeScreenLinkStore } from "./home-screen-link-store.ts";
 import { createIdentitySharingStore, type IdentitySharingStore } from "./identity-sharing-store.ts";
 import { createNativeSessionStore, type NativeSessionStore } from "./native-session-store.ts";
@@ -75,6 +76,7 @@ export function createSidebarDialogs(options: {
     readonly onOpenSession: (session: OpenMortySession) => void;
     readonly onOpenedSession: () => void;
     readonly onHomeScreenLinkCopied: () => void;
+    readonly accessHolder: AccessHolder;
 }): SidebarDialogs {
     const { clock, requests, computer, createTransfer, sharingTerms, onOpenSession, onOpenedSession } = options;
     return createStore<SidebarDialogsState>()((set, get) => ({
@@ -158,7 +160,7 @@ export function createSidebarDialogs(options: {
             if (get().sharing !== null) {
                 return;
             }
-            const sharing = createIdentitySharingStore(createTransfer, sharingTerms, clock);
+            const sharing = createIdentitySharingStore(createTransfer, sharingTerms, clock, options.accessHolder);
             set({ sharing });
             sharing.getState().start(options.signal());
         },
