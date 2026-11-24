@@ -3,6 +3,7 @@ import { type StoreApi, useStore } from "zustand";
 import { Button } from "../../components/ui/cloud-button.tsx";
 import { inputClassName } from "../../components/ui/input.tsx";
 import { MortyAlert } from "../../components/ui/morty-alert.tsx";
+import { NumberedStep } from "../../components/ui/numbered-step.tsx";
 import { Spinner } from "../../components/ui/spinner.tsx";
 import type { ConnectAppStore } from "../../view-models/authentication/connect-app-store.ts";
 import {
@@ -41,10 +42,17 @@ export function ConnectAppPage({
         <SetupCardShell titleId="connect-app-title">
             <SetupCardTitle id="connect-app-title">Connect the Morty app</SetupCardTitle>
             <SetupCardDescription>
-                {notice === "access-ended" ? "This app’s access ended. " : ""}
-                The Home Screen app keeps its own sign-in. In Safari, open Morty, tap Install app, then Copy link. Come
-                back here and paste it.
+                {notice === "access-ended" ? "This app’s access ended. " : ""}It signs in separately from Safari.
             </SetupCardDescription>
+            <ol aria-label="Steps" className="mt-5 space-y-4 text-left">
+                <NumberedStep number={1} title="In Safari, open Morty">
+                    <p className="text-13 leading-5 text-muted-foreground">
+                        Tap Add on the Home Screen suggestion, or open the Morty menu and tap Add to Home Screen.
+                    </p>
+                </NumberedStep>
+                <NumberedStep number={2} title="Tap Copy link" />
+                <NumberedStep number={3} title="Come back and tap Paste link" />
+            </ol>
             <SetupCardSection className="mt-5 space-y-4">
                 <Button
                     aria-busy={busy}

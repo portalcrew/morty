@@ -27,7 +27,7 @@ async function installSuggestion(app: TestApp): Promise<HTMLElement> {
     if (accessNotice !== null) {
         await app.user.click(getByRole(accessNotice, "button", { name: "Got it" }));
     }
-    return await app.waitForView(() => getByRole(document.body, "status", { name: "Install Morty" }));
+    return await app.waitForView(() => getByRole(document.body, "status", { name: "Install the Morty app" }));
 }
 
 async function userMenuItem(app: TestApp, name: string): Promise<HTMLElement | null> {
@@ -44,7 +44,9 @@ test("Given a connected browser that can install Morty, When the person installs
 
     await app.user.click(getByRole(await installSuggestion(app), "button", { name: "Install" }));
 
-    await app.waitForView(() => expect(queryByRole(document.body, "status", { name: "Install Morty" })).toBeNull());
+    await app.waitForView(() =>
+        expect(queryByRole(document.body, "status", { name: "Install the Morty app" })).toBeNull(),
+    );
     expect(await userMenuItem(app, "Install app")).toBeNull();
 });
 
@@ -55,11 +57,13 @@ test("Given a connected browser that can install Morty, When the person chooses 
     await readyComposer(app);
 
     await app.user.click(getByRole(await installSuggestion(app), "button", { name: "Not now" }));
-    await app.waitForView(() => expect(queryByRole(document.body, "status", { name: "Install Morty" })).toBeNull());
+    await app.waitForView(() =>
+        expect(queryByRole(document.body, "status", { name: "Install the Morty app" })).toBeNull(),
+    );
 
     const reloaded = await app.reload();
     await readyComposer(reloaded);
     const install = await userMenuItem(reloaded, "Install app");
     expect(install).not.toBeNull();
-    expect(queryByRole(document.body, "status", { name: "Install Morty" })).toBeNull();
+    expect(queryByRole(document.body, "status", { name: "Install the Morty app" })).toBeNull();
 });

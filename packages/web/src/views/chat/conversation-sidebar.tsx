@@ -3,7 +3,6 @@ import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import {
     ArrowLeftRight,
     Check,
-    Download,
     Laptop,
     List,
     LoaderCircle,
@@ -22,6 +21,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useStore } from "zustand";
 import { MortyLogoMark } from "../../components/brand/morty-logo.tsx";
+import { appInstallCopy } from "../../components/chat/app-install-copy.ts";
 import {
     mobileHeaderIconButtonBelowSmClassName,
     mobileHeaderIconButtonClassName,
@@ -561,6 +561,7 @@ export function ConversationSidebar({
     const diagnostic = useStore(workspace.sidebar.networkDiagnostic);
     const appInstall = useStore(workspace.appInstall);
     const installEntryShown = appInstallEntryShown(appInstall.state);
+    const installCopy = appInstallCopy(appInstall.state.kind === "home-screen");
     const startInstall =
         appInstall.state.kind === "home-screen"
             ? () => dialogs.getState().openHomeScreen(activeTarget)
@@ -906,8 +907,8 @@ export function ConversationSidebar({
                                                                 {installEntryShown ? (
                                                                     <SidebarSessionOption
                                                                         disabled={appInstall.state.kind === "prompting"}
-                                                                        icon={Download}
-                                                                        label="Install app"
+                                                                        icon={installCopy.icon}
+                                                                        label={installCopy.entry}
                                                                         variant="card"
                                                                         onClick={startInstall}
                                                                     />
@@ -994,6 +995,8 @@ export function ConversationSidebar({
                                                                               busy:
                                                                                   appInstall.state.kind === "prompting",
                                                                               start: startInstall,
+                                                                              icon: installCopy.icon,
+                                                                              label: installCopy.entry,
                                                                           }
                                                                         : null
                                                                 }
@@ -1081,8 +1084,8 @@ export function ConversationSidebar({
                                                 {() => (
                                                     <div className="px-5 pb-6">
                                                         <p className="mb-5 text-sm leading-5 text-muted-foreground">
-                                                            The Home Screen app keeps its own sign-in, so it connects
-                                                            with a link from here.
+                                                            The Home Screen app signs in separately, with a one-time
+                                                            link from here.
                                                         </p>
                                                         <HomeScreenSteps store={homeScreenStore} />
                                                     </div>

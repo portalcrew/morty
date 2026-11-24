@@ -1,36 +1,11 @@
 import { Check, Copy, Share } from "lucide-react";
-import type { ReactNode } from "react";
 import { type StoreApi, useStore } from "zustand";
 import { Button } from "../../components/ui/cloud-button.tsx";
 import { MortyAlert } from "../../components/ui/morty-alert.tsx";
+import { NumberedStep } from "../../components/ui/numbered-step.tsx";
 import { Spinner } from "../../components/ui/spinner.tsx";
 import { formatMoment } from "../../view-models/chat/access-presentation.ts";
 import type { HomeScreenLinkStore } from "../../view-models/chat/home-screen-link-store.ts";
-
-function Step({
-    number,
-    title,
-    children,
-}: {
-    readonly number: number;
-    readonly title: string;
-    readonly children?: ReactNode;
-}) {
-    return (
-        <li className="flex gap-3">
-            <span
-                aria-hidden="true"
-                className="flex size-6 shrink-0 items-center justify-center rounded-full bg-morty-fill-opacity-3 text-12 font-semibold text-foreground"
-            >
-                {number}
-            </span>
-            <div className="min-w-0 flex-1 space-y-2 pt-0.5">
-                <p className="text-14 font-medium leading-5 text-foreground">{title}</p>
-                {children}
-            </div>
-        </li>
-    );
-}
 
 function CopyLink({ store }: { readonly store: StoreApi<HomeScreenLinkStore> }) {
     const { state, copy } = useStore(store);
@@ -59,11 +34,12 @@ function CopyLink({ store }: { readonly store: StoreApi<HomeScreenLinkStore> }) 
             return (
                 <>
                     <Button onClick={copy} variant="outline">
-                        <Check aria-hidden="true" />
-                        Link copied
+                        <Copy aria-hidden="true" />
+                        Copy again
                     </Button>
-                    <p className="text-13 leading-5 text-muted-foreground" role="status">
-                        It works once, until {formatMoment(state.expiresAt)}.
+                    <p className="flex items-center gap-1.5 text-13 leading-5 text-muted-foreground" role="status">
+                        <Check aria-hidden="true" className="size-4 shrink-0" />
+                        Copied. It works once, until {formatMoment(state.expiresAt)}.
                     </p>
                 </>
             );
@@ -82,17 +58,21 @@ function CopyLink({ store }: { readonly store: StoreApi<HomeScreenLinkStore> }) 
 
 export function HomeScreenSteps({ store }: { readonly store: StoreApi<HomeScreenLinkStore> }) {
     return (
-        <ol aria-label="Steps" className="space-y-5">
-            <Step number={1} title="Copy a link for the app">
+        <ol aria-label="Steps" className="space-y-5 text-left">
+            <NumberedStep number={1} title="Copy a link">
                 <CopyLink store={store} />
-            </Step>
-            <Step number={2} title="Add Morty to your Home Screen">
+            </NumberedStep>
+            <NumberedStep number={2} title="Add to Home Screen">
                 <p className="text-13 leading-5 text-muted-foreground">
                     Tap <Share aria-label="Share" className="inline size-4 align-[-3px]" /> Share (in the ⋯ menu on
                     newer iOS), then Add to Home Screen.
                 </p>
-            </Step>
-            <Step number={3} title="Open Morty from your Home Screen and tap Paste link" />
+            </NumberedStep>
+            <NumberedStep number={3} title="Open Morty from your Home Screen">
+                <p className="text-13 leading-5 text-muted-foreground">
+                    Tap Paste link. After that, it opens straight to Morty.
+                </p>
+            </NumberedStep>
         </ol>
     );
 }
