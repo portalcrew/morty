@@ -1,4 +1,4 @@
-import { base64urlnopad } from "@scure/base";
+import { SealedHandoffError } from "@portalcrew/morty-client";
 import QRCode from "qrcode";
 import { createStore } from "zustand/vanilla";
 import {
@@ -6,11 +6,9 @@ import {
     type DeviceAccessDuration,
     deviceAccessDurations,
     IdentityApiError,
-    type IdentityTransfer,
     type SharingTerms,
-    transferCodeComputer,
 } from "@/services/identity/anonymous-identity-api";
-import { storedComputerEncryption } from "@/services/identity/remembered-computers";
+import type { SharedAccess } from "@/services/identity/shared-access";
 import type { Clock } from "@/services/time/clock";
 import { type AccessHolder, formatMoment } from "./access-presentation.ts";
 
@@ -25,7 +23,7 @@ type IdentitySharingState =
     | {
           readonly kind: "ready";
           readonly image: string;
-          readonly transfer: IdentityTransfer;
+          readonly transfer: SharedAccess;
           readonly replacedEarlier: boolean;
       };
 
@@ -154,27 +152,6 @@ export function chosenDuration(
     return options?.find((option) => option.accessLimitedBySharer)?.accessDuration ?? null;
 }
 
-export function linkCode(transfer: IdentityTransfer): string {
-    return new URLSearchParams(new URL(transfer.url).hash.slice(1)).get("code") ?? "";
-}
-
-/**
- * The link a new device opens: the issued link with this browser's Computer encryption access in its fragment, which
- * the browser never sends to Morty.
- */
-export function withEncryptionAccess(issued: IdentityTransfer): IdentityTransfer {
-    const computerId = transferCodeComputer(linkCode(issued));
-    const access = computerId === null ? null : storedComputerEncryption(computerId);
-    if (access === null) {
-        throw new IdentityApiError("INVALID_REQUEST", "Encrypted Computer access is required to share this Computer.");
-    }
-    const url = new URL(issued.url);
-    const fragment = new URLSearchParams(url.hash.slice(1));
-    fragment.set("e2e", base64urlnopad.encode(new TextEncoder().encode(JSON.stringify(access))));
-    url.hash = fragment.toString();
-    return { ...issued, url: url.toString() };
-}
-
 async function transferQrImage(url: string): Promise<string> {
     const options = { errorCorrectionLevel: "H" as const, margin: 2, width: 320 };
     try {
@@ -203,7 +180,7 @@ async function transferQrImage(url: string): Promise<string> {
 }
 
 export const createIdentitySharingStore = (
-    createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>,
+    shareAccess: (terms: SharingTerms, signal: AbortSignal) => Promise<SharedAccess>,
     sharingTerms: (signal: AbortSignal) => Promise<AccessDurationOptions>,
     clock: Clock,
     holder: AccessHolder,
@@ -241,7 +218,7 @@ export const createIdentitySharingStore = (
                         {
                             operationId: crypto.randomUUID(),
                             accessDuration: duration,
-                            replaces: linkCode(state.transfer),
+                            replaces: state.transfer.code,
                         },
                         duration,
                     );
@@ -306,9 +283,9 @@ export const createIdentitySharingStore = (
         readSharingTerms();
         void (async () => {
             try {
-                const transfer = withEncryptionAccess(await createTransfer(request, signal));
+                const transfer = await shareAccess(request, signal);
                 signal.throwIfAborted();
-                const image = await transferQrImage(transfer.url);
+                const image = await transferQrImage(transfer.link);
                 signal.throwIfAborted();
                 const current = store.getState().state;
                 if (current.kind !== "loading") {
@@ -319,7 +296,7 @@ export const createIdentitySharingStore = (
                         {
                             operationId: crypto.randomUUID(),
                             accessDuration: current.duration,
-                            replaces: linkCode(transfer),
+                            replaces: transfer.code,
                         },
                         current.duration,
                     );
@@ -337,10 +314,14 @@ export const createIdentitySharingStore = (
                     return;
                 }
                 const refused =
-                    cause instanceof IdentityApiError &&
-                    ["TRANSFER_CONFLICT", "UNAUTHENTICATED", "INVALID_REQUEST", "CREDENTIAL_KIND_REQUIRED"].includes(
-                        cause.code,
-                    );
+                    cause instanceof SealedHandoffError ||
+                    (cause instanceof IdentityApiError &&
+                        [
+                            "TRANSFER_CONFLICT",
+                            "UNAUTHENTICATED",
+                            "INVALID_REQUEST",
+                            "CREDENTIAL_KIND_REQUIRED",
+                        ].includes(cause.code));
                 store.setState({
                     state: refused
                         ? { kind: "refused", duration: current.duration }
@@ -356,12 +337,12 @@ export const createIdentitySharingStore = (
  * What the user pastes into an AI agent: where the published agent API is documented, and the link to redeem. The
  * document lives on the link's own origin, so the agent reads the description of the server that issued the link.
  */
-export function agentHandoffInstructions(transfer: IdentityTransfer): string {
-    const documentUrl = new URL("/doc/agent-api.md", transfer.url).toString();
+export function agentHandoffInstructions(transfer: SharedAccess): string {
+    const documentUrl = new URL("/doc/agent-api.md", transfer.agentLink).toString();
     return [
         "Use Morty to work on my computer.",
         `Read ${documentUrl} first. It provides the runnable encrypted Agent workflow and links the OpenAPI and AsyncAPI contracts.`,
         "Then redeem this one-time continue link as that document describes. Keep it secret: it can view and control every session on my computer.",
-        transfer.url,
+        transfer.agentLink,
     ].join("\n");
 }

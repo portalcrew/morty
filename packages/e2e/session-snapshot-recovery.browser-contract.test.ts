@@ -4,7 +4,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { sessionEventEnvelopeCodec } from "../client/src/protocol/session/events/index.ts";
 import { sessionHistoryPageLoadedCodec } from "../client/src/protocol/session/observability/history.ts";
 import { dataTestId } from "../web/src/data-testid.ts";
-import { openedSetupHandoff } from "../worker/tests/support/setup-handoff.ts";
+import { openedSetupHandoff } from "../worker/tests/support/sealed-handoff.ts";
 import { expandMobileComposer } from "./infra/mobile-composer.ts";
 import { test as base, conversationLoaded, expect } from "./infra/test.ts";
 

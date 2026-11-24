@@ -1,3 +1,4 @@
+import { readSealedHandoffLink } from "@portalcrew/morty-client";
 import { createStore } from "zustand/vanilla";
 
 export type ConnectAppStoreApi = ReturnType<typeof createConnectAppStore>;
@@ -25,7 +26,8 @@ function connectionLink(text: string, origin: string): URL | null {
         return null;
     }
     const code = new URLSearchParams(url.hash.slice(1)).get("code");
-    return url.origin === origin && url.pathname === "/continue" && code !== null && code.length > 0 ? url : null;
+    const carriesAccess = (code !== null && code.length > 0) || readSealedHandoffLink(url.hash) !== null;
+    return url.origin === origin && url.pathname === "/continue" && carriesAccess ? url : null;
 }
 
 /**

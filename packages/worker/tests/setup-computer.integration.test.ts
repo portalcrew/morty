@@ -10,7 +10,7 @@ import { runSetup } from "../../cli/src/setup/setup.ts";
 import { ControlledSetupRuntime } from "../../e2e/infra/setup-daemon.ts";
 import worker from "../src/worker/application.ts";
 import { createIdentityFixture } from "./support/identity-fixture.ts";
-import { openedSetupHandoff } from "./support/setup-handoff.ts";
+import { openedSetupHandoff } from "./support/sealed-handoff.ts";
 
 test.for(["current", "another service origin", "retired configuration"] as const)(
     "Given %s, When setup runs again, Then it continues the saved identity's Computer or refuses without rewriting the saved state",

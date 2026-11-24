@@ -12,7 +12,7 @@ import { mortyReply } from "../../../tests/support/fake-daemon/scenarios.ts";
 import { ControlledSetupRuntime } from "../../e2e/infra/setup-daemon.ts";
 import worker from "../src/worker/application.ts";
 import { prepareIdentityFixture } from "./support/identity-fixture.ts";
-import { openedSetupHandoff } from "./support/setup-handoff.ts";
+import { openedSetupHandoff } from "./support/sealed-handoff.ts";
 
 const localRuntimeModule = JSON.stringify(new URL("../../cli/src/setup/local-runtime.ts", import.meta.url).href);
 const builtCli = JSON.stringify(fileURLToPath(new URL("../../cli/dist/cli.js", import.meta.url)));

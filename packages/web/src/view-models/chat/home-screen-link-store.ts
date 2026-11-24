@@ -1,8 +1,8 @@
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
-import { IdentityApiError, type IdentityTransfer, type SharingTerms } from "@/services/identity/anonymous-identity-api";
+import { IdentityApiError, type SharingTerms } from "@/services/identity/anonymous-identity-api";
 import { withChatToOpen } from "@/services/identity/chat-to-open";
-import { linkCode, withEncryptionAccess } from "./identity-sharing-store.ts";
+import type { SharedAccess } from "@/services/identity/shared-access";
 
 type HomeScreenLinkState =
     | { readonly kind: "idle" }
@@ -21,7 +21,7 @@ export interface HomeScreenLinkStore {
  * issues a new single-use link that expires in minutes, granting access until this browser's own access ends.
  */
 export function createHomeScreenLinkStore(options: {
-    readonly createTransfer: (terms: SharingTerms, signal: AbortSignal) => Promise<IdentityTransfer>;
+    readonly shareAccess: (terms: SharingTerms, signal: AbortSignal) => Promise<SharedAccess>;
     readonly chat: NativeSessionTarget | null;
     readonly signal: AbortSignal;
     readonly onCopied: () => void;
@@ -30,18 +30,18 @@ export function createHomeScreenLinkStore(options: {
     const signal = AbortSignal.any([options.signal, lifetime.signal]);
     // The last link copied here. Copying again replaces it, so at most one link from this sheet still opens.
     let copiedCode: string | null = null;
-    const issue = async (): Promise<IdentityTransfer> => {
+    const issue = async (): Promise<SharedAccess> => {
         const terms = (replaces: string | null): SharingTerms => ({
             operationId: crypto.randomUUID(),
             accessDuration: "30d",
             replaces,
         });
         try {
-            return await options.createTransfer(terms(copiedCode), signal);
+            return await options.shareAccess(terms(copiedCode), signal);
         } catch (cause) {
             // The earlier link was already used or expired, so nothing is left to replace.
             if (copiedCode !== null && cause instanceof IdentityApiError && cause.code === "TRANSFER_CONFLICT") {
-                return await options.createTransfer(terms(null), signal);
+                return await options.shareAccess(terms(null), signal);
             }
             throw cause;
         }
@@ -54,9 +54,7 @@ export function createHomeScreenLinkStore(options: {
                 return;
             }
             set({ state: { kind: "copying" } });
-            const link = issue()
-                .then((issued) => withEncryptionAccess(issued))
-                .then((transfer) => ({ transfer, text: withChatToOpen(transfer.url, options.chat) }));
+            const link = issue().then((shared) => ({ shared, text: withChatToOpen(shared.link, options.chat) }));
             // Safari keeps the tap's permission to write only for a clipboard item handed over during the tap, so the
             // link is written once it exists instead of after a later await.
             const written =
@@ -68,12 +66,12 @@ export function createHomeScreenLinkStore(options: {
                       ])
                     : link.then(({ text }) => navigator.clipboard.writeText(text));
             void Promise.all([link, written]).then(
-                ([{ transfer }]) => {
+                ([{ shared }]) => {
                     if (signal.aborted) {
                         return;
                     }
-                    copiedCode = linkCode(transfer);
-                    set({ state: { kind: "copied", expiresAt: transfer.expiresAt } });
+                    copiedCode = shared.code;
+                    set({ state: { kind: "copied", expiresAt: shared.expiresAt } });
                     options.onCopied();
                 },
                 () => {

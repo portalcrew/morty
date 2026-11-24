@@ -1,8 +1,9 @@
 import {
+    sealedAccessHandoffFormat,
+    sealedHandoffLookupIdPattern,
+    sealedHandoffPattern,
     sealedSetupHandoffFormat,
-    sealedSetupHandoffPattern,
-    setupHandoffLookupIdPattern,
-} from "@portalcrew/morty-client/setup-handoff";
+} from "@portalcrew/morty-client/sealed-handoff";
 import { Hono } from "hono";
 import * as v from "valibot";
 import { transferRedemptionInput } from "../../../../contracts/agent-api/identity-requests.ts";
@@ -41,10 +42,10 @@ const revokeAllAccessInput = v.pipe(
     }),
     v.readonly(),
 );
-const setupHandoffInput = v.pipe(
+const sealedHandoffInput = v.pipe(
     v.strictObject({
-        lookupId: v.pipe(v.string(), v.regex(setupHandoffLookupIdPattern)),
-        sealed: v.pipe(v.string(), v.regex(sealedSetupHandoffPattern)),
+        lookupId: v.pipe(v.string(), v.regex(sealedHandoffLookupIdPattern)),
+        sealed: v.pipe(v.string(), v.regex(sealedHandoffPattern)),
         accessExpiresAt: v.pipe(v.string(), v.isoTimestamp()),
     }),
     v.readonly(),
@@ -146,8 +147,8 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
                             accessDuration: transfer.accessDuration,
                             accessLimitedBySharer: transfer.accessLimitedBySharer,
                             url: url.toString(),
-                            // Served by the deployment whose /continue page opens these links, so setup may issue them.
-                            setupHandoffFormats: [sealedSetupHandoffFormat],
+                            // Served by the deployment whose /continue page opens these links, so a sharer may issue them.
+                            setupHandoffFormats: [sealedSetupHandoffFormat, sealedAccessHandoffFormat],
                         },
                         201,
                     );
@@ -155,11 +156,11 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             )
             .post(
                 "/identity/setup-handoffs",
-                bodyParser<ManagementHttpEnvironment, typeof setupHandoffInput>(setupHandoffInput),
+                bodyParser<ManagementHttpEnvironment, typeof sealedHandoffInput>(sealedHandoffInput),
                 async (context) => {
                     const application = applicationForRequest(ctx, context);
                     const input = context.req.valid("json");
-                    const staged = await application.services.setupHandoffs.stage(
+                    const staged = await application.services.sealedHandoffs.stage(
                         readBearerToken(context.req.raw.headers),
                         {
                             lookupId: input.lookupId,
@@ -176,7 +177,7 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
                         case "conflict":
                             throw new ManagementError(
                                 "SETUP_HANDOFF_CONFLICT",
-                                "Another setup link already uses this id.",
+                                "Another link already uses this id.",
                                 409,
                             );
                         case "unauthenticated":
@@ -199,15 +200,11 @@ export function createAuthenticationRoutes(ctx: ManagementRouteContext) {
             .get("/identity/setup-handoffs/:lookupId", async (context) => {
                 const application = applicationForRequest(ctx, context);
                 const lookupId = context.req.param("lookupId");
-                const sealed = setupHandoffLookupIdPattern.test(lookupId)
-                    ? application.services.setupHandoffs.read(lookupId, context.req.raw.signal)
+                const sealed = sealedHandoffLookupIdPattern.test(lookupId)
+                    ? application.services.sealedHandoffs.read(lookupId, context.req.raw.signal)
                     : null;
                 if (sealed === null) {
-                    throw new ManagementError(
-                        "SETUP_HANDOFF_UNAVAILABLE",
-                        "This setup link has expired. Run setup again on that computer.",
-                        410,
-                    );
+                    throw new ManagementError("SETUP_HANDOFF_UNAVAILABLE", "This link has expired.", 410);
                 }
                 return json({ sealed }, 200, { "Cache-Control": "no-store" });
             })

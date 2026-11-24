@@ -264,7 +264,7 @@ export function createChatWorkspace(options: {
             signal: () => operationsLifetime.signal,
             requests,
             computer: () => computer.getState().computerConfiguration?.computer ?? null,
-            createTransfer: options.access.createTransfer,
+            shareAccess: options.access.shareAccess,
             sharingTerms: options.access.sharingTerms,
             onHomeScreenLinkCopied: () => options.appInstall.getState().dismissSuggestion(),
             accessHolder: options.accessHolder,
