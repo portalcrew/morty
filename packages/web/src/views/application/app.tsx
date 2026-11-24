@@ -1,5 +1,5 @@
 import { type AnyRouter, RouterProvider } from "@tanstack/react-router";
-import { ArrowLeft, ArrowUpRight, Unplug } from "lucide-react";
+import { ArrowUpRight, Unplug } from "lucide-react";
 import type { StoreApi } from "zustand";
 import { SetupConnectionGraphic } from "../../components/setup/setup-connection-graphic.tsx";
 import { SetupDemoVideo } from "../../components/setup/setup-demo-video.tsx";
@@ -17,6 +17,7 @@ import { BugReportButton, BugReportDialogHost } from "../diagnostics/bug-report-
 import { mortyDemoPoster, mortyDemoVideo, mortyRepository } from "../morty-repository.ts";
 import { GlobalLoadingPage } from "../setup/global-loading-page.tsx";
 import {
+    BackToLastComputer,
     SetupCardAlert,
     SetupCardDescription,
     SetupCardFailureIcon,
@@ -41,6 +42,7 @@ export type AppState =
     | {
           readonly kind: "connect-app";
           readonly notice: "access-ended" | "none";
+          readonly returnHref: string | null;
           readonly store: StoreApi<ConnectAppStore>;
       }
     | { readonly kind: "authentication"; readonly router: AnyRouter }
@@ -142,7 +144,7 @@ function ApplicationContent({ state }: { readonly state: AppState }) {
                 />
             );
         case "connect-app":
-            return <ConnectAppPage notice={state.notice} store={state.store} />;
+            return <ConnectAppPage notice={state.notice} returnHref={state.returnHref} store={state.store} />;
         case "authentication":
             return <RouterProvider router={state.router} />;
         case "signed-in":
@@ -182,16 +184,6 @@ function SetupApplication({
             </MortyAlert>
         ) : undefined;
 
-    const pageAction =
-        returnHref === null ? undefined : (
-            <Button asChild size="sm" variant="ghost">
-                <a href={returnHref}>
-                    <ArrowLeft aria-hidden="true" className="size-4" />
-                    <span>Back to your last computer</span>
-                </a>
-            </Button>
-        );
-
     return (
         <SetupCardShell
             headerAction={
@@ -207,7 +199,7 @@ function SetupApplication({
                     <span className="sr-only">(opens in a new tab)</span>
                 </Button>
             }
-            pageAction={pageAction}
+            pageAction={returnHref === null ? undefined : <BackToLastComputer href={returnHref} />}
             pageFooter={
                 <footer className="shrink-0 px-6 pb-4">
                     <nav aria-label="About Morty">

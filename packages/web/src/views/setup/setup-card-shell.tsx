@@ -1,7 +1,8 @@
-import { CircleAlert } from "lucide-react";
+import { ArrowLeft, CircleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { MortyLogoMark } from "@/components/brand/morty-logo";
 import { cn } from "@/lib/utils";
+import { Button } from "../../components/ui/cloud-button.tsx";
 import { overlaySurfaceRadiusClassName } from "../../components/ui/overlay-surface.ts";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 
@@ -157,5 +158,16 @@ export function SetupCardShell({
                 {children}
             </section>
         </SetupPageWithHeader>
+    );
+}
+
+export function BackToLastComputer({ href }: { readonly href: string }) {
+    return (
+        <Button asChild size="sm" variant="ghost">
+            <a href={href}>
+                <ArrowLeft aria-hidden="true" className="size-4" />
+                <span>Back to your last computer</span>
+            </a>
+        </Button>
     );
 }
