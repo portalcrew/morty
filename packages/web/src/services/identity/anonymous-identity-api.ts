@@ -1,4 +1,5 @@
 import { MortyApiError } from "@portalcrew/morty-client";
+import { COMPUTER_NOT_FOUND } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import type { ApiTransport } from "../api/api-transport.ts";
 import type { ApiRequest } from "../api/calls/call.ts";
@@ -447,7 +448,10 @@ export class AnonymousIdentityApi {
             if (error instanceof IdentityApiError && error.status === 401 && error.reason === ACCESS_REVOKED) {
                 return "revoked";
             }
-            if (error instanceof IdentityApiError && (error.status === 401 || error.status === 403)) {
+            if (
+                error instanceof IdentityApiError &&
+                (error.status === 401 || error.status === 403 || error.code === COMPUTER_NOT_FOUND.code)
+            ) {
                 return null;
             }
             throw error;

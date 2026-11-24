@@ -332,9 +332,14 @@ export async function createResponseLossProxy(upstream: string) {
             turnArrivals.emit("browser-connections", browserSockets.size);
             remote.terminate();
         });
-        remote.on("close", () => {
+        remote.on("close", (code, reason) => {
             sockets.delete(remote);
-            client.terminate();
+            // The service's normal and application close frames reach the browser as a real network delivers them.
+            if (code === 1000 || (code >= 3000 && code <= 4999)) {
+                client.close(code, reason);
+            } else {
+                client.terminate();
+            }
         });
     });
     await listen(server);

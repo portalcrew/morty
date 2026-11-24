@@ -1,5 +1,6 @@
 import { COMPUTER_SUCCESSOR_CREDENTIAL_HEADER, isComputerCredentialSuccessor } from "@portalcrew/morty-client/protocol";
 import { computerIdFromPrefixedValue } from "../../contracts/computer-id.ts";
+import { closedWebSocketResponse } from "../../http/closed-websocket.ts";
 import { RequestDeadline } from "../../http/request-deadline.ts";
 import { readBearerToken } from "../../http/request-headers.ts";
 
@@ -29,9 +30,5 @@ export async function retiredDaemonResponse(
 }
 
 export function revokedDaemonResponse(): Response {
-    const pair = new WebSocketPair();
-    pair[1].accept();
-    const frame = daemonCloseFrame({ kind: "revoked" });
-    pair[1].close(frame.code, frame.reason);
-    return new Response(null, { status: 101, webSocket: pair[0] });
+    return closedWebSocketResponse(daemonCloseFrame({ kind: "revoked" }));
 }
