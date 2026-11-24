@@ -52,7 +52,12 @@ export function SessionApplication({
         return (
             <App
                 bugReportDialog={application.bugReportDialog}
-                state={{ kind: "connect-app", notice: state.notice, store: application.connectApp }}
+                state={{
+                    kind: "connect-app",
+                    notice: state.notice,
+                    returnHref: state.returnHref,
+                    store: application.connectApp,
+                }}
             />
         );
     }

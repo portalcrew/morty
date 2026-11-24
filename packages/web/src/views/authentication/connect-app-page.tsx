@@ -7,6 +7,7 @@ import { NumberedStep } from "../../components/ui/numbered-step.tsx";
 import { Spinner } from "../../components/ui/spinner.tsx";
 import type { ConnectAppStore } from "../../view-models/authentication/connect-app-store.ts";
 import {
+    BackToLastComputer,
     SetupCardDescription,
     SetupCardSection,
     SetupCardShell,
@@ -32,16 +33,21 @@ function problem(kind: ConnectAppStore["state"]["kind"]): string | null {
 
 export function ConnectAppPage({
     notice,
+    returnHref,
     store,
 }: {
     readonly notice: "access-ended" | "none";
+    readonly returnHref: string | null;
     readonly store: StoreApi<ConnectAppStore>;
 }) {
     const { state, paste, submit } = useStore(store);
     const busy = state.kind === "reading" || state.kind === "opening";
     const message = problem(state.kind);
     return (
-        <SetupCardShell titleId="connect-app-title">
+        <SetupCardShell
+            pageAction={returnHref === null ? undefined : <BackToLastComputer href={returnHref} />}
+            titleId="connect-app-title"
+        >
             <SetupCardTitle id="connect-app-title">Connect the Morty app</SetupCardTitle>
             <SetupCardDescription>
                 {notice === "access-ended" ? "This app’s access ended. " : ""}It signs in separately from Safari.
