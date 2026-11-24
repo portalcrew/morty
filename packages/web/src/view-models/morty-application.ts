@@ -1,11 +1,13 @@
 import { createStore } from "zustand/vanilla";
 import type { ApiTransport } from "../services/api/api-transport.ts";
 import { BotChatApi } from "../services/chat/bot-chat-api.ts";
+import { type AppInstall, browserAppInstall } from "../services/device/app-install.ts";
 import { browserSetupHandoff, type SetupHandoff } from "../services/device/setup-handoff.ts";
 import { recordBrowserDiagnostic } from "../services/diagnostics/browser-diagnostics.ts";
 import { ANONYMOUS_CREDENTIAL_KEY_NAME } from "../services/identity/anonymous-identity-api.ts";
 import { replacedToken, storedToken } from "../services/identity/remembered-computers.ts";
 import { type Clock, systemClock } from "../services/time/clock.ts";
+import { createAppInstallStore } from "./app-install-store.ts";
 import { type ActiveAnonymousSession, createAnonymousSessionStore } from "./authentication/anonymous-session-store.ts";
 import { createContinueStore } from "./authentication/continue-store.ts";
 import { createIdentityAccess } from "./authentication/identity-access.ts";
@@ -70,6 +72,7 @@ export function createMortyApplication(options: {
     readonly transport: ApiTransport;
     readonly clock?: Clock;
     readonly setupHandoff?: SetupHandoff;
+    readonly appInstall?: AppInstall;
 }): MortyApplication {
     const lifetime = new AbortController();
     const transport = options.transport;
@@ -92,6 +95,11 @@ export function createMortyApplication(options: {
     const bugReportDialog = createBugReportDialogStore(() => (disposed ? null : transport));
     const setupHandoff = setupHandoffModel(options.setupHandoff ?? browserSetupHandoff());
     const sessionWorkspace = createSessionWorkspaceStore();
+    const appInstall = createAppInstallStore(
+        options.appInstall ?? browserAppInstall(),
+        options.clock ?? systemClock,
+        lifetime.signal,
+    );
     const continuation = createContinueStore(transport);
     let workspace: ChatWorkspace | null = null;
     let workspaceRequests: BotChatApi | null = null;
@@ -158,6 +166,7 @@ export function createMortyApplication(options: {
             }),
             entry: session.entry,
             bugReportDialog,
+            appInstall,
             computerId: identity.computerId,
             requests,
             access,

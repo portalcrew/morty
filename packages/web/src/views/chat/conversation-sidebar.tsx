@@ -3,6 +3,7 @@ import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import {
     ArrowLeftRight,
     Check,
+    Download,
     Laptop,
     List,
     LoaderCircle,
@@ -47,6 +48,7 @@ import { ScrollEdgeFade } from "../../components/utils/scroll-edge-fade.tsx";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
 import type { ManagedChatSession } from "../../services/chat/bot-chat-api.ts";
+import { appInstallEntryShown } from "../../view-models/app-install-store.ts";
 import { chatDiagnostics } from "../../view-models/chat/chat-diagnostics.ts";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { computerLocationLabel } from "../../view-models/chat/computer-location-label.ts";
@@ -555,6 +557,8 @@ export function ConversationSidebar({
     const access = useStore(workspace.sidebar.remoteAccess);
     const deviceAccess = workspace.deviceAccess;
     const diagnostic = useStore(workspace.sidebar.networkDiagnostic);
+    const appInstall = useStore(workspace.appInstall);
+    const installEntryShown = appInstallEntryShown(appInstall.state);
     const sessionDiagnostics = {
         computerId,
         harness: activeTarget?.harness ?? null,
@@ -599,6 +603,7 @@ export function ConversationSidebar({
                     onOpenDevices: deviceAccess.getState().open,
                     store: workspace.accessExpiry,
                 }}
+                appInstall={workspace.appInstall}
                 onReviewDevices={deviceAccess.getState().open}
                 store={workspace.linkedDevices}
             />
@@ -891,6 +896,15 @@ export function ConversationSidebar({
                                                                     variant="card"
                                                                     onClick={dialogs.getState().openSharing}
                                                                 />
+                                                                {installEntryShown ? (
+                                                                    <SidebarSessionOption
+                                                                        disabled={appInstall.state.kind === "prompting"}
+                                                                        icon={Download}
+                                                                        label="Install app"
+                                                                        variant="card"
+                                                                        onClick={appInstall.install}
+                                                                    />
+                                                                ) : null}
                                                                 <BugReportButton
                                                                     appearance="card"
                                                                     daemonSource={sessionDiagnostics}
@@ -967,6 +981,15 @@ export function ConversationSidebar({
                                                                     );
                                                                 }}
                                                                 onMeasureNetwork={measureNetwork}
+                                                                install={
+                                                                    installEntryShown
+                                                                        ? {
+                                                                              busy:
+                                                                                  appInstall.state.kind === "prompting",
+                                                                              start: appInstall.install,
+                                                                          }
+                                                                        : null
+                                                                }
                                                             />
                                                         ) : null}
                                                         {desktop ? (

@@ -7,6 +7,7 @@ import { flushSync } from "react-dom";
 import * as v from "valibot";
 import { afterAll, afterEach, beforeEach } from "vitest";
 import type { ControlledAgent } from "../../../../tests/support/fake-daemon/runtime.ts";
+import type { AppInstall } from "../../src/services/device/app-install.ts";
 import type { SetupHandoff } from "../../src/services/device/setup-handoff.ts";
 import { encodeIdentityScope, identityScopeSchema } from "../../src/services/identity/identity-scope-url.ts";
 import { withStoredAccessLock } from "../../src/services/identity/remembered-computers.ts";
@@ -96,6 +97,7 @@ interface TestAppOptions {
     readonly connectAgent?: boolean;
     readonly clock?: Clock;
     readonly setupHandoff?: SetupHandoff;
+    readonly appInstall?: AppInstall;
     readonly agent?: ControlledAgent;
     readonly agents?: readonly ControlledAgent[];
     readonly sessionIds?: ReadonlySet<string>;
@@ -192,6 +194,7 @@ async function startTestApp(options: TestAppOptions, owner: AbortSignal): Promis
         transport: current.transport,
         ...(options.clock === undefined ? {} : { clock: options.clock }),
         ...(options.setupHandoff === undefined ? {} : { setupHandoff: options.setupHandoff }),
+        ...(options.appInstall === undefined ? {} : { appInstall: options.appInstall }),
     });
     let rendered: { readonly unmount: () => void } = { unmount: () => {} };
     const mount = () => {
@@ -305,6 +308,7 @@ async function startTestApp(options: TestAppOptions, owner: AbortSignal): Promis
                 application: { ...current, transport, close: () => transport.dispose() },
                 page: { kind: "reload" },
                 ...(options.clock === undefined ? {} : { clock: options.clock }),
+                ...(options.appInstall === undefined ? {} : { appInstall: options.appInstall }),
             });
         },
         openViewer: async () => {

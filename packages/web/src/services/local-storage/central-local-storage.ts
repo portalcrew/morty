@@ -202,6 +202,11 @@ export const linkedDevicesSeenEntry = (computerId: string): StorageEntry<string>
         schema: v.pipe(v.string(), v.isoTimestamp()),
     });
 
+export const appInstallSuggestionDismissedEntry: StorageEntry<string> = stringStorageEntry({
+    key: "morty:app-install-suggestion-dismissed:v1",
+    schema: v.pipe(v.string(), v.isoTimestamp()),
+});
+
 export interface AccessAcknowledgement {
     readonly expiresAt: string;
     readonly through: "joined" | "ending";

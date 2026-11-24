@@ -5,6 +5,7 @@ import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import { encodeIdentityScope, type IdentityScope } from "../../services/identity/identity-scope-url.ts";
 import { rememberComputerName, rememberComputerVisit } from "../../services/identity/remembered-computers.ts";
 import type { Clock } from "../../services/time/clock.ts";
+import type { AppInstallStoreApi } from "../app-install-store.ts";
 import type { IdentityAccess } from "../authentication/identity-access.ts";
 import type { BugReportDialogStore } from "../bug-report-dialog-store.ts";
 import { reportApplicationError } from "../report-error.ts";
@@ -63,6 +64,7 @@ export interface ChatWorkspace {
     readonly requests: BotChatApi;
     /** The application-owned bug-report dialog state, flowing to entry points. */
     readonly bugReportDialog: BugReportDialogStore;
+    readonly appInstall: AppInstallStoreApi;
     readonly computerId: string;
     readonly computer: ComputerStatusStoreApi;
     readonly home: BotChatHomeStoreApi;
@@ -122,6 +124,7 @@ export function createChatWorkspace(options: {
     readonly accessNotice: string | null;
     readonly entry: "address" | "restore";
     readonly bugReportDialog: BugReportDialogStore;
+    readonly appInstall: AppInstallStoreApi;
     readonly computerId: string;
     readonly requests: BotChatApi;
     readonly access: IdentityAccess;
@@ -534,6 +537,7 @@ export function createChatWorkspace(options: {
         requests,
         computerId,
         bugReportDialog: options.bugReportDialog,
+        appInstall: options.appInstall,
         directory,
         computer,
         home,
