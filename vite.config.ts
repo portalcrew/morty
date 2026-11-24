@@ -19,6 +19,10 @@ const revision = process.env["MORTY_RELEASE_REVISION"];
 if (revision !== undefined && !/^[0-9a-f]{40}$/u.test(revision)) {
     throw new Error("MORTY_RELEASE_REVISION must be a full commit SHA");
 }
+const cliVersion = process.env["VITE_MORTY_CLI_VERSION"];
+if (cliVersion !== undefined && !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u.test(cliVersion)) {
+    throw new Error("VITE_MORTY_CLI_VERSION must be a stable semantic version");
+}
 const licenseFile = `assets/THIRD-PARTY-NOTICES-${revision ?? "local"}.txt`;
 const assetOrigins =
     process.env["MORTY_ASSET_ORIGIN"] === undefined
