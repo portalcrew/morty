@@ -8,7 +8,7 @@ import { CopyToClipboardButton } from "../../components/ui/copy-to-clipboard-but
 import { cn } from "../../lib/utils.ts";
 import { agentSetupPrompt, browserSetupHandoff } from "../../services/device/setup-handoff.ts";
 import { type AccessExpiryStore, visibleAccessNotice } from "../../view-models/chat/access-expiry-store.ts";
-import { formatMoment } from "../../view-models/chat/access-presentation.ts";
+import { type AccessHolder, formatMoment } from "../../view-models/chat/access-presentation.ts";
 
 const accessNoticeCardClassName =
     "pointer-events-auto relative mt-0 mb-0 w-full min-w-0 max-w-full shrink-0 rounded-[20px] border border-white bg-card/90 px-3 py-3 text-12 text-foreground [overflow-wrap:anywhere]";
@@ -117,10 +117,12 @@ export function SidebarAccessNoticeCard({
 function JoinedAccessNoticeCard({
     computerName,
     expiresAt,
+    holder,
     onDismiss,
     onOpenDevices,
 }: {
     readonly computerName: string;
+    readonly holder: AccessHolder;
     readonly expiresAt: string;
     readonly onDismiss: () => void;
     readonly onOpenDevices: () => void;
@@ -144,17 +146,19 @@ function JoinedAccessNoticeCard({
             }
             detail="Only devices you add can use your computer. See them, or disconnect any, in Devices."
             icon={ShieldCheck}
-            label="This browser's access"
-            title={`This browser can use ${computerName || "your computer"} until ${formatMoment(expiresAt)}.`}
+            label={`This ${holder}'s access`}
+            title={`This ${holder} can use ${computerName || "your computer"} until ${formatMoment(expiresAt)}.`}
         />
     );
 }
 
 function EndingAccessNoticeCard({
     expiresAt,
+    holder,
     onDismiss,
 }: {
     readonly expiresAt: string;
+    readonly holder: AccessHolder;
     readonly onDismiss: () => void;
 }) {
     // Setup again keeps this computer's pairing and returns a new link; only the computer running the agent can copy it.
@@ -193,13 +197,15 @@ function EndingAccessNoticeCard({
                 </>
             }
             detail={
-                copiesPrompt
-                    ? "To keep using Morty here, paste the setup prompt into your agent and open the new link in this browser. Your agent and tasks keep running."
-                    : "To keep using Morty here, ask your agent on your computer to run Morty setup again and open the new link in this browser. Your agent and tasks keep running."
+                holder === "app"
+                    ? "To keep using this app, renew Morty's access in Safari, then copy a new link there and paste it here. Your agent and tasks keep running."
+                    : copiesPrompt
+                      ? "To keep using Morty here, paste the setup prompt into your agent and open the new link in this browser. Your agent and tasks keep running."
+                      : "To keep using Morty here, ask your agent on your computer to run Morty setup again and open the new link in this browser. Your agent and tasks keep running."
             }
             icon={Clock3}
             label="Access ending soon"
-            title={`Access in this browser ends ${formatMoment(expiresAt)}`}
+            title={`Access in this ${holder} ends ${formatMoment(expiresAt)}`}
         />
     );
 }
@@ -218,7 +224,7 @@ export function AccessNotice({
     readonly onOpenDevices: () => void;
     readonly store: StoreApi<AccessExpiryStore>;
 }) {
-    const { state, dismiss } = useStore(store);
+    const { state, dismiss, holder } = useStore(store);
     const shown = visibleAccessNotice(state);
     if (shown === null) {
         return null;
@@ -228,12 +234,13 @@ export function AccessNotice({
             <JoinedAccessNoticeCard
                 computerName={computerName}
                 expiresAt={shown.expiresAt}
+                holder={holder}
                 onDismiss={dismiss}
                 onOpenDevices={onOpenDevices}
             />
         );
     }
-    return <EndingAccessNoticeCard expiresAt={shown.expiresAt} onDismiss={dismiss} />;
+    return <EndingAccessNoticeCard expiresAt={shown.expiresAt} holder={holder} onDismiss={dismiss} />;
 }
 
 /**
@@ -288,6 +295,7 @@ export function AccessTerm({
     readonly store: StoreApi<AccessExpiryStore>;
 }) {
     const state = useStore(store, (model) => model.state);
+    const holder = useStore(store, (model) => model.holder);
     if (state.kind === "unknown") {
         return <AccessTermSkeleton layout={layout} />;
     }
@@ -300,7 +308,7 @@ export function AccessTerm({
             : "font-medium leading-5 text-foreground";
     const term = (
         <div className="min-w-0">
-            <p className={titleClassName}>Access in this browser</p>
+            <p className={titleClassName}>Access in this {holder}</p>
             <p className="my-0.5 text-xs text-muted-foreground">Until {formatMoment(state.expiresAt)}</p>
         </div>
     );

@@ -82,13 +82,14 @@ function disconnectConfirmFooter(
     );
 }
 
-function ThisBrowser({ accessExpiry }: { readonly accessExpiry: StoreApi<AccessExpiryStore> }) {
+function ThisAccessHolder({ accessExpiry }: { readonly accessExpiry: StoreApi<AccessExpiryStore> }) {
     const term = useStore(accessExpiry, (model) => model.state);
+    const holder = useStore(accessExpiry, (model) => model.holder);
     const until = term.kind !== "known" ? null : term.expiresAt === null ? null : formatMomentNumeric(term.expiresAt);
     return (
         <DeviceSummary
             device={{
-                name: "This browser",
+                name: `This ${holder}`,
                 details:
                     until === null
                         ? term.kind === "known" && term.expiresAt === null
@@ -229,7 +230,7 @@ export function DevicesDialog({
                                 <h3 className={dialogSectionTitleClassName}>Always here</h3>
                                 <div className={deviceGroupCardClassName}>
                                     <div className={deviceGroupRowClassName}>
-                                        <ThisBrowser accessExpiry={accessExpiry} />
+                                        <ThisAccessHolder accessExpiry={accessExpiry} />
                                     </div>
                                     <div className={cn(deviceGroupDividerClassName, deviceGroupRowClassName)}>
                                         <DeviceSummary
@@ -278,7 +279,7 @@ export function DevicesDialog({
                                 {targets(state.disconnection, others) ? (
                                     <Dialog
                                         busy={state.disconnection.kind === "disconnecting"}
-                                        description="They lose access right away, and links you shared that no one opened stop working. This browser and your computer keep access."
+                                        description={`They lose access right away, and links you shared that no one opened stop working. This ${accessExpiry.getState().holder} and your computer keep access.`}
                                         footer={disconnectConfirmFooter(
                                             state.disconnection,
                                             cancel,

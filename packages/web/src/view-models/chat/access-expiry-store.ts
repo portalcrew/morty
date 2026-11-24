@@ -5,6 +5,7 @@ import {
     centralLocalStorage,
 } from "../../services/local-storage/central-local-storage.ts";
 import type { Clock } from "../../services/time/clock.ts";
+import type { AccessHolder } from "./access-presentation.ts";
 
 /** How long before this browser's access ends it is told once, so it can get a new link before work is cut off. */
 const reminderLead = 60 * 60 * 1000;
@@ -41,6 +42,7 @@ export function visibleAccessNotice(
 }
 
 export interface AccessExpiryStore {
+    readonly holder: AccessHolder;
     readonly state: AccessExpiryState;
     readonly onAttach: (node: HTMLElement | null) => (() => void) | undefined;
     readonly dismiss: () => void;
@@ -55,6 +57,7 @@ export function createAccessExpiryStore(options: {
     readonly computerId: string;
     readonly accessExpiresAt: (signal: AbortSignal) => Promise<string | null>;
     readonly clock: Clock;
+    readonly holder: AccessHolder;
 }) {
     const acknowledged = accessAcknowledgedEntry(options.computerId);
     return createStore<AccessExpiryStore>()((set, get) => {
@@ -104,6 +107,7 @@ export function createAccessExpiryStore(options: {
             tell(expiresAt);
         };
         return {
+            holder: options.holder,
             state: { kind: "unknown" },
             onAttach: (node) => {
                 if (node === null) {
