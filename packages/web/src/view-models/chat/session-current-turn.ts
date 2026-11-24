@@ -106,6 +106,11 @@ export function transitionCurrentTurn(turn: CurrentTurn, event: CurrentTurnEvent
     }
 }
 
+/** Whether the native session's owner took the current command, into its queue or its own turn. */
+export function ownerHoldsTurn(turn: CurrentTurn): boolean {
+    return turn.kind === "current" && turn.delegation !== null;
+}
+
 /** Whether only the native session's owner can stop the current turn, because it took the command into its own turn. */
 export function ownerRunsTurn(turn: CurrentTurn): boolean {
     return turn.kind === "current" && turn.delegation === "started";
