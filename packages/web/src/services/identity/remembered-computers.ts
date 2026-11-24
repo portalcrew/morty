@@ -67,6 +67,11 @@ export async function withStoredAccessLock<T>(
         : await locks.request("morty-stored-access", { signal }, perform);
 }
 
+/** The user's choice to stop listing a computer: this browser keeps neither its place nor its access. */
+export async function forgetRememberedComputer(scope: IdentityScope, signal: AbortSignal): Promise<void> {
+    await withStoredAccessLock(signal, async (access) => access.forget(scope));
+}
+
 export async function replacedToken(computerId: string, rejected: string, signal: AbortSignal): Promise<string | null> {
     return await withStoredAccessLock(signal, async () => {
         const current = storedToken(computerId);

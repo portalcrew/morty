@@ -1,4 +1,4 @@
-import { Check, ChevronDown, LoaderCircle, MonitorCog, Plus } from "lucide-react";
+import { Check, ChevronDown, LoaderCircle, MonitorCog, Plus, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useStore } from "zustand";
 import { cn } from "@/lib/utils";
@@ -130,7 +130,19 @@ function ComputerChoiceContent({
 const menuRowClassName =
     "h-9 rounded-full px-3 cursor-pointer transition-colors hover:bg-morty-fill-opacity-2 active:bg-morty-fill-opacity-3 data-[highlighted]:bg-accent motion-reduce:transition-none";
 
-function ComputerMenuChoice({ activeKey, choice }: { readonly activeKey: string; readonly choice: ComputerChoice }) {
+function forgetComputerLabel(choice: ComputerChoice): string {
+    return `Remove ${choice.disambiguator === null ? choice.name : `${choice.name} (${choice.disambiguator})`} from this browser`;
+}
+
+function ComputerMenuChoice({
+    activeKey,
+    choice,
+    onForget,
+}: {
+    readonly activeKey: string;
+    readonly choice: ComputerChoice;
+    readonly onForget: (key: string) => void;
+}) {
     const current = choice.key === activeKey;
     const rowClassName = cn(choiceRowClassName, menuRowClassName, choice.disambiguator !== null && "h-12");
     const content = (
@@ -142,11 +154,25 @@ function ComputerMenuChoice({ activeKey, choice }: { readonly activeKey: string;
             {content}
         </DropdownMenu.RadioItem>
     ) : (
-        <DropdownMenu.RadioItem asChild textValue={choice.name} value={choice.key}>
-            <a className={rowClassName} href={choice.href}>
-                {content}
-            </a>
-        </DropdownMenu.RadioItem>
+        <div className="group/choice relative">
+            <DropdownMenu.RadioItem asChild textValue={choice.name} value={choice.key}>
+                <a className={rowClassName} href={choice.href}>
+                    {content}
+                </a>
+            </DropdownMenu.RadioItem>
+            <DropdownMenu.Item
+                aria-label={forgetComputerLabel(choice)}
+                className="absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-copy-secondary opacity-0 outline-none transition-opacity duration-150 group-hover/choice:opacity-100 group-has-[[data-highlighted]]/choice:opacity-100 data-[highlighted]:bg-morty-fill-opacity-3 data-[highlighted]:text-foreground motion-reduce:transition-none"
+                onSelect={(event) => {
+                    // The menu stays open so several computers can be removed in turn.
+                    event.preventDefault();
+                    onForget(choice.key);
+                }}
+                title="Remove from this browser"
+            >
+                <X aria-hidden="true" className="size-3.5" />
+            </DropdownMenu.Item>
+        </div>
     );
 }
 
@@ -171,10 +197,12 @@ function ComputerListChoice({
     activeKey,
     choice,
     onChooseCurrent,
+    onForget,
 }: {
     readonly activeKey: string;
     readonly choice: ComputerChoice;
     readonly onChooseCurrent: () => void;
+    readonly onForget: (key: string) => void;
 }) {
     const current = choice.key === activeKey;
     const content = (
@@ -190,9 +218,19 @@ function ComputerListChoice({
             {content}
         </button>
     ) : (
-        <a className={mobileChoiceRowClassName} href={choice.href}>
-            {content}
-        </a>
+        <div className="relative">
+            <a className={mobileChoiceRowClassName} href={choice.href}>
+                {content}
+            </a>
+            <button
+                aria-label={forgetComputerLabel(choice)}
+                className="absolute top-1/2 right-2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-copy-secondary outline-none transition-colors hover:bg-morty-fill-opacity-2 active:bg-morty-fill-opacity-3 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
+                onClick={() => onForget(choice.key)}
+                type="button"
+            >
+                <X aria-hidden="true" className="size-4" />
+            </button>
+        </div>
     );
 }
 
@@ -234,6 +272,7 @@ export function ComputerSwitcher({
     const active = choices.find((choice) => choice.key === activeKey);
     const computerName = name || active?.name || "Computer";
     const detailsLabel = `View execution details for ${computerName}`;
+    const forget = (key: string) => void model.forget(key);
     if (layout === "list") {
         return (
             <ComputerExecutionDetails context={context}>
@@ -263,6 +302,7 @@ export function ComputerSwitcher({
                                         choice={choice}
                                         key={choice.key}
                                         onChooseCurrent={onChooseCurrent}
+                                        onForget={forget}
                                     />
                                 ))
                             )}
@@ -384,6 +424,7 @@ export function ComputerSwitcher({
                                                 activeKey={activeKey}
                                                 choice={choice}
                                                 key={choice.key}
+                                                onForget={forget}
                                             />
                                         ))
                                     )}
