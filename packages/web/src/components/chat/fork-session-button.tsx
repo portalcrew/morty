@@ -1,16 +1,41 @@
 import { GitFork, LoaderCircle } from "lucide-react";
+import { useCallback, useEffect, useRef } from "react";
 import { cn } from "../../lib/utils.ts";
+import { handComposerFocus } from "../utils/use-composer-focus.ts";
 import { replyActionButtonClassName } from "./response-copy-button.tsx";
 
 export function ForkSessionButton({
+    focusScope,
     forking,
     disabled,
     onFork,
 }: {
+    readonly focusScope: object;
     readonly forking: boolean;
     readonly disabled: boolean;
     readonly onFork: () => void;
 }) {
+    const keyboardFork = useRef(false);
+    useEffect(() => {
+        if (!forking) {
+            keyboardFork.current = false;
+        }
+    }, [forking]);
+    // A fork the workspace follows replaces this pane while the fork is still in progress here; keyboard focus moves on
+    // to the fork's composer instead of falling to the page.
+    const attach = useCallback(
+        (button: HTMLButtonElement | null) => {
+            if (button === null) {
+                return;
+            }
+            return () => {
+                if (keyboardFork.current && button.ownerDocument.activeElement === button) {
+                    handComposerFocus(focusScope);
+                }
+            };
+        },
+        [focusScope],
+    );
     return (
         <button
             aria-busy={forking}
@@ -22,7 +47,15 @@ export function ForkSessionButton({
             )}
             // Unlike `disabled`, this keeps keyboard focus on the button while the fork is in progress.
             aria-disabled={disabled || undefined}
-            onClick={disabled ? undefined : onFork}
+            onClick={
+                disabled
+                    ? undefined
+                    : (event) => {
+                          keyboardFork.current = event.currentTarget.matches(":focus-visible");
+                          onFork();
+                      }
+            }
+            ref={attach}
             title="Fork session"
             type="button"
         >

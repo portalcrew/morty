@@ -738,6 +738,7 @@ function MortySessionPaneBody({
                                                     group.forkOffered ? (
                                                         <ForkSessionButton
                                                             disabled={presentation.forkDisabled}
+                                                            focusScope={workspace}
                                                             forking={fork.fork.kind === "forking"}
                                                             onFork={() => run(pane.store.getState().fork)}
                                                         />
@@ -963,7 +964,7 @@ function MortySessionPaneBody({
                                 presentation.stopHeldByOwner
                                     ? {
                                           title: `Only ${executionContext.agent} on your computer can stop this task.`,
-                                          detail: "To control later tasks here, use Fork session on the reply once it finishes.",
+                                          detail: "To control later tasks here, use Fork session on the latest reply once nothing is running or queued.",
                                       }
                                     : undefined
                             }
