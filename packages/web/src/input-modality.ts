@@ -24,5 +24,24 @@ export function installInputModalityTracking(): void {
         capture: true,
         passive: true,
     });
-    window.addEventListener("keydown", () => setInputModality("keyboard"), { capture: true });
+    window.addEventListener(
+        "keydown",
+        (event) => {
+            if (isKeyboardNavigation(event)) {
+                setInputModality("keyboard");
+            }
+        },
+        { capture: true },
+    );
+}
+
+export function isKeyboardInputModality(): boolean {
+    return document.documentElement.getAttribute(INPUT_MODALITY_ATTRIBUTE) === "keyboard";
+}
+
+const modifierKeys = new Set(["Alt", "Control", "Meta", "Shift"]);
+
+/** Shortcuts such as Cmd+Tab or Ctrl+Tab leave the page; the focus it regains afterwards is not keyboard navigation. */
+function isKeyboardNavigation(event: KeyboardEvent): boolean {
+    return !(event.metaKey || event.ctrlKey || modifierKeys.has(event.key));
 }

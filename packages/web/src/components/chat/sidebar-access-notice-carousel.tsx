@@ -11,6 +11,7 @@ import {
     useRef,
     useState,
 } from "react";
+import { isKeyboardInputModality } from "../../input-modality.ts";
 import { cn } from "../../lib/utils.ts";
 import { useContainsRenderedSection } from "../utils/use-contains-rendered-section.ts";
 
@@ -245,7 +246,7 @@ export function SidebarAccessNoticeCarousel({ children }: { readonly children: R
                 event.stopPropagation();
             }}
             onFocus={() => {
-                if (document.documentElement.getAttribute("data-input-modality") === "keyboard") {
+                if (isKeyboardInputModality()) {
                     setPaused(true);
                 }
             }}

@@ -1,10 +1,11 @@
 import { LoaderCircle, LogOut, type LucideIcon, MonitorSmartphone, UserRound, Wifi } from "lucide-react";
 import { DropdownMenu, Tooltip } from "radix-ui";
-import { type ReactNode, useRef } from "react";
+import type { ReactNode } from "react";
 import { dataTestId } from "../../data-testid.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "../ui/cloud-button.tsx";
 import { MortyTooltipContent } from "../ui/morty-tooltip-content.tsx";
+import { MortyTooltipTrigger } from "../ui/morty-tooltip-trigger.tsx";
 import {
     type OverlayContentOpenAutoFocus,
     overlayMenuSeparatorClassName,
@@ -14,10 +15,6 @@ import {
     preventOverlayOpenAutoFocus,
 } from "../ui/overlay-surface.ts";
 
-/**
- * The sidebar account menu. A menu opened by a pointer does not hand focus back
- * to its trigger when it closes, so the trigger's tooltip does not reopen.
- */
 export function SidebarUserMenu({
     header,
     disabled,
@@ -40,20 +37,16 @@ export function SidebarUserMenu({
         readonly label: string;
     } | null;
 }) {
-    const openedByPointer = useRef(false);
     return (
         <DropdownMenu.Root>
             <Tooltip.Root>
-                <Tooltip.Trigger asChild>
+                <MortyTooltipTrigger asChild>
                     <DropdownMenu.Trigger asChild>
                         <Button
                             aria-label="User menu"
                             className="ml-1 shrink-0 rounded-full border-[1px] border-white bg-black/[0.08] text-copy-secondary hover:bg-black/[0.12] active:bg-black/[0.16] data-[state=open]:bg-black/[0.16]"
                             data-testid={dataTestId.userMenu}
                             disabled={disabled}
-                            onPointerDown={() => {
-                                openedByPointer.current = true;
-                            }}
                             size="icon"
                             variant="ghost"
                         >
@@ -64,7 +57,7 @@ export function SidebarUserMenu({
                             )}
                         </Button>
                     </DropdownMenu.Trigger>
-                </Tooltip.Trigger>
+                </MortyTooltipTrigger>
                 <Tooltip.Portal>
                     <MortyTooltipContent side="top" sideOffset={6}>
                         User menu
@@ -83,12 +76,6 @@ export function SidebarUserMenu({
                         overlaySurfacePanelClassName,
                         overlaySurfaceRadiusClassName,
                     )}
-                    onCloseAutoFocus={(event) => {
-                        if (openedByPointer.current) {
-                            event.preventDefault();
-                        }
-                        openedByPointer.current = false;
-                    }}
                     side="top"
                     sideOffset={overlayTriggerOffsetPx}
                 >

@@ -17,7 +17,7 @@ import {
     X,
 } from "lucide-react";
 import { ContextMenu, Tooltip } from "radix-ui";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useStore } from "zustand";
 import { MortyLogoMark } from "../../components/brand/morty-logo.tsx";
@@ -41,6 +41,7 @@ import { Button } from "../../components/ui/cloud-button.tsx";
 import { Dialog, SheetDialog } from "../../components/ui/dialog.tsx";
 import { MortyAlert } from "../../components/ui/morty-alert.tsx";
 import { MortyTooltipContent } from "../../components/ui/morty-tooltip-content.tsx";
+import { MortyTooltipTrigger } from "../../components/ui/morty-tooltip-trigger.tsx";
 import { type OverlayContentOpenAutoFocus, preventOverlayOpenAutoFocus } from "../../components/ui/overlay-surface.ts";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { DesktopChatLayout } from "../../components/utils/desktop-chat-layout.tsx";
@@ -239,13 +240,6 @@ function NetworkLatencyDialog({
     );
 }
 
-/** Releases pointer-click focus so the action's tooltip and focus ring do not linger. */
-function blurAfterPointerClick(event: MouseEvent<HTMLButtonElement>): void {
-    if (event.detail > 0) {
-        event.currentTarget.blur();
-    }
-}
-
 function SidebarSessionOption({
     label,
     icon: Icon,
@@ -293,7 +287,7 @@ function SidebarActionTooltip({
 }) {
     return (
         <Tooltip.Root>
-            <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
+            <MortyTooltipTrigger asChild>{children}</MortyTooltipTrigger>
             <Tooltip.Portal>
                 <MortyTooltipContent side={side} sideOffset={6}>
                     {label}
@@ -468,9 +462,9 @@ function ManagedSessionDirectoryList({
                         const sessionTrigger =
                             session.directoryLabel.length > 0 ? (
                                 <Tooltip.Root>
-                                    <Tooltip.Trigger asChild>
+                                    <MortyTooltipTrigger asChild>
                                         <ContextMenu.Trigger asChild>{sessionButton}</ContextMenu.Trigger>
-                                    </Tooltip.Trigger>
+                                    </MortyTooltipTrigger>
                                     <Tooltip.Portal>
                                         <MortyTooltipContent className="max-w-xs leading-5" side="right" sideOffset={8}>
                                             <div className="grid gap-1">
@@ -853,10 +847,7 @@ export function ConversationSidebar({
                                                                     }
                                                                     aria-busy={refreshing}
                                                                     disabled={refreshing}
-                                                                    onClick={(event) => {
-                                                                        blurAfterPointerClick(event);
-                                                                        workspace.refreshDirectory();
-                                                                    }}
+                                                                    onClick={() => workspace.refreshDirectory()}
                                                                 >
                                                                     <RefreshCw
                                                                         className={`size-3.5 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}`}
@@ -1021,10 +1012,7 @@ export function ConversationSidebar({
                                                                         aria-label="Continue on another device"
                                                                         className="size-8! min-h-8! shrink-0 justify-center rounded-lg px-0"
                                                                         data-testid={dataTestId.shareIdentity}
-                                                                        onClick={(event) => {
-                                                                            blurAfterPointerClick(event);
-                                                                            dialogs.getState().openSharing();
-                                                                        }}
+                                                                        onClick={() => dialogs.getState().openSharing()}
                                                                         size="icon"
                                                                         variant="ghost"
                                                                     >
@@ -1226,10 +1214,7 @@ export function ConversationSidebar({
                                                                           ? "Refreshing sessions"
                                                                           : "Refresh sessions"
                                                                   }
-                                                                  onClick={(event) => {
-                                                                      blurAfterPointerClick(event);
-                                                                      workspace.refreshDirectory();
-                                                                  }}
+                                                                  onClick={() => workspace.refreshDirectory()}
                                                               >
                                                                   <RefreshCw
                                                                       aria-hidden="true"
