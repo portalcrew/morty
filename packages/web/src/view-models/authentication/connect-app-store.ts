@@ -6,6 +6,7 @@ type ConnectAppState =
     | { readonly kind: "waiting" }
     | { readonly kind: "reading" }
     | { readonly kind: "not-a-link" }
+    | { readonly kind: "nothing-copied" }
     | { readonly kind: "clipboard-unavailable" }
     | { readonly kind: "opening" };
 
@@ -34,6 +35,10 @@ function connectionLink(text: string, origin: string): URL | null {
 export function createConnectAppStore(origin: string) {
     return createStore<ConnectAppStore>()((set, get) => {
         const open = (text: string) => {
+            if (text.trim().length === 0) {
+                set({ state: { kind: "nothing-copied" } });
+                return;
+            }
             const link = connectionLink(text, origin);
             if (link === null) {
                 set({ state: { kind: "not-a-link" } });

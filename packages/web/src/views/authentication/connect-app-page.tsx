@@ -19,6 +19,8 @@ function problem(kind: ConnectAppStore["state"]["kind"]): string | null {
     switch (kind) {
         case "not-a-link":
             return "That isn’t a Morty link. Copy the link again in Safari.";
+        case "nothing-copied":
+            return "Nothing is copied yet. In Safari, tap Copy link first.";
         case "clipboard-unavailable":
             return "Morty couldn’t read the clipboard. Paste the link below instead.";
         case "waiting":

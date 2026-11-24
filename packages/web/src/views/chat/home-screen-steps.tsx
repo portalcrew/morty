@@ -64,8 +64,8 @@ export function HomeScreenSteps({ store }: { readonly store: StoreApi<HomeScreen
             </NumberedStep>
             <NumberedStep number={2} title="Add to Home Screen">
                 <p className="text-13 leading-5 text-muted-foreground">
-                    Tap <Share aria-label="Share" className="inline size-4 align-[-3px]" /> Share (in the ⋯ menu on
-                    newer iOS), then Add to Home Screen.
+                    Open Safari’s <Share aria-hidden="true" className="inline size-4 align-[-3px]" /> Share menu and tap
+                    Add to Home Screen. If you don’t see it, tap View More. Leave Open as Web App on, then tap Add.
                 </p>
             </NumberedStep>
             <NumberedStep number={3} title="Open Morty from your Home Screen">
