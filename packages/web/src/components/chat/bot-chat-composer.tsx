@@ -24,7 +24,7 @@ import { useAutoGrowingTextarea } from "../utils/use-auto-growing-textarea.ts";
 import { useComposerFocus } from "../utils/use-composer-focus.ts";
 import { useMobileComposerActive } from "../utils/use-mobile-composer-active.ts";
 import { useScrollClippedEdges } from "../utils/use-scroll-clipped-edges.ts";
-import { useSoftwareKeyboardMarker } from "../utils/use-software-keyboard-marker.ts";
+import { softwareKeyboardOpen, useSoftwareKeyboardMarker } from "../utils/use-software-keyboard-marker.ts";
 import { useTouchFirst } from "../utils/use-touch-first.ts";
 import { chatSessionComposerClassName } from "./chat-session-layout.ts";
 import type { ComposerAttachment } from "./composer-attachment.ts";
@@ -253,16 +253,15 @@ export function BotChatComposer({
             button
         );
 
-    const submit = (event: FormEvent<HTMLFormElement>): void => {
-        event.preventDefault();
+    const send = (keepTyping: boolean): void => {
         if (!submitDisabled) {
             onSubmit();
-            // Touch devices drop the software keyboard so the reply is visible; keyboard users keep typing.
-            if (touchFirst) {
+            // A touch device drops its software keyboard so the reply is visible; keyboard users keep typing.
+            if (keepTyping) {
+                textarea.current?.focus({ preventScroll: true });
+            } else {
                 textarea.current?.blur();
                 setActive(false);
-            } else {
-                textarea.current?.focus({ preventScroll: true });
             }
         } else if (explainBlockedSend) {
             showToast({
@@ -271,6 +270,10 @@ export function BotChatComposer({
                 variant: "error",
             });
         }
+    };
+    const submit = (event: FormEvent<HTMLFormElement>): void => {
+        event.preventDefault();
+        send(!touchFirst);
     };
 
     const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -329,12 +332,18 @@ export function BotChatComposer({
             onDraftChange(event.currentTarget.value);
             return;
         }
-        // A software keyboard has no Shift+Enter, so its Return must stay a line break; Send is the button.
-        if (touchFirst || event.shiftKey || event.metaKey || event.altKey) {
+        // A software keyboard has no Shift+Enter, so its Return must stay a line break; Send is the button. A touch
+        // device's hardware keyboard covers nothing, and its Enter sends as on any other keyboard.
+        if (
+            event.shiftKey ||
+            event.metaKey ||
+            event.altKey ||
+            (touchFirst && softwareKeyboardOpen(event.currentTarget))
+        ) {
             return;
         }
         event.preventDefault();
-        event.currentTarget.form?.requestSubmit();
+        send(true);
     };
     const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
         const images = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
@@ -635,7 +644,7 @@ export function BotChatComposer({
             </span>
             <span className="sr-only" id="chat-composer-keyboard-hint">
                 {touchFirst
-                    ? "Enter inserts a new line. Use Send message to send."
+                    ? "Return on the on-screen keyboard inserts a new line; use Send message to send. Enter on a hardware keyboard sends."
                     : "Enter to send. Shift or Control plus Enter inserts a new line."}
                 {offeredSuggestion === null ? "" : " Tab inserts the suggested prompt and Escape dismisses it."}
             </span>

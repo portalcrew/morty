@@ -32,6 +32,10 @@ function opensSoftwareKeyboard(element: Element | null): boolean {
     );
 }
 
+export function softwareKeyboardOpen(element: Element): boolean {
+    return element.closest(`[${markerAttribute}="open"]`) !== null;
+}
+
 /**
  * Attaches to a container of text fields, such as the composer form or the phone rename bar, and marks it
  * `data-software-keyboard="open"` while a field inside it has focus and a software keyboard covers the bottom edge.
