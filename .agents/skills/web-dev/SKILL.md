@@ -27,7 +27,7 @@ skill needs no `.dev.vars`, no local Worker, and no cloud deployment credential.
 | Checkout | This repository with `package.json`, `vite.config.ts`, and `vite.web-dev.config.ts` at its root; locked dependencies installed. |
 | Toolchain | The Node.js version in `.nvmrc` and pnpm version pinned in `package.json`. |
 | Deployed origin | The Worker origin to proxy to. Default `https://morty.build`; when the user names another, set it via `WEB_DEV_ORIGIN`. |
-| Continue URL | A `https://<deployed>/continue#code=…` link from the user for sign-in. The code is a one-time secret: never print, log, or commit it. |
+| Continue URL | A `https://<deployed>/continue#…` link from the user for sign-in. Everything after `#` is a one-time secret: never print, log, or commit it. |
 
 Stop and ask if there is no continue link; do not invent credentials or redeem
 links from any other source. A link without `harness`/`sessionId` parameters
@@ -83,18 +83,19 @@ fix the proxy layer before touching the browser.
 
 ## Sign in with the continue link
 
-Rewrite the user's continue URL to the local origin, keeping the hash intact,
-without printing it. Given `https://morty.build/continue#code=…`, open:
+Rewrite the user's continue URL to the local origin, keeping the query and hash
+intact, without printing it. Given `https://morty.build/continue#…`, open:
 
 ```text
-http://localhost:<port>/continue#code=…
+http://localhost:<port>/continue#…
 ```
 
-The Continue page redeems the transfer code through the proxy, stores the
-identity, and lands on the Chat page with the user's real sessions. A code is
-one-time: if redemption fails, ask the user for a fresh link rather than
-retrying the spent one. Open the link in a fresh browser profile or session so
-no other stored identity interferes.
+The Continue page redeems the link through the proxy, whether its fragment
+carries the transfer code or the key to a short sealed link whose contents the
+deployed Worker holds. It stores the identity and lands on the Chat page with
+the user's real sessions. A link is one-time: if redemption fails, ask the user
+for a fresh link rather than retrying the spent one. Open the link in a fresh
+browser profile or session so no other stored identity interferes.
 
 ## Iterate
 
