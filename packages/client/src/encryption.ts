@@ -9,6 +9,7 @@ const MAX_ASSOCIATED_DATA_BYTES = 32 * 1024;
 
 export type E2EErrorCode =
     | "e2e_invalid_frame"
+    | "e2e_payload_expired"
     | "e2e_authentication_failed"
     | "e2e_channel_closed"
     | "e2e_invalid_key"
@@ -244,8 +245,11 @@ async function createPayloadEncryption(
             const expiresAt = issuedAt + PAYLOAD_MAX_AGE_MILLISECONDS;
             const now = Math.max(Date.now(), replayClock);
             replayClock = now;
-            if (issuedAt > now + PAYLOAD_FUTURE_SKEW_MILLISECONDS || expiresAt <= now) {
+            if (issuedAt > now + PAYLOAD_FUTURE_SKEW_MILLISECONDS) {
                 throw new E2EError("e2e_invalid_frame");
+            }
+            if (expiresAt <= now) {
+                throw new E2EError("e2e_payload_expired");
             }
             if (now >= nextExpiry) {
                 nextExpiry = Number.POSITIVE_INFINITY;
@@ -296,7 +300,7 @@ async function createPayloadEncryption(
                 }
                 replayClock = Math.max(Date.now(), replayClock);
                 if (expiresAt <= replayClock) {
-                    throw new E2EError("e2e_invalid_frame");
+                    throw new E2EError("e2e_payload_expired");
                 }
                 const retainedUntil = expiresAt + PAYLOAD_FUTURE_SKEW_MILLISECONDS;
                 seen.set(packetId, retainedUntil);

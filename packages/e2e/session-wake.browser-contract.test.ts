@@ -86,3 +86,67 @@ test("Given a conversation recovering after suspension, when its history read ti
     );
     await expect(page.getByRole("article", { name: "Your message" })).toHaveCount(2);
 });
+
+test("Given a reply streaming while the page is suspended, when the page resumes to deliveries older than their freshness window, then it shows the finished reply without a connection error", async ({
+    runtime,
+}) => {
+    const { page } = runtime;
+    // A suspended page runs no script, so frames its open socket receives wait until it resumes.
+    let suspension: {
+        readonly held: { readonly route: WebSocketRoute; readonly message: string | Buffer }[];
+        readonly firstEvent: PromiseWithResolvers<void>;
+    } | null = null;
+    await page.routeWebSocket("**/morty/api/v1/computers/*/transport", (socket) => {
+        const server = socket.connectToServer();
+        server.onMessage((message) => {
+            if (suspension === null) {
+                socket.send(message);
+                return;
+            }
+            suspension.held.push({ route: socket, message });
+            if (typeof message === "string" && message.includes('"session.events.event"')) {
+                suspension.firstEvent.resolve();
+            }
+        });
+        socket.onMessage((message) => server.send(message));
+        socket.onClose(async (code, reason) => {
+            await server.close({
+                ...(code === undefined ? {} : { code }),
+                ...(reason === undefined ? {} : { reason }),
+            });
+        });
+    });
+    await runtime.clock.install({ time: new Date("2026-10-28T08:00:00Z") });
+    await runtime.clock.pauseAt(new Date("2026-10-28T08:01:00Z"));
+    await runtime.openPairedChat();
+    const composer = page.getByRole("textbox", { name: "Message" });
+    await composer.fill("hold after first delta");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(page.getByRole("article", { name: "Agent response" })).toContainText("Partial reply");
+
+    const firstEvent = Promise.withResolvers<void>();
+    suspension = { held: [], firstEvent };
+    await runtime.continueReply("hold after first delta", {
+        outcome: "complete",
+        output: [{ kind: "text", text: "Finished while the page was suspended." }],
+    });
+    await firstEvent.promise;
+    // The page stayed suspended past the encrypted deliveries' freshness window.
+    await runtime.clock.setFixedTime(new Date("2026-10-28T08:06:00Z"));
+    const { held } = suspension;
+    suspension = null;
+    for (const { route, message } of held) {
+        route.send(message);
+    }
+    await page.evaluate(() => document.dispatchEvent(new Event("resume")));
+
+    const finished = page
+        .getByRole("article", { name: "Agent response" })
+        .filter({ hasText: "Finished while the page was suspended." });
+    await runtime.clock.advanceUntil(async () => {
+        expect(await finished.count()).toBe(1);
+    });
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByTestId(dataTestId.sessionReconnectNotice)).toBeHidden();
+    await expect(page.getByRole("button", { name: "Stop agent output" })).toBeHidden();
+});
