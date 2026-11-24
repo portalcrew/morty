@@ -1,7 +1,7 @@
 import type { ComposerAttachmentStore } from "./composer-attachment-store.ts";
 import type { SessionComposerStore } from "./session-composer-store.ts";
 import type { SessionConnection } from "./session-connection.ts";
-import { acceptedTurn, ownerRunsTurn, workingIndicator } from "./session-current-turn.ts";
+import { acceptedTurn, ownerHoldsTurn, ownerRunsTurn, workingIndicator } from "./session-current-turn.ts";
 import { sessionDeliveryPresentation } from "./session-delivery-presentation.ts";
 import { type SessionDeliveryStore, settledDelivery, unconfirmedJournal } from "./session-delivery-store.ts";
 import { type SessionExecutionState, sessionActivity, visibleQueue } from "./session-execution.ts";
@@ -23,7 +23,7 @@ import {
     composerHasMessage,
     queuedMessageEditable,
     type SessionOperationFacts,
-    steeringWithheld,
+    steeringUnavailable,
 } from "./session-operation-rules.ts";
 import {
     type SessionProjection,
@@ -78,6 +78,7 @@ export function sessionOperationFacts(input: {
         delivery: settledDelivery(input.delivery, execution).state,
         waitingForInput: waitingForInput(execution.interactions, input.interactions.submissions),
         ownerRunsTurn: ownerRunsTurn(execution.turn),
+        ownerHoldsTurn: ownerHoldsTurn(execution.turn),
         steeringSupported: input.steeringSupported,
         forkSupported: input.forkSupported,
         forking: input.fork.fork.kind === "forking",
@@ -94,7 +95,7 @@ function queuedMessagePresentation(facts: SessionOperationFacts, message: ChatQu
             ? `Edit queued message: ${message.summary}`
             : "This message's files cannot be restored here. Delete it and send it again.",
         steerDisabled: !canSteerQueued(facts, message),
-        steeringWithheld: steeringWithheld(facts, message),
+        steeringUnavailable: steeringUnavailable(facts, message),
         deleteDisabled: !canDeleteQueued(facts, message),
     } as const;
 }

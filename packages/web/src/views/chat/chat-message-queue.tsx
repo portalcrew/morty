@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ExplainedUnavailable, type UnavailableExplanation } from "../../components/chat/unavailable-explanation.tsx";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { dataTestId } from "../../data-testid.ts";
+import type { SteeringUnavailable } from "../../view-models/chat/session-operation-rules.ts";
 import type { sessionPanePresentation } from "../../view-models/chat/session-pane-presentation.ts";
 
 function QueueAction({
@@ -62,7 +63,7 @@ export function ChatMessageQueue({
     readonly onDelete: (commandId: string) => void;
     readonly onEdit: (commandId: string) => void;
     readonly onSteer: (commandId: string) => void;
-    readonly steerExplanation: UnavailableExplanation;
+    readonly steerExplanation: (reason: SteeringUnavailable) => UnavailableExplanation;
 }) {
     if (messages.length + pendingMessages.length === 0) {
         return null;
@@ -123,7 +124,11 @@ export function ChatMessageQueue({
                                             </QueueAction>
                                             <QueueAction
                                                 disabled={message.steerDisabled}
-                                                explanation={message.steeringWithheld ? steerExplanation : undefined}
+                                                explanation={
+                                                    message.steeringUnavailable === null
+                                                        ? undefined
+                                                        : steerExplanation(message.steeringUnavailable)
+                                                }
                                                 label={`Steer queued message: ${message.summary}`}
                                                 onClick={() => onSteer(message.commandId)}
                                             >

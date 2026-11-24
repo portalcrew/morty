@@ -37,6 +37,7 @@ import {
 import { SessionLoadFailure } from "../../components/chat/session-load-failure.tsx";
 import { SessionWelcomeInChat } from "../../components/chat/session-welcome.tsx";
 import { isFileEditToolCall } from "../../components/chat/tools/tool-renderer-registry.tsx";
+import type { UnavailableExplanation } from "../../components/chat/unavailable-explanation.tsx";
 import { UserPromptMessage } from "../../components/chat/user-prompt-message.tsx";
 import { OwnerQueueNotice, WorkingIndicator } from "../../components/chat/working-indicator.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
@@ -55,6 +56,7 @@ import { sessionHarnessSelection } from "../../view-models/chat/native-session-a
 import { draftPromptSuggestion } from "../../view-models/chat/prompt-suggestion.ts";
 import { sessionConnectionView } from "../../view-models/chat/session-connection-machine.ts";
 import { sessionInteractionPresentation } from "../../view-models/chat/session-interaction-store.ts";
+import type { SteeringUnavailable } from "../../view-models/chat/session-operation-rules.ts";
 import {
     sessionPanePresentation,
     sessionTitleEdit,
@@ -152,6 +154,21 @@ function SessionRenderItemContent({
             retryUnknownDeliveryDisabled={presentation.retryUnknownDeliveryDisabled}
         />
     );
+}
+
+function steeringUnavailableExplanation(reason: SteeringUnavailable, agent: string): UnavailableExplanation {
+    switch (reason) {
+        case "held-by-owner":
+            return {
+                title: `${agent} on your computer is running this session.`,
+                detail: "This message waits until the current task finishes. To steer tasks from here, use Fork session on the latest reply once nothing is running or queued.",
+            };
+        case "unsupported":
+            return {
+                title: "This session can't be steered from here.",
+                detail: "This message waits until the current task finishes.",
+            };
+    }
 }
 
 export function SessionMessageListSkeleton() {
@@ -929,10 +946,9 @@ function MortySessionPaneBody({
                                     async (signal) => await pane.store.getState().steerQueued(commandId, signal),
                                 )
                             }
-                            steerExplanation={{
-                                title: `${executionContext.agent} on your computer is running this session.`,
-                                detail: "This message waits until the current task finishes. To steer tasks from here, use Fork session on the reply once it finishes.",
-                            }}
+                            steerExplanation={(reason) =>
+                                steeringUnavailableExplanation(reason, executionContext.agent)
+                            }
                         />
                         <BotChatComposer
                             attachmentModel={attachmentModel}

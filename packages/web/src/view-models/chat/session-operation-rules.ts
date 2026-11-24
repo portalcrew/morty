@@ -20,6 +20,7 @@ export interface SessionOperationFacts {
     readonly delivery: DeliveryState;
     readonly waitingForInput: boolean;
     readonly ownerRunsTurn: boolean;
+    readonly ownerHoldsTurn: boolean;
     readonly steeringSupported: boolean;
     readonly forkSupported: boolean;
     readonly forking: boolean;
@@ -155,14 +156,20 @@ export function canSteerQueued(
 }
 
 /**
- * The queued message could steer but for the Session itself: the Runtime withdraws steering only from a Session another
- * process holds, as Codex on the computer does with its conversation.
+ * Why a queued message that could otherwise steer cannot: the native session's owner holds the current command, or the
+ * Session withdrew steering when it opened. A Session that took its conversation over from that owner keeps the
+ * steering it opened with, so only the current command says whether the owner still holds it.
  */
-export function steeringWithheld(
-    facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "steeringSupported">,
+export type SteeringUnavailable = "held-by-owner" | "unsupported";
+
+export function steeringUnavailable(
+    facts: Pick<SessionOperationFacts, "connectionAvailable" | "connection" | "steeringSupported" | "ownerHoldsTurn">,
     message: Pick<ChatQueuedMessage, "kind">,
-): boolean {
-    return !facts.steeringSupported && canActOnQueued(facts, message);
+): SteeringUnavailable | null {
+    if (facts.steeringSupported || !canActOnQueued(facts, message)) {
+        return null;
+    }
+    return facts.ownerHoldsTurn ? "held-by-owner" : "unsupported";
 }
 
 export function composerHasMessage(draft: string, attachmentCount: number, readingAttachments: boolean): boolean {
