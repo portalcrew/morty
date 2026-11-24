@@ -7,10 +7,10 @@ export interface InstallOffer {
 
 /**
  * Where this page runs on a device whose Home Screen apps keep storage apart from the browser, as iOS and iPadOS do:
- * in a browser that can add Morty to the Home Screen, or in the Home Screen app itself, which starts without the
- * browser's access. Elsewhere an installed app shares the browser's storage, so neither applies.
+ * in Safari, whose Home Screen steps and access Morty describes, or in the Home Screen app itself, which starts without
+ * Safari's access. Elsewhere an installed app shares the browser's storage, so neither applies.
  */
-type HomeScreenApp = "none" | "from-browser" | "running";
+type HomeScreenApp = "none" | "from-safari" | "running";
 
 export interface AppInstall {
     readonly homeScreenApp: HomeScreenApp;
@@ -44,9 +44,12 @@ function homeScreenAppOf(device: {
     if (device.standalone) {
         return "running";
     }
-    // Safari and the other iOS browsers carry a Safari token; in-app browsers such as WeChat cannot add to the Home
-    // Screen and do not.
-    return /Safari\//u.test(device.userAgent) ? "from-browser" : "none";
+    // Other iOS browsers keep their own access and Home Screen steps, and in-app browsers such as WeChat cannot add to
+    // the Home Screen; Safari alone carries Version/ and Safari/ without another browser's token.
+    const safari =
+        /Version\/[\d.]+.*Safari\//u.test(device.userAgent) &&
+        !/CriOS|FxiOS|EdgiOS|OPiOS|OPT\/|GSA\/|Ddg\//u.test(device.userAgent);
+    return safari ? "from-safari" : "none";
 }
 
 export function runsAsInstalledApp(): boolean {

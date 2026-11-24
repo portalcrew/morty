@@ -43,7 +43,7 @@ export function createAppInstallStore(appInstall: AppInstall, clock: Clock, sign
             set({ suggestionDismissed: true });
         };
         return {
-            state: appInstall.homeScreenApp === "from-browser" ? { kind: "home-screen" } : { kind: "unavailable" },
+            state: appInstall.homeScreenApp === "from-safari" ? { kind: "home-screen" } : { kind: "unavailable" },
             suggestionDismissed: centralLocalStorage.read(appInstallSuggestionDismissedEntry) !== null,
             install: () => {
                 const state = get().state;

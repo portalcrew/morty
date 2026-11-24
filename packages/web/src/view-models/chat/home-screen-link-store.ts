@@ -1,8 +1,8 @@
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
-import type { IdentityTransfer, SharingTerms } from "@/services/identity/anonymous-identity-api";
+import { IdentityApiError, type IdentityTransfer, type SharingTerms } from "@/services/identity/anonymous-identity-api";
 import { withChatToOpen } from "@/services/identity/chat-to-open";
-import { withEncryptionAccess } from "./identity-sharing-store.ts";
+import { linkCode, withEncryptionAccess } from "./identity-sharing-store.ts";
 
 type HomeScreenLinkState =
     | { readonly kind: "idle" }
@@ -28,6 +28,24 @@ export function createHomeScreenLinkStore(options: {
 }) {
     const lifetime = new AbortController();
     const signal = AbortSignal.any([options.signal, lifetime.signal]);
+    // The last link copied here. Copying again replaces it, so at most one link from this sheet still opens.
+    let copiedCode: string | null = null;
+    const issue = async (): Promise<IdentityTransfer> => {
+        const terms = (replaces: string | null): SharingTerms => ({
+            operationId: crypto.randomUUID(),
+            accessDuration: "30d",
+            replaces,
+        });
+        try {
+            return await options.createTransfer(terms(copiedCode), signal);
+        } catch (cause) {
+            // The earlier link was already used or expired, so nothing is left to replace.
+            if (copiedCode !== null && cause instanceof IdentityApiError && cause.code === "TRANSFER_CONFLICT") {
+                return await options.createTransfer(terms(null), signal);
+            }
+            throw cause;
+        }
+    };
     return createStore<HomeScreenLinkStore>()((set, get) => ({
         state: { kind: "idle" },
         dispose: () => lifetime.abort(),
@@ -36,9 +54,7 @@ export function createHomeScreenLinkStore(options: {
                 return;
             }
             set({ state: { kind: "copying" } });
-            const terms: SharingTerms = { operationId: crypto.randomUUID(), accessDuration: "30d", replaces: null };
-            const link = options
-                .createTransfer(terms, signal)
+            const link = issue()
                 .then((issued) => withEncryptionAccess(issued))
                 .then((transfer) => ({ transfer, text: withChatToOpen(transfer.url, options.chat) }));
             // Safari keeps the tap's permission to write only for a clipboard item handed over during the tap, so the
@@ -56,6 +72,7 @@ export function createHomeScreenLinkStore(options: {
                     if (signal.aborted) {
                         return;
                     }
+                    copiedCode = linkCode(transfer);
                     set({ state: { kind: "copied", expiresAt: transfer.expiresAt } });
                     options.onCopied();
                 },

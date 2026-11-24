@@ -53,7 +53,7 @@ export function ConnectAppPage({
                     </p>
                 </NumberedStep>
                 <NumberedStep number={2} title="Tap Copy link" />
-                <NumberedStep number={3} title="Come back and tap Paste link" />
+                <NumberedStep number={3} title="Come back, tap Paste link, then Allow Paste" />
             </ol>
             <SetupCardSection className="mt-5 space-y-4">
                 <Button

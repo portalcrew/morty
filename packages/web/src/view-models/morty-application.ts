@@ -100,7 +100,7 @@ export function createMortyApplication(options: {
     const sessionWorkspace = createSessionWorkspaceStore();
     const install = options.appInstall ?? browserAppInstall();
     const appInstall = createAppInstallStore(install, options.clock ?? systemClock, lifetime.signal);
-    const continuation = createContinueStore(transport);
+    const continuation = createContinueStore(transport, install.homeScreenApp === "running");
     let workspace: ChatWorkspace | null = null;
     let workspaceRequests: BotChatApi | null = null;
     let disposed = false;

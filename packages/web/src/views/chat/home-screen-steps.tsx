@@ -27,7 +27,9 @@ function CopyLink({ store }: { readonly store: StoreApi<HomeScreenLinkStore> }) 
                         )}
                         Copy link
                     </Button>
-                    <p className="text-13 leading-5 text-muted-foreground">It works once, for 10 minutes.</p>
+                    <p className="text-13 leading-5 text-muted-foreground">
+                        It works once, for 10 minutes, and opens your computer. Don’t share it.
+                    </p>
                 </>
             );
         case "copied":
@@ -39,7 +41,7 @@ function CopyLink({ store }: { readonly store: StoreApi<HomeScreenLinkStore> }) 
                     </Button>
                     <p className="flex items-center gap-1.5 text-13 leading-5 text-muted-foreground" role="status">
                         <Check aria-hidden="true" className="size-4 shrink-0" />
-                        Copied. It works once, until {formatMoment(state.expiresAt)}.
+                        Copied. It works once, until {formatMoment(state.expiresAt)}. Don’t share it.
                     </p>
                 </>
             );
@@ -70,7 +72,7 @@ export function HomeScreenSteps({ store }: { readonly store: StoreApi<HomeScreen
             </NumberedStep>
             <NumberedStep number={3} title="Open Morty from your Home Screen">
                 <p className="text-13 leading-5 text-muted-foreground">
-                    Tap Paste link. After that, it opens straight to Morty.
+                    Tap Paste link, then Allow Paste. After that, it opens straight to Morty.
                 </p>
             </NumberedStep>
         </ol>

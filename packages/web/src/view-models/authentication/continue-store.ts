@@ -75,7 +75,12 @@ export type ContinueState =
           readonly handoff: SessionHandoff;
           readonly message: string;
       }
-    | { readonly kind: "link-unavailable"; readonly recovery: "setup" | "share"; readonly message: string }
+    | {
+          readonly kind: "link-unavailable";
+          /** Who can give a working link: the computer's setup, whoever shared it, or this person in Safari. */
+          readonly recovery: "setup" | "share" | "home-screen-app";
+          readonly message: string;
+      }
     | { readonly kind: "identity-redeeming"; readonly code: string }
     | { readonly kind: "failed"; readonly code: string; readonly message: string }
     | { readonly kind: "invalid" };
@@ -150,7 +155,8 @@ function redeemedDestination(identity: AnonymousIdentity, chat: NativeSessionTar
  * computer's own access, can still open it. So a failed redemption falls back to
  * the access this browser still holds for the same Computer.
  */
-export const createContinueStore = (transport: ApiTransport) => {
+/** `homeScreenApp`: the page is the iOS Home Screen app, whose links come from the person's own Safari. */
+export const createContinueStore = (transport: ApiTransport, homeScreenApp: boolean) => {
     // Snapshot the fragment locally. It is never included in the redemption request or any relay call.
     const encryptionFragment = new URLSearchParams(window.location.hash.slice(1));
     const linkedChat = chatToOpen(window.location.search);
@@ -458,7 +464,11 @@ export const createContinueStore = (transport: ApiTransport) => {
                         set({
                             state: {
                                 kind: "link-unavailable",
-                                recovery: state.kind === "session-opening" ? "setup" : "share",
+                                recovery: homeScreenApp
+                                    ? "home-screen-app"
+                                    : state.kind === "session-opening"
+                                      ? "setup"
+                                      : "share",
                                 message,
                             },
                         });
