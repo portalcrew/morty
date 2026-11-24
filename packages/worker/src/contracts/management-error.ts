@@ -1,3 +1,4 @@
+import { COMPUTER_NOT_FOUND } from "@portalcrew/morty-client/protocol";
 import type { HttpError } from "./http-error.ts";
 
 export class ManagementError extends Error implements HttpError {
@@ -35,4 +36,4 @@ export class ManagementError extends Error implements HttpError {
 
 /** The answer for a computer that was never created, which every boundary gives the same way. */
 export const computerNotFound = (): ManagementError =>
-    new ManagementError("COMPUTER_NOT_FOUND", "The Morty computer does not exist.", 404);
+    new ManagementError(COMPUTER_NOT_FOUND.code, COMPUTER_NOT_FOUND.message, COMPUTER_NOT_FOUND.status);

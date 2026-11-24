@@ -1,4 +1,5 @@
 import {
+    COMPUTER_NOT_FOUND_CLOSE,
     type FileReadCommandRouting,
     fileReadCommandCodec,
     MORTY_API_PREFIX,
@@ -11,6 +12,7 @@ import { COMPUTER_INTERNAL_PREFIX } from "../../contracts/computer-relay-http.ts
 import { computerNotFound } from "../../contracts/management-error.ts";
 import { PairingDirectoryError, validateIdentifier } from "../../contracts/relay/pairing.ts";
 import { relayAuthenticationFromEnvironment } from "../../contracts/relay-authentication-environment.ts";
+import { closedWebSocketResponse } from "../../http/closed-websocket.ts";
 import { computerFromPath } from "../../http/computer-target.ts";
 import { errorMiddleware } from "../../http/error-middleware.ts";
 import { json } from "../../http/json.ts";
@@ -55,6 +57,13 @@ export function createComputerHttpRoutes(
                 using deadline = new RequestDeadline(context.req.raw.signal, 45_000);
                 const input: unknown = await context.req.json();
                 return json(await ctx.services.browser.create(context.var.computerId, input, deadline.signal), 201);
+            })
+            // A browser cannot read why an upgrade was refused, so it is told over the connection instead.
+            .get(`${MORTY_API_PREFIX}/v1/computers/:computerId/transport`, async (context, next) => {
+                if (!ctx.holdsComputer() && context.req.header("upgrade")?.toLowerCase() === "websocket") {
+                    return closedWebSocketResponse(COMPUTER_NOT_FOUND_CLOSE);
+                }
+                return await next();
             })
             // A request for a computer that was never created is refused here, before any route accepts a connection or
             // opens storage for it. A CORS preflight asks for nothing, so it is answered either way.

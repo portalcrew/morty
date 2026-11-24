@@ -5,6 +5,8 @@ import {
     CHANGES_READY_KIND,
     COMPUTER_HEARTBEAT_ACK_MESSAGE,
     COMPUTER_HEARTBEAT_MESSAGE,
+    COMPUTER_NOT_FOUND,
+    COMPUTER_NOT_FOUND_CLOSE,
     CONTENT_CHUNK_MAX_BYTES,
     ENCRYPTED_MESSAGE_MAX_WIRE_BYTES,
     encodeContentChunkFrame,
@@ -13,7 +15,7 @@ import {
     RELAY_CHANGE_TOPICS,
     type RelayChangeTopic,
 } from "@portalcrew/morty-client/protocol";
-import type { MortyTransportCall, MortyTransportRequest } from "../calls/call.ts";
+import type { MortyTransportCall, MortyTransportPolicy, MortyTransportRequest } from "../calls/call.ts";
 import { computerEncryptionAccessCodec } from "../calls/encryption.ts";
 import {
     type ComputerEncryptionAccess,
@@ -22,7 +24,13 @@ import {
     type PayloadEncryptionConnection,
     type PayloadEncryptor,
 } from "../encryption.ts";
-import { MortyApiError, MortyConnectionError, MortyProtocolError, MortyValidationError } from "../errors.ts";
+import {
+    MortyApiError,
+    MortyConnectionError,
+    type MortyError,
+    MortyProtocolError,
+    MortyValidationError,
+} from "../errors.ts";
 import { type LiveDeliveryExecution, registerLiveDelivery } from "./live-delivery.ts";
 
 const CONNECTION_TIMEOUT_MILLISECONDS = 15_000;
@@ -94,7 +102,10 @@ const EVENT_SUBSCRIBE_KIND = "session.events.subscribe";
 const EVENT_UNSUBSCRIBE_KIND = "session.events.unsubscribe";
 const SAFE_WEBSOCKET_CLOSE_REASONS = new Set(["WebSocket transport closed", "WebSocket transport idle timeout"]);
 
-function webSocketCloseError(event: CloseEvent, action: "connect" | "remain connected"): MortyConnectionError {
+function webSocketCloseError(event: CloseEvent, action: "connect" | "remain connected"): MortyError {
+    if (event.code === COMPUTER_NOT_FOUND_CLOSE.code) {
+        return new MortyApiError(COMPUTER_NOT_FOUND.code, COMPUTER_NOT_FOUND.message, COMPUTER_NOT_FOUND.status);
+    }
     const reason = SAFE_WEBSOCKET_CLOSE_REASONS.has(event.reason) ? `: ${event.reason}` : "";
     return new MortyConnectionError(`The Morty WebSocket could not ${action} (close code ${event.code}${reason})`);
 }
@@ -350,6 +361,25 @@ export class WsTransport {
                 signal: request.signal,
             });
         }
+        try {
+            return await this.#exchange(request, requestUrl, transport);
+        } catch (cause) {
+            // Over HTTP the Worker answers a computer that does not exist with this response, and so does this transport.
+            if (cause instanceof MortyApiError && cause.code === COMPUTER_NOT_FOUND.code) {
+                return Response.json(
+                    { error: { code: COMPUTER_NOT_FOUND.code, message: COMPUTER_NOT_FOUND.message } },
+                    { status: COMPUTER_NOT_FOUND.status },
+                );
+            }
+            throw cause;
+        }
+    };
+
+    readonly #exchange = async (
+        request: MortyTransportRequest,
+        requestUrl: URL,
+        transport: Extract<MortyTransportPolicy, { readonly kind: "websocket" }>,
+    ): Promise<Response> => {
         const socket = await this.#socket(request);
         request.signal.throwIfAborted();
         const requestId = request.requestId;
@@ -592,7 +622,7 @@ export class WsTransport {
             if (this.#state.kind !== "closed") {
                 this.#state = { kind: "disconnected" };
             }
-            if (cause instanceof MortyConnectionError) {
+            if (cause instanceof MortyConnectionError || cause instanceof MortyApiError) {
                 throw cause;
             }
             throw new MortyConnectionError("The Morty WebSocket transport could not connect", { cause });
@@ -671,7 +701,7 @@ export class WsTransport {
         }
     };
 
-    readonly #disconnected = (socket: WebSocket, cause: MortyConnectionError): void => {
+    readonly #disconnected = (socket: WebSocket, cause: MortyError): void => {
         if (this.#state.kind !== "connected" || this.#state.socket !== socket) {
             return;
         }

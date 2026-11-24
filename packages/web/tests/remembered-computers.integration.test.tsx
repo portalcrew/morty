@@ -112,6 +112,36 @@ test("Given a remembered computer, When its status query fails, Then its entry r
     expect(other.textContent).not.toContain("Unavailable");
 });
 
+// @no-uc: UX regression; a computer the Worker says does not exist must not stay listed as Status unknown.
+test("Given this browser remembers a computer that does not exist, When I open the computer list, Then it is no longer listed", {
+    timeout: 30_000,
+}, async () => {
+    const app = await createTestApp({ connectAgent: true });
+    await app.queryElementByTestId(dataTestId.messageComposer);
+    const missing = { computerId: "prj_wn_01_AAAAAAAAAAAAAAAAAAAAAAAA" };
+    const saved: { credentials: Record<string, string>; computers: unknown[] } = JSON.parse(
+        window.localStorage.getItem(ANONYMOUS_CREDENTIAL_KEY_NAME) ?? "",
+    );
+    window.localStorage.setItem(
+        ANONYMOUS_CREDENTIAL_KEY_NAME,
+        JSON.stringify({
+            credentials: { ...saved.credentials, [missing.computerId]: `morty_computer_v1_${"A".repeat(43)}` },
+            computers: [...saved.computers, { scope: missing }],
+        }),
+    );
+
+    await app.user.click(getByRole(document.body, "button", { name: /Switch computer/ }));
+
+    const choices = await app.waitForView(() => {
+        const menu = getByRole(document.body, "menu");
+        expect(queryByRole(menu, "status")).toBeNull();
+        return computerChoices(menu);
+    });
+    const current = encodeIdentityScope(app.identity);
+    expect(choices.map((choice) => identityOf(choice, current))).toEqual([current]);
+    expect(queryByText(document.body, "Status unknown")).toBeNull();
+});
+
 // @no-uc: UX regression; a confirmed unpaired computer must keep its known setup status.
 test("Given an unpaired remembered computer, When I open the computer list, Then it says Not set up", {
     timeout: 30_000,

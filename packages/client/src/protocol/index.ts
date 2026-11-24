@@ -20,6 +20,7 @@ export {
     computerDiagnosticsResultCodec,
     decodeComputerDiagnosticsResult,
 } from "./computer/diagnostics.ts";
+export { COMPUTER_NOT_FOUND, COMPUTER_NOT_FOUND_CLOSE } from "./computer/existence.ts";
 export type {
     ComputerHeartbeatEvent,
     ComputerLivenessReadyEvent,
