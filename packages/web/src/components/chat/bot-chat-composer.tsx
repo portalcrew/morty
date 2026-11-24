@@ -169,7 +169,7 @@ export function BotChatComposer({
     const fileInput = useRef<HTMLInputElement>(null);
     const textarea = useRef<HTMLTextAreaElement>(null);
     const scrollViewport = useRef<HTMLDivElement>(null);
-    const attachTextarea = useComposerFocus(textarea, focusScope);
+    const attachTextarea = useComposerFocus(textarea, disabled, focusScope);
     const { attachments, state: attachmentState } = attachmentModel;
     const [dismissedSuggestion, setDismissedSuggestion] = useState<string | null>(null);
     const offeredSuggestion =
