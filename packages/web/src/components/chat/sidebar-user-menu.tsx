@@ -1,4 +1,4 @@
-import { Download, LoaderCircle, LogOut, MonitorSmartphone, UserRound, Wifi } from "lucide-react";
+import { LoaderCircle, LogOut, type LucideIcon, MonitorSmartphone, UserRound, Wifi } from "lucide-react";
 import { DropdownMenu, Tooltip } from "radix-ui";
 import { type ReactNode, useRef } from "react";
 import { dataTestId } from "../../data-testid.ts";
@@ -33,7 +33,12 @@ export function SidebarUserMenu({
     readonly onMeasureNetwork: () => void;
     readonly onOpenDevices: () => void;
     readonly onEndAccess: () => void;
-    readonly install: { readonly busy: boolean; readonly start: () => void } | null;
+    readonly install: {
+        readonly busy: boolean;
+        readonly start: () => void;
+        readonly icon: LucideIcon;
+        readonly label: string;
+    } | null;
 }) {
     const openedByPointer = useRef(false);
     return (
@@ -101,8 +106,8 @@ export function SidebarUserMenu({
                             disabled={install.busy}
                             onSelect={install.start}
                         >
-                            <Download aria-hidden="true" className="size-4" />
-                            Install app
+                            <install.icon aria-hidden="true" className="size-4" />
+                            {install.label}
                         </DropdownMenu.Item>
                     ) : null}
                     <DropdownMenu.Separator className={cn("-mx-1.5 my-1.5", overlayMenuSeparatorClassName)} />

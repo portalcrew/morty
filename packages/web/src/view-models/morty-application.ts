@@ -9,6 +9,7 @@ import { replacedToken, storedToken } from "../services/identity/remembered-comp
 import { type Clock, systemClock } from "../services/time/clock.ts";
 import { createAppInstallStore } from "./app-install-store.ts";
 import { type ActiveAnonymousSession, createAnonymousSessionStore } from "./authentication/anonymous-session-store.ts";
+import { type ConnectAppStoreApi, createConnectAppStore } from "./authentication/connect-app-store.ts";
 import { createContinueStore } from "./authentication/continue-store.ts";
 import { createIdentityAccess } from "./authentication/identity-access.ts";
 import { createBugReportDialogStore } from "./bug-report-dialog-store.ts";
@@ -50,6 +51,8 @@ export interface MortyApplication {
      */
     readonly continuation: ReturnType<typeof createContinueStore>;
     readonly sessionWorkspace: SessionWorkspaceStoreApi;
+    /** Present in the iOS Home Screen app, which connects with a link copied in Safari. */
+    readonly connectApp: ConnectAppStoreApi | null;
     readonly reloadIdentity: () => void;
     readonly dispose: () => void;
 }
@@ -95,11 +98,8 @@ export function createMortyApplication(options: {
     const bugReportDialog = createBugReportDialogStore(() => (disposed ? null : transport));
     const setupHandoff = setupHandoffModel(options.setupHandoff ?? browserSetupHandoff());
     const sessionWorkspace = createSessionWorkspaceStore();
-    const appInstall = createAppInstallStore(
-        options.appInstall ?? browserAppInstall(),
-        options.clock ?? systemClock,
-        lifetime.signal,
-    );
+    const install = options.appInstall ?? browserAppInstall();
+    const appInstall = createAppInstallStore(install, options.clock ?? systemClock, lifetime.signal);
     const continuation = createContinueStore(transport);
     let workspace: ChatWorkspace | null = null;
     let workspaceRequests: BotChatApi | null = null;
@@ -255,6 +255,7 @@ export function createMortyApplication(options: {
         remoteImages: createRemoteImageConsentStore(),
         continuation,
         sessionWorkspace,
+        connectApp: install.homeScreenApp === "running" ? createConnectAppStore(options.origin) : null,
         reloadIdentity,
         dispose: () => {
             if (disposed) {

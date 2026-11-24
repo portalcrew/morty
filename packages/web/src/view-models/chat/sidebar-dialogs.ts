@@ -1,3 +1,4 @@
+import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi, ChatComputer } from "../../services/chat/bot-chat-api.ts";
 import type {
@@ -6,6 +7,7 @@ import type {
     SharingTerms,
 } from "../../services/identity/anonymous-identity-api.ts";
 import type { Clock } from "../../services/time/clock.ts";
+import { createHomeScreenLinkStore, type HomeScreenLinkStore } from "./home-screen-link-store.ts";
 import { createIdentitySharingStore, type IdentitySharingStore } from "./identity-sharing-store.ts";
 import { createNativeSessionStore, type NativeSessionStore } from "./native-session-store.ts";
 import type { OpenMortySession } from "./open-session.ts";
@@ -29,6 +31,7 @@ interface SidebarDialogsState {
     /** A closed dialog's store, kept so reopening the sheet returns to the session the user was reading. */
     readonly retainedNativeDialog: StoreApi<NativeSessionStore> | null;
     readonly sharing: StoreApi<IdentitySharingStore> | null;
+    readonly homeScreen: StoreApi<HomeScreenLinkStore> | null;
     readonly openMobileNav: () => void;
     readonly closeMobileNav: () => void;
     readonly closeMobilePanel: () => void;
@@ -44,6 +47,9 @@ interface SidebarDialogsState {
     readonly computerChanged: () => void;
     readonly openSharing: () => void;
     readonly closeSharing: () => void;
+    /** Opens the steps for adding Morty to the Home Screen, handing over the chat open now. */
+    readonly openHomeScreen: (chat: NativeSessionTarget | null) => void;
+    readonly closeHomeScreen: () => void;
 }
 
 /**
@@ -68,6 +74,7 @@ export function createSidebarDialogs(options: {
     readonly sharingTerms: (signal: AbortSignal) => Promise<AccessDurationOptions>;
     readonly onOpenSession: (session: OpenMortySession) => void;
     readonly onOpenedSession: () => void;
+    readonly onHomeScreenLinkCopied: () => void;
 }): SidebarDialogs {
     const { clock, requests, computer, createTransfer, sharingTerms, onOpenSession, onOpenedSession } = options;
     return createStore<SidebarDialogsState>()((set, get) => ({
@@ -75,6 +82,7 @@ export function createSidebarDialogs(options: {
         nativeDialog: null,
         retainedNativeDialog: null,
         sharing: null,
+        homeScreen: null,
         openMobileNav: () => set({ mobilePanel: { kind: "nav" } }),
         closeMobileNav: () => {
             if (get().mobilePanel.kind === "nav") {
@@ -161,6 +169,22 @@ export function createSidebarDialogs(options: {
             }
             store.getState().dispose();
             set({ sharing: null });
+        },
+        openHomeScreen: (chat) => {
+            if (get().homeScreen !== null) {
+                return;
+            }
+            const homeScreen = createHomeScreenLinkStore({
+                createTransfer,
+                chat,
+                signal: options.signal(),
+                onCopied: options.onHomeScreenLinkCopied,
+            });
+            set({ homeScreen });
+        },
+        closeHomeScreen: () => {
+            get().homeScreen?.getState().dispose();
+            set({ homeScreen: null });
         },
     }));
 }

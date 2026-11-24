@@ -48,6 +48,14 @@ export function SessionApplication({
     // Every branch renders the same App component, so the tree — and the bug
     // report dialog host inside it — survives the loading → setup/active
     // transition without unmounting or cancelling an in-flight send.
+    if (state.kind === "setup" && application.connectApp !== null) {
+        return (
+            <App
+                bugReportDialog={application.bugReportDialog}
+                state={{ kind: "connect-app", notice: state.notice, store: application.connectApp }}
+            />
+        );
+    }
     if (state.kind === "setup") {
         return (
             <App

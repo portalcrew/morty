@@ -153,6 +153,23 @@ function linkCode(transfer: IdentityTransfer): string {
     return new URLSearchParams(new URL(transfer.url).hash.slice(1)).get("code") ?? "";
 }
 
+/**
+ * The link a new device opens: the issued link with this browser's Computer encryption access in its fragment, which
+ * the browser never sends to Morty.
+ */
+export function withEncryptionAccess(issued: IdentityTransfer): IdentityTransfer {
+    const computerId = transferCodeComputer(linkCode(issued));
+    const access = computerId === null ? null : storedComputerEncryption(computerId);
+    if (access === null) {
+        throw new IdentityApiError("INVALID_REQUEST", "Encrypted Computer access is required to share this Computer.");
+    }
+    const url = new URL(issued.url);
+    const fragment = new URLSearchParams(url.hash.slice(1));
+    fragment.set("e2e", base64urlnopad.encode(new TextEncoder().encode(JSON.stringify(access))));
+    url.hash = fragment.toString();
+    return { ...issued, url: url.toString() };
+}
+
 async function transferQrImage(url: string): Promise<string> {
     const options = { errorCorrectionLevel: "H" as const, margin: 2, width: 320 };
     try {
@@ -282,20 +299,7 @@ export const createIdentitySharingStore = (
         readSharingTerms();
         void (async () => {
             try {
-                const issued = await createTransfer(request, signal);
-                const computerId = transferCodeComputer(linkCode(issued));
-                const access = computerId === null ? null : storedComputerEncryption(computerId);
-                if (access === null) {
-                    throw new IdentityApiError(
-                        "INVALID_REQUEST",
-                        "Encrypted Computer access is required to share this Computer.",
-                    );
-                }
-                const url = new URL(issued.url);
-                const fragment = new URLSearchParams(url.hash.slice(1));
-                fragment.set("e2e", base64urlnopad.encode(new TextEncoder().encode(JSON.stringify(access))));
-                url.hash = fragment.toString();
-                const transfer = { ...issued, url: url.toString() };
+                const transfer = withEncryptionAccess(await createTransfer(request, signal));
                 signal.throwIfAborted();
                 const image = await transferQrImage(transfer.url);
                 signal.throwIfAborted();

@@ -3,7 +3,6 @@ import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import {
     ArrowLeftRight,
     Check,
-    Download,
     Laptop,
     List,
     LoaderCircle,
@@ -22,6 +21,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useStore } from "zustand";
 import { MortyLogoMark } from "../../components/brand/morty-logo.tsx";
+import { appInstallCopy } from "../../components/chat/app-install-copy.ts";
 import {
     mobileHeaderIconButtonBelowSmClassName,
     mobileHeaderIconButtonClassName,
@@ -74,6 +74,7 @@ import {
     mobileDrawerCardRowClassName,
     mobileDrawerOptionDividerClassName,
 } from "./computer-switcher.tsx";
+import { HomeScreenSteps } from "./home-screen-steps.tsx";
 import { IdentitySharing } from "./identity-sharing.tsx";
 import { NativeSessionDialog } from "./native-session-dialog.tsx";
 import { NewDeviceNotice } from "./new-device-notice.tsx";
@@ -552,6 +553,7 @@ export function ConversationSidebar({
     const mobileSessionsOpen = dialogState.mobilePanel.kind === "sessions";
     const nativeDialog = dialogState.nativeDialog;
     const sharingStore = dialogState.sharing;
+    const homeScreenStore = dialogState.homeScreen;
     const openMobileRecentSessions = dialogs.getState().openMobileRecentSessions;
     const closeMobileRecentSessions = dialogs.getState().closeMobileRecentSessions;
     const access = useStore(workspace.sidebar.remoteAccess);
@@ -559,6 +561,11 @@ export function ConversationSidebar({
     const diagnostic = useStore(workspace.sidebar.networkDiagnostic);
     const appInstall = useStore(workspace.appInstall);
     const installEntryShown = appInstallEntryShown(appInstall.state);
+    const installCopy = appInstallCopy(appInstall.state.kind === "home-screen");
+    const startInstall =
+        appInstall.state.kind === "home-screen"
+            ? () => dialogs.getState().openHomeScreen(activeTarget)
+            : appInstall.install;
     const sessionDiagnostics = {
         computerId,
         harness: activeTarget?.harness ?? null,
@@ -604,6 +611,7 @@ export function ConversationSidebar({
                     store: workspace.accessExpiry,
                 }}
                 appInstall={workspace.appInstall}
+                onInstall={startInstall}
                 onReviewDevices={deviceAccess.getState().open}
                 store={workspace.linkedDevices}
             />
@@ -899,10 +907,10 @@ export function ConversationSidebar({
                                                                 {installEntryShown ? (
                                                                     <SidebarSessionOption
                                                                         disabled={appInstall.state.kind === "prompting"}
-                                                                        icon={Download}
-                                                                        label="Install app"
+                                                                        icon={installCopy.icon}
+                                                                        label={installCopy.entry}
                                                                         variant="card"
-                                                                        onClick={appInstall.install}
+                                                                        onClick={startInstall}
                                                                     />
                                                                 ) : null}
                                                                 <BugReportButton
@@ -986,7 +994,9 @@ export function ConversationSidebar({
                                                                         ? {
                                                                               busy:
                                                                                   appInstall.state.kind === "prompting",
-                                                                              start: appInstall.install,
+                                                                              start: startInstall,
+                                                                              icon: installCopy.icon,
+                                                                              label: installCopy.entry,
                                                                           }
                                                                         : null
                                                                 }
@@ -1059,6 +1069,25 @@ export function ConversationSidebar({
                                                             an AI agent.
                                                         </p>
                                                         <IdentitySharing allowQrDownload store={sharingStore} />
+                                                    </div>
+                                                )}
+                                            </SheetDialog>
+                                        )}
+                                        {homeScreenStore !== null && (
+                                            <SheetDialog
+                                                desktopWidth="standard"
+                                                mobileHeight="content"
+                                                onClose={dialogs.getState().closeHomeScreen}
+                                                pinnedTitle
+                                                title="Add Morty to your Home Screen"
+                                            >
+                                                {() => (
+                                                    <div className="px-5 pb-6">
+                                                        <p className="mb-5 text-sm leading-5 text-muted-foreground">
+                                                            The Home Screen app signs in separately, with a one-time
+                                                            link from here.
+                                                        </p>
+                                                        <HomeScreenSteps store={homeScreenStore} />
                                                     </div>
                                                 )}
                                             </SheetDialog>

@@ -9,7 +9,7 @@ import {
     type SetupHandoffLink,
     setupHandoffLookupId,
 } from "@portalcrew/morty-client";
-import { isIdentifier, MAX_WORKSPACE_PATH_LENGTH } from "@portalcrew/morty-client/protocol";
+import { isIdentifier, MAX_WORKSPACE_PATH_LENGTH, type NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { base64urlnopad } from "@scure/base";
 import { createStore } from "zustand/vanilla";
 import type { ApiTransport } from "@/services/api/api-transport";
@@ -22,6 +22,7 @@ import {
     IdentityApiError,
     transferCodeComputer,
 } from "@/services/identity/anonymous-identity-api";
+import { chatToOpen } from "@/services/identity/chat-to-open";
 import { encodeIdentityScope, hasIdentityScope, readIdentityScope } from "@/services/identity/identity-scope-url";
 import {
     computerKey,
@@ -131,6 +132,17 @@ function identityDestination(path: "/" | "/chat", identity: AnonymousIdentity): 
     return url;
 }
 
+/** Where a redeemed link opens: the chat it names, or Morty home. */
+function redeemedDestination(identity: AnonymousIdentity, chat: NativeSessionTarget | null): URL {
+    if (chat === null) {
+        return identityDestination("/", identity);
+    }
+    const url = identityDestination("/chat", identity);
+    url.searchParams.set("harness", chat.harness);
+    url.searchParams.set("sessionId", chat.sessionId);
+    return url;
+}
+
 /**
  * Redeeming a transfer code is the only way to obtain access for a link that
  * was never opened in this browser. A link that no longer opens may not be this
@@ -141,6 +153,7 @@ function identityDestination(path: "/" | "/chat", identity: AnonymousIdentity): 
 export const createContinueStore = (transport: ApiTransport) => {
     // Snapshot the fragment locally. It is never included in the redemption request or any relay call.
     const encryptionFragment = new URLSearchParams(window.location.hash.slice(1));
+    const linkedChat = chatToOpen(window.location.search);
     const fragmentEncryption = (): ComputerEncryptionAccess | null => {
         const encoded = encryptionFragment.get("e2e");
         if (encoded === null) {
@@ -426,7 +439,7 @@ export const createContinueStore = (transport: ApiTransport) => {
                             if (retained !== null) {
                                 await retainEncryption(retained, encryption, signal);
                                 if (state.kind === "identity-redeeming") {
-                                    window.location.replace(identityDestination("/", retained));
+                                    window.location.replace(redeemedDestination(retained, linkedChat));
                                 } else {
                                     await openSession(state.handoff, retained, signal);
                                 }
@@ -455,7 +468,7 @@ export const createContinueStore = (transport: ApiTransport) => {
                     return;
                 }
                 if (state.kind === "identity-redeeming") {
-                    window.location.replace(identityDestination("/", identity));
+                    window.location.replace(redeemedDestination(identity, linkedChat));
                     return;
                 }
                 await openSession(state.handoff, identity, signal);

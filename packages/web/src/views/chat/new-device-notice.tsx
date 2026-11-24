@@ -1,6 +1,7 @@
-import { Download, ShieldAlert } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
+import { appInstallCopy } from "../../components/chat/app-install-copy.ts";
 import { DeviceSummary } from "../../components/chat/device-list.tsx";
 import { SidebarAccessNoticeCarousel } from "../../components/chat/sidebar-access-notice-carousel.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
@@ -54,14 +55,23 @@ function NewDeviceCard({
     );
 }
 
-function InstallAppCard({ appInstall }: { readonly appInstall: AppInstallStoreApi }) {
-    const { install, dismissSuggestion } = appInstall.getState();
+function InstallAppCard({
+    appInstall,
+    homeScreen,
+    onInstall,
+}: {
+    readonly appInstall: AppInstallStoreApi;
+    readonly homeScreen: boolean;
+    readonly onInstall: () => void;
+}) {
+    const { dismissSuggestion } = appInstall.getState();
+    const copy = appInstallCopy(homeScreen);
     return (
         <SidebarAccessNoticeCard
             actions={
                 <>
-                    <Button className={sidebarAccessNoticeActionClassName} onClick={install} size="xs">
-                        Install
+                    <Button className={sidebarAccessNoticeActionClassName} onClick={onInstall} size="xs">
+                        {copy.action}
                     </Button>
                     <Button
                         className={sidebarAccessNoticeActionClassName}
@@ -73,10 +83,10 @@ function InstallAppCard({ appInstall }: { readonly appInstall: AppInstallStoreAp
                     </Button>
                 </>
             }
-            detail="Open Morty from your home screen or dock, like any other app."
-            icon={Download}
-            label="Install Morty"
-            title="Install the Morty app"
+            detail={copy.detail}
+            icon={copy.icon}
+            label={copy.title}
+            title={copy.title}
         />
     );
 }
@@ -101,17 +111,20 @@ function AccessNoticeCard({ access }: { readonly access: SidebarAccessNotice }) 
 export function NewDeviceNotice({
     access,
     appInstall,
+    onInstall,
     onReviewDevices,
     store,
 }: {
     readonly access: SidebarAccessNotice;
     readonly appInstall: AppInstallStoreApi;
+    readonly onInstall: () => void;
     readonly onReviewDevices: () => void;
     readonly store: StoreApi<LinkedDevicesStore>;
 }) {
     const { state, acknowledge } = useStore(store);
     const accessState = useStore(access.store, (model) => model.state);
     const installSuggested = useStore(appInstall, appInstallSuggested);
+    const homeScreen = useStore(appInstall, (model) => model.state.kind === "home-screen");
     // The access term arrives on its own. A device card shown before that sits outside the carousel,
     // then moves when the access card joins. Wait until this read settles so the card stays put.
     if (accessState.kind === "unknown") {
@@ -122,7 +135,9 @@ export function NewDeviceNotice({
         <SidebarAccessNoticeCarousel>
             {deviceCards(acknowledge, newDevicesSince(state.devices, state.seenAt), onReviewDevices)}
             {shown !== null ? <AccessNoticeCard access={access} /> : null}
-            {installSuggested ? <InstallAppCard appInstall={appInstall} /> : null}
+            {installSuggested ? (
+                <InstallAppCard appInstall={appInstall} homeScreen={homeScreen} onInstall={onInstall} />
+            ) : null}
         </SidebarAccessNoticeCarousel>
     );
 }

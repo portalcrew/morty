@@ -1,5 +1,6 @@
 import { type AnyRouter, RouterProvider } from "@tanstack/react-router";
 import { ArrowLeft, ArrowUpRight, Unplug } from "lucide-react";
+import type { StoreApi } from "zustand";
 import { SetupConnectionGraphic } from "../../components/setup/setup-connection-graphic.tsx";
 import { SetupDemoVideo } from "../../components/setup/setup-demo-video.tsx";
 import { SetupResourceLinks } from "../../components/setup/setup-resource-links.tsx";
@@ -7,8 +8,10 @@ import { Button } from "../../components/ui/cloud-button.tsx";
 import { ExternalLink } from "../../components/ui/external-link.tsx";
 import { MortyAlert } from "../../components/ui/morty-alert.tsx";
 import { Spinner } from "../../components/ui/spinner.tsx";
+import type { ConnectAppStore } from "../../view-models/authentication/connect-app-store.ts";
 import type { BugReportDialogStore } from "../../view-models/bug-report-dialog-store.ts";
 import type { SetupHandoffModel } from "../../view-models/send-link-store.ts";
+import { ConnectAppPage } from "../authentication/connect-app-page.tsx";
 import { PairingInstruction } from "../chat/pairing-instruction.tsx";
 import { BugReportButton, BugReportDialogHost } from "../diagnostics/bug-report-button.tsx";
 import { mortyDemoPoster, mortyDemoVideo, mortyRepository } from "../morty-repository.ts";
@@ -34,6 +37,11 @@ export type AppState =
           readonly notice: "access-ended" | "none";
           readonly returnHref: string | null;
           readonly setupHandoff: SetupHandoffModel;
+      }
+    | {
+          readonly kind: "connect-app";
+          readonly notice: "access-ended" | "none";
+          readonly store: StoreApi<ConnectAppStore>;
       }
     | { readonly kind: "authentication"; readonly router: AnyRouter }
     | {
@@ -133,6 +141,8 @@ function ApplicationContent({ state }: { readonly state: AppState }) {
                     setupHandoff={state.setupHandoff}
                 />
             );
+        case "connect-app":
+            return <ConnectAppPage notice={state.notice} store={state.store} />;
         case "authentication":
             return <RouterProvider router={state.router} />;
         case "signed-in":
