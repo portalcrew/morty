@@ -4,6 +4,7 @@ import type { ApiTransport } from "../api/api-transport.ts";
 import type { ApiRequest } from "../api/calls/call.ts";
 import { identityCalls } from "../api/calls/identity.ts";
 import { readJsonBody } from "../api/response-body.ts";
+import { runsAsInstalledApp } from "../device/app-install.ts";
 import { browserAccessEntry } from "../local-storage/central-local-storage.ts";
 import { ManagementApi } from "../management/management-api.ts";
 import { centralSessionStorage, transferRedemptionEntry } from "../session-storage/central-session-storage.ts";
@@ -297,7 +298,7 @@ export class AnonymousIdentityApi {
                     computerId: null,
                     code,
                     replaces,
-                    device: describeBrowser(navigator.userAgent),
+                    device: describeBrowser(navigator.userAgent, runsAsInstalledApp()),
                     redemptionKey,
                 }),
                 {

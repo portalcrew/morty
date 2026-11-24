@@ -54,13 +54,19 @@ function NewDeviceCard({
     );
 }
 
-function InstallAppCard({ appInstall }: { readonly appInstall: AppInstallStoreApi }) {
-    const { install, dismissSuggestion } = appInstall.getState();
+function InstallAppCard({
+    appInstall,
+    onInstall,
+}: {
+    readonly appInstall: AppInstallStoreApi;
+    readonly onInstall: () => void;
+}) {
+    const { dismissSuggestion } = appInstall.getState();
     return (
         <SidebarAccessNoticeCard
             actions={
                 <>
-                    <Button className={sidebarAccessNoticeActionClassName} onClick={install} size="xs">
+                    <Button className={sidebarAccessNoticeActionClassName} onClick={onInstall} size="xs">
                         Install
                     </Button>
                     <Button
@@ -101,11 +107,13 @@ function AccessNoticeCard({ access }: { readonly access: SidebarAccessNotice }) 
 export function NewDeviceNotice({
     access,
     appInstall,
+    onInstall,
     onReviewDevices,
     store,
 }: {
     readonly access: SidebarAccessNotice;
     readonly appInstall: AppInstallStoreApi;
+    readonly onInstall: () => void;
     readonly onReviewDevices: () => void;
     readonly store: StoreApi<LinkedDevicesStore>;
 }) {
@@ -122,7 +130,7 @@ export function NewDeviceNotice({
         <SidebarAccessNoticeCarousel>
             {deviceCards(acknowledge, newDevicesSince(state.devices, state.seenAt), onReviewDevices)}
             {shown !== null ? <AccessNoticeCard access={access} /> : null}
-            {installSuggested ? <InstallAppCard appInstall={appInstall} /> : null}
+            {installSuggested ? <InstallAppCard appInstall={appInstall} onInstall={onInstall} /> : null}
         </SidebarAccessNoticeCarousel>
     );
 }

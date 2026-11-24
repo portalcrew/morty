@@ -8,6 +8,7 @@ import { createTestApp, type TestApp } from "./infra/test-app.tsx";
 /** A browser that offers to install Morty on every page it loads, and answers its dialog with `choice`. */
 function browserOfferingInstall(choice: InstallChoice): AppInstall {
     return {
+        homeScreenApp: "none",
         watch: ({ offered, installed }) => {
             offered({
                 prompt: async () => {

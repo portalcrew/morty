@@ -11,6 +11,8 @@ export type AppInstallStoreApi = ReturnType<typeof createAppInstallStore>;
 export type AppInstallState =
     | { readonly kind: "unavailable" }
     | { readonly kind: "offered"; readonly offer: InstallOffer }
+    /** Added to the Home Screen by the person, following Morty's steps; the added app needs a link to connect. */
+    | { readonly kind: "home-screen" }
     | { readonly kind: "prompting" }
     | { readonly kind: "installed" };
 
@@ -22,12 +24,12 @@ export interface AppInstallStore {
 }
 
 export function appInstallSuggested(store: AppInstallStore): boolean {
-    return store.state.kind === "offered" && !store.suggestionDismissed;
+    return (store.state.kind === "offered" || store.state.kind === "home-screen") && !store.suggestionDismissed;
 }
 
 /** Whether the person can start installing Morty here; while the browser's dialog is open the entry stays, busy. */
 export function appInstallEntryShown(state: AppInstallState): boolean {
-    return state.kind === "offered" || state.kind === "prompting";
+    return state.kind === "offered" || state.kind === "prompting" || state.kind === "home-screen";
 }
 
 /**
@@ -41,7 +43,7 @@ export function createAppInstallStore(appInstall: AppInstall, clock: Clock, sign
             set({ suggestionDismissed: true });
         };
         return {
-            state: { kind: "unavailable" },
+            state: appInstall.homeScreenApp === "from-browser" ? { kind: "home-screen" } : { kind: "unavailable" },
             suggestionDismissed: centralLocalStorage.read(appInstallSuggestionDismissedEntry) !== null,
             install: () => {
                 const state = get().state;
