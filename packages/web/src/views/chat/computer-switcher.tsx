@@ -274,9 +274,6 @@ export function ComputerSwitcher({
     const computerName = name || active?.name || "Computer";
     const updateAvailable = useStore(update).state.kind === "available";
     const detailsLabel = `View execution details for ${computerName}${updateAvailable ? ", update available" : ""}`;
-    const updateTag = updateAvailable ? (
-        <span className="ml-auto shrink-0 text-xs font-medium text-foreground">Update available</span>
-    ) : null;
     const forget = model.requestRemoval;
     const removalDialog = <RemoveComputerDialog choices={choices} model={model} returnToMenu={layout === "header"} />;
     if (layout === "list") {
@@ -294,8 +291,14 @@ export function ComputerSwitcher({
                                 type="button"
                             >
                                 <MonitorCog aria-hidden="true" className="size-5 shrink-0 text-copy-secondary" />
-                                View execution details
-                                {updateTag}
+                                <span className="flex min-w-0 flex-col">
+                                    View execution details
+                                    {updateAvailable ? (
+                                        <span className="block truncate text-xs font-normal text-morty-text-3">
+                                            Update available
+                                        </span>
+                                    ) : null}
+                                </span>
                             </button>
                             <div
                                 className={cn(
@@ -412,7 +415,6 @@ export function ComputerSwitcher({
                                 >
                                     <MonitorCog aria-hidden="true" className="size-4 shrink-0" />
                                     View execution details
-                                    {updateTag}
                                 </DropdownMenu.Item>
                                 <DropdownMenu.Separator
                                     className={cn("-mx-1.5 my-1.5", overlayMenuSeparatorClassName)}

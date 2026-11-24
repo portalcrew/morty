@@ -1,10 +1,9 @@
-import { Archive, Check, Copy, type LucideIcon, RefreshCw, WifiOff } from "lucide-react";
+import { Archive, type LucideIcon, RefreshCw, WifiOff } from "lucide-react";
 import type { ReactNode } from "react";
 import { dataTestId } from "../../data-testid.ts";
-import { CopyToClipboardButton } from "../ui/copy-to-clipboard-button.tsx";
 import { LinkButton } from "../ui/link-button.tsx";
 import { MortyAlert, type MortyAlertTone } from "../ui/morty-alert.tsx";
-import { ScrollArea } from "../ui/scroll-area.tsx";
+import { CopyableCommand } from "./copyable-command.tsx";
 import type { ConnectionFeedback } from "./execution-context.ts";
 
 type VisibleFeedback = Exclude<ConnectionFeedback, { readonly kind: "hidden" }>;
@@ -43,37 +42,12 @@ function RetryAction({ className, onClick }: { readonly className: string; reado
     );
 }
 
-/**
- * The restart command on its own row: monospace and unbroken so it can be typed exactly,
- * with a copy action for when Morty is open on that computer.
- */
+/** The restart command on its own row, for when Morty is open on that computer. */
 export function RestartCommand({ command }: { readonly command: string }) {
     return (
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 font-normal">
             <span>After a restart, Morty must be started again. On that computer, run</span>
-            <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1">
-                <ScrollArea
-                    className="max-w-full shrink rounded-md bg-muted"
-                    orientation="horizontal"
-                    viewportClassName="max-w-full"
-                >
-                    <code className="whitespace-nowrap px-1.5 py-0.5 font-mono text-[11px] leading-4 text-foreground">
-                        {command}
-                    </code>
-                </ScrollArea>
-                <CopyToClipboardButton
-                    className="w-7 px-0"
-                    copiedContent={<Check aria-hidden="true" className="size-3.5" />}
-                    failureToast={{ description: "Select the command and copy it manually.", title: "Could not copy" }}
-                    label="Copy command"
-                    size="xs"
-                    successToast={{ description: "Run it in a terminal on that computer.", title: "Command copied" }}
-                    value={command}
-                    variant="ghost"
-                >
-                    <Copy aria-hidden="true" className="size-3.5" />
-                </CopyToClipboardButton>
-            </span>
+            <CopyableCommand command={command} />
         </div>
     );
 }
