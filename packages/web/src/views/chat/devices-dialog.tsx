@@ -15,6 +15,7 @@ import {
 import { ExternalLink } from "../../components/ui/external-link.tsx";
 import { LinkButton } from "../../components/ui/link-button.tsx";
 import { MortyTooltipContent } from "../../components/ui/morty-tooltip-content.tsx";
+import { MortyTooltipTrigger } from "../../components/ui/morty-tooltip-trigger.tsx";
 import { mutedTextLinkClassName, textLinkClassName } from "../../components/ui/text-link.ts";
 import { cn } from "../../lib/utils.ts";
 import type { LinkedDevice } from "../../services/identity/anonymous-identity-api.ts";
@@ -178,7 +179,7 @@ export function DevicesDialog({
                 action={
                     <Tooltip.Provider delayDuration={150}>
                         <Tooltip.Root>
-                            <Tooltip.Trigger asChild>
+                            <MortyTooltipTrigger asChild>
                                 <Button
                                     aria-label={`Disconnect ${description.name}`}
                                     className="size-8 -my-1.5 -mr-2 text-morty-text-3"
@@ -189,7 +190,7 @@ export function DevicesDialog({
                                 >
                                     <DisconnectIcon />
                                 </Button>
-                            </Tooltip.Trigger>
+                            </MortyTooltipTrigger>
                             <Tooltip.Portal>
                                 <MortyTooltipContent side="top" sideOffset={6}>
                                     Disconnect

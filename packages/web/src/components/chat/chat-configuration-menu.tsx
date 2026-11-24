@@ -4,6 +4,7 @@ import { type PointerEvent, type ReactNode, useCallback, useEffect, useId, useRe
 import { dataTestId } from "@/data-testid";
 import { cn } from "@/lib/utils";
 import { MortyTooltipContent } from "../ui/morty-tooltip-content.tsx";
+import { MortyTooltipTrigger } from "../ui/morty-tooltip-trigger.tsx";
 import {
     agentConfigurationPopoverWidthClassName,
     overlaySurfacePanelClassName,
@@ -521,11 +522,11 @@ function SettingControl({
                 ) : (
                     <Tooltip.Provider delayDuration={150}>
                         <Tooltip.Root>
-                            <Tooltip.Trigger asChild>
+                            <MortyTooltipTrigger asChild>
                                 <span className="min-w-0 truncate text-copy-secondary transition-colors duration-150 group-hover:text-secondary-foreground group-active:text-foreground group-data-[state=open]:text-foreground motion-reduce:transition-none">
                                     {value}
                                 </span>
-                            </Tooltip.Trigger>
+                            </MortyTooltipTrigger>
                             <Tooltip.Portal>
                                 <MortyTooltipContent className="max-w-64 break-all leading-5" side="top" sideOffset={6}>
                                     {value}
@@ -767,12 +768,12 @@ export function ChatConfigurationMenu({
                     <div className="pb-2 pr-4 pl-5">
                         <Tooltip.Provider delayDuration={150}>
                             <Tooltip.Root>
-                                <Tooltip.Trigger asChild>
+                                <MortyTooltipTrigger asChild>
                                     <h3 className="flex min-w-0 items-center gap-2 text-14 font-medium text-copy-secondary max-sm:[font-size:15px]">
                                         <HarnessMark harness={selectedHarness.value} label={selectedHarness.label} />
                                         <span className="min-w-0 truncate">{selectedHarness.label}</span>
                                     </h3>
-                                </Tooltip.Trigger>
+                                </MortyTooltipTrigger>
                                 <Tooltip.Portal>
                                     <MortyTooltipContent className="max-w-60 leading-5" side="top" sideOffset={6}>
                                         The harness cannot be changed for an existing session.

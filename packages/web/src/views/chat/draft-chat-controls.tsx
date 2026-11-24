@@ -4,6 +4,7 @@ import { useStore } from "zustand";
 import { dataTestId } from "@/data-testid";
 import { ChatConfigurationMenu } from "../../components/chat/chat-configuration-menu.tsx";
 import { MortyTooltipContent } from "../../components/ui/morty-tooltip-content.tsx";
+import { MortyTooltipTrigger } from "../../components/ui/morty-tooltip-trigger.tsx";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { draftHarnessSelection, draftShownOptions } from "../../view-models/chat/draft-controls-store.ts";
 import { computerDisconnectedMessage } from "../../view-models/format-error.ts";
@@ -55,7 +56,7 @@ export function DraftChatControls({
                 </button>
                 <Tooltip.Provider delayDuration={150}>
                     <Tooltip.Root>
-                        <Tooltip.Trigger asChild>
+                        <MortyTooltipTrigger asChild>
                             <button
                                 aria-label="Why settings are unavailable"
                                 className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/50 motion-reduce:transition-none"
@@ -63,7 +64,7 @@ export function DraftChatControls({
                             >
                                 <CircleHelp aria-hidden="true" className="size-4" />
                             </button>
-                        </Tooltip.Trigger>
+                        </MortyTooltipTrigger>
                         <Tooltip.Portal>
                             <MortyTooltipContent className="max-w-80 px-3 py-2 leading-5" side="top" sideOffset={8}>
                                 {message}

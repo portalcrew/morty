@@ -9,6 +9,7 @@ import { Button } from "../ui/cloud-button.tsx";
 import { dialogSectionTitleClassName, SheetDialog } from "../ui/dialog.tsx";
 import { inputClassName } from "../ui/input.tsx";
 import { MortyTooltipContent } from "../ui/morty-tooltip-content.tsx";
+import { MortyTooltipTrigger } from "../ui/morty-tooltip-trigger.tsx";
 import {
     overlayMenuSeparatorClassName,
     overlaySurfacePanelClassName,
@@ -57,7 +58,7 @@ export function ReadonlyWorkingDirectory({
     return (
         <Tooltip.Provider delayDuration={150}>
             <Tooltip.Root>
-                <Tooltip.Trigger asChild>
+                <MortyTooltipTrigger asChild>
                     <span
                         className={cn(workingDirectoryLabelClassName, className)}
                         data-testid={dataTestId.workingDirectory}
@@ -66,7 +67,7 @@ export function ReadonlyWorkingDirectory({
                         <FolderOpen aria-hidden="true" className="shrink-0 text-morty-text-3/60 size-3" />
                         <StartClippedLabel clip={clip} value={directoryLabel} />
                     </span>
-                </Tooltip.Trigger>
+                </MortyTooltipTrigger>
                 <Tooltip.Portal>
                     <MortyTooltipContent
                         className="max-w-80 break-all px-3 py-2 leading-5"
@@ -120,7 +121,7 @@ export function CwdSelector({
             >
                 <Tooltip.Provider delayDuration={150}>
                     <Tooltip.Root>
-                        <Tooltip.Trigger asChild>
+                        <MortyTooltipTrigger asChild>
                             <Popover.Trigger asChild>
                                 <Button
                                     aria-label={`Working directory: ${workingDirectory}`}
@@ -133,7 +134,7 @@ export function CwdSelector({
                                     <StartClippedLabel clip="end" value={workingDirectory} />
                                 </Button>
                             </Popover.Trigger>
-                        </Tooltip.Trigger>
+                        </MortyTooltipTrigger>
                         <Tooltip.Portal>
                             <MortyTooltipContent
                                 className="max-w-80 break-all px-3 py-2 leading-5"
@@ -202,7 +203,7 @@ export function CwdSelector({
                                             ) : null}
                                             {forgettable && (
                                                 <Tooltip.Root>
-                                                    <Tooltip.Trigger asChild>
+                                                    <MortyTooltipTrigger asChild>
                                                         <button
                                                             aria-label={`Forget recent working directory ${recent.directoryLabel}`}
                                                             className="absolute top-1/2 right-1 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-copy-secondary opacity-0 outline-none transition-[color,opacity] duration-150 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:text-foreground keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 group-hover/recent:opacity-100 group-focus-within/recent:opacity-100 motion-reduce:transition-none"
@@ -215,7 +216,7 @@ export function CwdSelector({
                                                         >
                                                             <X aria-hidden="true" className="size-4" />
                                                         </button>
-                                                    </Tooltip.Trigger>
+                                                    </MortyTooltipTrigger>
                                                     <Tooltip.Portal>
                                                         <MortyTooltipContent
                                                             side="top"

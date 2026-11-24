@@ -10,6 +10,7 @@ import {
     dialogSectionTitleClassName,
 } from "../../components/ui/dialog.tsx";
 import { MortyAlert } from "../../components/ui/morty-alert.tsx";
+import { MortyTooltipTrigger } from "../../components/ui/morty-tooltip-trigger.tsx";
 import { ObjectUrlImage } from "../../components/ui/object-url-image.tsx";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { formFieldShellClassName, formTextareaClassName, Textarea } from "../../components/ui/textarea.tsx";
@@ -49,12 +50,7 @@ export function BugReportButton({
                 type="button"
                 aria-label="Report a bug"
                 className={mobileDrawerCardRowClassName}
-                onClick={(event) => {
-                    if (event.detail > 0) {
-                        event.currentTarget.blur();
-                    }
-                    showBugReport(daemonSource);
-                }}
+                onClick={() => showBugReport(daemonSource)}
             >
                 <Bug aria-hidden="true" className="size-5 shrink-0 text-copy-secondary" />
                 Report a bug
@@ -63,12 +59,7 @@ export function BugReportButton({
             <Button
                 aria-label="Report a bug"
                 className={appearance === "labelled" && size === "lg" ? "" : appearances[appearance]}
-                onClick={(event) => {
-                    if (event.detail > 0) {
-                        event.currentTarget.blur();
-                    }
-                    showBugReport(daemonSource);
-                }}
+                onClick={() => showBugReport(daemonSource)}
                 size={size}
                 variant={variant}
             >
@@ -78,7 +69,7 @@ export function BugReportButton({
     return appearance === "icon" ? (
         <Tooltip.Provider delayDuration={150} disableHoverableContent>
             <Tooltip.Root>
-                <Tooltip.Trigger asChild>{trigger}</Tooltip.Trigger>
+                <MortyTooltipTrigger asChild>{trigger}</MortyTooltipTrigger>
                 <Tooltip.Portal>
                     <Tooltip.Content
                         className="z-[70] rounded-lg bg-foreground px-2.5 py-1.5 text-xs text-background shadow-lg"
