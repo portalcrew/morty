@@ -314,7 +314,7 @@ export const createContinueStore = (transport: ApiTransport, homeScreenApp: bool
         };
         /**
          * Reads a sealed link's contents from the Relay and opens them with the key only the link holds. Once they
-         * expired, the Computer opens only through access this browser still holds for it.
+         * expired, the Computer, or the chat the link names, opens only through access this browser still holds for it.
          */
         const unseal = async (link: SealedHandoffLink, signal: AbortSignal): Promise<void> => {
             const api = new AnonymousIdentityApi({ fetchRequest, origin: window.location.origin });
@@ -325,7 +325,7 @@ export const createContinueStore = (transport: ApiTransport, homeScreenApp: bool
                 if (sealed === null) {
                     const retained = await retainedAccess(api, link.computerId, signal);
                     if (retained !== null) {
-                        window.location.replace(identityDestination("/", retained));
+                        window.location.replace(redeemedDestination(retained, linkedChat));
                         return;
                     }
                     set({
