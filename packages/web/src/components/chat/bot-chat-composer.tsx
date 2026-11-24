@@ -233,6 +233,11 @@ export function BotChatComposer({
             textarea.current?.focus({ preventScroll: true });
         }
     };
+    const suggestionLabel = touchFirst ? (
+        "Use"
+    ) : (
+        <kbd className="rounded-[5px] border border-border px-1.5 font-sans text-xs leading-5">Tab</kbd>
+    );
     const animateComposer = !mobile || transitionsEnabled;
     const explainBlockedSend =
         outputState === "idle" &&
@@ -437,7 +442,7 @@ export function BotChatComposer({
                             onClick={() => acceptSuggestion(offeredSuggestion)}
                             type="button"
                         >
-                            Use
+                            {suggestionLabel}
                         </button>
                     )}
                     {explained(
@@ -565,7 +570,7 @@ export function BotChatComposer({
                                     title="Use suggested prompt (Tab)"
                                     type="button"
                                 >
-                                    Use
+                                    {suggestionLabel}
                                 </button>
                             )}
                             {explained(
