@@ -42,9 +42,11 @@ export async function sharedAccess(
     }
     const sealed = await sealHandoff(agentLink.origin, computerId, { kind: "access", handoff: { code, encryption } });
     signal.throwIfAborted();
+    // A shared link hands over only its single-use code; the device that redeems it holds its own access afterwards.
+    // The contents carry the Computer's encryption access, so they stay readable no longer than that code.
     await stage(
         computerId,
-        { lookupId: sealed.lookupId, sealed: sealed.sealed, accessExpiresAt: terms.accessExpiresAt },
+        { lookupId: sealed.lookupId, sealed: sealed.sealed, accessExpiresAt: terms.expiresAt },
         signal,
     );
     return { ...terms, code, link: sealed.url, agentLink: agentLink.toString() };
