@@ -149,7 +149,7 @@ export function chosenDuration(
     return options?.find((option) => option.accessLimitedBySharer)?.accessDuration ?? null;
 }
 
-function linkCode(transfer: IdentityTransfer): string {
+export function linkCode(transfer: IdentityTransfer): string {
     return new URLSearchParams(new URL(transfer.url).hash.slice(1)).get("code") ?? "";
 }
 

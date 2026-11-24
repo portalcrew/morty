@@ -37,6 +37,79 @@ function ContinueError({
     );
 }
 
+function LinkUnavailable({
+    fallback,
+    state,
+}: {
+    readonly fallback: ReactNode;
+    readonly state: Extract<ContinueState, { readonly kind: "link-unavailable" }>;
+}) {
+    switch (state.recovery) {
+        case "setup":
+            return (
+                <ContinueError
+                    title="This link is no longer available"
+                    content={`${state.message} Run setup again on that computer.`}
+                >
+                    <div className="mt-5 w-full">
+                        <CopyToClipboardButton
+                            className={setupPrimaryButtonClassName}
+                            copiedContent={
+                                <>
+                                    <Check aria-hidden="true" className="size-4" />
+                                    Copied
+                                </>
+                            }
+                            failureToast={{
+                                description: "Your browser blocked the copy. Try again.",
+                                title: "Could not copy",
+                            }}
+                            idleContent={<SetupPromptIdleHint />}
+                            label="Copy setup prompt"
+                            size={setupPrimaryButtonSize}
+                            successContent={<SetupPromptCopiedHint />}
+                            value={agentSetupPrompt()}
+                        >
+                            <Copy aria-hidden="true" className="size-4" />
+                            <span>Copy setup prompt</span>
+                        </CopyToClipboardButton>
+                        {fallback !== null && <div className="mt-3">{fallback}</div>}
+                    </div>
+                </ContinueError>
+            );
+        case "share":
+            return (
+                <ContinueError
+                    title="This link is no longer available"
+                    content={`${state.message} Ask for a new link.`}
+                >
+                    {fallback !== null && (
+                        <ButtonGroup className="mt-5 w-full" size={setupPrimaryButtonSize}>
+                            {fallback}
+                        </ButtonGroup>
+                    )}
+                </ContinueError>
+            );
+        case "home-screen-app":
+            return (
+                <ContinueError
+                    title="This link is no longer available"
+                    content={`${state.message} Copy a new link in Safari, then paste it here.`}
+                >
+                    <ButtonGroup className="mt-5 w-full" size={setupPrimaryButtonSize}>
+                        <Button
+                            asChild
+                            className={`${setupPrimaryButtonClassName} text-center`}
+                            size={setupPrimaryButtonSize}
+                        >
+                            <a href="/">Paste another link</a>
+                        </Button>
+                    </ButtonGroup>
+                </ContinueError>
+            );
+    }
+}
+
 export function ContinuePageContent({
     enterMorty,
     continueHref = null,
@@ -98,52 +171,8 @@ export function ContinuePageContent({
                 </ContinueError>
             );
         }
-        case "link-unavailable": {
-            const setupPrompt = state.recovery === "setup" ? agentSetupPrompt() : null;
-            return (
-                <ContinueError
-                    title="This link is no longer available"
-                    content={
-                        state.recovery === "setup"
-                            ? `${state.message} Run setup again on that computer.`
-                            : `${state.message} Ask for a new link.`
-                    }
-                >
-                    {setupPrompt !== null ? (
-                        <div className="mt-5 w-full">
-                            <CopyToClipboardButton
-                                className={setupPrimaryButtonClassName}
-                                copiedContent={
-                                    <>
-                                        <Check aria-hidden="true" className="size-4" />
-                                        Copied
-                                    </>
-                                }
-                                failureToast={{
-                                    description: "Your browser blocked the copy. Try again.",
-                                    title: "Could not copy",
-                                }}
-                                idleContent={<SetupPromptIdleHint />}
-                                label="Copy setup prompt"
-                                size={setupPrimaryButtonSize}
-                                successContent={<SetupPromptCopiedHint />}
-                                value={setupPrompt}
-                            >
-                                <Copy aria-hidden="true" className="size-4" />
-                                <span>Copy setup prompt</span>
-                            </CopyToClipboardButton>
-                            {fallback !== null && <div className="mt-3">{fallback}</div>}
-                        </div>
-                    ) : (
-                        fallback !== null && (
-                            <ButtonGroup className="mt-5 w-full" size={setupPrimaryButtonSize}>
-                                {fallback}
-                            </ButtonGroup>
-                        )
-                    )}
-                </ContinueError>
-            );
-        }
+        case "link-unavailable":
+            return <LinkUnavailable fallback={fallback} state={state} />;
         case "identity-redeeming":
             return <GlobalLoadingPage label="Securely transferring Morty access" />;
         case "failed": {
