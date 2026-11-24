@@ -529,8 +529,17 @@ test("Given an active turn on mobile, when the browser goes offline and the user
     await expandMobileComposer(page);
     await composer.fill("Keep this follow-up");
     await expect(page.getByTestId(dataTestId.sendMessage)).toBeDisabled();
+    const viewport = page.viewportSize();
+    if (viewport === null) {
+        throw new Error("Expected a mobile viewport");
+    }
+    // The software keyboard covers the bottom of the page.
+    const keyboardViewportHeight = viewport.height - 300;
+    await page.setViewportSize({ ...viewport, height: keyboardViewportHeight });
+    await page.waitForFunction((height) => window.visualViewport?.height === height, keyboardViewportHeight);
     await composer.press("Enter");
     await expect(composer).toHaveValue("Keep this follow-up\n");
+    await page.setViewportSize(viewport);
     await expect(page.getByTestId(dataTestId.queuedMessage)).toHaveCount(0);
     await page.context().setOffline(false);
     await runtime.clock.runFor(5000);

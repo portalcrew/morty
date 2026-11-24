@@ -23,6 +23,33 @@ test("Given a touch device, When I send a message, Then the composer releases fo
     expect(app.elementByTestId(dataTestId.messageComposer)).not.toBe(document.activeElement);
 });
 
+test("Given a touch device, When I press Return on its software keyboard and then Enter on a hardware keyboard, Then Return breaks the line and Enter sends while I keep typing", {
+    timeout: 30_000,
+}, async () => {
+    const viewport = { height: window.innerHeight, width: window.innerWidth };
+    try {
+        const app = await createTestApp({ connectAgent: true });
+        const composer = await readyComposer(app);
+
+        await app.user.click(composer);
+        await app.user.keyboard("First line");
+        await app.waitForView(() =>
+            expect(app.elementByTestId(dataTestId.sendMessage)).toHaveProperty("disabled", false),
+        );
+        window.happyDOM.setViewport({ height: viewport.height - 300 });
+        await app.user.keyboard("{Enter}");
+        expect(composer).toHaveProperty("value", "First line\n");
+
+        window.happyDOM.setViewport(viewport);
+        await app.user.keyboard("Second line{Enter}");
+        await app.waitForView(() => expect(app.elementsByTestId(dataTestId.agentResponse)).toHaveLength(1));
+        expect(document.body.textContent).toContain("Second line");
+        expect(app.elementByTestId(dataTestId.messageComposer)).toBe(document.activeElement);
+    } finally {
+        window.happyDOM.setViewport(viewport);
+    }
+});
+
 test("Given an empty mobile composer, When I expand it, Then it has no close control and tapping outside compacts it", {
     timeout: 30_000,
 }, async () => {
