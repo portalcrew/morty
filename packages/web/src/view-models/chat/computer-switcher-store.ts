@@ -31,6 +31,9 @@ type ComputerChoicesState =
     | { readonly kind: "loading"; readonly choices: readonly RememberedComputerChoice[] }
     | { readonly kind: "ready"; readonly choices: readonly RememberedComputerChoice[] };
 
+/** Removing a computer forgets this browser's only access to it, so the person confirms it first. */
+type ComputerRemoval = { readonly kind: "none" } | { readonly kind: "confirming"; readonly key: string };
+
 /** The current computer follows home directly; only other computers need independent status reads. */
 export function computerSwitcherChoices(
     state: ComputerChoicesState,
@@ -83,6 +86,7 @@ export function createComputerSwitcher(options: {
 }) {
     const api = new AnonymousIdentityApi(options);
     const store = createStore<ComputerChoicesState>(() => ({ kind: "loading", choices: [] }));
+    const removal = createStore<ComputerRemoval>(() => ({ kind: "none" }));
     const activeKey = computerKey(options.active);
     const lifetime = new AbortController();
     let attempt: AbortController | null = null;
@@ -162,10 +166,25 @@ export function createComputerSwitcher(options: {
                 }
             }
         },
+        removal,
         /** The computer this page is on cannot be forgotten from here. */
-        forget: async (key: string): Promise<void> => {
+        requestRemoval: (key: string): void => {
+            if (key !== activeKey) {
+                removal.setState({ kind: "confirming", key });
+            }
+        },
+        cancelRemoval: (): void => {
+            removal.setState({ kind: "none" });
+        },
+        confirmRemoval: async (): Promise<void> => {
+            const pending = removal.getState();
+            removal.setState({ kind: "none" });
+            if (pending.kind !== "confirming") {
+                return;
+            }
+            const key = pending.key;
             const computer = rememberedComputers().find((candidate) => computerKey(candidate.scope) === key);
-            if (key === activeKey || computer === undefined) {
+            if (computer === undefined) {
                 return;
             }
             try {

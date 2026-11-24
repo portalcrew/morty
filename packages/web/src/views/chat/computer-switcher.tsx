@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { MortyLogoMark } from "../../components/brand/morty-logo.tsx";
 import { ComputerExecutionDetails } from "../../components/chat/computer-execution-details.tsx";
 import type { ExecutionContext } from "../../components/chat/execution-context.ts";
+import { Button } from "../../components/ui/cloud-button.tsx";
+import { Dialog, dialogPinnedFooterActionsClassName } from "../../components/ui/dialog.tsx";
 import {
     type OverlayContentOpenAutoFocus,
     overlayMenuSeparatorClassName,
@@ -163,11 +165,7 @@ function ComputerMenuChoice({
             <DropdownMenu.Item
                 aria-label={forgetComputerLabel(choice)}
                 className="absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-copy-secondary opacity-0 outline-none transition-opacity duration-150 group-hover/choice:opacity-100 group-has-[[data-highlighted]]/choice:opacity-100 data-[highlighted]:bg-morty-fill-opacity-3 data-[highlighted]:text-foreground motion-reduce:transition-none"
-                onSelect={(event) => {
-                    // The menu stays open so several computers can be removed in turn.
-                    event.preventDefault();
-                    onForget(choice.key);
-                }}
+                onSelect={() => onForget(choice.key)}
                 title="Remove from this browser"
             >
                 <X aria-hidden="true" className="size-3.5" />
@@ -272,179 +270,239 @@ export function ComputerSwitcher({
     const active = choices.find((choice) => choice.key === activeKey);
     const computerName = name || active?.name || "Computer";
     const detailsLabel = `View execution details for ${computerName}`;
-    const forget = (key: string) => void model.forget(key);
+    const forget = model.requestRemoval;
+    const removalDialog = <RemoveComputerDialog choices={choices} model={model} returnToMenu={layout === "header"} />;
     if (layout === "list") {
         return (
-            <ComputerExecutionDetails context={context}>
-                {({ openDetails }) => (
-                    <nav aria-label="Computers" className="flex w-full min-w-0 flex-col">
-                        <p className={mobileComputersSectionTitleClassName}>Computers</p>
-                        <button
-                            aria-label={detailsLabel}
-                            className={mobileDrawerCardRowClassName}
-                            onClick={openDetails}
-                            type="button"
-                        >
-                            <MonitorCog aria-hidden="true" className="size-5 shrink-0 text-copy-secondary" />
-                            View execution details
-                        </button>
-                        <div className={cn(mobileDrawerOptionDividerClassName, "border-t-[0.5px] border-black/[0.06]")}>
-                            {choices.length === 0 ? (
-                                <PendingCurrentComputer
-                                    className="px-4 py-3 text-[15px]"
-                                    loading={listLoading}
-                                    name={computerName}
-                                />
-                            ) : (
-                                choices.map((choice) => (
-                                    <ComputerListChoice
-                                        activeKey={activeKey}
-                                        choice={choice}
-                                        key={choice.key}
-                                        onChooseCurrent={onChooseCurrent}
-                                        onForget={forget}
+            <>
+                {removalDialog}
+                <ComputerExecutionDetails context={context}>
+                    {({ openDetails }) => (
+                        <nav aria-label="Computers" className="flex w-full min-w-0 flex-col">
+                            <p className={mobileComputersSectionTitleClassName}>Computers</p>
+                            <button
+                                aria-label={detailsLabel}
+                                className={mobileDrawerCardRowClassName}
+                                onClick={openDetails}
+                                type="button"
+                            >
+                                <MonitorCog aria-hidden="true" className="size-5 shrink-0 text-copy-secondary" />
+                                View execution details
+                            </button>
+                            <div
+                                className={cn(
+                                    mobileDrawerOptionDividerClassName,
+                                    "border-t-[0.5px] border-black/[0.06]",
+                                )}
+                            >
+                                {choices.length === 0 ? (
+                                    <PendingCurrentComputer
+                                        className="px-4 py-3 text-[15px]"
+                                        loading={listLoading}
+                                        name={computerName}
                                     />
-                                ))
-                            )}
-                        </div>
-                        <a
-                            href="/setup"
-                            className={cn(mobileDrawerCardRowClassName, "border-t-[0.5px] border-black/[0.06]")}
-                        >
-                            <Plus aria-hidden="true" className="size-5 shrink-0 text-copy-secondary" />
-                            Connect another computer
-                        </a>
-                    </nav>
-                )}
-            </ComputerExecutionDetails>
+                                ) : (
+                                    choices.map((choice) => (
+                                        <ComputerListChoice
+                                            activeKey={activeKey}
+                                            choice={choice}
+                                            key={choice.key}
+                                            onChooseCurrent={onChooseCurrent}
+                                            onForget={forget}
+                                        />
+                                    ))
+                                )}
+                            </div>
+                            <a
+                                href="/setup"
+                                className={cn(mobileDrawerCardRowClassName, "border-t-[0.5px] border-black/[0.06]")}
+                            >
+                                <Plus aria-hidden="true" className="size-5 shrink-0 text-copy-secondary" />
+                                Connect another computer
+                            </a>
+                        </nav>
+                    )}
+                </ComputerExecutionDetails>
+            </>
         );
     }
     const statusLabel = connectionLabel(status);
     return (
-        <ComputerExecutionDetails context={context}>
-            {({ open: detailsOpen, openDetails }) => (
-                <DropdownMenu.Root
-                    onOpenChange={(open) => {
-                        if (open) {
-                            void model.refresh();
-                        }
-                    }}
-                >
-                    <DropdownMenu.Trigger asChild>
-                        <button
-                            type="button"
-                            aria-describedby="computer-connection-description"
-                            aria-label={`Switch computer, ${computerName}, ${statusLabel}`}
-                            data-connection-status={status.kind}
-                            data-testid={dataTestId.botConnectionStatus}
-                            className="group -mr-1 -ml-1.5 flex h-[50px] w-[calc(100%+0.625rem)] min-w-0 items-center gap-2 rounded-[16px] py-1.5 pr-3 pl-0.5 text-left outline-none transition-colors hover:bg-morty-fill-opacity-2 active:bg-morty-fill-opacity-3 data-[state=open]:bg-morty-fill-opacity-3 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
-                        >
-                            <MortyLogoMark className="ml-2" size={28} />
-                            <span className="mr-1.5 flex min-w-0 flex-1 flex-col">
-                                <span
-                                    className="mb-0.5 truncate font-inter text-14 leading-5 font-semibold tracking-[-0.01em] text-copy-secondary transition-colors duration-150 group-hover:text-foreground motion-reduce:transition-none"
-                                    title={computerName}
-                                >
-                                    {computerName}
-                                </span>
-                                <span className="-mb-0.5 flex min-w-0 items-center gap-1 text-12 leading-4 text-morty-text-3">
-                                    <StatusDot
-                                        className="size-1.5"
-                                        online={status.kind === "connected"}
-                                        pulsing={status.kind === "connecting"}
-                                    />
-                                    <span className="truncate">{statusLabel}</span>
-                                </span>
-                            </span>
-                            <ChevronDown
-                                aria-hidden="true"
-                                className="size-3 shrink-0 text-morty-text-3 transition-colors duration-150 group-hover:text-copy-secondary group-focus-visible:text-copy-secondary group-active:text-copy-secondary group-data-[state=open]:text-copy-secondary motion-reduce:transition-none"
-                            />
-                        </button>
-                    </DropdownMenu.Trigger>
-                    <span className="sr-only" id="computer-connection-description">
-                        {context.indicator.label}
-                    </span>
-                    <DropdownMenu.Portal>
-                        <DropdownMenu.Content
-                            align="start"
-                            sideOffset={overlayTriggerOffsetPx}
-                            onCloseAutoFocus={(event) => {
-                                if (detailsOpen) {
-                                    event.preventDefault();
-                                }
-                            }}
-                            {...({
-                                onOpenAutoFocus: preventOverlayOpenAutoFocus,
-                            } satisfies OverlayContentOpenAutoFocus)}
-                            className={cn(
-                                "z-[180] flex max-h-[min(70dvh,520px)] min-w-[280px] w-[min(calc(100vw-1.5rem),280px)] animate-cloud-enter flex-col overflow-hidden p-1.5 text-sm text-foreground outline-none motion-reduce:animate-none",
-                                overlaySurfacePanelClassName,
-                                overlaySurfaceRadiusClassName,
-                            )}
-                            aria-label="Computers"
-                        >
-                            {/* Details describe the computer shown on the trigger, so they sit right below it. */}
-                            <DropdownMenu.Item
-                                aria-label={detailsLabel}
-                                className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full px-3 text-copy-secondary outline-none data-[highlighted]:bg-accent data-[highlighted]:text-foreground"
-                                onSelect={openDetails}
+        <>
+            {removalDialog}
+            <ComputerExecutionDetails context={context}>
+                {({ open: detailsOpen, openDetails }) => (
+                    <DropdownMenu.Root
+                        onOpenChange={(open) => {
+                            if (open) {
+                                void model.refresh();
+                            }
+                        }}
+                    >
+                        <DropdownMenu.Trigger asChild>
+                            <button
+                                type="button"
+                                aria-describedby="computer-connection-description"
+                                aria-label={`Switch computer, ${computerName}, ${statusLabel}`}
+                                data-connection-status={status.kind}
+                                data-testid={dataTestId.botConnectionStatus}
+                                className="group -mr-1 -ml-1.5 flex h-[50px] w-[calc(100%+0.625rem)] min-w-0 items-center gap-2 rounded-[16px] py-1.5 pr-3 pl-0.5 text-left outline-none transition-colors hover:bg-morty-fill-opacity-2 active:bg-morty-fill-opacity-3 data-[state=open]:bg-morty-fill-opacity-3 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
                             >
-                                <MonitorCog aria-hidden="true" className="size-4 shrink-0" />
-                                View execution details
-                            </DropdownMenu.Item>
-                            <DropdownMenu.Separator className={cn("-mx-1.5 my-1.5", overlayMenuSeparatorClassName)} />
-                            <DropdownMenu.Label className="flex shrink-0 items-center justify-between gap-2 px-3 pt-1 pb-1 text-xs font-normal text-morty-text-3">
-                                Computers
-                                {listLoading ? (
-                                    <span className="inline-flex shrink-0" role="status">
-                                        <LoaderCircle
-                                            aria-hidden="true"
-                                            className="size-3.5 animate-spin text-copy-tertiary motion-reduce:animate-none"
-                                        />
-                                        <span className="sr-only">Checking connections…</span>
+                                <MortyLogoMark className="ml-2" size={28} />
+                                <span className="mr-1.5 flex min-w-0 flex-1 flex-col">
+                                    <span
+                                        className="mb-0.5 truncate font-inter text-14 leading-5 font-semibold tracking-[-0.01em] text-copy-secondary transition-colors duration-150 group-hover:text-foreground motion-reduce:transition-none"
+                                        title={computerName}
+                                    >
+                                        {computerName}
                                     </span>
-                                ) : null}
-                            </DropdownMenu.Label>
-                            <ScrollArea className="-mx-1 min-h-0 rounded-none" viewportClassName="max-h-[inherit] p-1">
-                                <DropdownMenu.RadioGroup
-                                    aria-label="Computers"
-                                    className="flex min-h-0 flex-col"
-                                    value={activeKey}
-                                >
-                                    {choices.length === 0 ? (
-                                        <PendingCurrentComputer
-                                            className="px-3 py-2"
-                                            loading={listLoading}
-                                            name={computerName}
+                                    <span className="-mb-0.5 flex min-w-0 items-center gap-1 text-12 leading-4 text-morty-text-3">
+                                        <StatusDot
+                                            className="size-1.5"
+                                            online={status.kind === "connected"}
+                                            pulsing={status.kind === "connecting"}
                                         />
-                                    ) : (
-                                        choices.map((choice) => (
-                                            <ComputerMenuChoice
-                                                activeKey={activeKey}
-                                                choice={choice}
-                                                key={choice.key}
-                                                onForget={forget}
-                                            />
-                                        ))
-                                    )}
-                                </DropdownMenu.RadioGroup>
-                            </ScrollArea>
-                            <DropdownMenu.Separator className={cn("-mx-1.5 my-1.5", overlayMenuSeparatorClassName)} />
-                            <DropdownMenu.Item asChild>
-                                <a
-                                    href="/setup"
-                                    className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full px-3 outline-none data-[highlighted]:bg-accent"
+                                        <span className="truncate">{statusLabel}</span>
+                                    </span>
+                                </span>
+                                <ChevronDown
+                                    aria-hidden="true"
+                                    className="size-3 shrink-0 text-morty-text-3 transition-colors duration-150 group-hover:text-copy-secondary group-focus-visible:text-copy-secondary group-active:text-copy-secondary group-data-[state=open]:text-copy-secondary motion-reduce:transition-none"
+                                />
+                            </button>
+                        </DropdownMenu.Trigger>
+                        <span className="sr-only" id="computer-connection-description">
+                            {context.indicator.label}
+                        </span>
+                        <DropdownMenu.Portal>
+                            <DropdownMenu.Content
+                                align="start"
+                                sideOffset={overlayTriggerOffsetPx}
+                                onCloseAutoFocus={(event) => {
+                                    if (detailsOpen) {
+                                        event.preventDefault();
+                                    }
+                                }}
+                                {...({
+                                    onOpenAutoFocus: preventOverlayOpenAutoFocus,
+                                } satisfies OverlayContentOpenAutoFocus)}
+                                className={cn(
+                                    "z-[180] flex max-h-[min(70dvh,520px)] min-w-[280px] w-[min(calc(100vw-1.5rem),280px)] animate-cloud-enter flex-col overflow-hidden p-1.5 text-sm text-foreground outline-none motion-reduce:animate-none",
+                                    overlaySurfacePanelClassName,
+                                    overlaySurfaceRadiusClassName,
+                                )}
+                                aria-label="Computers"
+                            >
+                                {/* Details describe the computer shown on the trigger, so they sit right below it. */}
+                                <DropdownMenu.Item
+                                    aria-label={detailsLabel}
+                                    className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full px-3 text-copy-secondary outline-none data-[highlighted]:bg-accent data-[highlighted]:text-foreground"
+                                    onSelect={openDetails}
                                 >
-                                    <Plus aria-hidden="true" className="size-4" />
-                                    Connect another computer
-                                </a>
-                            </DropdownMenu.Item>
-                        </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                </DropdownMenu.Root>
-            )}
-        </ComputerExecutionDetails>
+                                    <MonitorCog aria-hidden="true" className="size-4 shrink-0" />
+                                    View execution details
+                                </DropdownMenu.Item>
+                                <DropdownMenu.Separator
+                                    className={cn("-mx-1.5 my-1.5", overlayMenuSeparatorClassName)}
+                                />
+                                <DropdownMenu.Label className="flex shrink-0 items-center justify-between gap-2 px-3 pt-1 pb-1 text-xs font-normal text-morty-text-3">
+                                    Computers
+                                    {listLoading ? (
+                                        <span className="inline-flex shrink-0" role="status">
+                                            <LoaderCircle
+                                                aria-hidden="true"
+                                                className="size-3.5 animate-spin text-copy-tertiary motion-reduce:animate-none"
+                                            />
+                                            <span className="sr-only">Checking connections…</span>
+                                        </span>
+                                    ) : null}
+                                </DropdownMenu.Label>
+                                <ScrollArea
+                                    className="-mx-1 min-h-0 rounded-none"
+                                    viewportClassName="max-h-[inherit] p-1"
+                                >
+                                    <DropdownMenu.RadioGroup
+                                        aria-label="Computers"
+                                        className="flex min-h-0 flex-col"
+                                        value={activeKey}
+                                    >
+                                        {choices.length === 0 ? (
+                                            <PendingCurrentComputer
+                                                className="px-3 py-2"
+                                                loading={listLoading}
+                                                name={computerName}
+                                            />
+                                        ) : (
+                                            choices.map((choice) => (
+                                                <ComputerMenuChoice
+                                                    activeKey={activeKey}
+                                                    choice={choice}
+                                                    key={choice.key}
+                                                    onForget={forget}
+                                                />
+                                            ))
+                                        )}
+                                    </DropdownMenu.RadioGroup>
+                                </ScrollArea>
+                                <DropdownMenu.Separator
+                                    className={cn("-mx-1.5 my-1.5", overlayMenuSeparatorClassName)}
+                                />
+                                <DropdownMenu.Item asChild>
+                                    <a
+                                        href="/setup"
+                                        className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full px-3 outline-none data-[highlighted]:bg-accent"
+                                    >
+                                        <Plus aria-hidden="true" className="size-4" />
+                                        Connect another computer
+                                    </a>
+                                </DropdownMenu.Item>
+                            </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
+                )}
+            </ComputerExecutionDetails>
+        </>
+    );
+}
+
+function focusComputerSwitcher(): void {
+    document.querySelector<HTMLButtonElement>(`[data-testid="${dataTestId.botConnectionStatus}"]`)?.focus();
+}
+
+function RemoveComputerDialog({
+    choices,
+    model,
+    returnToMenu,
+}: {
+    readonly choices: readonly ComputerChoice[];
+    readonly model: ComputerSwitcherModel;
+    readonly returnToMenu: boolean;
+}) {
+    const removal = useStore(model.removal);
+    const choice =
+        removal.kind === "confirming" ? choices.find((candidate) => candidate.key === removal.key) : undefined;
+    if (choice === undefined) {
+        return null;
+    }
+    return (
+        <Dialog
+            description="Its Agent keeps running. To use it here again, open a new link from that computer or another device."
+            footer={
+                <div className={dialogPinnedFooterActionsClassName}>
+                    <Button onClick={model.cancelRemoval} variant="ghost">
+                        Cancel
+                    </Button>
+                    <Button onClick={() => void model.confirmRemoval()} variant="primary">
+                        Remove
+                    </Button>
+                </div>
+            }
+            onClose={model.cancelRemoval}
+            {...(returnToMenu ? { returnFocus: focusComputerSwitcher } : {})}
+            title={`${forgetComputerLabel(choice)}?`}
+        >
+            {null}
+        </Dialog>
     );
 }
 
