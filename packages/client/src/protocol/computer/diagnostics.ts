@@ -14,6 +14,8 @@ const computerDiagnosticsResultSchema = z
         requestId: identifier,
         truncated: z.boolean(),
         version: z.string().max(32),
+        // Only a Computer that declares it accepts computer.update; older Computers discard unknown requests unanswered.
+        remoteUpdate: z.literal("supported").optional(),
         entries: z
             .array(z.record(z.string(), z.string().max(256)).readonly())
             .max(200)

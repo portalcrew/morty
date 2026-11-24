@@ -97,6 +97,9 @@ export class AgentProcessPool {
         await Promise.all([...this.#slots].map(async ([id, slot]) => await this.#retireIdle(id, slot)));
     };
 
+    readonly hasWork = (): boolean =>
+        [...this.#slots.values()].some((slot) => slot.kind !== "retained" || slot.retention.isBusy());
+
     readonly stopIdleReclamation = async (): Promise<void> => {
         this.#stopping = true;
         for (const id of this.#idleTimeouts.keys()) {

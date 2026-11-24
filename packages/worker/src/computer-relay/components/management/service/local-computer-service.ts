@@ -1,10 +1,12 @@
-import type {
-    AgentSettingsDiscoverCommandRouting,
-    ComputerDiagnosticsRequestRouting,
-    ComputerPingCommandRouting,
-    NativeSessionTarget,
-    SessionAccessHolder,
-    SessionCreateCommandRouting,
+import {
+    type AgentSettingsDiscoverCommandRouting,
+    COMPUTER_UPDATE_TIMEOUT_MILLISECONDS,
+    type ComputerDiagnosticsRequestRouting,
+    type ComputerPingCommandRouting,
+    type ComputerUpdateRequestRouting,
+    type NativeSessionTarget,
+    type SessionAccessHolder,
+    type SessionCreateCommandRouting,
 } from "@portalcrew/morty-client/protocol";
 import * as v from "valibot";
 import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
@@ -96,6 +98,12 @@ export class LocalComputerService {
         await this.#run(signal, (computer, signal) => computer.agents(signal), 15_000);
     readonly readComputerDiagnostics = async (command: ComputerDiagnosticsRequestRouting, signal: AbortSignal) =>
         await this.#run(signal, (computer, signal) => computer.clientControl(command, signal), 10_000);
+    readonly updateComputer = async (command: ComputerUpdateRequestRouting, signal: AbortSignal) =>
+        await this.#run(
+            signal,
+            (computer, signal) => computer.clientControl(command, signal),
+            COMPUTER_UPDATE_TIMEOUT_MILLISECONDS,
+        );
     readonly measureComputerLatency = async (command: ComputerPingCommandRouting, signal: AbortSignal) =>
         await this.#run(
             signal,

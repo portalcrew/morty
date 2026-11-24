@@ -61,6 +61,12 @@ const refusedOperationCodes: ReadonlySet<string> = new Set([
     "session_configuration_conflict",
     "steering_target_unavailable",
     "steering_unsupported",
+    "computer_busy",
+    "update_not_newer",
+    "update_in_progress",
+    "update_npx_unavailable",
+    "update_download_failed",
+    "update_failed",
 ]);
 
 const appliedOperationCodes: ReadonlySet<string> = new Set(["command_result_expired"]);

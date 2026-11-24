@@ -25,6 +25,7 @@ function answeredBy<Kind extends keyof typeof daemonToRelayDecoders>(kind: Kind)
 const computerControlAnswers = {
     "computer.diagnostics.read": answeredBy("computer.diagnostics.result"),
     "computer.ping": answeredBy("computer.pong"),
+    "computer.update": answeredBy("computer.update.restarting"),
     "native.session.request": answeredBy("native.session.result"),
     "session.prepare": answeredBy("session.ready"),
     "session.create": answeredBy("session.ready"),
@@ -80,6 +81,7 @@ export function computerControlTarget(command: ClientControlCommand): NativeSess
             return command.target;
         case "computer.diagnostics.read":
         case "computer.ping":
+        case "computer.update":
         case "session.create":
         case "session.list":
         case "session.query":

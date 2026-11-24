@@ -1,10 +1,11 @@
-import type { SessionAccessHolder } from "@portalcrew/morty-client/protocol";
+import { COMPUTER_UPDATE_TIMEOUT_MILLISECONDS, type SessionAccessHolder } from "@portalcrew/morty-client/protocol";
 import { type Context, Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import * as v from "valibot";
 import {
     accessInput,
     archiveSessionInput,
+    computerUpdateInput,
     diagnosticsInput,
     directoryInput,
     managedSessionsInput,
@@ -113,6 +114,18 @@ export function createBotChatRoutes(ctx: ManagementRouteContext) {
                         context.get("chatScope"),
                         context.req.valid("json"),
                     ),
+                );
+            },
+        )
+        .post(
+            "/update",
+            authenticatedSession,
+            authorizedChat(COMPUTER_UPDATE_TIMEOUT_MILLISECONDS),
+            bodyParser<AuthorizedChatEnvironment, typeof computerUpdateInput>(computerUpdateInput),
+            async (context) => {
+                const application = applicationForRequest(ctx, context);
+                return json(
+                    await application.services.chat.updateComputer(context.get("chatScope"), context.req.valid("json")),
                 );
             },
         )

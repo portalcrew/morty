@@ -1,6 +1,7 @@
 import type { PayloadDecryptor, PayloadEncryptor } from "../../encryption.ts";
 import { computerDiagnosticsResultCodec } from "../computer/diagnostics.ts";
 import { COMPUTER_PONG_KIND, computerPongEventCodec } from "../computer/liveness.ts";
+import { computerUpdateRestartingCodec } from "../computer/update.ts";
 import {
     AGENT_SETTINGS_DISCOVERED_KIND,
     AGENT_SETTINGS_DISCOVERY_FAILED_KIND,
@@ -121,6 +122,10 @@ export const daemonEventSignatures = {
         codec: computerDiagnosticsResultCodec,
     }),
     [COMPUTER_PONG_KIND]: defineMessageSignature({ kind: COMPUTER_PONG_KIND, codec: computerPongEventCodec }),
+    "computer.update.restarting": defineMessageSignature({
+        kind: "computer.update.restarting",
+        codec: computerUpdateRestartingCodec,
+    }),
     [SESSION_EVENT_KIND]: defineMessageSignature({ kind: SESSION_EVENT_KIND, codec: sessionEventEnvelopeCodec }),
     [SESSION_PROMPT_SUGGESTIONS_KIND]: defineMessageSignature({
         kind: SESSION_PROMPT_SUGGESTIONS_KIND,

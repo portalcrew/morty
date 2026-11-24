@@ -5,7 +5,7 @@ import type { CommandContext } from "../context.ts";
 import type { DaemonCommand } from "../definition.ts";
 import { createNativeSessionRequestHandler } from "../native-session-requests.ts";
 import { reportAuthenticatedCapacity } from "./capacity.ts";
-import { handleComputerDiagnostics, handleComputerPing } from "./computer.ts";
+import { handleComputerDiagnostics, handleComputerPing, handleComputerUpdate } from "./computer.ts";
 import { createContentWriteCommands } from "./content-write/index.ts";
 import { createFileReadCommands } from "./file-read/index.ts";
 import { handlePreviewHistoryPageLoad, handleSessionHistoryPageLoad } from "./history.ts";
@@ -60,6 +60,8 @@ export function createCommandRegistry(context: CommandContext): {
                     return handleComputerDiagnostics(context, message);
                 case "computer.ping":
                     return handleComputerPing(context, message);
+                case "computer.update":
+                    return handleComputerUpdate(context, message);
                 case "session.live-history.v2.page.load":
                     return handleSessionHistoryPageLoad(context, message);
                 case "session.preview-history.page.load":

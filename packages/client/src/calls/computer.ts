@@ -1,4 +1,4 @@
-import { isIdentifier } from "@portalcrew/morty-client/protocol";
+import { COMPUTER_UPDATE_TIMEOUT_MILLISECONDS, isIdentifier } from "@portalcrew/morty-client/protocol";
 import { MortyValidationError } from "../errors.ts";
 import type { MortyOperationEndpoint, MortyTransportPolicy } from "./call.ts";
 
@@ -57,6 +57,13 @@ export const computerEndpoints = Object.freeze({
             operation: "daemon-diagnostics",
             path: "diagnostics/daemon",
             timeoutMilliseconds: 45_000,
+        }),
+    updateComputer: ({ computerId }: ComputerCallTarget): MortyOperationEndpoint =>
+        endpoint({
+            computerId,
+            operation: "computer-update",
+            path: "update",
+            timeoutMilliseconds: COMPUTER_UPDATE_TIMEOUT_MILLISECONDS + 15_000,
         }),
     measureLatency: ({ computerId }: ComputerCallTarget): MortyOperationEndpoint =>
         endpoint({

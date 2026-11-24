@@ -5,6 +5,7 @@ import {
     computerPongEventCodec,
     decodeComputerHeartbeatEvent,
 } from "../computer/liveness.ts";
+import { computerUpdateRestartingCodec } from "../computer/update.ts";
 import { CONTENT_CHUNK_ACK_KIND, decodeContentChunkAck } from "../relay/content-chunk-ack.ts";
 import {
     AGENT_SETTINGS_DISCOVERED_KIND,
@@ -101,6 +102,7 @@ export const daemonToRelayDecoders = {
     [COMPUTER_HEARTBEAT_KIND]: decodeComputerHeartbeatEvent,
     "computer.diagnostics.result": computerDiagnosticsResultCodec.decodeRouting,
     [COMPUTER_PONG_KIND]: computerPongEventCodec.decodeRouting,
+    "computer.update.restarting": computerUpdateRestartingCodec.decodeRouting,
     [SESSION_EVENT_KIND]: sessionEventEnvelopeCodec.decodeRouting,
     [SESSION_PROMPT_SUGGESTIONS_KIND]: sessionPromptSuggestionsCodec.decodeRouting,
     [SESSION_OPERATION_FAILED_KIND]: sessionOperationFailedEventCodec.decodeRouting,

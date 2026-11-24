@@ -5,10 +5,13 @@ import {
     agentSettingsDiscoveredEventCodec,
     agentSettingsDiscoveryFailedEventCodec,
     type ComputerDiagnosticsResult,
+    type ComputerUpdateRestarting,
     computerDiagnosticsRequestCodec,
     computerDiagnosticsResultCodec,
     computerPingCommandCodec,
     computerPongEventCodec,
+    computerUpdateRequestCodec,
+    computerUpdateRestartingCodec,
     decodeMessageKind,
     decodeNativeSessionEvents,
     decodeSessionAccessCredential,
@@ -209,6 +212,26 @@ export class MortyComputerClient {
                 requestId,
                 reply: computerDiagnosticsResultCodec,
                 mismatch: "The Computer returned an invalid diagnostics response.",
+            },
+            signal,
+        );
+    };
+
+    /** Success means the Computer has handed over to its updater and is restarting into `version`. */
+    readonly updateComputer = async (version: string, signal: AbortSignal): Promise<ComputerUpdateRestarting> => {
+        const requestId = crypto.randomUUID();
+        return await this.#executor.exchange(
+            {
+                endpoint: computerEndpoints.updateComputer({ computerId: this.#computerId }),
+                body: await computerUpdateRequestCodec.encode(
+                    { kind: "computer.update", requestId, version },
+                    this.#executor.payloadEncryption,
+                    signal,
+                ),
+                requestId,
+                reply: computerUpdateRestartingCodec,
+                mismatch: "The Computer returned an invalid update response.",
+                isAnswer: (reply) => reply.version === version,
             },
             signal,
         );

@@ -3,8 +3,10 @@ import {
     agentSettingsDiscoverCommandCodec,
     type ComputerDiagnosticsRequestRouting,
     type ComputerPingCommandRouting,
+    type ComputerUpdateRequestRouting,
     computerDiagnosticsRequestCodec,
     computerPingCommandCodec,
+    computerUpdateRequestCodec,
     type NativeSessionCommandRouting,
     nativeSessionCommandCodec,
     type SessionArchiveCommandRouting,
@@ -48,6 +50,14 @@ export const networkDiagnosticInput = v.custom<ComputerPingCommandRouting>((valu
         return false;
     }
 }, "An encrypted Computer ping is required.");
+export const computerUpdateInput = v.custom<ComputerUpdateRequestRouting>((value) => {
+    try {
+        computerUpdateRequestCodec.decodeRouting(JSON.stringify(value));
+        return true;
+    } catch {
+        return false;
+    }
+}, "An encrypted Computer update request is required.");
 export const managedSessionsInput = v.custom<SessionListCommandRouting>((value) => {
     try {
         sessionListCommandCodec.decodeRouting(JSON.stringify(value));

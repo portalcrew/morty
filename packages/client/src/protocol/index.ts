@@ -40,6 +40,17 @@ export {
     decodeComputerHeartbeatEvent,
     encodeComputerLivenessReadyEvent,
 } from "./computer/liveness.ts";
+export type {
+    ComputerUpdateRequestRouting,
+    ComputerUpdateRestarting,
+} from "./computer/update.ts";
+export {
+    COMPUTER_UPDATE_TIMEOUT_MILLISECONDS,
+    computerUpdateRequestCodec,
+    computerUpdateRestartingCodec,
+    isNewerMortyRelease,
+    mortyReleaseVersionSchema,
+} from "./computer/update.ts";
 export { CONTENT_CHUNK_ACK_KIND, decodeContentChunkAck, encodeContentChunkAck } from "./relay/content-chunk-ack.ts";
 export type { WorkerFileCredit } from "./relay/file-credit.ts";
 export { encodeWorkerFileCredit, WORKER_FILE_CREDIT_KIND } from "./relay/file-credit.ts";

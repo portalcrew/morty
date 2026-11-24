@@ -1,6 +1,7 @@
 import type { PayloadDecryptor, PayloadEncryptor } from "../../encryption.ts";
 import { computerDiagnosticsRequestCodec } from "../computer/diagnostics.ts";
 import { COMPUTER_PING_KIND, computerPingCommandCodec } from "../computer/liveness.ts";
+import { computerUpdateRequestCodec } from "../computer/update.ts";
 import { AGENT_SETTINGS_DISCOVER_KIND, agentSettingsDiscoverCommandCodec } from "../session/agent/settings.ts";
 import {
     SESSION_CONFIG_READ_KIND,
@@ -100,6 +101,7 @@ export const daemonInboundSignatures = {
         codec: computerDiagnosticsRequestCodec,
     }),
     [COMPUTER_PING_KIND]: defineMessageSignature({ kind: COMPUTER_PING_KIND, codec: computerPingCommandCodec }),
+    "computer.update": defineMessageSignature({ kind: "computer.update", codec: computerUpdateRequestCodec }),
     [SESSION_CANCEL_BEFORE_START_KIND]: defineMessageSignature({
         kind: SESSION_CANCEL_BEFORE_START_KIND,
         codec: sessionCancelBeforeStartCommandCodec,

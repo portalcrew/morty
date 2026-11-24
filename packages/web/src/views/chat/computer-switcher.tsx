@@ -24,6 +24,7 @@ import {
     type ComputerSwitcherModel,
     computerSwitcherChoices,
 } from "../../view-models/chat/computer-switcher-store.ts";
+import type { ComputerUpdateStoreApi } from "../../view-models/chat/computer-update-store.ts";
 
 function connectionLabel(status: BotConnectionStatus): string {
     switch (status.kind) {
@@ -254,10 +255,12 @@ export function ComputerSwitcher({
     name,
     status,
     layout,
+    update,
     onChooseCurrent = () => undefined,
 }: {
     readonly context: ExecutionContext;
     readonly model: ComputerSwitcherModel;
+    readonly update: ComputerUpdateStoreApi;
     readonly name: string;
     readonly status: BotConnectionStatus;
     readonly layout: "header" | "list";
@@ -269,14 +272,18 @@ export function ComputerSwitcher({
     const listLoading = state.kind === "loading";
     const active = choices.find((choice) => choice.key === activeKey);
     const computerName = name || active?.name || "Computer";
-    const detailsLabel = `View execution details for ${computerName}`;
+    const updateAvailable = useStore(update).state.kind === "available";
+    const detailsLabel = `View execution details for ${computerName}${updateAvailable ? ", update available" : ""}`;
+    const updateTag = updateAvailable ? (
+        <span className="ml-auto shrink-0 text-xs font-medium text-foreground">Update available</span>
+    ) : null;
     const forget = model.requestRemoval;
     const removalDialog = <RemoveComputerDialog choices={choices} model={model} returnToMenu={layout === "header"} />;
     if (layout === "list") {
         return (
             <>
                 {removalDialog}
-                <ComputerExecutionDetails context={context}>
+                <ComputerExecutionDetails context={context} update={update}>
                     {({ openDetails }) => (
                         <nav aria-label="Computers" className="flex w-full min-w-0 flex-col">
                             <p className={mobileComputersSectionTitleClassName}>Computers</p>
@@ -288,6 +295,7 @@ export function ComputerSwitcher({
                             >
                                 <MonitorCog aria-hidden="true" className="size-5 shrink-0 text-copy-secondary" />
                                 View execution details
+                                {updateTag}
                             </button>
                             <div
                                 className={cn(
@@ -330,7 +338,7 @@ export function ComputerSwitcher({
     return (
         <>
             {removalDialog}
-            <ComputerExecutionDetails context={context}>
+            <ComputerExecutionDetails context={context} update={update}>
                 {({ open: detailsOpen, openDetails }) => (
                     <DropdownMenu.Root
                         onOpenChange={(open) => {
@@ -343,7 +351,7 @@ export function ComputerSwitcher({
                             <button
                                 type="button"
                                 aria-describedby="computer-connection-description"
-                                aria-label={`Switch computer, ${computerName}, ${statusLabel}`}
+                                aria-label={`Switch computer, ${computerName}, ${statusLabel}${updateAvailable ? ", update available" : ""}`}
                                 data-connection-status={status.kind}
                                 data-testid={dataTestId.botConnectionStatus}
                                 className="group -mr-1 -ml-1.5 flex h-[50px] w-[calc(100%+0.625rem)] min-w-0 items-center gap-2 rounded-[16px] py-1.5 pr-3 pl-0.5 text-left outline-none transition-colors hover:bg-morty-fill-opacity-2 active:bg-morty-fill-opacity-3 data-[state=open]:bg-morty-fill-opacity-3 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
@@ -363,6 +371,9 @@ export function ComputerSwitcher({
                                             pulsing={status.kind === "connecting"}
                                         />
                                         <span className="truncate">{statusLabel}</span>
+                                        {updateAvailable ? (
+                                            <span className="shrink-0 text-copy-secondary">· Update available</span>
+                                        ) : null}
                                     </span>
                                 </span>
                                 <ChevronDown
@@ -401,6 +412,7 @@ export function ComputerSwitcher({
                                 >
                                     <MonitorCog aria-hidden="true" className="size-4 shrink-0" />
                                     View execution details
+                                    {updateTag}
                                 </DropdownMenu.Item>
                                 <DropdownMenu.Separator
                                     className={cn("-mx-1.5 my-1.5", overlayMenuSeparatorClassName)}

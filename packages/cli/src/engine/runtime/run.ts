@@ -9,6 +9,7 @@ import { systemTimer, type Timer } from "../util/timer.ts";
 import { publishAgentCatalog } from "./catalog/publish-agent-catalog.ts";
 import { resolveCatalogAgent } from "./catalog/resolve-catalog-agent.ts";
 import type { CommandServices } from "./command/context.ts";
+import type { ComputerUpdate } from "./computer-update.ts";
 import type { RuntimeConfig } from "./config.ts";
 import { ComputerEncryptionStore } from "./connection/computer-encryption-store.ts";
 import { RuntimeDiagnosticLog } from "./observability/diagnostic-log.ts";
@@ -74,6 +75,7 @@ export interface RunRuntimeOptions {
     readonly onInitialized?: () => void;
     readonly processes?: AgentProcessPool;
     readonly onConnectionStatus?: (status: "online" | "reconnecting") => void;
+    readonly computerUpdate?: ComputerUpdate;
 }
 
 export async function runRuntime(
@@ -139,6 +141,7 @@ export async function runRuntime(
         } = layer;
         const services: CommandServices = {
             resolveAgent,
+            computerUpdate: options.computerUpdate ?? null,
             directories,
             sessions: agentRuntime,
             sessionCreations,

@@ -2,10 +2,12 @@ import { X } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { cn } from "@/lib/utils";
 import { dataTestId } from "../../data-testid.ts";
+import type { ComputerUpdateStoreApi } from "../../view-models/chat/computer-update-store.ts";
 import { Button } from "../ui/cloud-button.tsx";
 import { executionDetailsDialogDesktopWidthClassName } from "../ui/overlay-surface.ts";
 import { ScrollArea } from "../ui/scroll-area.tsx";
 import { mobileHeaderIconButtonBelowSmClassName } from "./chat-header-control.ts";
+import { ComputerUpdateDetails } from "./computer-update-details.tsx";
 import type { ExecutionContext } from "./execution-context.ts";
 import { HarnessMark } from "./harness-mark.tsx";
 import { mobileSheetSurfaceClassName } from "./mobile-sheet.ts";
@@ -27,7 +29,13 @@ function computerStatusDotClassName(status: ExecutionContext["computerStatus"]):
 
 const executionDetailsTermClassName = "shrink-0 whitespace-nowrap text-muted-foreground";
 
-function ExecutionDetails({ context }: { readonly context: ExecutionContext }) {
+function ExecutionDetails({
+    context,
+    update,
+}: {
+    readonly context: ExecutionContext;
+    readonly update: ComputerUpdateStoreApi;
+}) {
     return (
         <dl className="grid gap-4 text-[13px] leading-5">
             <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-4">
@@ -55,6 +63,7 @@ function ExecutionDetails({ context }: { readonly context: ExecutionContext }) {
                         <span className="mt-1 block text-xs text-muted-foreground">{context.lastConfirmed}</span>
                     )}
                 </dd>
+                <ComputerUpdateDetails update={update} />
             </div>
             <div className="grid gap-2.5">
                 <dt className={executionDetailsTermClassName}>Working directory</dt>
@@ -71,11 +80,13 @@ function ExecutionDetails({ context }: { readonly context: ExecutionContext }) {
 
 export function ExecutionDetailsDialog({
     context,
+    update,
     open,
     onOpenChange,
     returnFocus,
 }: {
     readonly context: ExecutionContext;
+    readonly update: ComputerUpdateStoreApi;
     readonly open: boolean;
     readonly onOpenChange: (open: boolean) => void;
     readonly returnFocus: () => void;
@@ -105,7 +116,7 @@ export function ExecutionDetailsDialog({
                                 <MobileSheetTitle>Execution details</MobileSheetTitle>
                             </Dialog.Title>
                             <Dialog.Description className="sr-only">
-                                Computer availability, session connection, Agent, and working directory.
+                                Computer availability, session connection, Agent, Morty version, and working directory.
                             </Dialog.Description>
                         </div>
                         <Dialog.Close asChild>
@@ -123,7 +134,7 @@ export function ExecutionDetailsDialog({
                         className="min-h-0 flex-1 sm:-mx-1"
                         viewportClassName="h-full max-h-[inherit] px-6 sm:px-1"
                     >
-                        <ExecutionDetails context={context} />
+                        <ExecutionDetails context={context} update={update} />
                     </ScrollArea>
                 </Dialog.Content>
             </Dialog.Portal>

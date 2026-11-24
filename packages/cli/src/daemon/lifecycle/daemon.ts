@@ -19,6 +19,7 @@ import {
     type LifecycleResponse,
 } from "../control/protocol.ts";
 import { openMortyInstallation } from "../pairing/pair-local-computer.ts";
+import { DaemonUpdate } from "./daemon-update.ts";
 import { surviveUnhandledRejections, type UnhandledRejectionGuard } from "./unhandled-rejection.ts";
 
 class DaemonRuntimeError extends Error {
@@ -59,14 +60,14 @@ export async function releaseIdleAgentProcesses(
     }
 }
 
-export async function runDaemon(version: string, signal: AbortSignal): Promise<void> {
+export async function runDaemon(version: string, entry: string, signal: AbortSignal): Promise<void> {
     // Install before any await: an unhandled rejection during startup itself
     // must not kill the daemon before the guard exists.
     const rejectionGuard = surviveUnhandledRejections();
     const shutdown = new AbortController();
     const combined = AbortSignal.any([signal, shutdown.signal]);
     try {
-        await runDaemonRuntime(version, combined, shutdown, rejectionGuard);
+        await runDaemonRuntime(version, entry, combined, shutdown, rejectionGuard);
     } catch (cause) {
         await recordDaemonFailure(cause);
         throw cause;
@@ -93,6 +94,7 @@ async function recordDaemonFailure(failure: unknown): Promise<void> {
 
 async function runDaemonRuntime(
     version: string,
+    entry: string,
     combined: AbortSignal,
     shutdown: AbortController,
     rejectionGuard: UnhandledRejectionGuard,
@@ -144,6 +146,13 @@ async function runDaemonRuntime(
                     const completion = runRuntime(config, AbortSignal.any([combined, controller.signal]), systemTimer, {
                         processes,
                         onInitialized: initialized.resolve,
+                        computerUpdate: new DaemonUpdate({
+                            version,
+                            entry,
+                            processes,
+                            lifecycleLog,
+                            stop: () => shutdown.abort(),
+                        }),
                     }).then(
                         () => {
                             if (!combined.aborted && !controller.signal.aborted) {

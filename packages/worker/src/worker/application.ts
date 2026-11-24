@@ -81,6 +81,7 @@ function createComputerForwardingRoutes() {
             .get("/morty/api/v1/computers/:computerId", computerFromPath, forward)
             .post("/morty/api/v1/computers/:computerId/diagnostics/daemon", computerFromPath, forward)
             .post("/morty/api/v1/computers/:computerId/diagnostics/network", computerFromPath, forward)
+            .post("/morty/api/v1/computers/:computerId/update", computerFromPath, forward)
             .post("/morty/api/v1/computers/:computerId/workspace/directory", computerFromPath, forward)
             .post("/morty/api/v1/computers/:computerId/managed-sessions", computerFromPath, forward)
             .post("/morty/api/v1/computers/:computerId/agent-settings", computerFromPath, forward)

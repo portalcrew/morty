@@ -11,6 +11,7 @@ import type { ExecutionReceipts } from "../../session/turn/execution-receipts.ts
 import type { SessionTurns } from "../../session/turn/session-turns.ts";
 import type { WorkspaceDirectoryService } from "../../session/workspace/workspace-directory.ts";
 import type { Timer } from "../../util/timer.ts";
+import type { ComputerUpdate } from "../computer-update.ts";
 import type { RuntimeConfig } from "../config.ts";
 import type { RelayConnectionDiagnostics } from "../relay/diagnostics.ts";
 import type { createSessionSubscriptions } from "./registry/subscriptions.ts";
@@ -20,6 +21,7 @@ export interface CommandContext {
     readonly subscriptions: ReturnType<typeof createSessionSubscriptions>;
     readonly sessionCreations: SessionCreations;
     readonly resolveAgent: ResolveAgent;
+    readonly computerUpdate: ComputerUpdate | null;
     readonly config: RuntimeConfig;
     readonly directories: WorkspaceDirectoryService;
     readonly sessions: SessionManager;
@@ -38,6 +40,7 @@ export interface CommandContext {
 export type CommandServices = Pick<
     CommandContext,
     | "resolveAgent"
+    | "computerUpdate"
     | "directories"
     | "sessions"
     | "sessionCreations"

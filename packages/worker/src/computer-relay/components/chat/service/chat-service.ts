@@ -3,6 +3,7 @@ import type {
     AgentSettingsDiscoverCommandRouting,
     ComputerDiagnosticsRequestRouting,
     ComputerPingCommandRouting,
+    ComputerUpdateRequestRouting,
     NativeSessionCommandRouting,
     NativeSessionTarget,
     SessionAccessHolder,
@@ -91,6 +92,11 @@ export class ChatService {
     readonly daemonDiagnostics = async (scope: ChatScope, command: ComputerDiagnosticsRequestRouting) => {
         await this.#requirePairedComputer(scope);
         return await this.#relay.readComputerDiagnostics(command, scope.signal);
+    };
+
+    readonly updateComputer = async (scope: ChatScope, command: ComputerUpdateRequestRouting) => {
+        await this.#requirePairedComputer(scope);
+        return await this.#relay.updateComputer(command, scope.signal);
     };
 
     readonly networkDiagnostic = async (scope: ChatScope, command: ComputerPingCommandRouting) => {

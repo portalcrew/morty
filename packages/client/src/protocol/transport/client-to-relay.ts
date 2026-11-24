@@ -1,5 +1,6 @@
 import { computerDiagnosticsRequestCodec } from "../computer/diagnostics.ts";
 import { COMPUTER_PING_KIND, computerPingCommandCodec } from "../computer/liveness.ts";
+import { computerUpdateRequestCodec } from "../computer/update.ts";
 import { AGENT_SETTINGS_DISCOVER_KIND, agentSettingsDiscoverCommandCodec } from "../session/agent/settings.ts";
 import {
     SESSION_CONFIG_READ_KIND,
@@ -79,6 +80,7 @@ const clientToRelayDecoders = {
     [NATIVE_SESSION_REQUEST_KIND]: nativeSessionCommandCodec.decodeRouting,
     "computer.diagnostics.read": computerDiagnosticsRequestCodec.decodeRouting,
     [COMPUTER_PING_KIND]: computerPingCommandCodec.decodeRouting,
+    "computer.update": computerUpdateRequestCodec.decodeRouting,
     [SESSION_CANCEL_BEFORE_START_KIND]: sessionCancelBeforeStartCommandCodec.decodeRouting,
     [SESSION_CANCEL_KIND]: sessionCancelCommandCodec.decodeRouting,
     [SESSION_CONFIGURE_KIND]: sessionConfigureCommandCodec.decodeRouting,
@@ -139,6 +141,8 @@ export function encodeClientToRelayMessage(message: ClientToRelayMessage): strin
             return computerDiagnosticsRequestCodec.encodeRouting(message);
         case COMPUTER_PING_KIND:
             return computerPingCommandCodec.encodeRouting(message);
+        case "computer.update":
+            return computerUpdateRequestCodec.encodeRouting(message);
         case SESSION_CANCEL_BEFORE_START_KIND:
             return sessionCancelBeforeStartCommandCodec.encodeRouting(message);
         case SESSION_CANCEL_KIND:

@@ -169,6 +169,8 @@ export class BotChatApi {
         return await this.#computer().readDiagnostics(signal);
     };
     readonly networkDiagnostic = async (signal: AbortSignal) => await this.#computer().measureLatency(signal);
+    readonly updateComputer = async (version: string, signal: AbortSignal) =>
+        await this.#computer().updateComputer(version, signal);
     readonly verifyAgent = async (harness: string, signal: AbortSignal): Promise<void> => {
         await this.#computer().verifyAgent(harness, signal);
     };

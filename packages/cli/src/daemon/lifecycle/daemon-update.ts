@@ -1,0 +1,114 @@
+import { type ChildProcess, spawn } from "node:child_process";
+import { once } from "node:events";
+import { homedir } from "node:os";
+import { isNewerMortyRelease } from "@portalcrew/morty-client/protocol";
+import { OperationError } from "../../engine/infra/operation-error.ts";
+import type { ComputerUpdate } from "../../engine/runtime/computer-update.ts";
+import type { AgentProcessPool } from "../../engine/session/process/agent-process-pool.ts";
+import type { BoundedLineLog } from "../../engine/storage/logs/bounded-log.ts";
+import { findExecutableOnPath, runBoundedProcess } from "../../engine/util/process/executable.ts";
+
+export const MORTY_PACKAGE_NAME = "@portalcrew/morty";
+const RELEASE_DOWNLOAD_TIMEOUT_MILLISECONDS = 180_000;
+
+export interface DaemonUpdateOptions {
+    readonly version: string;
+    readonly entry: string;
+    readonly processes: AgentProcessPool;
+    readonly lifecycleLog: BoundedLineLog;
+    readonly stop: () => void;
+}
+
+export async function findNpx(): Promise<string> {
+    const npx = await findExecutableOnPath("npx", process.env);
+    if (npx === null) {
+        throw new OperationError("update_npx_unavailable", "This computer has no npx to download Morty with.");
+    }
+    return npx.path;
+}
+
+export function recordUpdate(log: BoundedLineLog, kind: string, details: Readonly<Record<string, string>>): void {
+    log.record(JSON.stringify({ kind, ...details, timestamp: new Date().toISOString() }));
+}
+
+export class DaemonUpdate implements ComputerUpdate {
+    readonly #options: DaemonUpdateOptions;
+    #updating = false;
+
+    constructor(options: DaemonUpdateOptions) {
+        this.#options = options;
+    }
+
+    readonly restartInto = async (version: string, announce: () => void, signal: AbortSignal): Promise<void> => {
+        const { entry, lifecycleLog, processes, stop } = this.#options;
+        const current = this.#options.version;
+        if (!isNewerMortyRelease(version, current)) {
+            throw new OperationError("update_not_newer", `This computer already runs Morty ${current}.`);
+        }
+        if (this.#updating) {
+            throw new OperationError("update_in_progress", "This computer is already updating Morty.");
+        }
+        this.#updating = true;
+        let updater: ChildProcess | undefined;
+        try {
+            refuseWhileWorking(processes);
+            recordUpdate(lifecycleLog, "daemon_update_requested", { from: current, to: version });
+            await downloadRelease(version, signal);
+            updater = await spawnUpdater(entry, version);
+            // Nothing awaits between this check and stop(), so no Agent work can begin before the Computer stops.
+            refuseWhileWorking(processes);
+            announce();
+            recordUpdate(lifecycleLog, "daemon_update_handed_over", { from: current, to: version });
+            stop();
+        } catch (error) {
+            updater?.kill();
+            this.#updating = false;
+            recordUpdate(lifecycleLog, "daemon_update_refused", {
+                from: current,
+                to: version,
+                code: error instanceof OperationError ? error.code : "update_failed",
+            });
+            throw error;
+        }
+    };
+}
+
+function refuseWhileWorking(processes: AgentProcessPool): void {
+    if (processes.hasWork()) {
+        throw new OperationError("computer_busy", "Morty updates when no task is running on this computer.");
+    }
+}
+
+async function downloadRelease(version: string, signal: AbortSignal): Promise<void> {
+    const npx = await findNpx();
+    try {
+        await runBoundedProcess({
+            command: npx,
+            arguments: ["--yes", `${MORTY_PACKAGE_NAME}@${version}`, "--help"],
+            cwd: homedir(),
+            environment: process.env,
+            signal,
+            timeoutMilliseconds: RELEASE_DOWNLOAD_TIMEOUT_MILLISECONDS,
+        });
+    } catch (cause) {
+        signal.throwIfAborted();
+        throw new OperationError("update_download_failed", `Morty ${version} could not be downloaded.`, { cause });
+    }
+}
+
+// The updater must outlive this daemon, so it runs detached rather than among the Agent process trees stop() ends.
+async function spawnUpdater(entry: string, version: string): Promise<ChildProcess> {
+    const updater = spawn(process.execPath, [entry, "__update", version], {
+        detached: true,
+        windowsHide: true,
+        env: process.env,
+        stdio: "ignore",
+    });
+    try {
+        await once(updater, "spawn");
+    } catch (cause) {
+        throw new OperationError("update_failed", "Morty could not start its updater.", { cause });
+    }
+    updater.unref();
+    return updater;
+}
