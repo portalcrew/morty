@@ -25,7 +25,7 @@ import {
 } from "@portalcrew/morty-client/protocol";
 import type { MortyOperationEndpoint } from "./calls/call.ts";
 import { sessionEndpoints } from "./calls/session.ts";
-import type { ComputerEncryptionAccess, PayloadDecryptor } from "./encryption.ts";
+import { type ComputerEncryptionAccess, E2EError, type PayloadDecryptor } from "./encryption.ts";
 import {
     MortyApiError,
     MortyCancellationError,
@@ -1522,6 +1522,11 @@ export class MortyLiveEventSubscription {
 
 /** Protocol and request failures keep their meaning; a lost connection reports its sanitized causes. */
 function liveStreamFailure(cause: unknown): unknown {
+    // A delivery past its freshness window means the stream fell behind, as when a suspended page resumes to frames its
+    // socket held while frozen. The rejected delivery is never shown; a new subscription reads what it missed from history.
+    if (cause instanceof E2EError && cause.code === "e2e_payload_expired") {
+        return new MortyConnectionError("The live session event stream fell behind", { cause });
+    }
     if (
         cause instanceof MortyProtocolError ||
         (cause instanceof MortyApiError && cause.status < 500) ||

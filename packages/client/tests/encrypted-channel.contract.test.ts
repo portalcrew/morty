@@ -860,7 +860,7 @@ it("Given an expired request, when it reaches the Computer, then it is rejected 
     const signal = new AbortController().signal;
     const encoded = await forgePacket(client, { kind: "session.prompt", prompt: "hello" }, signal);
     vi.setSystemTime(new Date("2026-11-12T00:05:00Z"));
-    await expect(decryptPacket(computer, encoded, signal)).rejects.toMatchObject({ code: "e2e_invalid_frame" });
+    await expect(decryptPacket(computer, encoded, signal)).rejects.toMatchObject({ code: "e2e_payload_expired" });
 });
 
 it("Given a long-lived Computer connection, when a nonce ages out and the clock moves backward, then later traffic succeeds and the old response remains rejected", async () => {
@@ -873,7 +873,7 @@ it("Given a long-lived Computer connection, when a nonce ages out and the clock 
     const later = await computer.encrypt(new TextEncoder().encode("later"), routing, signal);
     expect(new TextDecoder().decode(await client.decrypt(later, routing, signal))).toBe("later");
     vi.setSystemTime(new Date("2026-11-12T00:00:00Z"));
-    await expect(client.decrypt(first, routing, signal)).rejects.toMatchObject({ code: "e2e_invalid_frame" });
+    await expect(client.decrypt(first, routing, signal)).rejects.toMatchObject({ code: "e2e_payload_expired" });
 });
 
 it("Given a response issued within the permitted future skew, when its retention window passes, then a clock rollback cannot replay it", async () => {
@@ -888,5 +888,5 @@ it("Given a response issued within the permitted future skew, when its retention
     const later = await computer.encrypt(new TextEncoder().encode("later"), routing, signal);
     expect(new TextDecoder().decode(await client.decrypt(later, routing, signal))).toBe("later");
     vi.setSystemTime(new Date("2026-11-12T00:00:00Z"));
-    await expect(client.decrypt(future, routing, signal)).rejects.toMatchObject({ code: "e2e_invalid_frame" });
+    await expect(client.decrypt(future, routing, signal)).rejects.toMatchObject({ code: "e2e_payload_expired" });
 });
