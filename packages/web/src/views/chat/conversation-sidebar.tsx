@@ -44,6 +44,7 @@ import { MortyTooltipContent } from "../../components/ui/morty-tooltip-content.t
 import { MortyTooltipTrigger } from "../../components/ui/morty-tooltip-trigger.tsx";
 import { type OverlayContentOpenAutoFocus, preventOverlayOpenAutoFocus } from "../../components/ui/overlay-surface.ts";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
+import { ToastAnnouncement } from "../../components/ui/toast-announcement.tsx";
 import { DesktopChatLayout } from "../../components/utils/desktop-chat-layout.tsx";
 import { ScrollEdgeFade } from "../../components/utils/scroll-edge-fade.tsx";
 import { dataTestId } from "../../data-testid.ts";
@@ -523,6 +524,9 @@ export function ConversationSidebar({
     const home = useStore(workspace.home);
     const status = useStore(workspace.computer);
     const outdated = useStore(workspace.computerRelease, (model) => model.state.kind === "outdated");
+    const updatedRelease = useStore(workspace.computerRelease, (model) =>
+        model.state.kind === "updated" ? model.state.running : null,
+    );
     const draftSettings = useStore(workspace.draftControls, (state) => state.settings);
     const openPane = useStore(workspace.pane);
     const pane = openPane.kind === "open" ? openPane.model : null;
@@ -1036,6 +1040,14 @@ export function ConversationSidebar({
                                                 </ScrollArea>
                                             </Tooltip.Provider>
                                         </div>
+                                        <ToastAnnouncement
+                                            description={
+                                                updatedRelease === null
+                                                    ? undefined
+                                                    : `This computer now runs ${updatedRelease}.`
+                                            }
+                                            title={updatedRelease === null ? null : "Morty updated"}
+                                        />
                                         {nativeDialog !== null && (
                                             <NativeSessionDialog
                                                 store={nativeDialog.store}

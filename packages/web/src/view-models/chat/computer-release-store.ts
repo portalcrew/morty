@@ -6,7 +6,9 @@ import type { Clock } from "../../services/time/clock.ts";
 type ComputerReleaseState =
     | { readonly kind: "unknown" }
     | { readonly kind: "current"; readonly running: string }
-    | { readonly kind: "outdated"; readonly running: string; readonly latest: string };
+    | { readonly kind: "outdated"; readonly running: string; readonly latest: string }
+    // This page saw the Computer move from an older release to the latest one.
+    | { readonly kind: "updated"; readonly running: string };
 
 export interface ComputerReleaseStore {
     readonly state: ComputerReleaseState;
@@ -29,7 +31,7 @@ export const createComputerReleaseStore = (options: {
     let online = false;
     let reading: AbortController | null = null;
 
-    return createStore<ComputerReleaseStore>()((set) => {
+    return createStore<ComputerReleaseStore>()((set, get) => {
         const read = async (target: string, signal: AbortSignal): Promise<void> => {
             for (const delay of RELEASE_READ_DELAYS_MILLISECONDS) {
                 if (delay > 0) {
@@ -42,7 +44,9 @@ export const createComputerReleaseStore = (options: {
                     set({
                         state: isNewerMortyRelease(target, version)
                             ? { kind: "outdated", running: version, latest: target }
-                            : { kind: "current", running: version },
+                            : get().state.kind === "outdated"
+                              ? { kind: "updated", running: version }
+                              : { kind: "current", running: version },
                     });
                     return;
                 } catch {
