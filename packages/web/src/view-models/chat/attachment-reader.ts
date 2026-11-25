@@ -1,6 +1,11 @@
 import { MAX_PROMPT_ATTACHMENT_BYTES, PROMPT_IMAGE_MAX_BYTES } from "@portalcrew/morty-client/protocol";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
-import { exceedsPromptImageEdge, PROMPT_IMAGE_MAX_EDGE, promptImageSize } from "./prompt-image-size.ts";
+import {
+    fitsPromptImageTarget,
+    PROMPT_IMAGE_MAX_EDGE,
+    promptImageEdges,
+    promptImageSize,
+} from "./prompt-image-size.ts";
 
 const READ_TIMEOUT_MILLISECONDS = 15_000;
 const LOSSY_IMAGE_QUALITY = 0.9;
@@ -72,9 +77,36 @@ function attachmentUri(name: string): string {
     return `attachment:///${encodeURIComponent(name.replaceAll("/", "_"))}`;
 }
 
+async function encodedImage(
+    canvas: HTMLCanvasElement,
+    bitmap: ImageBitmap,
+    edge: number,
+    mediaType: string,
+    name: string,
+): Promise<{ readonly bytes: Uint8Array<ArrayBuffer>; readonly mediaType: string }> {
+    const size = promptImageSize(bitmap, edge);
+    canvas.width = size.width;
+    canvas.height = size.height;
+    const context = canvas.getContext("2d");
+    if (context === null) {
+        throw new AttachmentReadError("attachment_resize_failed", `${name} could not be resized.`);
+    }
+    context.imageSmoothingQuality = "high";
+    context.drawImage(bitmap, 0, 0, size.width, size.height);
+    const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, mediaType, LOSSY_IMAGE_QUALITY);
+    });
+    if (blob === null) {
+        throw new AttachmentReadError("attachment_resize_failed", `${name} could not be resized.`);
+    }
+    // A browser that cannot encode the original type produces PNG instead.
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), mediaType: blob.type };
+}
+
 async function resizedImage(
     bytes: Uint8Array<ArrayBuffer>,
     mediaType: string,
+    edges: readonly number[],
     name: string,
     signal: AbortSignal,
 ): Promise<{ readonly bytes: Uint8Array<ArrayBuffer>; readonly mediaType: string }> {
@@ -86,26 +118,16 @@ async function resizedImage(
     }
     const canvas = document.createElement("canvas");
     try {
-        signal.throwIfAborted();
-        const size = promptImageSize(bitmap);
-        canvas.width = size.width;
-        canvas.height = size.height;
-        const context = canvas.getContext("2d");
-        if (context === null) {
-            throw new AttachmentReadError("attachment_resize_failed", `${name} could not be resized.`);
+        let resized = { bytes, mediaType };
+        for (const edge of edges) {
+            signal.throwIfAborted();
+            resized = await encodedImage(canvas, bitmap, edge, mediaType, name);
+            if (fitsPromptImageTarget(resized.bytes.byteLength)) {
+                break;
+            }
         }
-        context.imageSmoothingQuality = "high";
-        context.drawImage(bitmap, 0, 0, size.width, size.height);
-        const blob = await new Promise<Blob | null>((resolve) => {
-            canvas.toBlob(resolve, mediaType, LOSSY_IMAGE_QUALITY);
-        });
-        if (blob === null) {
-            throw new AttachmentReadError("attachment_resize_failed", `${name} could not be resized.`);
-        }
-        const resized = new Uint8Array(await blob.arrayBuffer());
         signal.throwIfAborted();
-        // A browser that cannot encode the original type produces PNG instead.
-        return { bytes: resized, mediaType: blob.type };
+        return resized;
     } finally {
         bitmap.close();
         // Safari holds a canvas's pixel memory until its size is cleared.
@@ -129,9 +151,11 @@ export async function readPromptAttachment(file: File, signal: AbortSignal): Pro
     const bytes = new Uint8Array(await readBytes(file, signal));
     signal.throwIfAborted();
     if (rasterImage) {
-        const image = exceedsPromptImageEdge(bytes, file.type)
-            ? await resizedImage(bytes, file.type, file.name, signal)
-            : { bytes, mediaType: file.type };
+        const edges = promptImageEdges(bytes, file.type);
+        const image =
+            edges.length === 0
+                ? { bytes, mediaType: file.type }
+                : await resizedImage(bytes, file.type, edges, file.name, signal);
         if (image.bytes.byteLength > PROMPT_IMAGE_MAX_BYTES) {
             throw new AttachmentReadError(
                 "attachment_size_invalid",
