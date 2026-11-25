@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getAllByRole, getByRole, queryAllByRole, queryByRole } from "@testing-library/dom";
+import { getAllByRole, getByRole, getByText, queryAllByRole, queryByRole } from "@testing-library/dom";
 import type { DetachedWindowAPI } from "happy-dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
@@ -307,7 +307,7 @@ test("Given a paired Bot with cached agent settings, When a user filters its mod
     await created.waitForView(() => expect(created.optionalElementByTestId(dataTestId.sessionStatus)).toBeNull());
 });
 
-test("Given a Computer offering only Codex, When a user opens New Session settings, Then only Codex is offered", {
+test("Given a Computer offering only Codex, When a user opens New Session settings, Then Codex appears as text without a selection control", {
     timeout: 30_000,
 }, async () => {
     const created = await createTestApp({ connectAgent: true });
@@ -317,10 +317,10 @@ test("Given a Computer offering only Codex, When a user opens New Session settin
     await created.user.click(await created.queryElementByTestId(dataTestId.agentConfiguration));
     const configuration = getByRole(document.body, "dialog", { name: "Agent configuration" });
 
-    const harnesses = getByRole(configuration, "radiogroup", { name: "Harness" });
-    const codex = getByRole(harnesses, "radio", { name: "Codex", checked: true });
-    expect(getAllByRole(harnesses, "radio")).toEqual([codex]);
-    expect(codex).toHaveProperty("disabled", false);
+    expect(getByText(configuration, "Harness")).toBeDefined();
+    expect(getByText(configuration, "Codex")).toBeDefined();
+    expect(queryByRole(configuration, "radiogroup", { name: "Harness" })).toBeNull();
+    expect(queryByRole(configuration, "radio", { name: "Codex" })).toBeNull();
 });
 
 test("Given a Bot has a recent directory from another harness, When its Computer configuration loads, Then the directory remains available", {
@@ -645,7 +645,7 @@ test("Given a Bot paired with the Claude harness, When the user opens its settin
 
     await app.user.click(await app.queryElementByTestId(dataTestId.agentConfiguration));
     const configuration = getByRole(document.body, "dialog", { name: "Agent configuration" });
-    const harness = getByRole(configuration, "radio", { name: "Claude Code", checked: true });
+    const harness = app.elementByTestId(dataTestId.agentSetting("harness"), configuration);
     expect(harness.textContent).toContain("Claude Code");
     const harnessMark = app.elementByTestId(dataTestId.harnessMark, harness);
     expect(harnessMark.getAttribute("data-harness-product")).toBe("claude");
@@ -722,11 +722,10 @@ test("Given a Bot paired with an unlisted harness, When the user opens its setti
 
     await app.user.click(await app.queryElementByTestId(dataTestId.agentConfiguration));
     const configuration = getByRole(document.body, "dialog", { name: "Agent configuration" });
-    const harness = getByRole(configuration, "radio", { name: "Unlisted Agent", checked: true });
+    const harness = app.elementByTestId(dataTestId.agentSetting("harness"), configuration);
     expect(harness.textContent).toContain("Unlisted Agent");
     expect(app.elementByTestId(dataTestId.harnessMark, harness).getAttribute("data-harness-product")).toBe("generic");
-    const harnesses = getByRole(configuration, "radiogroup", { name: "Harness" });
-    expect(getAllByRole(harnesses, "radio")).toEqual([harness]);
+    expect(queryByRole(configuration, "radiogroup", { name: "Harness" })).toBeNull();
 });
 
 test("Given a Bot paired with Pi, When the user opens its settings and sends a prompt, Then Pi and its streamed reply are visible", {
@@ -736,7 +735,7 @@ test("Given a Bot paired with Pi, When the user opens its settings and sends a p
     await waitForConnection(app, "connected");
     await app.user.click(await app.queryElementByTestId(dataTestId.agentConfiguration));
     const configuration = getByRole(document.body, "dialog", { name: "Agent configuration" });
-    expect(getByRole(configuration, "radio", { name: "Pi", checked: true }).textContent).toContain("Pi");
+    expect(getByText(configuration, "Pi")).toBeDefined();
     await app.user.keyboard("{Escape}");
     const composer = await app.queryElementByTestId(dataTestId.messageComposer);
     if (!(composer instanceof HTMLTextAreaElement)) {

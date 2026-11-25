@@ -855,7 +855,9 @@ export function ConversationSidebar({
                                                             frameClassName="col-span-2 -ml-3 -mr-3 box-border flex min-h-0 min-w-0 w-[calc(100%+24px)] max-w-none flex-1 flex-col max-sm:row-start-2 sm:-ml-2.5 sm:-mr-2.5 sm:w-[calc(100%+20px)]"
                                                             className="min-h-0 flex-1 space-y-0 px-3 sm:px-2.5"
                                                         >
-                                                            <ManagedSessionDirectoryList {...sessionListProps} />
+                                                            <div className="pb-4">
+                                                                <ManagedSessionDirectoryList {...sessionListProps} />
+                                                            </div>
                                                         </ScrollEdgeFade>
                                                     </Tooltip.Provider>
                                                 </div>

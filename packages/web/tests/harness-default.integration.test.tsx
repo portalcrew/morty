@@ -1,4 +1,4 @@
-import { getByRole, queryByRole } from "@testing-library/dom";
+import { getByRole, getByText, queryByRole } from "@testing-library/dom";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
 import { readyComposer, sendPrompt } from "./infra/application-scenario.ts";
@@ -210,6 +210,7 @@ test("Given a draft last used Pi, When the Computer reconnects offering only Cod
     await waitForHarness(app, "codex");
     await app.user.click(await app.queryElementByTestId(dataTestId.agentConfiguration));
     const dialog = getByRole(document.body, "dialog", { name: "Agent configuration" });
-    expect(getByRole(dialog, "radio", { name: "Codex", checked: true })).toHaveProperty("disabled", false);
+    expect(getByText(dialog, "Codex")).toBeDefined();
+    expect(queryByRole(dialog, "radiogroup", { name: "Harness" })).toBeNull();
     expect(queryByRole(dialog, "radio", { name: "Pi" })).toBeNull();
 });

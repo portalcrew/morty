@@ -156,6 +156,37 @@ test("Given an unpaired remembered computer, When I open the computer list, Then
     expect(other.textContent).toContain("Not set up");
 });
 
+test("Given online and unpaired remembered computers, When I open the computer list, Then the current computer comes first, online computers keep their order, and the unpaired computer comes last", {
+    timeout: 30_000,
+}, async () => {
+    const unpaired = await createTestApp();
+    await unpaired.waitForView(() => getByRole(document.body, "dialog", { name: "Connect agent" }));
+    await unpaired.close();
+    const onlineScopes: string[] = [];
+    for (let index = 0; index < 2; index += 1) {
+        const online = await createTestApp({ connectAgent: true });
+        await readyComposer(online);
+        onlineScopes.push(encodeIdentityScope(online.identity));
+        await online.close();
+    }
+    const app = await createTestApp({ connectAgent: true });
+    await readyComposer(app);
+    await app.user.click(getByRole(document.body, "button", { name: /Switch computer/ }));
+    const currentScope = encodeIdentityScope(app.identity);
+    const expected = [
+        currentScope,
+        ...onlineScopes.toSorted((left, right) => left.localeCompare(right)),
+        encodeIdentityScope(unpaired.identity),
+    ];
+    await app.waitForView(() => {
+        const choices = computerChoices(getByRole(document.body, "menu"));
+        expect(choices.map((choice) => identityOf(choice, currentScope))).toEqual(expected);
+        expect(choices[0]?.getAttribute("aria-checked")).toBe("true");
+        expect(choices.slice(0, 3).every((choice) => choice.textContent?.includes("Online"))).toBe(true);
+        expect(choices[3]?.textContent).toContain("Not set up");
+    });
+});
+
 test("Given two remembered computers, When I return and then switch, Then the last computer and each computer's own conversation are restored", {
     timeout: 30_000,
 }, async () => {
@@ -193,7 +224,7 @@ test("Given two remembered computers, When I return and then switch, Then the la
         throw new Error("Expected a computer");
     }
     expect(details.compareDocumentPosition(firstChoice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    const order = choices.map((item) => identityOf(item, secondScope));
+    expect(choices.map((item) => identityOf(item, secondScope))).toEqual([secondScope, firstScope]);
     expect(choices.find((item) => item.getAttribute("aria-checked") === "true")).not.toBeInstanceOf(HTMLAnchorElement);
     const firstLink = choices.find((item) => identityOf(item, secondScope) === firstScope);
     if (!(firstLink instanceof HTMLAnchorElement)) {
@@ -224,8 +255,8 @@ test("Given two remembered computers, When I return and then switch, Then the la
         }
         return items;
     });
-    expect(reordered.map((item) => identityOf(item, firstScope))).toEqual(order);
-    expect(reordered.findIndex((item) => item.getAttribute("aria-checked") === "true")).toBe(order.indexOf(firstScope));
+    expect(reordered.map((item) => identityOf(item, firstScope))).toEqual([firstScope, secondScope]);
+    expect(reordered[0]?.getAttribute("aria-checked")).toBe("true");
 });
 
 test("Given two remembered computers, When I choose the computer I am already on, Then the menu closes and the conversation stays open", {

@@ -21,6 +21,12 @@ interface ComputerConnectionChoice {
 
 export type ComputerChoice = ComputerConnectionChoice & { readonly disambiguator: string | null };
 
+export function sortComputerChoices(choices: readonly ComputerChoice[], activeKey: string): readonly ComputerChoice[] {
+    const priority = (choice: ComputerChoice): number =>
+        choice.key === activeKey ? 0 : choice.status === "online" ? 1 : 2;
+    return choices.toSorted((left, right) => priority(left) - priority(right));
+}
+
 type RememberedComputerChoice = Omit<ComputerConnectionChoice, "status"> &
     (
         | { readonly kind: "current" }
