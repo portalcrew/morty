@@ -35,8 +35,6 @@ export function isNewerMortyRelease(candidate: string, current: string): boolean
  * foreground would stop the old daemon and die before starting the new one; detached and delayed, the restart outlives
  * the Agent's reply.
  */
-export const mortyUpdatePrompt = `Update Morty on this computer to the latest release.
-Restarting Morty ends this conversation, so start the update as a detached background process that waits 15 seconds, then reply before it begins.
-On macOS or Linux, run:
+export const mortyUpdatePrompt = `Update Morty on this computer. Restarting Morty ends this conversation, so run the restart detached in the background after a short delay, and reply before it starts:
 nohup sh -c 'sleep 15; npx --yes @portalcrew/morty@latest restart' > /dev/null 2>&1 &
-On Windows, start the same steps as a hidden background process with PowerShell's Start-Process.`;
+On Windows, do the same with PowerShell's Start-Process.`;
