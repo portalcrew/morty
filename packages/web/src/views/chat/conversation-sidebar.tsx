@@ -658,6 +658,7 @@ export function ConversationSidebar({
                                                             dialogs.getState().closeMobilePanel();
                                                         } else {
                                                             dialogs.getState().openMobileNav();
+                                                            workspace.computers.stopEditing();
                                                             void workspace.computers.refresh();
                                                         }
                                                     }}
