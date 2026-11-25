@@ -295,7 +295,7 @@ test("Given the New Session page while the computer is offline, When an attachme
     const alert = await reopened.waitForView(() => {
         const alerts = queryAllByRole(form, "alert");
         expect(alerts).toHaveLength(1);
-        expect(alerts[0]?.textContent).toContain("Files must be between 1 byte");
+        expect(alerts[0]?.textContent).toContain("Couldn't add empty.txt: the file is empty.");
         return alerts[0];
     });
     if (alert === undefined) {

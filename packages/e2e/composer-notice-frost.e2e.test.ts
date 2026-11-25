@@ -21,7 +21,7 @@ test("Given a session pinned to its latest reply, When an unreadable attachment 
     await page.locator("input[aria-label='Choose attachments']").setInputFiles(empty);
     const notice = page.locator('[data-notice-placement="overlay"]');
     await expect(
-        notice.getByRole("alert").filter({ hasText: "Files must be between 1 byte and 32 MB." }),
+        notice.getByRole("alert").filter({ hasText: "Couldn't add empty.txt: the file is empty." }),
     ).toBeVisible();
     await page.screenshot({ animations: "disabled", path: testInfo.outputPath("notice-frost.png") });
 
@@ -59,7 +59,7 @@ test.describe("Given an interactive card ending the log", () => {
         await page.locator("input[aria-label='Choose attachments']").setInputFiles(empty);
         const notice = page.locator('[data-notice-placement="overlay"]');
         await expect(
-            notice.getByRole("alert").filter({ hasText: "Files must be between 1 byte and 32 MB." }),
+            notice.getByRole("alert").filter({ hasText: "Couldn't add empty.txt: the file is empty." }),
         ).toBeVisible();
         await page.screenshot({ animations: "disabled", path: testInfo.outputPath("notice-card-tail.png") });
 

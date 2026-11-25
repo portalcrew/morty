@@ -1,19 +1,24 @@
 import { MAX_PROMPT_ATTACHMENT_BYTES, PROMPT_IMAGE_MAX_BYTES } from "@portalcrew/morty-client/protocol";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
-import {
-    fitsPromptImageTarget,
-    PROMPT_IMAGE_MAX_EDGE,
-    promptImageEdges,
-    promptImageSize,
-} from "./prompt-image-size.ts";
+import { fitsPromptImageTarget, promptImageEdges, promptImageSize } from "./prompt-image-size.ts";
 
 const READ_TIMEOUT_MILLISECONDS = 15_000;
 const LOSSY_IMAGE_QUALITY = 0.9;
 
-export class AttachmentReadError extends Error {
-    readonly code: string;
+export type AttachmentReadErrorCode =
+    | "attachment_empty"
+    | "attachment_too_large"
+    | "attachment_image_too_large"
+    | "attachment_timeout"
+    | "attachment_cancelled"
+    | "attachment_read_failed"
+    | "attachment_image_invalid"
+    | "attachment_resize_failed";
 
-    constructor(code: string, message: string, options: ErrorOptions = {}) {
+export class AttachmentReadError extends Error {
+    readonly code: AttachmentReadErrorCode;
+
+    constructor(code: AttachmentReadErrorCode, message: string, options: ErrorOptions = {}) {
         super(message, options);
         this.code = code;
         this.name = "AttachmentReadError";
@@ -142,11 +147,11 @@ export async function readPromptAttachment(file: File, signal: AbortSignal): Pro
     const lowerName = file.name.toLowerCase();
     const svg = file.type === "image/svg+xml" || (file.type.length === 0 && lowerName.endsWith(".svg"));
     const pdf = file.type === "application/pdf" || (file.type.length === 0 && lowerName.endsWith(".pdf"));
-    if (file.size === 0 || file.size > MAX_PROMPT_ATTACHMENT_BYTES) {
-        throw new AttachmentReadError(
-            "attachment_size_invalid",
-            rasterImage ? "Images must be between 1 byte and 32 MB." : "Files must be between 1 byte and 32 MB.",
-        );
+    if (file.size === 0) {
+        throw new AttachmentReadError("attachment_empty", `${file.name} is empty.`);
+    }
+    if (file.size > MAX_PROMPT_ATTACHMENT_BYTES) {
+        throw new AttachmentReadError("attachment_too_large", `${file.name} is larger than 32 MB.`);
     }
     const bytes = new Uint8Array(await readBytes(file, signal));
     signal.throwIfAborted();
@@ -157,10 +162,7 @@ export async function readPromptAttachment(file: File, signal: AbortSignal): Pro
                 ? { bytes, mediaType: file.type }
                 : await resizedImage(bytes, file.type, edges, file.name, signal);
         if (image.bytes.byteLength > PROMPT_IMAGE_MAX_BYTES) {
-            throw new AttachmentReadError(
-                "attachment_size_invalid",
-                `Images must fit in 5 MB once resized to at most ${PROMPT_IMAGE_MAX_EDGE.toString()} pixels.`,
-            );
+            throw new AttachmentReadError("attachment_image_too_large", `${file.name} is larger than 5 MB.`);
         }
         return {
             bytes: image.bytes,

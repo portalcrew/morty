@@ -640,7 +640,7 @@ test("Given an unavailable Computer and an editable draft, When automatic retrie
     const attachmentAlert = await app.waitForView(() => {
         const alerts = queryAllByRole(composerForm, "alert");
         expect(alerts).toHaveLength(1);
-        expect(alerts[0]?.textContent).toContain("Files must be between 1 byte");
+        expect(alerts[0]?.textContent).toContain("Couldn't add empty.txt: the file is empty.");
         return alerts[0];
     });
     // Exactly one assertive region: the attachment headline owns it, and the

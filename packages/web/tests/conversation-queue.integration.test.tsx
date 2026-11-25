@@ -694,7 +694,9 @@ test("Given a follow-up with a file was queued from another browser, When this v
             target: { files: [new File([], "empty.txt", { type: "text/plain" })] },
         });
     });
-    await viewer.waitForView(() => expect(document.body.textContent).toContain("Files must be between 1 byte"));
+    await viewer.waitForView(() =>
+        expect(document.body.textContent).toContain("Couldn't add empty.txt: the file is empty."),
+    );
     expect(document.body.textContent).toContain("Files attached to this message could not be restored here.");
 
     const edited = viewerComposer.value;

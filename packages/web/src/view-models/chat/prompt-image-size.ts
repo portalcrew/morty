@@ -1,5 +1,5 @@
 // Vision models downsample larger images before reading them; the extra pixels only cost transfer and Agent history.
-export const PROMPT_IMAGE_MAX_EDGE = 2_048;
+const PROMPT_IMAGE_MAX_EDGE = 2_048;
 // Eight images of this size stay under 32 MB once base64-encoded, the largest message Morty reads from Codex.
 const PROMPT_IMAGE_TARGET_BYTES = 2_500_000;
 const PROMPT_IMAGE_EDGES = [PROMPT_IMAGE_MAX_EDGE, 1_536, 1_024, 768];

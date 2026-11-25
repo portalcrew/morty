@@ -1,12 +1,51 @@
 import { type ReactNode, useRef } from "react";
-import type { ComposerAttachmentStore } from "../../view-models/chat/composer-attachment-store.ts";
+import type { AttachmentRejection, ComposerAttachmentStore } from "../../view-models/chat/composer-attachment-store.ts";
 import { MortyAlert } from "../ui/morty-alert.tsx";
 import { useComposerNoticeLayout } from "../utils/use-composer-notice-layout.ts";
 
 export type ComposerNoticePlacement = "overlay" | "in-flow";
 
+function rejectionReason(reason: Exclude<AttachmentRejection["reason"], "attachment_limit">): string {
+    switch (reason) {
+        case "attachment_empty":
+            return "the file is empty";
+        case "attachment_too_large":
+            return "files can be up to 32 MB";
+        case "attachment_image_too_large":
+            return "images can be up to 5 MB";
+        case "attachment_timeout":
+            return "it took too long to read";
+        case "attachment_cancelled":
+        case "attachment_read_failed":
+        case "attachment_image_invalid":
+        case "attachment_resize_failed":
+            return "it couldn't be read";
+    }
+}
+
+function attachmentRejectionMessage(rejections: readonly AttachmentRejection[]): string {
+    const sentences: string[] = [];
+    const overLimit: Extract<AttachmentRejection, { readonly reason: "attachment_limit" }>[] = [];
+    for (const rejection of rejections) {
+        if (rejection.reason === "attachment_limit") {
+            overLimit.push(rejection);
+        } else {
+            sentences.push(`Couldn't add ${rejection.name}: ${rejectionReason(rejection.reason)}.`);
+        }
+    }
+    const [first] = overLimit;
+    if (first !== undefined) {
+        const files = overLimit.length === 1 ? first.name : `${overLimit.length.toString()} files`;
+        sentences.push(`Couldn't add ${files}: a message can have up to ${first.limit.toString()} attachments.`);
+    }
+    return sentences.join(" ");
+}
+
 export function composerErrorMessage(error: string, attachmentState: ComposerAttachmentStore["state"]): string {
-    return error.length > 0 ? error : attachmentState.kind === "failed" ? attachmentState.message : "";
+    if (error.length > 0) {
+        return error;
+    }
+    return attachmentState.kind === "rejected" ? attachmentRejectionMessage(attachmentState.rejections) : "";
 }
 
 /**
