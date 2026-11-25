@@ -5,6 +5,7 @@ import { executableLaunch, platformSpawnOptions, spawnProcess } from "../../../u
 import { AcpExecutionError } from "../../acp-error.ts";
 import { type AgentTermination, agentTerminationError } from "../../agent/agent-lifecycle.ts";
 import { decodeAppServerMessage } from "./app-server-protocol.ts";
+import { type OversizedMessage, OversizedMessageScanner } from "./oversized-message.ts";
 
 const INITIALIZE_TIMEOUT_MILLISECONDS = 30_000;
 const MESSAGE_OUTPUT_LIMIT_BYTES = 32 * 1_024 * 1_024;
@@ -15,6 +16,19 @@ export class CodexAppServerError extends AcpExecutionError {
         this.name = "CodexAppServerError";
     }
 }
+
+export class CodexAppServerResponseTooLargeError extends CodexAppServerError {
+    constructor() {
+        super("codex_app_server_response_too_large", "The Codex app-server response is too large for Morty to read");
+        this.name = "CodexAppServerResponseTooLargeError";
+    }
+}
+
+type OutputLine =
+    | { readonly kind: "reading"; readonly fragments: readonly string[]; readonly bytes: number }
+    | { readonly kind: "discarding"; readonly scanner: OversizedMessageScanner };
+
+const EMPTY_LINE: OutputLine = { kind: "reading", fragments: [], bytes: 0 };
 
 /** A request the app-server addressed to Morty, which Morty must answer by id. */
 export interface CodexAppServerServerRequest {
@@ -49,8 +63,7 @@ export class CodexAppServerClient {
         kind: "open",
     };
     #nextRequestId = 1;
-    #pendingBytes = 0;
-    #pendingFragments: string[] = [];
+    #line: OutputLine = EMPTY_LINE;
 
     constructor(options: CodexAppServerOptions) {
         this.#handlers = options.handlers;
@@ -134,38 +147,11 @@ export class CodexAppServerClient {
         }
         try {
             let cursor = 0;
-            let newline = chunk.indexOf("\n");
-            while (newline >= 0) {
-                const fragment = chunk.slice(cursor, newline);
-                const lineBytes = this.#pendingBytes + Buffer.byteLength(fragment);
-                if (lineBytes > MESSAGE_OUTPUT_LIMIT_BYTES) {
-                    throw new CodexAppServerError(
-                        "codex_app_server_output_limit",
-                        "The Codex app-server produced an oversized message",
-                    );
-                }
-                const line =
-                    this.#pendingFragments.length === 0 ? fragment : [...this.#pendingFragments, fragment].join("");
-                this.#pendingBytes = 0;
-                this.#pendingFragments = [];
-                cursor = newline + 1;
-                newline = chunk.indexOf("\n", cursor);
-                if (line.trim().length === 0) {
-                    continue;
-                }
-                const value: unknown = JSON.parse(line);
-                this.#dispatch(decodeAppServerMessage(value));
-            }
-            const remainder = chunk.slice(cursor);
-            if (remainder.length > 0) {
-                this.#pendingBytes += Buffer.byteLength(remainder);
-                if (this.#pendingBytes > MESSAGE_OUTPUT_LIMIT_BYTES) {
-                    throw new CodexAppServerError(
-                        "codex_app_server_output_limit",
-                        "The Codex app-server produced an oversized message",
-                    );
-                }
-                this.#pendingFragments.push(remainder);
+            while (cursor < chunk.length) {
+                const newline = chunk.indexOf("\n", cursor);
+                const end = newline < 0 ? chunk.length : newline;
+                this.#read(chunk.slice(cursor, end), newline >= 0);
+                cursor = end + 1;
             }
         } catch (error) {
             this.#fail(
@@ -178,6 +164,57 @@ export class CodexAppServerClient {
                       ),
             );
         }
+    };
+
+    readonly #read = (fragment: string, lineEnded: boolean): void => {
+        const line = this.#line;
+        if (line.kind === "discarding") {
+            line.scanner.scan(fragment);
+            if (lineEnded) {
+                this.#line = EMPTY_LINE;
+                this.#settleOversized(line.scanner.message());
+            }
+            return;
+        }
+        const fragments = [...line.fragments, fragment];
+        const bytes = line.bytes + Buffer.byteLength(fragment);
+        if (bytes > MESSAGE_OUTPUT_LIMIT_BYTES) {
+            const scanner = new OversizedMessageScanner();
+            for (const part of fragments) {
+                scanner.scan(part);
+            }
+            this.#line = { kind: "discarding", scanner };
+            this.#read("", lineEnded);
+            return;
+        }
+        if (!lineEnded) {
+            this.#line = { kind: "reading", fragments, bytes };
+            return;
+        }
+        this.#line = EMPTY_LINE;
+        const text = fragments.join("");
+        if (text.trim().length === 0) {
+            return;
+        }
+        const value: unknown = JSON.parse(text);
+        this.#dispatch(decodeAppServerMessage(value));
+    };
+
+    // An oversized response fails only the request it answers. Any other oversized message stays
+    // terminal: dropping a notification or an approval request would leave the Session inconsistent.
+    readonly #settleOversized = (message: OversizedMessage): void => {
+        if (message.kind === "other") {
+            throw new CodexAppServerError(
+                "codex_app_server_output_limit",
+                "The Codex app-server produced an oversized message",
+            );
+        }
+        const pending = this.#pending.get(message.id);
+        if (pending === undefined) {
+            return;
+        }
+        this.#pending.delete(message.id);
+        pending.completion.reject(new CodexAppServerResponseTooLargeError());
     };
 
     // Handler failures are recorded as the app-server's terminal failure: an ACP client that cannot
