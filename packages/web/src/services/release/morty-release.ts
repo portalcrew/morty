@@ -6,13 +6,18 @@ function releaseParts(version: unknown): readonly number[] | null {
         : null;
 }
 
+function configuredRelease(value: unknown): string | null {
+    return typeof value === "string" && releaseParts(value) !== null ? value : null;
+}
+
 /**
  * The Morty CLI released with this page, which deployment activates only once it is npm's latest release. Builds
  * outside a release have none, so they never ask for an update.
  */
-const configuredRelease: unknown = import.meta.env["VITE_MORTY_CLI_VERSION"];
-export const mortyReleaseVersion: string | null =
-    typeof configuredRelease === "string" && releaseParts(configuredRelease) !== null ? configuredRelease : null;
+export const mortyReleaseVersion = configuredRelease(import.meta.env["VITE_MORTY_CLI_VERSION"]);
+
+/** The release that was latest a week before this page's; a Computer older than it has been out of date that long. */
+export const mortyReleaseWeekAgo = configuredRelease(import.meta.env["VITE_MORTY_CLI_VERSION_WEEK_AGO"]);
 
 /** False whenever either side is not a stable release, so an unknown version never asks for an update. */
 export function isNewerMortyRelease(candidate: string, current: string): boolean {

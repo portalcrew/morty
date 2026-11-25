@@ -4,7 +4,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import { encodeIdentityScope, type IdentityScope } from "../../services/identity/identity-scope-url.ts";
 import { rememberComputerName, rememberComputerVisit } from "../../services/identity/remembered-computers.ts";
-import { mortyReleaseVersion } from "../../services/release/morty-release.ts";
+import { mortyReleaseVersion, mortyReleaseWeekAgo } from "../../services/release/morty-release.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import type { AppInstallStoreApi } from "../app-install-store.ts";
 import type { IdentityAccess } from "../authentication/identity-access.ts";
@@ -147,7 +147,12 @@ export function createChatWorkspace(options: {
     };
     const titles: SessionTitlesStore = createSessionTitlesStore(encodeIdentityScope(options.rememberedIdentity));
     const computer = createComputerStatusStore(navigator.onLine);
-    const computerRelease = createComputerReleaseStore({ latest: mortyReleaseVersion, requests, clock: options.clock });
+    const computerRelease = createComputerReleaseStore({
+        latest: mortyReleaseVersion,
+        weekAgo: mortyReleaseWeekAgo,
+        requests,
+        clock: options.clock,
+    });
     const follower = createComputerFollower({
         requests,
         computer,

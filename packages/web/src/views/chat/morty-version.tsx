@@ -16,7 +16,7 @@ export function MortyVersion({ release }: { readonly release: ComputerReleaseSto
             <dt className={executionDetailsTermClassName}>Morty version</dt>
             <dd className="min-w-0 text-foreground">
                 <span className="block">{state.running}</span>
-                {state.kind === "outdated" && (
+                {(state.kind === "available" || state.kind === "overdue") && (
                     <>
                         <span className="mt-1 block text-xs text-muted-foreground">
                             {state.latest} is available. When no task is running, send the update prompt to your agent

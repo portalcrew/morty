@@ -523,7 +523,7 @@ export function ConversationSidebar({
     const dialogs = workspace.sidebar.dialogs;
     const home = useStore(workspace.home);
     const status = useStore(workspace.computer);
-    const outdated = useStore(workspace.computerRelease, (model) => model.state.kind === "outdated");
+    const overdue = useStore(workspace.computerRelease, (model) => model.state.kind === "overdue");
     const updatedRelease = useStore(workspace.computerRelease, (model) =>
         model.state.kind === "updated" ? model.state.running : null,
     );
@@ -646,7 +646,7 @@ export function ConversationSidebar({
                                                     aria-label={
                                                         mobileNavOpen
                                                             ? "Close navigation"
-                                                            : outdated
+                                                            : overdue
                                                               ? "Open navigation, update available"
                                                               : "Open navigation"
                                                     }
@@ -665,7 +665,7 @@ export function ConversationSidebar({
                                                     }}
                                                 >
                                                     <MortyLogoMark size={26} />
-                                                    {outdated && !mobileNavOpen ? (
+                                                    {overdue && !mobileNavOpen ? (
                                                         <span
                                                             aria-hidden="true"
                                                             className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary ring-2 ring-white"

@@ -6,7 +6,10 @@ import type { Clock } from "../../services/time/clock.ts";
 type ComputerReleaseState =
     | { readonly kind: "unknown" }
     | { readonly kind: "current"; readonly running: string }
-    | { readonly kind: "outdated"; readonly running: string; readonly latest: string }
+    // A newer release exists; it is mentioned only where the person looks up the version.
+    | { readonly kind: "available"; readonly running: string; readonly latest: string }
+    // The Computer lacks a release that is a week old, so the page draws attention to the update.
+    | { readonly kind: "overdue"; readonly running: string; readonly latest: string }
     // This page saw the Computer move from an older release to the latest one.
     | { readonly kind: "updated"; readonly running: string };
 
@@ -21,12 +24,29 @@ const RELEASE_READ_TIMEOUT_MILLISECONDS = 15_000;
 // A read can fail while the Computer is still settling in; spaced retries recover it without a reload.
 const RELEASE_READ_DELAYS_MILLISECONDS = [0, 5_000, 15_000, 45_000];
 
+function nextReleaseState(
+    previous: ComputerReleaseState,
+    running: string,
+    latest: string,
+    weekAgo: string | null,
+): ComputerReleaseState {
+    if (isNewerMortyRelease(latest, running)) {
+        return weekAgo !== null && isNewerMortyRelease(weekAgo, running)
+            ? { kind: "overdue", running, latest }
+            : { kind: "available", running, latest };
+    }
+    return previous.kind === "available" || previous.kind === "overdue"
+        ? { kind: "updated", running }
+        : { kind: "current", running };
+}
+
 export const createComputerReleaseStore = (options: {
     readonly latest: string | null;
+    readonly weekAgo: string | null;
     readonly requests: Pick<BotChatApi, "daemonDiagnostics">;
     readonly clock: Clock;
 }) => {
-    const { latest, requests, clock } = options;
+    const { latest, weekAgo, requests, clock } = options;
     const lifetime = new AbortController();
     let online = false;
     let reading: AbortController | null = null;
@@ -41,13 +61,7 @@ export const createComputerReleaseStore = (options: {
                     const { version } = await requests.daemonDiagnostics(
                         AbortSignal.any([signal, AbortSignal.timeout(RELEASE_READ_TIMEOUT_MILLISECONDS)]),
                     );
-                    set({
-                        state: isNewerMortyRelease(target, version)
-                            ? { kind: "outdated", running: version, latest: target }
-                            : get().state.kind === "outdated"
-                              ? { kind: "updated", running: version }
-                              : { kind: "current", running: version },
-                    });
+                    set({ state: nextReleaseState(get().state, version, target, weekAgo) });
                     return;
                 } catch {
                     signal.throwIfAborted();

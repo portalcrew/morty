@@ -315,8 +315,8 @@ export function ComputerSwitcher({
     const listLoading = state.kind === "loading";
     const active = choices.find((choice) => choice.key === activeKey);
     const computerName = name || active?.name || "Computer";
-    const outdated = useStore(release, (model) => model.state.kind === "outdated");
-    const detailsLabel = `View execution details for ${computerName}${outdated ? ", update available" : ""}`;
+    const overdue = useStore(release, (model) => model.state.kind === "overdue");
+    const detailsLabel = `View execution details for ${computerName}${overdue ? ", update available" : ""}`;
     const removal = useStore(model.removal);
     const removable = choices.some((choice) => choice.key !== activeKey);
     const editing = removable && removal.kind !== "none";
@@ -353,7 +353,7 @@ export function ComputerSwitcher({
                                 <MonitorCog aria-hidden="true" className="size-5 shrink-0 text-copy-secondary" />
                                 <span className="flex min-w-0 flex-col">
                                     View execution details
-                                    {outdated ? (
+                                    {overdue ? (
                                         <span className="block truncate text-xs font-normal text-morty-text-3">
                                             Update available
                                         </span>
@@ -416,7 +416,7 @@ export function ComputerSwitcher({
                             <button
                                 type="button"
                                 aria-describedby="computer-connection-description"
-                                aria-label={`Switch computer, ${computerName}, ${statusLabel}${outdated ? ", update available" : ""}`}
+                                aria-label={`Switch computer, ${computerName}, ${statusLabel}${overdue ? ", update available" : ""}`}
                                 data-connection-status={status.kind}
                                 data-testid={dataTestId.botConnectionStatus}
                                 className="group -mr-1 -ml-1.5 flex h-[50px] w-[calc(100%+0.625rem)] min-w-0 items-center gap-2 rounded-[16px] py-1.5 pr-3 pl-0.5 text-left outline-none transition-colors hover:bg-morty-fill-opacity-2 active:bg-morty-fill-opacity-3 data-[state=open]:bg-morty-fill-opacity-3 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
@@ -436,7 +436,7 @@ export function ComputerSwitcher({
                                             pulsing={status.kind === "connecting"}
                                         />
                                         <span className="truncate">{statusLabel}</span>
-                                        {outdated ? (
+                                        {overdue ? (
                                             <span className="shrink-0 text-copy-secondary">· Update available</span>
                                         ) : null}
                                     </span>
