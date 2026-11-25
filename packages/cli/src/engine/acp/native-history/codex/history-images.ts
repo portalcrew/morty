@@ -1,9 +1,9 @@
+import { MAXIMUM_ENCODED_CONTENT_CHARACTERS } from "../../content/content-externalizer.ts";
 import { readLocalRaster } from "../../content/raster.ts";
 
 const IMAGE_MARKER = /\[@image\]\(([^)\r\n]*)(?:\)|$)/g;
 const DATA_IMAGE_HEADER = /^data:(image\/[a-z+]+);base64,/;
 const BASE_64 = /^[A-Za-z0-9+/]*={0,2}$/;
-const SESSION_HISTORY_IMAGE_CHARACTER_LIMIT = 4_000_000;
 
 interface NativeHistoryImage {
     readonly data: string;
@@ -21,7 +21,7 @@ function parseNativeHistoryImage(uri: string): NativeHistoryImage | null {
     }
     const mimeType = header[1] ?? "";
     const data = uri.slice(header[0].length);
-    if (!isRasterMime(mimeType) || data.length < 4 || data.length > SESSION_HISTORY_IMAGE_CHARACTER_LIMIT) {
+    if (!isRasterMime(mimeType) || data.length < 4 || data.length > MAXIMUM_ENCODED_CONTENT_CHARACTERS) {
         return null;
     }
     if (data.length % 4 !== 0 || !BASE_64.test(data)) {
@@ -38,12 +38,12 @@ export async function resolveHistoryTextImages(
     const images: NativeHistoryImage[] = [];
     let imageCharacters = 0;
     const text = await replaceImageMarkers(value, async (uri) => {
-        if (images.length >= 8 || imageCharacters >= SESSION_HISTORY_IMAGE_CHARACTER_LIMIT) {
+        if (images.length >= 8 || imageCharacters >= MAXIMUM_ENCODED_CONTENT_CHARACTERS) {
             return "[Image unavailable]";
         }
         const embedded = parseNativeHistoryImage(uri);
         if (embedded !== null) {
-            if (imageCharacters + embedded.data.length > SESSION_HISTORY_IMAGE_CHARACTER_LIMIT) {
+            if (imageCharacters + embedded.data.length > MAXIMUM_ENCODED_CONTENT_CHARACTERS) {
                 return "[Image unavailable]";
             }
             images.push(embedded);
@@ -55,7 +55,7 @@ export async function resolveHistoryTextImages(
             return "[Image unavailable]";
         }
         const data = await local.base64();
-        if (imageCharacters + data.length > SESSION_HISTORY_IMAGE_CHARACTER_LIMIT) {
+        if (imageCharacters + data.length > MAXIMUM_ENCODED_CONTENT_CHARACTERS) {
             return "[Image unavailable]";
         }
         images.push({
