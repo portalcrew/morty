@@ -523,6 +523,10 @@ export function ConversationSidebar({
     const home = useStore(workspace.home);
     const status = useStore(workspace.computer);
     const outdated = useStore(workspace.computerRelease, (model) => model.state.kind === "outdated");
+    const askAgentToUpdate = (): void => {
+        workspace.draftComputerUpdate();
+        dialogs.getState().closeMobilePanel();
+    };
     const draftSettings = useStore(workspace.draftControls, (state) => state.settings);
     const openPane = useStore(workspace.pane);
     const pane = openPane.kind === "open" ? openPane.model : null;
@@ -676,6 +680,7 @@ export function ConversationSidebar({
                                                             context={executionContext}
                                                             layout="header"
                                                             release={workspace.computerRelease}
+                                                            onAskAgentToUpdate={askAgentToUpdate}
                                                             model={workspace.computers}
                                                             name={computerName}
                                                             status={connectionStatus}
@@ -887,6 +892,7 @@ export function ConversationSidebar({
                                                                     context={executionContext}
                                                                     layout="list"
                                                                     release={workspace.computerRelease}
+                                                                    onAskAgentToUpdate={askAgentToUpdate}
                                                                     model={workspace.computers}
                                                                     name={computerName}
                                                                     onChooseCurrent={dialogs.getState().closeMobileNav}

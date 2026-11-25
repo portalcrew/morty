@@ -299,11 +299,13 @@ export function ComputerSwitcher({
     status,
     layout,
     release,
+    onAskAgentToUpdate,
     onChooseCurrent = () => undefined,
 }: {
     readonly context: ExecutionContext;
     readonly model: ComputerSwitcherModel;
     readonly release: ComputerReleaseStoreApi;
+    readonly onAskAgentToUpdate: () => void;
     readonly name: string;
     readonly status: BotConnectionStatus;
     readonly layout: "header" | "list";
@@ -326,7 +328,18 @@ export function ComputerSwitcher({
         return (
             <>
                 {removalDialog}
-                <ComputerExecutionDetails context={context} rows={<MortyVersion release={release} />}>
+                <ComputerExecutionDetails
+                    context={context}
+                    rows={({ closeDetails }) => (
+                        <MortyVersion
+                            onAskAgent={() => {
+                                closeDetails();
+                                onAskAgentToUpdate();
+                            }}
+                            release={release}
+                        />
+                    )}
+                >
                     {({ openDetails }) => (
                         <nav aria-label="Computers" className="flex w-full min-w-0 flex-col">
                             <div className="flex items-center justify-between pt-3 pb-1">
@@ -402,7 +415,18 @@ export function ComputerSwitcher({
     return (
         <>
             {removalDialog}
-            <ComputerExecutionDetails context={context} rows={<MortyVersion release={release} />}>
+            <ComputerExecutionDetails
+                context={context}
+                rows={({ closeDetails }) => (
+                    <MortyVersion
+                        onAskAgent={() => {
+                            closeDetails();
+                            onAskAgentToUpdate();
+                        }}
+                        release={release}
+                    />
+                )}
+            >
                 {({ open: detailsOpen, openDetails }) => (
                     <DropdownMenu.Root
                         onOpenChange={(open) => {

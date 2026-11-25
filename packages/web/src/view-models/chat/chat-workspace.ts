@@ -4,7 +4,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import { encodeIdentityScope, type IdentityScope } from "../../services/identity/identity-scope-url.ts";
 import { rememberComputerName, rememberComputerVisit } from "../../services/identity/remembered-computers.ts";
-import { mortyReleaseVersion } from "../../services/release/morty-release.ts";
+import { mortyReleaseVersion, mortyUpdatePrompt } from "../../services/release/morty-release.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import type { AppInstallStoreApi } from "../app-install-store.ts";
 import type { IdentityAccess } from "../authentication/identity-access.ts";
@@ -87,6 +87,8 @@ export interface ChatWorkspace {
     readonly operationsSignal: () => AbortSignal;
     /** Records deliberate activity in this tab without following another tab's selection. */
     readonly recordUserActivity: () => void;
+    /** Starts a new conversation whose draft asks the Agent to update Morty; the person reviews and sends it. */
+    readonly draftComputerUpdate: () => void;
     readonly start: () => void;
     readonly dispose: () => void;
 }
@@ -517,6 +519,10 @@ export function createChatWorkspace(options: {
             endOtherBrowserAccess: options.access.endOtherBrowserAccess,
             readDevices: linkedDevices.getState().refresh,
         }),
+        draftComputerUpdate: () => {
+            home.getState().newConversation();
+            home.getState().setDraft(mortyUpdatePrompt);
+        },
         recordUserActivity: () => {
             const selection = home.getState().selection;
             const destination =
