@@ -1,50 +1,28 @@
-import type { ComputerLocationHint } from "./computer-location.ts";
-import { ComputerManagementError } from "./computer-management.ts";
-import type { ComputerManagementPlacement } from "./relay/computer-management.ts";
+// The prefix no longer selects a Relay location. Released Workers and open pages accept only these values, and a
+// replacement keeps its predecessor's prefix so every Worker version derives the same successor.
+const computerIdPrefixes = ["wn", "ap", "an", "as"] as const;
+type ComputerIdPrefix = (typeof computerIdPrefixes)[number];
+const computerIdPattern = `prj_(${computerIdPrefixes.join("|")})_01_[A-Za-z0-9_-]{24}`;
+const computerIdExpression = new RegExp(`^${computerIdPattern}$`, "u");
+const prefixedComputerIdExpression = new RegExp(`(?:^|_)(${computerIdPattern})(?:[._]|$)`, "u");
 
-const placements: ReadonlyMap<string, ComputerManagementPlacement> = new Map([
-    ["wn", { locationHint: "wnam" }],
-    ["ap", { locationHint: "apac" }],
-    ["an", { locationHint: "apac-ne" }],
-    ["as", { locationHint: "apac-se" }],
-]);
-
-export async function accountComputerId(key: string, locationHint: ComputerLocationHint): Promise<string> {
+export async function accountComputerId(key: string, prefix: ComputerIdPrefix = "ap"): Promise<string> {
     const digest = new Uint8Array(
         await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(["morty-computer-v1", key]))),
     );
     const localId = btoa(String.fromCharCode(...digest.subarray(0, 18)))
         .replaceAll("+", "-")
         .replaceAll("/", "_");
-    return encodeRelayComputerId({ locationHint }, localId);
+    return `prj_${prefix}_01_${localId}`;
 }
 
-function encodeRelayComputerId(placement: ComputerManagementPlacement, localId: string): string {
-    for (const [code, candidate] of placements) {
-        if (candidate.locationHint === placement.locationHint) {
-            return `prj_${code}_01_${localId}`;
-        }
-    }
-    throw new ComputerManagementError(
-        "storage_location_unavailable",
-        "The requested storage location is unavailable",
-        400,
-    );
-}
-
-export function decodeComputerPlacement(computerId: string): ComputerManagementPlacement | null {
-    const match = /^prj_(wn|ap|an|as)_01_([A-Za-z0-9_-]{24})$/.exec(computerId);
-    const code = match?.[1];
-    if (match?.[0] !== computerId || code === undefined) {
-        return null;
-    }
-    return placements.get(code) ?? null;
+export function computerIdPrefix(computerId: string): ComputerIdPrefix | null {
+    const code = computerIdExpression.exec(computerId)?.[1];
+    return computerIdPrefixes.find((prefix) => prefix === code) ?? null;
 }
 
 export function computerIdFromPrefixedValue(value: string): string | null {
-    const match = /(?:^|_)(prj_(?:wn|ap|an|as)_01_[A-Za-z0-9_-]{24})(?:[._]|$)/.exec(value);
-    const computerId = match?.[1];
-    return computerId !== undefined && decodeComputerPlacement(computerId) !== null ? computerId : null;
+    return prefixedComputerIdExpression.exec(value)?.[1] ?? null;
 }
 
 /**

@@ -53,7 +53,6 @@ import { appInstallEntryShown } from "../../view-models/app-install-store.ts";
 import type { AccessHolder } from "../../view-models/chat/access-presentation.ts";
 import { chatDiagnostics } from "../../view-models/chat/chat-diagnostics.ts";
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
-import { computerLocationLabel } from "../../view-models/chat/computer-location-label.ts";
 import type { BotConnectionStatus } from "../../view-models/chat/computer-status-store.ts";
 import {
     type ConversationDirectoryStore,
@@ -109,17 +108,10 @@ function NetworkLatencyCard({ children }: { readonly children: ReactNode }) {
     );
 }
 
-function NetworkLatencyIntro({
-    computerId,
-    holder,
-}: {
-    readonly computerId: string | null;
-    readonly holder: AccessHolder;
-}) {
+function NetworkLatencyIntro({ holder }: { readonly holder: AccessHolder }) {
     return (
         <div className="text-14 leading-5 text-muted-foreground">
             <p>Round-trip latency for this {holder} and its connected Computer.</p>
-            <p className="mt-1">Relay location: {computerLocationLabel(computerId ?? "")}</p>
         </div>
     );
 }
@@ -157,13 +149,11 @@ function NetworkLatencySkeleton() {
 }
 
 function NetworkLatencyDialog({
-    computerId,
     desktop,
     diagnostic,
     holder,
     onRefresh,
 }: {
-    readonly computerId: string | null;
     readonly holder: AccessHolder;
     readonly desktop: boolean;
     readonly diagnostic: NetworkDiagnosticStore;
@@ -188,7 +178,7 @@ function NetworkLatencyDialog({
     );
     const content = (
         <div className="flex flex-col gap-0">
-            <NetworkLatencyIntro computerId={computerId} holder={holder} />
+            <NetworkLatencyIntro holder={holder} />
             {state.kind === "measuring" ? (
                 <NetworkLatencySkeleton />
             ) : state.kind === "failed" ? (
@@ -1091,7 +1081,6 @@ export function ConversationSidebar({
                                             </SheetDialog>
                                         )}
                                         <NetworkLatencyDialog
-                                            computerId={workspace.computerId}
                                             desktop={desktop}
                                             diagnostic={diagnostic}
                                             holder={workspace.accessExpiry.getState().holder}

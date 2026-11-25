@@ -1,4 +1,3 @@
-import type { ComputerLocationHint } from "../computer-location.ts";
 import { ComputerManagementError } from "../computer-management.ts";
 
 export class RelayAuthenticationConfiguration {
@@ -9,10 +8,6 @@ export class RelayAuthenticationConfiguration {
         }
         this.allowedOrigins = new Set(allowedOrigins);
     }
-}
-
-export interface ComputerManagementPlacement {
-    readonly locationHint: ComputerLocationHint;
 }
 
 function validOrigin(value: string): boolean {

@@ -21,21 +21,14 @@ afterAll(async () => {
     await fixture.close();
 });
 
-function creationRequest(headers: Readonly<Record<string, string>> = {}): Request {
-    return new Request(`${APP_ORIGIN}/morty/api/v1/computers`, { method: "POST", headers });
+function creationRequest(): Request {
+    return new Request(`${APP_ORIGIN}/morty/api/v1/computers`, { method: "POST" });
 }
 
 test("Given no D1 binding, When a user creates Computers and later links saved Computer credentials after a Worker restart, Then each creation is new and the saved credentials still open their Computer", async () => {
     let environment = fixture.environment();
-    class RegionalRequest extends Request {
-        override readonly cf: { readonly continent: string; readonly country: string };
-        constructor(request: Request, continent: string, country: string) {
-            super(request);
-            this.cf = { continent, country };
-        }
-    }
-    const create = async (continent: string, country: string) => {
-        const response = await worker.fetch(new RegionalRequest(creationRequest(), continent, country), environment);
+    const create = async () => {
+        const response = await worker.fetch(creationRequest(), environment);
         expect(response.status).toBe(201);
         return v.parse(
             v.object({
@@ -46,11 +39,8 @@ test("Given no D1 binding, When a user creates Computers and later links saved C
         );
     };
 
-    const [first, second, third] = await Promise.all([create("AS", "CN"), create("NA", "US"), create("AS", "SG")]);
+    const [first, second, third] = await Promise.all([create(), create(), create()]);
     expect(new Set([first.computerId, second.computerId, third.computerId]).size).toBe(3);
-    expect(first.computerId).toMatch(/^prj_an_01_/u);
-    expect(second.computerId).toMatch(/^prj_wn_01_/u);
-    expect(third.computerId).toMatch(/^prj_as_01_/u);
     await fixture.reload();
     environment = fixture.environment();
     for (const identity of [first, second, third]) {
@@ -124,7 +114,7 @@ test("Given the computer creation API, When a client calls the retired anonymous
     expect(response.status).toBe(404);
 });
 
-test("Given a computer account, When a caller changes only its placement prefix, Then the alias is not found and the original identity remains usable", async () => {
+test("Given a computer account, When a caller changes only its ID prefix, Then the alias is not found and the original identity remains usable", async () => {
     const owner = await fixture.createAnonymousUser();
     const alias = `${owner.computerId.startsWith("prj_wn_") ? "prj_ap_01_" : "prj_wn_01_"}${owner.computerId.slice(10)}`;
     const response = await worker.fetch(accountRequest(owner.token, alias), fixture.environment());
@@ -323,81 +313,26 @@ test("Given links shared by the computer's own credential, When that credential 
     expect((await redeem(unusedLocalLink)).status).toBe(410);
 });
 
-test("Given visitors across Cloudflare regions, When Chat provisions and reopens Morty data, Then Relay preserves every placement", {
-    timeout: 30_000,
-}, async () => {
-    // Cloudflare supplies cf metadata on incoming Requests; Node does not.
-    class GeolocatedRequest extends Request {
-        override readonly cf: { readonly continent: string; readonly country: string };
-        constructor(request: Request, continent: string, country: string) {
-            super(request);
-            this.cf = { continent, country };
-        }
-    }
+test("Given separate Computers, When users reopen and transfer Morty access, Then Computer objects retain their identities and reject another Project", async () => {
     const environment = fixture.environment();
-    for (const [continent, country, region] of [
-        ["AS", "CN", "apac-ne"],
-        ["AS", "SG", "apac-se"],
-        ["AS", "IN", "apac"],
-        ["OC", "AU", "apac"],
-        ["NA", "US", "wnam"],
-        ["SA", "BR", "wnam"],
-        ["EU", "DE", "wnam"],
-        ["AF", "ZA", "wnam"],
-        ["AN", "AQ", "wnam"],
-        ["unknown", "US", "apac"],
-    ] as const) {
-        const created = await worker.fetch(
-            new GeolocatedRequest(creationRequest({ "cf-ipcountry": "US" }), continent, country),
-            environment,
-        );
-        expect(created.status).toBe(201);
-        const identity = v.parse(v.object({ computerToken: v.string(), computerId: v.string() }), await created.json());
-        const computerRequest = () =>
-            new Request(`${APP_ORIGIN}/morty/api/v1/computers/${identity.computerId}`, {
-                headers: { authorization: `Bearer ${identity.computerToken}` },
-            });
-        const response = await worker.fetch(computerRequest(), environment);
-        expect(response.status).toBe(200);
-        const initial = v.parse(v.object({ computer: v.object({ computerId: v.string() }) }), await response.json());
-        const regionCode = { apac: "ap", "apac-ne": "an", "apac-se": "as", wnam: "wn" }[region];
-        expect(initial.computer.computerId).toMatch(new RegExp(`^prj_${regionCode}_01_`));
-        const revisited = await worker.fetch(
-            new GeolocatedRequest(computerRequest(), region === "wnam" ? "AS" : "NA", region === "wnam" ? "CN" : "US"),
-            environment,
-        );
-        expect(revisited.status).toBe(200);
-        expect(await revisited.json()).toMatchObject(initial);
-    }
-});
-
-test("Given Computers in separate regions, When users reopen and transfer Morty access, Then Computer objects retain their identities and reject another Project", async () => {
-    const environment = fixture.environment();
-    class RegionalRequest extends Request {
-        override readonly cf: { readonly continent: string };
-        constructor(continent: string) {
-            super(creationRequest());
-            this.cf = { continent };
-        }
-    }
     const identitySchema = v.pipe(
         v.object({ computerId: v.string(), computerToken: v.string() }),
         v.transform(({ computerId, computerToken }) => ({ computerId, token: computerToken })),
     );
-    const asian = await worker.fetch(new RegionalRequest("AS"), environment);
-    const american = await worker.fetch(new RegionalRequest("NA"), environment);
-    expect(asian.status).toBe(201);
-    expect(american.status).toBe(201);
-    const apac = v.parse(identitySchema, await asian.json());
-    const wnam = v.parse(identitySchema, await american.json());
-    const sameRegionResponse = await worker.fetch(new RegionalRequest("AS"), environment);
-    expect(sameRegionResponse.status).toBe(201);
-    const sameRegion = v.parse(identitySchema, await sameRegionResponse.json());
-    expect((await worker.fetch(accountRequest(apac.token, sameRegion.computerId), environment)).status).toBe(401);
-    expect((await worker.fetch(accountRequest(apac.token), environment)).status).toBe(401);
+    const firstResponse = await worker.fetch(creationRequest(), environment);
+    const secondResponse = await worker.fetch(creationRequest(), environment);
+    expect(firstResponse.status).toBe(201);
+    expect(secondResponse.status).toBe(201);
+    const first = v.parse(identitySchema, await firstResponse.json());
+    const second = v.parse(identitySchema, await secondResponse.json());
+    const thirdResponse = await worker.fetch(creationRequest(), environment);
+    expect(thirdResponse.status).toBe(201);
+    const third = v.parse(identitySchema, await thirdResponse.json());
+    expect((await worker.fetch(accountRequest(first.token, third.computerId), environment)).status).toBe(401);
+    expect((await worker.fetch(accountRequest(first.token), environment)).status).toBe(401);
     for (const [identity, other] of [
-        [apac, wnam],
-        [wnam, apac],
+        [first, second],
+        [second, first],
     ]) {
         if (identity === undefined || other === undefined) {
             throw new Error("Missing identity fixture");
