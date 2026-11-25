@@ -34,6 +34,7 @@ function replyItemMarginClassName(spacing: ReplyItemSpacing, first: boolean, las
 }
 
 export function SessionReplyContent({
+    onAttach,
     active = false,
     activeItemId = null,
     copyText,
@@ -43,6 +44,7 @@ export function SessionReplyContent({
     workingSectionId = null,
     renderItem,
 }: {
+    readonly onAttach?: React.RefCallback<HTMLElement> | undefined;
     readonly active?: boolean;
     readonly activeItemId?: string | null;
     readonly copyText: string | null;
@@ -99,7 +101,11 @@ export function SessionReplyContent({
     }
     const childCount = children.length + (copyText === null ? 0 : 1);
     return (
-        <article aria-label="Agent response" className={cn(chatSessionAgentReplyGroupClassName, active && "pb-3")}>
+        <article
+            ref={onAttach}
+            aria-label="Agent response"
+            className={cn(chatSessionAgentReplyGroupClassName, active && "pb-3")}
+        >
             {children.map((child, index) => (
                 <Fragment key={child.id}>
                     {child.render(replyItemMarginClassName(child.spacing, index === 0, index === childCount - 1))}

@@ -7,6 +7,7 @@ import {
 import type { SessionConfigurationSelection, SessionPromptSuggestions } from "@portalcrew/morty-client/protocol";
 import { createStore } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
+import type { SessionOpenTiming } from "../../services/diagnostics/session-open-timing.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import { agentQuestionAnswer, openAgentQuestions } from "./agent-question-answer.ts";
 import { createBrowserFilePreviewStore } from "./file-preview-store.ts";
@@ -71,6 +72,7 @@ export interface SessionPaneStore {
 }
 
 export function createSessionPaneModel(options: {
+    readonly timing: SessionOpenTiming;
     readonly clock: Clock;
     readonly session: SelectedMortySession;
     readonly sessionPage: SessionPageState;
@@ -94,6 +96,7 @@ export function createSessionPaneModel(options: {
     let phase: "created" | "started" | "stopped" = "created";
 
     const history = createSessionHistory({
+        timing: options.timing,
         clock,
         sessionTarget,
         lifetime: lifetime.signal,
@@ -143,6 +146,7 @@ export function createSessionPaneModel(options: {
         onConnected: options.onConnected,
         onWaitingForComputer: options.onWaitingForComputer,
         onClosed: () => {
+            options.timing?.finish("failed");
             execution.getState().apply({ kind: "closed" });
         },
     });
@@ -412,6 +416,7 @@ export function createSessionPaneModel(options: {
         store,
         connection,
         history: history.store,
+        timing: options.timing,
         delivery,
         feedback,
         fork,

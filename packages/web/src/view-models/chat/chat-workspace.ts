@@ -2,6 +2,7 @@ import { NativeSessionMap, sameNativeSession } from "@portalcrew/morty-client/na
 import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
+import { type SessionOpenTiming, startSessionOpenTiming } from "../../services/diagnostics/session-open-timing.ts";
 import { encodeIdentityScope, type IdentityScope } from "../../services/identity/identity-scope-url.ts";
 import { rememberComputerName, rememberComputerVisit } from "../../services/identity/remembered-computers.ts";
 import type { Clock } from "../../services/time/clock.ts";
@@ -124,6 +125,7 @@ export function createChatWorkspace(options: {
     readonly computers: ComputerSwitcherModel;
     readonly accessNotice: string | null;
     readonly entry: "address" | "restore";
+    readonly openedChatDocument: boolean;
     readonly bugReportDialog: BugReportDialogStore;
     readonly appInstall: AppInstallStoreApi;
     readonly accessHolder: AccessHolder;
@@ -138,6 +140,14 @@ export function createChatWorkspace(options: {
     const requests = options.requests;
     let rememberedSessionTarget: NativeSessionTarget | null = null;
     let initialVisitPending = true;
+    let timing: SessionOpenTiming = null;
+    const openTiming = (navigation: boolean) => {
+        timing?.finish("cancelled");
+        timing =
+            home.getState().selection.kind === "pending"
+                ? startSessionOpenTiming(navigation ? "navigation" : "selection", navigation ? 0 : performance.now())
+                : null;
+    };
     const recordHome = () => {
         rememberedSessionTarget = null;
         rememberComputerVisit(options.rememberedIdentity, options.clock.now(), { kind: "home" });
@@ -196,7 +206,15 @@ export function createChatWorkspace(options: {
         onDraftSelected: () => enterDraft(),
         onRestart: () => startOver(),
         // A selection chosen while the Computer's entry failed starts the page over, as Reconnect would.
-        onSelectionChanged: () => (computer.getState().entry.kind === "failed" ? startOver() : startHomeLoad()),
+        onSelectionChanged: () => {
+            openTiming(false);
+            if (computer.getState().entry.kind === "failed") {
+                startOver();
+            } else {
+                startHomeLoad();
+            }
+        },
+        onOpenFailed: () => timing?.finish("failed"),
         onDirectoryRefreshed: () => startDirectoryLoad(),
         onFirstMessage: (sessionTarget, message) =>
             sessionState(sessionTarget).delivery.getState().awaitConnection(message),
@@ -205,6 +223,9 @@ export function createChatWorkspace(options: {
             replacePane(selection);
         },
         onSelectionTargeted: (conversationId) => {
+            if (conversationId === null) {
+                timing?.finish("cancelled");
+            }
             if (conversationId !== null) {
                 statuses.getState().opened(conversationId);
             }
@@ -474,6 +495,7 @@ export function createChatWorkspace(options: {
         const model = createSessionPaneModel({
             clock: options.clock,
             session: selection.session,
+            timing,
             sessionPage,
             attachmentSignal: operationsLifetime.signal,
             computerId,
@@ -525,6 +547,7 @@ export function createChatWorkspace(options: {
             rememberComputerVisit(options.rememberedIdentity, options.clock.now(), destination);
         },
         start: () => {
+            openTiming(options.openedChatDocument);
             void directory
                 .getState()
                 .followCalendar(operationsLifetime.signal)
@@ -565,6 +588,7 @@ export function createChatWorkspace(options: {
         refreshDirectory: startDirectoryLoad,
         operationsSignal: () => operationsLifetime.signal,
         dispose: () => {
+            timing?.finish("cancelled");
             options.computers.dispose();
             sidebar.dialogs.getState().discardNativeDialog();
             sidebar.dialogs.getState().closeSharing();

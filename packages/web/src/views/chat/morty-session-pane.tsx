@@ -720,6 +720,7 @@ function MortySessionPaneBody({
                                             return (
                                                 <div
                                                     key={group.id}
+                                                    ref={pane.timing?.messageRef(group.id)}
                                                     className={cn(
                                                         chatSessionMessageItemClassName,
                                                         group.followsUserMessage && "mt-1",
@@ -747,6 +748,7 @@ function MortySessionPaneBody({
                                         }
                                         return (
                                             <SessionReplyContent
+                                                onAttach={pane.timing?.messageRef(group.id)}
                                                 key={group.id}
                                                 active={group.active}
                                                 activeItemId={group.activeItemId}

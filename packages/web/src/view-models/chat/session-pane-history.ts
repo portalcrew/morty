@@ -1,6 +1,7 @@
 import { type MortyClient, MortyPageRequest, MortyTimeoutError } from "@portalcrew/morty-client";
 import type { NativeSessionTarget, SessionEvent } from "@portalcrew/morty-client/protocol";
 import { createStore, type StoreApi } from "zustand/vanilla";
+import type { SessionOpenTiming } from "../../services/diagnostics/session-open-timing.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import { formatError } from "../format-error.ts";
 import type { SessionExecutionStore } from "./session-execution.ts";
@@ -51,7 +52,8 @@ async function readSessionHistory(
     expectedSessionGenerationId: string | null,
     signal: AbortSignal,
     loadedRange: { readonly generation: string; readonly firstEventId: string | null } | null = null,
-): Promise<SessionEventHistory> {
+    timing: SessionOpenTiming = null,
+): Promise<SessionEventHistory & { readonly messages: ReturnType<typeof sessionReductionMessages> }> {
     let events: readonly SessionEvent[] = newerEvents;
     let nextCursor = initialCursor;
     // Loading the newest page can itself restore native history and replace the
@@ -62,12 +64,18 @@ async function readSessionHistory(
     let renderableMessages = sessionReductionMessages(createSessionMessageReduction({ events, nextCursor }));
     do {
         const requestedCursor = nextCursor;
+        if (requestedCursor === null) {
+            timing?.request();
+        }
         const page = await client.events.list(
             sessionTarget,
             new MortyPageRequest(SESSION_EVENT_PAGE_LIMIT, requestedCursor ?? ""),
             signal,
         );
         signal.throwIfAborted();
+        if (requestedCursor === null) {
+            timing?.response();
+        }
         // Only the newest page defines which live deltas the snapshot covers.
         if (requestedCursor === initialCursor) {
             throughPosition = page.throughPosition;
@@ -93,7 +101,7 @@ async function readSessionHistory(
     if (sessionGenerationId === null || throughPosition === null) {
         throw new Error("The Computer returned no Session history generation.");
     }
-    return { events, nextCursor, sessionGenerationId, throughPosition };
+    return { events, nextCursor, sessionGenerationId, throughPosition, messages: renderableMessages };
 }
 
 async function untilSettledOrAborted(work: Promise<void>, signal: AbortSignal): Promise<void> {
@@ -106,6 +114,7 @@ async function untilSettledOrAborted(work: Promise<void>, signal: AbortSignal): 
 }
 
 export function createSessionHistory(options: {
+    readonly timing: SessionOpenTiming;
     readonly clock: Clock;
     readonly sessionTarget: NativeSessionTarget;
     /** The pane's lifetime. */
@@ -192,12 +201,14 @@ export function createSessionHistory(options: {
                 effect.generation,
                 signal,
                 loaded.kind === "established" ? loaded : null,
+                options.timing,
             );
             parentSignal.throwIfAborted();
             const current = projection();
             if (controller.signal.aborted || current.pending === null || current.revision !== revision) {
                 return;
             }
+            options.timing?.history(history.messages);
             const effects = commit(
                 { history, kind: "history-loaded", revision },
                 sessionEventCommandIds(history.events),

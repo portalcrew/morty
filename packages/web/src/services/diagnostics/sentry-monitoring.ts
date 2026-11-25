@@ -1,6 +1,15 @@
 import { breadcrumbsIntegration, browserTracingIntegration, type Event, getClient, init } from "@sentry/react";
 import { browserDiagnosticsSnapshot } from "./browser-diagnostics.ts";
 
+import { sessionOpenTimingPath } from "./session-open-timing.ts";
+
+function isSessionTimingRequest(url: unknown): boolean {
+    return (
+        typeof url === "string" &&
+        (url === sessionOpenTimingPath || url === window.location.origin + sessionOpenTimingPath)
+    );
+}
+
 const lastErrors = new WeakMap<NonNullable<ReturnType<typeof getClient>>, string>();
 
 export function lastErrorEventId(): string | null {
@@ -80,12 +89,16 @@ export function initializeBrowserMonitoring(configuration: {
             ...defaults.filter((integration) => integration.name !== "Console" && integration.name !== "Breadcrumbs"),
             breadcrumbsIntegration({ dom: false }),
             browserTracingIntegration({
+                shouldCreateSpanForRequest: (url) => !isSessionTimingRequest(url),
                 beforeStartSpan: (options) => ({ ...options, name: window.location.pathname }),
             }),
         ],
         tracesSampleRate: configuration.environment === "production" ? 0.1 : 1,
         tracePropagationTargets: [],
         beforeBreadcrumb: (breadcrumb) => {
+            if (isSessionTimingRequest(breadcrumb.data?.["url"])) {
+                return null;
+            }
             if (!["fetch", "xhr", "navigation"].includes(breadcrumb.category ?? "")) {
                 return null;
             }
