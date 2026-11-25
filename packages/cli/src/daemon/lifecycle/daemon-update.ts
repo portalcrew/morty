@@ -7,6 +7,7 @@ import type { ComputerUpdate } from "../../engine/runtime/computer-update.ts";
 import type { AgentProcessPool } from "../../engine/session/process/agent-process-pool.ts";
 import type { BoundedLineLog } from "../../engine/storage/logs/bounded-log.ts";
 import { findExecutableOnPath, runBoundedProcess } from "../../engine/util/process/executable.ts";
+import { waitForSharedOperation } from "../../engine/util/wait-for-shared-operation.ts";
 
 export const MORTY_PACKAGE_NAME = "@portalcrew/morty";
 // A slow download is refused before the request's own deadline, so the page never mistakes it for a restart.
@@ -32,9 +33,22 @@ export function recordUpdate(log: BoundedLineLog, kind: string, details: Readonl
     log.record(JSON.stringify({ kind, ...details, timestamp: new Date().toISOString() }));
 }
 
+/**
+ * The update this daemon is carrying out. Every request for its version joins it and hears its outcome, so a page
+ * that asked second learns of a refusal as soon as the page that asked first.
+ */
+type UpdateAttempt =
+    | {
+          readonly kind: "preparing";
+          readonly version: string;
+          readonly announcements: Set<() => void>;
+          readonly settled: Promise<void>;
+      }
+    | { readonly kind: "handed-over"; readonly version: string };
+
 export class DaemonUpdate implements ComputerUpdate {
     readonly #options: DaemonUpdateOptions;
-    #updating = false;
+    #attempt: UpdateAttempt | null = null;
 
     constructor(options: DaemonUpdateOptions) {
         this.#options = options;
@@ -46,10 +60,33 @@ export class DaemonUpdate implements ComputerUpdate {
         if (!isNewerMortyRelease(version, current)) {
             throw new OperationError("update_not_newer", `This computer already runs Morty ${current}.`);
         }
-        if (this.#updating) {
-            throw new OperationError("update_in_progress", "This computer is already updating Morty.");
+        const attempt = this.#attempt;
+        if (attempt !== null) {
+            if (attempt.version !== version) {
+                throw new OperationError("update_in_progress", "This computer is already updating Morty.");
+            }
+            if (attempt.kind === "handed-over") {
+                announce();
+                return;
+            }
+            attempt.announcements.add(announce);
+            try {
+                await waitForSharedOperation(attempt.settled, signal);
+            } finally {
+                attempt.announcements.delete(announce);
+            }
+            return;
         }
-        this.#updating = true;
+        const settled = Promise.withResolvers<void>();
+        // A refusal nobody else joined still settles the attempt; only its own request reports it.
+        settled.promise.catch(() => undefined);
+        const preparing = {
+            kind: "preparing",
+            version,
+            announcements: new Set([announce]),
+            settled: settled.promise,
+        } as const;
+        this.#attempt = preparing;
         let updater: ChildProcess | undefined;
         try {
             refuseWhileWorking(processes);
@@ -58,12 +95,17 @@ export class DaemonUpdate implements ComputerUpdate {
             updater = await spawnUpdater(entry, version);
             // Nothing awaits between this check and stop(), so no Agent work can begin before the Computer stops.
             refuseWhileWorking(processes);
-            announce();
+            for (const announcement of preparing.announcements) {
+                announcement();
+            }
+            this.#attempt = { kind: "handed-over", version };
+            settled.resolve();
             recordUpdate(lifecycleLog, "daemon_update_handed_over", { from: current, to: version });
             stop();
         } catch (error) {
             updater?.kill();
-            this.#updating = false;
+            this.#attempt = null;
+            settled.reject(error);
             recordUpdate(lifecycleLog, "daemon_update_refused", {
                 from: current,
                 to: version,

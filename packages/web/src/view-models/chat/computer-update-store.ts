@@ -32,6 +32,8 @@ export interface ComputerUpdateStore {
 const RESTART_DEADLINE_MILLISECONDS = 240_000;
 const RESTART_CHECK_INTERVAL_MILLISECONDS = 3_000;
 const RELEASE_READ_TIMEOUT_MILLISECONDS = 15_000;
+// A first read can fail while the Computer is still settling in; a few spaced retries recover it without a reload.
+const RELEASE_READ_RETRY_DELAYS_MILLISECONDS = [0, 5_000, 15_000, 45_000];
 
 function releaseState(latest: string, running: string, remote: boolean): ComputerUpdateState {
     return isNewerMortyRelease(latest, running)
@@ -63,15 +65,36 @@ export const createComputerUpdateStore = (options: {
     // Whether the Computer went offline since this page asked it to update: until then, an earlier release answering
     // is the one still stopping, and after it, the release that came back.
     let wentOffline = false;
+    let releaseRead: AbortController | null = null;
 
-    const readRelease = async (): Promise<{ readonly running: string; readonly remote: boolean }> => {
+    const readRelease = async (
+        signal: AbortSignal = lifetime.signal,
+    ): Promise<{ readonly running: string; readonly remote: boolean }> => {
         const diagnostics = await requests.daemonDiagnostics(
-            AbortSignal.any([lifetime.signal, AbortSignal.timeout(RELEASE_READ_TIMEOUT_MILLISECONDS)]),
+            AbortSignal.any([signal, AbortSignal.timeout(RELEASE_READ_TIMEOUT_MILLISECONDS)]),
         );
         return { running: diagnostics.version, remote: diagnostics.remoteUpdate === "supported" };
     };
 
     return createStore<ComputerUpdateStore>()((set, get) => {
+        const readReleaseOnline = async (target: string, signal: AbortSignal): Promise<void> => {
+            for (const delay of RELEASE_READ_RETRY_DELAYS_MILLISECONDS) {
+                if (delay > 0) {
+                    await clock.sleep(delay, signal);
+                }
+                try {
+                    const release = await readRelease(signal);
+                    const current = get().state;
+                    if (current.kind !== "updating" && current.kind !== "restarting") {
+                        set({ state: releaseState(target, release.running, release.remote) });
+                    }
+                    return;
+                } catch {
+                    signal.throwIfAborted();
+                }
+            }
+        };
+
         const settleRestart = async (running: string, target: string): Promise<void> => {
             const deadline = clock.now() + RESTART_DEADLINE_MILLISECONDS;
             while (clock.now() < deadline) {
@@ -111,16 +134,15 @@ export const createComputerUpdateStore = (options: {
                 if (!nowOnline && (state.kind === "updating" || state.kind === "restarting")) {
                     wentOffline = true;
                 }
+                if (!nowOnline) {
+                    releaseRead?.abort(new DOMException("The Computer went offline.", "AbortError"));
+                    releaseRead = null;
+                }
                 if (!cameOnline || latest === null || state.kind === "updating" || state.kind === "restarting") {
                     return;
                 }
-                void readRelease().then(
-                    (release) => {
-                        const current = get().state;
-                        if (current.kind !== "updating" && current.kind !== "restarting") {
-                            set({ state: releaseState(latest, release.running, release.remote) });
-                        }
-                    },
+                releaseRead = new AbortController();
+                void readReleaseOnline(latest, AbortSignal.any([lifetime.signal, releaseRead.signal])).catch(
                     () => undefined,
                 );
             },
@@ -145,12 +167,7 @@ export const createComputerUpdateStore = (options: {
                         });
                         return;
                     }
-                    // Another device's update already runs, so this page follows its outcome as its own.
-                    if (
-                        cause instanceof MortyOperationError &&
-                        cause.outcome !== "unknown" &&
-                        cause.code !== "update_in_progress"
-                    ) {
+                    if (cause instanceof MortyOperationError && cause.outcome !== "unknown") {
                         set({ state: { ...state, notice: refusalNotice(cause.code) } });
                         return;
                     }
