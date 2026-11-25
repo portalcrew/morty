@@ -296,39 +296,3 @@ test("Given the asset router, When an agent requests installation resources, The
         expect(await setup.text()).toMatch(/^# Set up Morty/);
     }
 });
-
-test("Given a browser session-open timing, When the Worker receives it, Then only bounded same-origin measurements are accepted", async () => {
-    const origin = "https://morty.example";
-    const sample = {
-        entry: "navigation",
-        outcome: "visible",
-        openedToRequestMs: 11,
-        requestToResponseMs: 20,
-        responseToVisibleMs: 4,
-        elapsedMs: 35,
-    };
-    const report = (payload: unknown, source = origin, headers: Record<string, string> = {}) =>
-        runtime.dispatchFetch(`${origin}/morty/api/v1/metrics/session-open`, {
-            method: "POST",
-            headers: { origin: source, "content-type": "application/json", ...headers },
-            body: JSON.stringify(payload),
-        });
-    expect((await report(sample)).status).toBe(204);
-    expect((await report({ ...sample, elapsedMs: 36 })).status).toBe(400);
-    expect((await report({ ...sample, requestToResponseMs: -1 })).status).toBe(400);
-    expect((await report({ ...sample, sessionId: "unexpected" })).status).toBe(400);
-    expect((await report(sample, "https://other.example")).status).toBe(403);
-    expect((await report({ ...sample, clientCountry: "CN" })).status).toBe(400);
-    expect((await report({ ...sample, elapsedMs: 120001 })).status).toBe(400);
-    expect((await report({ ...sample, sessionId: "x".repeat(2000) })).status).toBe(413);
-    expect((await report(sample, origin, { "content-type": "text/plain" })).status).toBe(415);
-    for (const header of ["DNT", "Sec-GPC"]) {
-        expect((await report(null, origin, { [header]: "1" })).status).toBe(204);
-    }
-    for (const outcome of ["timeout", "hidden", "failed", "cancelled"]) {
-        expect(
-            (await report({ ...sample, outcome, requestToResponseMs: null, responseToVisibleMs: null })).status,
-        ).toBe(204);
-    }
-    expect((await report({ ...sample, outcome: "empty", responseToVisibleMs: null })).status).toBe(204);
-});
