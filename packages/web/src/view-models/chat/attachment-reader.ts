@@ -1,7 +1,9 @@
 import { MAX_PROMPT_ATTACHMENT_BYTES, PROMPT_IMAGE_MAX_BYTES } from "@portalcrew/morty-client/protocol";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
+import { exceedsPromptImageEdge, PROMPT_IMAGE_MAX_EDGE, promptImageSize } from "./prompt-image-size.ts";
 
 const READ_TIMEOUT_MILLISECONDS = 15_000;
+const LOSSY_IMAGE_QUALITY = 0.9;
 
 export class AttachmentReadError extends Error {
     readonly code: string;
@@ -70,26 +72,76 @@ function attachmentUri(name: string): string {
     return `attachment:///${encodeURIComponent(name.replaceAll("/", "_"))}`;
 }
 
+async function resizedImage(
+    bytes: Uint8Array<ArrayBuffer>,
+    mediaType: string,
+    name: string,
+    signal: AbortSignal,
+): Promise<{ readonly bytes: Uint8Array<ArrayBuffer>; readonly mediaType: string }> {
+    let bitmap: ImageBitmap;
+    try {
+        bitmap = await createImageBitmap(new Blob([bytes], { type: mediaType }), { imageOrientation: "from-image" });
+    } catch (cause) {
+        throw new AttachmentReadError("attachment_image_invalid", `${name} could not be read as an image.`, { cause });
+    }
+    const canvas = document.createElement("canvas");
+    try {
+        signal.throwIfAborted();
+        const size = promptImageSize(bitmap);
+        canvas.width = size.width;
+        canvas.height = size.height;
+        const context = canvas.getContext("2d");
+        if (context === null) {
+            throw new AttachmentReadError("attachment_resize_failed", `${name} could not be resized.`);
+        }
+        context.imageSmoothingQuality = "high";
+        context.drawImage(bitmap, 0, 0, size.width, size.height);
+        const blob = await new Promise<Blob | null>((resolve) => {
+            canvas.toBlob(resolve, mediaType, LOSSY_IMAGE_QUALITY);
+        });
+        if (blob === null) {
+            throw new AttachmentReadError("attachment_resize_failed", `${name} could not be resized.`);
+        }
+        const resized = new Uint8Array(await blob.arrayBuffer());
+        signal.throwIfAborted();
+        // A browser that cannot encode the original type produces PNG instead.
+        return { bytes: resized, mediaType: blob.type };
+    } finally {
+        bitmap.close();
+        // Safari holds a canvas's pixel memory until its size is cleared.
+        canvas.width = 0;
+        canvas.height = 0;
+    }
+}
+
 export async function readPromptAttachment(file: File, signal: AbortSignal): Promise<ComposerAttachment> {
     signal.throwIfAborted();
     const rasterImage = /^image\/(?:gif|jpeg|png|webp)$/u.test(file.type);
     const lowerName = file.name.toLowerCase();
     const svg = file.type === "image/svg+xml" || (file.type.length === 0 && lowerName.endsWith(".svg"));
     const pdf = file.type === "application/pdf" || (file.type.length === 0 && lowerName.endsWith(".pdf"));
-    const limit = rasterImage ? PROMPT_IMAGE_MAX_BYTES : MAX_PROMPT_ATTACHMENT_BYTES;
-    if (file.size === 0 || file.size > limit) {
+    if (file.size === 0 || file.size > MAX_PROMPT_ATTACHMENT_BYTES) {
         throw new AttachmentReadError(
             "attachment_size_invalid",
-            rasterImage ? "Images must be between 1 byte and 5 MB." : "Files must be between 1 byte and 32 MB.",
+            rasterImage ? "Images must be between 1 byte and 32 MB." : "Files must be between 1 byte and 32 MB.",
         );
     }
     const bytes = new Uint8Array(await readBytes(file, signal));
     signal.throwIfAborted();
     if (rasterImage) {
+        const image = exceedsPromptImageEdge(bytes, file.type)
+            ? await resizedImage(bytes, file.type, file.name, signal)
+            : { bytes, mediaType: file.type };
+        if (image.bytes.byteLength > PROMPT_IMAGE_MAX_BYTES) {
+            throw new AttachmentReadError(
+                "attachment_size_invalid",
+                `Images must fit in 5 MB once resized to at most ${PROMPT_IMAGE_MAX_EDGE.toString()} pixels.`,
+            );
+        }
         return {
-            bytes,
+            bytes: image.bytes,
             kind: "image",
-            mediaType: file.type,
+            mediaType: image.mediaType,
             name: file.name,
             uri: attachmentUri(file.name),
         };

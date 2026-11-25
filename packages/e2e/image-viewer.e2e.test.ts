@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { imagePreviewPng } from "../../tests/support/fake-daemon/image-preview.ts";
 import { expect, test } from "./infra/test.ts";
 
-const tallImage = imagePreviewPng(1600, 2400);
+const tallImage = imagePreviewPng(1600, 2000);
 const smallImage = imagePreviewPng(16, 16);
 
 test("Given a tool image is open, When the agent finishes and its tools collapse, Then the image stays visible until the user closes it", async ({
