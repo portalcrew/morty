@@ -6,7 +6,7 @@ import {
     isComputerCredentialSuccessor,
 } from "@portalcrew/morty-client/protocol";
 import { Hono } from "hono";
-import { computerIdFromPrefixedValue, computerObjectName, computerRegionFromId } from "../contracts/computer-id.ts";
+import { computerIdFromPrefixedValue, computerIdPrefix, computerObjectName } from "../contracts/computer-id.ts";
 import { ComputerManagementError } from "../contracts/computer-management.ts";
 import { computerNotFound } from "../contracts/management-error.ts";
 import { hashPairingCredential } from "../contracts/relay/pairing.ts";
@@ -213,7 +213,7 @@ export class ComputerRelay extends DurableObject<ConfiguredRelayBindings> {
     }
 
     #operate(computerId: string): ComputerRelayStore {
-        const store = computerRegionFromId(computerId) === null ? null : this.#computerStore(computerId);
+        const store = computerIdPrefix(computerId) === null ? null : this.#computerStore(computerId);
         if (store === null) {
             throw new Error("The computer is unavailable");
         }

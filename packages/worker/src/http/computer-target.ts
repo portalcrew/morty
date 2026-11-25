@@ -1,6 +1,6 @@
 import type { Context, Next } from "hono";
 import * as v from "valibot";
-import { computerIdFromPrefixedValue, computerRegionFromId } from "../contracts/computer-id.ts";
+import { computerIdFromPrefixedValue, computerIdPrefix } from "../contracts/computer-id.ts";
 import { ComputerManagementError, relayIdentifier } from "../contracts/computer-management.ts";
 import { ManagementError } from "../contracts/management-error.ts";
 import { readTransferCredential } from "../contracts/transfer-credential.ts";
@@ -13,7 +13,7 @@ export type ComputerTargetEnvironment = {
 
 function computerIdentifier(input: unknown): string {
     const parsed = v.safeParse(relayIdentifier, input);
-    if (!parsed.success || computerRegionFromId(parsed.output) === null) {
+    if (!parsed.success || computerIdPrefix(parsed.output) === null) {
         throw new ComputerManagementError("computer_id_invalid", "The Computer identifier is invalid", 400);
     }
     return parsed.output;

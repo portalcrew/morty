@@ -389,7 +389,6 @@ test("Given one Morty Worker and a connected Computer, When the user refreshes N
 
     const dialog = getByRole(document.body, "dialog", { name: "Network latency" });
     await app.waitForView(() => {
-        expect(dialog.textContent).toContain("Relay location: Western North America");
         expect(dialog.textContent).toContain("Browser ↔ Morty");
         expect(dialog.textContent).not.toContain("Browser ↔ Relay");
         expect(dialog.textContent).not.toContain("Morty ↔ Relay");

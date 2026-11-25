@@ -1,6 +1,6 @@
 import * as v from "valibot";
 import { type CreationOrigin, computerCreationRequest } from "../../contracts/computer-creation.ts";
-import { computerObjectName, computerRegionFromId } from "../../contracts/computer-id.ts";
+import { computerIdPrefix, computerObjectName } from "../../contracts/computer-id.ts";
 import { ComputerManagementError, relayIdentifier } from "../../contracts/computer-management.ts";
 import type { ConfiguredRelayBindings } from "../../contracts/relay-bindings.ts";
 import { RequestDeadline } from "../../http/request-deadline.ts";
@@ -12,7 +12,7 @@ export class ComputerRelayGateway {
     constructor(bindings: ConfiguredRelayBindings, computerId: string) {
         this.#bindings = bindings;
         this.#computerId = v.parse(relayIdentifier, computerId);
-        if (computerRegionFromId(this.#computerId) === null) {
+        if (computerIdPrefix(this.#computerId) === null) {
             throw new ComputerManagementError("INVALID_ACCOUNT_ID", "The Computer ID is invalid.", 400);
         }
     }

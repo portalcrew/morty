@@ -1,27 +1,28 @@
-import { type ComputerRegionCode, computerRegionCodes } from "./computer-location.ts";
+// The prefix no longer selects a Relay location. Released Workers and open pages accept only these values, and a
+// replacement keeps its predecessor's prefix so every Worker version derives the same successor.
+const computerIdPrefixes = ["wn", "ap", "an", "as"] as const;
+type ComputerIdPrefix = (typeof computerIdPrefixes)[number];
+const computerIdPattern = `prj_(${computerIdPrefixes.join("|")})_01_[A-Za-z0-9_-]{24}`;
+const computerIdExpression = new RegExp(`^${computerIdPattern}$`, "u");
+const prefixedComputerIdExpression = new RegExp(`(?:^|_)(${computerIdPattern})(?:[._]|$)`, "u");
 
-export async function accountComputerId(key: string, region: ComputerRegionCode): Promise<string> {
+export async function accountComputerId(key: string, prefix: ComputerIdPrefix = "ap"): Promise<string> {
     const digest = new Uint8Array(
         await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(["morty-computer-v1", key]))),
     );
     const localId = btoa(String.fromCharCode(...digest.subarray(0, 18)))
         .replaceAll("+", "-")
         .replaceAll("/", "_");
-    return `prj_${region}_01_${localId}`;
+    return `prj_${prefix}_01_${localId}`;
 }
 
-export function computerRegionFromId(computerId: string): ComputerRegionCode | null {
-    const match = /^prj_([a-z]{2})_01_[A-Za-z0-9_-]{24}$/u.exec(computerId);
-    if (match?.[0] !== computerId) {
-        return null;
-    }
-    return computerRegionCodes.find((code) => code === match[1]) ?? null;
+export function computerIdPrefix(computerId: string): ComputerIdPrefix | null {
+    const code = computerIdExpression.exec(computerId)?.[1];
+    return computerIdPrefixes.find((prefix) => prefix === code) ?? null;
 }
 
 export function computerIdFromPrefixedValue(value: string): string | null {
-    const match = /(?:^|_)(prj_(?:wn|ap|an|as)_01_[A-Za-z0-9_-]{24})(?:[._]|$)/.exec(value);
-    const computerId = match?.[1];
-    return computerId !== undefined && computerRegionFromId(computerId) !== null ? computerId : null;
+    return prefixedComputerIdExpression.exec(value)?.[1] ?? null;
 }
 
 /**

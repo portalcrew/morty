@@ -1,6 +1,10 @@
 import * as v from "valibot";
+import { computerIdPrefix } from "./computer-id.ts";
 
-const computerId = v.pipe(v.string(), v.regex(/^prj_(wn|ap|an|as)_01_[A-Za-z0-9_-]{24}$/u));
+const computerId = v.pipe(
+    v.string(),
+    v.check((value) => computerIdPrefix(value) !== null),
+);
 const secret = v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{43}$/u));
 const credentialKind = v.picklist(["morty_transfer_v1"]);
 const credential = v.tuple([credentialKind, computerId, secret]);

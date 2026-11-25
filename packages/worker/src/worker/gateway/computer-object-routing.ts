@@ -1,6 +1,6 @@
 import * as v from "valibot";
 import { type CloudBindings, durableObjectNamespaceBindingSchema } from "../../contracts/cloud-bindings.ts";
-import { computerObjectName, computerRegionFromId } from "../../contracts/computer-id.ts";
+import { computerIdPrefix, computerObjectName } from "../../contracts/computer-id.ts";
 import { ComputerManagementError } from "../../contracts/computer-management.ts";
 import { logger } from "../../infra/logger.ts";
 
@@ -56,7 +56,7 @@ export function computerObject(bindings: CloudBindings, computerId: string) {
     if (!parsed.success) {
         throw new ComputerManagementError("COMPUTER_OBJECT_UNAVAILABLE", "Morty storage is unavailable.", 503);
     }
-    if (computerRegionFromId(computerId) === null) {
+    if (computerIdPrefix(computerId) === null) {
         throw new ComputerManagementError("INVALID_ACCOUNT_ID", "The Computer ID is invalid.", 400);
     }
     const namespace = parsed.output;
