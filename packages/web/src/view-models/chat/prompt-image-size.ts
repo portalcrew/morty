@@ -1,5 +1,8 @@
 // Vision models downsample larger images before reading them; the extra pixels only cost transfer and Agent history.
 export const PROMPT_IMAGE_MAX_EDGE = 2_048;
+// Eight images of this size stay under 32 MB once base64-encoded, the largest message Morty reads from Codex.
+const PROMPT_IMAGE_TARGET_BYTES = 2_500_000;
+const PROMPT_IMAGE_EDGES = [PROMPT_IMAGE_MAX_EDGE, 1_536, 1_024, 768];
 
 interface ImageSize {
     readonly width: number;
@@ -85,13 +88,24 @@ function encodedSize(bytes: Uint8Array, mediaType: string): ImageSize | null {
     }
 }
 
-export function exceedsPromptImageEdge(bytes: Uint8Array, mediaType: string): boolean {
+export function promptImageEdges(bytes: Uint8Array, mediaType: string): readonly number[] {
     const size = encodedSize(bytes, mediaType);
-    return size !== null && Math.max(size.width, size.height) > PROMPT_IMAGE_MAX_EDGE;
+    if (size === null) {
+        return [];
+    }
+    const longEdge = Math.max(size.width, size.height);
+    if (longEdge <= PROMPT_IMAGE_MAX_EDGE && bytes.byteLength <= PROMPT_IMAGE_TARGET_BYTES) {
+        return [];
+    }
+    return PROMPT_IMAGE_EDGES.filter((edge) => edge < longEdge);
 }
 
-export function promptImageSize(decoded: ImageSize): ImageSize {
-    const scale = Math.min(1, PROMPT_IMAGE_MAX_EDGE / Math.max(decoded.width, decoded.height));
+export function fitsPromptImageTarget(byteLength: number): boolean {
+    return byteLength <= PROMPT_IMAGE_TARGET_BYTES;
+}
+
+export function promptImageSize(decoded: ImageSize, edge: number): ImageSize {
+    const scale = Math.min(1, edge / Math.max(decoded.width, decoded.height));
     return {
         width: Math.max(1, Math.round(decoded.width * scale)),
         height: Math.max(1, Math.round(decoded.height * scale)),
