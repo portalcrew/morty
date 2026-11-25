@@ -2,6 +2,7 @@ import { createStore } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import { isNewerMortyRelease } from "../../services/release/morty-release.ts";
 import type { Clock } from "../../services/time/clock.ts";
+import type { ComputerStatusStoreApi } from "./computer-status-store.ts";
 
 type ComputerReleaseState =
     | { readonly kind: "unknown" }
@@ -15,13 +16,11 @@ type ComputerReleaseState =
 
 export interface ComputerReleaseStore {
     readonly state: ComputerReleaseState;
-    /** Announced with each Computer configuration; each one seen online asks the Computer which release it runs. */
-    readonly observe: (online: boolean) => void;
     /**
-     * The page is back from being offline or in the background. Its Computer may have restarted meanwhile without any
-     * configuration change to show it, so an online Computer is asked again.
+     * Asks an online Computer which release it runs: with each configuration, and when the page is back from being
+     * offline or in the background, since the Computer may have restarted meanwhile without changing its configuration.
      */
-    readonly recover: () => void;
+    readonly check: () => void;
     readonly dispose: () => void;
 }
 
@@ -49,11 +48,11 @@ export const createComputerReleaseStore = (options: {
     readonly latest: string | null;
     readonly weekAgo: string | null;
     readonly requests: Pick<BotChatApi, "daemonDiagnostics">;
+    readonly computer: ComputerStatusStoreApi;
     readonly clock: Clock;
 }) => {
-    const { latest, weekAgo, requests, clock } = options;
+    const { latest, weekAgo, requests, computer, clock } = options;
     const lifetime = new AbortController();
-    let online = false;
     let reading: AbortController | null = null;
 
     return createStore<ComputerReleaseStore>()((set, get) => {
@@ -74,10 +73,10 @@ export const createComputerReleaseStore = (options: {
             }
         };
 
-        const readAgain = (): void => {
+        const check = (): void => {
             reading?.abort(new DOMException("A newer read of the Computer's release started.", "AbortError"));
             reading = null;
-            if (!online || latest === null) {
+            if (computer.getState().computerConfiguration?.computer.online !== true || latest === null) {
                 return;
             }
             reading = new AbortController();
@@ -86,11 +85,7 @@ export const createComputerReleaseStore = (options: {
 
         return {
             state: { kind: "unknown" },
-            observe: (nowOnline) => {
-                online = nowOnline;
-                readAgain();
-            },
-            recover: () => readAgain(),
+            check,
             dispose: () => lifetime.abort(new DOMException("The chat workspace closed.", "AbortError")),
         };
     });

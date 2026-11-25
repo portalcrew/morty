@@ -151,6 +151,7 @@ export function createChatWorkspace(options: {
         latest: mortyReleaseVersion,
         weekAgo: mortyReleaseWeekAgo,
         requests,
+        computer,
         clock: options.clock,
     });
     const follower = createComputerFollower({
@@ -172,7 +173,7 @@ export function createChatWorkspace(options: {
             }
             rememberComputerName(options.rememberedIdentity, configuration.computer.computerName);
             computerRecovery.observe(configuration.computer.online, observation);
-            computerRelease.getState().observe(configuration.computer.online);
+            computerRelease.getState().check();
         },
         onEntered: (outcome) => home.getState().entryAnswered(outcome),
         onRevoked: (message) => home.getState().computerRevoked(message),

@@ -210,7 +210,7 @@ export function createMortyApplication(options: {
         // A connection that reads as open may have died while the page was away; it shows only when a check goes
         // unanswered, so check now rather than at the next heartbeat.
         transport.verifyConnections();
-        workspace?.computerRelease.getState().recover();
+        workspace?.computerRelease.getState().check();
         if (recovery !== null) {
             return;
         }

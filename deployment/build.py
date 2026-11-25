@@ -30,13 +30,16 @@ def run(command, cwd=ROOT, env=None):
 def week_old_release(version):
     # Main ships many releases a day, so the browser reminds a Computer only once it lacks a release a week old. Each
     # first-parent main commit is one version (scripts/release-artifact.mjs), so that release is HEAD's version less
-    # the commits since.
+    # the commits since, unless the baseline version changed in between.
     shallow = subprocess.check_output(['git', 'rev-parse', '--is-shallow-repository'], cwd=ROOT, text=True).strip() == 'true'
     if shallow or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version):
         return None
     released_at = int(subprocess.check_output(['git', 'log', '-1', '--format=%ct', 'HEAD'], cwd=ROOT, text=True))
     since = datetime.fromtimestamp(released_at - 7 * 24 * 60 * 60, timezone.utc).isoformat()
     newer = int(subprocess.check_output(['git', 'rev-list', '--first-parent', '--count', '--since=' + since, 'HEAD'], cwd=ROOT, text=True))
+    rebased = subprocess.check_output(['git', 'log', '--first-parent', '--format=%H', '--since=' + since, 'HEAD', '--', 'scripts/release-baseline.json'], cwd=ROOT, text=True).strip()
+    if rebased:
+        return None
     major, minor, patch = (int(part) for part in version.split('.'))
     return f'{major}.{minor}.{patch - newer}' if patch >= newer else None
 
