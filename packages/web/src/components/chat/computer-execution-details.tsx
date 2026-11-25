@@ -11,7 +11,7 @@ export function ComputerExecutionDetails({
 }: {
     readonly children: (details: { readonly open: boolean; readonly openDetails: () => void }) => ReactNode;
     readonly context: ExecutionContext;
-    readonly rows?: (details: { readonly closeDetails: () => void }) => ReactNode;
+    readonly rows?: ReactNode;
 }) {
     const [open, setOpen] = useState(false);
     return (
@@ -19,7 +19,7 @@ export function ComputerExecutionDetails({
             {children({ open, openDetails: () => setOpen(true) })}
             <ExecutionDetailsDialog
                 context={context}
-                rows={rows?.({ closeDetails: () => setOpen(false) })}
+                rows={rows}
                 onOpenChange={setOpen}
                 open={open}
                 returnFocus={() => {
