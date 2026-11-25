@@ -334,6 +334,12 @@ export const threadTurnsPageSchema = z.object({
     nextCursor: boundedText(1_024).nullish(),
 });
 
+export const CODEX_HISTORY_ITEM_PAGE_LIMIT = 20;
+export const threadItemsPageSchema = z.object({
+    data: z.array(z.object({ item: z.unknown() })).max(CODEX_HISTORY_ITEM_PAGE_LIMIT),
+    nextCursor: boundedText(1_024).nullish(),
+});
+
 export const threadResumeResponseSchema = threadLifecycleResponseSchema;
 export const threadForkResponseSchema = threadLifecycleResponseSchema;
 

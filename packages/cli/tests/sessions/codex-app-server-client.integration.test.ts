@@ -28,7 +28,10 @@ const input = readline.createInterface({ input: process.stdin });
 input.on("line", (line) => {
     const message = JSON.parse(line);
     if (message.id === undefined) return;
-    const result = message.method === "initialize" ? {} : "x".repeat(${responseCharacters.toString()});
+    if (message.method === "events/announce") {
+        process.stdout.write(JSON.stringify({ method: "events/announced", params: "x".repeat(${responseCharacters.toString()}) }) + "\\n");
+    }
+    const result = message.method === "initialize" ? {} : message.method === "status/read" ? "ready" : "x".repeat(${responseCharacters.toString()});
     process.stdout.write(JSON.stringify({ id: message.id, result }) + "\\n");
 });
 `,
@@ -115,7 +118,7 @@ it("Given a long-lived Codex app-server returns more than 32 MiB across consumed
     }
 });
 
-it("Given Codex sends an individual protocol message above 32 MiB, When Morty receives it, Then the connection stops at the bounded transport boundary", async ({
+it("Given Codex answers a request with a message above 32 MiB, When Morty receives it, Then only that request fails and the connection stays usable", async ({
     signal,
 }) => {
     const command = await appServer(33 * 1024 * 1024);
@@ -131,6 +134,31 @@ it("Given Codex sends an individual protocol message above 32 MiB, When Morty re
     try {
         await client.initialize(signal);
         await expect(client.request("history/read", {}, signal)).rejects.toMatchObject({
+            code: "codex_app_server_response_too_large",
+        });
+        await expect(client.request("status/read", {}, signal)).resolves.toBe("ready");
+    } finally {
+        client.detach();
+        await stopProcessTree(client.child());
+    }
+});
+
+it("Given Codex sends a notification above 32 MiB, When Morty receives it, Then the connection stops at the bounded transport boundary", async ({
+    signal,
+}) => {
+    const command = await appServer(33 * 1024 * 1024);
+    const client = new CodexAppServerClient({
+        command,
+        cwd: process.cwd(),
+        environment: {},
+        handlers: {
+            onNotification: async () => {},
+            onServerRequest: async () => {},
+        },
+    });
+    try {
+        await client.initialize(signal);
+        await expect(client.request("events/announce", {}, signal)).rejects.toMatchObject({
             code: "codex_app_server_output_limit",
         });
     } finally {
