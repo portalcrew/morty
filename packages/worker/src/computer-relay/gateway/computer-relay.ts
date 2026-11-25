@@ -1,7 +1,6 @@
 import * as v from "valibot";
 import { type CreationOrigin, computerCreationRequest } from "../../contracts/computer-creation.ts";
-import { computerObjectName, decodeComputerPlacement } from "../../contracts/computer-id.ts";
-import type { ComputerLocationHint } from "../../contracts/computer-location.ts";
+import { computerObjectName, computerRegionFromId } from "../../contracts/computer-id.ts";
 import { ComputerManagementError, relayIdentifier } from "../../contracts/computer-management.ts";
 import type { ConfiguredRelayBindings } from "../../contracts/relay-bindings.ts";
 import { RequestDeadline } from "../../http/request-deadline.ts";
@@ -9,16 +8,13 @@ import { RequestDeadline } from "../../http/request-deadline.ts";
 export class ComputerRelayGateway {
     readonly #bindings: ConfiguredRelayBindings;
     readonly #computerId: string;
-    readonly #locationHint: ComputerLocationHint;
 
     constructor(bindings: ConfiguredRelayBindings, computerId: string) {
         this.#bindings = bindings;
         this.#computerId = v.parse(relayIdentifier, computerId);
-        const placement = decodeComputerPlacement(this.#computerId);
-        if (placement === null) {
+        if (computerRegionFromId(this.#computerId) === null) {
             throw new ComputerManagementError("INVALID_ACCOUNT_ID", "The Computer ID is invalid.", 400);
         }
-        this.#locationHint = placement.locationHint;
     }
 
     readonly #call = async <Value>(
@@ -30,9 +26,7 @@ export class ComputerRelayGateway {
         try {
             deadline.signal.throwIfAborted();
             const namespace = this.#bindings.COMPUTER_RELAY;
-            const stub = namespace.getByName(computerObjectName(this.#computerId), {
-                locationHint: this.#locationHint,
-            });
+            const stub = namespace.getByName(computerObjectName(this.#computerId));
             return await deadline.wait(operation(stub, deadline.signal));
         } catch (cause) {
             signal.throwIfAborted();

@@ -323,7 +323,7 @@ test("Given links shared by the computer's own credential, When that credential 
     expect((await redeem(unusedLocalLink)).status).toBe(410);
 });
 
-test("Given visitors across Cloudflare regions, When Chat provisions and reopens Morty data, Then Relay preserves every placement", {
+test("Given visitors across Cloudflare regions, When Chat provisions and reopens Morty data, Then the Computer keeps its regional ID", {
     timeout: 30_000,
 }, async () => {
     // Cloudflare supplies cf metadata on incoming Requests; Node does not.
@@ -335,17 +335,17 @@ test("Given visitors across Cloudflare regions, When Chat provisions and reopens
         }
     }
     const environment = fixture.environment();
-    for (const [continent, country, region] of [
-        ["AS", "CN", "apac-ne"],
-        ["AS", "SG", "apac-se"],
-        ["AS", "IN", "apac"],
-        ["OC", "AU", "apac"],
-        ["NA", "US", "wnam"],
-        ["SA", "BR", "wnam"],
-        ["EU", "DE", "wnam"],
-        ["AF", "ZA", "wnam"],
-        ["AN", "AQ", "wnam"],
-        ["unknown", "US", "apac"],
+    for (const [continent, country, regionCode] of [
+        ["AS", "CN", "an"],
+        ["AS", "SG", "as"],
+        ["AS", "IN", "ap"],
+        ["OC", "AU", "ap"],
+        ["NA", "US", "wn"],
+        ["SA", "BR", "wn"],
+        ["EU", "DE", "wn"],
+        ["AF", "ZA", "wn"],
+        ["AN", "AQ", "wn"],
+        ["unknown", "US", "ap"],
     ] as const) {
         const created = await worker.fetch(
             new GeolocatedRequest(creationRequest({ "cf-ipcountry": "US" }), continent, country),
@@ -360,10 +360,13 @@ test("Given visitors across Cloudflare regions, When Chat provisions and reopens
         const response = await worker.fetch(computerRequest(), environment);
         expect(response.status).toBe(200);
         const initial = v.parse(v.object({ computer: v.object({ computerId: v.string() }) }), await response.json());
-        const regionCode = { apac: "ap", "apac-ne": "an", "apac-se": "as", wnam: "wn" }[region];
         expect(initial.computer.computerId).toMatch(new RegExp(`^prj_${regionCode}_01_`));
         const revisited = await worker.fetch(
-            new GeolocatedRequest(computerRequest(), region === "wnam" ? "AS" : "NA", region === "wnam" ? "CN" : "US"),
+            new GeolocatedRequest(
+                computerRequest(),
+                regionCode === "wn" ? "AS" : "NA",
+                regionCode === "wn" ? "CN" : "US",
+            ),
             environment,
         );
         expect(revisited.status).toBe(200);

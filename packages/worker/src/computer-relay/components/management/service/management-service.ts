@@ -1,5 +1,5 @@
 import type { CreationOrigin } from "../../../../contracts/computer-creation.ts";
-import { accountComputerId, decodeComputerPlacement } from "../../../../contracts/computer-id.ts";
+import { accountComputerId, computerRegionFromId } from "../../../../contracts/computer-id.ts";
 import { ComputerManagementError } from "../../../../contracts/computer-management.ts";
 import { ManagementError } from "../../../../contracts/management-error.ts";
 import type { ComputerIdentity } from "../entity/computer-identity.ts";
@@ -50,11 +50,11 @@ export class ManagementService {
         }
         // The predecessor fixes the successor's creation identity, so retries reach the same computer.
         const reference = `replacement_${previous.computerId}`;
-        const placement = decodeComputerPlacement(previous.computerId);
-        if (placement === null) {
+        const region = computerRegionFromId(previous.computerId);
+        if (region === null) {
             throw new ComputerManagementError("INVALID_ACCOUNT_ID", "The Computer ID is invalid.", 400);
         }
-        const successorId = await accountComputerId(reference, placement.locationHint);
+        const successorId = await accountComputerId(reference, region);
         signal.throwIfAborted();
         return { computerId: successorId };
     };
