@@ -33,7 +33,7 @@ export function ResponseCopyButton({
     const copy = model.state.kind;
 
     return (
-        <div className="mt-3 flex flex-wrap items-center gap-x-3" ref={model.onAttach}>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 sm:gap-x-0" ref={model.onAttach}>
             <button
                 aria-label={copy === "copied" ? "Copied" : "Copy response"}
                 className={cn(replyActionButtonClassName, "-ml-1", className)}
