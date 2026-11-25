@@ -4,6 +4,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import type { BotChatApi } from "../../services/chat/bot-chat-api.ts";
 import { encodeIdentityScope, type IdentityScope } from "../../services/identity/identity-scope-url.ts";
 import { rememberComputerName, rememberComputerVisit } from "../../services/identity/remembered-computers.ts";
+import { mortyReleaseVersion } from "../../services/release/morty-release.ts";
 import type { Clock } from "../../services/time/clock.ts";
 import type { AppInstallStoreApi } from "../app-install-store.ts";
 import type { IdentityAccess } from "../authentication/identity-access.ts";
@@ -14,6 +15,7 @@ import type { AccessHolder } from "./access-presentation.ts";
 import { type BotChatHomeStoreApi, createBotChatHomeStore, homeWaitsForComputer } from "./bot-chat-home-store.ts";
 import { createComputerFollower } from "./computer-follower.ts";
 import { createComputerRecovery } from "./computer-recovery.ts";
+import { type ComputerReleaseStoreApi, createComputerReleaseStore } from "./computer-release-store.ts";
 import { type ComputerStatusStoreApi, createComputerStatusStore } from "./computer-status-store.ts";
 import type { ComputerSwitcherModel } from "./computer-switcher-store.ts";
 import { connectionPresentation } from "./connection-presentation.ts";
@@ -68,6 +70,7 @@ export interface ChatWorkspace {
     readonly appInstall: AppInstallStoreApi;
     readonly computerId: string;
     readonly computer: ComputerStatusStoreApi;
+    readonly computerRelease: ComputerReleaseStoreApi;
     readonly home: BotChatHomeStoreApi;
     readonly titles: SessionTitlesStore;
     readonly directory: StoreApi<ConversationDirectoryStore>;
@@ -144,6 +147,7 @@ export function createChatWorkspace(options: {
     };
     const titles: SessionTitlesStore = createSessionTitlesStore(encodeIdentityScope(options.rememberedIdentity));
     const computer = createComputerStatusStore(navigator.onLine);
+    const computerRelease = createComputerReleaseStore({ latest: mortyReleaseVersion, requests, clock: options.clock });
     const follower = createComputerFollower({
         requests,
         computer,
@@ -163,6 +167,7 @@ export function createChatWorkspace(options: {
             }
             rememberComputerName(options.rememberedIdentity, configuration.computer.computerName);
             computerRecovery.observe(configuration.computer.online, observation);
+            computerRelease.getState().observe(configuration.computer.online);
         },
         onEntered: (outcome) => home.getState().entryAnswered(outcome),
         onRevoked: (message) => home.getState().computerRevoked(message),
@@ -503,6 +508,7 @@ export function createChatWorkspace(options: {
     });
     return {
         computers: options.computers,
+        computerRelease,
         accessNotice: options.accessNotice,
         linkedDevices,
         accessExpiry,
@@ -566,6 +572,7 @@ export function createChatWorkspace(options: {
         operationsSignal: () => operationsLifetime.signal,
         dispose: () => {
             options.computers.dispose();
+            computerRelease.getState().dispose();
             sidebar.dialogs.getState().discardNativeDialog();
             sidebar.dialogs.getState().closeSharing();
             home.getState().composerAttachments.getState().clear();

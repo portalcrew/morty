@@ -19,12 +19,14 @@ import {
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
 import { textLinkClassName } from "../../components/ui/text-link.ts";
 import { dataTestId } from "../../data-testid.ts";
+import type { ComputerReleaseStoreApi } from "../../view-models/chat/computer-release-store.ts";
 import type { BotConnectionStatus } from "../../view-models/chat/computer-status-store.ts";
 import {
     type ComputerChoice,
     type ComputerSwitcherModel,
     computerSwitcherChoices,
 } from "../../view-models/chat/computer-switcher-store.ts";
+import { MortyVersion } from "./morty-version.tsx";
 
 function connectionLabel(status: BotConnectionStatus): string {
     switch (status.kind) {
@@ -296,10 +298,12 @@ export function ComputerSwitcher({
     name,
     status,
     layout,
+    release,
     onChooseCurrent = () => undefined,
 }: {
     readonly context: ExecutionContext;
     readonly model: ComputerSwitcherModel;
+    readonly release: ComputerReleaseStoreApi;
     readonly name: string;
     readonly status: BotConnectionStatus;
     readonly layout: "header" | "list";
@@ -311,7 +315,8 @@ export function ComputerSwitcher({
     const listLoading = state.kind === "loading";
     const active = choices.find((choice) => choice.key === activeKey);
     const computerName = name || active?.name || "Computer";
-    const detailsLabel = `View execution details for ${computerName}`;
+    const outdated = useStore(release, (model) => model.state.kind === "outdated");
+    const detailsLabel = `View execution details for ${computerName}${outdated ? ", update available" : ""}`;
     const removal = useStore(model.removal);
     const removable = choices.some((choice) => choice.key !== activeKey);
     const editing = removable && removal.kind !== "none";
@@ -321,7 +326,7 @@ export function ComputerSwitcher({
         return (
             <>
                 {removalDialog}
-                <ComputerExecutionDetails context={context}>
+                <ComputerExecutionDetails context={context} rows={<MortyVersion release={release} />}>
                     {({ openDetails }) => (
                         <nav aria-label="Computers" className="flex w-full min-w-0 flex-col">
                             <div className="flex items-center justify-between pt-3 pb-1">
@@ -346,7 +351,14 @@ export function ComputerSwitcher({
                                 type="button"
                             >
                                 <MonitorCog aria-hidden="true" className="size-5 shrink-0 text-copy-secondary" />
-                                View execution details
+                                <span className="flex min-w-0 flex-col">
+                                    View execution details
+                                    {outdated ? (
+                                        <span className="block truncate text-xs font-normal text-morty-text-3">
+                                            Update available
+                                        </span>
+                                    ) : null}
+                                </span>
                             </button>
                             <div
                                 className={cn(
@@ -390,7 +402,7 @@ export function ComputerSwitcher({
     return (
         <>
             {removalDialog}
-            <ComputerExecutionDetails context={context}>
+            <ComputerExecutionDetails context={context} rows={<MortyVersion release={release} />}>
                 {({ open: detailsOpen, openDetails }) => (
                     <DropdownMenu.Root
                         onOpenChange={(open) => {
@@ -404,7 +416,7 @@ export function ComputerSwitcher({
                             <button
                                 type="button"
                                 aria-describedby="computer-connection-description"
-                                aria-label={`Switch computer, ${computerName}, ${statusLabel}`}
+                                aria-label={`Switch computer, ${computerName}, ${statusLabel}${outdated ? ", update available" : ""}`}
                                 data-connection-status={status.kind}
                                 data-testid={dataTestId.botConnectionStatus}
                                 className="group -mr-1 -ml-1.5 flex h-[50px] w-[calc(100%+0.625rem)] min-w-0 items-center gap-2 rounded-[16px] py-1.5 pr-3 pl-0.5 text-left outline-none transition-colors hover:bg-morty-fill-opacity-2 active:bg-morty-fill-opacity-3 data-[state=open]:bg-morty-fill-opacity-3 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
@@ -424,6 +436,9 @@ export function ComputerSwitcher({
                                             pulsing={status.kind === "connecting"}
                                         />
                                         <span className="truncate">{statusLabel}</span>
+                                        {outdated ? (
+                                            <span className="shrink-0 text-copy-secondary">· Update available</span>
+                                        ) : null}
                                     </span>
                                 </span>
                                 <ChevronDown

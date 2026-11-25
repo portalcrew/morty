@@ -522,6 +522,7 @@ export function ConversationSidebar({
     const dialogs = workspace.sidebar.dialogs;
     const home = useStore(workspace.home);
     const status = useStore(workspace.computer);
+    const outdated = useStore(workspace.computerRelease, (model) => model.state.kind === "outdated");
     const draftSettings = useStore(workspace.draftControls, (state) => state.settings);
     const openPane = useStore(workspace.pane);
     const pane = openPane.kind === "open" ? openPane.model : null;
@@ -638,9 +639,15 @@ export function ConversationSidebar({
                                                     type="button"
                                                     aria-controls="conversation-sidebar-mobile-drawer"
                                                     aria-expanded={mobileNavOpen}
-                                                    aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+                                                    aria-label={
+                                                        mobileNavOpen
+                                                            ? "Close navigation"
+                                                            : outdated
+                                                              ? "Open navigation, update available"
+                                                              : "Open navigation"
+                                                    }
                                                     className={cn(
-                                                        "inline-flex items-center justify-center outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 sm:hidden",
+                                                        "relative inline-flex items-center justify-center outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 sm:hidden",
                                                         mobileHeaderIconButtonClassName,
                                                     )}
                                                     onClick={() => {
@@ -654,6 +661,12 @@ export function ConversationSidebar({
                                                     }}
                                                 >
                                                     <MortyLogoMark size={26} />
+                                                    {outdated && !mobileNavOpen ? (
+                                                        <span
+                                                            aria-hidden="true"
+                                                            className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary ring-2 ring-white"
+                                                        />
+                                                    ) : null}
                                                 </button>
                                                 {desktop ? (
                                                     <>
@@ -662,6 +675,7 @@ export function ConversationSidebar({
                                                         <ComputerSwitcher
                                                             context={executionContext}
                                                             layout="header"
+                                                            release={workspace.computerRelease}
                                                             model={workspace.computers}
                                                             name={computerName}
                                                             status={connectionStatus}
@@ -872,6 +886,7 @@ export function ConversationSidebar({
                                                                 <ComputerSwitcher
                                                                     context={executionContext}
                                                                     layout="list"
+                                                                    release={workspace.computerRelease}
                                                                     model={workspace.computers}
                                                                     name={computerName}
                                                                     onChooseCurrent={dialogs.getState().closeMobileNav}

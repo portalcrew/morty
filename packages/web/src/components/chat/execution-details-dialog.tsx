@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { Dialog } from "radix-ui";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { dataTestId } from "../../data-testid.ts";
 import { Button } from "../ui/cloud-button.tsx";
@@ -25,9 +26,9 @@ function computerStatusDotClassName(status: ExecutionContext["computerStatus"]):
     }
 }
 
-const executionDetailsTermClassName = "shrink-0 whitespace-nowrap text-muted-foreground";
+export const executionDetailsTermClassName = "shrink-0 whitespace-nowrap text-muted-foreground";
 
-function ExecutionDetails({ context }: { readonly context: ExecutionContext }) {
+function ExecutionDetails({ context, rows }: { readonly context: ExecutionContext; readonly rows: ReactNode }) {
     return (
         <dl className="grid gap-4 text-[13px] leading-5">
             <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-4">
@@ -55,6 +56,7 @@ function ExecutionDetails({ context }: { readonly context: ExecutionContext }) {
                         <span className="mt-1 block text-xs text-muted-foreground">{context.lastConfirmed}</span>
                     )}
                 </dd>
+                {rows}
             </div>
             <div className="grid gap-2.5">
                 <dt className={executionDetailsTermClassName}>Working directory</dt>
@@ -71,11 +73,14 @@ function ExecutionDetails({ context }: { readonly context: ExecutionContext }) {
 
 export function ExecutionDetailsDialog({
     context,
+    rows,
     open,
     onOpenChange,
     returnFocus,
 }: {
     readonly context: ExecutionContext;
+    /** Further term and description pairs about the Computer, after its status. */
+    readonly rows?: ReactNode;
     readonly open: boolean;
     readonly onOpenChange: (open: boolean) => void;
     readonly returnFocus: () => void;
@@ -105,7 +110,7 @@ export function ExecutionDetailsDialog({
                                 <MobileSheetTitle>Execution details</MobileSheetTitle>
                             </Dialog.Title>
                             <Dialog.Description className="sr-only">
-                                Computer availability, session connection, Agent, and working directory.
+                                Computer availability, session connection, Agent, Morty version, and working directory.
                             </Dialog.Description>
                         </div>
                         <Dialog.Close asChild>
@@ -123,7 +128,7 @@ export function ExecutionDetailsDialog({
                         className="min-h-0 flex-1 sm:-mx-1"
                         viewportClassName="h-full max-h-[inherit] px-6 sm:px-1"
                     >
-                        <ExecutionDetails context={context} />
+                        <ExecutionDetails context={context} rows={rows} />
                     </ScrollArea>
                 </Dialog.Content>
             </Dialog.Portal>
