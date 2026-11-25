@@ -39,6 +39,9 @@ export function isNewerMortyRelease(candidate: string, current: string): boolean
  * For the Agent on the outdated computer. `update` restarts Morty from its own detached session after a delay, because
  * restarting Morty ends the Agent's processes, and an Agent's tool may end every process its command started.
  */
-export const mortyUpdatePrompt = `Update Morty on this computer to the latest release.
-Run \`npx --yes @portalcrew/morty@latest update\`. It is done when the command exits with code 0 and prints "Morty restarts in 15 seconds." Reply as soon as it does: the restart ends this conversation.
-If the command fails, reply with its error. Do not restart or stop Morty any other way, because this conversation would end before Morty starts again.`;
+export const mortyUpdatePrompt = `Update Morty on this computer. Run this command once:
+npx --yes @portalcrew/morty@latest update
+
+If it exits with code 0 and prints "Morty restarts in 15 seconds.", immediately tell me the restart is scheduled and end your turn.
+
+Otherwise, report the command output and end your turn. Use only the command above.`;
