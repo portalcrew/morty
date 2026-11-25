@@ -31,8 +31,14 @@ type ComputerChoicesState =
     | { readonly kind: "loading"; readonly choices: readonly RememberedComputerChoice[] }
     | { readonly kind: "ready"; readonly choices: readonly RememberedComputerChoice[] };
 
-/** Removing a computer forgets this browser's only access to it, so the person confirms it first. */
-type ComputerRemoval = { readonly kind: "none" } | { readonly kind: "confirming"; readonly key: string };
+/**
+ * Removing a computer forgets this browser's only access to it, so the list offers removal only while the person edits
+ * it, and the person confirms each removal.
+ */
+type ComputerRemoval =
+    | { readonly kind: "none" }
+    | { readonly kind: "editing" }
+    | { readonly kind: "confirming"; readonly key: string };
 
 /** The current computer follows home directly; only other computers need independent status reads. */
 export function computerSwitcherChoices(
@@ -167,9 +173,19 @@ export function createComputerSwitcher(options: {
             }
         },
         removal,
+        startEditing: (): void => {
+            if (removal.getState().kind === "none") {
+                removal.setState({ kind: "editing" });
+            }
+        },
+        stopEditing: (): void => {
+            if (removal.getState().kind === "editing") {
+                removal.setState({ kind: "none" });
+            }
+        },
         /** The computer this page is on cannot be forgotten from here. */
         requestRemoval: (key: string): void => {
-            if (key !== activeKey) {
+            if (removal.getState().kind === "editing" && key !== activeKey) {
                 removal.setState({ kind: "confirming", key });
             }
         },

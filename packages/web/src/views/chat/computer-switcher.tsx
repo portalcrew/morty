@@ -1,5 +1,6 @@
-import { Check, ChevronDown, LoaderCircle, MonitorCog, Plus, X } from "lucide-react";
+import { Check, ChevronDown, LoaderCircle, MonitorCog, Plus } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
+import type { ReactNode } from "react";
 import { useStore } from "zustand";
 import { cn } from "@/lib/utils";
 import { MortyLogoMark } from "../../components/brand/morty-logo.tsx";
@@ -88,11 +89,13 @@ function ComputerChoiceContent({
     choice,
     current,
     nameClassName,
+    removal,
     statusClassName,
 }: {
     readonly choice: ComputerChoice;
     readonly current: boolean;
     readonly nameClassName: string;
+    readonly removal?: ReactNode;
     readonly statusClassName: string;
 }) {
     const status = choiceStatusLabel(choice.status);
@@ -122,9 +125,11 @@ function ComputerChoiceContent({
             <span className={cn("whitespace-nowrap text-morty-text-3", statusClassName, current && "sr-only")}>
                 {status}
             </span>
-            <span className="flex w-4 justify-center" aria-hidden="true">
-                {current ? <Check className="size-3.5" /> : null}
-            </span>
+            {removal ?? (
+                <span className="flex w-4 justify-center" aria-hidden="true">
+                    {current ? <Check className="size-3.5" /> : null}
+                </span>
+            )}
         </>
     );
 }
@@ -139,14 +144,40 @@ function forgetComputerLabel(choice: ComputerChoice): string {
 function ComputerMenuChoice({
     activeKey,
     choice,
-    onForget,
+    editing,
+    onRemove,
 }: {
     readonly activeKey: string;
     readonly choice: ComputerChoice;
-    readonly onForget: (key: string) => void;
+    readonly editing: boolean;
+    readonly onRemove: (key: string) => void;
 }) {
     const current = choice.key === activeKey;
-    const rowClassName = cn(choiceRowClassName, menuRowClassName, choice.disambiguator !== null && "h-12");
+    const tall = choice.disambiguator !== null && "h-12";
+    if (editing) {
+        return (
+            <div className={cn(choiceRowClassName, "h-9 grid-cols-[1rem_minmax(0,1fr)_auto_auto] px-3", tall)}>
+                <ComputerChoiceContent
+                    choice={choice}
+                    current={current}
+                    nameClassName="text-14"
+                    removal={
+                        current ? null : (
+                            <DropdownMenu.Item
+                                aria-label={forgetComputerLabel(choice)}
+                                className="-mr-2 flex h-7 cursor-pointer items-center rounded-full px-2 text-xs font-medium text-destructive outline-none data-[highlighted]:bg-destructive/10"
+                                onSelect={() => onRemove(choice.key)}
+                            >
+                                Remove
+                            </DropdownMenu.Item>
+                        )
+                    }
+                    statusClassName="text-xs"
+                />
+            </div>
+        );
+    }
+    const rowClassName = cn(choiceRowClassName, menuRowClassName, tall);
     const content = (
         <ComputerChoiceContent choice={choice} current={current} nameClassName="text-14" statusClassName="text-xs" />
     );
@@ -156,21 +187,11 @@ function ComputerMenuChoice({
             {content}
         </DropdownMenu.RadioItem>
     ) : (
-        <div className="group/choice relative">
-            <DropdownMenu.RadioItem asChild textValue={choice.name} value={choice.key}>
-                <a className={rowClassName} href={choice.href}>
-                    {content}
-                </a>
-            </DropdownMenu.RadioItem>
-            <DropdownMenu.Item
-                aria-label={forgetComputerLabel(choice)}
-                className="absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-copy-secondary opacity-0 outline-none transition-opacity duration-150 group-hover/choice:opacity-100 group-has-[[data-highlighted]]/choice:opacity-100 data-[highlighted]:bg-morty-fill-opacity-3 data-[highlighted]:text-foreground motion-reduce:transition-none"
-                onSelect={() => onForget(choice.key)}
-                title="Remove from this browser"
-            >
-                <X aria-hidden="true" className="size-3.5" />
-            </DropdownMenu.Item>
-        </div>
+        <DropdownMenu.RadioItem asChild textValue={choice.name} value={choice.key}>
+            <a className={rowClassName} href={choice.href}>
+                {content}
+            </a>
+        </DropdownMenu.RadioItem>
     );
 }
 
@@ -183,26 +204,57 @@ export const mobileDrawerCardRowClassName =
     "flex h-12 w-full items-center gap-3 px-4 text-left text-[15px] font-medium text-foreground outline-none transition-colors hover:bg-morty-fill-opacity-2 active:bg-morty-fill-opacity-3 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-inset keyboard-focus:focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none";
 
 const mobileComputersSectionTitleClassName =
-    "px-4 pt-3 pb-1 text-[15px] font-semibold leading-5 tracking-[-0.015em] text-foreground";
+    "px-4 text-[15px] font-semibold leading-5 tracking-[-0.015em] text-foreground";
 
-const mobileChoiceRowClassName = cn(
+const mobileChoiceRowLayoutClassName = cn(
     choiceRowClassName,
     // The first column matches the 20px icons of the drawer's action rows, so every label starts on one line.
-    "min-h-12 w-full grid-cols-[1.25rem_minmax(0,1fr)_auto_1rem] gap-x-3 px-4 text-left transition-colors hover:bg-morty-fill-opacity-2 active:bg-morty-fill-opacity-3 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-inset keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none",
+    "min-h-12 w-full grid-cols-[1.25rem_minmax(0,1fr)_auto_1rem] gap-x-3 px-4 text-left",
+);
+
+const mobileChoiceRowClassName = cn(
+    mobileChoiceRowLayoutClassName,
+    "transition-colors hover:bg-morty-fill-opacity-2 active:bg-morty-fill-opacity-3 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-inset keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none",
 );
 
 function ComputerListChoice({
     activeKey,
     choice,
+    editing,
     onChooseCurrent,
-    onForget,
+    onRemove,
 }: {
     readonly activeKey: string;
     readonly choice: ComputerChoice;
+    readonly editing: boolean;
     readonly onChooseCurrent: () => void;
-    readonly onForget: (key: string) => void;
+    readonly onRemove: (key: string) => void;
 }) {
     const current = choice.key === activeKey;
+    if (editing) {
+        return (
+            <div className={cn(mobileChoiceRowLayoutClassName, "grid-cols-[1.25rem_minmax(0,1fr)_auto_auto]")}>
+                <ComputerChoiceContent
+                    choice={choice}
+                    current={current}
+                    nameClassName="text-[15px]"
+                    removal={
+                        current ? null : (
+                            <button
+                                aria-label={forgetComputerLabel(choice)}
+                                className="-mr-3 flex min-h-11 items-center rounded-full px-3 text-[15px] font-medium text-destructive outline-none transition-colors hover:bg-destructive/10 active:bg-destructive/15 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
+                                onClick={() => onRemove(choice.key)}
+                                type="button"
+                            >
+                                Remove
+                            </button>
+                        )
+                    }
+                    statusClassName="text-[13px]"
+                />
+            </div>
+        );
+    }
     const content = (
         <ComputerChoiceContent
             choice={choice}
@@ -216,19 +268,9 @@ function ComputerListChoice({
             {content}
         </button>
     ) : (
-        <div className="relative">
-            <a className={mobileChoiceRowClassName} href={choice.href}>
-                {content}
-            </a>
-            <button
-                aria-label={forgetComputerLabel(choice)}
-                className="absolute top-1/2 right-2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-copy-secondary outline-none transition-colors hover:bg-morty-fill-opacity-2 active:bg-morty-fill-opacity-3 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
-                onClick={() => onForget(choice.key)}
-                type="button"
-            >
-                <X aria-hidden="true" className="size-4" />
-            </button>
-        </div>
+        <a className={mobileChoiceRowClassName} href={choice.href}>
+            {content}
+        </a>
     );
 }
 
@@ -270,7 +312,10 @@ export function ComputerSwitcher({
     const active = choices.find((choice) => choice.key === activeKey);
     const computerName = name || active?.name || "Computer";
     const detailsLabel = `View execution details for ${computerName}`;
-    const forget = model.requestRemoval;
+    const removal = useStore(model.removal);
+    const removable = choices.some((choice) => choice.key !== activeKey);
+    const editing = removable && removal.kind !== "none";
+    const toggleEditing = editing ? model.stopEditing : model.startEditing;
     const removalDialog = <RemoveComputerDialog choices={choices} model={model} returnToMenu={layout === "header"} />;
     if (layout === "list") {
         return (
@@ -279,7 +324,21 @@ export function ComputerSwitcher({
                 <ComputerExecutionDetails context={context}>
                     {({ openDetails }) => (
                         <nav aria-label="Computers" className="flex w-full min-w-0 flex-col">
-                            <p className={mobileComputersSectionTitleClassName}>Computers</p>
+                            <div className="flex items-center justify-between pt-3 pb-1">
+                                <p className={mobileComputersSectionTitleClassName}>Computers</p>
+                                {removable ? (
+                                    <button
+                                        className={cn(
+                                            "-my-3 min-h-11 rounded-full px-4 text-[15px] font-medium outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60",
+                                            textLinkClassName,
+                                        )}
+                                        onClick={toggleEditing}
+                                        type="button"
+                                    >
+                                        {editing ? "Done" : "Edit"}
+                                    </button>
+                                ) : null}
+                            </div>
                             <button
                                 aria-label={detailsLabel}
                                 className={mobileDrawerCardRowClassName}
@@ -306,9 +365,10 @@ export function ComputerSwitcher({
                                         <ComputerListChoice
                                             activeKey={activeKey}
                                             choice={choice}
+                                            editing={editing}
                                             key={choice.key}
                                             onChooseCurrent={onChooseCurrent}
-                                            onForget={forget}
+                                            onRemove={model.requestRemoval}
                                         />
                                     ))
                                 )}
@@ -334,6 +394,7 @@ export function ComputerSwitcher({
                 {({ open: detailsOpen, openDetails }) => (
                     <DropdownMenu.Root
                         onOpenChange={(open) => {
+                            model.stopEditing();
                             if (open) {
                                 void model.refresh();
                             }
@@ -405,8 +466,8 @@ export function ComputerSwitcher({
                                 <DropdownMenu.Separator
                                     className={cn("-mx-1.5 my-1.5", overlayMenuSeparatorClassName)}
                                 />
-                                <DropdownMenu.Label className="flex shrink-0 items-center justify-between gap-2 px-3 pt-1 pb-1 text-xs font-normal text-morty-text-3">
-                                    Computers
+                                <DropdownMenu.Label className="flex shrink-0 items-center gap-2 px-3 pt-1 pb-1 text-xs font-normal text-morty-text-3">
+                                    <span className="mr-auto">Computers</span>
                                     {listLoading ? (
                                         <span className="inline-flex shrink-0" role="status">
                                             <LoaderCircle
@@ -415,6 +476,18 @@ export function ComputerSwitcher({
                                             />
                                             <span className="sr-only">Checking connections…</span>
                                         </span>
+                                    ) : null}
+                                    {removable ? (
+                                        <DropdownMenu.Item
+                                            className="-my-1 -mr-2 cursor-pointer rounded-full px-2 py-1 font-medium text-primary outline-none data-[highlighted]:bg-accent"
+                                            onSelect={(event) => {
+                                                // Editing changes what the open menu offers, so it keeps the menu open.
+                                                event.preventDefault();
+                                                toggleEditing();
+                                            }}
+                                        >
+                                            {editing ? "Done" : "Edit"}
+                                        </DropdownMenu.Item>
                                     ) : null}
                                 </DropdownMenu.Label>
                                 <ScrollArea
@@ -437,8 +510,9 @@ export function ComputerSwitcher({
                                                 <ComputerMenuChoice
                                                     activeKey={activeKey}
                                                     choice={choice}
+                                                    editing={editing}
                                                     key={choice.key}
-                                                    onForget={forget}
+                                                    onRemove={model.requestRemoval}
                                                 />
                                             ))
                                         )}
@@ -492,7 +566,7 @@ function RemoveComputerDialog({
                     <Button onClick={model.cancelRemoval} variant="ghost">
                         Cancel
                     </Button>
-                    <Button onClick={() => void model.confirmRemoval()} variant="primary">
+                    <Button onClick={() => void model.confirmRemoval()} variant="destructive">
                         Remove
                     </Button>
                 </div>

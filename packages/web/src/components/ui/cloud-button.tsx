@@ -9,6 +9,7 @@ const variants = {
     primary: "border-transparent bg-foreground text-background hover:bg-foreground/85 active:bg-foreground/75",
     outline: "border-border bg-transparent text-foreground hover:bg-accent active:bg-morty-fill-opacity-4",
     ghost: "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground active:bg-morty-fill-opacity-4 active:text-foreground",
+    destructive: "border-transparent bg-destructive text-white hover:bg-destructive/85 active:bg-destructive/75",
 };
 /**
  * Text-edge padding is pl/pr. Icon-edge classes override one side and stay smaller than that padding.
