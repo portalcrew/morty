@@ -15,8 +15,13 @@ type ComputerReleaseState =
 
 export interface ComputerReleaseStore {
     readonly state: ComputerReleaseState;
-    /** Announced with each Computer configuration; a Computer that comes online is asked which release it runs. */
+    /** Announced with each Computer configuration; each one seen online asks the Computer which release it runs. */
     readonly observe: (online: boolean) => void;
+    /**
+     * The page is back from being offline or in the background. Its Computer may have restarted meanwhile without any
+     * configuration change to show it, so an online Computer is asked again.
+     */
+    readonly recover: () => void;
     readonly dispose: () => void;
 }
 
@@ -69,21 +74,23 @@ export const createComputerReleaseStore = (options: {
             }
         };
 
+        const readAgain = (): void => {
+            reading?.abort(new DOMException("A newer read of the Computer's release started.", "AbortError"));
+            reading = null;
+            if (!online || latest === null) {
+                return;
+            }
+            reading = new AbortController();
+            void read(latest, AbortSignal.any([lifetime.signal, reading.signal])).catch(() => undefined);
+        };
+
         return {
             state: { kind: "unknown" },
             observe: (nowOnline) => {
-                const cameOnline = nowOnline && !online;
                 online = nowOnline;
-                if (!nowOnline) {
-                    reading?.abort(new DOMException("The Computer went offline.", "AbortError"));
-                    reading = null;
-                }
-                if (!cameOnline || latest === null) {
-                    return;
-                }
-                reading = new AbortController();
-                void read(latest, AbortSignal.any([lifetime.signal, reading.signal])).catch(() => undefined);
+                readAgain();
             },
+            recover: () => readAgain(),
             dispose: () => lifetime.abort(new DOMException("The chat workspace closed.", "AbortError")),
         };
     });
