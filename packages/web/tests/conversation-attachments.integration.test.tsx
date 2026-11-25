@@ -229,6 +229,46 @@ test("Given an existing Session draft, When Chat remounts during an attachment r
     expect(reopened.value).toBe("Keep this unsent draft");
 });
 
+test("Given a valid file and an empty file, When the user attaches both, Then the valid file is added, the notice names only the empty file, and removing an attachment clears it", {
+    timeout: 30_000,
+}, async () => {
+    const app = await createTestApp({ connectAgent: true });
+    await readyComposer(app);
+    const input = getByLabelText(document.body, "Choose attachments");
+    await app.user.upload(input, [
+        new File(["Notes"], "notes.md", { type: "text/plain" }),
+        new File([], "empty.md", { type: "text/plain" }),
+    ]);
+    await app.waitForView(() => {
+        expect(getByRole(document.body, "list", { name: "Attachments" }).textContent).toContain("notes.md");
+        expect(getByRole(document.body, "alert").textContent).toBe("Couldn't add empty.md: the file is empty.");
+    });
+    await app.user.click(getByRole(document.body, "button", { name: "Remove notes.md" }));
+    await app.waitForView(() => expect(queryByRole(document.body, "alert")).toBeNull());
+});
+
+test("Given nine files, When the user attaches them, Then eight are added and the notice says the ninth was not", {
+    timeout: 30_000,
+}, async () => {
+    const app = await createTestApp({ connectAgent: true });
+    await readyComposer(app);
+    const input = getByLabelText(document.body, "Choose attachments");
+    await app.user.upload(
+        input,
+        Array.from(
+            { length: 9 },
+            (_, index) =>
+                new File([`Note ${index.toString()}`], `note-${(index + 1).toString()}.md`, { type: "text/plain" }),
+        ),
+    );
+    await app.waitForView(() => {
+        expect(getAllByRole(getByRole(document.body, "list", { name: "Attachments" }), "listitem")).toHaveLength(8);
+        expect(getByRole(document.body, "alert").textContent).toBe(
+            "Couldn't add note-9.md: a message can have up to 8 attachments.",
+        );
+    });
+});
+
 test("Given an attachment is being read, When the user removes an earlier attachment, Then completing the read preserves that removal", {
     timeout: 30_000,
 }, async () => {

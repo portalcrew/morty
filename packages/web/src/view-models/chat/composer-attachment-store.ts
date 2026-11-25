@@ -1,11 +1,17 @@
 import { createStore } from "zustand/vanilla";
 import type { ComposerAttachment } from "../../components/chat/composer-attachment.ts";
-import { AttachmentReadError, readPromptAttachment } from "./attachment-reader.ts";
+import { AttachmentReadError, type AttachmentReadErrorCode, readPromptAttachment } from "./attachment-reader.ts";
+
+export type AttachmentRejection =
+    | { readonly name: string; readonly reason: AttachmentReadErrorCode }
+    | { readonly name: string; readonly reason: "attachment_limit"; readonly limit: number };
 
 type AttachmentReadState =
     | { readonly kind: "idle" }
     | { readonly kind: "reading" }
-    | { readonly kind: "failed"; readonly message: string };
+    | { readonly kind: "rejected"; readonly rejections: readonly AttachmentRejection[] };
+
+const IDLE: AttachmentReadState = { kind: "idle" };
 
 export interface ComposerAttachmentStore {
     readonly attachments: readonly ComposerAttachment[];
@@ -23,19 +29,31 @@ export function canAddAttachments(model: ComposerAttachmentStore): boolean {
 }
 
 // One at a time: a resized photo is decoded at full size, and several at once can exhaust a phone's page memory.
-async function readAttachments(files: readonly File[], signal: AbortSignal): Promise<readonly ComposerAttachment[]> {
-    const read: ComposerAttachment[] = [];
+async function readAttachments(
+    files: readonly File[],
+    signal: AbortSignal,
+): Promise<{ readonly added: readonly ComposerAttachment[]; readonly rejected: readonly AttachmentRejection[] }> {
+    const added: ComposerAttachment[] = [];
+    const rejected: AttachmentRejection[] = [];
     for (const file of files) {
-        read.push(await readPromptAttachment(file, signal));
+        try {
+            added.push(await readPromptAttachment(file, signal));
+        } catch (cause) {
+            signal.throwIfAborted();
+            rejected.push({
+                name: file.name,
+                reason: cause instanceof AttachmentReadError ? cause.code : "attachment_read_failed",
+            });
+        }
     }
-    return read;
+    return { added, rejected };
 }
 
 export function createComposerAttachmentStore(initial: readonly ComposerAttachment[] = []) {
     let pending: AbortController | null = null;
     return createStore<ComposerAttachmentStore>()((set, get) => ({
         attachments: initial,
-        state: { kind: "idle" },
+        state: IDLE,
         addFiles: (files, signal) => {
             if (signal.aborted || !canAddAttachments(get()) || files.length === 0) {
                 return;
@@ -44,43 +62,45 @@ export function createComposerAttachmentStore(initial: readonly ComposerAttachme
             pending = controller;
             const readSignal = AbortSignal.any([signal, controller.signal]);
             set({ state: { kind: "reading" } });
-            void readAttachments(files.slice(0, ATTACHMENT_LIMIT - get().attachments.length), readSignal).then(
-                (read) => {
+            const capacity = ATTACHMENT_LIMIT - get().attachments.length;
+            const overflow = files.slice(capacity).map(
+                (file): AttachmentRejection => ({
+                    name: file.name,
+                    reason: "attachment_limit",
+                    limit: ATTACHMENT_LIMIT,
+                }),
+            );
+            void readAttachments(files.slice(0, capacity), readSignal).then(
+                ({ added, rejected }) => {
                     if (readSignal.aborted || pending !== controller) {
                         return;
                     }
-                    const added: readonly ComposerAttachment[] = read;
                     pending = null;
+                    const rejections = [...rejected, ...overflow];
                     // Read the latest list: a removal during file I/O must survive completion.
-                    set((current) => ({ attachments: [...current.attachments, ...added], state: { kind: "idle" } }));
+                    set((current) => ({
+                        attachments: [...current.attachments, ...added],
+                        state: rejections.length === 0 ? IDLE : { kind: "rejected", rejections },
+                    }));
                 },
-                (cause: unknown) => {
-                    if (pending !== controller) {
-                        return;
+                () => {
+                    if (pending === controller) {
+                        pending = null;
                     }
-                    pending = null;
-                    if (readSignal.aborted) {
-                        return;
-                    }
-                    controller.abort(cause);
-                    set({
-                        state: {
-                            kind: "failed",
-                            message:
-                                cause instanceof AttachmentReadError
-                                    ? cause.message
-                                    : "The selected attachment could not be read.",
-                        },
-                    });
                 },
             );
         },
-        remove: (index) => set((current) => ({ attachments: current.attachments.filter((_, item) => item !== index) })),
+        // Removing an attachment is the user acting on the draft, so an earlier rejection no longer describes it.
+        remove: (index) =>
+            set((current) => ({
+                attachments: current.attachments.filter((_, item) => item !== index),
+                state: current.state.kind === "rejected" ? IDLE : current.state,
+            })),
         clear: () => {
             const previous = pending;
             pending = null;
             previous?.abort(new DOMException("The attachment draft was cleared.", "AbortError"));
-            set({ attachments: [], state: { kind: "idle" } });
+            set({ attachments: [], state: IDLE });
         },
         restore: (attachments) => {
             get().clear();
