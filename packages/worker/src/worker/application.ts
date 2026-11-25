@@ -12,6 +12,7 @@ import { assertBrowserOriginAllowed } from "../middleware/browser-cors.ts";
 import { instructionDocumentRoutes } from "./components/instruction-documents/http/instruction-document-routes.ts";
 import { cloudRoutes } from "./composition/cloud-http.ts";
 import { forwardToComputer } from "./gateway/computer-object-routing.ts";
+import { sessionOpenTimingRoutes } from "./http/session-open-timing.ts";
 import { webPages } from "./http/web-pages.ts";
 
 type ForwardingEnvironment = {
@@ -102,6 +103,7 @@ const notFound = (): never => {
 const publicApplication = new Hono<{ readonly Bindings: CloudBindings }>()
     .onError(errorHandler)
     .get("/morty/api/v1/health", controlBodyLimit, (context) => context.body(null, 204))
+    .route("/", sessionOpenTimingRoutes)
     .route("/", webPages)
     .route("/", instructionDocumentRoutes)
     .route("/morty/api", cloudRoutes)

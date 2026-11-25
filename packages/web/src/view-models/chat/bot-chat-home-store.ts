@@ -245,6 +245,7 @@ export const createBotChatHomeStore = (
         /** Announced when a created conversation joins the directory: the owner reloads it without reloading the home view. */
         readonly onDirectoryRefreshed: () => void;
         readonly onFirstMessage: (sessionTarget: NativeSessionTarget, message: SubmittedMessage) => void;
+        readonly onOpenFailed: () => void;
         readonly onDraftSelected: () => void;
         readonly onSelectionTargeted: (conversationId: NativeSessionTarget | null) => void;
         readonly onSelectionReady: (selection: Extract<ConversationSelectionState, { readonly kind: "ready" }>) => void;
@@ -395,6 +396,7 @@ export const createBotChatHomeStore = (
                 ): void => {
                     const current = get().selection;
                     if (current.kind === "loading") {
+                        options.onOpenFailed();
                         set({
                             selection: transitionConversationSelection(current, {
                                 kind: "session-load-failed",

@@ -101,6 +101,7 @@ export function createMortyApplication(options: {
     const install = options.appInstall ?? browserAppInstall();
     const appInstall = createAppInstallStore(install, options.clock ?? systemClock, lifetime.signal);
     const continuation = createContinueStore(transport, install.homeScreenApp === "running");
+    let openedChatDocument = window.location.pathname === "/chat";
     let workspace: ChatWorkspace | null = null;
     let workspaceRequests: BotChatApi | null = null;
     let disposed = false;
@@ -165,6 +166,7 @@ export function createMortyApplication(options: {
                     }),
             }),
             entry: session.entry,
+            openedChatDocument,
             bugReportDialog,
             appInstall,
             accessHolder: install.homeScreenApp === "running" ? "app" : "browser",
@@ -176,6 +178,7 @@ export function createMortyApplication(options: {
             },
         });
         workspaceRequests = requests;
+        openedChatDocument = false;
         workspace.start();
         sessionWorkspace.setState({ workspace });
     };
