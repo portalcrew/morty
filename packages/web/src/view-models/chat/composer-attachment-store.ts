@@ -22,6 +22,15 @@ export function canAddAttachments(model: ComposerAttachmentStore): boolean {
     return model.state.kind !== "reading" && model.attachments.length < ATTACHMENT_LIMIT;
 }
 
+// One at a time: a resized photo is decoded at full size, and several at once can exhaust a phone's page memory.
+async function readAttachments(files: readonly File[], signal: AbortSignal): Promise<readonly ComposerAttachment[]> {
+    const read: ComposerAttachment[] = [];
+    for (const file of files) {
+        read.push(await readPromptAttachment(file, signal));
+    }
+    return read;
+}
+
 export function createComposerAttachmentStore(initial: readonly ComposerAttachment[] = []) {
     let pending: AbortController | null = null;
     return createStore<ComposerAttachmentStore>()((set, get) => ({
@@ -35,11 +44,7 @@ export function createComposerAttachmentStore(initial: readonly ComposerAttachme
             pending = controller;
             const readSignal = AbortSignal.any([signal, controller.signal]);
             set({ state: { kind: "reading" } });
-            void Promise.all(
-                files
-                    .slice(0, ATTACHMENT_LIMIT - get().attachments.length)
-                    .map((file) => readPromptAttachment(file, readSignal)),
-            ).then(
+            void readAttachments(files.slice(0, ATTACHMENT_LIMIT - get().attachments.length), readSignal).then(
                 (read) => {
                     if (readSignal.aborted || pending !== controller) {
                         return;
