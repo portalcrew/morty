@@ -38,7 +38,7 @@ export function MortyVersion({ release }: { readonly release: ComputerReleaseSto
                             label="Copy update prompt"
                             size="sm"
                             successToast={{
-                                description: "Send it to your agent on that computer. Morty restarts after it replies.",
+                                description: "Send the copied prompt to your agent on that computer.",
                                 title: "Copied",
                             }}
                             value={mortyUpdatePrompt}
