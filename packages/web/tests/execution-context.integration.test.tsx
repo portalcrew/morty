@@ -1,4 +1,4 @@
-import { getByRole, queryByRole } from "@testing-library/dom";
+import { getByRole, getByText, queryByRole } from "@testing-library/dom";
 import type { DetachedWindowAPI } from "happy-dom";
 import { expect, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
@@ -18,10 +18,10 @@ declare global {
     }
 }
 
-async function selectCodexHarness(app: TestApp): Promise<void> {
+async function verifyCodexHarness(app: TestApp): Promise<void> {
     await app.user.click(await app.queryElementByTestId(dataTestId.agentConfiguration));
     const configuration = getByRole(document.body, "dialog", { name: "Agent configuration" });
-    await app.user.click(getByRole(configuration, "radio", { name: "Codex" }));
+    expect(getByText(configuration, "Codex")).toBeDefined();
     await app.user.keyboard("{Escape}");
     expect(queryByRole(document.body, "dialog", { name: "Agent configuration" })).toBeNull();
 }
@@ -84,7 +84,7 @@ test("Given a connected Computer, When a saved conversation disconnects and reco
     const clock = new TestClock("2026-10-21T08:00:00Z");
     const app = await createTestApp({ connectAgent: true, clock });
     await readyComposer(app);
-    await selectCodexHarness(app);
+    await verifyCodexHarness(app);
     const directoryName = await readDirectory(app);
     await sendPrompt(app, app.elementByTestId(dataTestId.messageComposer), "Remember this execution context");
     await app.waitForView(() =>
@@ -132,7 +132,7 @@ test("Given a saved conversation and a different draft directory, When the user 
 }, async () => {
     const app = await createTestApp({ connectAgent: true });
     await readyComposer(app);
-    await selectCodexHarness(app);
+    await verifyCodexHarness(app);
     const originalDirectory = await readDirectory(app);
     expect(getByRole(document.body, "button", { name: /Switch computer/ }).textContent).toContain(
         "Controlled Agent Runtime",

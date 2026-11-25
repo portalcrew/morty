@@ -57,6 +57,28 @@ function HarnessSelect({
     readonly harness: ChatConfigurationSelectControl;
     readonly mutedWhenDisabled?: boolean;
 }) {
+    const singleOption = harness.options.length === 1 ? harness.options[0] : undefined;
+    if (singleOption !== undefined) {
+        return (
+            <div
+                className="flex min-h-9 min-w-0 items-center justify-between gap-4 px-3.5 text-13 text-copy-secondary max-sm:min-h-11 max-sm:[font-size:15px]"
+                data-testid={dataTestId.agentSetting("harness")}
+            >
+                <span>{harness.label}</span>
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <HarnessMark
+                        harness={singleOption.value}
+                        label={singleOption.label}
+                        testId={dataTestId.harnessMark}
+                    />
+                    <span className="truncate">
+                        {singleOption.label}
+                        {singleOption.installed === false ? " (not installed)" : null}
+                    </span>
+                </span>
+            </div>
+        );
+    }
     return (
         <div className="flex flex-col gap-1.5">
             <span className="px-3.5 text-13 text-copy-secondary max-sm:[font-size:15px]">{harness.label}</span>

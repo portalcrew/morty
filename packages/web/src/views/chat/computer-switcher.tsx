@@ -24,6 +24,7 @@ import {
     type ComputerChoice,
     type ComputerSwitcherModel,
     computerSwitcherChoices,
+    sortComputerChoices,
 } from "../../view-models/chat/computer-switcher-store.ts";
 
 function connectionLabel(status: BotConnectionStatus): string {
@@ -60,7 +61,6 @@ function choiceStatusLabel(status: ComputerChoice["status"]): string | null {
     }
 }
 
-/** Online is a filled dot; every other state is a hollow ring, so the state never depends on color alone. */
 function StatusDot({
     className,
     online,
@@ -76,14 +76,14 @@ function StatusDot({
             className={cn(
                 "size-1.5 shrink-0 rounded-full",
                 className,
-                online ? "bg-success" : "border-[1.5px] border-muted-foreground/60",
-                pulsing && "animate-pulse border-amber-500 motion-reduce:animate-none",
+                online ? "bg-success" : "bg-morty-text-4",
+                pulsing && "animate-pulse bg-amber-500 motion-reduce:animate-none",
             )}
         />
     );
 }
 
-const choiceRowClassName = "grid grid-cols-[1rem_minmax(0,1fr)_auto_1rem] items-center gap-x-2 outline-none";
+const choiceRowClassName = "grid grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-x-2 outline-none";
 
 function ComputerChoiceContent({
     choice,
@@ -101,35 +101,49 @@ function ComputerChoiceContent({
     const status = choiceStatusLabel(choice.status);
     return (
         <>
-            <span className="flex justify-center">
+            <span className={cn("flex justify-center", choice.disambiguator !== null && "-translate-y-2")}>
                 <StatusDot online={choice.status === "online"} />
                 {status === null ? <span className="sr-only">Online</span> : null}
             </span>
             <span
                 className={cn(
                     "min-w-0 font-medium",
-                    current && "col-span-2",
+                    ((current && removal !== undefined) ||
+                        (!current && (status === null || choice.status === "unavailable"))) &&
+                        "col-span-2",
                     nameClassName,
-                    status !== null && "font-normal text-copy-secondary",
+                    choice.status === "unavailable" ? "text-morty-text-3/70" : status !== null && "text-copy-secondary",
                 )}
             >
                 <span className="block truncate" title={choice.name}>
                     {choice.name}
                 </span>
                 {choice.disambiguator === null ? null : (
-                    <span className="block truncate text-xs font-normal text-morty-text-3" title={choice.disambiguator}>
+                    <span
+                        className="block truncate text-11 leading-4 font-normal text-morty-text-3/80"
+                        title={choice.disambiguator}
+                    >
                         {choice.disambiguator}
                     </span>
                 )}
             </span>
-            <span className={cn("whitespace-nowrap text-morty-text-3", statusClassName, current && "sr-only")}>
-                {status}
-            </span>
-            {removal ?? (
-                <span className="flex w-4 justify-center" aria-hidden="true">
-                    {current ? <Check className="size-3.5" /> : null}
+            {status !== null && (
+                <span
+                    className={cn(
+                        "whitespace-nowrap text-morty-text-3",
+                        statusClassName,
+                        (current || choice.status === "unavailable") && "sr-only",
+                    )}
+                >
+                    {status}
                 </span>
             )}
+            {removal ??
+                (current ? (
+                    <span className="flex w-4 justify-center" aria-hidden="true">
+                        <Check className="size-3.5" />
+                    </span>
+                ) : null)}
         </>
     );
 }
@@ -153,7 +167,7 @@ function ComputerMenuChoice({
     readonly onRemove: (key: string) => void;
 }) {
     const current = choice.key === activeKey;
-    const tall = choice.disambiguator !== null && "h-12";
+    const tall = choice.disambiguator !== null && "h-12 rounded-[16px]";
     if (editing) {
         return (
             <div className={cn(choiceRowClassName, "h-9 grid-cols-[1rem_minmax(0,1fr)_auto_auto] px-3", tall)}>
@@ -165,7 +179,7 @@ function ComputerMenuChoice({
                         current ? null : (
                             <DropdownMenu.Item
                                 aria-label={forgetComputerLabel(choice)}
-                                className="-mr-2 flex h-7 cursor-pointer items-center rounded-full px-2 text-xs font-medium text-destructive outline-none data-[highlighted]:bg-destructive/10"
+                                className="-mr-2 flex h-7 cursor-pointer items-center rounded-full px-2 text-xs font-normal text-destructive outline-none data-[highlighted]:bg-destructive/10"
                                 onSelect={() => onRemove(choice.key)}
                             >
                                 Remove
@@ -209,7 +223,7 @@ const mobileComputersSectionTitleClassName =
 const mobileChoiceRowLayoutClassName = cn(
     choiceRowClassName,
     // The first column matches the 20px icons of the drawer's action rows, so every label starts on one line.
-    "min-h-12 w-full grid-cols-[1.25rem_minmax(0,1fr)_auto_1rem] gap-x-3 px-4 text-left",
+    "min-h-12 w-full grid-cols-[1.25rem_minmax(0,1fr)_auto] gap-x-3 px-4 text-left",
 );
 
 const mobileChoiceRowClassName = cn(
@@ -242,7 +256,7 @@ function ComputerListChoice({
                         current ? null : (
                             <button
                                 aria-label={forgetComputerLabel(choice)}
-                                className="-mr-3 flex min-h-11 items-center rounded-full px-3 text-[15px] font-medium text-destructive outline-none transition-colors hover:bg-destructive/10 active:bg-destructive/15 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
+                                className="-mr-3 flex min-h-11 items-center rounded-full px-3 text-[15px] font-normal text-destructive outline-none transition-colors hover:bg-destructive/10 active:bg-destructive/15 keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 motion-reduce:transition-none"
                                 onClick={() => onRemove(choice.key)}
                                 type="button"
                             >
@@ -306,8 +320,9 @@ export function ComputerSwitcher({
     readonly onChooseCurrent?: () => void;
 }) {
     const state = useStore(model.store);
-    const choices = computerSwitcherChoices(state, name, status);
     const activeKey = model.activeKey;
+    const availableChoices = computerSwitcherChoices(state, name, status);
+    const choices = sortComputerChoices(availableChoices, activeKey);
     const listLoading = state.kind === "loading";
     const active = choices.find((choice) => choice.key === activeKey);
     const computerName = name || active?.name || "Computer";
@@ -329,7 +344,7 @@ export function ComputerSwitcher({
                                 {removable ? (
                                     <button
                                         className={cn(
-                                            "-my-3 min-h-11 rounded-full px-4 text-[15px] font-medium outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60",
+                                            "-my-3 min-h-11 rounded-full px-4 text-[15px] font-normal outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60",
                                             textLinkClassName,
                                         )}
                                         onClick={toggleEditing}
@@ -341,7 +356,7 @@ export function ComputerSwitcher({
                             </div>
                             <button
                                 aria-label={detailsLabel}
-                                className={mobileDrawerCardRowClassName}
+                                className={cn(mobileDrawerCardRowClassName, "font-normal")}
                                 onClick={openDetails}
                                 type="button"
                             >
@@ -375,7 +390,10 @@ export function ComputerSwitcher({
                             </div>
                             <a
                                 href="/setup"
-                                className={cn(mobileDrawerCardRowClassName, "border-t-[0.5px] border-black/[0.06]")}
+                                className={cn(
+                                    mobileDrawerCardRowClassName,
+                                    "border-t-[0.5px] border-black/[0.06] font-normal",
+                                )}
                             >
                                 <Plus aria-hidden="true" className="size-5 shrink-0 text-copy-secondary" />
                                 Connect another computer
@@ -457,7 +475,7 @@ export function ComputerSwitcher({
                                 {/* Details describe the computer shown on the trigger, so they sit right below it. */}
                                 <DropdownMenu.Item
                                     aria-label={detailsLabel}
-                                    className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full px-3 text-copy-secondary outline-none data-[highlighted]:bg-accent data-[highlighted]:text-foreground"
+                                    className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full px-3 font-normal text-copy-secondary outline-none data-[highlighted]:bg-accent data-[highlighted]:text-foreground"
                                     onSelect={openDetails}
                                 >
                                     <MonitorCog aria-hidden="true" className="size-4 shrink-0" />
@@ -479,7 +497,7 @@ export function ComputerSwitcher({
                                     ) : null}
                                     {removable ? (
                                         <DropdownMenu.Item
-                                            className="-my-1 -mr-2 cursor-pointer rounded-full px-2 py-1 font-medium text-primary outline-none data-[highlighted]:bg-accent"
+                                            className="-my-1 -mr-2 cursor-pointer rounded-full px-2 py-1 font-normal text-morty-text-3 outline-none data-[highlighted]:bg-accent"
                                             onSelect={(event) => {
                                                 // Editing changes what the open menu offers, so it keeps the menu open.
                                                 event.preventDefault();
@@ -524,7 +542,7 @@ export function ComputerSwitcher({
                                 <DropdownMenu.Item asChild>
                                     <a
                                         href="/setup"
-                                        className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full px-3 outline-none data-[highlighted]:bg-accent"
+                                        className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full px-3 font-normal outline-none data-[highlighted]:bg-accent"
                                     >
                                         <Plus aria-hidden="true" className="size-4" />
                                         Connect another computer
