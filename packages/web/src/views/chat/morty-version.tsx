@@ -32,7 +32,7 @@ export function MortyVersion({ release }: { readonly release: ComputerReleaseSto
                             }
                             failureToast={{
                                 description:
-                                    "Ask your agent to run `npx --yes @portalcrew/morty@latest restart` as a detached background process.",
+                                    "Ask your agent on that computer to run `npx --yes @portalcrew/morty@latest update`.",
                                 title: "Could not copy",
                             }}
                             label="Copy update prompt"

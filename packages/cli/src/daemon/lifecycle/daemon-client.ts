@@ -8,8 +8,16 @@ import { daemonLockExists } from "../../storage/daemon/daemon-lock.ts";
 import { CONTROL_TIMEOUT_MILLISECONDS, sendLocalRequest } from "../control/local-client.ts";
 import { decodeLifecycleResponse } from "../control/protocol.ts";
 
-async function spawnDaemon(entry: string, environment: Readonly<NodeJS.ProcessEnv>): Promise<ChildProcess> {
-    const child = spawn(process.execPath, [entry, "__daemon"], {
+/**
+ * Starts a CLI command in its own session (its own process group on Windows), so it outlives the process that started
+ * it, including a process group that an Agent's tool ends when its command returns.
+ */
+export async function spawnDetachedCommand(
+    entry: string,
+    command: string,
+    environment: Readonly<NodeJS.ProcessEnv>,
+): Promise<ChildProcess> {
+    const child = spawn(process.execPath, [entry, command], {
         detached: true,
         windowsHide: true,
         env: environment,
@@ -110,7 +118,7 @@ async function waitForDaemon(
                 throw new Error("The daemon exited before becoming ready");
             }
             if (!daemonStarted) {
-                child = await spawnDaemon(entry, environment);
+                child = await spawnDetachedCommand(entry, "__daemon", environment);
                 daemonStarted = true;
             }
             await new Promise<void>((resolve, reject) => {
@@ -157,4 +165,14 @@ export async function stopDaemon(stateDirectory: InstallationDirectory, signal: 
             await delay(50, undefined, { signal: deadline });
         }
     }
+}
+
+export async function restartDaemon(
+    stateDirectory: InstallationDirectory,
+    entry: string,
+    environment: Readonly<NodeJS.ProcessEnv>,
+    signal: AbortSignal,
+): Promise<RunningDaemon> {
+    await stopDaemon(stateDirectory, signal);
+    return await ensureDaemon(stateDirectory, entry, environment, signal);
 }

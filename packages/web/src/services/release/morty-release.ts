@@ -36,10 +36,9 @@ export function isNewerMortyRelease(candidate: string, current: string): boolean
 }
 
 /**
- * For the Agent on the outdated computer. Restarting Morty ends the Agent's own processes, so a restart it runs in the
- * foreground would stop the old daemon and die before starting the new one; detached and delayed, the restart outlives
- * the Agent's reply.
+ * For the Agent on the outdated computer. `update` restarts Morty from its own detached session after a delay, because
+ * restarting Morty ends the Agent's processes, and an Agent's tool may end every process its command started.
  */
-export const mortyUpdatePrompt = `Update Morty on this computer. Restarting Morty ends this conversation, so run the restart detached in the background after a short delay, and reply before it starts:
-nohup sh -c 'sleep 15; npx --yes @portalcrew/morty@latest restart' > /dev/null 2>&1 &
-On Windows, do the same with PowerShell's Start-Process.`;
+export const mortyUpdatePrompt = `Update Morty on this computer to the latest release.
+Run \`npx --yes @portalcrew/morty@latest update\`. It is done when the command exits with code 0 and prints "Morty restarts in 15 seconds." Reply as soon as it does: the restart ends this conversation.
+If the command fails, reply with its error. Do not restart or stop Morty any other way, because this conversation would end before Morty starts again.`;
