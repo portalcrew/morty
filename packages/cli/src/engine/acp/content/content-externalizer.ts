@@ -1,5 +1,5 @@
 import type { ContentBlock, SessionUpdate, ToolCallContent } from "@agentclientprotocol/sdk/unstable";
-import type { NativeSessionTarget } from "@portalcrew/morty-client/protocol";
+import { type NativeSessionTarget, PROMPT_IMAGE_MAX_BYTES } from "@portalcrew/morty-client/protocol";
 import { z } from "zod";
 
 interface ExtractedContent {
@@ -17,7 +17,8 @@ export type StoreExtractedContent = (
 
 import { sniffRasterMime } from "./raster.ts";
 
-const MAXIMUM_ENCODED_CONTENT_CHARACTERS = 4_000_000;
+// Every image a prompt accepts must remain viewable in the Session, live and after history replay.
+export const MAXIMUM_ENCODED_CONTENT_CHARACTERS = Math.ceil(PROMPT_IMAGE_MAX_BYTES / 3) * 4;
 // Match the event wire's UTF-16 bound, including the omission marker.
 const MAXIMUM_TEXT_CHARACTERS = 1_000_000;
 
