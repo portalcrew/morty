@@ -77,10 +77,7 @@ class InhibitorHold implements SleepPreventionHold {
     };
 }
 
-/**
- * Holds the computer awake through the first of the platform's inhibitor commands that runs. Holding never fails:
- * a computer that cannot be held awake only risks sleeping, so the work it would have protected still runs.
- */
+/** Holds the computer awake through the first of the platform's inhibitor commands that runs. */
 export function hostSleepPrevention(launches: readonly ProcessLaunch[], timer: Timer): SleepPrevention {
     let reported = false;
     const unavailable = (): void => {

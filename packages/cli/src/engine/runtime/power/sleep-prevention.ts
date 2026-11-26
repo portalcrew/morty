@@ -4,6 +4,7 @@ export interface SleepPreventionHold {
 }
 
 export interface SleepPrevention {
+    /** Never throws: a computer that cannot be held awake only risks sleeping, and the work it protects still runs. */
     readonly hold: () => SleepPreventionHold;
 }
 
