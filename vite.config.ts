@@ -72,6 +72,22 @@ export default defineConfig({
             },
         },
     },
+    environments: {
+        client: {
+            build: {
+                rolldownOptions: {
+                    output: {
+                        // Releases change application code far more often than the lockfile. Keeping the
+                        // third-party code a page needs at start in its own chunk lets a returning browser
+                        // keep it cached across releases.
+                        codeSplitting: {
+                            groups: [{ name: "vendor", test: /[\\/]node_modules[\\/]/u, tags: ["$initial"] }],
+                        },
+                    },
+                },
+            },
+        },
+    },
     resolve: {
         alias: [{ find: "@", replacement: fileURLToPath(new URL("./packages/web/src", import.meta.url)) }],
     },
