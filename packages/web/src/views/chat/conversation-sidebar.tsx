@@ -44,6 +44,7 @@ import { MortyTooltipContent } from "../../components/ui/morty-tooltip-content.t
 import { MortyTooltipTrigger } from "../../components/ui/morty-tooltip-trigger.tsx";
 import { type OverlayContentOpenAutoFocus, preventOverlayOpenAutoFocus } from "../../components/ui/overlay-surface.ts";
 import { ScrollArea } from "../../components/ui/scroll-area.tsx";
+import { ToastAnnouncement } from "../../components/ui/toast-announcement.tsx";
 import { DesktopChatLayout } from "../../components/utils/desktop-chat-layout.tsx";
 import { ScrollEdgeFade } from "../../components/utils/scroll-edge-fade.tsx";
 import { dataTestId } from "../../data-testid.ts";
@@ -535,6 +536,10 @@ export function ConversationSidebar({
     const dialogs = workspace.sidebar.dialogs;
     const home = useStore(workspace.home);
     const status = useStore(workspace.computer);
+    const overdue = useStore(workspace.computerRelease, (model) => model.state.kind === "overdue");
+    const updatedRelease = useStore(workspace.computerRelease, (model) =>
+        model.state.kind === "updated" ? model.state.running : null,
+    );
     const draftSettings = useStore(workspace.draftControls, (state) => state.settings);
     const openPane = useStore(workspace.pane);
     const pane = openPane.kind === "open" ? openPane.model : null;
@@ -651,9 +656,15 @@ export function ConversationSidebar({
                                                     type="button"
                                                     aria-controls="conversation-sidebar-mobile-drawer"
                                                     aria-expanded={mobileNavOpen}
-                                                    aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+                                                    aria-label={
+                                                        mobileNavOpen
+                                                            ? "Close navigation"
+                                                            : overdue
+                                                              ? "Open navigation, update available"
+                                                              : "Open navigation"
+                                                    }
                                                     className={cn(
-                                                        "inline-flex items-center justify-center outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 sm:hidden",
+                                                        "relative inline-flex items-center justify-center outline-none keyboard-focus:focus-visible:ring-[3px] keyboard-focus:focus-visible:ring-ring/60 sm:hidden",
                                                         mobileHeaderIconButtonClassName,
                                                     )}
                                                     onClick={() => {
@@ -667,6 +678,12 @@ export function ConversationSidebar({
                                                     }}
                                                 >
                                                     <MortyLogoMark size={26} />
+                                                    {overdue && !mobileNavOpen ? (
+                                                        <span
+                                                            aria-hidden="true"
+                                                            className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary ring-2 ring-white"
+                                                        />
+                                                    ) : null}
                                                 </button>
                                                 {desktop ? (
                                                     <>
@@ -675,6 +692,7 @@ export function ConversationSidebar({
                                                         <ComputerSwitcher
                                                             context={executionContext}
                                                             layout="header"
+                                                            release={workspace.computerRelease}
                                                             model={workspace.computers}
                                                             name={computerName}
                                                             status={connectionStatus}
@@ -889,6 +907,7 @@ export function ConversationSidebar({
                                                                 <ComputerSwitcher
                                                                     context={executionContext}
                                                                     layout="list"
+                                                                    release={workspace.computerRelease}
                                                                     model={workspace.computers}
                                                                     name={computerName}
                                                                     onChooseCurrent={dialogs.getState().closeMobileNav}
@@ -1038,6 +1057,14 @@ export function ConversationSidebar({
                                                 </ScrollArea>
                                             </Tooltip.Provider>
                                         </div>
+                                        <ToastAnnouncement
+                                            description={
+                                                updatedRelease === null
+                                                    ? undefined
+                                                    : `This computer now runs ${updatedRelease}.`
+                                            }
+                                            title={updatedRelease === null ? null : "Morty updated"}
+                                        />
                                         {nativeDialog !== null && (
                                             <NativeSessionDialog
                                                 store={nativeDialog.store}

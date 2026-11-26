@@ -7,9 +7,11 @@ import { ExecutionDetailsDialog } from "./execution-details-dialog.tsx";
 export function ComputerExecutionDetails({
     children,
     context,
+    rows,
 }: {
     readonly children: (details: { readonly open: boolean; readonly openDetails: () => void }) => ReactNode;
     readonly context: ExecutionContext;
+    readonly rows?: ReactNode;
 }) {
     const [open, setOpen] = useState(false);
     return (
@@ -17,6 +19,7 @@ export function ComputerExecutionDetails({
             {children({ open, openDetails: () => setOpen(true) })}
             <ExecutionDetailsDialog
                 context={context}
+                rows={rows}
                 onOpenChange={setOpen}
                 open={open}
                 returnFocus={() => {

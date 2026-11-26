@@ -68,7 +68,7 @@ export async function runDaemon(version: string, signal: AbortSignal): Promise<v
     try {
         await runDaemonRuntime(version, combined, shutdown, rejectionGuard);
     } catch (cause) {
-        await recordDaemonFailure(cause);
+        await recordDaemonFailure("daemon_failed", cause);
         throw cause;
     } finally {
         shutdown.abort();
@@ -77,12 +77,15 @@ export async function runDaemon(version: string, signal: AbortSignal): Promise<v
 }
 
 /** Never throws: the failure being recorded must reach the caller, whatever stops it from being recorded. */
-async function recordDaemonFailure(failure: unknown): Promise<void> {
+export async function recordDaemonFailure(
+    kind: "daemon_failed" | "daemon_restart_failed",
+    failure: unknown,
+): Promise<void> {
     try {
         const control = await openMortyInstallation(AbortSignal.timeout(5_000), process.env);
         new BoundedLineLog(logDirectory(control.stateDirectory), DAEMON_LIFECYCLE_LOG_FILENAME, 512 * 1024).record(
             JSON.stringify({
-                kind: "daemon_failed",
+                kind,
                 message: failure instanceof Error ? failure.message : "Daemon failed",
             }),
         );
