@@ -30,6 +30,7 @@ export interface SessionLayerOptions {
     readonly resolveAgent: ResolveAgent;
     readonly sink: SessionEventSink;
     readonly stateDirectory: string;
+    readonly onWorking: (working: boolean) => void;
     readonly timer: Timer;
 }
 
@@ -57,6 +58,7 @@ export function buildSessionLayer(options: SessionLayerOptions) {
             stopping: (target, commandId) => manager.stopping(target, commandId),
         },
         (target) => manager.turnFinished(target),
+        options.onWorking,
     );
     const standings = new CommandStandings(activeSessions, events.livePosition);
     const sessionCreations = new SessionCreations(sessionStore);

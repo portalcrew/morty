@@ -40,6 +40,7 @@ import {
     RuntimeAgentDependencies,
     RuntimeLocalContext,
 } from "../../../src/engine/runtime/config.ts";
+import type { SleepPrevention } from "../../../src/engine/runtime/power/sleep-prevention.ts";
 import {
     HEARTBEAT_ACK_TIMEOUT_MILLISECONDS,
     HEARTBEAT_INTERVAL_MILLISECONDS,
@@ -107,6 +108,7 @@ export async function withRealDaemon(
     workspaceDirectory?: string,
     timer: Timer = systemTimer,
     adapters: AdapterResolver = harnessAdapters,
+    sleepPrevention?: SleepPrevention,
 ): Promise<void> {
     await withDaemonConnection(
         signal,
@@ -120,6 +122,7 @@ export async function withRealDaemon(
         workspaceDirectory,
         timer,
         adapters,
+        sleepPrevention,
     );
 }
 
@@ -129,8 +132,19 @@ export const withControlledDaemonConnection = (
     environment: Readonly<Record<string, string>>,
     scenario: (peer: DaemonConnectionPeer) => Promise<void>,
     launch: "embedded" | "managed" = "embedded",
+    sleepPrevention?: SleepPrevention,
 ): Promise<void> =>
-    withDaemonConnection(signal, specification, environment, scenario, launch, undefined, systemTimer, acpAdapters);
+    withDaemonConnection(
+        signal,
+        specification,
+        environment,
+        scenario,
+        launch,
+        undefined,
+        systemTimer,
+        acpAdapters,
+        sleepPrevention,
+    );
 
 export const withRealDaemonConnection = (
     signal: AbortSignal,
@@ -150,6 +164,7 @@ async function withDaemonConnection(
     workspaceDirectory: string | undefined,
     timer: Timer,
     adapters: AdapterResolver,
+    sleepPrevention?: SleepPrevention,
 ): Promise<void> {
     const directory = await mkdtemp(join(tmpdir(), `morty-real-${specification.harness}-`));
     const workspace = workspaceDirectory ?? join(directory, "workspace");
@@ -339,6 +354,7 @@ async function withDaemonConnection(
                         Number(environment["MORTY_TEST_MAX_ACP_PROCESSES"] ?? "1000"),
                         runtimeTimer,
                     ),
+                    ...(sleepPrevention === undefined ? {} : { sleepPrevention }),
                 });
                 void runtime.catch((error: unknown) => {
                     connected.reject(error);

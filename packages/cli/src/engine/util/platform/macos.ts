@@ -19,4 +19,5 @@ export const macosPlatform: PlatformSupport = {
         }
         return paths;
     },
+    idleSleepInhibitors: () => [{ command: "/usr/bin/caffeinate", arguments: ["-i", "/bin/cat"] }],
 };

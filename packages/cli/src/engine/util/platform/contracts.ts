@@ -1,3 +1,5 @@
+import type { ProcessLaunch } from "../process/platform/contracts.ts";
+
 export interface PlatformSupport {
     readonly controlSocketPath: (installationHash: string) => string;
     readonly prepareControlSocket: (path: string) => Promise<void>;
@@ -11,4 +13,9 @@ export interface PlatformSupport {
         signal: AbortSignal,
     ) => Promise<void>;
     readonly claudeCodeExecutablePaths: (environment: Readonly<NodeJS.ProcessEnv>) => readonly string[];
+    /**
+     * Commands that each keep the computer from sleeping while idle, in order of preference. Each holds until its
+     * standard input closes, so the hold also ends when the Runtime exits without releasing it.
+     */
+    readonly idleSleepInhibitors: (environment: Readonly<NodeJS.ProcessEnv>) => readonly ProcessLaunch[];
 }

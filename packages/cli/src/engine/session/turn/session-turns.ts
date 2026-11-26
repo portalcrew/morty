@@ -21,16 +21,23 @@ export class SessionTurns {
     readonly #operations: ExecutionReceipts;
     readonly #executions: SessionExecutions;
     readonly #onFinished: (sessionTarget: NativeSessionTarget) => void;
+    readonly #onWorking: (working: boolean) => void;
 
     constructor(
         operations: ExecutionReceipts,
         executions: SessionExecutions,
         onFinished: (sessionTarget: NativeSessionTarget) => void,
+        onWorking: (working: boolean) => void,
     ) {
         this.#operations = operations;
         this.#executions = executions;
         this.#onFinished = onFinished;
+        this.#onWorking = onWorking;
     }
+
+    /** Whether any Session is working, by the same rule as each Session's status. */
+    readonly #working = (): boolean =>
+        [...this.#bySessionTarget.values()].some((session) => session.working() !== undefined);
 
     readonly hasUnsettledTurn = (sessionTarget: NativeSessionTarget): boolean =>
         this.#bySessionTarget
@@ -51,12 +58,15 @@ export class SessionTurns {
         this.#bySessionTarget.get(sessionTarget)?.get(commandId);
 
     readonly start = (command: SessionPromptCommand, onQueued: () => void): ActiveRuntimeTurn => {
-        return this.session(command.target).start(command, onQueued);
+        const turn = this.session(command.target).start(command, onQueued);
+        this.#onWorking(this.#working());
+        return turn;
     };
 
     readonly finish = (turn: ActiveRuntimeTurn): void => {
         this.#bySessionTarget.get(turn.command.target)?.finish(turn);
         this.sweep();
+        this.#onWorking(this.#working());
         this.#onFinished(turn.command.target);
     };
 

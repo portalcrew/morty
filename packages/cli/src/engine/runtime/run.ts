@@ -4,6 +4,7 @@ import { createRuntimeAdapterRegistry } from "../acp/adapter/adapter-registry.ts
 import { buildSessionLayer } from "../session/api/session-layer.ts";
 import { LocalExternalContentStore } from "../session/content/external-content-store.ts";
 import { AgentProcessPool } from "../session/process/agent-process-pool.ts";
+import { hostPlatform } from "../util/platform/index.ts";
 import { runCleanup } from "../util/run-cleanup.ts";
 import { systemTimer, type Timer } from "../util/timer.ts";
 import { publishAgentCatalog } from "./catalog/publish-agent-catalog.ts";
@@ -12,6 +13,8 @@ import type { CommandServices } from "./command/context.ts";
 import type { RuntimeConfig } from "./config.ts";
 import { ComputerEncryptionStore } from "./connection/computer-encryption-store.ts";
 import { RuntimeDiagnosticLog } from "./observability/diagnostic-log.ts";
+import { hostSleepPrevention } from "./power/host-sleep-prevention.ts";
+import { AwakeWhileWorking, type SleepPrevention } from "./power/sleep-prevention.ts";
 import { ComputerRelayRevokedError } from "./relay/computer-revocation.ts";
 import { RelayConnectionDiagnostics } from "./relay/diagnostics.ts";
 import { runRelayConnection } from "./relay/run-relay-connection.ts";
@@ -73,6 +76,7 @@ async function publishAgentCatalogUntilAvailable(
 export interface RunRuntimeOptions {
     readonly onInitialized?: () => void;
     readonly processes?: AgentProcessPool;
+    readonly sleepPrevention?: SleepPrevention;
     readonly onConnectionStatus?: (status: "online" | "reconnecting") => void;
 }
 
@@ -117,6 +121,9 @@ export async function runRuntime(
                 externalizeSessionUpdate,
             };
         };
+        const awake = new AwakeWhileWorking(
+            options.sleepPrevention ?? hostSleepPrevention(hostPlatform.idleSleepInhibitors(process.env)),
+        );
         const layer = buildSessionLayer({
             processes,
             computerId: config.computerId,
@@ -125,6 +132,7 @@ export async function runRuntime(
             sink: publisher,
             stateDirectory: config.localContext.stateDirectory,
             timer,
+            onWorking: awake.follow,
         });
         const {
             activeSessions,
@@ -230,6 +238,7 @@ export async function runRuntime(
             operations.beginShutdown();
             await activeSessions.close();
             await runCleanup(
+                () => awake.release(),
                 () => catalogPublication,
                 () => nativeSessions.close(),
                 () => sessionCreations.settle(),

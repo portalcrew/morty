@@ -55,6 +55,13 @@ if ($env:MORTY_PERMISSION_PRIVATE -eq '1') {
 }
 `;
 
+// ES_CONTINUOUS | ES_SYSTEM_REQUIRED holds for this thread until PowerShell exits when the Runtime closes its input.
+const keepSystemAwake = `
+$power = Add-Type -Namespace Morty -Name Power -PassThru -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint flags);'
+if ($power::SetThreadExecutionState([uint32]2147483649) -eq 0) { exit 1 }
+[Console]::In.ReadToEnd() | Out-Null
+`;
+
 // Keep ACL validation bounded in case Windows filesystem operations stall.
 const windowsPermissionsTimeoutMs = 30_000;
 
@@ -116,5 +123,22 @@ export const windowsPlatform: PlatformSupport = {
         }
         paths.push(...desktopClaudeExecutablePaths(environment));
         return paths;
+    },
+    idleSleepInhibitors: (environment) => {
+        const systemRoot = environmentValue(environment, "SystemRoot");
+        return systemRoot === undefined
+            ? []
+            : [
+                  {
+                      command: join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+                      arguments: [
+                          "-NoLogo",
+                          "-NoProfile",
+                          "-NonInteractive",
+                          "-EncodedCommand",
+                          Buffer.from(keepSystemAwake, "utf16le").toString("base64"),
+                      ],
+                  },
+              ];
     },
 };
