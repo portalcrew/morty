@@ -1,4 +1,4 @@
-import { queryAllByRole } from "@testing-library/dom";
+import { getByRole, queryAllByRole } from "@testing-library/dom";
 import { expect, onTestFinished, test } from "vitest";
 import { dataTestId } from "../src/data-testid.ts";
 import { readyComposer, refreshSessions, sendPrompt } from "./infra/application-scenario.ts";
@@ -32,6 +32,41 @@ test("Given a conversation whose turn failed, When the directory reloads with th
     await app.waitForView(() => {
         expect(directoryEntry(app, "Start another conversation")).toBeDefined();
         expect(entryStatus(app, failedPrompt)).toBe("Session failed");
+    });
+});
+
+test("Given the agent asks for permission, When I look at the sidebar in that conversation and after reopening Morty elsewhere, Then it says the conversation needs my answer until I answer", {
+    timeout: 30_000,
+}, async () => {
+    const prompt = "request session permission";
+    const app = await createTestApp({
+        connectAgent: true,
+        agent: { harness: "interaction-test", label: "Interaction Agent" },
+    });
+    await sendPrompt(app, await readyComposer(app), prompt);
+    await app.waitForView(() => {
+        getByRole(document.body, "alertdialog", { name: "Agent permission request" });
+        expect(entryStatus(app, prompt)).toBe("Needs your answer");
+    });
+
+    await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
+    // A reloaded page follows no conversation, so only the Computer's listing can tell it the request is pending.
+    const reloaded = await app.reload();
+    const entry = await reloaded.waitForView(() => {
+        expect(entryStatus(reloaded, prompt)).toBe("Needs your answer");
+        return directoryEntry(reloaded, prompt);
+    });
+    if (entry === undefined) {
+        throw new Error("Expected the conversation in the sidebar");
+    }
+    await reloaded.user.click(entry);
+    const permission = await reloaded.waitForView(() =>
+        getByRole(document.body, "alertdialog", { name: "Agent permission request" }),
+    );
+    await reloaded.user.click(getByRole(permission, "button", { name: "Allow for this session" }));
+    await reloaded.waitForView(() => {
+        expect(document.body.textContent).toContain("Selected decision: allow-session");
+        expect(entryStatus(reloaded, prompt)).toBeNull();
     });
 });
 

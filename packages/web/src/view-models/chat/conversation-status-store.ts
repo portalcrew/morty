@@ -3,6 +3,8 @@ import type { NativeSessionTarget, SessionStatus } from "@portalcrew/morty-clien
 import { createStore } from "zustand/vanilla";
 import type { ManagedChatSession } from "../../services/chat/bot-chat-api.ts";
 import type { SessionActivityState } from "./session-activity-machine.ts";
+import { waitingForInput } from "./session-execution.ts";
+import type { SessionInteraction } from "./session-pane-types.ts";
 
 export type ConversationStatusStoreApi = ReturnType<typeof createConversationStatusStore>;
 
@@ -13,7 +15,7 @@ type ReportedStatus =
     | { readonly commandId: string; readonly kind: "working" }
     | { readonly kind: "failed"; readonly commandId: string | null; readonly message: string };
 
-type ListedSession = Pick<ManagedChatSession, "target" | "status">;
+type ListedSession = Pick<ManagedChatSession, "target" | "status" | "waitingFor">;
 
 /**
  * What the page remembers of a Session beyond the directory's current listing; a Session without a record shows the
@@ -116,14 +118,36 @@ export function conversationListStatus(
 }
 
 /**
- * Whether any listed Session holds a reply the user has not seen, as the collapsed mobile header must say. An unseen
- * end is never recorded beside an observation, so the page's accounts cannot change the answer.
+ * Whether the Agent waits for the user's answer in the Session, whether or not a turn runs. A Session a pane followed
+ * since the listing was read answers from the page's account of the Agent's requests once the page has one, every
+ * other Session from the listing.
  */
-export function hasUnreadConversation(
+export function conversationWaitsForAnswer(
+    session: ListedSession,
+    record: SessionRecord | undefined,
+    interactions: readonly SessionInteraction[] | null,
+): boolean {
+    if (record?.kind === "followed" && interactions !== null) {
+        return waitingForInput(interactions);
+    }
+    return session.waitingFor === "answer";
+}
+
+/**
+ * What the collapsed mobile header must say of the Sessions besides the open one: that one waits for the user's answer,
+ * otherwise that one holds a reply the user has not seen. It reads the listing, not the page's accounts: the page
+ * follows no other Session past the next listing, which the sidebar reads again every two seconds while one works.
+ */
+export function otherConversationsAttention(
     sessions: readonly ListedSession[] | null,
     records: Pick<NativeSessionMap<SessionRecord>, "get">,
-): boolean {
-    return (sessions ?? []).some((session) => unread(session, records.get(session.target)));
+    open: NativeSessionTarget | null,
+): "answer" | "unread" | null {
+    const others = (sessions ?? []).filter((session) => open === null || !sameNativeSession(open, session.target));
+    if (others.some((session) => conversationWaitsForAnswer(session, records.get(session.target), null))) {
+        return "answer";
+    }
+    return others.some((session) => unread(session, records.get(session.target))) ? "unread" : null;
 }
 
 export function hasWorkingBackgroundConversation(

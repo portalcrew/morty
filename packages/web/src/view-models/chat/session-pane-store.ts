@@ -153,7 +153,6 @@ export function createSessionPaneModel(options: {
         sessionOperationFacts({
             connection: shownConnection(),
             execution: execution.getState().state,
-            interactions: sessionPage.interactions.getState(),
             delivery: delivery.getState(),
             tasks: tasks.getState(),
             settings: settings.getState(),
@@ -325,7 +324,6 @@ export function createSessionPaneModel(options: {
                 connection: shownConnection(),
                 projection: history.store.getState().projection,
                 execution: execution.getState().state,
-                interactions: sessionPage.interactions.getState(),
                 composer: composer.getState(),
                 delivery: delivery.getState(),
                 tasks: tasks.getState(),

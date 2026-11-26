@@ -970,6 +970,8 @@ export class AgentSession {
 
     readonly pendingInteractions = (): SessionPendingInteractions => this.#interactions.snapshot();
 
+    readonly waitsForAnswer = (): boolean => this.#interactions.waitsForAnswer();
+
     readonly respondPermission = async (options: PermissionResponseOptions): Promise<void> => {
         await this.#interactions.respondPermission(options);
     };

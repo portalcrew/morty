@@ -543,7 +543,6 @@ function MortySessionPaneBody({
         connection,
         projection,
         execution,
-        interactions: interactionModel,
         composer,
         delivery,
         tasks: taskControls,

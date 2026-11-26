@@ -81,6 +81,11 @@ const sessionRecordFields = {
     status: sessionStatusSchema,
     title: z.string().max(500),
     updatedAt: z.iso.datetime({ offset: true }),
+    /**
+     * Present while the Agent cannot go on until the user answers one of its requests, which it may make outside a
+     * turn too. Optional so a page that predates it, and a Computer that does not report it, keep today's sidebar.
+     */
+    waitingFor: z.literal("answer").optional(),
 };
 const sessionRecordSchema = z.object(sessionRecordFields).readonly();
 

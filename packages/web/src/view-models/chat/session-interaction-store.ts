@@ -91,22 +91,8 @@ function elicitationNeed(elicitation: ElicitationInteraction, responses: Interac
     }
 }
 
-function interactionNeed(
-    interaction: SessionInteraction,
-    responses: InteractionResponses,
-): PermissionNeed | ElicitationNeed {
-    return interaction.kind === "permission"
-        ? permissionNeed(interaction.permission, responses)
-        : elicitationNeed(interaction.elicitation, responses);
-}
-
 function awaitsAnswer(need: PermissionNeed | ElicitationNeed): need is AnswerNeed {
     return need.kind === "answer" || need.kind === "sending";
-}
-
-/** Whether the Agent waits on the user: a request the Computer holds pending still needs the user's answer. */
-export function waitingForInput(interactions: readonly SessionInteraction[], responses: InteractionResponses): boolean {
-    return interactions.some((interaction) => awaitsAnswer(interactionNeed(interaction, responses)));
 }
 
 /** The answers typed so far into each pending question, by question and then by field. */
