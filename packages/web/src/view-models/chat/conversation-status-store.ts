@@ -150,17 +150,27 @@ export function otherConversationsAttention(
     return others.some((session) => unread(session, records.get(session.target))) ? "unread" : null;
 }
 
-export function hasWorkingBackgroundConversation(
+/**
+ * Whether a Session besides the open one may still change on the Computer, so the sidebar keeps reading the listing:
+ * its turn works, or the Agent waits for an answer the user may give from another device.
+ */
+export function backgroundConversationMayChange(
     sessions: readonly ListedSession[],
     records: Pick<NativeSessionMap<SessionRecord>, "get">,
     activity: (sessionTarget: NativeSessionTarget) => SessionActivityState | null,
+    interactions: (sessionTarget: NativeSessionTarget) => readonly SessionInteraction[] | null,
     selected: NativeSessionTarget | null,
 ): boolean {
-    return sessions.some(
-        (session) =>
-            (selected === null || !sameNativeSession(selected, session.target)) &&
-            conversationListStatus(session, records.get(session.target), activity(session.target)).kind === "working",
-    );
+    return sessions.some((session) => {
+        if (selected !== null && sameNativeSession(selected, session.target)) {
+            return false;
+        }
+        const record = records.get(session.target);
+        return (
+            conversationListStatus(session, record, activity(session.target)).kind === "working" ||
+            conversationWaitsForAnswer(session, record, interactions(session.target))
+        );
+    });
 }
 
 interface ConversationStatusState {
