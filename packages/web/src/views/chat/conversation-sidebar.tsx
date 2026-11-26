@@ -604,7 +604,12 @@ export function ConversationSidebar({
         archiveSession: workspace.directory.getState().archiveSession,
         operationsSignal: workspace.operationsSignal,
     };
-    const attention = otherConversationsAttention(sessions, sessionStatuses, activeTarget);
+    const attention = otherConversationsAttention(
+        sessions,
+        sessionStatuses,
+        workspace.sessionInteractions,
+        activeTarget,
+    );
     const accessNotices = (
         <SidebarAccessNoticeHost
             attachAccess={workspace.accessExpiry.getState().onAttach}

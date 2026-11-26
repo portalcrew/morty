@@ -134,17 +134,41 @@ export function conversationWaitsForAnswer(
 }
 
 /**
- * What the collapsed mobile header must say of the Sessions besides the open one: that one waits for the user's answer,
- * otherwise that one holds a reply the user has not seen. It reads the listing, not the page's accounts: the page
- * follows no other Session past the next listing, which the sidebar reads again every two seconds while one works.
+ * How many Sessions need the user: the Agent waits for their answer, or one holds a reply they have not seen. Each
+ * Session answers as its sidebar entry does.
+ */
+export function conversationsNeedingUser(
+    sessions: readonly ListedSession[] | null,
+    records: Pick<NativeSessionMap<SessionRecord>, "get">,
+    interactions: (sessionTarget: NativeSessionTarget) => readonly SessionInteraction[] | null,
+): number {
+    return (sessions ?? []).filter((session) => {
+        const record = records.get(session.target);
+        return conversationWaitsForAnswer(session, record, interactions(session.target)) || unread(session, record);
+    }).length;
+}
+
+/** Leads a document title with how many conversations need the user, as mail and chat apps count what awaits them. */
+export function titleWithAttention(title: string, needingUser: number): string {
+    return needingUser === 0 ? title : `(${needingUser.toString()}) ${title}`;
+}
+
+/**
+ * What the collapsed mobile header must say of the Sessions besides the open one, each as its sidebar entry does: that
+ * one waits for the user's answer, otherwise that one holds a reply the user has not seen.
  */
 export function otherConversationsAttention(
     sessions: readonly ListedSession[] | null,
     records: Pick<NativeSessionMap<SessionRecord>, "get">,
+    interactions: (sessionTarget: NativeSessionTarget) => readonly SessionInteraction[] | null,
     open: NativeSessionTarget | null,
 ): "answer" | "unread" | null {
     const others = (sessions ?? []).filter((session) => open === null || !sameNativeSession(open, session.target));
-    if (others.some((session) => conversationWaitsForAnswer(session, records.get(session.target), null))) {
+    if (
+        others.some((session) =>
+            conversationWaitsForAnswer(session, records.get(session.target), interactions(session.target)),
+        )
+    ) {
         return "answer";
     }
     return others.some((session) => unread(session, records.get(session.target))) ? "unread" : null;
