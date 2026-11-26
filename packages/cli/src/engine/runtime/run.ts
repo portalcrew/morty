@@ -122,7 +122,7 @@ export async function runRuntime(
             };
         };
         const awake = new AwakeWhileWorking(
-            options.sleepPrevention ?? hostSleepPrevention(hostPlatform.idleSleepInhibitors(process.env)),
+            options.sleepPrevention ?? hostSleepPrevention(hostPlatform.idleSleepInhibitors(process.env), timer),
         );
         const layer = buildSessionLayer({
             processes,
