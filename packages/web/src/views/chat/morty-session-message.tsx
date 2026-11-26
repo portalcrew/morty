@@ -1,15 +1,10 @@
 import type { ContentBlock } from "@portalcrew/morty-client/protocol";
 import { CircleAlert, X } from "lucide-react";
-import {
-    AgentMarkdown,
-    loadLatexRenderer,
-    localFilePath,
-    type MarkdownImageReader,
-} from "../../components/agents/agent-markdown.tsx";
+import { AgentMarkdown, type MarkdownImageReader } from "../../components/agents/agent-markdown.tsx";
 import { AgentResponseText } from "../../components/agents/agent-response-text.tsx";
 import { isDisplayableImageType } from "../../components/agents/displayable-image-type.ts";
 import { ExternalContentBlock, LinkedResourceBlock } from "../../components/agents/external-content-block.tsx";
-import { loadDiagramRenderer } from "../../components/agents/mermaid-code-block.tsx";
+import { localFilePath } from "../../components/agents/local-file-link.ts";
 import { isSafeAudioType } from "../../components/agents/safe-audio-type.ts";
 import { AgentThinking } from "../../components/chat/agent-thinking.tsx";
 import { AttemptFailure } from "../../components/chat/attempt-failure.tsx";
@@ -31,21 +26,6 @@ import {
     sessionTextValue,
 } from "../../view-models/chat/session-presentation.ts";
 import type { UserMessageCollapseStore } from "../../view-models/chat/user-message-collapse-store.ts";
-
-// Warm the lazily loaded rich renderers once the page settles, so the first
-// LaTeX or Mermaid content resolves its renderer without a visible fallback
-// swap. Deferred to idle because the chunks add ~244 kB gzip; agent replies
-// arrive seconds later, well after idle has fired.
-function warmRichRenderers(): void {
-    void loadLatexRenderer();
-    void loadDiagramRenderer();
-}
-
-if (typeof requestIdleCallback === "function") {
-    requestIdleCallback(() => warmRichRenderers());
-} else {
-    setTimeout(warmRichRenderers, 2_000);
-}
 
 function safeRemoteUrl(value: string): string | null {
     try {

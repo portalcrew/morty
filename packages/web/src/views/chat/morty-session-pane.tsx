@@ -3,6 +3,7 @@ import { Check, CircleAlert, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useStore } from "zustand";
 import { dataTestId } from "@/data-testid";
+import { AgentMarkdownReady } from "../../components/agents/agent-markdown.tsx";
 import { AgentQuestions } from "../../components/chat/agent-questions.tsx";
 import { AgentThinking } from "../../components/chat/agent-thinking.tsx";
 import { AuthenticationNotice } from "../../components/chat/authentication-notice.tsx";
@@ -714,192 +715,199 @@ function MortySessionPaneBody({
                             )}
                             {!sessionMessagesLoading && presentation.historyLoading && <OlderHistorySkeleton />}
                             {!sessionMessagesLoading && (
-                                <div className={chatSessionMessageColumnClassName}>
-                                    {initialMessage !== null && (
-                                        <div className={chatSessionMessageItemClassName}>
-                                            <UserPromptMessage
-                                                attachments={initialMessage.attachments}
-                                                collapseStore={pane.userMessageCollapse}
-                                                messageId={initialMessage.commandId}
-                                                text={initialMessage.content}
-                                            />
-                                        </div>
-                                    )}
-                                    {timelinePresentation.groups.map((group) => {
-                                        if (group.kind === "user") {
-                                            return (
-                                                <div
-                                                    key={group.id}
-                                                    className={cn(
-                                                        chatSessionMessageItemClassName,
-                                                        group.followsUserMessage && "mt-1",
-                                                    )}
-                                                >
-                                                    <SessionRenderItemContent
-                                                        active={group.active}
-                                                        answerChoices={composer.answerChoices}
-                                                        item={group.item}
-                                                        computerName={executionContext.computer}
-                                                        onAnswer={answer}
-                                                        onChooseAnswer={pane.store.getState().chooseAnswer}
-                                                        onRemoveUnknownDelivery={() =>
-                                                            run(pane.store.getState().removeUnknownDelivery)
-                                                        }
-                                                        onRetryUnknownDelivery={() =>
-                                                            run(pane.store.getState().retryUnknownDelivery)
-                                                        }
-                                                        openLocalFile={openLocalFile}
-                                                        pane={pane}
-                                                        presentation={presentation}
-                                                    />
-                                                </div>
-                                            );
-                                        }
-                                        return (
-                                            <SessionReplyContent
-                                                key={group.id}
-                                                active={group.active}
-                                                activeItemId={group.activeItemId}
-                                                copyText={group.copyText}
-                                                fork={
-                                                    group.forkOffered ? (
-                                                        <ForkSessionButton
-                                                            disabled={presentation.forkDisabled}
-                                                            focusScope={workspace}
-                                                            forking={fork.fork.kind === "forking"}
-                                                            onFork={() => run(pane.store.getState().fork)}
+                                <AgentMarkdownReady fallback={<SessionMessageListSkeleton />}>
+                                    <div className={chatSessionMessageColumnClassName}>
+                                        {initialMessage !== null && (
+                                            <div className={chatSessionMessageItemClassName}>
+                                                <UserPromptMessage
+                                                    attachments={initialMessage.attachments}
+                                                    collapseStore={pane.userMessageCollapse}
+                                                    messageId={initialMessage.commandId}
+                                                    text={initialMessage.content}
+                                                />
+                                            </div>
+                                        )}
+                                        {timelinePresentation.groups.map((group) => {
+                                            if (group.kind === "user") {
+                                                return (
+                                                    <div
+                                                        key={group.id}
+                                                        className={cn(
+                                                            chatSessionMessageItemClassName,
+                                                            group.followsUserMessage && "mt-1",
+                                                        )}
+                                                    >
+                                                        <SessionRenderItemContent
+                                                            active={group.active}
+                                                            answerChoices={composer.answerChoices}
+                                                            item={group.item}
+                                                            computerName={executionContext.computer}
+                                                            onAnswer={answer}
+                                                            onChooseAnswer={pane.store.getState().chooseAnswer}
+                                                            onRemoveUnknownDelivery={() =>
+                                                                run(pane.store.getState().removeUnknownDelivery)
+                                                            }
+                                                            onRetryUnknownDelivery={() =>
+                                                                run(pane.store.getState().retryUnknownDelivery)
+                                                            }
+                                                            openLocalFile={openLocalFile}
+                                                            pane={pane}
+                                                            presentation={presentation}
                                                         />
-                                                    ) : undefined
-                                                }
-                                                sections={group.sections}
-                                                workingSectionId={group.workingSectionId}
-                                                renderItem={(item, active) => (
-                                                    <SessionRenderItemContent
-                                                        active={active}
-                                                        answerChoices={composer.answerChoices}
-                                                        item={item}
-                                                        computerName={executionContext.computer}
-                                                        onAnswer={answer}
-                                                        onChooseAnswer={pane.store.getState().chooseAnswer}
-                                                        onRemoveUnknownDelivery={() =>
-                                                            run(pane.store.getState().removeUnknownDelivery)
+                                                    </div>
+                                                );
+                                            }
+                                            return (
+                                                <SessionReplyContent
+                                                    key={group.id}
+                                                    active={group.active}
+                                                    activeItemId={group.activeItemId}
+                                                    copyText={group.copyText}
+                                                    fork={
+                                                        group.forkOffered ? (
+                                                            <ForkSessionButton
+                                                                disabled={presentation.forkDisabled}
+                                                                focusScope={workspace}
+                                                                forking={fork.fork.kind === "forking"}
+                                                                onFork={() => run(pane.store.getState().fork)}
+                                                            />
+                                                        ) : undefined
+                                                    }
+                                                    sections={group.sections}
+                                                    workingSectionId={group.workingSectionId}
+                                                    renderItem={(item, active) => (
+                                                        <SessionRenderItemContent
+                                                            active={active}
+                                                            answerChoices={composer.answerChoices}
+                                                            item={item}
+                                                            computerName={executionContext.computer}
+                                                            onAnswer={answer}
+                                                            onChooseAnswer={pane.store.getState().chooseAnswer}
+                                                            onRemoveUnknownDelivery={() =>
+                                                                run(pane.store.getState().removeUnknownDelivery)
+                                                            }
+                                                            onRetryUnknownDelivery={() =>
+                                                                run(pane.store.getState().retryUnknownDelivery)
+                                                            }
+                                                            openLocalFile={openLocalFile}
+                                                            pane={pane}
+                                                            presentation={presentation}
+                                                        />
+                                                    )}
+                                                />
+                                            );
+                                        })}
+                                        {presentation.confirmedMessages.map((message) => (
+                                            <div key={message.commandId} className={chatSessionMessageItemClassName}>
+                                                <UserPromptMessage
+                                                    attachments={message.attachments}
+                                                    attachmentLabels={message.attachmentLabels}
+                                                    collapseStore={pane.userMessageCollapse}
+                                                    messageId={message.commandId}
+                                                    text={message.content}
+                                                />
+                                            </div>
+                                        ))}
+                                        {presentation.pendingDelivery !== null && (
+                                            <div
+                                                className={chatSessionMessageItemClassName}
+                                                data-testid={dataTestId.queuedMessage}
+                                            >
+                                                <UserPromptMessage
+                                                    attachments={presentation.pendingDelivery.message.attachments}
+                                                    attachmentLabels={
+                                                        presentation.pendingDelivery.message.attachmentLabels
+                                                    }
+                                                    collapseStore={pane.userMessageCollapse}
+                                                    messageId={presentation.pendingDelivery.message.commandId}
+                                                    status={
+                                                        presentation.pendingDelivery.error !== null ? (
+                                                            <MessageDeliveryStatus
+                                                                delivery="failed"
+                                                                label="Message failed to send"
+                                                            />
+                                                        ) : presentation.pendingDelivery.sending ? (
+                                                            <MessageDeliveryStatus
+                                                                delivery="sending"
+                                                                label="Sending message"
+                                                            />
+                                                        ) : undefined
+                                                    }
+                                                    text={presentation.pendingDelivery.message.content}
+                                                />
+                                                {presentation.pendingDelivery.error !== null && (
+                                                    <div
+                                                        className="ml-auto flex max-w-[85%] items-center gap-3 text-xs text-destructive"
+                                                        role="alert"
+                                                    >
+                                                        <span>{presentation.pendingDelivery.error}</span>
+                                                        <Button
+                                                            disabled={presentation.retryFailedDisabled}
+                                                            onClick={() =>
+                                                                run(pane.store.getState().retryFailedMessage)
+                                                            }
+                                                        >
+                                                            Retry message
+                                                        </Button>
+                                                        <Button
+                                                            disabled={attachmentModel.state.kind === "reading"}
+                                                            onClick={pane.store.getState().editFailedMessage}
+                                                        >
+                                                            Edit failed message
+                                                        </Button>
+                                                        <Button onClick={pane.store.getState().discardFailedMessage}>
+                                                            Discard failed message
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {presentation.unconfirmedDelivery !== null && (
+                                            <UnconfirmedDeliveryCard
+                                                collapseStore={pane.userMessageCollapse}
+                                                delivery={presentation.unconfirmedDelivery}
+                                                removeDisabled={presentation.removeUnknownDeliveryDisabled}
+                                                retryDisabled={presentation.retryUnknownDeliveryDisabled}
+                                                onRemove={() => run(pane.store.getState().removeUnknownDelivery)}
+                                                onRetry={() => run(pane.store.getState().retryUnknownDelivery)}
+                                            />
+                                        )}
+                                        {timelinePresentation.workingIndicator !== null && (
+                                            <div className="mt-1">
+                                                {timelinePresentation.workingIndicator.kind === "queued-in-owner" ? (
+                                                    <OwnerQueueNotice owner={executionContext.agent} />
+                                                ) : (
+                                                    <WorkingIndicator
+                                                        owner={
+                                                            timelinePresentation.workingIndicator.inOwner
+                                                                ? executionContext.agent
+                                                                : null
                                                         }
-                                                        onRetryUnknownDelivery={() =>
-                                                            run(pane.store.getState().retryUnknownDelivery)
-                                                        }
-                                                        openLocalFile={openLocalFile}
-                                                        pane={pane}
-                                                        presentation={presentation}
+                                                        startedAt={timelinePresentation.workingIndicator.startedAt}
                                                     />
                                                 )}
-                                            />
-                                        );
-                                    })}
-                                    {presentation.confirmedMessages.map((message) => (
-                                        <div key={message.commandId} className={chatSessionMessageItemClassName}>
-                                            <UserPromptMessage
-                                                attachments={message.attachments}
-                                                attachmentLabels={message.attachmentLabels}
-                                                collapseStore={pane.userMessageCollapse}
-                                                messageId={message.commandId}
-                                                text={message.content}
-                                            />
-                                        </div>
-                                    ))}
-                                    {presentation.pendingDelivery !== null && (
-                                        <div
-                                            className={chatSessionMessageItemClassName}
-                                            data-testid={dataTestId.queuedMessage}
-                                        >
-                                            <UserPromptMessage
-                                                attachments={presentation.pendingDelivery.message.attachments}
-                                                attachmentLabels={presentation.pendingDelivery.message.attachmentLabels}
-                                                collapseStore={pane.userMessageCollapse}
-                                                messageId={presentation.pendingDelivery.message.commandId}
-                                                status={
-                                                    presentation.pendingDelivery.error !== null ? (
-                                                        <MessageDeliveryStatus
-                                                            delivery="failed"
-                                                            label="Message failed to send"
-                                                        />
-                                                    ) : presentation.pendingDelivery.sending ? (
-                                                        <MessageDeliveryStatus
-                                                            delivery="sending"
-                                                            label="Sending message"
-                                                        />
-                                                    ) : undefined
-                                                }
-                                                text={presentation.pendingDelivery.message.content}
-                                            />
-                                            {presentation.pendingDelivery.error !== null && (
-                                                <div
-                                                    className="ml-auto flex max-w-[85%] items-center gap-3 text-xs text-destructive"
-                                                    role="alert"
-                                                >
-                                                    <span>{presentation.pendingDelivery.error}</span>
-                                                    <Button
-                                                        disabled={presentation.retryFailedDisabled}
-                                                        onClick={() => run(pane.store.getState().retryFailedMessage)}
-                                                    >
-                                                        Retry message
-                                                    </Button>
-                                                    <Button
-                                                        disabled={attachmentModel.state.kind === "reading"}
-                                                        onClick={pane.store.getState().editFailedMessage}
-                                                    >
-                                                        Edit failed message
-                                                    </Button>
-                                                    <Button onClick={pane.store.getState().discardFailedMessage}>
-                                                        Discard failed message
-                                                    </Button>
+                                            </div>
+                                        )}
+                                        {authenticationRecovery !== null &&
+                                            presentation.authenticationFailure !== null && (
+                                                <div className={chatSessionMessageItemClassName}>
+                                                    <AuthenticationNotice
+                                                        code={presentation.authenticationFailure.code}
+                                                        guidance={authenticationRecovery}
+                                                        message={presentation.authenticationFailure.message}
+                                                    />
                                                 </div>
                                             )}
-                                        </div>
-                                    )}
-                                    {presentation.unconfirmedDelivery !== null && (
-                                        <UnconfirmedDeliveryCard
-                                            collapseStore={pane.userMessageCollapse}
-                                            delivery={presentation.unconfirmedDelivery}
-                                            removeDisabled={presentation.removeUnknownDeliveryDisabled}
-                                            retryDisabled={presentation.retryUnknownDeliveryDisabled}
-                                            onRemove={() => run(pane.store.getState().removeUnknownDelivery)}
-                                            onRetry={() => run(pane.store.getState().retryUnknownDelivery)}
-                                        />
-                                    )}
-                                    {timelinePresentation.workingIndicator !== null && (
-                                        <div className="mt-1">
-                                            {timelinePresentation.workingIndicator.kind === "queued-in-owner" ? (
-                                                <OwnerQueueNotice owner={executionContext.agent} />
-                                            ) : (
-                                                <WorkingIndicator
-                                                    owner={
-                                                        timelinePresentation.workingIndicator.inOwner
-                                                            ? executionContext.agent
-                                                            : null
-                                                    }
-                                                    startedAt={timelinePresentation.workingIndicator.startedAt}
-                                                />
-                                            )}
-                                        </div>
-                                    )}
-                                    {authenticationRecovery !== null && presentation.authenticationFailure !== null && (
-                                        <div className={chatSessionMessageItemClassName}>
-                                            <AuthenticationNotice
-                                                code={presentation.authenticationFailure.code}
-                                                guidance={authenticationRecovery}
-                                                message={presentation.authenticationFailure.message}
+                                        {connection.kind === "ready" && (
+                                            <SessionWelcomeInChat
+                                                canSuggestProgress={presentation.canSuggestProgress}
+                                                onDismiss={pane.welcome.getState().dismiss}
+                                                onSuggestProgress={pane.welcome.getState().suggestProgress}
+                                                visible={welcome.kind === "visible"}
                                             />
-                                        </div>
-                                    )}
-                                    {connection.kind === "ready" && (
-                                        <SessionWelcomeInChat
-                                            canSuggestProgress={presentation.canSuggestProgress}
-                                            onDismiss={pane.welcome.getState().dismiss}
-                                            onSuggestProgress={pane.welcome.getState().suggestProgress}
-                                            visible={welcome.kind === "visible"}
-                                        />
-                                    )}
-                                </div>
+                                        )}
+                                    </div>
+                                </AgentMarkdownReady>
                             )}
                         </FollowLatestScrollArea>
                         {noticePlacement === "in-flow" && (

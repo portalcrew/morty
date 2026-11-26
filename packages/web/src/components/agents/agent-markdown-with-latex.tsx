@@ -1,6 +1,7 @@
 import { createMathPlugin } from "@streamdown/math";
 import "katex/dist/katex.min.css";
-import { AgentMarkdownContent, type AgentMarkdownProps } from "./agent-markdown.tsx";
+import type { AgentMarkdownProps } from "./agent-markdown.tsx";
+import { AgentMarkdownContent } from "./agent-markdown-renderer.tsx";
 
 const MATH_PLUGIN = createMathPlugin({ singleDollarTextMath: true });
 
