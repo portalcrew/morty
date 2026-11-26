@@ -625,6 +625,18 @@ export function runtimeCoversMessage(state: SessionExecutionState, commandId: st
     }
 }
 
+/**
+ * Whether the Agent waits on the user: a request the Computer holds pending needs the user's answer, also while this
+ * page's answer is on its way.
+ */
+export function waitingForInput(interactions: readonly SessionInteraction[]): boolean {
+    return interactions.some(
+        (interaction) =>
+            (interaction.kind === "permission" ? interaction.permission.state : interaction.elicitation.state).kind ===
+            "pending",
+    );
+}
+
 /** The Agent's requests as the Computer's account holds them, or null while this page has no account of them yet. */
 export function accountedInteractions(state: SessionExecutionState): readonly SessionInteraction[] | null {
     return state.coverage.kind === "covered" ? state.interactions : null;

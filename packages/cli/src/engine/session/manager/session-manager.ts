@@ -595,6 +595,9 @@ export class SessionManager {
     readonly stopping = (target: NativeSessionTarget, commandId: string): boolean =>
         this.#executions.stopping(target, commandId);
 
+    readonly waitsForAnswer = (target: NativeSessionTarget): boolean =>
+        this.#executionProcesses.get(target)?.waitsForAnswer() ?? false;
+
     readonly acceptsSteering = (target: NativeSessionTarget, targetCommandId: string): boolean =>
         admitNow(this.#activity(target), { kind: "steer", targetCommandId }).kind === "admitted";
 

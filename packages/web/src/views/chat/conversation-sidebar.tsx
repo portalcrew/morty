@@ -59,13 +59,17 @@ import {
     conversationDirectorySessions,
 } from "../../view-models/chat/conversation-directory-store.ts";
 import { type ConversationGroup, groupConversationsByUpdatedAt } from "../../view-models/chat/conversation-groups.ts";
-import { conversationListStatus, hasUnreadConversation } from "../../view-models/chat/conversation-status-store.ts";
+import {
+    conversationListStatus,
+    conversationWaitsForAnswer,
+    otherConversationsAttention,
+} from "../../view-models/chat/conversation-status-store.ts";
 import { pendingExecutionContext, sessionExecutionContext } from "../../view-models/chat/execution-context.ts";
 import { nativeSessionAgentTabs } from "../../view-models/chat/native-session-agents.ts";
 import type { NetworkDiagnosticStore } from "../../view-models/chat/network-diagnostic-store.ts";
 import { sessionConnectionView } from "../../view-models/chat/session-connection-machine.ts";
 import { noSessionDelivery } from "../../view-models/chat/session-delivery-store.ts";
-import { noSessionExecution, pageActivity } from "../../view-models/chat/session-execution.ts";
+import { accountedInteractions, noSessionExecution, pageActivity } from "../../view-models/chat/session-execution.ts";
 import { noSessionConnection } from "../../view-models/chat/session-pane-connection.ts";
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
 import { AccessTerm } from "./access-term.tsx";
@@ -303,7 +307,16 @@ function SessionStatusIndicator({
     const execution = useStore(page?.execution ?? noSessionExecution, (state) => state.state);
     const delivery = useStore(page?.delivery ?? noSessionDelivery, (state) => state.state);
     const status = conversationListStatus(session, record, pageActivity(execution, delivery));
-    return status.kind === "working" ? (
+    return conversationWaitsForAnswer(session, record, accountedInteractions(execution)) ? (
+        <span
+            aria-label="Needs your answer"
+            className="text-xs font-medium text-primary-active"
+            data-testid={dataTestId.sessionStatus}
+            role="status"
+        >
+            Needs you
+        </span>
+    ) : status.kind === "working" ? (
         <span
             aria-label="Session working"
             className="inline-flex -mr-[3px] size-4 items-center justify-center text-copy-secondary"
@@ -376,7 +389,7 @@ function ManagedSessionDirectoryList({
     /** The phone sheet has no persistent selection elsewhere, so it marks the open Session with a check. */
     readonly showSelectedIndicator?: boolean;
     readonly connectionStatus: BotConnectionStatus;
-    readonly sessionStatuses: Parameters<typeof hasUnreadConversation>[1];
+    readonly sessionStatuses: Parameters<typeof otherConversationsAttention>[1];
     readonly sessionPage: ChatWorkspace["sessionPage"];
     readonly onConnectAgent: (() => void) | null;
     readonly onOpen: (session: ManagedChatSession) => void;
@@ -591,7 +604,7 @@ export function ConversationSidebar({
         archiveSession: workspace.directory.getState().archiveSession,
         operationsSignal: workspace.operationsSignal,
     };
-    const unreadReplies = hasUnreadConversation(sessions, sessionStatuses);
+    const attention = otherConversationsAttention(sessions, sessionStatuses, activeTarget);
     const accessNotices = (
         <SidebarAccessNoticeHost
             attachAccess={workspace.accessExpiry.getState().onAttach}
@@ -684,9 +697,11 @@ export function ConversationSidebar({
                                                         "relative sm:hidden",
                                                     )}
                                                     aria-label={
-                                                        unreadReplies
-                                                            ? "Recent sessions, unread replies"
-                                                            : "Recent sessions"
+                                                        attention === "answer"
+                                                            ? "Recent sessions, one needs your answer"
+                                                            : attention === "unread"
+                                                              ? "Recent sessions, unread replies"
+                                                              : "Recent sessions"
                                                     }
                                                     aria-expanded={mobileSessionsOpen}
                                                     aria-controls="chat-conversations-mobile-sheet"
@@ -701,11 +716,11 @@ export function ConversationSidebar({
                                                     }}
                                                 >
                                                     <List aria-hidden="true" className="size-5" />
-                                                    {unreadReplies ? (
+                                                    {attention !== null ? (
                                                         <span
                                                             aria-hidden="true"
                                                             className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary ring-2 ring-white"
-                                                            data-testid={dataTestId.mobileRecentSessionsUnread}
+                                                            data-testid={dataTestId.mobileRecentSessionsAttention}
                                                         />
                                                     ) : null}
                                                 </Button>

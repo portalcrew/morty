@@ -4,9 +4,8 @@ import type { SessionConnection } from "./session-connection.ts";
 import { acceptedTurn, ownerHoldsTurn, ownerRunsTurn, workingIndicator } from "./session-current-turn.ts";
 import { sessionDeliveryPresentation } from "./session-delivery-presentation.ts";
 import { type SessionDeliveryStore, settledDelivery, unconfirmedJournal } from "./session-delivery-store.ts";
-import { type SessionExecutionState, sessionActivity, visibleQueue } from "./session-execution.ts";
+import { type SessionExecutionState, sessionActivity, visibleQueue, waitingForInput } from "./session-execution.ts";
 import type { SessionForkStore } from "./session-fork-store.ts";
-import { type SessionInteractionStore, waitingForInput } from "./session-interaction-store.ts";
 import type { ChatQueuedMessage, SessionMessageQueueStore } from "./session-message-queue-store.ts";
 import { operationFailureMessage, type SessionOperationFeedbackStore } from "./session-operation-feedback.ts";
 import {
@@ -58,7 +57,6 @@ export function sessionTitleEdit(draft: string | null, rename: SessionRename): T
 export function sessionOperationFacts(input: {
     readonly connection: SessionConnection;
     readonly execution: SessionExecutionState;
-    readonly interactions: Pick<SessionInteractionStore, "submissions">;
     readonly delivery: Pick<SessionDeliveryStore, "state" | "accepted">;
     readonly tasks: Pick<SessionTaskControlsStore, "stopInFlight">;
     readonly settings: Pick<SessionSettingsStore, "change">;
@@ -76,7 +74,7 @@ export function sessionOperationFacts(input: {
         stopping: turn.kind === "current" && (turn.stop === "stopping" || stopInFlight(input.tasks, turn.commandId)),
         configuring: settingsChanging(input.settings),
         delivery: settledDelivery(input.delivery, execution).state,
-        waitingForInput: waitingForInput(execution.interactions, input.interactions.submissions),
+        waitingForInput: waitingForInput(execution.interactions),
         ownerRunsTurn: ownerRunsTurn(execution.turn),
         ownerHoldsTurn: ownerHoldsTurn(execution.turn),
         steeringSupported: input.steeringSupported,
@@ -104,7 +102,6 @@ export function sessionPanePresentation(input: {
     readonly connection: SessionConnection;
     readonly projection: SessionProjection;
     readonly execution: SessionExecutionState;
-    readonly interactions: Pick<SessionInteractionStore, "submissions">;
     readonly composer: Pick<SessionComposerStore, "draft">;
     readonly delivery: SessionDeliveryStore;
     readonly tasks: SessionTaskControlsStore;

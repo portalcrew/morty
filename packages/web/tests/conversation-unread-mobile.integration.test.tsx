@@ -36,14 +36,14 @@ test("Given a reply finished in another session on a phone, When the user looks 
         );
         await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
         const recentSessions = () => getByRole(document.body, "button", { name: /^Recent sessions/u });
-        expect(app.optionalElementByTestId(dataTestId.mobileRecentSessionsUnread)).toBeNull();
+        expect(app.optionalElementByTestId(dataTestId.mobileRecentSessionsAttention)).toBeNull();
 
         await daemon.continueReply(HELD_PROMPT, { outcome: "complete", output: [] });
         const trigger = recentSessions();
         await app.user.click(trigger);
         const sheet = await app.queryElementByTestId(dataTestId.mobileRecentSessionsSheet);
         await app.user.click(getByRole(sheet, "button", { name: "Refresh sessions" }));
-        const dot = await app.queryElementByTestId(dataTestId.mobileRecentSessionsUnread);
+        const dot = await app.queryElementByTestId(dataTestId.mobileRecentSessionsAttention);
         expect(trigger.contains(dot)).toBe(true);
         expect(trigger.getAttribute("aria-label")).toBe("Recent sessions, unread replies");
 
@@ -55,7 +55,7 @@ test("Given a reply finished in another session on a phone, When the user looks 
         }
         await app.user.click(unreadConversation);
         await app.waitForView(() => {
-            expect(app?.optionalElementByTestId(dataTestId.mobileRecentSessionsUnread)).toBeNull();
+            expect(app?.optionalElementByTestId(dataTestId.mobileRecentSessionsAttention)).toBeNull();
             expect(recentSessions().getAttribute("aria-label")).toBe("Recent sessions");
         });
     } finally {

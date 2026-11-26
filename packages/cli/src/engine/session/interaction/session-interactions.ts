@@ -72,6 +72,10 @@ export class SessionInteractions {
         ...[...this.#pendingElicitations.values()].map((pending) => pending.request),
         ...this.#acceptedUrlElicitations.values(),
     ];
+
+    /** An accepted URL request is not counted: the user already answered it and its external flow is what remains. */
+    readonly waitsForAnswer = (): boolean => this.#pendingPermissions.size > 0 || this.#pendingElicitations.size > 0;
+
     constructor(context: SessionInteractionContext) {
         this.#context = context;
     }

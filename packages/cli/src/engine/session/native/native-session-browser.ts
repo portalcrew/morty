@@ -357,6 +357,7 @@ export class NativeSessionService {
                 status: this.#status(session.target),
                 title: displayTitle(session.title),
                 updatedAt: session.updatedAt,
+                ...(this.#sessions.waitsForAnswer(session.target) ? { waitingFor: "answer" as const } : {}),
             });
         }
         return entries;
