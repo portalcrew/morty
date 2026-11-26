@@ -104,7 +104,7 @@ export function ChatMessageQueue({
                                             ) : (
                                                 <Clock4
                                                     aria-hidden="true"
-                                                    className="size-3.5 shrink-0 text-morty-text-4"
+                                                    className="size-3.5 shrink-0 text-morty-text-3"
                                                 />
                                             )}
                                         </div>

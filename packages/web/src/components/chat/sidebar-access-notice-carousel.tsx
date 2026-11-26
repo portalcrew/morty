@@ -365,7 +365,7 @@ export function SidebarAccessNoticeCarousel({ children }: { readonly children: R
                                 aria-hidden="true"
                                 className={cn(
                                     "block h-2 w-2 shrink-0 overflow-visible transition-colors duration-300 ease-out motion-reduce:transition-none",
-                                    slideIndex === displayIndex ? "text-foreground/80" : "text-morty-text-4",
+                                    slideIndex === displayIndex ? "text-foreground" : "text-morty-text-3",
                                 )}
                                 height="8"
                                 viewBox="0 0 8 8"

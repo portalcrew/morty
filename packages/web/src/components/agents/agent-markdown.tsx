@@ -448,7 +448,7 @@ export function AgentMarkdownContent({
                     "[&_li>p]:my-0",
                     "[&_blockquote]:my-4 [&_blockquote]:border-l-[3px] [&_blockquote]:border-black/12 [&_blockquote]:py-2 [&_blockquote]:pl-3 [&_blockquote]:leading-6 [&_blockquote]:not-italic [&_blockquote]:text-[#454959] [&_blockquote_p]:my-0",
                     "[&_hr]:border-t-[0.5px]",
-                    "[&_a]:font-medium [&_a]:text-primary [&_a]:transition-colors [&_a]:hover:text-primary-hover [&_a]:active:text-primary-active",
+                    "[&_a]:font-medium [&_a]:text-primary [&_a]:transition-colors [&_a]:hover:text-primary-hover [&_a]:hover:underline [&_a]:active:text-primary-active",
                     "[&_code]:font-mono",
                     "[&_table]:text-[13px] [&_th]:text-[13px] [&_th]:px-2.5 [&_[data-streamdown=table-header-cell]]:py-2.5 [&_td]:text-[13px] [&_td]:px-2.5 [&_[data-streamdown=table-cell]]:py-2.5",
                     "[&_[data-streamdown=table-wrapper]]:relative [&_[data-streamdown=table-wrapper]]:!border-0 [&_[data-streamdown=table-wrapper]]:!bg-transparent [&_[data-streamdown=table-wrapper]]:!p-0",
