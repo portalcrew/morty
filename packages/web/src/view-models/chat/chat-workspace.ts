@@ -26,9 +26,9 @@ import {
 import type { ConversationSelectionState } from "./conversation-selection-machine.ts";
 import { selectedConversationTarget } from "./conversation-selection-machine.ts";
 import {
+    backgroundConversationMayChange,
     type ConversationStatusStoreApi,
     createConversationStatusStore,
-    hasWorkingBackgroundConversation,
 } from "./conversation-status-store.ts";
 import { createDeviceAccessStore, type DeviceAccessStore } from "./device-access-store.ts";
 import { createDraftControlsStore, type DraftControlsStore, draftConfiguration } from "./draft-controls-store.ts";
@@ -37,7 +37,7 @@ import { createNetworkDiagnosticStore, type NetworkDiagnosticStore } from "./net
 import { createRemoteAccessStore, type RemoteAccessStore } from "./remote-access-store.ts";
 import { connectionWaitsForComputer } from "./session-connection.ts";
 import { sessionConnectionView } from "./session-connection-machine.ts";
-import { commandEnded, pageActivity, submittingCommandId } from "./session-execution.ts";
+import { accountedInteractions, commandEnded, pageActivity, submittingCommandId } from "./session-execution.ts";
 import { createSessionPageState, type SessionPageState } from "./session-page-state.ts";
 import { createSessionPaneModel, type SessionPaneModel } from "./session-pane-store.ts";
 import { createSessionTitlesStore, type SessionTitlesStore } from "./session-titles-store.ts";
@@ -216,7 +216,7 @@ export function createChatWorkspace(options: {
             if (open.kind === "open" && (selection.kind !== "ready" || selection.session !== open.model.session)) {
                 closePane();
             }
-            if (backgroundConversationIsWorking()) {
+            if (backgroundConversationChanges()) {
                 void startDirectoryLoad("background");
             }
         },
@@ -336,14 +336,15 @@ export function createChatWorkspace(options: {
             .finally(loaded.resolve);
         return loaded.promise;
     };
-    const backgroundConversationIsWorking = (): boolean => {
+    const backgroundConversationChanges = (): boolean => {
         const state = directory.getState().state;
         return (
             "sessions" in state &&
-            hasWorkingBackgroundConversation(
+            backgroundConversationMayChange(
                 state.sessions,
                 statuses.getState().records,
                 sessionPageActivity,
+                sessionPageInteractions,
                 selectedConversationTarget(home.getState().selection),
             )
         );
@@ -366,12 +367,12 @@ export function createChatWorkspace(options: {
                 return;
             }
             computerRecovery.working();
-            if (!backgroundConversationIsWorking()) {
+            if (!backgroundConversationChanges()) {
                 return;
             }
             await options.clock.sleep(2_000, signal);
             mode = "background";
-        } while (backgroundConversationIsWorking());
+        } while (backgroundConversationChanges());
     };
     const listWaitsForComputer = (): boolean => directoryWaitsForComputer(directory.getState().state);
     const draftWaitsForComputer = (): boolean => draftControls.getState().settings.kind === "unreachable";
@@ -445,6 +446,10 @@ export function createChatWorkspace(options: {
         return state === undefined
             ? null
             : pageActivity(state.execution.getState().state, state.delivery.getState().state);
+    };
+    const sessionPageInteractions = (sessionTarget: NativeSessionTarget) => {
+        const state = sessionStates.get(sessionTarget);
+        return state === undefined ? null : accountedInteractions(state.execution.getState().state);
     };
     const replacePane = (selection: Extract<ConversationSelectionState, { readonly kind: "ready" }>): void => {
         const open = paneStore.getState();
