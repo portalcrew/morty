@@ -444,7 +444,7 @@ function PermissionCard({
                     >
                         {presentation.options.map((option) => (
                             <Button
-                                className="max-w-full whitespace-normal py-[7.5px]!"
+                                className="max-w-full min-h-11 whitespace-normal py-[7.5px]! md:min-h-9"
                                 disabled={busy}
                                 key={option.optionId}
                                 onClick={() => {
@@ -461,7 +461,7 @@ function PermissionCard({
                             </Button>
                         ))}
                         <Button
-                            className="max-w-full whitespace-normal py-[7.5px]!"
+                            className="max-w-full min-h-11 whitespace-normal py-[7.5px]! md:min-h-9"
                             disabled={busy}
                             onClick={stop}
                             size="sm"
