@@ -16,9 +16,9 @@
     --foreground: #0e0f11;
     --card: #fafafb;
     --popover: #ffffff;
-    --primary: #4f7cff;
-    --primary-hover: #6e97ff;
-    --primary-active: #3154d2;
+    --primary: #3a63e6;
+    --primary-hover: #3154d2;
+    --primary-active: #2a47b8;
     --primary-foreground: #ffffff;
     --secondary: rgba(11, 26, 57, 0.08);
     --secondary-foreground: #1c1e22;
@@ -39,7 +39,7 @@
     --morty-fill-opacity-3: rgba(11, 26, 57, 0.08);
     --morty-fill-opacity-4: rgba(11, 26, 57, 0.12);
 
-    --success: #2fb872;
+    --success: #279a60;
     --copy-secondary: var(--morty-text-2);
     --copy-tertiary: var(--morty-text-3);
     --surface-subtle: #f7f8f9;

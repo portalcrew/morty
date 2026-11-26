@@ -145,7 +145,7 @@ function IdentitySharingTransferSection(props: IdentitySharingTransferSectionPro
                     </div>
                     <div aria-hidden="true" className={shareMethodOrDividerClassName}>
                         <div className="h-[0.5px] min-w-0 flex-1 bg-border/60 sm:h-auto sm:min-h-0 sm:w-[0.5px]" />
-                        <p className="py-2 text-11 font-medium uppercase tracking-wide text-morty-text-4">or</p>
+                        <p className="py-2 text-11 font-medium uppercase tracking-wide text-morty-text-3">or</p>
                         <div className="h-[0.5px] min-w-0 flex-1 bg-border/60 sm:h-auto sm:min-h-0 sm:w-[0.5px]" />
                     </div>
                     {loading ? (
