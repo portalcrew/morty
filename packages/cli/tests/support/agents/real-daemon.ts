@@ -132,7 +132,7 @@ export const withControlledDaemonConnection = (
     environment: Readonly<Record<string, string>>,
     scenario: (peer: DaemonConnectionPeer) => Promise<void>,
     launch: "embedded" | "managed" = "embedded",
-    sleepPrevention?: SleepPrevention,
+    runtime: { readonly sleepPrevention?: SleepPrevention; readonly timer?: Timer } = {},
 ): Promise<void> =>
     withDaemonConnection(
         signal,
@@ -141,9 +141,9 @@ export const withControlledDaemonConnection = (
         scenario,
         launch,
         undefined,
-        systemTimer,
+        runtime.timer ?? systemTimer,
         acpAdapters,
-        sleepPrevention,
+        runtime.sleepPrevention,
     );
 
 export const withRealDaemonConnection = (

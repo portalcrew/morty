@@ -123,6 +123,7 @@ export async function runRuntime(
         };
         const awake = new AwakeWhileWorking(
             options.sleepPrevention ?? hostSleepPrevention(hostPlatform.idleSleepInhibitors(process.env), timer),
+            timer,
         );
         const layer = buildSessionLayer({
             processes,

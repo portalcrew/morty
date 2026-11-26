@@ -22,14 +22,30 @@ import {
     prepareNewRealSession,
     withControlledDaemonConnection,
 } from "../support/agents/real-daemon.ts";
+import { AwakeLingerTimer } from "../support/awake-linger-timer.ts";
 import { writeControlledAcpExecutable } from "../support/controlled-acp-executable.ts";
 import { RecordingSleepPrevention } from "../support/recording-sleep-prevention.ts";
 
-const submit = (peer: DaemonConnectionPeer, target: NativeSessionTarget, prompt: string): string => {
+// Content the Computer never received fails the prompt as soon as its turn prepares.
+const missingAttachment = {
+    byteLength: 1,
+    contentKey: "0".repeat(64),
+    kind: "resource",
+    mimeType: "text/plain",
+    name: "missing.txt",
+    uri: "file:///missing.txt",
+} as const;
+
+const submit = (
+    peer: DaemonConnectionPeer,
+    target: NativeSessionTarget,
+    prompt: string,
+    attachments: readonly (typeof missingAttachment)[] = [],
+): string => {
     const commandId = randomUUID();
     peer.send(
         encodeSessionPromptCommand({
-            attachments: [],
+            attachments: [...attachments],
             commandId,
             requestId: commandId,
             disposition: SessionPromptDisposition.Append,
@@ -91,13 +107,18 @@ const observe = (peer: DaemonConnectionPeer) => {
     };
 };
 
-const scenario = async (
-    signal: AbortSignal,
-    run: (peer: DaemonConnectionPeer, computer: RecordingSleepPrevention, agentState: string) => Promise<void>,
-): Promise<void> => {
+interface KeepAwakeScenario {
+    readonly peer: DaemonConnectionPeer;
+    readonly computer: RecordingSleepPrevention;
+    readonly timer: AwakeLingerTimer;
+    readonly agentState: string;
+}
+
+const scenario = async (signal: AbortSignal, run: (context: KeepAwakeScenario) => Promise<void>): Promise<void> => {
     const directory = await mkdtemp(join(tmpdir(), "morty-keep-awake-"));
     const agentState = join(directory, "agent");
     const computer = new RecordingSleepPrevention();
+    const timer = new AwakeLingerTimer();
     try {
         await withControlledDaemonConnection(
             signal,
@@ -106,19 +127,28 @@ const scenario = async (
                 MORTY_FAKE_ACP_STATE_DIRECTORY: agentState,
                 PATH: await writeControlledAcpExecutable(directory),
             },
-            (peer) => run(peer, computer, agentState),
+            (peer) => run({ peer, computer, timer, agentState }),
             "embedded",
-            computer,
+            { sleepPrevention: computer, timer },
         );
     } finally {
         await rm(directory, { recursive: true, force: true });
     }
 };
 
-test("Given an Agent works on a prompt, When the turn ends, Then the computer stays awake through the turn and may sleep afterwards", async ({
+/** Work ended: the computer stays held through the grace period, then may sleep. */
+const sleepsAfterGrace = async ({ computer, timer }: KeepAwakeScenario): Promise<void> => {
+    await timer.lingering();
+    expect(computer.awake).toBe(true);
+    timer.elapse();
+    await computer.asleep();
+};
+
+test("Given an Agent works on a prompt, When the turn ends, Then the computer stays awake through the turn and may sleep after a grace period", async ({
     signal,
 }) => {
-    await scenario(signal, async (peer, computer, agentState) => {
+    await scenario(signal, async (context) => {
+        const { peer, computer, agentState } = context;
         const target = await prepareNewRealSession(peer, "controlled-acp");
         const observed = observe(peer);
         expect(computer.awake).toBe(false);
@@ -129,7 +159,7 @@ test("Given an Agent works on a prompt, When the turn ends, Then the computer st
 
         await writeFile(join(agentState, "resume-turn"), "");
         await observed.ended(turn);
-        await computer.asleep();
+        await sleepsAfterGrace(context);
         expect(computer.holds).toBe(1);
     });
 });
@@ -137,7 +167,8 @@ test("Given an Agent works on a prompt, When the turn ends, Then the computer st
 test("Given an Agent waits for a permission answer, When the person answers from another device, Then the computer stays awake while it waits and may sleep once the turn ends", async ({
     signal,
 }) => {
-    await scenario(signal, async (peer, computer) => {
+    await scenario(signal, async (context) => {
+        const { peer, computer } = context;
         const target = await prepareNewRealSession(peer, "controlled-acp");
         const observed = observe(peer);
 
@@ -156,7 +187,7 @@ test("Given an Agent waits for a permission answer, When the person answers from
             }),
         );
         await observed.ended(turn);
-        await computer.asleep();
+        await sleepsAfterGrace(context);
         expect(computer.holds).toBe(1);
     });
 });
@@ -164,7 +195,8 @@ test("Given an Agent waits for a permission answer, When the person answers from
 test("Given two Sessions work at once, When one Session's turn ends, Then the computer stays awake for the other and may sleep once both end", async ({
     signal,
 }) => {
-    await scenario(signal, async (peer, computer) => {
+    await scenario(signal, async (context) => {
+        const { peer, computer, timer } = context;
         const first = await prepareNewRealSession(peer, "controlled-acp");
         const second = await prepareNewRealSession(peer, "controlled-acp");
         const observed = observe(peer);
@@ -177,12 +209,55 @@ test("Given two Sessions work at once, When one Session's turn ends, Then the co
         const nextTurn = submit(peer, second, "Next short task");
         await observed.started(nextTurn);
         expect(computer.awake).toBe(true);
-        expect(computer.holds).toBe(1);
+        expect(timer.started).toBe(0);
 
         await observed.ended(nextTurn);
         cancel(peer, first, longTurn);
         await observed.ended(longTurn);
-        await computer.asleep();
+        await sleepsAfterGrace(context);
+        expect(computer.holds).toBe(1);
+    });
+});
+
+test("Given a turn just ended, When the next prompt starts within the grace period, Then the same hold keeps the computer awake", async ({
+    signal,
+}) => {
+    await scenario(signal, async (context) => {
+        const { peer, computer, timer } = context;
+        const target = await prepareNewRealSession(peer, "controlled-acp");
+        const observed = observe(peer);
+
+        const firstTurn = submit(peer, target, "First task");
+        await observed.ended(firstTurn);
+        await timer.lingering();
+        const followUp = submit(peer, target, "hold after first delta");
+        await observed.started(followUp);
+        timer.elapse();
+        expect(computer.awake).toBe(true);
+        expect(computer.holds).toBe(1);
+
+        cancel(peer, target, followUp);
+        await observed.ended(followUp);
+        await sleepsAfterGrace(context);
+        expect(computer.holds).toBe(1);
+    });
+});
+
+test("Given many prompts fail as soon as they arrive, When they end one after another, Then they share one hold", async ({
+    signal,
+}) => {
+    await scenario(signal, async (context) => {
+        const { peer, computer } = context;
+        const target = await prepareNewRealSession(peer, "controlled-acp");
+        const observed = observe(peer);
+
+        const failing = Array.from({ length: 20 }, (_, index) =>
+            submit(peer, target, `Failing prompt ${index.toString()}`, [missingAttachment]),
+        );
+        for (const commandId of failing) {
+            await observed.ended(commandId);
+        }
+        await sleepsAfterGrace(context);
         expect(computer.holds).toBe(1);
     });
 });
@@ -190,7 +265,8 @@ test("Given two Sessions work at once, When one Session's turn ends, Then the co
 test("Given an Agent works on a prompt, When the person stops the turn, Then the computer may sleep", async ({
     signal,
 }) => {
-    await scenario(signal, async (peer, computer) => {
+    await scenario(signal, async (context) => {
+        const { peer, computer } = context;
         const target = await prepareNewRealSession(peer, "controlled-acp");
         const observed = observe(peer);
 
@@ -200,15 +276,15 @@ test("Given an Agent works on a prompt, When the person stops the turn, Then the
 
         cancel(peer, target, turn);
         await observed.ended(turn);
-        await computer.asleep();
+        await sleepsAfterGrace(context);
         expect(computer.holds).toBe(1);
     });
 });
 
-test("Given an Agent works on a prompt, When Morty stops on this computer, Then the computer may sleep", async ({
+test("Given an Agent works on a prompt, When Morty stops on this computer, Then the computer may sleep at once", async ({
     signal,
 }) => {
-    await scenario(signal, async (peer, computer) => {
+    await scenario(signal, async ({ peer, computer }) => {
         const target = await prepareNewRealSession(peer, "controlled-acp");
         const observed = observe(peer);
 
