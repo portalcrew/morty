@@ -41,6 +41,7 @@
 
     --success: #2fb872;
     --copy-secondary: var(--morty-text-2);
+    --copy-tertiary: var(--morty-text-3);
     --surface-subtle: #f7f8f9;
     /* Opaque visual match for bg-card/90 over the dialog overlay. */
     --user-message-surface: #e6e8eb;
@@ -248,6 +249,7 @@
     --color-destructive: var(--destructive);
     --color-success: var(--success);
     --color-copy-secondary: var(--copy-secondary);
+    --color-copy-tertiary: var(--copy-tertiary);
     --color-surface-subtle: var(--surface-subtle);
     --color-user-message-surface: var(--user-message-surface);
     --color-sidebar: var(--sidebar);
