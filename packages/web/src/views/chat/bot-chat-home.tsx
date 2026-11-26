@@ -1,4 +1,4 @@
-import { nativeSessionKey } from "@portalcrew/morty-client/native-session";
+import { nativeSessionKey, sameNativeSession } from "@portalcrew/morty-client/native-session";
 import type { ReactNode } from "react";
 import { useStore } from "zustand";
 import { MortyLogoMark } from "../../components/brand/morty-logo.tsx";
@@ -22,6 +22,7 @@ import { SessionLoadFailure } from "../../components/chat/session-load-failure.t
 import { UserPromptMessage } from "../../components/chat/user-prompt-message.tsx";
 import { Button } from "../../components/ui/cloud-button.tsx";
 import { Dialog } from "../../components/ui/dialog.tsx";
+import { AppBadge } from "../../components/utils/app-badge.tsx";
 import { DesktopChatLayout } from "../../components/utils/desktop-chat-layout.tsx";
 import { FollowLatestScrollArea } from "../../components/utils/follow-latest-scroll-area.tsx";
 import { dataTestId } from "../../data-testid.ts";
@@ -46,6 +47,7 @@ import {
 } from "../../view-models/chat/conversation-creation-machine.ts";
 import { listedSessions } from "../../view-models/chat/conversation-directory-store.ts";
 import { draftCreation, selectedConversationTarget } from "../../view-models/chat/conversation-selection-machine.ts";
+import { conversationsNeedingUser, titleWithAttention } from "../../view-models/chat/conversation-status-store.ts";
 import type { DraftControlsStore } from "../../view-models/chat/draft-controls-store.ts";
 import { activeHarnessMark, pendingExecutionContext } from "../../view-models/chat/execution-context.ts";
 import {
@@ -53,6 +55,7 @@ import {
     pendingConversationPresentation,
 } from "../../view-models/chat/pending-conversation-presentation.ts";
 import { type RecentDirectory, recentDirectories } from "../../view-models/chat/recent-directories.ts";
+import { accountedInteractions, noSessionExecution } from "../../view-models/chat/session-execution.ts";
 import { describeLoadFailure, type PageFailure } from "../../view-models/format-error.ts";
 import { reportApplicationError } from "../../view-models/report-error.ts";
 import { BugReportButton } from "../diagnostics/bug-report-button.tsx";
@@ -161,6 +164,17 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
     const computer = useStore(workspace.computer);
     const draftControls = useStore(workspace.draftControls);
     const sessions = useStore(workspace.directory, (state) => listedSessions(state.state)) ?? [];
+    const statusRecords = useStore(workspace.statuses, (state) => state.records);
+    const openPane = useStore(workspace.pane);
+    const openModel = openPane.kind === "open" ? openPane.model : null;
+    const openInteractions = useStore(openModel?.execution ?? noSessionExecution, (state) =>
+        accountedInteractions(state.state),
+    );
+    const needingUser = conversationsNeedingUser(sessions, statusRecords, (target) =>
+        openModel !== null && sameNativeSession(openModel.session.target, target)
+            ? openInteractions
+            : workspace.sessionInteractions(target),
+    );
     const executionContext = pendingExecutionContext(model, computer, draftControls.settings);
     const attachmentModel = useStore(model.composerAttachments);
     const connectionStatus = botConnectionStatus(computer);
@@ -240,6 +254,11 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
             onKeyDownCapture={workspace.recordUserActivity}
             onInputCapture={workspace.recordUserActivity}
         >
+            <AppBadge count={needingUser} />
+            {/* Browsers pick an undefined one of several titles, so an open conversation's pane renders the only one. */}
+            {model.selection.kind === "ready" || needingUser === 0 ? null : (
+                <title>{titleWithAttention("Morty", needingUser)}</title>
+            )}
             <ConversationSidebar
                 computerId={workspace.computerId}
                 workspace={workspace}
@@ -271,7 +290,7 @@ function BotChatHomeLayout({ workspace, desktop }: BotChatHomeProps & { readonly
                             className={chatSessionPaneEnterClassName}
                             key={nativeSessionKey(model.selection.session.target)}
                         >
-                            <MortySessionPane workspace={workspace} />
+                            <MortySessionPane needingUser={needingUser} workspace={workspace} />
                         </div>
                     ) : conversationReadPending(model.selection, computer) && pendingConversation.recovery === null ? (
                         <MortySessionPaneLoading

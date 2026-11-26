@@ -332,3 +332,31 @@ test("Given a new conversation still connecting, When the user saves a new title
     await app.waitForView(() => getByRole(document.body, "heading", { name: renamed }));
     await app.waitForView(() => expect(directoryTitles(app).some((title) => title.includes(renamed))).toBe(true));
 });
+
+test("Given the agent asks for permission, When I move to a new conversation and come back to answer, Then the tab title counts the conversation that needs me until I answer", {
+    timeout: 30_000,
+}, async () => {
+    const prompt = "request session permission";
+    const app = await createTestApp({
+        connectAgent: true,
+        agent: { harness: "interaction-test", label: "Interaction Agent" },
+    });
+    await sendPrompt(app, await readyComposer(app), prompt);
+    await app.waitForView(() => {
+        getByRole(document.body, "alertdialog", { name: "Agent permission request" });
+        expect(document.title).toBe(`(1) ${prompt} · Morty`);
+    });
+
+    await app.user.click(await app.queryElementByTestId(dataTestId.newConversation));
+    await app.waitForView(() => expect(document.title).toBe("(1) Morty"));
+
+    await app.user.click(getByRole(document.body, "button", { name: `Open ${prompt}` }));
+    const permission = await app.waitForView(() =>
+        getByRole(document.body, "alertdialog", { name: "Agent permission request" }),
+    );
+    await app.user.click(getByRole(permission, "button", { name: "Allow for this session" }));
+    await app.waitForView(() => {
+        expect(document.body.textContent).toContain("Selected decision: allow-session");
+        expect(document.title).toBe(`${prompt} · Morty`);
+    });
+});

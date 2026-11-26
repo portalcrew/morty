@@ -40,6 +40,7 @@ import { sessionConnectionView } from "./session-connection-machine.ts";
 import { accountedInteractions, commandEnded, pageActivity, submittingCommandId } from "./session-execution.ts";
 import { createSessionPageState, type SessionPageState } from "./session-page-state.ts";
 import { createSessionPaneModel, type SessionPaneModel } from "./session-pane-store.ts";
+import type { SessionInteraction } from "./session-pane-types.ts";
 import { createSessionTitlesStore, type SessionTitlesStore } from "./session-titles-store.ts";
 import { createSidebarDialogs, type SidebarDialogs } from "./sidebar-dialogs.ts";
 
@@ -79,6 +80,11 @@ export interface ChatWorkspace {
     readonly sessionPage: (
         sessionTarget: NativeSessionTarget,
     ) => Pick<SessionPageState, "execution" | "delivery"> | null;
+    /**
+     * The page's account of the Agent's requests in a Session, or null while the page has none. Only the open pane's
+     * Session changes it, so a view subscribes to that pane alone.
+     */
+    readonly sessionInteractions: (sessionTarget: NativeSessionTarget) => readonly SessionInteraction[] | null;
     readonly retryDraftControls: () => void;
     readonly refreshDirectory: () => void;
     readonly operationsSignal: () => AbortSignal;
@@ -561,6 +567,7 @@ export function createChatWorkspace(options: {
             return open.kind === "open" ? open.model : null;
         },
         sessionPage: (sessionTarget) => sessionStates.get(sessionTarget) ?? null,
+        sessionInteractions: sessionPageInteractions,
         retryDraftControls: () => {
             void draftControls
                 .getState()

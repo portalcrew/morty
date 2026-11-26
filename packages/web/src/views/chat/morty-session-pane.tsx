@@ -51,6 +51,7 @@ import { authenticationGuidance } from "../../view-models/chat/authentication-gu
 import type { ChatWorkspace } from "../../view-models/chat/chat-workspace.ts";
 import { canAddAttachments } from "../../view-models/chat/composer-attachment-store.ts";
 import { commandDraft, commandSuggestions } from "../../view-models/chat/composer-commands.ts";
+import { titleWithAttention } from "../../view-models/chat/conversation-status-store.ts";
 import { sessionExecutionContext } from "../../view-models/chat/execution-context.ts";
 import { sessionHarnessSelection } from "../../view-models/chat/native-session-agents.ts";
 import { draftPromptSuggestion } from "../../view-models/chat/prompt-suggestion.ts";
@@ -478,18 +479,26 @@ function OlderHistorySkeleton() {
     );
 }
 
-export function MortySessionPane({ workspace }: { readonly workspace: ChatWorkspace }) {
+export function MortySessionPane({
+    workspace,
+    needingUser,
+}: {
+    readonly workspace: ChatWorkspace;
+    readonly needingUser: number;
+}) {
     const pane = useStore(workspace.pane);
     if (pane.kind === "none") {
         return <section className={chatSessionPaneFillClassName} />;
     }
-    return <MortySessionPaneBody pane={pane.model} workspace={workspace} />;
+    return <MortySessionPaneBody needingUser={needingUser} pane={pane.model} workspace={workspace} />;
 }
 
 function MortySessionPaneBody({
+    needingUser,
     pane,
     workspace,
 }: {
+    readonly needingUser: number;
     readonly pane: SessionPaneModel;
     readonly workspace: ChatWorkspace;
 }) {
@@ -634,7 +643,9 @@ function MortySessionPaneBody({
         <DesktopChatLayout>
             {(desktop) => (
                 <>
-                    {sessionMessagesLoading ? null : <title>{`${title} · Morty`}</title>}
+                    {sessionMessagesLoading ? null : (
+                        <title>{titleWithAttention(`${title} · Morty`, needingUser)}</title>
+                    )}
                     <section className={chatSessionPaneFillClassName}>
                         {desktop ? (
                             <header className={chatSessionExecutionHeaderClassName}>
