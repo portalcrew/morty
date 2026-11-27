@@ -8,6 +8,7 @@ import { windowsPlatform } from "./windows.ts";
 const fallbackPlatform: PlatformSupport = {
     ...posixOperations,
     claudeCodeExecutablePaths: () => [],
+    idleSleepInhibitors: () => [],
 };
 const platforms: ReadonlyMap<NodeJS.Platform, PlatformSupport> = new Map([
     ["linux", linuxPlatform],

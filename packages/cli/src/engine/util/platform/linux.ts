@@ -10,4 +10,8 @@ export const linuxPlatform: PlatformSupport = {
             ? [join(homeDirectory, ".local", "bin", "claude")]
             : [];
     },
+    // Released GNOME turns a suspend inhibitor into a logind lock that, from systemd 257, also blocks the person's own
+    // suspend, and KDE reads logind's idle lock as "keep the screen on" without stopping idle suspend. Linux keeps its
+    // own sleep behavior until a lock is verified on those desktops.
+    idleSleepInhibitors: () => [],
 };
