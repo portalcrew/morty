@@ -2,8 +2,6 @@ import { isAbsolute, join } from "node:path";
 import type { PlatformSupport } from "./contracts.ts";
 import { posixOperations } from "./posix.ts";
 
-const IDLE_SLEEP_REASON = "An Agent is working on a Morty task";
-
 export const linuxPlatform: PlatformSupport = {
     ...posixOperations,
     claudeCodeExecutablePaths: (environment) => {
@@ -12,15 +10,8 @@ export const linuxPlatform: PlatformSupport = {
             ? [join(homeDirectory, ".local", "bin", "claude")]
             : [];
     },
-    // GNOME suspends an idle session itself and honors only its session inhibitors, not logind's idle lock.
-    idleSleepInhibitors: () => [
-        {
-            command: "gnome-session-inhibit",
-            arguments: ["--inhibit", "suspend", "--app-id", "morty", "--reason", IDLE_SLEEP_REASON, "cat"],
-        },
-        {
-            command: "systemd-inhibit",
-            arguments: ["--what=idle", "--mode=block", "--who=Morty", `--why=${IDLE_SLEEP_REASON}`, "cat"],
-        },
-    ],
+    // Released GNOME turns a suspend inhibitor into a logind lock that, from systemd 257, also blocks the person's own
+    // suspend, and KDE reads logind's idle lock as "keep the screen on" without stopping idle suspend. Linux keeps its
+    // own sleep behavior until a lock is verified on those desktops.
+    idleSleepInhibitors: () => [],
 };

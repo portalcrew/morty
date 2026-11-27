@@ -1,13 +1,15 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import type { ProcessLaunch } from "../../util/process/platform/contracts.ts";
-import type { Timer } from "../../util/timer.ts";
+import type { ScheduledTask, Timer } from "../../util/timer.ts";
 import type { SleepPrevention, SleepPreventionHold } from "./sleep-prevention.ts";
 
 const RELEASE_DEADLINE_MILLISECONDS = 5_000;
+// An inhibitor that failed or was stopped is tried again on this interval for as long as work needs the hold.
+const RETRY_MILLISECONDS = 60_000;
 
 type InhibitorState =
     | { readonly kind: "holding"; readonly child: ChildProcess; readonly exited: Promise<void> }
-    | { readonly kind: "unavailable" }
+    | { readonly kind: "retrying"; readonly retry: ScheduledTask }
     | { readonly kind: "released" };
 
 function launchInhibitor(launch: ProcessLaunch): ChildProcess | null {
@@ -53,14 +55,25 @@ class InhibitorHold implements SleepPreventionHold {
             return { kind: "holding", child, exited };
         }
         this.#unavailable();
-        return { kind: "unavailable" };
+        const retry = this.#timer.schedule(() => {
+            if (this.#state.kind === "retrying" && this.#state.retry === retry) {
+                this.#state = this.#start(0);
+            }
+        }, RETRY_MILLISECONDS);
+        return { kind: "retrying", retry };
     }
 
     readonly release = async (): Promise<void> => {
         const state = this.#state;
         this.#state = { kind: "released" };
-        if (state.kind !== "holding") {
-            return;
+        switch (state.kind) {
+            case "released":
+                return;
+            case "retrying":
+                state.retry.cancel();
+                return;
+            case "holding":
+                break;
         }
         state.child.stdin?.end();
         state.child.kill();
@@ -79,6 +92,9 @@ class InhibitorHold implements SleepPreventionHold {
 
 /** Holds the computer awake through the first of the platform's inhibitor commands that runs. */
 export function hostSleepPrevention(launches: readonly ProcessLaunch[], timer: Timer): SleepPrevention {
+    if (launches.length === 0) {
+        return { hold: () => ({ release: async () => undefined }) };
+    }
     let reported = false;
     const unavailable = (): void => {
         if (!reported) {
