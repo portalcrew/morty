@@ -14,8 +14,8 @@ export interface PlatformSupport {
     ) => Promise<void>;
     readonly claudeCodeExecutablePaths: (environment: Readonly<NodeJS.ProcessEnv>) => readonly string[];
     /**
-     * Commands that each keep the computer from sleeping while idle, in order of preference. Each holds until its
-     * standard input closes, so the hold also ends when the Runtime exits without releasing it.
+     * Commands that each keep the computer from sleeping while idle, in order of preference. Each holds until it is
+     * stopped, and also stops when the Runtime exits without releasing it.
      */
     readonly idleSleepInhibitors: (environment: Readonly<NodeJS.ProcessEnv>) => readonly ProcessLaunch[];
 }

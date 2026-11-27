@@ -19,5 +19,7 @@ export const macosPlatform: PlatformSupport = {
         }
         return paths;
     },
-    idleSleepInhibitors: () => [{ command: "/usr/bin/caffeinate", arguments: ["-i", "/bin/cat"] }],
+    // With a utility to run, caffeinate execs it in the launched process and asserts from a forked child, so the
+    // Runtime would not see the assertion end. Watching the Runtime keeps the assertion in the process it launched.
+    idleSleepInhibitors: () => [{ command: "/usr/bin/caffeinate", arguments: ["-i", "-w", String(process.pid)] }],
 };
