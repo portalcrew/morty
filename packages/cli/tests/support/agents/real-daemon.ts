@@ -108,7 +108,6 @@ export async function withRealDaemon(
     workspaceDirectory?: string,
     timer: Timer = systemTimer,
     adapters: AdapterResolver = harnessAdapters,
-    sleepPrevention?: SleepPrevention,
 ): Promise<void> {
     await withDaemonConnection(
         signal,
@@ -122,7 +121,6 @@ export async function withRealDaemon(
         workspaceDirectory,
         timer,
         adapters,
-        sleepPrevention,
     );
 }
 

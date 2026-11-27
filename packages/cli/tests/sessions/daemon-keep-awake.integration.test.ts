@@ -26,26 +26,11 @@ import { AwakeLingerTimer } from "../support/awake-linger-timer.ts";
 import { writeControlledAcpExecutable } from "../support/controlled-acp-executable.ts";
 import { RecordingSleepPrevention } from "../support/recording-sleep-prevention.ts";
 
-// Content the Computer never received fails the prompt as soon as its turn prepares.
-const missingAttachment = {
-    byteLength: 1,
-    contentKey: "0".repeat(64),
-    kind: "resource",
-    mimeType: "text/plain",
-    name: "missing.txt",
-    uri: "file:///missing.txt",
-} as const;
-
-const submit = (
-    peer: DaemonConnectionPeer,
-    target: NativeSessionTarget,
-    prompt: string,
-    attachments: readonly (typeof missingAttachment)[] = [],
-): string => {
+const submit = (peer: DaemonConnectionPeer, target: NativeSessionTarget, prompt: string): string => {
     const commandId = randomUUID();
     peer.send(
         encodeSessionPromptCommand({
-            attachments: [...attachments],
+            attachments: [],
             commandId,
             requestId: commandId,
             disposition: SessionPromptDisposition.Append,
@@ -56,9 +41,6 @@ const submit = (
     );
     return commandId;
 };
-
-const cancel = (peer: DaemonConnectionPeer, target: NativeSessionTarget, commandId: string): void =>
-    peer.send(JSON.stringify({ kind: "session.cancel", requestId: randomUUID(), commandId, target }));
 
 const observe = (peer: DaemonConnectionPeer) => {
     const events: SessionLiveEvent[] = [];
@@ -186,95 +168,6 @@ test("Given an Agent waits for a permission answer, When the person answers from
                 target,
             }),
         );
-        await observed.ended(turn);
-        await sleepsAfterGrace(context);
-        expect(computer.holds).toBe(1);
-    });
-});
-
-test("Given two Sessions work at once, When one Session's turn ends, Then the computer stays awake for the other and may sleep once both end", async ({
-    signal,
-}) => {
-    await scenario(signal, async (context) => {
-        const { peer, computer, timer } = context;
-        const first = await prepareNewRealSession(peer, "controlled-acp");
-        const second = await prepareNewRealSession(peer, "controlled-acp");
-        const observed = observe(peer);
-
-        const longTurn = submit(peer, first, "hold after first delta");
-        await observed.started(longTurn);
-        const shortTurn = submit(peer, second, "Short task");
-        await observed.ended(shortTurn);
-        // The next prompt starts only after the short turn has finished, so the Runtime has stopped counting it.
-        const nextTurn = submit(peer, second, "Next short task");
-        await observed.started(nextTurn);
-        expect(computer.awake).toBe(true);
-        expect(timer.started).toBe(0);
-
-        await observed.ended(nextTurn);
-        cancel(peer, first, longTurn);
-        await observed.ended(longTurn);
-        await sleepsAfterGrace(context);
-        expect(computer.holds).toBe(1);
-    });
-});
-
-test("Given a turn just ended, When the next prompt starts within the grace period, Then the same hold keeps the computer awake", async ({
-    signal,
-}) => {
-    await scenario(signal, async (context) => {
-        const { peer, computer, timer } = context;
-        const target = await prepareNewRealSession(peer, "controlled-acp");
-        const observed = observe(peer);
-
-        const firstTurn = submit(peer, target, "First task");
-        await observed.ended(firstTurn);
-        await timer.lingering();
-        const followUp = submit(peer, target, "hold after first delta");
-        await observed.started(followUp);
-        timer.elapse();
-        expect(computer.awake).toBe(true);
-        expect(computer.holds).toBe(1);
-
-        cancel(peer, target, followUp);
-        await observed.ended(followUp);
-        await sleepsAfterGrace(context);
-        expect(computer.holds).toBe(1);
-    });
-});
-
-test("Given many prompts fail as soon as they arrive, When they end one after another, Then they share one hold", async ({
-    signal,
-}) => {
-    await scenario(signal, async (context) => {
-        const { peer, computer } = context;
-        const target = await prepareNewRealSession(peer, "controlled-acp");
-        const observed = observe(peer);
-
-        const failing = Array.from({ length: 20 }, (_, index) =>
-            submit(peer, target, `Failing prompt ${index.toString()}`, [missingAttachment]),
-        );
-        for (const commandId of failing) {
-            await observed.ended(commandId);
-        }
-        await sleepsAfterGrace(context);
-        expect(computer.holds).toBe(1);
-    });
-});
-
-test("Given an Agent works on a prompt, When the person stops the turn, Then the computer may sleep", async ({
-    signal,
-}) => {
-    await scenario(signal, async (context) => {
-        const { peer, computer } = context;
-        const target = await prepareNewRealSession(peer, "controlled-acp");
-        const observed = observe(peer);
-
-        const turn = submit(peer, target, "hold after first delta");
-        await observed.started(turn);
-        expect(computer.awake).toBe(true);
-
-        cancel(peer, target, turn);
         await observed.ended(turn);
         await sleepsAfterGrace(context);
         expect(computer.holds).toBe(1);

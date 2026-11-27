@@ -5,12 +5,6 @@ import { type ScheduledTask, systemTimer, type Timer } from "../../src/engine/ut
 export class AwakeLingerTimer implements Timer {
     readonly #pending = new Map<symbol, () => void>();
     #waiters: Array<() => void> = [];
-    #started = 0;
-
-    /** How many grace periods began: each one means no Session was working at that moment. */
-    get started(): number {
-        return this.#started;
-    }
 
     readonly schedule = (callback: () => void, milliseconds: number): ScheduledTask => {
         if (milliseconds !== AWAKE_LINGER_MILLISECONDS) {
@@ -18,7 +12,6 @@ export class AwakeLingerTimer implements Timer {
         }
         const id = Symbol("awake linger");
         this.#pending.set(id, callback);
-        this.#started += 1;
         for (const wake of this.#waiters.splice(0)) {
             wake();
         }
